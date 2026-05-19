@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+body {
+  /* Page bg — pixel-sampled from canonical Figma PNG (cr token in design-spec.md). */
+  background: #F8F8F8;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* scrollbar hide */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Provider photo gradients ── */
+/* Warm tan — cleaning / home */
+.fv-jamie {
+  background:
+    radial-gradient(ellipse 70% 60% at 62% 30%, rgba(255,248,235,.48) 0%, transparent 62%),
+    radial-gradient(ellipse 40% 55% at 75% 70%, rgba(80,40,10,.18) 0%, transparent 55%),
+    linear-gradient(158deg, #ede4d0 0%, #d4bc98 28%, #b89568 52%, #8a6840 72%, #5c4028 100%);
+}
+/* Cool blue-grey — professional service */
+.fv-john {
+  background:
+    radial-gradient(ellipse 65% 55% at 58% 25%, rgba(230,242,255,.44) 0%, transparent 58%),
+    radial-gradient(ellipse 38% 50% at 78% 72%, rgba(20,40,80,.16) 0%, transparent 52%),
+    linear-gradient(155deg, #dce8f2 0%, #b5cfe4 28%, #84a8c2 54%, #548098 74%, #285070 100%);
+}
+/* Warm brown — budget / earthy */
+.fv-steve {
+  background:
+    radial-gradient(ellipse 62% 52% at 60% 28%, rgba(255,244,222,.42) 0%, transparent 56%),
+    radial-gradient(ellipse 45% 38% at 76% 74%, rgba(90,50,12,.16) 0%, transparent 50%),
+    linear-gradient(152deg, #ece2d0 0%, #d6c09a 27%, #b49560 52%, #826030 72%, #503820 100%);
+}
+
+/* person-area depth */
+.fv-jamie::before,
+.fv-john::before,
+.fv-steve::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 30% 62% at 70% 54%, rgba(0,0,0,.11) 0%, transparent 62%),
+    radial-gradient(ellipse 18% 22% at 70% 17%, rgba(0,0,0,.08) 0%, transparent 58%);
+}
+
+/* Splash background glow — brand green from design-spec.md (#4AA901). */
+.splash-glow {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 30%, rgba(74,169,1,.22) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(74,169,1,.10) 0%, transparent 60%);
+}
+
+/* Pop-in animation for booking confirm */
+@keyframes popIn {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.animate-pop-in { animation: popIn .5s cubic-bezier(.34,1.56,.64,1) both; }
