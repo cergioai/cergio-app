@@ -78,6 +78,7 @@ import { MessagesScreen }                   from './screens/MessagesScreen';
 const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
 const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages']; // focused linear flows
 const HIDE_NAV_PATHS_EXTRA = [
+  '/intake',                          // chat composer at bottom — nav was covering it
   '/enable-free-offers', '/confirm-submit', '/roaming',
   '/earnings/breakdown', '/earnings/network', '/earnings/transactions',
   '/earnings/how', '/earnings/track',
