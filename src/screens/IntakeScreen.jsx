@@ -7,19 +7,28 @@ export function IntakeScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { chat, freeServices, setFreeServices } = useOutletContext();
-  const seedTask = location.state?.seedTask ?? null;
+  const seedTask       = location.state?.seedTask       ?? null;
+  const initialMessage = location.state?.initialMessage ?? null;
 
   const { messages, quickReplies, phase, typing, init, send, state } = chat;
   const inputRef  = useRef(null);
   const bottomRef = useRef(null);
 
   // Re-initialize the chat each time the user navigates here fresh
-  // (location.key changes on every new navigation entry).
+  // (location.key changes on every new navigation entry). Prefer the
+  // free-text initialMessage path (from Home search) over seedTask
+  // (from Home category chips) when both are present.
   const initedKey = useRef(null);
   useEffect(() => {
     if (initedKey.current !== location.key) {
       initedKey.current = location.key;
-      init(seedTask);
+      if (initialMessage) {
+        init({ initialMessage });
+      } else if (seedTask) {
+        init(seedTask);
+      } else {
+        init();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);

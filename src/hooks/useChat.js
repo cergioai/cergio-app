@@ -84,14 +84,66 @@ export function useChat() {
     addMsg(text, 'bot');
   }, [addMsg]);
 
-  // init — optionally seed with a pre-filled task
-  const init = useCallback(async (seedTask = null) => {
+  // init — optionally seed with a pre-filled task OR a free-text initial message
+  //   string  (legacy)              — seed `what` directly; ask where next
+  //   {seedTask: string}            — same as above, object form
+  //   {initialMessage: string}      — treat as the user's first chat turn;
+  //                                   run full parsing (what / where / budget)
+  //                                   so the chat can skip straight to whatever's
+  //                                   still unknown. Powers the home search bar.
+  const init = useCallback(async (arg = null) => {
+    const seedTask       = typeof arg === 'string' ? arg : arg?.seedTask ?? null;
+    const initialMessage = typeof arg === 'object' && arg ? arg.initialMessage : null;
+
     setState({ step: 'what', what: '', when: '', budget: '', where: '', details: '', fields: 0 });
     setMessages([]);
     setQR([]);
     setPhase('chat');
+
+    if (initialMessage) {
+      // Inlined parse — mirrors send()'s `what` branch so the chat can react
+      // to a full free-text query like "deep clean my apt in Brooklyn under $200"
+      // in one shot without a back-and-forth on what/where/budget.
+      setTimeout(async () => {
+        const text = initialMessage.trim();
+        addMsg(text, 'user');
+
+        const svc    = parseService(text) || text;
+        const when   = parseWhen(text);
+        const budget = parseBudget(text);
+        const where  = parseWhere(text);
+
+        const next = {
+          step: 'what', what: svc, when: '', budget: '', where: '', details: '', fields: 1,
+        };
+        if (when)   { next.when   = when;   next.fields = Math.max(next.fields, 2); }
+        if (budget) { next.budget = budget; }
+        if (where)  { next.where  = where;  next.fields = 3; }
+
+        const ack = [
+          svc    && `${svc} ✓`,
+          when   && `${when} ✓`,
+          budget && `Budget ${budget} ✓`,
+          where  && `📍 ${where} ✓`,
+        ].filter(Boolean).join(' · ');
+
+        const required = nextRequired(next);
+        if (required === 'done') {
+          // All required fields captured — skip ahead to details.
+          setState({ ...next, step: 'details' });
+          await botSay(`${ack}\n\nAnything else to tell the provider? (or skip)`, 500);
+          setQR(QUICK.details);
+        } else {
+          setState({ ...next, step: required });
+          await botSay(`${ack}\n\n${PROMPTS[required]}`, 500);
+          setQR(QUICK[required] || []);
+        }
+      }, 200);
+      return;
+    }
+
     if (seedTask) {
-      // show user message immediately, then process
+      // Pre-filled category from Home chip tap — only sets `what`.
       setTimeout(async () => {
         addMsg(`I need help with: ${seedTask}`, 'user');
         const svc = seedTask;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
 import { CATEGORIES, FEED } from '../data/mock';
@@ -14,6 +14,29 @@ export function HomeScreen() {
   const navigate = useNavigate();
   const { showToast, startTask } = useOutletContext();
   const [activeCat, setActiveCat] = useState('cleaning');
+  const [query, setQuery] = useState('');
+  const inputRef = useRef(null);
+
+  // Submit the home-bar query: route to /intake with the typed text as the
+  // chat's first user message. useChat will parse it (service + when + where +
+  // budget) and skip ahead to whatever's still missing.
+  const submitQuery = () => {
+    const text = query.trim();
+    if (!text) {
+      // Empty submit → just open the chat blank (preserves the legacy
+      // "tap the search bar to open chat" UX).
+      navigate('/intake');
+      return;
+    }
+    navigate('/intake', { state: { initialMessage: text } });
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitQuery();
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cr">
@@ -40,20 +63,35 @@ export function HomeScreen() {
         </h1>
       </div>
 
-      {/* search bar */}
+      {/* search bar — real input. Empty submit opens the blank chat;
+          a typed query gets parsed in one shot inside /intake. */}
       <div className="px-5 py-3">
         <div
-          onClick={() => navigate('/intake')}
           className="flex items-center gap-2.5 bg-white border border-bdr rounded-pill
-                     px-4 py-3 cursor-pointer transition-all hover:border-g hover:shadow-[0_0_0_3px_#F3FFEA]"
+                     pl-4 pr-1 py-1 transition-all focus-within:border-g focus-within:shadow-[0_0_0_3px_#F3FFEA]"
         >
-          <span className="flex-1 text-[14px] text-b3 font-medium">Describe what you need…</span>
-          <div className="w-9 h-9 bg-g rounded-full flex items-center justify-center flex-shrink-0">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe what you need…"
+            className="flex-1 text-[14px] text-black placeholder-b3 font-medium
+                       bg-transparent outline-none py-2.5"
+          />
+          <button
+            type="button"
+            onClick={submitQuery}
+            aria-label="Search"
+            className="w-9 h-9 bg-g rounded-full flex items-center justify-center flex-shrink-0
+                       hover:opacity-90 active:scale-95 transition-transform"
+          >
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="7" stroke="white" strokeWidth="2.5" />
               <path d="M16 16l4 4" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
             </svg>
-          </div>
+          </button>
         </div>
       </div>
 
