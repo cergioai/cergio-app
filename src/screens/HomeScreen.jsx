@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
+import { Toggle } from '../components/ui/Toggle';
 import { CATEGORIES, FEED } from '../data/mock';
 
 const BUNDLES = [
@@ -12,7 +13,7 @@ const BUNDLES = [
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { showToast, startTask } = useOutletContext();
+  const { showToast, startTask, freeServices, setFreeServices } = useOutletContext();
   const [activeCat, setActiveCat] = useState('cleaning');
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
@@ -99,6 +100,32 @@ export function HomeScreen() {
           Mention <span className="font-bold">what · when · where · budget</span> all in one go.
           I'll only ask about what's missing.
         </p>
+
+        {/* Free-services-for-Rainmakers toggle. Surfaced here (was buried in
+            the chat) so users see the option BEFORE they describe their
+            request. When ON, the chat's "ready" CTA routes to the free-offers
+            flow; when OFF, it routes to the paid /results flow. */}
+        <div className="bg-white border border-bdr rounded-[16px] px-3.5 py-3 mt-3 flex items-center gap-3">
+          <div className="flex-1">
+            <p className="text-[13px] font-extrabold text-black leading-tight">
+              Free services for Rainmakers
+            </p>
+            <p className="text-[11px] text-b3 mt-0.5 leading-snug">
+              {freeServices
+                ? "On — providers can offer free in exchange for an Instagram post."
+                : "Off — pay normally."}
+              {' '}
+              <button
+                type="button"
+                onClick={() => navigate('/rainmakers')}
+                className="text-g font-bold underline underline-offset-2"
+              >
+                Learn how
+              </button>
+            </p>
+          </div>
+          <Toggle on={freeServices} onChange={setFreeServices} size="sm" />
+        </div>
       </div>
 
       {/* categories */}
@@ -135,19 +162,8 @@ export function HomeScreen() {
         ))}
       </div>
 
-      {/* rainmaker banner */}
-      <div
-        onClick={() => navigate('/rainmakers')}
-        className="mx-5 mb-5 p-4 rounded-[18px] bg-gradient-to-br from-[#0D0D0D] to-[#0F2418]
-                   flex items-center gap-3.5 cursor-pointer"
-      >
-        <span className="text-[28px]">🌧️</span>
-        <div className="flex-1">
-          <p className="text-[14px] font-extrabold text-white mb-0.5">Are you a Rainmaker?</p>
-          <p className="text-[12px] text-white/60 font-medium">Spotlight the best services and earn with them</p>
-        </div>
-        <span className="text-[18px] text-white/70">→</span>
-      </div>
+      {/* Rainmaker banner removed — entry point is now the "Learn how" link
+          under the free-services toggle at the top of this screen. */}
 
       {/* friend activity */}
       <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">Friends recently booked</p>

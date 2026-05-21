@@ -21,34 +21,147 @@ import { useState, useCallback, useRef } from 'react';
 import { chatParse } from '../lib/api';
 
 // ─── tiny regex fallback (only used when Claude is unreachable) ─────────────
-const SERVICE_MAP = {
-  clean: 'Cleaning', cleaning: 'Cleaning', housekeeper: 'Cleaning',
-  handyman: 'Handyman', repair: 'Handyman', install: 'Installation',
-  tv: 'TV Mounting',  nail: 'Nail Art', beauty: 'Beauty', hair: 'Hair',
-  makeup: 'Makeup',  fit: 'Personal Training', train: 'Personal Training',
-  cater: 'Catering', chef: 'Catering', cook: 'Catering',
-  wedding: 'Wedding Bundle', event: 'Event Coordination',
-  tutor: 'Tutoring', garden: 'Gardening', lawn: 'Gardening',
-  paint: 'Painting', photo: 'Photography', move: 'Moving',
-  yoga: 'Yoga', pilates: 'Pilates',
-};
+// Substring → display category. Order matters: more specific keys (e.g.
+// "cat sitter") come BEFORE generic ones ("cat" → false positive on
+// "catering") so the .find() short-circuits correctly.
+const SERVICE_MAP = [
+  // pet / personal services
+  ['cat sitter',           'Pet Care'],
+  ['cat sitting',          'Pet Care'],
+  ['pet sitter',           'Pet Care'],
+  ['pet sitting',          'Pet Care'],
+  ['dog sitter',           'Pet Care'],
+  ['dog walking',          'Dog Walking'],
+  ['dog walker',           'Dog Walking'],
+  ['nanny',                'Childcare'],
+  ['babysitter',           'Childcare'],
+  ['babysitting',          'Childcare'],
+  ['child care',           'Childcare'],
+  ['childcare',            'Childcare'],
+  ['personal assistant',   'Personal Assistant'],
+  ['errand',               'Personal Assistant'],
+  ['concierge',            'Personal Assistant'],
+  // mobility / drivers
+  ['driver',               'Driver'],
+  ['chauffeur',             'Driver'],
+  ['ride',                 'Driver'],
+  // home services
+  ['housekeeper',          'Cleaning'],
+  ['house cleaner',        'Cleaning'],
+  ['deep clean',           'Cleaning'],
+  ['cleaning',             'Cleaning'],
+  ['clean',                'Cleaning'],
+  ['handyman',             'Handyman'],
+  ['repair',               'Handyman'],
+  ['plumber',              'Plumbing'],
+  ['plumbing',             'Plumbing'],
+  ['electrician',          'Electrical'],
+  ['electrical',           'Electrical'],
+  ['hvac',                 'HVAC'],
+  ['ac repair',            'HVAC'],
+  ['tv mount',             'TV Mounting'],
+  ['install',              'Installation'],
+  ['assembly',             'Furniture Assembly'],
+  ['ikea',                 'Furniture Assembly'],
+  ['garden',               'Gardening'],
+  ['lawn',                 'Gardening'],
+  ['paint',                'Painting'],
+  ['move',                 'Moving'],
+  ['moving',               'Moving'],
+  // beauty / wellness
+  ['nail',                 'Nail Art'],
+  ['beauty',               'Beauty'],
+  ['hair',                 'Hair'],
+  ['makeup',               'Makeup'],
+  ['massage',              'Massage'],
+  ['facial',               'Beauty'],
+  ['barber',               'Barber'],
+  // fitness
+  ['personal trainer',     'Personal Training'],
+  ['personal training',    'Personal Training'],
+  ['trainer',              'Personal Training'],
+  ['yoga',                 'Yoga'],
+  ['pilates',              'Pilates'],
+  ['coach',                'Coaching'],
+  // food / events
+  ['catering',             'Catering'],
+  ['cater',                'Catering'],
+  ['chef',                 'Catering'],
+  ['bartender',            'Bartending'],
+  ['bartending',           'Bartending'],
+  ['wedding',              'Wedding Bundle'],
+  ['party',                'Event Coordination'],
+  ['event',                'Event Coordination'],
+  ['photographer',         'Photography'],
+  ['photography',          'Photography'],
+  ['videographer',         'Videography'],
+  ['videography',          'Videography'],
+  ['dj',                   'Event Coordination'],
+  // services / lessons
+  ['tutor',                'Tutoring'],
+  ['tutoring',             'Tutoring'],
+  ['lesson',               'Music Lessons'],
+  ['piano',                'Music Lessons'],
+  ['guitar',               'Music Lessons'],
+];
+
+const MONTHS = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+  'january', 'february', 'march', 'april', 'june', 'july', 'august',
+  'september', 'october', 'november', 'december',
+];
+const MONTH_RE  = new RegExp(`\\b(${MONTHS.join('|')})\\b[a-z0-9 ,/.\\-:]*`, 'i');
+const DAY_RE    = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|weekend|next week|this week)\b[^,.]*/i;
 
 function naiveParse(text, state = {}) {
   const l = text.toLowerCase();
-  const what = state.what
-    || Object.entries(SERVICE_MAP).find(([k]) => l.includes(k))?.[1]
-    || null;
 
-  const whenMatch = text.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|weekend)\b[^,.]*/i);
-  const when = state.when || (whenMatch ? whenMatch[0].trim() : null);
+  // Service: longest matching key wins so "personal trainer" beats "trainer".
+  let what = state.what;
+  if (!what) {
+    let bestKey = null;
+    for (const [k, v] of SERVICE_MAP) {
+      if (l.includes(k) && (bestKey === null || k.length > bestKey[0].length)) {
+        bestKey = [k, v];
+      }
+    }
+    what = bestKey ? bestKey[1] : null;
+  }
 
-  const budgetMatch = text.match(/\$\s*\d+/);
-  const budget = state.budget || (budgetMatch ? budgetMatch[0].replace(/\s+/g, '') : null);
+  // When: months OR day-words. Months catch "jan wedding", "start nov".
+  let when = state.when;
+  if (!when) {
+    const mMatch = text.match(MONTH_RE);
+    const dMatch = text.match(DAY_RE);
+    when = (mMatch?.[0] || dMatch?.[0] || null);
+    if (when) when = when.trim();
+  }
 
-  const whereMatch = text.match(/\b\d+\s+[A-Za-z][A-Za-z\s]+(st|ave|blvd|rd|dr|lane|court|place|street)\b/i);
-  const where = state.where || (whereMatch ? whereMatch[0] : null);
+  // Budget: $200, 200 dollars, max 200
+  let budget = state.budget;
+  if (!budget) {
+    const m = text.match(/(?:\$|under|max(?:imum)?|up to|budget)?\s*\$?\s*(\d{2,5})\s*(?:dollars?|usd|bucks)?/i);
+    if (m && parseInt(m[1], 10) >= 10) budget = `$${m[1]}`;
+  }
 
-  return { what, when, where, budget, details: state.details ?? null };
+  // Where: street number + words. Loosened from strict suffix list so things
+  // like "5701 collins ave miami" or "1145 Broadway" both catch.
+  let where = state.where;
+  if (!where) {
+    // Try "<num> <words> <suffix>" first, then "<num> <words>" loose.
+    const strict = text.match(/\b\d{1,6}\s+[A-Za-z][A-Za-z .'-]+(st|ave|av|blvd|rd|dr|lane|court|place|street|hwy|highway|way)\b[^,.\n]*/i);
+    const loose  = text.match(/\b\d{2,6}\s+[A-Z][A-Za-z][A-Za-z .'-]+/);
+    where = (strict?.[0] || loose?.[0] || null);
+    if (where) where = where.trim();
+  }
+
+  const flexible = /\bflexible\b|\bany (?:time|day|evening|morning|afternoon)\b|\bwhenever\b|\bopen\b/i.test(text);
+
+  return {
+    what, when, where, budget,
+    details: state.details ?? null,
+    flexible_time: flexible || state.flexible_time || null,
+  };
 }
 
 function fallbackPlan(text, state) {
@@ -59,19 +172,28 @@ function fallbackPlan(text, state) {
     !parsed.where ? 'where' :
     'done';
   const promptByStep = {
-    what:  "What service do you need? (e.g. handyman, cleaning, tutor…)",
-    when:  "When do you need this done? A date, time, or open range works.",
-    where: "Where should the provider come to?",
+    what:  "What service do you need? (e.g. handyman, cleaning, tutor, cat sitter, driver, personal assistant…)",
+    when:  "When do you need this done? A specific date, time, or open range like \"any evening next week\" works.",
+    where: "Where should the provider come to? An address or area is fine.",
   };
+  // Build an acknowledgement line for what WAS captured so the user knows
+  // their query landed.
+  const ack = [
+    parsed.what  && `${parsed.what} ✓`,
+    parsed.when  && `${parsed.when} ✓`,
+    parsed.where && `📍 ${parsed.where} ✓`,
+    parsed.budget && `Budget ${parsed.budget} ✓`,
+  ].filter(Boolean).join(' · ');
+
   return {
     parsed,
     fits: true,
-    is_flexible_time: null,
+    is_flexible_time: parsed.flexible_time ?? null,
     next_step: missing,
     bot_reply: missing === 'done'
-      ? "All set! Ready to find your best matches 🎯"
-      : `Got it. ${promptByStep[missing]}`,
-    quick_replies: missing === 'done' ? [] : [],
+      ? `${ack ? ack + '\n\n' : ''}All set! Ready to find your best matches 🎯`
+      : `${ack ? ack + '\n\n' : ''}${promptByStep[missing]}`,
+    quick_replies: [],
     switch_to_form: false,
     _offline: true,
   };

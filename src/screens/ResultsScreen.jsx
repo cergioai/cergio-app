@@ -14,13 +14,15 @@ import { geocodeAddress } from '../lib/google';
 // Sequence of status lines shown while we hunt for providers. Each line
 // advances ~900 ms after the previous; the last one repeats with an
 // animated ellipsis until real data lands. Keep it warm + concrete, not
-// generic-loader vibes.
+// generic-loader vibes. A label-level hint surfaces on "Negotiating
+// offers" so the user knows that step is the slow one and can opt to
+// be notified instead of waiting on this screen.
 const STATUS_STEPS = [
-  'Pinging local providers',
-  "Scanning your friends' recos",
-  'Looking up your network',
-  'Getting quotes',
-  'Negotiating offers',
+  { label: 'Pinging local providers' },
+  { label: "Scanning your friends' recos" },
+  { label: 'Looking up your network' },
+  { label: 'Getting quotes' },
+  { label: 'Negotiating offers', hint: 'This may take a while…' },
 ];
 const STATUS_STEP_MS = 900;
 
@@ -174,32 +176,57 @@ export function ResultsScreen() {
             </span>
           </div>
           <ul className="flex flex-col gap-2">
-            {STATUS_STEPS.map((label, i) => {
+            {STATUS_STEPS.map((step, i) => {
               const done   = i < statusStep;
               const active = i === statusStep;
               return (
                 <li
-                  key={label}
-                  className={`flex items-center gap-2.5 text-[13px] leading-tight transition-opacity
+                  key={step.label}
+                  className={`flex items-start gap-2.5 text-[13px] leading-tight transition-opacity
                               ${i > statusStep ? 'opacity-40' : 'opacity-100'}`}
                 >
-                  {done ? (
-                    <span className="w-4 h-4 rounded-full bg-g text-white text-[10px] font-extrabold
-                                     flex items-center justify-center flex-shrink-0">✓</span>
-                  ) : active ? (
-                    <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                      <span className="w-3 h-3 border-2 border-g border-t-transparent rounded-full animate-spin" />
+                  <span className="pt-0.5">
+                    {done ? (
+                      <span className="w-4 h-4 rounded-full bg-g text-white text-[10px] font-extrabold
+                                       flex items-center justify-center flex-shrink-0">✓</span>
+                    ) : active ? (
+                      <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                        <span className="w-3 h-3 border-2 border-g border-t-transparent rounded-full animate-spin" />
+                      </span>
+                    ) : (
+                      <span className="w-4 h-4 rounded-full border-2 border-bdr flex-shrink-0" />
+                    )}
+                  </span>
+                  <span className="flex flex-col">
+                    <span className={done ? 'text-b2 font-medium' : active ? 'text-black font-extrabold' : 'text-b3 font-medium'}>
+                      {step.label}{active ? '…' : ''}
                     </span>
-                  ) : (
-                    <span className="w-4 h-4 rounded-full border-2 border-bdr flex-shrink-0" />
-                  )}
-                  <span className={done ? 'text-b2 font-medium' : active ? 'text-black font-extrabold' : 'text-b3 font-medium'}>
-                    {label}{active ? '…' : ''}
+                    {/* slow-step hint surfaces only while we're on it */}
+                    {active && step.hint && (
+                      <span className="text-[11px] text-b3 mt-0.5 italic">{step.hint}</span>
+                    )}
                   </span>
                 </li>
               );
             })}
           </ul>
+
+          {/* Notify-me opt-out so the user doesn't feel stuck on this screen
+              while the slow Negotiating step runs in the background. */}
+          <div className="mt-4 pt-3 border-t border-bdr flex items-start gap-2.5">
+            <div className="flex-1">
+              <p className="text-[12px] text-b2 leading-relaxed">
+                We'll keep negotiating in the background.{' '}
+                <button
+                  type="button"
+                  onClick={() => showToast("Got it — we'll ping you when offers land.")}
+                  className="text-g font-extrabold underline underline-offset-2"
+                >
+                  Notify me when offers are ready
+                </button>
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

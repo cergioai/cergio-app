@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
-import { Toggle } from '../components/ui/Toggle';
 
 export function IntakeScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { chat, freeServices, setFreeServices } = useOutletContext();
+  const { chat, freeServices } = useOutletContext();
   const seedTask       = location.state?.seedTask       ?? null;
   const initialMessage = location.state?.initialMessage ?? null;
 
@@ -163,22 +162,12 @@ export function IntakeScreen() {
         </div>
       )}
 
-      {/* CTA when ready — chat covered the mandatory three */}
+      {/* CTA when ready — chat covered the mandatory three. The
+          free-services toggle now lives on Home (top of /home), so this
+          screen no longer duplicates it — it just reads the current value
+          off context to pick which CTA to show. */}
       {phase === 'ready' && (
         <div className="px-4 pb-3 flex flex-col gap-2">
-          {/* small inline toggle for repeat Rainmakers, just above submit */}
-          <div className="bg-soft rounded-[14px] px-3 py-2.5 flex items-center gap-3">
-            <div className="flex-1">
-              <p className="text-[12px] font-extrabold text-black leading-tight">
-                Free service for Instagram post
-              </p>
-              <p className="text-[11px] text-b3">
-                {freeServices ? 'On — receive free offers' : 'Off — pay normally'}
-              </p>
-            </div>
-            <Toggle on={freeServices} onChange={setFreeServices} size="sm" />
-          </div>
-
           <button
             onClick={() => navigate(freeServices ? '/enable-free-offers' : '/results')}
             className="w-full bg-g text-white rounded-[24px] py-3.5 text-[15px] font-extrabold
