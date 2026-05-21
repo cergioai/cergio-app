@@ -155,6 +155,41 @@ export async function listServices({
   return await q;
 }
 
+// ─── Chat parsing (Claude Haiku 4.5 via edge function) ──────────────────────
+
+/**
+ * Send the user's latest message + current chat state to the chat-parse
+ * edge function. Claude turns the free-text into a structured intent and
+ * decides the next step. Returns:
+ *   {
+ *     parsed: { what, when, where, budget, details },
+ *     fits: boolean,
+ *     is_flexible_time: boolean | null,
+ *     next_step: "what" | "when" | "flexible_check" | "budget" | "where" | "details" | "done",
+ *     bot_reply: string,
+ *     quick_replies: string[],
+ *     switch_to_form: boolean,
+ *   }
+ *
+ * Frontend should fall back to a local heuristic if this errors (e.g.
+ * Anthropic outage) so the chat keeps working.
+ */
+export async function chatParse({
+  user_message,
+  state = {},
+  attempts = {},
+  is_repeat_user = false,
+  default_address = null,
+} = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data, error } = await supabase.functions.invoke('chat-parse', {
+    body: { user_message, state, attempts, is_repeat_user, default_address },
+  });
+  if (error)        return { data: null, error };
+  if (data?.error)  return { data: null, error: { message: data.error, raw: data.raw } };
+  return { data, error: null };
+}
+
 // ─── Stripe payments ─────────────────────────────────────────────────────────
 
 /**

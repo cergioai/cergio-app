@@ -1,13 +1,28 @@
 // Per design-spec.md — Results / SRP.
 // Fetches real listed services from Supabase, falls back to mock when empty
-// or when Supabase isn't configured.
-import { useEffect, useState } from 'react';
+// or when Supabase isn't configured. While fetching, runs a Claude-style
+// status reel ("pinging providers… scanning friends' recos…") instead of
+// showing a static spinner.
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
 import { ProviderCard } from '../components/ui/ProviderCard';
 import { PROVIDERS } from '../data/mock';
 import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
+
+// Sequence of status lines shown while we hunt for providers. Each line
+// advances ~900 ms after the previous; the last one repeats with an
+// animated ellipsis until real data lands. Keep it warm + concrete, not
+// generic-loader vibes.
+const STATUS_STEPS = [
+  'Pinging local providers',
+  "Scanning your friends' recos",
+  'Looking up your network',
+  'Getting quotes',
+  'Negotiating offers',
+];
+const STATUS_STEP_MS = 900;
 
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 
@@ -49,7 +64,19 @@ export function ResultsScreen() {
   const chatState = chat.state;
   const { what, when, where, budget } = chatState;
 
-  const [services, setServices] = useState(null); // null = loading
+  const [services, setServices]   = useState(null); // null = loading
+  const [statusStep, setStatusStep] = useState(0);
+
+  // While services is still loading, advance through the status reel.
+  // Stops at the last item and lets it cycle the ellipsis there until
+  // data arrives.
+  useEffect(() => {
+    if (services !== null) return;
+    const t = setInterval(() => {
+      setStatusStep(s => Math.min(s + 1, STATUS_STEPS.length - 1));
+    }, STATUS_STEP_MS);
+    return () => clearInterval(t);
+  }, [services]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,8 +166,40 @@ export function ResultsScreen() {
       </div>
 
       {services === null && (
-        <div className="text-center py-10">
-          <p className="text-[14px] text-b3">Looking for providers…</p>
+        <div className="mx-5 mb-5 bg-white border border-bdr rounded-[18px] p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Logo size={20} />
+            <span className="text-[12px] font-extrabold tracking-widest uppercase text-g">
+              Cergio AI is on it
+            </span>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {STATUS_STEPS.map((label, i) => {
+              const done   = i < statusStep;
+              const active = i === statusStep;
+              return (
+                <li
+                  key={label}
+                  className={`flex items-center gap-2.5 text-[13px] leading-tight transition-opacity
+                              ${i > statusStep ? 'opacity-40' : 'opacity-100'}`}
+                >
+                  {done ? (
+                    <span className="w-4 h-4 rounded-full bg-g text-white text-[10px] font-extrabold
+                                     flex items-center justify-center flex-shrink-0">✓</span>
+                  ) : active ? (
+                    <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                      <span className="w-3 h-3 border-2 border-g border-t-transparent rounded-full animate-spin" />
+                    </span>
+                  ) : (
+                    <span className="w-4 h-4 rounded-full border-2 border-bdr flex-shrink-0" />
+                  )}
+                  <span className={done ? 'text-b2 font-medium' : active ? 'text-black font-extrabold' : 'text-b3 font-medium'}>
+                    {label}{active ? '…' : ''}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

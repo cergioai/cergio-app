@@ -63,8 +63,9 @@ export function HomeScreen() {
         </h1>
       </div>
 
-      {/* search bar — real input. Empty submit opens the blank chat;
-          a typed query gets parsed in one shot inside /intake. */}
+      {/* search bar — real input. The home search is the primary UX: put
+          everything in one query and Claude only follows up on what's
+          missing. The chat in /intake is the gap-filler, not a sequence. */}
       <div className="px-5 py-3">
         <div
           className="flex items-center gap-2.5 bg-white border border-bdr rounded-pill
@@ -76,7 +77,7 @@ export function HomeScreen() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Describe what you need…"
+            placeholder="e.g. deep clean Mon 2pm, flexible, max $200"
             className="flex-1 text-[14px] text-black placeholder-b3 font-medium
                        bg-transparent outline-none py-2.5"
           />
@@ -93,6 +94,11 @@ export function HomeScreen() {
             </svg>
           </button>
         </div>
+        {/* hint under the search bar — tells the user they can dump it all in */}
+        <p className="text-[11px] text-b3 mt-1.5 px-1 leading-snug">
+          Mention <span className="font-bold">what · when · where · budget</span> all in one go.
+          I'll only ask about what's missing.
+        </p>
       </div>
 
       {/* categories */}

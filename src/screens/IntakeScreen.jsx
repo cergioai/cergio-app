@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
 import { Toggle } from '../components/ui/Toggle';
@@ -10,7 +10,9 @@ export function IntakeScreen() {
   const seedTask       = location.state?.seedTask       ?? null;
   const initialMessage = location.state?.initialMessage ?? null;
 
-  const { messages, quickReplies, phase, typing, init, send, state } = chat;
+  const {
+    messages, quickReplies, phase, typing, needsForm, init, send, state,
+  } = chat;
   const inputRef  = useRef(null);
   const bottomRef = useRef(null);
 
@@ -48,7 +50,15 @@ export function IntakeScreen() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const { fields } = state;
+  // Progress dots — count the three mandatory fields (what / when / where).
+  // Budget + details + photos are optional and don't move the bar.
+  const fields = useMemo(() => {
+    let n = 0;
+    if (state.what)  n++;
+    if (state.when)  n++;
+    if (state.where) n++;
+    return n;
+  }, [state.what, state.when, state.where]);
 
   return (
     <div className="flex-1 flex flex-col bg-cr overflow-hidden">
@@ -65,7 +75,13 @@ export function IntakeScreen() {
           <Logo size={22} />
           <span className="text-[14px] font-bold text-black">Cergio AI</span>
         </div>
-        <div className="w-8" />
+        <button
+          onClick={() => navigate('/intake-form', { state: { prefill: state } })}
+          className="text-[12px] font-extrabold text-g underline underline-offset-2 px-1"
+          aria-label="Switch to structured form"
+        >
+          Use form
+        </button>
       </div>
 
       {/* progress */}
@@ -111,6 +127,24 @@ export function IntakeScreen() {
         <div ref={bottomRef} />
       </div>
 
+      {/* Claude bailed — offer to switch to the structured form */}
+      {needsForm && (
+        <div className="mx-4 mb-2 bg-[#FFF5E0] border border-[#F0A030]/40 rounded-[14px] p-3">
+          <p className="text-[13px] font-extrabold text-[#8A5A10] mb-1">
+            Want to use a quick form instead?
+          </p>
+          <p className="text-[12px] text-[#8A5A10] mb-2 leading-relaxed">
+            We'll show you fields one screen at a time. No back-and-forth typing.
+          </p>
+          <button
+            onClick={() => navigate('/intake-form', { state: { prefill: state } })}
+            className="bg-black text-white rounded-[12px] px-3.5 py-1.5 text-[12px] font-extrabold"
+          >
+            Switch to form
+          </button>
+        </div>
+      )}
+
       {/* quick replies */}
       {quickReplies.length > 0 && (
         <div className="flex flex-wrap gap-2 px-4 pb-2">
@@ -119,7 +153,7 @@ export function IntakeScreen() {
               key={r}
               onClick={() => send(r)}
               className={`border rounded-pill px-3.5 py-1.5 text-[12px] font-bold cursor-pointer transition-colors
-                          ${r === 'Skip →'
+                          ${r === 'Skip →' || /skip/i.test(r)
                             ? 'border-bdr text-b3 hover:bg-bg5'
                             : 'border-g text-gd hover:bg-gl'}`}
             >
@@ -129,7 +163,7 @@ export function IntakeScreen() {
         </div>
       )}
 
-      {/* CTA when ready */}
+      {/* CTA when ready — chat covered the mandatory three */}
       {phase === 'ready' && (
         <div className="px-4 pb-3 flex flex-col gap-2">
           {/* small inline toggle for repeat Rainmakers, just above submit */}
@@ -145,10 +179,6 @@ export function IntakeScreen() {
             <Toggle on={freeServices} onChange={setFreeServices} size="sm" />
           </div>
 
-          {/* Phase C — split the chat-complete CTA on the free-services toggle:
-              ON  → /enable-free-offers (existing free Rainmaker flow → /roaming)
-              OFF → /results            (paid flow: real provider cards → Book → PaymentSheet)
-          */}
           <button
             onClick={() => navigate(freeServices ? '/enable-free-offers' : '/results')}
             className="w-full bg-g text-white rounded-[24px] py-3.5 text-[15px] font-extrabold
@@ -156,7 +186,10 @@ export function IntakeScreen() {
           >
             {freeServices ? 'Get my free offers →' : 'Show me providers →'}
           </button>
-          <button className="w-full bg-bg5 text-b2 rounded-pill py-3 text-[13px] font-bold">
+          <button
+            onClick={() => send('Add some photos / videos to my request')}
+            className="w-full bg-bg5 text-b2 rounded-pill py-3 text-[13px] font-bold"
+          >
             📷 Add photos / videos
           </button>
         </div>
@@ -169,7 +202,11 @@ export function IntakeScreen() {
             <textarea
               ref={inputRef}
               rows={1}
-              placeholder="Type here…"
+              placeholder={
+                fields === 0
+                  ? "Type everything: service + when + where + budget…"
+                  : "Type here…"
+              }
               onKeyDown={handleKey}
               className="flex-1 bg-cr border border-bdr rounded-[14px] px-3.5 py-2.5
                          text-[13px] text-black font-medium resize-none outline-none

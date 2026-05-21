@@ -22,6 +22,7 @@ import { SplashScreen }     from './screens/SplashScreen';
 import { OnboardScreen }    from './screens/OnboardScreen';
 import { HomeScreen }       from './screens/HomeScreen';
 import { IntakeScreen }     from './screens/IntakeScreen';
+import { IntakeFormScreen } from './screens/IntakeFormScreen';
 import { ResultsScreen }    from './screens/ResultsScreen';
 import { BookingScreen }    from './screens/BookingScreen';
 import { RainmakersScreen } from './screens/RainmakersScreen';
@@ -79,6 +80,7 @@ const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
 const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages']; // focused linear flows
 const HIDE_NAV_PATHS_EXTRA = [
   '/intake',                          // chat composer at bottom — nav was covering it
+  '/intake-form',                     // structured form fallback — same reason
   '/enable-free-offers', '/confirm-submit', '/roaming',
   '/earnings/breakdown', '/earnings/network', '/earnings/transactions',
   '/earnings/how', '/earnings/track',
@@ -243,6 +245,7 @@ export default function App() {
           <Route path="/auth"        element={<AuthScreen />} />
           <Route path="/home"        element={<HomeScreen />} />
           <Route path="/intake"      element={<IntakeScreen />} />
+          <Route path="/intake-form" element={<IntakeFormScreen />} />
           <Route path="/results"     element={<ResultsScreen />} />
           <Route path="/booking"     element={<BookingScreen />} />
           <Route path="/rainmakers"  element={<RainmakersScreen />} />

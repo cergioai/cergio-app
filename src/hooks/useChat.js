@@ -1,220 +1,236 @@
-import { useState, useCallback } from 'react';
+// useChat — Cergio's intake chat hook.
+//
+// Primary path: the user types a complete request on the Home search bar
+// (e.g. "need a deep clean Monday 2pm, flexible, max $200") and we let
+// Claude Haiku 4.5 do the parsing + decide what's still missing. The
+// chat in /intake is the *gap-filler* for whatever wasn't captured up
+// front, not a multi-step interrogation.
+//
+// Each turn:
+//   1. Show the user's message immediately.
+//   2. Toggle the typing indicator.
+//   3. Call `chatParse` (the Claude-backed edge function) with the
+//      current state. Claude returns parsed fields + the next step +
+//      a natural bot reply.
+//   4. Update state, render bot reply, surface its quick replies.
+//
+// If Claude errors out (Anthropic outage, missing API key, etc.) we
+// fall back to a tiny regex parser so the chat doesn't deadlock.
 
+import { useState, useCallback, useRef } from 'react';
+import { chatParse } from '../lib/api';
+
+// ─── tiny regex fallback (only used when Claude is unreachable) ─────────────
 const SERVICE_MAP = {
-  clean: 'Cleaning', cleaning: 'Cleaning', cleaner: 'Cleaning', housekeeper: 'Cleaning',
-  handyman: 'Handyman', repair: 'Handyman', install: 'Installation', tv: 'TV Mounting',
-  nail: 'Nail Art', beauty: 'Beauty', hair: 'Hair', makeup: 'Makeup',
-  fit: 'Personal Training', gym: 'Personal Training', train: 'Personal Training',
+  clean: 'Cleaning', cleaning: 'Cleaning', housekeeper: 'Cleaning',
+  handyman: 'Handyman', repair: 'Handyman', install: 'Installation',
+  tv: 'TV Mounting',  nail: 'Nail Art', beauty: 'Beauty', hair: 'Hair',
+  makeup: 'Makeup',  fit: 'Personal Training', train: 'Personal Training',
   cater: 'Catering', chef: 'Catering', cook: 'Catering',
-  wedding: 'Wedding Bundle', party: 'Event Coordination', event: 'Event Coordination',
-  tutor: 'Tutoring', teach: 'Tutoring', garden: 'Gardening', lawn: 'Gardening',
+  wedding: 'Wedding Bundle', event: 'Event Coordination',
+  tutor: 'Tutoring', garden: 'Gardening', lawn: 'Gardening',
   paint: 'Painting', photo: 'Photography', move: 'Moving',
+  yoga: 'Yoga', pilates: 'Pilates',
 };
 
-function parseService(text) {
+function naiveParse(text, state = {}) {
   const l = text.toLowerCase();
-  for (const [k, v] of Object.entries(SERVICE_MAP)) if (l.includes(k)) return v;
-  return null;
+  const what = state.what
+    || Object.entries(SERVICE_MAP).find(([k]) => l.includes(k))?.[1]
+    || null;
+
+  const whenMatch = text.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|weekend)\b[^,.]*/i);
+  const when = state.when || (whenMatch ? whenMatch[0].trim() : null);
+
+  const budgetMatch = text.match(/\$\s*\d+/);
+  const budget = state.budget || (budgetMatch ? budgetMatch[0].replace(/\s+/g, '') : null);
+
+  const whereMatch = text.match(/\b\d+\s+[A-Za-z][A-Za-z\s]+(st|ave|blvd|rd|dr|lane|court|place|street)\b/i);
+  const where = state.where || (whereMatch ? whereMatch[0] : null);
+
+  return { what, when, where, budget, details: state.details ?? null };
 }
 
-function parseWhen(text) {
-  const l = text.toLowerCase();
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-  const combo = l.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-  if (combo) return `${combo[1][0].toUpperCase() + combo[1].slice(1)} ${combo[2].trim()}`;
-  for (const d of days) if (l.includes(d)) return d[0].toUpperCase() + d.slice(1);
-  if (l.includes('tomorrow')) return 'Tomorrow';
-  if (l.includes('today'))    return 'Today';
-  if (l.includes('weekend'))  return 'This weekend';
-  if (l.includes('flexible') || l.includes('anytime')) return 'Flexible';
-  return null;
+function fallbackPlan(text, state) {
+  const parsed = naiveParse(text, state);
+  const missing =
+    !parsed.what  ? 'what'  :
+    !parsed.when  ? 'when'  :
+    !parsed.where ? 'where' :
+    'done';
+  const promptByStep = {
+    what:  "What service do you need? (e.g. handyman, cleaning, tutor…)",
+    when:  "When do you need this done? A date, time, or open range works.",
+    where: "Where should the provider come to?",
+  };
+  return {
+    parsed,
+    fits: true,
+    is_flexible_time: null,
+    next_step: missing,
+    bot_reply: missing === 'done'
+      ? "All set! Ready to find your best matches 🎯"
+      : `Got it. ${promptByStep[missing]}`,
+    quick_replies: missing === 'done' ? [] : [],
+    switch_to_form: false,
+    _offline: true,
+  };
 }
 
-function parseBudget(text) {
-  const m = text.match(/(?:under|max|around|~|up to)?\s*\$?\s*(\d+)/i);
-  if (m) return `$${m[1]}`;
-  if (/cheap|budget|low/i.test(text)) return 'Budget-friendly';
-  if (/premium|best quality/i.test(text)) return 'Premium';
-  return null;
-}
-
-function parseWhere(text) {
-  const addr = text.match(/\b\d+\s+[A-Za-z][A-Za-z\s]+(st|ave|blvd|rd|dr|lane|court|place|street)\b/i);
-  if (addr) return addr[0];
-  if (/\bmy (home|house|apartment|place|condo)\b/i.test(text)) return 'Your home';
-  const postal = text.match(/\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b|\b\d{5}\b/i);
-  if (postal) return postal[0];
-  return null;
-}
-
-// Mandatory: what + where. Optional: when, budget, details.
-function nextRequired(state) {
-  if (!state.what)  return 'what';
-  if (!state.where) return 'where';
-  return 'done';
-}
-
-const PROMPTS = {
-  what:    "Hi! I'm Cergio AI 👋  What service do you need — or just describe everything at once (service, date, budget, address).",
-  where:   "Where should the provider come to? (address or area)",
-  details: "Any extra details for the provider? (rooms, pets, notes…) — or tap Skip.",
-};
-
-const QUICK = {
-  what:    ['Deep cleaning 🧹', 'Handyman 🔧', 'Nail art 💅', 'Personal trainer 💪', 'Catering 🍽️'],
-  where:   ['My home', 'Use my location 📍', 'Skip →'],
-  details: ['2 bedrooms', 'Have pets 🐶', 'Post-party clean', 'Skip →'],
+// ─── hook ───────────────────────────────────────────────────────────────────
+const INITIAL_STATE = {
+  what: null, when: null, where: null, budget: null, details: null,
+  flexible_time: null,
 };
 
 export function useChat() {
-  const [messages, setMessages] = useState([]);
-  const [state, setState]       = useState({ step: 'init', what: '', when: '', budget: '', where: '', details: '', fields: 0 });
-  const [quickReplies, setQR]   = useState([]);
-  const [phase, setPhase]       = useState('chat'); // 'chat' | 'ready'
-  const [typing, setTyping]     = useState(false);
+  const [messages, setMessages]     = useState([]);
+  const [state, setState]           = useState(INITIAL_STATE);
+  const [quickReplies, setQR]       = useState([]);
+  const [phase, setPhase]           = useState('chat');     // 'chat' | 'ready'
+  const [typing, setTyping]         = useState(false);
+  const [needsForm, setNeedsForm]   = useState(false);      // Claude wants us to bail to /intake-form
+  const [lastBotReply, setLastBot]  = useState(null);
+  // Track attempts per step so Claude (and the fallback) can decide when
+  // to suggest switching to the form.
+  const attemptsRef = useRef({ what: 0, when: 0, where: 0, budget: 0 });
 
   const addMsg = useCallback((text, role, extra = {}) => {
-    setMessages(m => [...m, { id: Date.now() + Math.random(), text, role, ...extra }]);
+    setMessages(m => [...m, { id: `${Date.now()}-${Math.random()}`, text, role, ...extra }]);
   }, []);
 
-  const botSay = useCallback(async (text, ms = 700) => {
-    setTyping(true);
-    await new Promise(r => setTimeout(r, ms));
-    setTyping(false);
-    addMsg(text, 'bot');
+  // Render Claude's response onto the chat surface.
+  const applyParseResult = useCallback((res, prevState) => {
+    const fields = res.parsed ?? {};
+    const merged = {
+      what:           fields.what          ?? prevState.what          ?? null,
+      when:           fields.when          ?? prevState.when          ?? null,
+      where:          fields.where         ?? prevState.where         ?? null,
+      budget:         fields.budget        ?? prevState.budget        ?? null,
+      details:        fields.details       ?? prevState.details       ?? null,
+      flexible_time:  res.is_flexible_time ?? prevState.flexible_time ?? null,
+    };
+    setState(merged);
+
+    addMsg(res.bot_reply || 'Got it.', 'bot');
+    setQR(Array.isArray(res.quick_replies) ? res.quick_replies : []);
+    setLastBot(res.bot_reply);
+
+    if (res.switch_to_form) setNeedsForm(true);
+
+    if (res.next_step === 'done') {
+      setPhase('ready');
+    } else {
+      setPhase('chat');
+    }
+
+    return merged;
   }, [addMsg]);
 
-  // init — optionally seed with a pre-filled task OR a free-text initial message
-  //   string  (legacy)              — seed `what` directly; ask where next
-  //   {seedTask: string}            — same as above, object form
-  //   {initialMessage: string}      — treat as the user's first chat turn;
-  //                                   run full parsing (what / where / budget)
-  //                                   so the chat can skip straight to whatever's
-  //                                   still unknown. Powers the home search bar.
+  // Wrapper that hits Claude with a typing indicator + offline fallback.
+  const runParse = useCallback(async ({ user_message, baseState, defaultAddress = null, isRepeatUser = false }) => {
+    setTyping(true);
+    // Bump the attempt counter for the step we're trying to satisfy.
+    const wantStep =
+      !baseState.what  ? 'what'  :
+      !baseState.when  ? 'when'  :
+      !baseState.where ? 'where' :
+      'budget';
+    attemptsRef.current = {
+      ...attemptsRef.current,
+      [wantStep]: (attemptsRef.current[wantStep] || 0) + 1,
+    };
+
+    const { data, error } = await chatParse({
+      user_message,
+      state:           baseState,
+      attempts:        attemptsRef.current,
+      is_repeat_user:  isRepeatUser,
+      default_address: defaultAddress,
+    });
+
+    setTyping(false);
+    if (error || !data) {
+      // Offline / Anthropic down — keep moving with the naive parser.
+      return applyParseResult(fallbackPlan(user_message, baseState), baseState);
+    }
+    return applyParseResult(data, baseState);
+  }, [applyParseResult]);
+
+  // init — open the chat, optionally with a free-text initialMessage from
+  // the Home search bar, or a category seedTask from a Home chip tap.
   const init = useCallback(async (arg = null) => {
     const seedTask       = typeof arg === 'string' ? arg : arg?.seedTask ?? null;
     const initialMessage = typeof arg === 'object' && arg ? arg.initialMessage : null;
+    const defaultAddress = typeof arg === 'object' && arg ? arg.default_address ?? null : null;
+    const isRepeatUser   = typeof arg === 'object' && arg ? !!arg.is_repeat_user      : false;
 
-    setState({ step: 'what', what: '', when: '', budget: '', where: '', details: '', fields: 0 });
+    setState(INITIAL_STATE);
     setMessages([]);
     setQR([]);
     setPhase('chat');
+    setNeedsForm(false);
+    attemptsRef.current = { what: 0, when: 0, where: 0, budget: 0 };
 
     if (initialMessage) {
-      // Inlined parse — mirrors send()'s `what` branch so the chat can react
-      // to a full free-text query like "deep clean my apt in Brooklyn under $200"
-      // in one shot without a back-and-forth on what/where/budget.
-      setTimeout(async () => {
-        const text = initialMessage.trim();
-        addMsg(text, 'user');
-
-        const svc    = parseService(text) || text;
-        const when   = parseWhen(text);
-        const budget = parseBudget(text);
-        const where  = parseWhere(text);
-
-        const next = {
-          step: 'what', what: svc, when: '', budget: '', where: '', details: '', fields: 1,
-        };
-        if (when)   { next.when   = when;   next.fields = Math.max(next.fields, 2); }
-        if (budget) { next.budget = budget; }
-        if (where)  { next.where  = where;  next.fields = 3; }
-
-        const ack = [
-          svc    && `${svc} ✓`,
-          when   && `${when} ✓`,
-          budget && `Budget ${budget} ✓`,
-          where  && `📍 ${where} ✓`,
-        ].filter(Boolean).join(' · ');
-
-        const required = nextRequired(next);
-        if (required === 'done') {
-          // All required fields captured — skip ahead to details.
-          setState({ ...next, step: 'details' });
-          await botSay(`${ack}\n\nAnything else to tell the provider? (or skip)`, 500);
-          setQR(QUICK.details);
-        } else {
-          setState({ ...next, step: required });
-          await botSay(`${ack}\n\n${PROMPTS[required]}`, 500);
-          setQR(QUICK[required] || []);
-        }
-      }, 200);
+      addMsg(initialMessage, 'user');
+      await runParse({
+        user_message:    initialMessage,
+        baseState:       INITIAL_STATE,
+        defaultAddress,
+        isRepeatUser,
+      });
       return;
     }
 
     if (seedTask) {
-      // Pre-filled category from Home chip tap — only sets `what`.
-      setTimeout(async () => {
-        addMsg(`I need help with: ${seedTask}`, 'user');
-        const svc = seedTask;
-        setState(s => ({ ...s, what: svc, fields: 1, step: 'where' }));
-        await botSay(`${svc} ✓\n\nWhere should the provider come to?`, 500);
-        setQR(QUICK.where);
-      }, 400);
-    } else {
-      await botSay(PROMPTS.what, 300);
-      setQR(QUICK.what);
+      addMsg(`I need help with: ${seedTask}`, 'user');
+      await runParse({
+        user_message:    seedTask,
+        baseState:       INITIAL_STATE,
+        defaultAddress,
+        isRepeatUser,
+      });
+      return;
     }
-  }, [addMsg, botSay]);
 
-  // send user message
+    // Blank open — show the welcome line per spec.
+    addMsg(
+      "Hi, I'm Cergio. Tell me what you want, when, where, and your maximum budget — " +
+      "all in one go if you can. Add any detail that'll help the provider give you " +
+      "an accurate offer.",
+      'bot',
+    );
+    setQR(['Deep cleaning 🧹', 'Handyman 🔧', 'Personal trainer 💪', 'Catering 🍽️']);
+  }, [addMsg, runParse]);
+
+  // send — user typed a follow-up. Just route to Claude with current state.
   const send = useCallback(async (text) => {
-    const skip = /^skip/i.test(text.trim());
-    addMsg(text, 'user');
+    const trimmed = (text || '').trim();
+    if (!trimmed) return;
+
+    addMsg(trimmed, 'user');
     setQR([]);
 
-    const step = state.step;
+    // Use the freshest state captured in the closure of this callback.
+    // setState is async; reading `state` here gives the value at render time.
+    await runParse({
+      user_message:    trimmed,
+      baseState:       state,
+      defaultAddress:  null,    // wire to profile when available
+      isRepeatUser:    false,   // ditto
+    });
+  }, [addMsg, runParse, state]);
 
-    if (step === 'what') {
-      const svc    = parseService(text) || text.trim();
-      const when   = parseWhen(text);
-      const budget = parseBudget(text);
-      const where  = parseWhere(text);
-
-      const next = { ...state, what: svc, fields: 1 };
-      if (when)   { next.when   = when;   next.fields = Math.max(next.fields, 2); }
-      if (budget) { next.budget = budget; }
-      if (where)  { next.where  = where;  next.fields = 3; }
-
-      setState(next);
-
-      const ack = [
-        svc    && `${svc} ✓`,
-        when   && `${when} ✓`,
-        budget && `Budget ${budget} ✓`,
-        where  && `📍 ${where} ✓`,
-      ].filter(Boolean).join(' · ');
-
-      const required = nextRequired(next);
-      if (required === 'done') {
-        await botSay(`${ack}\n\nAnything else to tell the provider? (or skip)`, 600);
-        setState(s => ({ ...s, step: 'details' }));
-        setQR(QUICK.details);
-      } else {
-        await botSay(`${ack}\n\n${PROMPTS[required]}`, 600);
-        setState(s => ({ ...s, step: required }));
-        setQR(QUICK[required] || []);
-      }
-      return;
-    }
-
-    if (step === 'where') {
-      const where = skip ? '' : (parseWhere(text) || text.trim());
-      setState(s => ({ ...s, where, fields: Math.max(s.fields, 3), step: 'details' }));
-      await botSay(`${where ? `📍 ${where} ✓\n\n` : ''}${PROMPTS.details}`, 600);
-      setQR(QUICK.details);
-      return;
-    }
-
-    if (step === 'details') {
-      const details = skip ? '' : text.trim();
-      setState(s => ({ ...s, details, step: 'done' }));
-      await botSay('All set! Ready to find your best matches 🎯', 600);
-      setPhase('ready');
-      setQR([]);
-      return;
-    }
-  }, [state, addMsg, botSay]);
-
-  return { messages, state, quickReplies, phase, typing, init, send, QUICK };
+  return {
+    messages,
+    state,
+    quickReplies,
+    phase,
+    typing,
+    needsForm,
+    lastBotReply,
+    init,
+    send,
+  };
 }
