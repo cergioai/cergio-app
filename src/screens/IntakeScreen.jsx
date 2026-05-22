@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
+import { AddressLabelPrompt } from '../components/ui/AddressLabelPrompt';
 
 export function IntakeScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { chat, freeServices } = useOutletContext();
+  const {
+    chat, freeServices, auth, showToast,
+    defaultAddress, refreshDefaultAddress,
+  } = useOutletContext();
   const seedTask       = location.state?.seedTask       ?? null;
   const initialMessage = location.state?.initialMessage ?? null;
 
@@ -18,17 +22,26 @@ export function IntakeScreen() {
   // Re-initialize the chat each time the user navigates here fresh
   // (location.key changes on every new navigation entry). Prefer the
   // free-text initialMessage path (from Home search) over seedTask
-  // (from Home category chips) when both are present.
+  // (from Home category chips) when both are present. Pass the user's
+  // saved default address so Claude can short-circuit the where step
+  // for repeat users.
   const initedKey = useRef(null);
   useEffect(() => {
     if (initedKey.current !== location.key) {
       initedKey.current = location.key;
+      // Reset address validation tracking — a new chat session may
+      // re-ask about where and we want to re-validate the new value.
+      validatedAddressRef.current = null;
+      const opts = {
+        default_address: defaultAddress?.formatted_address ?? null,
+        is_repeat_user:  !!defaultAddress,
+      };
       if (initialMessage) {
-        init({ initialMessage });
+        init({ ...opts, initialMessage });
       } else if (seedTask) {
-        init(seedTask);
+        init({ ...opts, seedTask });
       } else {
-        init();
+        init(opts);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,6 +60,82 @@ export function IntakeScreen() {
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  // ── Address validation + save-as-label prompt ─────────────────────────────
+  //
+  // When the chat captures a where value we haven't validated yet:
+  //   1. Skip if it matches the user's existing default address (string OR
+  //      a substring overlap — Claude sometimes normalises wording).
+  //   2. Geocode via Google Places. null = couldn't verify → toast a warning
+  //      so the user can re-try, but don't block the chat.
+  //   3. Look up the user's saved addresses by place_id. Already saved →
+  //      silently use it. New → open the label prompt.
+  const validatedAddressRef = useRef(null);
+  const [savePrompt, setSavePrompt] = useState(null); // { formatted, lat, lng, placeId } | null
+
+  useEffect(() => {
+    const where = state.where;
+    if (!where) return;
+    if (validatedAddressRef.current === where) return;
+    validatedAddressRef.current = where;
+
+    // Not signed in → no address-saving flow. Bail.
+    if (!auth?.isSignedIn) return;
+
+    // Matches current default? Treat as a no-op.
+    if (defaultAddress?.formatted_address &&
+        (where === defaultAddress.formatted_address ||
+         where.toLowerCase().includes(defaultAddress.formatted_address.toLowerCase().slice(0, 14)))) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { geocodeAddress } = await import('../lib/google');
+      const g = await geocodeAddress(where);
+      if (cancelled) return;
+      if (!g) {
+        showToast("Couldn't verify that address. Try a more specific one?");
+        return;
+      }
+      // Check existing saved addresses by place_id.
+      const { listMyAddresses } = await import('../lib/api');
+      const { data: saved } = await listMyAddresses();
+      if (cancelled) return;
+      if (saved?.some(a => a.place_id && a.place_id === g.placeId)) return;
+
+      setSavePrompt({
+        formatted: g.formatted,
+        lat:       g.lat,
+        lng:       g.lng,
+        placeId:   g.placeId,
+      });
+    })();
+
+    return () => { cancelled = true; };
+  }, [state.where, auth?.isSignedIn, defaultAddress, showToast]);
+
+  const handleSaveAddress = async (label) => {
+    if (!savePrompt) return;
+    const { saveAddress } = await import('../lib/api');
+    const { data, error } = await saveAddress({
+      label,
+      formattedAddress: savePrompt.formatted,
+      lat:    savePrompt.lat,
+      lng:    savePrompt.lng,
+      placeId: savePrompt.placeId,
+    });
+    if (error) {
+      showToast(`Couldn't save: ${error.message}`);
+    } else {
+      showToast(`Saved as ${label}`);
+      // If this saved address is the user's first (and therefore the new
+      // default), refresh the layout-level default so subsequent chats
+      // pre-fill it.
+      if (data?.is_default) await refreshDefaultAddress();
+    }
+    setSavePrompt(null);
   };
 
   // Progress dots — count the three mandatory fields (what / when / where).
@@ -212,6 +301,17 @@ export function IntakeScreen() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Save-as-label modal — pops up after Cergio captures a NEW address
+          that Google validated and the user hasn't saved before. */}
+      {savePrompt && (
+        <AddressLabelPrompt
+          formattedAddress={savePrompt.formatted}
+          defaultLabel={defaultAddress ? 'Office' : 'Home'}
+          onSave={handleSaveAddress}
+          onSkip={() => setSavePrompt(null)}
+        />
       )}
     </div>
   );

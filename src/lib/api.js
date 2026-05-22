@@ -155,6 +155,108 @@ export async function listServices({
   return await q;
 }
 
+// ─── Saved addresses (Google-validated, labeled, with a default) ────────────
+
+/** Pull every saved address for the signed-in user, default first. */
+export async function listMyAddresses() {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  return await supabase
+    .from('user_addresses')
+    .select('*')
+    .eq('profile_id', userRes.user.id)
+    .order('is_default', { ascending: false })
+    .order('created_at', { ascending: true });
+}
+
+/** Fetch the user's single default address (or null). */
+export async function getDefaultAddress() {
+  if (!supabaseReady) return { data: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('user_addresses')
+    .select('*')
+    .eq('profile_id', userRes.user.id)
+    .eq('is_default', true)
+    .maybeSingle();
+  return { data, error };
+}
+
+/**
+ * Save a Google-validated address. If `makeDefault` is true (or this is the
+ * user's first saved address), it's also set as the default.
+ */
+export async function saveAddress({ label, formattedAddress, lat, lng, placeId, makeDefault = false } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) {
+    return { data: null, error: { message: 'You must be signed in to save an address.' } };
+  }
+  const uid = userRes.user.id;
+
+  // Dedup on place_id — if user already has this exact place saved, return
+  // the existing row instead of duplicating.
+  if (placeId) {
+    const { data: existing } = await supabase
+      .from('user_addresses')
+      .select('*')
+      .eq('profile_id', uid)
+      .eq('place_id',   placeId)
+      .maybeSingle();
+    if (existing) {
+      if (makeDefault) await supabase.rpc('set_default_address', { target_id: existing.id });
+      return { data: existing, error: null };
+    }
+  }
+
+  // Decide whether this should be default. Auto-default if it's their first.
+  let shouldBeDefault = !!makeDefault;
+  if (!shouldBeDefault) {
+    const { count } = await supabase
+      .from('user_addresses')
+      .select('id', { count: 'exact', head: true })
+      .eq('profile_id', uid);
+    if ((count ?? 0) === 0) shouldBeDefault = true;
+  }
+
+  const { data, error } = await supabase
+    .from('user_addresses')
+    .insert({
+      profile_id:         uid,
+      label:              (label || 'Home').slice(0, 60),
+      formatted_address:  formattedAddress,
+      lat: lat ?? null,
+      lng: lng ?? null,
+      place_id:           placeId ?? null,
+      is_default:         false, // flip via RPC below to keep "only one default" invariant
+    })
+    .select()
+    .single();
+
+  if (error) return { data: null, error };
+
+  if (shouldBeDefault) {
+    await supabase.rpc('set_default_address', { target_id: data.id });
+    data.is_default = true;
+  }
+  return { data, error: null };
+}
+
+/** Flip the given row to default; clears default on every other row. */
+export async function setDefaultAddress(addressId) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { error } = await supabase.rpc('set_default_address', { target_id: addressId });
+  return { data: !error, error };
+}
+
+/** Delete a saved address. */
+export async function deleteAddress(addressId) {
+  if (!supabaseReady) return NOT_WIRED;
+  return await supabase.from('user_addresses').delete().eq('id', addressId);
+}
+
 // ─── Chat parsing (Claude Haiku 4.5 via edge function) ──────────────────────
 
 /**

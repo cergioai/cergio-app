@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -101,6 +101,17 @@ function Layout() {
   const [paymentSheet, setPaymentSheet] = useState(null); // {clientSecret, bookingId, totalCents, providerName} | null
   const [freeServices, setFreeServices] = useState(true); // Rainmaker default
   const [serviceMode, setServiceMode]   = useState(false); // false=consumer, true=provider
+  // Default saved address — loaded on sign-in so the chat can pre-fill
+  // "your home, right?" and bypass re-typing. Refreshable by screens that
+  // save a new address (Profile → manage, IntakeScreen label prompt).
+  const [defaultAddress, setDefaultAddress] = useState(null);
+  const refreshDefaultAddress = useCallback(async () => {
+    if (!auth?.isSignedIn) { setDefaultAddress(null); return; }
+    const { getDefaultAddress } = await import('./lib/api');
+    const { data } = await getDefaultAddress();
+    setDefaultAddress(data || null);
+  }, [auth?.isSignedIn]);
+  useEffect(() => { refreshDefaultAddress(); }, [refreshDefaultAddress]);
   const [listingDraft, setListingDraft] = useState({
     category: '', location: '', description: '',
     pricingMode: null,            // 'hourly' | 'session'
@@ -212,6 +223,8 @@ function Layout() {
             serviceMode,
             setServiceMode,
             auth,
+            defaultAddress,
+            refreshDefaultAddress,
             listingDraft, updateListingDraft, addOffering, resetListingDraft,
           }}
         />
