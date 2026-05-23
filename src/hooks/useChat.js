@@ -203,6 +203,14 @@ function fallbackPlan(text, state) {
 const INITIAL_STATE = {
   what: null, when: null, where: null, budget: null, details: null,
   flexible_time: null,
+  // populated from the chat-parse resolver telemetry — used by ResultsScreen
+  // to filter providers and by the status reel to say "Pinging local Plumbers"
+  // instead of the generic copy.
+  category:      null,   // broader taxonomy category, e.g. "Plumbing"
+  provider_type: null,   // notify_as / singular, e.g. "Plumber"
+  offering_id:   null,   // taxonomy id, e.g. "HOME-PLUMB-001"
+  urgency:       false,
+  bundle:        null,   // { id, name, step_count } when chat resolves to a bundle
 };
 
 export function useChat() {
@@ -224,6 +232,7 @@ export function useChat() {
   // Render Claude's response onto the chat surface.
   const applyParseResult = useCallback((res, prevState) => {
     const fields = res.parsed ?? {};
+    const resolver = res._resolver ?? {};
     const merged = {
       what:           fields.what          ?? prevState.what          ?? null,
       when:           fields.when          ?? prevState.when          ?? null,
@@ -231,6 +240,14 @@ export function useChat() {
       budget:         fields.budget        ?? prevState.budget        ?? null,
       details:        fields.details       ?? prevState.details       ?? null,
       flexible_time:  res.is_flexible_time ?? prevState.flexible_time ?? null,
+      // ── resolver-sourced fields. Carry forward when the new turn didn't
+      // produce a fresh value so a follow-up "where is …" doesn't blank
+      // out the offering_id we already locked in.
+      category:       resolver.category       ?? prevState.category       ?? null,
+      provider_type:  resolver.provider_type  ?? prevState.provider_type  ?? null,
+      offering_id:    resolver.offering_id    ?? prevState.offering_id    ?? null,
+      bundle:         resolver.bundle         ?? prevState.bundle         ?? null,
+      urgency:        res.urgency === true || prevState.urgency === true,
     };
     setState(merged);
 

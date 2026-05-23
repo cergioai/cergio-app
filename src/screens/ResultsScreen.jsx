@@ -11,20 +11,22 @@ import { PROVIDERS } from '../data/mock';
 import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
 
-// Sequence of status lines shown while we hunt for providers. Each line
-// advances ~900 ms after the previous; the last one repeats with an
-// animated ellipsis until real data lands. Keep it warm + concrete, not
-// generic-loader vibes. A label-level hint surfaces on "Negotiating
-// offers" so the user knows that step is the slow one and can opt to
-// be notified instead of waiting on this screen.
-const STATUS_STEPS = [
-  { label: 'Pinging local providers' },
-  { label: "Scanning your friends' recos" },
-  { label: 'Looking up your network' },
-  { label: 'Getting quotes' },
-  { label: 'Negotiating offers', hint: 'This may take a while…' },
-];
+// Sequence of status lines shown while we hunt for providers. When the
+// resolver gave us a provider_type ("Plumber", "Pet Sitter"…) we splice
+// it in to make the copy specific instead of generic. The last step
+// repeats its ellipsis until real data lands; its sub-hint signals it's
+// the slow one and offers a Notify-me bail.
 const STATUS_STEP_MS = 900;
+function buildStatusSteps(providerType) {
+  const plural = providerType ? `${providerType}s` : 'providers';
+  return [
+    { label: `Pinging local ${plural}` },
+    { label: `Scanning your friends' ${plural.toLowerCase()} recos` },
+    { label: 'Looking up your network' },
+    { label: providerType ? `Getting quotes from ${plural}` : 'Getting quotes' },
+    { label: 'Negotiating offers', hint: 'This may take a while…' },
+  ];
+}
 
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 
@@ -64,9 +66,13 @@ export function ResultsScreen() {
   const navigate = useNavigate();
   const { chat, showToast, handleBook } = useOutletContext();
   const chatState = chat.state;
-  const { what, when, where, budget } = chatState;
+  const { what, when, where, budget, category, provider_type } = chatState;
 
-  const [services, setServices]   = useState(null); // null = loading
+  // Build the status reel from the resolver's provider_type so the user
+  // sees "Pinging local Plumbers" instead of generic copy when known.
+  const statusSteps = useMemo(() => buildStatusSteps(provider_type), [provider_type]);
+
+  const [services, setServices]     = useState(null); // null = loading
   const [statusStep, setStatusStep] = useState(0);
 
   // While services is still loading, advance through the status reel.
@@ -75,10 +81,10 @@ export function ResultsScreen() {
   useEffect(() => {
     if (services !== null) return;
     const t = setInterval(() => {
-      setStatusStep(s => Math.min(s + 1, STATUS_STEPS.length - 1));
+      setStatusStep(s => Math.min(s + 1, statusSteps.length - 1));
     }, STATUS_STEP_MS);
     return () => clearInterval(t);
-  }, [services]);
+  }, [services, statusSteps.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,25 +96,34 @@ export function ResultsScreen() {
         const g = await geocodeAddress(where);
         if (g) { lat = g.lat; lng = g.lng; }
       }
+      // Prefer the broader taxonomy category for filtering (the names
+      // providers actually wrote on their listings). Fall back to the
+      // offering name, then nothing. Always over-fetch and let the
+      // mock fallback fill in if no real matches.
+      const filterCategory = category || what || null;
       const { data, error } = await listServices({
-        category: what || null, lat, lng, radiusMiles: 25,
+        category: filterCategory, lat, lng, radiusMiles: 25,
       });
       if (cancelled) return;
       if (error || !data) { setServices([]); return; }
       setServices(data);
     })();
     return () => { cancelled = true; };
-  }, [what, where]);
+  }, [what, category, where]);
 
   const budgetCents = parseBudgetCents(budget);
   const providers   = (services && services.length > 0)
     ? services.map((s, i) => serviceToProvider(s, i, budgetCents))
     : PROVIDERS; // fallback to mock
 
-  const usingReal = services && services.length > 0;
-  const titleText = usingReal
-    ? `Showing ${providers.length} ${(what || 'matching').toLowerCase()} providers`
-    : (what ? `Showing ${providers.length} ${what.toLowerCase()} providers` : 'Here are your matches');
+  const usingReal  = services && services.length > 0;
+  const headerNoun =
+    provider_type ? `${provider_type.toLowerCase()}s` :
+    what          ? what.toLowerCase()                :
+    'matching';
+  const titleText  = usingReal
+    ? `Showing ${providers.length} ${headerNoun} providers`
+    : (what ? `Showing ${providers.length} ${headerNoun} providers` : 'Here are your matches');
   const pills = [when, where, budget && `Budget ${budget}`].filter(Boolean);
 
   return (
@@ -176,7 +191,7 @@ export function ResultsScreen() {
             </span>
           </div>
           <ul className="flex flex-col gap-2">
-            {STATUS_STEPS.map((step, i) => {
+            {statusSteps.map((step, i) => {
               const done   = i < statusStep;
               const active = i === statusStep;
               return (
