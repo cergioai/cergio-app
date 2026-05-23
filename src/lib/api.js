@@ -289,6 +289,12 @@ export async function chatParse({
   });
   if (error)        return { data: null, error };
   if (data?.error)  return { data: null, error: { message: data.error, raw: data.raw } };
+  // _resolver telemetry is debug-only; log to console so we can see which
+  // queries hit the local engine vs Claude.
+  if (data?._resolver && typeof window !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.debug('[chat-parse]', data._resolver);
+  }
   return { data, error: null };
 }
 
