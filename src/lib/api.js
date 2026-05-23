@@ -39,7 +39,10 @@ export async function createService(draft) {
   }
   const ownerId = userRes.user.id;
 
-  // 1. Insert service
+  // 1. Insert service. taxonomy_* fields are populated when the
+  //    /list-service/about screen ran the provider's typed "Service type"
+  //    through resolveOffering(). Null is fine — service still works,
+  //    matching falls back to text category.
   const { data: svc, error: svcErr } = await supabase
     .from('services')
     .insert({
@@ -52,13 +55,19 @@ export async function createService(draft) {
       lng:          draft.lng ?? null,
       photo_class:  draft.photoClass || 'fv-jamie',
       status:       'listed',
+      taxonomy_category:      draft.taxonomy_category      || null,
+      taxonomy_provider_type: draft.taxonomy_provider_type || null,
+      taxonomy_offering_id:   draft.taxonomy_offering_id   || null,
     })
     .select()
     .single();
 
   if (svcErr) return { data: null, error: svcErr };
 
-  // 2. Insert offerings (if any)
+  // 2. Insert offerings (if any). Each offering carries its own
+  //    taxonomy_offering_id (resolved when the provider typed the offering
+  //    name) plus taxonomy_override=true if we couldn't confidently match
+  //    it. Override rows surface in the admin curation queue later.
   if (Array.isArray(draft.offerings) && draft.offerings.length > 0) {
     const rows = draft.offerings.map(o => ({
       service_id:        svc.id,
@@ -69,6 +78,8 @@ export async function createService(draft) {
       duration_minutes:  o.kind === 'session' ? (parseInt(o.durationMinutes, 10) || null) : null,
       currency:          'USD',
       is_default:        true,
+      taxonomy_offering_id: o.taxonomy_offering_id || null,
+      taxonomy_override:   !!o.taxonomy_override,
     }));
     const { error: offErr } = await supabase.from('offerings').insert(rows);
     if (offErr) return { data: svc, error: offErr };
@@ -108,6 +119,8 @@ export async function listMyServices() {
  */
 export async function listServices({
   category = null,
+  offering_id = null,
+  provider_type = null,
   lat = null, lng = null, radiusMiles = 25,
   limit = 50,
 } = {}) {
@@ -122,37 +135,61 @@ export async function listServices({
     });
     if (error) return { data: null, error };
 
-    const ids = (data || []).map(s => s.id);
+    let ids = (data || []).map(s => s.id);
     if (ids.length === 0) return { data: [], error: null };
 
-    // Pull offerings in one shot, then attach.
+    // Pull offerings in one shot, then attach. Carry taxonomy fields so
+    // we can re-filter by offering_id when one was requested.
     const { data: offs } = await supabase
       .from('offerings')
-      .select('id, service_id, name, kind, price_cents, duration_minutes, is_default')
+      .select('id, service_id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id')
       .in('service_id', ids);
     const offMap = {};
     (offs || []).forEach(o => { (offMap[o.service_id] ||= []).push(o); });
 
-    return {
-      data: data.map(s => ({ ...s, offerings: offMap[s.id] || [] })),
-      error: null,
-    };
+    let filtered = data.map(s => ({ ...s, offerings: offMap[s.id] || [] }));
+    if (offering_id) {
+      filtered = filtered.filter(s =>
+        (s.taxonomy_offering_id === offering_id) ||
+        (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
+      );
+    }
+    return { data: filtered, error: null };
   }
 
-  // Plain branch.
+  // Plain branch. Prefer taxonomy_offering_id when given — exact targeted
+  // match against either the service or one of its offerings. Otherwise
+  // fall back to the legacy text-category ilike.
   let q = supabase
     .from('services')
     .select(`
       id, title, category, description, location_text, photo_class,
       rating_avg, rating_count, bookings_count, owner_id, created_at,
-      offerings ( id, name, kind, price_cents, duration_minutes, is_default )
+      taxonomy_category, taxonomy_provider_type, taxonomy_offering_id,
+      offerings ( id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id )
     `)
     .eq('status', 'listed')
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (category) q = q.ilike('category', `%${category}%`);
-  return await q;
+  if (offering_id) {
+    // Wide net: services whose primary taxonomy_offering_id matches OR who
+    // have at least one offering with this id. Post-filter offerings array
+    // on the client since we can't easily JSON-filter the embedded join.
+    q = q.or(`taxonomy_offering_id.eq.${offering_id},offerings.taxonomy_offering_id.eq.${offering_id}`);
+  } else if (provider_type) {
+    q = q.ilike('taxonomy_provider_type', provider_type);
+  } else if (category) {
+    q = q.ilike('category', `%${category}%`);
+  }
+  const res = await q;
+  if (offering_id && res.data) {
+    res.data = res.data.filter(s =>
+      s.taxonomy_offering_id === offering_id ||
+      (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
+    );
+  }
+  return res;
 }
 
 // ─── Saved addresses (Google-validated, labeled, with a default) ────────────
@@ -276,6 +313,47 @@ export async function deleteAddress(addressId) {
  * Frontend should fall back to a local heuristic if this errors (e.g.
  * Anthropic outage) so the chat keeps working.
  */
+/**
+ * Resolve a free-text service / offering name against the v3 taxonomy.
+ * Provider-side helper: when a provider types "Drain unclog" or "fix leaky
+ * sinks", we run that through chat-parse and return whatever the resolver
+ * picked. The frontend can then save the canonical taxonomy_offering_id
+ * alongside the provider's own wording (so consumer queries match).
+ *
+ * Returns:
+ *   {
+ *     data: {
+ *       offering_id, provider_type, category, offering_name,
+ *       confidence, method, candidates, bundle, ok (confidence ≥ 0.60),
+ *     },
+ *     error
+ *   }
+ */
+export async function resolveOffering(text) {
+  if (!text || !text.trim()) {
+    return { data: null, error: { message: 'empty input' } };
+  }
+  if (!supabaseReady) return NOT_WIRED;
+  const { data, error } = await supabase.functions.invoke('chat-parse', {
+    body: { user_message: text, state: {} },
+  });
+  if (error) return { data: null, error };
+  if (data?.error) return { data: null, error: { message: data.error } };
+  const r = data?._resolver ?? {};
+  const out = {
+    offering_id:   r.offering_id   || null,
+    provider_type: r.provider_type || null,
+    category:      data?.parsed?.category || null,   // chat-parse rarely sets this for provider names; left for future use
+    offering_name: data?.parsed?.what     || null,
+    confidence:    typeof r.confidence === 'number' ? r.confidence : 0,
+    method:        r.method,
+    candidates:    Array.isArray(r.candidates) ? r.candidates : (r.top_candidates || []),
+    bundle:        r.bundle || null,
+    ok:            (typeof r.confidence === 'number' ? r.confidence : 0) >= 0.60 && !!r.offering_id,
+  };
+  return { data: out, error: null };
+}
+
 export async function chatParse({
   user_message,
   state = {},

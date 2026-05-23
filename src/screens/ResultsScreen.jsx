@@ -96,20 +96,24 @@ export function ResultsScreen() {
         const g = await geocodeAddress(where);
         if (g) { lat = g.lat; lng = g.lng; }
       }
-      // Prefer the broader taxonomy category for filtering (the names
-      // providers actually wrote on their listings). Fall back to the
-      // offering name, then nothing. Always over-fetch and let the
-      // mock fallback fill in if no real matches.
+      // Prefer the exact taxonomy_offering_id when we have one (resolver
+      // confident on the user's query). Falls back to provider_type, then
+      // broader category text, then nothing. Always over-fetches and lets
+      // the mock fallback fill in if no real matches.
+      const { offering_id: resolvedOfferingId } = chatState;
       const filterCategory = category || what || null;
       const { data, error } = await listServices({
-        category: filterCategory, lat, lng, radiusMiles: 25,
+        offering_id:   resolvedOfferingId || null,
+        provider_type: provider_type      || null,
+        category:      filterCategory,
+        lat, lng, radiusMiles: 25,
       });
       if (cancelled) return;
       if (error || !data) { setServices([]); return; }
       setServices(data);
     })();
     return () => { cancelled = true; };
-  }, [what, category, where]);
+  }, [what, category, where, provider_type, chatState.offering_id]);
 
   const budgetCents = parseBudgetCents(budget);
   const providers   = (services && services.length > 0)

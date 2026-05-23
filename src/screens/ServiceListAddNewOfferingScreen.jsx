@@ -3,6 +3,8 @@
 // "Delete offering" / "Add" instead of "Back" / "Next".
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { TaxonomyMatchBadge } from '../components/ui/TaxonomyMatchBadge';
+import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
 
 const DURATION_UNITS = ['minutes', 'hours', 'days'];
 
@@ -19,6 +21,13 @@ export function ServiceListAddNewOfferingScreen() {
   const [duration, setDur]        = useState('');
   const [unit, setUnit]           = useState('minutes');
   const [desc, setDesc]           = useState('');
+  const [override, setOverride]   = useState(false);
+
+  // Resolve the offering title (+ optional description) against the
+  // taxonomy. We feed both fields so descriptions like "fix drains"
+  // can rescue a sparse title like "Plumbing".
+  const resolveInput = [title, desc].filter(s => s.trim()).join(' — ');
+  const { resolving, result, resolveNow } = useTaxonomyResolve(resolveInput);
 
   const valid = mode === 'hourly'
     ? title.trim() && hourlyPrice.trim() && desc.trim()
@@ -52,7 +61,14 @@ export function ServiceListAddNewOfferingScreen() {
         </div>
 
         <Field label="Title" placeholder="Pilates Session, Haircut, etc."
-               value={title} onChange={setTitle} />
+               value={title} onChange={v => { setTitle(v); setOverride(false); }} />
+        <TaxonomyMatchBadge
+          resolving={resolving}
+          result={result}
+          overridden={override}
+          onOverride={() => setOverride(true)}
+          onUndoOverride={() => setOverride(false)}
+        />
 
         {mode === 'hourly' ? (
           <Field label="Hourly price" placeholder="$ USD"
@@ -112,15 +128,21 @@ export function ServiceListAddNewOfferingScreen() {
           Delete offering
         </button>
         <button
-          onClick={() => {
+          onClick={async () => {
             if (!valid) return;
-            const offering = mode === 'hourly'
+            const taxo = result ?? await resolveNow();
+            const useTaxo = !override && taxo?.ok;
+            const base = mode === 'hourly'
               ? { name: title.trim(), kind: 'hourly',  price: hourlyPrice.trim(),
                   description: desc.trim() }
               : { name: title.trim(), kind: 'session', price: sessionPrice.trim(),
                   description: desc.trim(),
                   durationMinutes: (parseInt(duration, 10) || 0) * (UNIT_TO_MIN[unit] || 1) };
-            addOffering(offering);
+            addOffering({
+              ...base,
+              taxonomy_offering_id: useTaxo ? (taxo.offering_id || null) : null,
+              taxonomy_override:    !useTaxo,
+            });
             navigate('/list-service/more-offerings');
           }}
           disabled={!valid}

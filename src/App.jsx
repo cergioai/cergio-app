@@ -117,10 +117,18 @@ function Layout() {
     pricingMode: null,            // 'hourly' | 'session'
     offerings: [],
     photoClass: 'fv-jamie',
+    // Taxonomy linkage populated by the list-service flow when the
+    // provider's typed text resolved through chat-parse with confidence
+    // ≥ 0.60. Null when they overrode or we couldn't match — we then
+    // mark the matching offering rows with taxonomy_override=true.
+    taxonomy_category:      null,
+    taxonomy_provider_type: null,
+    taxonomy_offering_id:   null,
   });
   const resetListingDraft = useCallback(() => setListingDraft({
     category: '', location: '', description: '',
     pricingMode: null, offerings: [], photoClass: 'fv-jamie',
+    taxonomy_category: null, taxonomy_provider_type: null, taxonomy_offering_id: null,
   }), []);
   const updateListingDraft = useCallback((patch) => setListingDraft(d => ({ ...d, ...patch })), []);
   const addOffering = useCallback((offering) => setListingDraft(d => ({ ...d, offerings: [...d.offerings, offering] })), []);

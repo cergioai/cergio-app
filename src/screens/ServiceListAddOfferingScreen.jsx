@@ -2,12 +2,21 @@
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RegHeader, RegFooter } from '../components/ui/RegHeader';
+import { TaxonomyMatchBadge } from '../components/ui/TaxonomyMatchBadge';
+import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
 
 export function ServiceListAddOfferingScreen() {
   const navigate = useNavigate();
-  const { addOffering } = useOutletContext();
+  const { addOffering, listingDraft } = useOutletContext();
   const [name, setName] = useState('');
   const [rate, setRate] = useState('');
+  const [override, setOverride] = useState(false);
+
+  // Resolve the offering name against the taxonomy. We seed with the
+  // service-level taxonomy_provider_type so the resolver has a head start
+  // — typing "drain unclog" under a provider already classified as a
+  // Plumber should still map confidently.
+  const { resolving, result, resolveNow } = useTaxonomyResolve(name);
 
   const valid = name.trim() && rate.trim();
 
@@ -23,10 +32,18 @@ export function ServiceListAddOfferingScreen() {
         <div className="mb-6">
           <label className="block text-[18px] font-extrabold text-black mb-2.5">Offering name</label>
           <input
-            type="text" value={name} onChange={e => setName(e.target.value)}
+            type="text" value={name}
+            onChange={e => { setName(e.target.value); setOverride(false); }}
             placeholder="Personal Training"
             className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+          />
+          <TaxonomyMatchBadge
+            resolving={resolving}
+            result={result}
+            overridden={override}
+            onOverride={() => setOverride(true)}
+            onUndoOverride={() => setOverride(false)}
           />
         </div>
         <div className="mb-6">
@@ -42,8 +59,16 @@ export function ServiceListAddOfferingScreen() {
 
       <RegFooter
         progress={0.35}
-        onNext={() => {
-          addOffering({ name: name.trim(), kind: 'hourly', price: rate.trim() });
+        onNext={async () => {
+          const taxo = result ?? await resolveNow();
+          const useTaxo = !override && taxo?.ok;
+          addOffering({
+            name:  name.trim(),
+            kind:  'hourly',
+            price: rate.trim(),
+            taxonomy_offering_id: useTaxo ? (taxo.offering_id || null) : null,
+            taxonomy_override:    !useTaxo,
+          });
           navigate('/list-service/more-offerings');
         }}
         nextEnabled={valid}

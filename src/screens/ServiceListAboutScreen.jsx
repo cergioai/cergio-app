@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RegHeader, RegFooter } from '../components/ui/RegHeader';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
+import { TaxonomyMatchBadge } from '../components/ui/TaxonomyMatchBadge';
+import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
 
 export function ServiceListAboutScreen() {
   const navigate = useNavigate();
@@ -11,6 +13,12 @@ export function ServiceListAboutScreen() {
   const [location, setLocation]       = useState(listingDraft.location || '');
   const [coords, setCoords]           = useState(null); // {lat,lng} when Google Place picked
   const [headline, setHeadline]       = useState(listingDraft.description || '');
+  const [overrideTaxonomy, setOverrideTaxonomy] = useState(false);
+
+  // As the provider types the service type, run it through the same chat
+  // resolver consumers use. We surface the match inline so they see how
+  // their listing will be classified.
+  const { resolving, result, resolveNow } = useTaxonomyResolve(serviceType);
 
   const valid = serviceType.trim() && location.trim() && headline.trim();
 
@@ -23,9 +31,16 @@ export function ServiceListAboutScreen() {
       />
 
       <div className="bg-cr rounded-t-[28px] -mt-7 px-7 pt-7 flex-1 pb-32 overflow-y-auto">
-        <Field label="Service type" placeholder="Type a service category"
-               value={serviceType} onChange={setServiceType} />
-        <div className="mb-6">
+        <Field label="Service type" placeholder="e.g. Plumber, Cleaning, Dog walker"
+               value={serviceType} onChange={v => { setServiceType(v); setOverrideTaxonomy(false); }} />
+        <TaxonomyMatchBadge
+          resolving={resolving}
+          result={result}
+          overridden={overrideTaxonomy}
+          onOverride={() => setOverrideTaxonomy(true)}
+          onUndoOverride={() => setOverrideTaxonomy(false)}
+        />
+        <div className="mb-6 mt-6">
           <label className="block text-[18px] font-extrabold text-black mb-2.5">Service location</label>
           <AddressAutocomplete
             value={location}
@@ -59,11 +74,20 @@ export function ServiceListAboutScreen() {
               console.warn('[list-service] geocode failed; saving without coords', e);
             }
           }
+
+          // Make sure we have a resolver result before saving. The debounce
+          // may not have fired yet if the user submitted quickly.
+          const taxo = result ?? await resolveNow();
+          const useTaxo = !overrideTaxonomy && taxo?.ok;
+
           updateListingDraft({
             category:    serviceType.trim(),
             location:    location.trim(),
             description: headline.trim(),
             lat, lng,
+            taxonomy_category:      useTaxo ? (taxo.category || null) : null,
+            taxonomy_provider_type: useTaxo ? (taxo.provider_type || null) : null,
+            taxonomy_offering_id:   useTaxo ? (taxo.offering_id || null) : null,
           });
           navigate('/list-service/hourly-or-session');
         }}
