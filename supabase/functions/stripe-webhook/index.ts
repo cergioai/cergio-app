@@ -82,28 +82,61 @@ serve(async (req: Request) => {
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const pi = event.data.object as Stripe.PaymentIntent;
-        const bookingId = pi.metadata?.booking_id;
-        const providerId = pi.metadata?.provider_id;
+        // Dispatch by metadata type. Bookings carry booking_id;
+        // spotlight payments carry spotlight_request_id + type='spotlight'.
+        const bookingId           = pi.metadata?.booking_id;
+        const spotlightRequestId  = pi.metadata?.spotlight_request_id;
+        const providerId          = pi.metadata?.provider_id;
+        const connectorId         = pi.metadata?.connector_id;
+        const appFeeCents         = (pi.application_fee_amount ?? 0);
+
+        if (spotlightRequestId) {
+          // ── Spotlight payment path ────────────────────────────────────────
+          await supaAdmin
+            .from('spotlight_requests')
+            .update({ paid_at: new Date().toISOString() })
+            .eq('id', spotlightRequestId)
+            .is('paid_at', null);   // idempotent — don't re-stamp
+
+          // Earnings ledger row for the Connector (their share after our fee).
+          const connectorShare = (pi.amount ?? 0) - appFeeCents;
+          if (connectorId && connectorShare > 0) {
+            const { data: existing } = await supaAdmin
+              .from('earnings')
+              .select('id')
+              .eq('source_id', spotlightRequestId)
+              .eq('kind', 'spotlight')
+              .eq('profile_id', connectorId)
+              .maybeSingle();
+            if (!existing) {
+              await supaAdmin.from('earnings').insert({
+                profile_id:   connectorId,
+                kind:         'spotlight',
+                source_id:    spotlightRequestId,
+                amount_cents: connectorShare,
+                currency:     pi.currency?.toUpperCase() || 'USD',
+                status:       'cleared',
+                meta:         { stripe_intent_id: pi.id, app_fee_cents: appFeeCents, platform: pi.metadata?.platform },
+              });
+            }
+          }
+          break;
+        }
+
         if (!bookingId) break; // not one of ours
 
-        // Flip booking → confirmed (idempotent).
+        // ── Booking payment path (existing) ─────────────────────────────────
         await supaAdmin
           .from('bookings')
           .update({ status: 'confirmed' })
           .eq('id', bookingId)
           .neq('status', 'cancelled');
 
-        // Flip payment → succeeded.
         await supaAdmin
           .from('payments')
           .update({ status: 'succeeded' })
           .eq('stripe_intent_id', pi.id);
 
-        // Record the provider's earnings (after our platform fee, before
-        // Stripe's processing fee — Stripe deducts that from the destination
-        // automatically). Insert ledger row idempotently: stripe intent id
-        // doubles as the natural source_id.
-        const appFeeCents = (pi.application_fee_amount ?? 0);
         const providerShare = (pi.amount ?? 0) - appFeeCents;
         if (providerId && providerShare > 0) {
           const { data: existing } = await supaAdmin
@@ -130,7 +163,14 @@ serve(async (req: Request) => {
 
       case 'payment_intent.payment_failed': {
         const pi = event.data.object as Stripe.PaymentIntent;
-        const bookingId = pi.metadata?.booking_id;
+        const bookingId          = pi.metadata?.booking_id;
+        const spotlightRequestId = pi.metadata?.spotlight_request_id;
+
+        if (spotlightRequestId) {
+          // Spotlight payment failed — leave row at status='accepted' so the
+          // provider can retry. Just log nothing structurally changes.
+          break;
+        }
         if (!bookingId) break;
 
         await supaAdmin

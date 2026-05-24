@@ -673,6 +673,22 @@ export async function setSpotlightRequestStatus(id, status) {
   return res;
 }
 
+/**
+ * Create a PaymentIntent for an accepted spotlight request. Returns the
+ * client_secret the frontend feeds to Stripe's PaymentSheet. After the
+ * provider completes the payment, the stripe-webhook flips paid_at on the
+ * row and writes the Connector's earnings.
+ */
+export async function createSpotlightPaymentIntent(spotlightRequestId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!spotlightRequestId) return { data: null, error: { message: 'spotlightRequestId required' } };
+  const { data, error } = await supabase.functions.invoke('create-spotlight-payment-intent', {
+    body: { spotlightRequestId },
+  });
+  if (error) return { data: null, error };
+  return { data, error: null };
+}
+
 /** Fire-and-forget call to notify-spotlight edge function. Never awaits or
  *  surfaces errors to the caller — the database row is what matters, email
  *  is best-effort. Mirrors the notifyProvider pattern for bookings. */

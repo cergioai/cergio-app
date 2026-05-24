@@ -14,6 +14,7 @@ import {
 } from '../lib/api';
 import { fmtDollars, sellerEarningsCents, platformFeeCents, PLATFORM_FEE_RATE } from '../lib/fees';
 import { CounterSpotlightModal } from '../components/ui/CounterSpotlightModal';
+import { SpotlightPaymentModal } from '../components/ui/SpotlightPaymentModal';
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -41,6 +42,7 @@ export function ConnectorRequestsScreen() {
   const [outbound, setOutbound] = useState([]);
   const [loading, setLoading] = useState(true);
   const [counterTarget, setCounterTarget] = useState(null);  // request open in counter modal
+  const [payTarget,     setPayTarget]     = useState(null);  // request open in payment modal
 
   const refresh = async () => {
     setLoading(true);
@@ -121,6 +123,7 @@ export function ConnectorRequestsScreen() {
                 onDecline={() => handleDecline(r)} />
             : <OutboundCard key={r.id} request={r}
                 onAccept={() => handleAccept(r)}
+                onPay={() => setPayTarget(r)}
                 onCancel={() => handleCancel(r)} />
           )}
         </div>
@@ -131,6 +134,15 @@ export function ConnectorRequestsScreen() {
           request={counterTarget}
           onClose={() => setCounterTarget(null)}
           onCountered={() => { showToast('Counter sent ✓'); refresh(); }}
+        />
+      )}
+
+      {payTarget && (
+        <SpotlightPaymentModal
+          spotlightRequestId={payTarget.id}
+          connectorName={null /* could enrich with profile lookup later */}
+          onClose={() => setPayTarget(null)}
+          onSuccess={() => { showToast('Paid ✓ — Connector notified'); setPayTarget(null); refresh(); }}
         />
       )}
     </div>
@@ -189,7 +201,7 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline }) {
   );
 }
 
-function OutboundCard({ request: r, onAccept, onCancel }) {
+function OutboundCard({ request: r, onAccept, onPay, onCancel }) {
   const pill = STATUS_PILL[r.status] || STATUS_PILL.pending;
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
   const isCountered = r.status === 'countered' && r.offered_price_cents != null;
@@ -240,6 +252,18 @@ function OutboundCard({ request: r, onAccept, onCancel }) {
           className="w-full bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
           Cancel request
         </button>
+      )}
+      {/* Pay button appears once the request is accepted but not yet paid */}
+      {r.status === 'accepted' && !r.paid_at && (
+        <button onClick={onPay}
+          className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all">
+          Pay {fmtDollars(r.offered_price_cents ?? r.official_price_cents)} to confirm
+        </button>
+      )}
+      {r.status === 'accepted' && r.paid_at && (
+        <div className="bg-gl text-gd rounded-[14px] py-2.5 text-[13px] font-extrabold text-center">
+          Paid ✓ — waiting for the post
+        </div>
       )}
     </div>
   );
