@@ -14,9 +14,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PROFILE } from '../data/mock';
-import { getStripeOnboardingUrl, getMyInstagram, saveInstagram } from '../lib/api';
+import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
+import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
 
 function fmtFollowers(n) {
   if (!Number.isFinite(+n)) return '';
@@ -95,9 +96,13 @@ export function ProfileScreen() {
   // Instagram connection
   const [ig, setIg] = useState(null);
   const [showIgModal, setShowIgModal] = useState(false);
+  // TikTok connection — mirrors IG state
+  const [tt, setTt] = useState(null);
+  const [showTtModal, setShowTtModal] = useState(false);
   useEffect(() => {
-    if (!isSignedIn) { setIg(null); return; }
+    if (!isSignedIn) { setIg(null); setTt(null); return; }
     getMyInstagram().then(({ data }) => setIg(data || null));
+    getMyTikTok().then(({ data }) => setTt(data || null));
   }, [isSignedIn]);
   const handleSaveIg = async ({ handle: h, followers: f, verified }) => {
     const { data, error } = await saveInstagram({ handle: h, followers: f, verified });
@@ -110,6 +115,18 @@ export function ProfileScreen() {
     });
     showToast?.('Instagram saved ✓');
     setShowIgModal(false);
+  };
+  const handleSaveTt = async ({ handle: h, followers: f, verified }) => {
+    const { data, error } = await saveTikTok({ handle: h, followers: f, verified });
+    if (error) throw new Error(error.message);
+    setTt({
+      tiktok_handle:       data?.tiktok_handle ?? h,
+      tiktok_followers:    data?.tiktok_followers ?? f ?? null,
+      tiktok_connected_at: data?.tiktok_connected_at ?? new Date().toISOString(),
+      tiktok_verified_at:  data?.tiktok_verified_at ?? (verified ? new Date().toISOString() : null),
+    });
+    showToast?.('TikTok saved ✓');
+    setShowTtModal(false);
   };
 
   // Gating for List my service
@@ -171,14 +188,17 @@ export function ProfileScreen() {
         />
       </div>
 
-      {/* ── Instagram section ────────────────────────────────────────────────── */}
+      {/* ── Social section ───────────────────────────────────────────────────
+          Instagram + TikTok stacked. Both feed audience size into the
+          Rainmaker / spotlight flow — providers can see total reach. */}
       {isSignedIn && (
         <>
-          <SectionHeader title="Instagram" />
+          <SectionHeader title="Social" />
           <div className="px-5">
+            {/* Instagram row */}
             {ig?.instagram_handle ? (
               <Row
-                title={`@${ig.instagram_handle}`}
+                title={`Instagram · @${ig.instagram_handle}`}
                 subtitle={
                   ig.instagram_followers != null
                     ? `${fmtFollowers(ig.instagram_followers)} followers · helps Rainmakers tag you`
@@ -186,13 +206,32 @@ export function ProfileScreen() {
                 }
                 pill={ig.instagram_verified_at ? <MintPill>✓ Verified</MintPill> : null}
                 onClick={() => setShowIgModal(true)}
-                isLast
               />
             ) : (
               <Row
                 title="Connect Instagram"
                 subtitle="Required for Rainmakers · boosts trust for providers"
                 onClick={() => setShowIgModal(true)}
+              />
+            )}
+            {/* TikTok row */}
+            {tt?.tiktok_handle ? (
+              <Row
+                title={`TikTok · @${tt.tiktok_handle}`}
+                subtitle={
+                  tt.tiktok_followers != null
+                    ? `${fmtFollowers(tt.tiktok_followers)} audience · boosts your spotlight reach`
+                    : 'Connected — add audience size for better matches'
+                }
+                pill={tt.tiktok_verified_at ? <MintPill>✓ Verified</MintPill> : null}
+                onClick={() => setShowTtModal(true)}
+                isLast
+              />
+            ) : (
+              <Row
+                title="Connect TikTok"
+                subtitle="Add your TikTok handle + audience size"
+                onClick={() => setShowTtModal(true)}
                 isLast
               />
             )}
@@ -313,6 +352,16 @@ export function ProfileScreen() {
           initialFollowers={ig?.instagram_followers ?? ''}
           onSave={handleSaveIg}
           onClose={() => setShowIgModal(false)}
+        />
+      )}
+
+      {/* TikTok connect modal */}
+      {showTtModal && (
+        <TikTokConnectModal
+          initialHandle={tt?.tiktok_handle ?? ''}
+          initialFollowers={tt?.tiktok_followers ?? ''}
+          onSave={handleSaveTt}
+          onClose={() => setShowTtModal(false)}
         />
       )}
     </div>

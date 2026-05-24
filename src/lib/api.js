@@ -480,6 +480,52 @@ export async function getMyInstagram() {
     .maybeSingle();
 }
 
+// ─── TikTok connect ─────────────────────────────────────────────────────────
+// Mirrors the Instagram helpers above. Schema v8 added tiktok_* columns to
+// profiles. Manual entry for now; once TikTok OAuth ships we flip
+// tiktok_verified_at to a timestamp on OAuth-validated saves.
+
+/**
+ * Save the user's TikTok handle + audience (follower count) to their
+ * profile. `verified` flips when the value came from OAuth, not manual entry.
+ */
+export async function saveTikTok({ handle, followers, verified = false } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) {
+    return { data: null, error: { message: 'You must be signed in to connect TikTok.' } };
+  }
+  const cleanHandle = String(handle || '').replace(/^@/, '').trim().slice(0, 60);
+  if (!cleanHandle) {
+    return { data: null, error: { message: 'Handle is required.' } };
+  }
+  const followersNum = Number.isFinite(+followers) && +followers >= 0 ? Math.floor(+followers) : null;
+  const now = new Date().toISOString();
+  return await supabase
+    .from('profiles')
+    .update({
+      tiktok_handle:       cleanHandle,
+      tiktok_followers:    followersNum,
+      tiktok_connected_at: now,
+      tiktok_verified_at:  verified ? now : null,
+    })
+    .eq('id', userRes.user.id)
+    .select()
+    .single();
+}
+
+/** Read the signed-in user's TikTok connection state. */
+export async function getMyTikTok() {
+  if (!supabaseReady) return { data: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: null };
+  return await supabase
+    .from('profiles')
+    .select('tiktok_handle, tiktok_followers, tiktok_connected_at, tiktok_verified_at')
+    .eq('id', userRes.user.id)
+    .maybeSingle();
+}
+
 // ─── Booking notifications ──────────────────────────────────────────────────
 
 /**
