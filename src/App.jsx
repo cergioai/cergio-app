@@ -29,6 +29,8 @@ import { RainmakersScreen } from './screens/RainmakersScreen';
 import { BrowseConnectorsScreen } from './screens/BrowseConnectorsScreen';
 import { ConnectorRequestsScreen } from './screens/ConnectorRequestsScreen';
 import { FindFriendsScreen } from './screens/FindFriendsScreen';
+import { PrivacyPolicyScreen } from './screens/PrivacyPolicyScreen';
+import { DataDeletionScreen } from './screens/DataDeletionScreen';
 import { JobsInboxScreen }       from './screens/JobsInboxScreen';
 import { ServiceCompleteScreen }  from './screens/ServiceCompleteScreen';
 import { SharePromptScreen }      from './screens/SharePromptScreen';
@@ -281,6 +283,9 @@ export default function App() {
           <Route path="/connectors/requests" element={<ConnectorRequestsScreen />} />
           {/* Find friends: phone contacts / Google / share-to-social / search */}
           <Route path="/find-friends" element={<FindFriendsScreen />} />
+          {/* Legal pages — required for Meta App Review + Google OAuth verification */}
+          <Route path="/privacy"        element={<PrivacyPolicyScreen />} />
+          <Route path="/data-deletion"  element={<DataDeletionScreen />} />
           <Route path="/inbox"             element={<JobsInboxScreen />} />
           <Route path="/complete"          element={<ServiceCompleteScreen />} />
           <Route path="/share"             element={<SharePromptScreen />} />

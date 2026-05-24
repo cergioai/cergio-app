@@ -5,9 +5,26 @@
 // ship dedicated edge functions that create Supabase users from those
 // OAuth identities — for now they route to the existing connect modals
 // inside Profile after sign-in).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
+
+// TikTok OAuth sign-in config (separate from the link-only flow used in
+// modals). Public client_key + redirect URI from build env.
+const TIKTOK_CLIENT_KEY = import.meta.env.VITE_TIKTOK_CLIENT_KEY || '';
+const TIKTOK_REDIRECT   = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiktok-oauth/callback`;
+const TIKTOK_SCOPES     = 'user.info.basic,user.info.profile';
+
+function buildTikTokSigninUrl(state) {
+  const params = new URLSearchParams({
+    client_key:    TIKTOK_CLIENT_KEY,
+    scope:         TIKTOK_SCOPES,
+    response_type: 'code',
+    redirect_uri:  TIKTOK_REDIRECT,
+    state,    // suffix '.signin' tells the edge function this is the sign-in flow
+  });
+  return `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`;
+}
 
 // Very loose phone validation — 7+ digits, optional + and spaces. We're not
 // SMS-verifying it in the auth flow today; this just blocks obvious typos.
@@ -26,6 +43,32 @@ export function AuthScreen() {
   const [password, setPassword] = useState('');
   const [busy, setBusy]         = useState(false);
   const [socialBusy, setSocialBusy] = useState(null); // 'google'|'instagram'|'tiktok'|null
+  const ttPopupRef = useRef(null);
+
+  // Listen for postMessage from the TikTok signin popup.
+  useEffect(() => {
+    function onMessage(ev) {
+      const data = ev?.data;
+      if (!data || data.source !== 'cergio-tt-signin') return;
+      setSocialBusy(null);
+      try { ttPopupRef.current?.close?.(); } catch {}
+      if (!data.ok) {
+        showToast(data.error || 'TikTok sign-in failed');
+        return;
+      }
+      // Edge function generated a magic link — opener navigates to complete session.
+      if (data.signin_link) {
+        // Magic link includes the session token; navigating completes auth
+        // and Supabase auth state listener routes us to /home automatically.
+        window.location.href = data.signin_link;
+      } else {
+        showToast('TikTok connected — refreshing…');
+        setTimeout(() => window.location.reload(), 700);
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [showToast]);
 
   const isSignup = mode === 'signup';
   const valid =
@@ -72,7 +115,30 @@ export function AuthScreen() {
         // coming, but route to email signup for now.
         showToast('Instagram sign-in is coming soon — use email or Google for now.');
       } else if (provider === 'tiktok') {
-        showToast('TikTok sign-in is coming soon — use email or Google for now.');
+        if (!TIKTOK_CLIENT_KEY) {
+          showToast('TikTok sign-in launching soon — use email or Google for now.');
+          return;
+        }
+        const state = `${crypto.randomUUID()}.signin`;
+        const w = 540, h = 720;
+        const left = window.screenX + Math.max(0, (window.outerWidth  - w) / 2);
+        const top  = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
+        ttPopupRef.current = window.open(
+          buildTikTokSigninUrl(state),
+          'cergio-tt-signin',
+          `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no`,
+        );
+        if (!ttPopupRef.current) {
+          showToast('Popup blocked. Allow popups for this site and try again.');
+          return;
+        }
+        // Clear the spinner if the user closes the popup without finishing.
+        const poll = setInterval(() => {
+          if (ttPopupRef.current?.closed) {
+            clearInterval(poll);
+            setSocialBusy(null);
+          }
+        }, 600);
       }
     } finally {
       setSocialBusy(null);
