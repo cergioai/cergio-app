@@ -27,7 +27,7 @@ export function ServiceListAboutScreen() {
   const [overrideTaxonomy, setOverrideTaxonomy] = useState(false);
 
   // Optional Instagram + TikTok connect for providers. Loaded from profile
-  // so we pre-fill if they already linked either via the Rainmaker flow.
+  // so we pre-fill if they already linked either via the Connector flow.
   const [igHandle, setIgHandle]    = useState('');
   const [igFollowers, setIgFollowers] = useState(null);
   const [showIgModal, setShowIgModal] = useState(false);
@@ -88,13 +88,13 @@ export function ServiceListAboutScreen() {
                value={headline} onChange={setHeadline} type="textarea" />
 
         {/* Socials — optional. Boosts trust + lets the service appear in
-            friend-of-friend social feeds when Rainmakers spotlight them. */}
+            friend-of-friend social feeds when Connectors spotlight them. */}
         <div className="mb-2">
           <label className="block text-[18px] font-extrabold text-black mb-1.5">
             Socials <span className="text-[12px] font-bold text-b3 align-middle">(optional)</span>
           </label>
           <p className="text-[12px] text-b3 mb-2.5 leading-relaxed">
-            Helps customers trust your work and lets Rainmakers tag you when they spotlight your service.
+            Helps customers trust your work and lets Connectors tag you when they spotlight your service.
           </p>
 
           {/* Instagram row */}
@@ -182,7 +182,7 @@ export function ServiceListAboutScreen() {
           initialHandle={igHandle}
           initialFollowers={igFollowers ?? ''}
           title="Connect your Instagram"
-          subtitle="Optional — boosts trust and lets Rainmakers tag you in spotlights."
+          subtitle="Optional — boosts trust and lets Connectors tag you in spotlights."
           onSave={async ({ handle: h, followers: f, verified }) => {
             const { data, error } = await saveInstagram({ handle: h, followers: f, verified });
             if (error) throw new Error(error.message);

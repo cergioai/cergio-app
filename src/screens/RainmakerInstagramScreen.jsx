@@ -1,4 +1,4 @@
-// Per design-spec.md — step 3 of Rainmaker reg, social connect.
+// Per design-spec.md — step 3 of Connector reg, social connect.
 // Required: Instagram. Optional: TikTok (audience size feeds the
 // spotlight reach calculation). Uses shared connect modals; both
 // persist to profiles via save{Instagram,TikTok}.
@@ -31,7 +31,7 @@ export function RainmakerInstagramScreen() {
   const [showTtModal, setShowTtModal] = useState(false);
 
   // Pre-fill if the user already connected Instagram or TikTok earlier
-  // (e.g. they started the Rainmaker flow, bounced, and came back).
+  // (e.g. they started the Connector flow, bounced, and came back).
   useEffect(() => {
     if (!auth?.isSignedIn) return;
     getMyInstagram().then(({ data }) => {
@@ -216,7 +216,7 @@ export function RainmakerInstagramScreen() {
           initialHandle={handle}
           initialFollowers={followers ?? ''}
           title="Connect your Instagram"
-          subtitle="Rainmakers use Instagram to spotlight free services. We pull your handle + follower count."
+          subtitle="Connectors use Instagram to spotlight free services. We pull your handle + follower count."
           onSave={onSave}
           onClose={() => setShowModal(false)}
         />

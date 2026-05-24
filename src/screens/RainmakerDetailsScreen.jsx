@@ -1,4 +1,4 @@
-// Per design-spec.md — step 2 of Rainmaker reg, fields vary by type.
+// Per design-spec.md — step 2 of Connector reg, fields vary by type.
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 

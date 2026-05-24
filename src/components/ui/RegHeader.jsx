@@ -1,4 +1,4 @@
-// Shared header pattern for onboarding flows (Rainmaker reg + Service listing).
+// Shared header pattern for onboarding flows (Connector reg + Service listing).
 // Per design-spec.md — green gradient + white headline + optional sub.
 import { useNavigate } from 'react-router-dom';
 

@@ -48,7 +48,7 @@ function serviceToProvider(svc, idx, budgetCents) {
     bio:         svc.description || '',
     price:       price || 0,
     recos:       svc.rating_count || 0,
-    rainmakers:  0,
+    connectors:  0,
     friends:     [],
     savings:     savings,
     pick:        idx === 0,        // first real listing gets the Cergio Pick badge

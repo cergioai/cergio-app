@@ -25,7 +25,7 @@ export function EnableFreeOffersPopupScreen() {
         <div className="relative w-44 h-44 flex items-center justify-center">
           {/* large soft mint backing */}
           <div className="absolute inset-0 rounded-full bg-gl" />
-          {/* shield/Rainmaker badge */}
+          {/* shield/Connector badge */}
           <div className="relative w-24 h-24 rounded-full bg-g flex items-center justify-center shadow-card">
             <svg width="46" height="46" viewBox="0 0 24 24" fill="none"
                  stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

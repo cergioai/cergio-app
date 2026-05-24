@@ -31,7 +31,7 @@ export function RoamingForOffersScreen() {
         </button>
       </div>
 
-      {/* avatars: requester + Rainmaker badge */}
+      {/* avatars: requester + Connector badge */}
       <div className="flex items-center justify-center gap-3 pt-2 pb-5">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#4478aa] to-[#2a5070]
                         flex items-center justify-center text-white text-[22px] font-extrabold">

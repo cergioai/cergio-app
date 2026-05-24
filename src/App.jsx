@@ -99,7 +99,7 @@ function Layout() {
   const auth                 = useSession();
   const [booking, setBooking]           = useState(null);
   const [paymentSheet, setPaymentSheet] = useState(null); // {clientSecret, bookingId, totalCents, providerName} | null
-  const [freeServices, setFreeServices] = useState(true); // Rainmaker default
+  const [freeServices, setFreeServices] = useState(true); // Connector default
   const [serviceMode, setServiceMode]   = useState(false); // false=consumer, true=provider
   // Default saved address — loaded on sign-in so the chat can pre-fill
   // "your home, right?" and bypass re-typing. Refreshable by screens that
@@ -143,7 +143,7 @@ function Layout() {
   //
   // Three branches:
   //  (a) Mock/demo provider (no ownerId) → just navigate to /booking, no DB.
-  //  (b) Real provider, free Rainmaker booking ($0) → insert booking, mark
+  //  (b) Real provider, free Connector booking ($0) → insert booking, mark
   //      confirmed immediately, navigate. Skips Stripe entirely (per Phase B
   //      decision).
   //  (c) Real provider, paid booking → insert booking (pending), open the
@@ -172,7 +172,7 @@ function Layout() {
       return;
     }
 
-    // (b) Free Rainmaker booking — skip payment, confirm directly.
+    // (b) Free Connector booking — skip payment, confirm directly.
     if (row.is_free_for_rainmaker || (row.total_cents ?? 0) === 0) {
       const { error: confirmErr } = await updateBookingStatus(row.id, 'confirmed');
       if (confirmErr) {

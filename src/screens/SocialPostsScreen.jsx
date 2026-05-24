@@ -1,4 +1,4 @@
-// Per design-spec.md — feed of Rainmaker posts that promoted services.
+// Per design-spec.md — feed of Connector posts that promoted services.
 import { useNavigate, useOutletContext } from 'react-router-dom';
 
 const POSTS = [
@@ -35,7 +35,7 @@ export function SocialPostsScreen() {
       {/* headline */}
       <div className="px-7 text-center pb-6">
         <h1 className="text-[20px] font-extrabold text-black leading-tight mb-2">
-          Rainmakers have shared their go-to services on Cergio to 2M+ followers.
+          Connectors have shared their go-to services on Cergio to 2M+ followers.
         </h1>
         <p className="text-[14px] font-extrabold text-g">#cergiorainmakers</p>
       </div>
@@ -71,7 +71,7 @@ export function SocialPostsScreen() {
           )}
 
           {/* shared by */}
-          <p className="text-[12px] text-g font-bold mt-3">Shared by {post.sharedBy}, Rainmaker</p>
+          <p className="text-[12px] text-g font-bold mt-3">Shared by {post.sharedBy}, Connector</p>
         </div>
       ))}
 

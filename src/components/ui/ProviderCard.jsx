@@ -46,12 +46,12 @@ function FriendAvatars({ friends }) {
 }
 
 export function ProviderCard({ provider, onBook, onSave }) {
-  const { name, category, bio, price, recos, rainmakers, friends, savings, pick, photoClass } = provider;
+  const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass } = provider;
 
   const recoText = () => {
     if (!friends || friends.length === 0) return null;
     const fStr = friends.join(', ');
-    const rmStr = rainmakers > 0 ? ` and ${rainmakers} Rainmakers` : '';
+    const rmStr = connectors > 0 ? ` and ${connectors} Connectors` : '';
     return `Reco'd by ${fStr}${rmStr}`;
   };
 

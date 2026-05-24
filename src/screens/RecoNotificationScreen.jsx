@@ -85,7 +85,7 @@ export function RecoNotificationScreen() {
       <div className="px-5 pt-12 text-center">
         <p className="text-[14px] text-b3 leading-relaxed">
           {requests.length === 0
-            ? <>No pending requests right now.<br />New Rainmaker requests will appear here.</>
+            ? <>No pending requests right now.<br />New Connector requests will appear here.</>
             : null}
         </p>
       </div>

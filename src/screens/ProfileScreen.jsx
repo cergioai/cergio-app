@@ -1,16 +1,11 @@
-// Per Figma "User Profile View with Invite etc...png" — minimal, flat,
-// list-based design. No green gradient header, no role pills, no bordered
-// cards. Just sections of plain list rows with thin dividers. Inline pills
-// for status/values (e.g. @handle, follower count, earnings).
+// Per Figma "Hi Jacob!" Profile view — pure white bg, large greeting +
+// avatar top-right, large bold section headers, NO dividers between rows,
+// generous vertical rhythm. Switch to Service View is full-width GREEN
+// inside the Services section.
 //
-// Section structure mirrors the Figma:
-//   - Top: tiny avatar + name (horizontal, no extras)
-//   - Account: profile / payments / notifications
-//   - Instagram: connect-or-show status (rolled into Account-style list)
-//   - Services: list / manage / payouts (gated on Stripe-readiness)
-//   - Earn: invite / recommend / Rainmaker / benefits
-//   - Support: help / about
-//   - Bottom CTAs: Switch view + Sign out
+// Brand language: Rainmaker → Connector (rename applied across UI 2026-05-24;
+// route paths + DB columns kept on `rainmaker_*` until a follow-up migration
+// renames them too — the user-visible copy is what matters most right now).
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PROFILE } from '../data/mock';
@@ -27,42 +22,53 @@ function fmtFollowers(n) {
   return String(x);
 }
 
-// Plain list row: title + optional inline pill + optional subtitle + chevron.
-// Thin border-b for separation, no card container.
-function Row({ title, subtitle, pill, onClick, danger = false, disabled = false, isLast = false }) {
+// Big-row pattern per Figma: title (text-[18px] bold) + optional subtitle
+// (text-[15px] b3) + optional inline mint pill, with a fat chevron at right.
+// No bottom-border — separation comes from generous py-4.5 spacing alone.
+function Row({ title, subtitle, pill, onClick, disabled = false }) {
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`w-full py-4 flex items-center justify-between text-left
-                  ${isLast ? '' : 'border-b border-bdr'}
-                  ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-bg5/40 transition-colors'}`}
+      className={`w-full px-5 py-4 flex items-center justify-between text-left
+                  ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-bg5/30 transition-colors'}`}
     >
       <div className="flex-1 pr-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[16px] font-bold ${danger ? 'text-danger' : 'text-black'}`}>
-            {title}
-          </span>
+          <span className="text-[18px] font-bold text-black leading-tight">{title}</span>
           {pill && pill}
         </div>
         {subtitle && (
-          <p className="text-[14px] text-b3 mt-0.5 leading-snug">{subtitle}</p>
+          <p className="text-[15px] text-b3 mt-1 leading-snug font-medium">{subtitle}</p>
         )}
       </div>
-      {!danger && <span className="text-b3 text-xl flex-shrink-0">›</span>}
+      <Chevron />
     </button>
   );
 }
 
-// Section header — big bold text, generous top spacing.
-function SectionHeader({ title }) {
+// Fat chevron per Figma — thicker than the default `›`, matches the
+// visual weight of the bold row titles.
+function Chevron() {
   return (
-    <h2 className="text-[22px] font-extrabold text-black mt-8 mb-2 px-5">{title}</h2>
+    <svg width="11" height="18" viewBox="0 0 11 18" fill="none" className="flex-shrink-0">
+      <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor"
+            strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+            className="text-black/80" />
+    </svg>
   );
 }
 
-function SetupPayoutsRow({ showToast, isLast }) {
+// Section header — big, bold, generous top margin to define rhythm
+// between sections. Sits at the same px-5 inset as rows.
+function SectionHeader({ title }) {
+  return (
+    <h2 className="px-5 text-[26px] font-extrabold text-black mt-10 mb-1 leading-tight">{title}</h2>
+  );
+}
+
+function SetupPayoutsRow({ showToast }) {
   const [busy, setBusy] = useState(false);
   const handle = async () => {
     setBusy(true);
@@ -77,7 +83,6 @@ function SetupPayoutsRow({ showToast, isLast }) {
       subtitle="Connect a bank account so we can pay you"
       onClick={handle}
       disabled={busy}
-      isLast={isLast}
     />
   );
 }
@@ -90,13 +95,11 @@ export function ProfileScreen() {
   const isSignedIn  = !!auth?.isSignedIn;
   const u           = auth?.user;
   const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || PROFILE.name;
-  const handle      = u?.email ? '@' + (u.email.split('@')[0]) : PROFILE.handle;
   const initials    = (displayName[0] || 'T').toUpperCase();
 
-  // Instagram connection
+  // Social connections
   const [ig, setIg] = useState(null);
   const [showIgModal, setShowIgModal] = useState(false);
-  // TikTok connection — mirrors IG state
   const [tt, setTt] = useState(null);
   const [showTtModal, setShowTtModal] = useState(false);
   useEffect(() => {
@@ -129,7 +132,6 @@ export function ProfileScreen() {
     setShowTtModal(false);
   };
 
-  // Gating for List my service
   const listGated = isSignedIn && !provider.loading && !provider.ready;
   const onListService = () => {
     if (listGated) {
@@ -143,209 +145,166 @@ export function ProfileScreen() {
     navigate('/list-service');
   };
 
-  // Inline pill helpers — small rounded-full chips that sit beside row titles.
+  // Inline pills used inside row titles.
   const MintPill = ({ children }) => (
-    <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold">
+    <span className="bg-gl text-gd rounded-pill px-3 py-0.5 text-[14px] font-extrabold whitespace-nowrap">
       {children}
     </span>
   );
-  const GrayPill = ({ children }) => (
-    <span className="bg-bg5 text-b2 rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold">
-      {children}
-    </span>
-  );
+
+  // Greeting first name only.
+  const firstName = displayName.split(/[\s@.]/)[0];
 
   return (
     <div className="flex-1 flex flex-col bg-white overflow-y-auto pb-24">
-      {/* ── Top identity strip — minimal, no gradient ────────────────────────── */}
-      <div className="px-5 pt-10 pb-2 flex items-center gap-3">
-        <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-[18px] font-extrabold flex-shrink-0">
+      {/* ── Top: greeting + avatar ─────────────────────────────────────────── */}
+      <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
+        <h1 className="text-[30px] font-extrabold text-black leading-tight">
+          Hi {firstName}!
+        </h1>
+        <div className="w-14 h-14 rounded-full bg-bg5 flex items-center justify-center text-black text-[20px] font-extrabold flex-shrink-0 overflow-hidden">
           {initials}
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[22px] font-extrabold text-black leading-tight truncate">{displayName}</p>
-          {isSignedIn && (
-            <p className="text-[13px] text-b3 truncate">{handle}</p>
-          )}
-        </div>
       </div>
 
-      {/* ── Account section ──────────────────────────────────────────────────── */}
+      {/* ── Account ────────────────────────────────────────────────────────── */}
       <SectionHeader title="Account" />
-      <div className="px-5">
-        <Row
-          title="View and edit profile"
-          onClick={() => showToast('Profile editing — coming soon')}
-        />
-        <Row
-          title="Payment methods"
-          onClick={() => showToast('Payment methods — coming soon')}
-        />
-        <Row
-          title="Notifications"
-          onClick={() => showToast('Notifications — coming soon')}
-          isLast
-        />
-      </div>
+      <Row title="View and edit profile" onClick={() => showToast('Profile editing — coming soon')} />
+      <Row title="Edit account info"   onClick={() => showToast('Account info — coming soon')} />
+      <Row title="Payment settings"    onClick={() => showToast('Payment methods — coming soon')} />
 
-      {/* ── Social section ───────────────────────────────────────────────────
-          Instagram + TikTok stacked. Both feed audience size into the
-          Rainmaker / spotlight flow — providers can see total reach. */}
+      {/* ── Social (kept from prior build — IG required for Connectors) ────── */}
       {isSignedIn && (
         <>
           <SectionHeader title="Social" />
-          <div className="px-5">
-            {/* Instagram row */}
-            {ig?.instagram_handle ? (
-              <Row
-                title={`Instagram · @${ig.instagram_handle}`}
-                subtitle={
-                  ig.instagram_followers != null
-                    ? `${fmtFollowers(ig.instagram_followers)} followers · helps Rainmakers tag you`
-                    : 'Connected — add follower count for better matches'
-                }
-                pill={ig.instagram_verified_at ? <MintPill>✓ Verified</MintPill> : null}
-                onClick={() => setShowIgModal(true)}
-              />
-            ) : (
-              <Row
-                title="Connect Instagram"
-                subtitle="Required for Rainmakers · boosts trust for providers"
-                onClick={() => setShowIgModal(true)}
-              />
-            )}
-            {/* TikTok row */}
-            {tt?.tiktok_handle ? (
-              <Row
-                title={`TikTok · @${tt.tiktok_handle}`}
-                subtitle={
-                  tt.tiktok_followers != null
-                    ? `${fmtFollowers(tt.tiktok_followers)} audience · boosts your spotlight reach`
-                    : 'Connected — add audience size for better matches'
-                }
-                pill={tt.tiktok_verified_at ? <MintPill>✓ Verified</MintPill> : null}
-                onClick={() => setShowTtModal(true)}
-                isLast
-              />
-            ) : (
-              <Row
-                title="Connect TikTok"
-                subtitle="Add your TikTok handle + audience size"
-                onClick={() => setShowTtModal(true)}
-                isLast
-              />
-            )}
-          </div>
+          {ig?.instagram_handle ? (
+            <Row
+              title={`Instagram · @${ig.instagram_handle}`}
+              subtitle={
+                ig.instagram_followers != null
+                  ? `${fmtFollowers(ig.instagram_followers)} followers · helps Connectors tag you`
+                  : 'Connected — add follower count for better matches'
+              }
+              pill={ig.instagram_verified_at ? <MintPill>✓ Verified</MintPill> : null}
+              onClick={() => setShowIgModal(true)}
+            />
+          ) : (
+            <Row title="Connect Instagram" subtitle="Required for Connectors · boosts trust for providers" onClick={() => setShowIgModal(true)} />
+          )}
+          {tt?.tiktok_handle ? (
+            <Row
+              title={`TikTok · @${tt.tiktok_handle}`}
+              subtitle={
+                tt.tiktok_followers != null
+                  ? `${fmtFollowers(tt.tiktok_followers)} audience · boosts your spotlight reach`
+                  : 'Connected — add audience size for better matches'
+              }
+              pill={tt.tiktok_verified_at ? <MintPill>✓ Verified</MintPill> : null}
+              onClick={() => setShowTtModal(true)}
+            />
+          ) : (
+            <Row title="Connect TikTok" subtitle="Add your TikTok handle + audience size" onClick={() => setShowTtModal(true)} />
+          )}
         </>
       )}
 
-      {/* ── Services section ─────────────────────────────────────────────────── */}
+      {/* ── Services — GREEN switch CTA right at the top of the section ────── */}
       <SectionHeader title="Services" />
-      <div className="px-5">
-        <Row
-          title="List a new service"
-          subtitle={listGated
-            ? (provider.hasAccount ? 'Stripe verifying…' : 'Needs payouts setup first')
-            : 'Offer your service on Cergio'}
-          onClick={onListService}
-        />
-        {serviceMode && (
-          <Row
-            title="Manage services"
-            subtitle="Edit listings, photos, and pricing"
-            onClick={() => navigate('/services/manage')}
-          />
-        )}
-        {serviceMode && !provider.ready && (
-          <SetupPayoutsRow showToast={showToast} />
-        )}
-        <Row
-          title="My earnings"
-          subtitle="See and manage your cash earnings"
-          pill={<MintPill>$0 USD</MintPill>}
-          onClick={() => navigate('/earnings')}
-          isLast
-        />
-      </div>
-
-      {/* ── Earn section ─────────────────────────────────────────────────────── */}
-      <SectionHeader title="Earn" />
-      <div className="px-5">
-        <Row
-          title="Invite friends"
-          subtitle="Earn $25 credit per friend"
-          onClick={() => navigate('/invite/friends-popup')}
-        />
-        <Row
-          title="Recommend services"
-          subtitle="Earn $100 credit per service"
-          onClick={() => navigate('/invite/recommend-popup')}
-        />
-        <Row
-          title="Become a Rainmaker"
-          subtitle="Spotlight services and earn"
-          onClick={() => navigate('/rainmakers')}
-        />
-        <Row
-          title="Apply for Rainmaker"
-          subtitle="Submit your application"
-          onClick={() => navigate('/rainmaker/apply')}
-        />
-        <Row
-          title="Free Service Benefits"
-          subtitle="How free services work"
-          onClick={() => navigate('/benefits')}
-          isLast
-        />
-      </div>
-
-      {/* ── Support section ──────────────────────────────────────────────────── */}
-      <SectionHeader title="Support" />
-      <div className="px-5">
-        <Row
-          title="Help & support"
-          onClick={() => showToast('Help — coming soon')}
-        />
-        <Row
-          title="About Cergio"
-          onClick={() => showToast('About — coming soon')}
-          isLast
-        />
-      </div>
-
-      {/* ── Bottom CTAs ──────────────────────────────────────────────────────── */}
-      <div className="px-5 mt-10 mb-6 flex flex-col gap-3">
+      <Row
+        title="List a new service"
+        subtitle={listGated
+          ? (provider.hasAccount ? 'Stripe verifying…' : 'Needs payouts setup first')
+          : 'Offer your service on Cergio'}
+        onClick={onListService}
+      />
+      {/* Switch button — full-width GREEN per Figma. Moved to TOP of
+          Services per user direction (was previously below the list at the
+          bottom of the screen). */}
+      <div className="px-5 mt-3 mb-1">
         <button
           onClick={() => {
             setServiceMode(!serviceMode);
             showToast(serviceMode ? 'Back to user view' : 'You\'re now in Service view');
           }}
-          className="w-full bg-black text-white rounded-[12px] py-4 text-[16px] font-bold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
                      hover:opacity-90 active:scale-[.98] transition-all"
         >
-          {serviceMode ? 'Switch to user view' : 'Switch to Service view'}
+          {serviceMode ? 'Switch to User View' : 'Switch to Service View'}
         </button>
+      </div>
+      {serviceMode && (
+        <>
+          <Row
+            title="Manage services"
+            subtitle="Edit listings, photos, and pricing"
+            onClick={() => navigate('/services/manage')}
+          />
+          {!provider.ready && <SetupPayoutsRow showToast={showToast} />}
+        </>
+      )}
 
+      {/* ── Earn Cash! ─────────────────────────────────────────────────────── */}
+      <SectionHeader title="Earn Cash!" />
+      <Row
+        title="My credits"
+        subtitle="See and manage your earnings"
+        pill={<MintPill>$0 USD</MintPill>}
+        onClick={() => navigate('/earnings')}
+      />
+      <Row
+        title="Invite friends"
+        subtitle="Earn $25 credit per friend"
+        onClick={() => navigate('/invite/friends-popup')}
+      />
+      <Row
+        title="Recommend services"
+        subtitle="Earn $100 credit per service"
+        onClick={() => navigate('/invite/recommend-popup')}
+      />
+      <Row
+        title="Manage network"
+        onClick={() => showToast('Network management — coming soon')}
+      />
+      <Row
+        title="Invite Connectors and influencers"
+        onClick={() => navigate('/rainmakers')}
+      />
+
+      {/* ── Additional Links ───────────────────────────────────────────────── */}
+      <SectionHeader title="Additional Links" />
+      <Row title="Cergio FAQ"          onClick={() => showToast('FAQ — coming soon')} />
+      <Row title="About Cergio"        onClick={() => showToast('About — coming soon')} />
+      <Row title="Become a Connector"  onClick={() => navigate('/rainmaker/apply')} />
+      <Row title="Contact support"     onClick={() => showToast('Support — coming soon')} />
+
+      {/* ── Bottom: outlined Log out + "later" link ────────────────────────── */}
+      <div className="px-5 mt-10 mb-3">
         {isSignedIn ? (
           <button
             onClick={async () => { await auth.signOut(); showToast('Signed out'); navigate('/'); }}
-            className="w-full bg-white border border-bdr text-black rounded-[12px] py-4
-                       text-[16px] font-bold hover:bg-bg5/40 transition-colors"
+            className="w-full bg-white border-2 border-black text-black rounded-[14px] py-4
+                       text-[17px] font-extrabold hover:bg-bg5/40 transition-colors"
           >
-            Sign out
+            Log out
           </button>
         ) : (
           <button
             onClick={() => navigate('/auth')}
-            className="w-full bg-white border border-bdr text-black rounded-[12px] py-4
-                       text-[16px] font-bold hover:bg-bg5/40 transition-colors"
+            className="w-full bg-white border-2 border-black text-black rounded-[14px] py-4
+                       text-[17px] font-extrabold hover:bg-bg5/40 transition-colors"
           >
             Sign in
           </button>
         )}
       </div>
+      <button
+        onClick={() => navigate('/home')}
+        className="text-center text-[16px] font-extrabold text-b3 py-3 mx-auto"
+      >
+        I'll do this later
+      </button>
 
-      {/* Instagram connect modal */}
+      {/* Modals */}
       {showIgModal && (
         <InstagramConnectModal
           initialHandle={ig?.instagram_handle ?? ''}
@@ -354,8 +313,6 @@ export function ProfileScreen() {
           onClose={() => setShowIgModal(false)}
         />
       )}
-
-      {/* TikTok connect modal */}
       {showTtModal && (
         <TikTokConnectModal
           initialHandle={tt?.tiktok_handle ?? ''}

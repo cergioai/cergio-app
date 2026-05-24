@@ -8,7 +8,7 @@ export const PROVIDERS = [
     bio: 'Post Party Cleaning Specialist · ex 4 Seasons',
     price: 170,
     recos: 111,
-    rainmakers: 21,
+    connectors: 21,
     friends: ['Jennifer Hu', '3 other friends'],
     savings: 65,       // vs budget — calculated at runtime in production
     pick: true,
@@ -21,7 +21,7 @@ export const PROVIDERS = [
     bio: 'Experienced apartment & condo cleaner and organizer',
     price: 250,
     recos: 184,
-    rainmakers: 0,
+    connectors: 0,
     friends: ['Claudia B', '1 other friend'],
     savings: -15,      // negative = over budget
     pick: false,
@@ -34,7 +34,7 @@ export const PROVIDERS = [
     bio: 'Budget-friendly general cleaning',
     price: 35,
     recos: 31,
-    rainmakers: 0,
+    connectors: 0,
     friends: [],
     savings: 200,
     pick: false,
@@ -172,7 +172,7 @@ export const TRANSACTIONS = {
 };
 
 // ─── ACTIVITY FEED (Activity tab) ─────────────────────────────────────────────
-// Mixed feed: bookings made (consumer), jobs done (provider), Rainmaker shares.
+// Mixed feed: bookings made (consumer), jobs done (provider), Connector shares.
 export const ACTIVITY = [
   { id: 'a1', type: 'booked',     title: 'You booked Jamie Hall',           sub: 'Housekeeper · Tomorrow 10:00 AM', time: '2h ago' },
   { id: 'a2', type: 'completed',  title: 'You completed a free service',    sub: 'Earned a 5-star rating from Lydia', time: 'Yesterday' },
@@ -189,7 +189,7 @@ export const EARNINGS_SUMMARY = {
   cergioCoin:      '$50',
   recentPayouts: [
     { id: 'p1', label: 'Service · Apt clean',     amount: '+$120', date: 'Tue, May 5' },
-    { id: 'p2', label: 'Rainmaker referral · Sara', amount: '+$25',  date: 'Mon, May 4' },
+    { id: 'p2', label: 'Connector referral · Sara', amount: '+$25',  date: 'Mon, May 4' },
     { id: 'p3', label: 'Cergio Coin top-up',      amount: '+$50',  date: 'Sun, May 3' },
   ],
 };
@@ -206,7 +206,7 @@ export const PROFILE = {
 };
 
 // ─── INBOX REQUESTS ───────────────────────────────────────────────────────────
-// Provider-side: incoming Rainmaker requests waiting to be accepted/declined.
+// Provider-side: incoming Connector requests waiting to be accepted/declined.
 // Later: replace with GET /api/jobs/inbox?providerId=
 export const INBOX_REQUESTS = [
   {

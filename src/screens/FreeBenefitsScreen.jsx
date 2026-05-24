@@ -55,7 +55,7 @@ export function FreeBenefitsScreen() {
           </div>
           <div className="ml-15 pl-1">
             <p className="text-[14px] text-b3 leading-relaxed mb-3" style={{ marginLeft: 60 }}>
-              Rainmakers that book a free service are required to share positive booking experiences
+              Connectors that book a free service are required to share positive booking experiences
               with their social network and add to their Reco list.
             </p>
             <p className="text-[14px] text-b3 leading-relaxed" style={{ marginLeft: 60 }}>

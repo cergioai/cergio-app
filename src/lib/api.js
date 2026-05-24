@@ -434,7 +434,7 @@ export async function getMyStripeAccount() {
 
 /**
  * Save the signed-in user's Instagram handle + follower count to their
- * profile. Used by both the Rainmaker apply flow (required for them) and
+ * profile. Used by both the Connector apply flow (required for them) and
  * the provider list-service flow (optional — boosts trust score).
  *
  * When we wire the Meta/Instagram OAuth integration later, swap this for

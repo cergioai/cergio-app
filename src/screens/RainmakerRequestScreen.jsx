@@ -1,5 +1,5 @@
 // Per design-spec.md — uses tokens only.
-// Provider-facing: a Rainmaker is asking to feature this provider's service.
+// Provider-facing: a Connector is asking to feature this provider's service.
 import { useNavigate, useOutletContext } from 'react-router-dom';
 
 const REQUEST = {
@@ -87,7 +87,7 @@ export function RainmakerRequestScreen() {
 
       {/* sub */}
       <p className="text-[15px] text-b3 text-center leading-relaxed px-7 mb-9">
-        {rainmakerName} is a <span className="text-g font-extrabold">Cergio Rainmaker</span>.
+        {rainmakerName} is a <span className="text-g font-extrabold">Cergio Connector</span>.
         Offer a free service in exchange for the following benefits:
       </p>
 
@@ -116,7 +116,7 @@ export function RainmakerRequestScreen() {
           onClick={() => showToast('Recent posts — coming next batch')}
           className="w-full text-center text-[14px] font-extrabold text-g pt-4"
         >
-          See recent posts by Rainmakers
+          See recent posts by Connectors
         </button>
       </div>
     </div>

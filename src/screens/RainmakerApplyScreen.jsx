@@ -1,4 +1,4 @@
-// Per design-spec.md — "What best describes you?" step 1 of Rainmaker reg.
+// Per design-spec.md — "What best describes you?" step 1 of Connector reg.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 

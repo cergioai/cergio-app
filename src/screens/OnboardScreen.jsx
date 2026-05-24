@@ -17,7 +17,7 @@ const SLIDES = [
   {
     icon: '🌧️',
     bg: 'bg-crd',
-    title: 'Become a Rainmaker',
+    title: 'Become a Connector',
     desc: "Spotlight the best services, drive real earnings to great providers — and earn with them.",
   },
 ];

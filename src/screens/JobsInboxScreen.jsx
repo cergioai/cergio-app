@@ -178,7 +178,7 @@ export function JobsInboxScreen() {
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" />
                     </svg>
-                    Free for Rainmakers
+                    Free for Connectors
                   </span>
                 )}
               </div>

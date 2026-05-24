@@ -91,7 +91,7 @@ export function RequestDetailScreen() {
       navigate('/job');
       return;
     }
-    // Paid bookings require the provider to be Stripe-ready. Free Rainmaker
+    // Paid bookings require the provider to be Stripe-ready. Free Connector
     // bookings bypass this check since no payout happens.
     if (!data.isFree && !provider.ready) {
       showToast(
@@ -186,7 +186,7 @@ export function RequestDetailScreen() {
             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" />
             </svg>
-            Free for Rainmakers
+            Free for Connectors
           </div>
         )}
         {data.description && <p className="text-[15px] text-black mb-1">{data.description}</p>}

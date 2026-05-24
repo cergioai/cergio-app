@@ -5,25 +5,25 @@ const TABLE_ROWS = [
     label: 'Free services',
     desc:  'Promote a provider on Instagram in exchange for a complimentary service',
     users: 'no',
-    rainmakers: 'yes',
+    connectors: 'yes',
   },
   {
     label: 'Cash per invite',
     desc:  'Earn when an invited friend completes a booking — up to 10% on each booking they make',
     users: { amount: '$250', type: 'credit' },
-    rainmakers: { amount: '$250', type: 'cash' },
+    connectors: { amount: '$250', type: 'cash' },
   },
   {
     label: "Per friend's invite",
     desc:  "Earn when friends you invited invite their own friends",
     users: null,
-    rainmakers: { amount: '$12.50', type: 'cash' },
+    connectors: { amount: '$12.50', type: 'cash' },
   },
   {
     label: '200 friends milestone',
     desc:  'Bonus when you invite 200 friends — up to 10% on each booking they make',
     users: 'no',
-    rainmakers: { amount: '$10,000', type: 'cash', highlight: true },
+    connectors: { amount: '$10,000', type: 'cash', highlight: true },
   },
 ];
 
@@ -125,7 +125,7 @@ export function RainmakersScreen() {
         >
           ⭐
         </div>
-        <h3 className="text-[20px] font-extrabold text-white mb-2">How to earn Rainmaker status</h3>
+        <h3 className="text-[20px] font-extrabold text-white mb-2">How to earn Connector status</h3>
         <p className="text-[14px] font-bold text-white/90 italic mb-3">
           Invite 10 new friends every month to book on Cergio
         </p>
@@ -145,7 +145,7 @@ export function RainmakersScreen() {
       {/* comparison table */}
       <div className="px-5 pt-7 pb-2">
         <h3 className="text-[20px] font-extrabold text-black text-center leading-tight mb-5">
-          Enjoy exclusive benefits<br />as a Rainmaker
+          Enjoy exclusive benefits<br />as a Connector
         </h3>
         <table className="w-full border-collapse">
           <thead>
@@ -158,7 +158,7 @@ export function RainmakersScreen() {
               </th>
               <th className="pb-2.5 w-24">
                 <span className="inline-flex items-center gap-1 bg-g text-white text-[12px] font-bold px-3 py-1.5 rounded-pill">
-                  ⭐ Rainmakers
+                  ⭐ Connectors
                 </span>
               </th>
             </tr>
@@ -171,7 +171,7 @@ export function RainmakersScreen() {
                   <p className="text-[11px] text-b3 font-medium leading-snug">{row.desc}</p>
                 </td>
                 <td className="py-3.5 text-center"><CashCell val={row.users} /></td>
-                <td className="py-3.5 text-center"><CashCell val={row.rainmakers} /></td>
+                <td className="py-3.5 text-center"><CashCell val={row.connectors} /></td>
               </tr>
             ))}
           </tbody>
@@ -202,10 +202,10 @@ export function RainmakersScreen() {
           })}
         </div>
         <h3 className="text-[22px] font-extrabold text-white leading-tight mb-2">
-          Invite friends.<br />Become a Rainmaker
+          Invite friends.<br />Become a Connector
         </h3>
         <p className="text-[13px] text-white/72 leading-relaxed mb-4">
-          Once ten (10) of them join and complete a booking, apply for Rainmaker status.
+          Once ten (10) of them join and complete a booking, apply for Connector status.
         </p>
         <button
           onClick={() => showToast('Invite link copied!')}
@@ -226,7 +226,7 @@ export function RainmakersScreen() {
           className="w-full bg-g text-white rounded-[24px] py-4
                      text-[15px] font-extrabold hover:opacity-90 active:scale-[.97] transition-all"
         >
-          Apply for Rainmaker status
+          Apply for Connector status
         </button>
       </div>
 

@@ -1,4 +1,4 @@
-// Per design-spec.md — provider's view: their profile was shared on a Rainmaker's IG.
+// Per design-spec.md — provider's view: their profile was shared on a Connector's IG.
 import { useNavigate, useOutletContext } from 'react-router-dom';
 
 const SHARE = {

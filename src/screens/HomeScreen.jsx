@@ -101,14 +101,14 @@ export function HomeScreen() {
           I'll only ask about what's missing.
         </p>
 
-        {/* Free-services-for-Rainmakers toggle. Surfaced here (was buried in
+        {/* Free-services-for-Connectors toggle. Surfaced here (was buried in
             the chat) so users see the option BEFORE they describe their
             request. When ON, the chat's "ready" CTA routes to the free-offers
             flow; when OFF, it routes to the paid /results flow. */}
         <div className="bg-white border border-bdr rounded-[16px] px-3.5 py-3 mt-3 flex items-center gap-3">
           <div className="flex-1">
             <p className="text-[13px] font-extrabold text-black leading-tight">
-              Free services for Rainmakers
+              Free services for Connectors
             </p>
             <p className="text-[11px] text-b3 mt-0.5 leading-snug">
               {freeServices
@@ -162,7 +162,7 @@ export function HomeScreen() {
         ))}
       </div>
 
-      {/* Rainmaker banner removed — entry point is now the "Learn how" link
+      {/* Connector banner removed — entry point is now the "Learn how" link
           under the free-services toggle at the top of this screen. */}
 
       {/* friend activity */}

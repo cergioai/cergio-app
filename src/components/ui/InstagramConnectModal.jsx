@@ -9,7 +9,7 @@
 //       fallback (and the only path while Meta app credentials aren't set).
 //
 // Used by:
-//   - RainmakerInstagramScreen (required step of Rainmaker apply flow)
+//   - RainmakerInstagramScreen (required step of Connector apply flow)
 //   - ServiceListAboutScreen   (optional connect for providers)
 //   - ProfileScreen            (manage / re-connect later)
 import { useEffect, useRef, useState } from 'react';
