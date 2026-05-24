@@ -144,7 +144,7 @@ serve(async (req: Request) => {
 function buildAuthorizeUrl(appId: string, redirectUri: string, state: string): string {
   // Scopes: instagram_business_basic gives username + account_type.
   //         instagram_business_manage_insights is required for followers_count.
-  // If you only need handle (no follower count) you can drop the insights scope.
+  // Verified working end-to-end on 2026-05-24 against tarikromio (Creator).
   const scopes = [
     'instagram_business_basic',
     'instagram_business_manage_insights',

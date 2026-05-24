@@ -18,6 +18,9 @@ import { useEffect, useRef, useState } from 'react';
 // If VITE_META_APP_ID is unset we silently fall back to manual entry.
 const META_APP_ID   = import.meta.env.VITE_META_APP_ID || '';
 const META_REDIRECT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-oauth/callback`;
+// Scope: instagram_business_basic gives username + account_type. Adding
+// instagram_business_manage_insights pulls followers_count in /me. Verified
+// working end-to-end on 2026-05-24 against tarikromio (Creator account).
 const META_SCOPES   = 'instagram_business_basic,instagram_business_manage_insights';
 
 function buildInstagramAuthUrl(state) {
