@@ -430,6 +430,31 @@ export async function getMyStripeAccount() {
     .maybeSingle();
 }
 
+// ─── Booking notifications ──────────────────────────────────────────────────
+
+/**
+ * Ping the matched provider (Resend email) that a consumer just booked
+ * them. Designed to be fire-and-forget — the booking row is what matters;
+ * notification is best-effort. createBooking() calls this on success
+ * without awaiting so the consumer's UI never waits on email delivery.
+ *
+ * If Resend is down or RESEND_API_KEY isn't pushed, the function returns
+ * an error JSON. We surface that as { error } and the caller swallows it.
+ */
+export async function notifyProvider(bookingId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId)     return { data: null, error: { message: 'bookingId required' } };
+  // Pass the current app URL so the email's "Accept or decline →" link
+  // points at the right host (preview vs prod vs localhost).
+  const app_url = typeof window !== 'undefined' ? window.location.origin : undefined;
+  const { data, error } = await supabase.functions.invoke('notify-provider', {
+    body: { bookingId, app_url },
+  });
+  if (error)       return { data: null, error };
+  if (data?.error) return { data: null, error: { message: data.error } };
+  return { data, error: null };
+}
+
 // ─── Bookings ────────────────────────────────────────────────────────────────
 
 /**
@@ -477,6 +502,25 @@ export async function createBooking({
     })
     .select()
     .single();
+
+  // Fire-and-forget provider notification. We never block the consumer's
+  // UI on email delivery; if Resend is down or unconfigured, the booking
+  // still completes and the provider can see the request on next sign-in
+  // via the inbox. Errors are logged to console for debugging.
+  if (data?.id && !error) {
+    notifyProvider(data.id).then(
+      ({ error: nErr }) => {
+        if (nErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[notify-provider]', nErr.message || nErr);
+        }
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[notify-provider] threw', err);
+      }
+    );
+  }
 
   return { data, error };
 }
