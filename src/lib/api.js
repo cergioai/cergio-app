@@ -526,6 +526,51 @@ export async function getMyTikTok() {
     .maybeSingle();
 }
 
+// ─── Connector spotlight pricing (v9) ───────────────────────────────────────
+// Rate-card per platform. Stored in cents on profiles. Connectors set these
+// during apply flow; providers see them when browsing Connectors for paid
+// spotlights. NULL = "free-swap only" — they only do barter, not paid.
+
+/**
+ * Save the signed-in user's spotlight prices. Accepts dollars (numbers like
+ * 25 or "25.00") or cents (>=100 with a flag). We default to dollars-to-cents
+ * conversion since that's what humans type.
+ */
+export async function saveSpotlightPrices({ instagramDollars, tiktokDollars } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) {
+    return { data: null, error: { message: 'You must be signed in to set spotlight prices.' } };
+  }
+  const toCents = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = +v;
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.round(n * 100);
+  };
+  return await supabase
+    .from('profiles')
+    .update({
+      spotlight_price_instagram_cents: toCents(instagramDollars),
+      spotlight_price_tiktok_cents:    toCents(tiktokDollars),
+    })
+    .eq('id', userRes.user.id)
+    .select('spotlight_price_instagram_cents, spotlight_price_tiktok_cents')
+    .single();
+}
+
+/** Read the signed-in user's spotlight rate card. */
+export async function getMySpotlightPrices() {
+  if (!supabaseReady) return { data: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: null };
+  return await supabase
+    .from('profiles')
+    .select('spotlight_price_instagram_cents, spotlight_price_tiktok_cents')
+    .eq('id', userRes.user.id)
+    .maybeSingle();
+}
+
 // ─── Booking notifications ──────────────────────────────────────────────────
 
 /**

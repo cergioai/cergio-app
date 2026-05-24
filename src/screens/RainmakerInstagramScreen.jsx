@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
-import { getMyInstagram, saveInstagram, getMyTikTok, saveTikTok } from '../lib/api';
+import { getMyInstagram, saveInstagram, getMyTikTok, saveTikTok, getMySpotlightPrices, saveSpotlightPrices } from '../lib/api';
 
 function fmtFollowers(n) {
   if (!Number.isFinite(+n)) return '';
@@ -29,6 +29,12 @@ export function RainmakerInstagramScreen() {
   const [ttFollowers, setTtFollowers] = useState(null);
   const [ttVerifiedAt, setTtVerifiedAt] = useState(null);
   const [showTtModal, setShowTtModal] = useState(false);
+  // Spotlight rate card — Connector sets a default price per platform.
+  // Stored in dollars on the form, converted to cents server-side.
+  const [igPrice, setIgPrice] = useState('');
+  const [ttPrice, setTtPrice] = useState('');
+  const [priceBusy, setPriceBusy] = useState(false);
+  const [priceMsg, setPriceMsg] = useState('');
 
   // Pre-fill if the user already connected Instagram or TikTok earlier
   // (e.g. they started the Connector flow, bounced, and came back).
@@ -48,7 +54,31 @@ export function RainmakerInstagramScreen() {
         setTtVerifiedAt(data.tiktok_verified_at ?? null);
       }
     });
+    getMySpotlightPrices().then(({ data }) => {
+      if (data?.spotlight_price_instagram_cents != null)
+        setIgPrice(String(data.spotlight_price_instagram_cents / 100));
+      if (data?.spotlight_price_tiktok_cents != null)
+        setTtPrice(String(data.spotlight_price_tiktok_cents / 100));
+    });
   }, [auth?.isSignedIn]);
+
+  // Auto-save rate card on blur — quiet UX, no submit button. Empty
+  // string saves NULL ("free-swap only").
+  const savePrices = async () => {
+    setPriceBusy(true);
+    setPriceMsg('');
+    const { error } = await saveSpotlightPrices({
+      instagramDollars: igPrice === '' ? null : +igPrice,
+      tiktokDollars:    ttPrice === '' ? null : +ttPrice,
+    });
+    setPriceBusy(false);
+    if (error) {
+      setPriceMsg(`Couldn't save: ${error.message}`);
+    } else {
+      setPriceMsg('Saved ✓');
+      setTimeout(() => setPriceMsg(''), 1200);
+    }
+  };
 
   const connected = !!handle;   // IG is the required gate; TikTok is optional
 
@@ -178,6 +208,66 @@ export function RainmakerInstagramScreen() {
             Add TikTok (optional)
           </button>
         )}
+
+        {/* ── Rate card — Connector spotlight prices ────────────────────── */}
+        <div className="mt-6 mb-2">
+          <h3 className="text-[18px] font-extrabold text-black mb-1">Your spotlight rate card</h3>
+          <p className="text-[12px] text-b3 leading-relaxed mb-3">
+            What you charge for a paid spotlight per platform. Leave blank if you
+            only do the free-services swap. You can always offer a lower price
+            on a specific request later.
+          </p>
+          <div className="flex flex-col gap-3">
+            {/* Instagram price */}
+            <div className="flex items-center gap-3 bg-white border border-bdr rounded-[14px] px-3.5 py-3">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   stroke="black" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <rect x="2" y="2" width="20" height="20" rx="5" />
+                <circle cx="12" cy="12" r="4.5" />
+                <circle cx="17.5" cy="6.5" r="1.2" fill="black" stroke="none" />
+              </svg>
+              <span className="text-[14px] font-extrabold text-black flex-1">Instagram</span>
+              <span className="text-[14px] text-b3">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={igPrice}
+                onChange={e => setIgPrice(e.target.value.replace(/[^0-9.]/g, ''))}
+                onBlur={savePrices}
+                placeholder="0"
+                className="w-20 bg-bg5 rounded-[10px] px-3 py-2 text-[14px] text-black text-right
+                           placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+                aria-label="Instagram spotlight price"
+              />
+              <span className="text-[12px] font-bold text-b3">/post</span>
+            </div>
+            {/* TikTok price */}
+            <div className="flex items-center gap-3 bg-white border border-bdr rounded-[14px] px-3.5 py-3">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="black" className="flex-shrink-0">
+                <path d="M16.6 5.82a4.28 4.28 0 0 1-2.6-1.82V14.5a3.5 3.5 0 1 1-3.5-3.5v2.06a1.44 1.44 0 1 0 1.44 1.44V2h2.06a4.27 4.27 0 0 0 4.27 4.27v2.06a6.34 6.34 0 0 1-1.67-.22v-2.29z"/>
+              </svg>
+              <span className="text-[14px] font-extrabold text-black flex-1">TikTok</span>
+              <span className="text-[14px] text-b3">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={ttPrice}
+                onChange={e => setTtPrice(e.target.value.replace(/[^0-9.]/g, ''))}
+                onBlur={savePrices}
+                placeholder="0"
+                className="w-20 bg-bg5 rounded-[10px] px-3 py-2 text-[14px] text-black text-right
+                           placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+                aria-label="TikTok spotlight price"
+              />
+              <span className="text-[12px] font-bold text-b3">/post</span>
+            </div>
+          </div>
+          {priceMsg && (
+            <p className={`text-[11px] mt-1.5 font-bold ${priceMsg.startsWith('Saved') ? 'text-g' : 'text-danger'}`}>
+              {priceMsg}{priceBusy ? '…' : ''}
+            </p>
+          )}
+        </div>
 
         <p className="text-[12px] text-b3 leading-relaxed mt-2">
           Your audience size helps providers price the free service exchange. Once OAuth ships

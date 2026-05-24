@@ -64,68 +64,108 @@ export function HomeScreen() {
         </h1>
       </div>
 
-      {/* search bar — real input. The home search is the primary UX: put
-          everything in one query and Claude only follows up on what's
-          missing. The chat in /intake is the gap-filler, not a sequence. */}
+      {/* Claude-style submit box — single rounded container with the input
+          at the top and a chip toolbar at the bottom where Claude shows the
+          model selector. We put the "Free services for Connectors" toggle in
+          that bottom-left slot, and the green send arrow at the bottom-right.
+          This is the primary UX: dump what/when/where/budget in one go and
+          the chat only asks about what's still missing. */}
       <div className="px-5 py-3">
         <div
-          className="flex items-center gap-2.5 bg-white border border-bdr rounded-pill
-                     pl-4 pr-1 py-1 transition-all focus-within:border-g focus-within:shadow-[0_0_0_3px_#F3FFEA]"
+          className="bg-white border border-bdr rounded-[28px] transition-all
+                     focus-within:border-g focus-within:shadow-[0_0_0_3px_#F3FFEA]"
         >
-          <input
+          {/* row 1: the textarea-ish input */}
+          <textarea
             ref={inputRef}
-            type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="e.g. deep clean Mon 2pm, flexible, max $200"
-            className="flex-1 text-[14px] text-black placeholder-b3 font-medium
-                       bg-transparent outline-none py-2.5"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitQuery();
+              }
+            }}
+            placeholder="Tell me what you need…  e.g. deep clean Mon 2pm, flexible, max $200"
+            rows={2}
+            className="w-full bg-transparent outline-none resize-none px-5 pt-4 pb-2
+                       text-[15px] text-black placeholder-b3 font-medium leading-snug"
           />
-          <button
-            type="button"
-            onClick={submitQuery}
-            aria-label="Search"
-            className="w-9 h-9 bg-g rounded-full flex items-center justify-center flex-shrink-0
-                       hover:opacity-90 active:scale-95 transition-transform"
-          >
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="7" stroke="white" strokeWidth="2.5" />
-              <path d="M16 16l4 4" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
-          </button>
+          {/* row 2: chip toolbar — Free-services toggle on left, send on right */}
+          <div className="flex items-center gap-2 px-3 pb-3 pt-1">
+            {/* Toggle pill — single button that toggles freeServices on/off.
+                Visual matches Claude's model-selector chip: rounded-pill,
+                soft bg, label + state. On = mint pill; Off = neutral pill. */}
+            <button
+              type="button"
+              onClick={() => setFreeServices(!freeServices)}
+              className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-extrabold
+                          transition-all
+                          ${freeServices
+                            ? 'bg-gl text-gd border border-g/30'
+                            : 'bg-bg5 text-b2 border border-bdr hover:border-g/40'}`}
+              aria-pressed={freeServices}
+            >
+              <span className={`w-2 h-2 rounded-full ${freeServices ? 'bg-g' : 'bg-b3'}`} />
+              Free for Connectors
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/rainmakers')}
+              className="text-[11px] font-bold text-b3 underline underline-offset-2 hover:text-g transition-colors"
+            >
+              Learn how
+            </button>
+            <div className="flex-1" />
+            {/* Send — green circle with up arrow, matches Claude's submit */}
+            <button
+              type="button"
+              onClick={submitQuery}
+              aria-label="Search"
+              className="w-9 h-9 bg-g rounded-full flex items-center justify-center flex-shrink-0
+                         hover:opacity-90 active:scale-95 transition-transform"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M12 19V5M5 12l7-7 7 7" stroke="white"
+                      strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
-        {/* hint under the search bar — tells the user they can dump it all in */}
+        {/* hint under the box */}
         <p className="text-[11px] text-b3 mt-1.5 px-1 leading-snug">
           Mention <span className="font-bold">what · when · where · budget</span> all in one go.
           I'll only ask about what's missing.
         </p>
 
-        {/* Free-services-for-Connectors toggle. Surfaced here (was buried in
-            the chat) so users see the option BEFORE they describe their
-            request. When ON, the chat's "ready" CTA routes to the free-offers
-            flow; when OFF, it routes to the paid /results flow. */}
-        <div className="bg-white border border-bdr rounded-[16px] px-3.5 py-3 mt-3 flex items-center gap-3">
+        {/* Service-side entry: a separate compact CTA for providers who want
+            a Connector to spotlight their service (the reverse direction of
+            the main flow). Routes to the placeholder marketplace stub. */}
+        <button
+          type="button"
+          onClick={() => navigate('/connectors/browse')}
+          className="w-full mt-3 bg-white border border-bdr rounded-[16px] px-4 py-3
+                     flex items-center gap-3 text-left hover:border-g/40 transition-colors"
+        >
+          <div className="w-9 h-9 rounded-full bg-gl flex items-center justify-center flex-shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
           <div className="flex-1">
-            <p className="text-[13px] font-extrabold text-black leading-tight">
-              Free services for Connectors
+            <p className="text-[14px] font-extrabold text-black leading-tight">
+              Have a service? Ask a Connector to spotlight it
             </p>
-            <p className="text-[11px] text-b3 mt-0.5 leading-snug">
-              {freeServices
-                ? "On — providers can offer free in exchange for an Instagram post."
-                : "Off — pay normally."}
-              {' '}
-              <button
-                type="button"
-                onClick={() => navigate('/rainmakers')}
-                className="text-g font-bold underline underline-offset-2"
-              >
-                Learn how
-              </button>
+            <p className="text-[12px] text-b3 mt-0.5 leading-snug">
+              Browse Connectors by audience size + rate. Negotiate below the rate card.
             </p>
           </div>
-          <Toggle on={freeServices} onChange={setFreeServices} size="sm" />
-        </div>
+          <svg width="9" height="14" viewBox="0 0 11 18" fill="none" className="flex-shrink-0">
+            <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor"
+                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-black/60" />
+          </svg>
+        </button>
       </div>
 
       {/* categories */}

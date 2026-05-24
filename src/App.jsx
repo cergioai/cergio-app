@@ -26,6 +26,7 @@ import { IntakeFormScreen } from './screens/IntakeFormScreen';
 import { ResultsScreen }    from './screens/ResultsScreen';
 import { BookingScreen }    from './screens/BookingScreen';
 import { RainmakersScreen } from './screens/RainmakersScreen';
+import { BrowseConnectorsScreen } from './screens/BrowseConnectorsScreen';
 import { JobsInboxScreen }       from './screens/JobsInboxScreen';
 import { ServiceCompleteScreen }  from './screens/ServiceCompleteScreen';
 import { SharePromptScreen }      from './screens/SharePromptScreen';
@@ -270,6 +271,9 @@ export default function App() {
           <Route path="/results"     element={<ResultsScreen />} />
           <Route path="/booking"     element={<BookingScreen />} />
           <Route path="/rainmakers"  element={<RainmakersScreen />} />
+          {/* Service-side: providers browse Connectors who set a spotlight
+              rate card. Phase 2 will add request + counter-offer flow. */}
+          <Route path="/connectors/browse" element={<BrowseConnectorsScreen />} />
           <Route path="/inbox"             element={<JobsInboxScreen />} />
           <Route path="/complete"          element={<ServiceCompleteScreen />} />
           <Route path="/share"             element={<SharePromptScreen />} />
