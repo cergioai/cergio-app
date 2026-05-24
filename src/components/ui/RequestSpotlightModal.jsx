@@ -5,12 +5,9 @@
 // and can Accept / Counter (lower price) / Decline.
 import { useState } from 'react';
 import { createSpotlightRequest } from '../../lib/api';
+import { PLATFORM_FEE_RATE, platformFeeCents, sellerEarningsCents, fmtDollars } from '../../lib/fees';
 
-function fmtPrice(cents) {
-  if (cents == null) return null;
-  const n = cents / 100;
-  return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
-}
+const fmtPrice = fmtDollars;
 
 export function RequestSpotlightModal({ connector, onClose, onSent }) {
   // Available platforms = the ones the Connector priced. Default to the
@@ -69,28 +66,45 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
             This Connector hasn't set a rate card yet. Send them a friend invite
             instead.
           </p>
-        ) : platforms.length > 1 ? (
-          <div className="flex gap-2 mb-3">
-            {platforms.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPlatform(p.id)}
-                className={`flex-1 rounded-[14px] py-3 text-[13px] font-extrabold transition-all
-                  ${platform === p.id
-                    ? 'bg-gl text-gd border-2 border-g'
-                    : 'bg-bg5 text-b2 border-2 border-transparent hover:border-g/30'}`}
-              >
-                {p.label}
-                <span className="block text-[11px] font-bold mt-0.5">{fmtPrice(p.cents)} / post</span>
-              </button>
-            ))}
-          </div>
         ) : (
-          <div className="bg-gl border border-g/30 rounded-[14px] px-3.5 py-2.5 mb-3 flex items-center justify-between">
-            <span className="text-[13px] font-extrabold text-gd">{picked.label} spotlight</span>
-            <span className="text-[14px] font-extrabold text-gd">{fmtPrice(picked.cents)} / post</span>
-          </div>
+          <>
+            {platforms.length > 1 && (
+              <div className="flex gap-2 mb-3">
+                {platforms.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPlatform(p.id)}
+                    className={`flex-1 rounded-[14px] py-3 text-[13px] font-extrabold transition-all
+                      ${platform === p.id
+                        ? 'bg-gl text-gd border-2 border-g'
+                        : 'bg-bg5 text-b2 border-2 border-transparent hover:border-g/30'}`}
+                  >
+                    {p.label}
+                    <span className="block text-[11px] font-bold mt-0.5">{fmtPrice(p.cents)} / post</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Fee breakdown — transparent so providers know where their money goes. */}
+            {picked && (
+              <div className="bg-bg5/60 border border-bdr rounded-[14px] px-3.5 py-3 mb-3">
+                <div className="flex items-center justify-between text-[13px] mb-1">
+                  <span className="text-b2">You pay</span>
+                  <span className="font-extrabold text-black">{fmtPrice(picked.cents)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[12px] text-b3">
+                  <span>Connector earns</span>
+                  <span>{fmtPrice(sellerEarningsCents(picked.cents))}</span>
+                </div>
+                <div className="flex items-center justify-between text-[12px] text-b3">
+                  <span>Cergio fee ({Math.round(PLATFORM_FEE_RATE * 100)}%)</span>
+                  <span>{fmtPrice(platformFeeCents(picked.cents))}</span>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <form onSubmit={submit} className="flex flex-col gap-3">

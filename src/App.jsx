@@ -27,6 +27,7 @@ import { ResultsScreen }    from './screens/ResultsScreen';
 import { BookingScreen }    from './screens/BookingScreen';
 import { RainmakersScreen } from './screens/RainmakersScreen';
 import { BrowseConnectorsScreen } from './screens/BrowseConnectorsScreen';
+import { ConnectorRequestsScreen } from './screens/ConnectorRequestsScreen';
 import { JobsInboxScreen }       from './screens/JobsInboxScreen';
 import { ServiceCompleteScreen }  from './screens/ServiceCompleteScreen';
 import { SharePromptScreen }      from './screens/SharePromptScreen';
@@ -274,6 +275,9 @@ export default function App() {
           {/* Service-side: providers browse Connectors who set a spotlight
               rate card. Phase 2 will add request + counter-offer flow. */}
           <Route path="/connectors/browse" element={<BrowseConnectorsScreen />} />
+          {/* Two-tab inbox for spotlight requests — inbound for Connectors,
+              outbound for providers. Counter-offer modal lives inside. */}
+          <Route path="/connectors/requests" element={<ConnectorRequestsScreen />} />
           <Route path="/inbox"             element={<JobsInboxScreen />} />
           <Route path="/complete"          element={<ServiceCompleteScreen />} />
           <Route path="/share"             element={<SharePromptScreen />} />

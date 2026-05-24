@@ -194,6 +194,13 @@ export function ProfileScreen() {
             pill={hasRateCard ? <MintPill>Connector ✓</MintPill> : null}
             onClick={() => navigate('/rainmaker/apply/instagram')}
           />
+          {/* Spotlight requests — second Social row. Shows for everyone since
+              providers also see their outbound requests here. */}
+          <Row
+            title="Spotlight requests"
+            subtitle="Manage inbound + sent spotlight asks"
+            onClick={() => navigate('/connectors/requests')}
+          />
           {ig?.instagram_handle ? (
             <Row
               title={`Instagram · @${ig.instagram_handle}`}
