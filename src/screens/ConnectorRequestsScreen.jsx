@@ -123,6 +123,8 @@ export function ConnectorRequestsScreen() {
                 onDecline={() => handleDecline(r)} />
             : <OutboundCard key={r.id} request={r}
                 onAccept={() => handleAccept(r)}
+                onCounter={() => setCounterTarget(r)}
+                onDecline={() => handleDecline(r)}
                 onPay={() => setPayTarget(r)}
                 onCancel={() => handleCancel(r)} />
           )}
@@ -152,9 +154,12 @@ export function ConnectorRequestsScreen() {
 function InboundCard({ request: r, onAccept, onCounter, onDecline }) {
   const pill = STATUS_PILL[r.status] || STATUS_PILL.pending;
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
-  // Effective price: countered → offered; otherwise official.
   const effective = r.offered_price_cents ?? r.official_price_cents;
-  const isOpen = r.status === 'pending' || r.status === 'countered';
+  // Connector's turn to act: pending (initial request) OR provider just countered.
+  // If Connector themselves countered (last_counter_by='connector'), waiting on Provider.
+  const isMyTurn =
+    r.status === 'pending' ||
+    (r.status === 'countered' && r.last_counter_by === 'provider');
   return (
     <div className="bg-white border border-bdr rounded-[18px] p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -181,7 +186,7 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline }) {
           <span>{fmtDollars(sellerEarningsCents(effective))} (after {Math.round(PLATFORM_FEE_RATE * 100)}% fee)</span>
         </div>
       </div>
-      {isOpen && (
+      {isMyTurn && (
         <div className="flex gap-2">
           <button onClick={onDecline}
             className="flex-1 bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
@@ -197,11 +202,17 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline }) {
           </button>
         </div>
       )}
+      {/* Connector countered + waiting on Provider */}
+      {r.status === 'countered' && r.last_counter_by === 'connector' && (
+        <p className="text-[12px] text-b3 text-center font-medium mt-1">
+          Waiting on Provider to respond to your counter of {fmtDollars(effective)}…
+        </p>
+      )}
     </div>
   );
 }
 
-function OutboundCard({ request: r, onAccept, onPay, onCancel }) {
+function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCancel }) {
   const pill = STATUS_PILL[r.status] || STATUS_PILL.pending;
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
   const isCountered = r.status === 'countered' && r.offered_price_cents != null;
@@ -241,11 +252,28 @@ function OutboundCard({ request: r, onAccept, onPay, onCancel }) {
         </div>
       </div>
 
-      {r.status === 'countered' && (
-        <button onClick={onAccept}
-          className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90">
-          Accept counter for {fmtDollars(r.offered_price_cents)}
-        </button>
+      {/* Connector countered → Provider's turn (Accept · Counter back · Decline) */}
+      {r.status === 'countered' && r.last_counter_by === 'connector' && (
+        <div className="flex gap-2">
+          <button onClick={onDecline}
+            className="flex-1 bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
+            Decline
+          </button>
+          <button onClick={onCounter}
+            className="flex-1 bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
+            Counter
+          </button>
+          <button onClick={onAccept}
+            className="flex-1 bg-g text-white rounded-[14px] py-2.5 text-[13px] font-extrabold hover:opacity-90">
+            Accept {fmtDollars(r.offered_price_cents)}
+          </button>
+        </div>
+      )}
+      {/* Provider countered → waiting on Connector */}
+      {r.status === 'countered' && r.last_counter_by === 'provider' && (
+        <p className="text-[12px] text-b3 text-center font-medium">
+          Waiting on Connector to respond to your counter of {fmtDollars(r.offered_price_cents)}…
+        </p>
       )}
       {r.status === 'pending' && (
         <button onClick={onCancel}

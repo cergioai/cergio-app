@@ -6,9 +6,14 @@ import { counterSpotlightRequest } from '../../lib/api';
 import { PLATFORM_FEE_RATE, platformFeeCents, sellerEarningsCents, fmtDollars } from '../../lib/fees';
 
 export function CounterSpotlightModal({ request, onClose, onCountered }) {
+  // The "current" price is whatever the OTHER party last asked. If
+  // Connector hasn't countered yet, that's the official rate card. If they
+  // have countered, that's the offered price. Either way, the new counter
+  // must be lower than the current.
+  const currentCents = request.offered_price_cents ?? request.official_price_cents;
   const officialCents = request.official_price_cents;
-  // Default suggestion: 80% of official (a friendly 20% off).
-  const suggested = Math.max(0, Math.round(officialCents * 0.8) / 100);
+  // Default suggestion: 80% of current (friendly 20% off).
+  const suggested = Math.max(0, Math.round(currentCents * 0.8) / 100);
   const [dollars, setDollars] = useState(String(suggested));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -16,8 +21,8 @@ export function CounterSpotlightModal({ request, onClose, onCountered }) {
   const offerCents = (dollars === '' || dollars == null)
     ? null
     : Math.max(0, Math.round(+dollars * 100));
-  const valid = offerCents != null && offerCents > 0 && offerCents < officialCents;
-  const savingsCents = offerCents != null ? Math.max(0, officialCents - offerCents) : 0;
+  const valid = offerCents != null && offerCents > 0 && offerCents < currentCents;
+  const savingsCents = offerCents != null ? Math.max(0, currentCents - offerCents) : 0;
 
   const submit = async (e) => {
     e?.preventDefault?.();
@@ -39,12 +44,14 @@ export function CounterSpotlightModal({ request, onClose, onCountered }) {
       <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-5 pb-7" onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-4" />
         <h2 className="text-[20px] font-extrabold text-black leading-tight mb-1">
-          Offer a lower price
+          {request.offered_price_cents != null ? 'Counter back' : 'Offer a lower price'}
         </h2>
         <p className="text-[12px] text-b3 mb-4 leading-relaxed">
-          Your rate card says <strong className="text-black">{fmtDollars(officialCents)}</strong>{' '}
-          for {request.platform === 'instagram' ? 'an Instagram' : 'a TikTok'} post.
-          Offer a discount and they'll see the savings.
+          Current ask is <strong className="text-black">{fmtDollars(currentCents)}</strong>{' '}
+          for {request.platform === 'instagram' ? 'an Instagram' : 'a TikTok'} post
+          {request.offered_price_cents != null && (
+            <> (down from rate-card <strong>{fmtDollars(officialCents)}</strong>)</>
+          )}. Offer a lower number and they'll see the savings.
         </p>
 
         <form onSubmit={submit} className="flex flex-col gap-3">
@@ -79,9 +86,9 @@ export function CounterSpotlightModal({ request, onClose, onCountered }) {
               </div>
             </div>
           )}
-          {offerCents != null && offerCents >= officialCents && (
+          {offerCents != null && offerCents >= currentCents && (
             <p className="text-[12px] text-danger font-bold">
-              Counter must be less than your rate card ({fmtDollars(officialCents)}).
+              Counter must be less than the current ask ({fmtDollars(currentCents)}).
             </p>
           )}
           {err && <p className="text-[12px] text-danger font-bold">{err}</p>}

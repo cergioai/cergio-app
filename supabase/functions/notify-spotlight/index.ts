@@ -1,12 +1,14 @@
 // Supabase Edge Function — spotlight request email notifications.
 //
-// Triggered fire-and-forget from api.js whenever a spotlight_requests row
-// transitions to a state someone needs to know about:
+// Triggered fire-and-forget from api.js (or from stripe-webhook for `paid`)
+// whenever a spotlight_requests row transitions to a state someone needs
+// to know about:
 //   created   → Connector receives "{Provider} wants a spotlight from you"
 //   countered → Provider receives "{Connector} offered $X — Save $Y vs $Z"
 //   accepted  → Provider receives "{Connector} accepted your request"
 //   declined  → Provider receives "{Connector} declined"
 //   cancelled → Connector receives "{Provider} cancelled their request"
+//   paid      → Connector receives "You got paid $X — post your spotlight"
 //
 // Caller payload:
 //   { requestId: string, event: 'created'|'countered'|'accepted'|'declined'|'cancelled', app_url?: string }
@@ -48,7 +50,7 @@ serve(async (req: Request) => {
     const { data: r, error: rErr } = await supaAdmin
       .from('spotlight_requests')
       .select(`
-        id, platform, official_price_cents, offered_price_cents, message, status, created_at,
+        id, platform, official_price_cents, offered_price_cents, message, status, created_at, last_counter_by,
         provider:profiles!spotlight_requests_provider_id_fkey ( id, display_name, instagram_handle, tiktok_handle ),
         connector:profiles!spotlight_requests_connector_id_fkey ( id, display_name, instagram_handle, tiktok_handle )
       `)
@@ -57,7 +59,17 @@ serve(async (req: Request) => {
     if (rErr || !r) return json({ error: 'request not found', detail: rErr?.message }, 404);
 
     // Pick recipient (auth.users.email is canonical).
-    const recipientUser = ['created', 'cancelled'].includes(event) ? r.connector : r.provider;
+    //   created/cancelled/paid       → Connector receives.
+    //   accepted/declined            → Provider receives.
+    //   countered → routes to the party who DIDN'T counter (their turn now).
+    let recipientUser;
+    if (event === 'countered') {
+      recipientUser = r.last_counter_by === 'provider' ? r.connector : r.provider;
+    } else if (['created', 'cancelled', 'paid'].includes(event)) {
+      recipientUser = r.connector;
+    } else {
+      recipientUser = r.provider;
+    }
     if (!recipientUser?.id) return json({ error: 'no recipient party on request' }, 422);
     const { data: authRes, error: aErr } = await supaAdmin.auth.admin.getUserById(recipientUser.id);
     if (aErr || !authRes?.user?.email) return json({ error: 'recipient email not found', detail: aErr?.message }, 422);
@@ -88,16 +100,18 @@ serve(async (req: Request) => {
           ${r.message ? `<p style="font-size:14px;color:#3A3A3A;margin:16px 0 0;line-height:1.5;font-style:italic;">"${escapeHtml(r.message)}"</p>` : ''}`;
         cta_label = 'Accept · Counter · Decline →';
         break;
-      case 'countered':
-        subject = `${connectorName} countered at ${offered} (you save vs ${official})`;
+      case 'countered': {
+        const counterer = r.last_counter_by === 'provider' ? providerName : connectorName;
+        subject = `${counterer} countered at ${offered} (vs ${official})`;
         heading = `Counter-offer in 🟢`;
         body_html = `
           <p style="font-size:15px;color:#3A3A3A;margin:0 0 18px;">
-            <strong>${escapeHtml(connectorName)}</strong> offered a lower price for your ${platformLabel} spotlight.
+            <strong>${escapeHtml(counterer)}</strong> countered with a new price for the ${platformLabel} spotlight. Your turn — accept, counter back, or decline.
           </p>
           ${priceTable(r.offered_price_cents, r.official_price_cents)}`;
-        cta_label = 'Accept counter →';
+        cta_label = 'Open counter →';
         break;
+      }
       case 'accepted':
         subject = `${connectorName} accepted your ${platformLabel} spotlight (${offered || official})`;
         heading = `Spotlight accepted ✓`;
@@ -129,6 +143,20 @@ serve(async (req: Request) => {
           </p>`;
         cta_label = 'Open inbox →';
         break;
+      case 'paid': {
+        const paidCents = r.offered_price_cents || r.official_price_cents;
+        const earn = paidCents - feeCents(paidCents);
+        subject = `You got paid ${fmt(earn)} — time to post your ${platformLabel} spotlight`;
+        heading = `Paid ✓`;
+        body_html = `
+          <p style="font-size:15px;color:#3A3A3A;margin:0 0 18px;">
+            <strong>${escapeHtml(providerName)}</strong> paid for the ${platformLabel} spotlight.
+            Your share landed in your Stripe Connect balance — they're waiting for the post.
+          </p>
+          ${priceTable(paidCents)}`;
+        cta_label = 'Open request →';
+        break;
+      }
       default:
         return json({ error: `unknown event: ${event}` }, 400);
     }

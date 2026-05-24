@@ -92,11 +92,15 @@ serve(async (req: Request) => {
 
         if (spotlightRequestId) {
           // ── Spotlight payment path ────────────────────────────────────────
-          await supaAdmin
+          // Only flip + notify if we're transitioning paid_at from NULL.
+          // The .select() pattern returns rows actually updated so we can
+          // gate the notify on a real state change (vs duplicate webhook).
+          const { data: flipped } = await supaAdmin
             .from('spotlight_requests')
             .update({ paid_at: new Date().toISOString() })
             .eq('id', spotlightRequestId)
-            .is('paid_at', null);   // idempotent — don't re-stamp
+            .is('paid_at', null)
+            .select('id');
 
           // Earnings ledger row for the Connector (their share after our fee).
           const connectorShare = (pi.amount ?? 0) - appFeeCents;
@@ -119,6 +123,21 @@ serve(async (req: Request) => {
                 meta:         { stripe_intent_id: pi.id, app_fee_cents: appFeeCents, platform: pi.metadata?.platform },
               });
             }
+          }
+
+          // Email the Connector that funds landed. Only on first transition
+          // (flipped row count > 0) so duplicate webhook deliveries don't
+          // spam them. Fire-and-forget — webhook never blocks on this.
+          if (flipped && flipped.length > 0) {
+            const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/notify-spotlight`;
+            fetch(fnUrl, {
+              method:  'POST',
+              headers: {
+                'Content-Type':  'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({ requestId: spotlightRequestId, event: 'paid' }),
+            }).catch(() => { /* best-effort */ });
           }
           break;
         }

@@ -636,16 +636,34 @@ export async function listMyInboundSpotlightRequests({ limit = 50 } = {}) {
     .limit(limit);
 }
 
-/** Connector counters with a lower price. Status → 'countered'.
- *  Fires notify-spotlight (event=countered) fire-and-forget on success. */
+/** Counter with a lower price. Either party (Connector or Provider) can
+ *  counter — we auto-detect role from the signed-in user vs the row.
+ *  Status → 'countered'; last_counter_by stamps who just countered so the
+ *  UI knows whose turn it is. Fires notify-spotlight (countered) on success. */
 export async function counterSpotlightRequest(id, { offeredPriceCents } = {}) {
   if (!supabaseReady) return NOT_WIRED;
   if (!id) return { data: null, error: { message: 'id required' } };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+
+  // Look up the row to determine the caller's role.
+  const { data: row, error: rowErr } = await supabase
+    .from('spotlight_requests')
+    .select('id, provider_id, connector_id')
+    .eq('id', id)
+    .single();
+  if (rowErr || !row) return { data: null, error: rowErr || { message: 'request not found' } };
+  let role = null;
+  if (row.provider_id  === userRes.user.id) role = 'provider';
+  if (row.connector_id === userRes.user.id) role = 'connector';
+  if (!role) return { data: null, error: { message: 'You are not on this request' } };
+
   const res = await supabase
     .from('spotlight_requests')
     .update({
       offered_price_cents: Math.max(0, Math.round(+offeredPriceCents || 0)),
       status:              'countered',
+      last_counter_by:     role,
       responded_at:        new Date().toISOString(),
     })
     .eq('id', id)
@@ -671,6 +689,27 @@ export async function setSpotlightRequestStatus(id, status) {
     .single();
   if (!res.error && res.data?.id) fireSpotlightNotify(res.data.id, status);
   return res;
+}
+
+/**
+ * Read the signed-in user's earnings ledger (bookings + spotlights merged).
+ * Returns rows ordered by created_at desc, capped at `limit`. Each row has
+ * { id, kind, source_id, amount_cents, currency, status, created_at, meta }.
+ * Includes both kind='booking' (from paid services) and kind='spotlight'
+ * (from accepted + paid spotlight requests).
+ */
+export async function getMyEarnings({ limit = 50, kind } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  let q = supabase
+    .from('earnings')
+    .select('id, kind, source_id, amount_cents, currency, status, created_at, meta')
+    .eq('profile_id', userRes.user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (kind) q = q.eq('kind', kind);
+  return await q;
 }
 
 /**
