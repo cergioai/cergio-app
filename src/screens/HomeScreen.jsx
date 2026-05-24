@@ -211,6 +211,14 @@ export function HomeScreen() {
             </div>
           )}
 
+          {/* Hint inside the box, left-aligned. Subtle so it doesn't compete
+              with the input but visible enough to teach the "dump it all in
+              one go" pattern. */}
+          <p className="px-5 pb-1 text-[11px] text-b3 leading-snug">
+            Mention <span className="font-bold text-b2">what · when · where · budget</span>{' '}
+            — I'll only ask about what's missing.
+          </p>
+
           {/* row 2: chip toolbar — + attach, mode dropdown, then send arrow. */}
           <div className="flex items-center gap-2 px-3 pb-3 pt-1">
             {/* + attach button (Claude-style). Hidden file input triggered
@@ -229,9 +237,13 @@ export function HomeScreen() {
               onClick={() => fileRef.current?.click()}
               aria-label="Attach photos"
               className="w-8 h-8 rounded-full bg-bg5 border border-bdr text-b2 flex items-center justify-center
-                         text-[18px] font-bold hover:border-g/40 hover:text-g transition-colors flex-shrink-0"
+                         hover:border-g/40 hover:text-g transition-colors flex-shrink-0"
             >
-              +
+              {/* Ultra-thin SVG plus — Claude style */}
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M7 1.5v11M1.5 7h11" stroke="currentColor"
+                      strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
             </button>
 
             {/* Mode dropdown — replaces the on/off toggle. Single pill shows
@@ -249,7 +261,6 @@ export function HomeScreen() {
                               ? 'bg-gl text-gd border border-g/30'
                               : 'bg-bg5 text-b2 border border-bdr hover:border-g/40'}`}
               >
-                <span className={`w-2 h-2 rounded-full ${freeServices ? 'bg-g' : 'bg-b3'}`} />
                 {freeServices ? 'Free for Connectors' : 'Pay full price'}
                 <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5">
                   <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -296,12 +307,6 @@ export function HomeScreen() {
             </button>
           </div>
         </div>
-        {/* hint under the box */}
-        <p className="text-[11px] text-b3 mt-1.5 px-1 leading-snug">
-          Mention <span className="font-bold">what · when · where · budget</span> all in one go.
-          I'll only ask about what's missing.
-        </p>
-
         {/* Service-side entry: a separate compact CTA for providers who want
             a Connector to spotlight their service (the reverse direction of
             the main flow). Routes to the placeholder marketplace stub. */}

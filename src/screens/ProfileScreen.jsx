@@ -276,6 +276,11 @@ export function ProfileScreen() {
         onClick={() => navigate('/earnings')}
       />
       <Row
+        title="Find friends on Cergio"
+        subtitle="Sync contacts · Instagram · TikTok — see who's already here"
+        onClick={() => navigate('/find-friends')}
+      />
+      <Row
         title="Invite friends"
         subtitle="Earn $25 credit per friend"
         onClick={() => navigate('/invite/friends-popup')}

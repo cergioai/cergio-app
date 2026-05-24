@@ -581,6 +581,7 @@ export async function getMySpotlightPrices() {
  * `officialPriceCents` should be the rate card snapshot at the time of
  * request — we don't trust the client value beyond what the server can
  * also read from the profile (drift between fetch + insert is tiny).
+ * Fires notify-spotlight (event=created) fire-and-forget on success.
  */
 export async function createSpotlightRequest({ connectorId, platform, officialPriceCents, message, serviceId = null } = {}) {
   if (!supabaseReady) return NOT_WIRED;
@@ -592,7 +593,7 @@ export async function createSpotlightRequest({ connectorId, platform, officialPr
   if (platform !== 'instagram' && platform !== 'tiktok') {
     return { data: null, error: { message: 'platform must be instagram or tiktok' } };
   }
-  return await supabase
+  const res = await supabase
     .from('spotlight_requests')
     .insert({
       provider_id:          userRes.user.id,
@@ -605,6 +606,8 @@ export async function createSpotlightRequest({ connectorId, platform, officialPr
     })
     .select()
     .single();
+  if (!res.error && res.data?.id) fireSpotlightNotify(res.data.id, 'created');
+  return res;
 }
 
 /** List requests where the signed-in user is the provider (their outbound). */
@@ -633,11 +636,12 @@ export async function listMyInboundSpotlightRequests({ limit = 50 } = {}) {
     .limit(limit);
 }
 
-/** Connector counters with a lower price. Status → 'countered'. */
+/** Connector counters with a lower price. Status → 'countered'.
+ *  Fires notify-spotlight (event=countered) fire-and-forget on success. */
 export async function counterSpotlightRequest(id, { offeredPriceCents } = {}) {
   if (!supabaseReady) return NOT_WIRED;
   if (!id) return { data: null, error: { message: 'id required' } };
-  return await supabase
+  const res = await supabase
     .from('spotlight_requests')
     .update({
       offered_price_cents: Math.max(0, Math.round(+offeredPriceCents || 0)),
@@ -647,21 +651,39 @@ export async function counterSpotlightRequest(id, { offeredPriceCents } = {}) {
     .eq('id', id)
     .select()
     .single();
+  if (!res.error && res.data?.id) fireSpotlightNotify(res.data.id, 'countered');
+  return res;
 }
 
-/** Set request status (accept / decline / cancel). */
+/** Set request status (accept / decline / cancel).
+ *  Fires notify-spotlight with matching event fire-and-forget on success. */
 export async function setSpotlightRequestStatus(id, status) {
   if (!supabaseReady) return NOT_WIRED;
   if (!id) return { data: null, error: { message: 'id required' } };
   if (!['accepted','declined','cancelled'].includes(status)) {
     return { data: null, error: { message: `invalid status: ${status}` } };
   }
-  return await supabase
+  const res = await supabase
     .from('spotlight_requests')
     .update({ status, responded_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single();
+  if (!res.error && res.data?.id) fireSpotlightNotify(res.data.id, status);
+  return res;
+}
+
+/** Fire-and-forget call to notify-spotlight edge function. Never awaits or
+ *  surfaces errors to the caller — the database row is what matters, email
+ *  is best-effort. Mirrors the notifyProvider pattern for bookings. */
+function fireSpotlightNotify(requestId, event) {
+  const app_url = typeof window !== 'undefined' ? window.location.origin : undefined;
+  supabase.functions
+    .invoke('notify-spotlight', { body: { requestId, event, app_url } })
+    .catch(err => {
+      // eslint-disable-next-line no-console
+      console.warn('[notify-spotlight] best-effort send failed', err);
+    });
 }
 
 // ─── Booking notifications ──────────────────────────────────────────────────

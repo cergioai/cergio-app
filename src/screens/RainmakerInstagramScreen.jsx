@@ -247,11 +247,14 @@ export function RainmakerInstagramScreen() {
             Cergio takes a flat 10% fee on the agreed price. Connector sets
             what the provider PAYS; we show what they receive after fee. */}
         <div className="mt-6 mb-2">
-          <h3 className="text-[18px] font-extrabold text-black mb-1">Your spotlight rate card</h3>
+          <h3 className="text-[18px] font-extrabold text-black mb-1">
+            Add your rate <span className="text-[14px] font-bold text-b3">(or get free services in exchange for spotlights)</span>
+          </h3>
           <p className="text-[12px] text-b3 leading-relaxed mb-3">
-            What providers pay you per platform. Cergio takes a flat{' '}
+            What providers pay you per platform — Cergio takes a flat{' '}
             <strong className="text-black">{Math.round(PLATFORM_FEE_RATE * 100)}% fee</strong>;
-            you receive the rest. Leave blank if you only do the free-services swap.
+            you keep the rest. Leave blank if you only want to swap your spotlights
+            for free services (no cash, just barter).
           </p>
           <div className="flex flex-col gap-3">
             {/* Instagram price */}

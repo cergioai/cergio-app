@@ -28,6 +28,7 @@ import { BookingScreen }    from './screens/BookingScreen';
 import { RainmakersScreen } from './screens/RainmakersScreen';
 import { BrowseConnectorsScreen } from './screens/BrowseConnectorsScreen';
 import { ConnectorRequestsScreen } from './screens/ConnectorRequestsScreen';
+import { FindFriendsScreen } from './screens/FindFriendsScreen';
 import { JobsInboxScreen }       from './screens/JobsInboxScreen';
 import { ServiceCompleteScreen }  from './screens/ServiceCompleteScreen';
 import { SharePromptScreen }      from './screens/SharePromptScreen';
@@ -278,6 +279,8 @@ export default function App() {
           {/* Two-tab inbox for spotlight requests — inbound for Connectors,
               outbound for providers. Counter-offer modal lives inside. */}
           <Route path="/connectors/requests" element={<ConnectorRequestsScreen />} />
+          {/* Find friends: phone contacts / Google / share-to-social / search */}
+          <Route path="/find-friends" element={<FindFriendsScreen />} />
           <Route path="/inbox"             element={<JobsInboxScreen />} />
           <Route path="/complete"          element={<ServiceCompleteScreen />} />
           <Route path="/share"             element={<SharePromptScreen />} />
