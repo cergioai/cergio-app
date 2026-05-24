@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PROFILE } from '../data/mock';
-import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok } from '../lib/api';
+import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok, getMySpotlightPrices } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
@@ -48,14 +48,13 @@ function Row({ title, subtitle, pill, onClick, disabled = false }) {
   );
 }
 
-// Fat chevron per Figma — thicker than the default `›`, matches the
-// visual weight of the bold row titles.
+// Small, cute chevron — thin stroke + compact size per Tarik's "small cute
+// etc" direction. Softer visual weight than the row titles.
 function Chevron() {
   return (
-    <svg width="11" height="18" viewBox="0 0 11 18" fill="none" className="flex-shrink-0">
+    <svg width="8" height="13" viewBox="0 0 11 18" fill="none" className="flex-shrink-0 text-b3">
       <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor"
-            strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-            className="text-black/80" />
+            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -97,16 +96,23 @@ export function ProfileScreen() {
   const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || PROFILE.name;
   const initials    = (displayName[0] || 'T').toUpperCase();
 
-  // Social connections
+  // Social connections + spotlight rate card (drives "Become a Connector"
+  // vs "Add spotlight rate" label on the Social section entry row).
   const [ig, setIg] = useState(null);
   const [showIgModal, setShowIgModal] = useState(false);
   const [tt, setTt] = useState(null);
   const [showTtModal, setShowTtModal] = useState(false);
+  const [spotlightPrices, setSpotlightPrices] = useState(null);
   useEffect(() => {
-    if (!isSignedIn) { setIg(null); setTt(null); return; }
+    if (!isSignedIn) { setIg(null); setTt(null); setSpotlightPrices(null); return; }
     getMyInstagram().then(({ data }) => setIg(data || null));
     getMyTikTok().then(({ data }) => setTt(data || null));
+    getMySpotlightPrices().then(({ data }) => setSpotlightPrices(data || null));
   }, [isSignedIn]);
+  const hasRateCard = !!(
+    spotlightPrices?.spotlight_price_instagram_cents != null ||
+    spotlightPrices?.spotlight_price_tiktok_cents    != null
+  );
   const handleSaveIg = async ({ handle: h, followers: f, verified }) => {
     const { data, error } = await saveInstagram({ handle: h, followers: f, verified });
     if (error) throw new Error(error.message);
@@ -156,7 +162,7 @@ export function ProfileScreen() {
   const firstName = displayName.split(/[\s@.]/)[0];
 
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-y-auto pb-24">
+    <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
       {/* ── Top: greeting + avatar ─────────────────────────────────────────── */}
       <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
         <h1 className="text-[30px] font-extrabold text-black leading-tight">
@@ -173,10 +179,21 @@ export function ProfileScreen() {
       <Row title="Edit account info"   onClick={() => showToast('Account info — coming soon')} />
       <Row title="Payment settings"    onClick={() => showToast('Payment methods — coming soon')} />
 
-      {/* ── Social (kept from prior build — IG required for Connectors) ────── */}
+      {/* ── Social — Connector entry on top, then IG, then TikTok ─────────
+          The first row flips between "Become a Connector" (new user, no
+          rate card yet) and "Add spotlight rate" (already a Connector).
+          Both route to the apply flow where IG/TT and rate-card are set. */}
       {isSignedIn && (
         <>
           <SectionHeader title="Social" />
+          <Row
+            title={hasRateCard ? 'Add a spotlight rate' : 'Become a Connector'}
+            subtitle={hasRateCard
+              ? 'Edit your IG / TikTok rate card or audience'
+              : 'Set your rate card — services book you for spotlights'}
+            pill={hasRateCard ? <MintPill>Connector ✓</MintPill> : null}
+            onClick={() => navigate('/rainmaker/apply/instagram')}
+          />
           {ig?.instagram_handle ? (
             <Row
               title={`Instagram · @${ig.instagram_handle}`}

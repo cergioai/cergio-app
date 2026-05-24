@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
+import { RequestSpotlightModal } from '../components/ui/RequestSpotlightModal';
 
 function fmtFollowers(n) {
   if (!Number.isFinite(+n) || n == null) return '—';
@@ -31,6 +32,7 @@ export function BrowseConnectorsScreen() {
   const { showToast } = useOutletContext();
   const [connectors, setConnectors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [requestTarget, setRequestTarget] = useState(null);  // Connector row open in modal
 
   useEffect(() => {
     if (!supabaseReady) { setLoading(false); return; }
@@ -62,7 +64,7 @@ export function BrowseConnectorsScreen() {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-y-auto pb-24">
+    <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
       {/* header */}
       <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
         <h1 className="text-[28px] font-extrabold text-black leading-tight">
@@ -91,10 +93,18 @@ export function BrowseConnectorsScreen() {
             <ConnectorRow
               key={c.id}
               connector={c}
-              onClick={() => showToast('Spotlight requests launch next — full counter-offer flow is being built.')}
+              onClick={() => setRequestTarget(c)}
             />
           ))}
         </div>
+      )}
+
+      {requestTarget && (
+        <RequestSpotlightModal
+          connector={requestTarget}
+          onClose={() => setRequestTarget(null)}
+          onSent={() => showToast('Spotlight request sent — they\'ll respond soon')}
+        />
       )}
     </div>
   );

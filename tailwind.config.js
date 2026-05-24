@@ -33,15 +33,19 @@ export default {
         pm:  '#C8C8C5',
 
         // ── Backgrounds ──────────────────────────────────────────────────
-        // cr   = page bg (88% frequency in canonical PNG).
+        // cr   = page bg. Updated 2026-05-24 to the ultra-light salmon-cream
+        //        Tarik picked from the latest Figma set — warmer than the
+        //        previous neutral #F8F8F8. Same token name; cascades app-wide.
+        // cream = explicit alias for the new bg (also usable as bg-cream).
         // card = mockup card-on-page bg (subtle lift over page).
         // soft = stronger info-strip bg (e.g. "wait 24h"). NOT in mockup,
         //        added per Tarik's request for utility info patterns.
         // crd  = legacy alias kept pointing to soft.
-        cr:   '#F8F8F8',
-        card: '#FCFCFC',
-        soft: '#F4F4F2',
-        crd:  '#F4F4F2',
+        cr:    '#FAF4EE',
+        cream: '#FAF4EE',
+        card:  '#FCFCFC',
+        soft:  '#F4F4F2',
+        crd:   '#F4F4F2',
 
         // ── Text ─────────────────────────────────────────────────────────
         // b3 = body / inactive gray, pixel-sampled (2.37% frequency).

@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
-import { Toggle } from '../components/ui/Toggle';
 import { CATEGORIES, FEED } from '../data/mock';
 
 const BUNDLES = [
@@ -11,36 +10,133 @@ const BUNDLES = [
   { icon: '🔨', label: 'Kitchen reno',    task: 'Renovate my kitchen' },
 ];
 
+// Single option inside the mode-picker popover.
+function ModeOption({ active, label, sub, onClick }) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={active}
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2.5 flex items-start gap-2 hover:bg-bg5/40 transition-colors
+                  ${active ? 'bg-gl/30' : ''}`}
+    >
+      <span className={`mt-1 text-[12px] flex-shrink-0 ${active ? 'text-g' : 'text-transparent'}`}>✓</span>
+      <span className="flex-1">
+        <span className="block text-[13px] font-extrabold text-black leading-tight">{label}</span>
+        <span className="block text-[11px] text-b3 mt-0.5 leading-snug">{sub}</span>
+      </span>
+    </button>
+  );
+}
+
+// Identity gate modal — shown when the user attaches photos. Real CC
+// linkage (Stripe SetupIntent) is a follow-up; for now the modal explains
+// why we need it and offers an "Add card" stub.
+function CcGateModal({ onClose, onAddCard }) {
+  return (
+    <div className="fixed inset-0 z-[10003] bg-black/40 flex items-end justify-center" onClick={onClose}>
+      <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6 pb-7" onClick={e => e.stopPropagation()}>
+        <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-5" />
+        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-gl mx-auto mb-4">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+               stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="6" width="20" height="13" rx="2" />
+            <path d="M2 11h20" />
+            <path d="M6 16h4" />
+          </svg>
+        </div>
+        <h2 className="text-[20px] font-extrabold text-black text-center leading-tight mb-2">
+          Verify your identity to add photos
+        </h2>
+        <p className="text-[13px] text-b3 text-center leading-relaxed mb-5">
+          We ask for a credit card before photo uploads so we can keep fakes,
+          spam, and inappropriate content off Cergio. You won't be charged —
+          this is just for identity verification.
+        </p>
+        <button
+          type="button"
+          onClick={onAddCard}
+          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+                     hover:opacity-90 active:scale-[.97] transition-all"
+        >
+          Add card to verify
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full mt-2 text-[14px] font-extrabold text-b3 py-2"
+        >
+          Maybe later
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function HomeScreen() {
   const navigate = useNavigate();
   const { showToast, startTask, freeServices, setFreeServices } = useOutletContext();
   const [activeCat, setActiveCat] = useState('cleaning');
   const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);          // [{ name, dataUrl }]
+  const [modeOpen, setModeOpen] = useState(false);   // Free vs Pay popover
+  const [showCcGate, setShowCcGate] = useState(false);
   const inputRef = useRef(null);
+  const fileRef = useRef(null);
+  const modeBtnRef = useRef(null);
+
+  // Close mode popover on outside click.
+  useEffect(() => {
+    if (!modeOpen) return;
+    const onDoc = (e) => {
+      if (modeBtnRef.current && !modeBtnRef.current.contains(e.target)) {
+        setModeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [modeOpen]);
 
   // Submit the home-bar query: route to /intake with the typed text as the
   // chat's first user message. useChat will parse it (service + when + where +
-  // budget) and skip ahead to whatever's still missing.
+  // budget) and skip ahead to whatever's still missing. If images are
+  // attached, gate behind the credit-card identity check (anti-abuse).
   const submitQuery = () => {
+    if (images.length > 0) {
+      // Stub: until we wire a real CC-on-file check, always prompt the gate
+      // when photos are attached. The modal explains why and offers an
+      // "Add card" CTA (Stripe SetupIntent flow lands next).
+      setShowCcGate(true);
+      return;
+    }
     const text = query.trim();
     if (!text) {
-      // Empty submit → just open the chat blank (preserves the legacy
-      // "tap the search bar to open chat" UX).
       navigate('/intake');
       return;
     }
     navigate('/intake', { state: { initialMessage: text } });
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      submitQuery();
-    }
+  // Image attach handler — read selected files as data URLs so we can
+  // preview thumbs inline. Real upload happens once the user signs in +
+  // passes the identity gate (deferred to a follow-up commit).
+  const onFilesPicked = (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 4); // cap at 4
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImages(prev => [...prev, { name: file.name, dataUrl: reader.result }].slice(0, 4));
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = ''; // allow re-picking same file later
   };
 
+  const removeImage = (i) => setImages(prev => prev.filter((_, idx) => idx !== i));
+
   return (
-    <div className="flex-1 overflow-y-auto pb-20 bg-cr">
+    <div className="flex-1 overflow-y-auto pb-20 bg-cream">
 
       {/* header */}
       <div className="flex justify-between items-center px-5 pt-4">
@@ -91,24 +187,92 @@ export function HomeScreen() {
             className="w-full bg-transparent outline-none resize-none px-5 pt-4 pb-2
                        text-[15px] text-black placeholder-b3 font-medium leading-snug"
           />
-          {/* row 2: chip toolbar — Free-services toggle on left, send on right */}
+          {/* Image thumbnails — shown above the toolbar when attached.
+              Tap × to remove. Cap of 4 enforced in onFilesPicked. */}
+          {images.length > 0 && (
+            <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
+              {images.map((img, i) => (
+                <div key={i} className="relative flex-shrink-0">
+                  <img
+                    src={img.dataUrl}
+                    alt={img.name}
+                    className="w-16 h-16 rounded-[10px] object-cover border border-bdr"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    aria-label="Remove image"
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-[12px] font-bold flex items-center justify-center"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* row 2: chip toolbar — + attach, mode dropdown, then send arrow. */}
           <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-            {/* Toggle pill — single button that toggles freeServices on/off.
-                Visual matches Claude's model-selector chip: rounded-pill,
-                soft bg, label + state. On = mint pill; Off = neutral pill. */}
+            {/* + attach button (Claude-style). Hidden file input triggered
+                via click. Submission with images is gated behind the
+                credit-card identity modal. */}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={onFilesPicked}
+            />
             <button
               type="button"
-              onClick={() => setFreeServices(!freeServices)}
-              className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-extrabold
-                          transition-all
-                          ${freeServices
-                            ? 'bg-gl text-gd border border-g/30'
-                            : 'bg-bg5 text-b2 border border-bdr hover:border-g/40'}`}
-              aria-pressed={freeServices}
+              onClick={() => fileRef.current?.click()}
+              aria-label="Attach photos"
+              className="w-8 h-8 rounded-full bg-bg5 border border-bdr text-b2 flex items-center justify-center
+                         text-[18px] font-bold hover:border-g/40 hover:text-g transition-colors flex-shrink-0"
             >
-              <span className={`w-2 h-2 rounded-full ${freeServices ? 'bg-g' : 'bg-b3'}`} />
-              Free for Connectors
+              +
             </button>
+
+            {/* Mode dropdown — replaces the on/off toggle. Single pill shows
+                the current mode + ▾; tapping opens a small popover with
+                both options. Mirrors Claude's model-selector pattern. */}
+            <div ref={modeBtnRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setModeOpen(o => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={modeOpen}
+                className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-extrabold
+                            transition-all
+                            ${freeServices
+                              ? 'bg-gl text-gd border border-g/30'
+                              : 'bg-bg5 text-b2 border border-bdr hover:border-g/40'}`}
+              >
+                <span className={`w-2 h-2 rounded-full ${freeServices ? 'bg-g' : 'bg-b3'}`} />
+                {freeServices ? 'Free for Connectors' : 'Pay full price'}
+                <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5">
+                  <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {modeOpen && (
+                <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[200px]">
+                  <ModeOption
+                    active={freeServices}
+                    label="Free for Connectors"
+                    sub="Providers offer free in exchange for IG/TT post"
+                    onClick={() => { setFreeServices(true); setModeOpen(false); }}
+                  />
+                  <ModeOption
+                    active={!freeServices}
+                    label="Pay full price"
+                    sub="Normal paid booking"
+                    onClick={() => { setFreeServices(false); setModeOpen(false); }}
+                  />
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => navigate('/rainmakers')}
@@ -117,7 +281,7 @@ export function HomeScreen() {
               Learn how
             </button>
             <div className="flex-1" />
-            {/* Send — green circle with up arrow, matches Claude's submit */}
+            {/* Send — green circle with up arrow (small cute), matches Claude */}
             <button
               type="button"
               onClick={submitQuery}
@@ -125,9 +289,9 @@ export function HomeScreen() {
               className="w-9 h-9 bg-g rounded-full flex items-center justify-center flex-shrink-0
                          hover:opacity-90 active:scale-95 transition-transform"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M12 19V5M5 12l7-7 7 7" stroke="white"
-                      strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                      strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           </div>
@@ -204,6 +368,19 @@ export function HomeScreen() {
 
       {/* Connector banner removed — entry point is now the "Learn how" link
           under the free-services toggle at the top of this screen. */}
+
+      {/* CC identity gate — fires when user submits with images attached */}
+      {showCcGate && (
+        <CcGateModal
+          onClose={() => setShowCcGate(false)}
+          onAddCard={() => {
+            // TODO: wire to Stripe SetupIntent edge function. For now toast
+            // so users see the action acknowledged.
+            showToast('Card linking coming soon — your photos stay attached');
+            setShowCcGate(false);
+          }}
+        />
+      )}
 
       {/* friend activity */}
       <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">Friends recently booked</p>

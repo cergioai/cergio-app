@@ -6,8 +6,9 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; padding: 0; }
 body {
-  /* Page bg — pixel-sampled from canonical Figma PNG (cr token in design-spec.md). */
-  background: #F8F8F8;
+  /* Page bg — ultra-light salmon-cream from the 2026-05 Figma set. Matches
+     the `cr` / `cream` tailwind tokens. */
+  background: #FAF4EE;
   font-family: 'DM Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
 }

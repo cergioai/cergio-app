@@ -571,6 +571,99 @@ export async function getMySpotlightPrices() {
     .maybeSingle();
 }
 
+// ─── Spotlight requests (v10) ───────────────────────────────────────────────
+// Provider asks Connector for an IG/TT spotlight. Connector can counter at
+// a lower price. RLS scopes reads to the two parties on the row.
+
+/**
+ * Create a spotlight request. The Connector sees this in their inbox.
+ * `platform` must be 'instagram' or 'tiktok'.
+ * `officialPriceCents` should be the rate card snapshot at the time of
+ * request — we don't trust the client value beyond what the server can
+ * also read from the profile (drift between fetch + insert is tiny).
+ */
+export async function createSpotlightRequest({ connectorId, platform, officialPriceCents, message, serviceId = null } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) {
+    return { data: null, error: { message: 'You must be signed in to request a spotlight.' } };
+  }
+  if (!connectorId) return { data: null, error: { message: 'connectorId required' } };
+  if (platform !== 'instagram' && platform !== 'tiktok') {
+    return { data: null, error: { message: 'platform must be instagram or tiktok' } };
+  }
+  return await supabase
+    .from('spotlight_requests')
+    .insert({
+      provider_id:          userRes.user.id,
+      connector_id:         connectorId,
+      service_id:           serviceId,
+      platform,
+      official_price_cents: Math.max(0, Math.round(+officialPriceCents || 0)),
+      message:              (message || '').slice(0, 2000) || null,
+      status:               'pending',
+    })
+    .select()
+    .single();
+}
+
+/** List requests where the signed-in user is the provider (their outbound). */
+export async function listMyOutboundSpotlightRequests({ limit = 50 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  return await supabase
+    .from('spotlight_requests')
+    .select('*')
+    .eq('provider_id', userRes.user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+}
+
+/** List requests addressed to the signed-in user (their inbound, as Connector). */
+export async function listMyInboundSpotlightRequests({ limit = 50 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  return await supabase
+    .from('spotlight_requests')
+    .select('*')
+    .eq('connector_id', userRes.user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+}
+
+/** Connector counters with a lower price. Status → 'countered'. */
+export async function counterSpotlightRequest(id, { offeredPriceCents } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!id) return { data: null, error: { message: 'id required' } };
+  return await supabase
+    .from('spotlight_requests')
+    .update({
+      offered_price_cents: Math.max(0, Math.round(+offeredPriceCents || 0)),
+      status:              'countered',
+      responded_at:        new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+}
+
+/** Set request status (accept / decline / cancel). */
+export async function setSpotlightRequestStatus(id, status) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!id) return { data: null, error: { message: 'id required' } };
+  if (!['accepted','declined','cancelled'].includes(status)) {
+    return { data: null, error: { message: `invalid status: ${status}` } };
+  }
+  return await supabase
+    .from('spotlight_requests')
+    .update({ status, responded_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+}
+
 // ─── Booking notifications ──────────────────────────────────────────────────
 
 /**
