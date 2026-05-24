@@ -430,6 +430,56 @@ export async function getMyStripeAccount() {
     .maybeSingle();
 }
 
+// ─── Instagram connection (manual for now, swap for OAuth later) ────────────
+
+/**
+ * Save the signed-in user's Instagram handle + follower count to their
+ * profile. Used by both the Rainmaker apply flow (required for them) and
+ * the provider list-service flow (optional — boosts trust score).
+ *
+ * When we wire the Meta/Instagram OAuth integration later, swap this for
+ * an edge-function call that exchanges the code → access_token, fetches
+ * the canonical handle + follower count, and writes verified_at. Until
+ * then, verified_at stays null on user-entered values so a future
+ * verification pass can re-stamp them.
+ */
+export async function saveInstagram({ handle, followers, verified = false } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) {
+    return { data: null, error: { message: 'You must be signed in to connect Instagram.' } };
+  }
+  const cleanHandle = String(handle || '').replace(/^@/, '').trim().slice(0, 60);
+  if (!cleanHandle) {
+    return { data: null, error: { message: 'Handle is required.' } };
+  }
+  const followersNum = Number.isFinite(+followers) && +followers >= 0 ? Math.floor(+followers) : null;
+  const now = new Date().toISOString();
+  return await supabase
+    .from('profiles')
+    .update({
+      instagram_handle:       cleanHandle,
+      instagram_followers:    followersNum,
+      instagram_connected_at: now,
+      instagram_verified_at:  verified ? now : null,
+    })
+    .eq('id', userRes.user.id)
+    .select()
+    .single();
+}
+
+/** Read the signed-in user's Instagram connection state. */
+export async function getMyInstagram() {
+  if (!supabaseReady) return { data: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: null };
+  return await supabase
+    .from('profiles')
+    .select('instagram_handle, instagram_followers, instagram_connected_at, instagram_verified_at')
+    .eq('id', userRes.user.id)
+    .maybeSingle();
+}
+
 // ─── Booking notifications ──────────────────────────────────────────────────
 
 /**

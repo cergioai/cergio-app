@@ -1,9 +1,18 @@
 // Per design-spec.md — Profile tab: identity, role pills, role entry points.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PROFILE } from '../data/mock';
-import { getStripeOnboardingUrl } from '../lib/api';
+import { getStripeOnboardingUrl, getMyInstagram, saveInstagram } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
+import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
+
+function fmtFollowers(n) {
+  if (!Number.isFinite(+n)) return '';
+  const x = +n;
+  if (x >= 1_000_000) return `${(x / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (x >= 1_000)     return `${(x / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return String(x);
+}
 
 const QUICK_LINKS = [
   { label: 'Invite friends',           to: '/invite/friends-popup',    desc: 'Earn $25 credit per friend',       icon: 'people' },
@@ -72,6 +81,26 @@ export function ProfileScreen() {
 
   const p = { ...PROFILE, name: displayName, handle, initials, joinedDate };
 
+  // Instagram connection — loaded once, surfaced as a card in the header.
+  const [ig, setIg] = useState(null);
+  const [showIgModal, setShowIgModal] = useState(false);
+  useEffect(() => {
+    if (!isSignedIn) { setIg(null); return; }
+    getMyInstagram().then(({ data }) => setIg(data || null));
+  }, [isSignedIn]);
+  const handleSaveIg = async ({ handle: h, followers: f }) => {
+    const { data, error } = await saveInstagram({ handle: h, followers: f });
+    if (error) throw new Error(error.message);
+    setIg({
+      instagram_handle:       data?.instagram_handle ?? h,
+      instagram_followers:    data?.instagram_followers ?? f ?? null,
+      instagram_connected_at: data?.instagram_connected_at ?? new Date().toISOString(),
+      instagram_verified_at:  data?.instagram_verified_at ?? null,
+    });
+    showToast?.('Instagram saved ✓');
+    setShowIgModal(false);
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
       {/* header — green gradient + identity */}
@@ -105,6 +134,76 @@ export function ProfileScreen() {
           )}
         </div>
       </div>
+
+      {/* Instagram card — show connected handle + followers, or a "Connect"
+          CTA when empty. Drives the spotlight flow and trust score. */}
+      {isSignedIn && (
+        <div className="px-5 pt-5">
+          {ig?.instagram_handle ? (
+            <button
+              type="button"
+              onClick={() => setShowIgModal(true)}
+              className="w-full bg-white border border-bdr rounded-[16px] p-3.5 flex items-center gap-3 text-left
+                         hover:border-g/40 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-[10px] bg-black flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" />
+                  <circle cx="12" cy="12" r="4.5" />
+                  <circle cx="17.5" cy="6.5" r="1.2" fill="white" stroke="none" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-[14px] font-extrabold text-black leading-tight">
+                  @{ig.instagram_handle}
+                  {ig.instagram_verified_at && (
+                    <span className="ml-1.5 inline-flex items-center bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold align-middle">
+                      ✓ Verified
+                    </span>
+                  )}
+                </p>
+                {ig.instagram_followers != null && (
+                  <p className="text-[12px] text-b3 mt-0.5">
+                    {fmtFollowers(ig.instagram_followers)} followers
+                  </p>
+                )}
+              </div>
+              <span className="text-b3 text-lg">›</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowIgModal(true)}
+              className="w-full bg-white border border-bdr rounded-[16px] p-3.5 flex items-center gap-3 text-left
+                         hover:border-g/40 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-[10px] bg-black flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" />
+                  <circle cx="12" cy="12" r="4.5" />
+                  <circle cx="17.5" cy="6.5" r="1.2" fill="white" stroke="none" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-[14px] font-extrabold text-black leading-tight">Connect Instagram</p>
+                <p className="text-[12px] text-b3 mt-0.5">Required for Rainmakers · boosts trust for providers</p>
+              </div>
+              <span className="text-b3 text-lg">›</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {showIgModal && (
+        <InstagramConnectModal
+          initialHandle={ig?.instagram_handle ?? ''}
+          initialFollowers={ig?.instagram_followers ?? ''}
+          onSave={handleSaveIg}
+          onClose={() => setShowIgModal(false)}
+        />
+      )}
 
       {/* Service mode toggle — provider <-> consumer view */}
       <div className="px-5 pt-6">
