@@ -49,11 +49,11 @@ export function TaxonomyMatchBadge({ resolving, result, overridden, onOverride, 
 
   if (showNew) {
     return (
-      <div className="mt-1.5 bg-[#FFF5E0] border border-[#F0A030]/40 rounded-[10px] px-3 py-2 leading-snug">
-        <p className="text-[11px] font-extrabold text-[#8A5A10]">
+      <div className="mt-1.5 bg-warnBg border border-warn/40 rounded-[10px] px-3 py-2 leading-snug">
+        <p className="text-[11px] font-extrabold text-warnText">
           🆕 New offering — we'll review &amp; add it to our catalog
         </p>
-        <p className="text-[10px] text-[#8A5A10]/85 mt-0.5">
+        <p className="text-[10px] text-warnText/85 mt-0.5">
           Your listing goes live now. We'll fine-tune the matching so future
           searches find you faster.
         </p>
@@ -61,7 +61,7 @@ export function TaxonomyMatchBadge({ resolving, result, overridden, onOverride, 
           <button
             type="button"
             onClick={onUndoOverride}
-            className="text-[10px] text-[#8A5A10] font-bold underline underline-offset-2 mt-1"
+            className="text-[10px] text-warnText font-bold underline underline-offset-2 mt-1"
           >
             Undo — use the suggested match
           </button>

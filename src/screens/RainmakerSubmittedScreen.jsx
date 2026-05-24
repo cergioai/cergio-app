@@ -47,7 +47,7 @@ export function RainmakerSubmittedScreen() {
       <div className="px-7 pb-9">
         <button
           onClick={() => navigate('/home')}
-          className="w-full bg-white text-g rounded-pill py-3.5 text-[15px] font-extrabold
+          className="w-full bg-white text-g rounded-[24px] py-3.5 text-[15px] font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Back to home

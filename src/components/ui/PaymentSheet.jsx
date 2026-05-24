@@ -57,7 +57,7 @@ function PayForm({ bookingId, onSuccess, onCancel, totalCents, providerName }) {
       <PaymentElement options={{ layout: 'tabs' }} />
 
       {error && (
-        <p className="text-[13px] text-[#A32D2D] font-bold leading-relaxed">{error}</p>
+        <p className="text-[13px] text-danger font-bold leading-relaxed">{error}</p>
       )}
 
       <button

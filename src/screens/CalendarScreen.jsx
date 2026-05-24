@@ -8,7 +8,7 @@ import { listProviderBookings } from '../lib/api';
 
 const STATUS = {
   available:    { dot: 'bg-g',         label: 'Available',           copy: 'Bookings on this date will automatically be accepted' },
-  request_only: { dot: 'bg-[#F0A030]', label: 'Request only',        copy: 'Customers can only send you requests — you accept or decline.' },
+  request_only: { dot: 'bg-warn',      label: 'Request only',        copy: 'Customers can only send you requests — you accept or decline.' },
   unavailable:  { dot: 'bg-[#E05A3A]', label: "I'm not available",   copy: "Customers will not be able to book or request you at this time." },
 };
 

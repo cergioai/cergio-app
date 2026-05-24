@@ -207,11 +207,11 @@ export function RequestDetailScreen() {
       {!alreadyResolved && (
         <>
           {data.real && !data.isFree && !provider.loading && !provider.ready && (
-            <div className="mx-5 mt-3 mb-1 bg-[#FFF5E0] border border-[#F0A030]/40 rounded-[14px] p-3">
-              <p className="text-[13px] font-extrabold text-[#8A5A10] mb-0.5">
+            <div className="mx-5 mt-3 mb-1 bg-warnBg border border-warn/40 rounded-[14px] p-3">
+              <p className="text-[13px] font-extrabold text-warnText mb-0.5">
                 {provider.hasAccount ? 'Payouts not yet enabled' : 'Set up payouts first'}
               </p>
-              <p className="text-[12px] text-[#8A5A10] leading-relaxed">
+              <p className="text-[12px] text-warnText leading-relaxed">
                 {provider.hasAccount
                   ? 'Stripe is still verifying your account. You can accept once it switches to enabled.'
                   : 'You need a Stripe payout account before you can accept paid bookings. Profile → Switch to Service view → Set up payouts.'}

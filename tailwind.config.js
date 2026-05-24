@@ -56,6 +56,21 @@ export default {
         bdr: '#E5E5E3',
         bg5: '#F5F5F5',
         bg4: '#FAFAFA',
+
+        // ── Semantic: danger / destructive ───────────────────────────────
+        // Consistent across the app for: required-field asterisks, sign-out
+        // labels, validation errors, decline buttons. Was previously hard-coded
+        // as `text-[#A32D2D]` in ~8 files; replaced with `text-danger`.
+        danger: '#A32D2D',
+
+        // ── Semantic: warning / amber notice ─────────────────────────────
+        // For "tentative" / "we'll review" / "wait" panels. Used by
+        // TaxonomyMatchBadge (provider override), RequestDetailScreen
+        // (negotiating notice), IntakeScreen (free-listing override). Was
+        // previously hard-coded as #FFF5E0 / #F0A030 / #8A5A10 in many places.
+        warn:     '#F0A030',   // accent / icon (was #F0A030)
+        warnBg:   '#FFF5E0',   // soft bg for warn panels
+        warnText: '#8A5A10',   // strong text on warnBg
       },
       fontFamily: {
         sans: ['"DM Sans"', 'system-ui', 'sans-serif'],

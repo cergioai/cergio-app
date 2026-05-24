@@ -4,7 +4,7 @@ import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 
 const OPTIONS = [
   { id: 'available',    label: 'Available',           dot: 'bg-g',         copy: 'Bookings on this date will automatically be accepted' },
-  { id: 'request_only', label: 'Request only',        dot: 'bg-[#F0A030]', copy: 'Customers can only send you requests that you can manually accept or decline.' },
+  { id: 'request_only', label: 'Request only',        dot: 'bg-warn',      copy: 'Customers can only send you requests that you can manually accept or decline.' },
   { id: 'unavailable',  label: "I'm not available",   dot: 'bg-[#E05A3A]', copy: 'Customers will not be able to book or request you at this time. This setting should only be on when you cannot work.' },
 ];
 

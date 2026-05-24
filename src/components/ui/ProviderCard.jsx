@@ -9,7 +9,7 @@ function SavingsLabel({ savings }) {
   if (!savings || savings === 0) return null;
   if (savings < 0) {
     return (
-      <span className="text-[11px] font-bold text-[#A32D2D]">
+      <span className="text-[11px] font-bold text-danger">
         ${Math.abs(savings)} over budget
       </span>
     );
@@ -100,7 +100,7 @@ export function ProviderCard({ provider, onBook, onSave }) {
             className={`absolute top-2.5 right-2.5 text-[11px] font-bold
                         px-2.5 py-1 rounded-pill z-10
                         ${savings < 0
-                          ? 'bg-red-50/95 text-[#A32D2D]'
+                          ? 'bg-red-50/95 text-danger'
                           : 'bg-gl/95 text-gd'}`}
           >
             {savings < 0 ? `$${Math.abs(savings)} over budget` : `Saves $${savings}`}

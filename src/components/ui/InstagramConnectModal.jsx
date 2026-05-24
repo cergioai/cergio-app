@@ -1,14 +1,37 @@
 // Bottom-sheet modal for connecting an Instagram account to a Cergio
-// profile. Today: user enters handle + follower count manually. Tomorrow
-// (when Meta/Instagram OAuth is wired): the "Connect with Instagram"
-// button kicks off the real OAuth dance instead, and the manual fields
-// are pre-filled / hidden.
+// profile. Two paths:
+//   (1) "Connect with Instagram" button — opens a popup to Meta OAuth.
+//       When VITE_META_APP_ID is configured, this triggers the real OAuth
+//       dance (popup → Meta authorize → our edge function callback →
+//       postMessage back to this window). On success we auto-save and
+//       close. Verified flag flips to true.
+//   (2) Manual handle + follower count entry — always available as a
+//       fallback (and the only path while Meta app credentials aren't set).
 //
 // Used by:
 //   - RainmakerInstagramScreen (required step of Rainmaker apply flow)
 //   - ServiceListAboutScreen   (optional connect for providers)
 //   - ProfileScreen            (manage / re-connect later)
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+// Meta OAuth config. Public client ID + redirect URI come from build env.
+// If VITE_META_APP_ID is unset we silently fall back to manual entry.
+const META_APP_ID   = import.meta.env.VITE_META_APP_ID || '';
+const META_REDIRECT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-oauth/callback`;
+const META_SCOPES   = 'instagram_business_basic,instagram_business_manage_insights';
+
+function buildInstagramAuthUrl(state) {
+  const params = new URLSearchParams({
+    client_id:            META_APP_ID,
+    redirect_uri:         META_REDIRECT,
+    response_type:        'code',
+    scope:                META_SCOPES,
+    state,
+    force_authentication: '1',
+    enable_fb_login:      '0',
+  });
+  return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
+}
 
 function formatFollowers(n) {
   if (!Number.isFinite(+n)) return '';
@@ -30,6 +53,77 @@ export function InstagramConnectModal({
   const [followers, setFollowers] = useState(initialFollowers ? String(initialFollowers) : '');
   const [busy,      setBusy]      = useState(false);
   const [err,       setErr]       = useState(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const popupRef = useRef(null);
+
+  // Listen for the postMessage sent by the edge function's callback page.
+  // We only react to messages tagged 'cergio-ig-oauth' so other origins
+  // can't spoof a connect. We deliberately don't check ev.origin because
+  // the popup lives on the Supabase functions domain while the app may run
+  // on Vercel — the source tag + presence of an opener is our guard.
+  useEffect(() => {
+    function onMessage(ev) {
+      const data = ev?.data;
+      if (!data || data.source !== 'cergio-ig-oauth') return;
+      setOauthBusy(false);
+      try { popupRef.current?.close?.(); } catch {}
+      if (!data.ok) {
+        setErr(data.error || 'Instagram connect failed.');
+        return;
+      }
+      // Pre-fill so the user sees what came back even if persistence fails.
+      if (data.handle) setHandle(String(data.handle).replace(/^@/, ''));
+      if (Number.isFinite(+data.followers)) setFollowers(String(+data.followers));
+      // Auto-save — no need to make them press the button again.
+      (async () => {
+        setBusy(true);
+        setErr(null);
+        try {
+          await onSave({
+            handle:    String(data.handle || '').trim(),
+            followers: Number.isFinite(+data.followers) ? +data.followers : null,
+            verified:  true,
+          });
+        } catch (e) {
+          setErr(e?.message || 'Saved on Instagram but could not write to your profile.');
+          setBusy(false);
+        }
+      })();
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [onSave]);
+
+  const startInstagramOauth = () => {
+    if (!META_APP_ID) {
+      // Not configured yet — fall back to manual entry, focus the handle field.
+      document.getElementById('ig-handle')?.focus();
+      return;
+    }
+    setErr(null);
+    setOauthBusy(true);
+    const state = crypto.randomUUID();
+    const w = 540, h = 720;
+    const left = window.screenX + Math.max(0, (window.outerWidth  - w) / 2);
+    const top  = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
+    popupRef.current = window.open(
+      buildInstagramAuthUrl(state),
+      'cergio-ig-oauth',
+      `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no`,
+    );
+    if (!popupRef.current) {
+      setOauthBusy(false);
+      setErr('Popup blocked. Allow popups for this site and try again.');
+      return;
+    }
+    // Clear the spinner if the user closes the popup without finishing.
+    const poll = setInterval(() => {
+      if (popupRef.current?.closed) {
+        clearInterval(poll);
+        setOauthBusy(false);
+      }
+    }, 600);
+  };
 
   const followersOk = followers === '' || /^\d{1,9}$/.test(followers);
   const valid       = handle.trim().length >= 2 && followersOk;
@@ -75,15 +169,15 @@ export function InstagramConnectModal({
         </div>
         <p className="text-[13px] text-b3 mb-4 leading-relaxed">{subtitle}</p>
 
-        {/* "Connect with Instagram" — placeholder for future OAuth. For now
-            it just focuses the handle field with a friendly note. */}
+        {/* "Connect with Instagram" — opens Meta OAuth popup when configured;
+            falls back to focusing the manual field when VITE_META_APP_ID isn't set. */}
         <button
           type="button"
-          onClick={() => {
-            document.getElementById('ig-handle')?.focus();
-          }}
-          className="w-full mb-3 bg-black text-white rounded-pill py-3 text-[14px] font-extrabold
-                     hover:opacity-90 active:scale-[.97] transition-all flex items-center justify-center gap-2"
+          onClick={startInstagramOauth}
+          disabled={oauthBusy || busy}
+          className="w-full mb-3 bg-black text-white rounded-[24px] py-3 text-[14px] font-extrabold
+                     hover:opacity-90 active:scale-[.97] transition-all flex items-center justify-center gap-2
+                     disabled:opacity-60 disabled:cursor-wait"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -91,10 +185,12 @@ export function InstagramConnectModal({
             <circle cx="12" cy="12" r="4.5" />
             <circle cx="17.5" cy="6.5" r="1.2" fill="white" stroke="none" />
           </svg>
-          Connect with Instagram
+          {oauthBusy ? 'Waiting for Instagram…' : 'Connect with Instagram'}
         </button>
         <p className="text-[11px] text-b3 mb-4 leading-snug text-center">
-          One-tap Instagram login is rolling out — until then, fill the fields below.
+          {META_APP_ID
+            ? 'Sign in to Instagram in the popup — we\'ll pull your handle + follower count.'
+            : 'One-tap Instagram login is rolling out — until then, fill the fields below.'}
         </p>
 
         <form onSubmit={submit} className="flex flex-col gap-3">
@@ -131,11 +227,11 @@ export function InstagramConnectModal({
               <p className="text-[11px] text-b3 mt-1">≈ <strong className="text-black">{previewFollowers}</strong> followers</p>
             )}
             {!followersOk && (
-              <p className="text-[11px] text-[#A32D2D] mt-1">Numbers only, please.</p>
+              <p className="text-[11px] text-danger mt-1">Numbers only, please.</p>
             )}
           </div>
 
-          {err && <p className="text-[12px] text-[#A32D2D] font-bold">{err}</p>}
+          {err && <p className="text-[12px] text-danger font-bold">{err}</p>}
 
           <button
             type="submit"

@@ -245,7 +245,7 @@ function Field({ label, hint, required, children }) {
   return (
     <div>
       <label className="block text-[14px] font-extrabold text-black mb-1.5">
-        {label}{required && <span className="text-[#A32D2D] ml-1">*</span>}
+        {label}{required && <span className="text-danger ml-1">*</span>}
       </label>
       {hint && <p className="text-[11px] text-b3 mb-2">{hint}</p>}
       {children}

@@ -37,14 +37,14 @@ export function BookingScreen() {
 
       <button
         onClick={() => navigate('/home')}
-        className="w-full bg-g text-white rounded-pill py-4 text-[15px] font-extrabold
+        className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
                    mb-3 hover:opacity-90 active:scale-[.97] transition-all"
       >
         Back to home
       </button>
       <button
         onClick={() => navigate('/home')}
-        className="w-full bg-transparent border border-bdr text-b3 rounded-pill py-4
+        className="w-full bg-transparent border border-bdr text-b3 rounded-[24px] py-4
                    text-[15px] font-bold hover:bg-bg5 transition-colors"
       >
         Share with friends

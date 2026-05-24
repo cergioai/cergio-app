@@ -163,7 +163,7 @@ export function ServiceDetailProviderScreen() {
         </button>
         <button
           onClick={() => showToast('Delete service — coming soon')}
-          className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-[#A32D2D]"
+          className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-danger"
         >
           Delete service
         </button>

@@ -103,11 +103,12 @@ export function ProfileScreen() {
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
-      {/* header — green gradient + identity */}
-      <div className="bg-gradient-to-b from-gm to-g px-5 pt-8 pb-7">
+      {/* header — green gradient + identity. Padding tuned per design-spec.md
+          (px-5 page padding, generous top/bottom breathing for tab screens). */}
+      <div className="bg-gradient-to-b from-gm to-g px-5 pt-10 pb-8">
         <div className="flex items-center gap-4">
-          <div className={`w-20 h-20 rounded-full bg-white/20 border-[3px] border-white
-                          flex items-center justify-center text-white text-[28px] font-extrabold`}>
+          <div className="w-20 h-20 rounded-full bg-white/20 border-[3px] border-white
+                          flex items-center justify-center text-white text-[28px] font-extrabold">
             {p.initials}
           </div>
           <div className="flex-1 text-white">
@@ -117,8 +118,8 @@ export function ProfileScreen() {
           </div>
         </div>
 
-        {/* role pills */}
-        <div className="flex flex-wrap gap-2 mt-4">
+        {/* role pills — text-[11px] matches the spec's badge size range (11-12). */}
+        <div className="flex flex-wrap gap-2 mt-5">
           <span className="bg-white text-black text-[11px] font-extrabold px-3 py-1 rounded-pill">
             Booker
           </span>
@@ -136,14 +137,16 @@ export function ProfileScreen() {
       </div>
 
       {/* Instagram card — show connected handle + followers, or a "Connect"
-          CTA when empty. Drives the spotlight flow and trust score. */}
+          CTA when empty. Drives the spotlight flow and trust score.
+          Padding (`p-4`) and radius (`rounded-[16px]`) match the quick-links
+          stack below so the IG card visually belongs with that group. */}
       {isSignedIn && (
-        <div className="px-5 pt-5">
+        <div className="px-5 pt-6">
           {ig?.instagram_handle ? (
             <button
               type="button"
               onClick={() => setShowIgModal(true)}
-              className="w-full bg-white border border-bdr rounded-[16px] p-3.5 flex items-center gap-3 text-left
+              className="w-full bg-white border border-bdr rounded-[16px] p-4 flex items-center gap-3 text-left
                          hover:border-g/40 transition-colors"
             >
               <div className="w-10 h-10 rounded-[10px] bg-black flex items-center justify-center flex-shrink-0">
@@ -175,7 +178,7 @@ export function ProfileScreen() {
             <button
               type="button"
               onClick={() => setShowIgModal(true)}
-              className="w-full bg-white border border-bdr rounded-[16px] p-3.5 flex items-center gap-3 text-left
+              className="w-full bg-white border border-bdr rounded-[16px] p-4 flex items-center gap-3 text-left
                          hover:border-g/40 transition-colors"
             >
               <div className="w-10 h-10 rounded-[10px] bg-black flex items-center justify-center flex-shrink-0">
@@ -236,7 +239,7 @@ export function ProfileScreen() {
       </div>
 
       {/* quick links */}
-      <p className="px-5 pt-6 pb-3 text-[11px] font-extrabold uppercase tracking-widest text-b3">
+      <p className="px-5 pt-6 pb-3 text-[10px] font-extrabold uppercase tracking-wide text-b3">
         Become more on Cergio
       </p>
       <div className="px-5 flex flex-col gap-2">
@@ -280,7 +283,7 @@ export function ProfileScreen() {
       </div>
 
       {/* settings */}
-      <p className="px-5 pt-6 pb-3 text-[11px] font-extrabold uppercase tracking-widest text-b3">
+      <p className="px-5 pt-6 pb-3 text-[10px] font-extrabold uppercase tracking-wide text-b3">
         Settings
       </p>
       <div className="px-5 flex flex-col">
@@ -302,7 +305,7 @@ export function ProfileScreen() {
                           ${i === settings.length - 1 ? 'rounded-b-[16px]' : 'border-b border-bdr'}
                           px-4`}
             >
-              <span className={`text-[14px] font-extrabold ${s.label === 'Sign out' ? 'text-[#A32D2D]' : 'text-black'}`}>{s.label}</span>
+              <span className={`text-[14px] font-extrabold ${s.label === 'Sign out' ? 'text-danger' : 'text-black'}`}>{s.label}</span>
               <span className="text-b3 text-lg">›</span>
             </button>
           ));

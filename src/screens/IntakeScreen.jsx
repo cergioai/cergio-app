@@ -217,11 +217,11 @@ export function IntakeScreen() {
 
       {/* Claude bailed — offer to switch to the structured form */}
       {needsForm && (
-        <div className="mx-4 mb-2 bg-[#FFF5E0] border border-[#F0A030]/40 rounded-[14px] p-3">
-          <p className="text-[13px] font-extrabold text-[#8A5A10] mb-1">
+        <div className="mx-4 mb-2 bg-warnBg border border-warn/40 rounded-[14px] p-3">
+          <p className="text-[13px] font-extrabold text-warnText mb-1">
             Want to use a quick form instead?
           </p>
-          <p className="text-[12px] text-[#8A5A10] mb-2 leading-relaxed">
+          <p className="text-[12px] text-warnText mb-2 leading-relaxed">
             We'll show you fields one screen at a time. No back-and-forth typing.
           </p>
           <button

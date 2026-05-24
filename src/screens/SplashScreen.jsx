@@ -19,14 +19,14 @@ export function SplashScreen() {
       <div className="relative z-10 flex flex-col gap-3 w-[280px] mt-12">
         <button
           onClick={() => navigate('/auth')}
-          className="bg-g text-white rounded-pill py-4 text-[15px] font-extrabold
+          className="bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
                      transition-opacity hover:opacity-90 active:scale-[.97]"
         >
           Sign in or sign up
         </button>
         <button
           onClick={() => navigate('/home')}
-          className="bg-transparent text-white/70 border border-white/25 rounded-pill
+          className="bg-transparent text-white/70 border border-white/25 rounded-[24px]
                      py-4 text-[15px] font-bold transition-colors hover:border-white/50"
         >
           Continue as guest
