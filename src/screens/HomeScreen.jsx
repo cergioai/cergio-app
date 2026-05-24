@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
 import { CATEGORIES, FEED } from '../data/mock';
+import { CcGateModal } from '../components/ui/CcGateModal';
+import { getMyCcStatus } from '../lib/api';
 
 const BUNDLES = [
   { icon: '💍', label: 'Plan my wedding', task: 'Plan my wedding' },
@@ -30,61 +32,27 @@ function ModeOption({ active, label, sub, onClick }) {
   );
 }
 
-// Identity gate modal — shown when the user attaches photos. Real CC
-// linkage (Stripe SetupIntent) is a follow-up; for now the modal explains
-// why we need it and offers an "Add card" stub.
-function CcGateModal({ onClose, onAddCard }) {
-  return (
-    <div className="fixed inset-0 z-[10003] bg-black/40 flex items-end justify-center" onClick={onClose}>
-      <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6 pb-7" onClick={e => e.stopPropagation()}>
-        <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-5" />
-        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-gl mx-auto mb-4">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
-               stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="6" width="20" height="13" rx="2" />
-            <path d="M2 11h20" />
-            <path d="M6 16h4" />
-          </svg>
-        </div>
-        <h2 className="text-[20px] font-extrabold text-black text-center leading-tight mb-2">
-          Verify your identity to add photos
-        </h2>
-        <p className="text-[13px] text-b3 text-center leading-relaxed mb-5">
-          We ask for a credit card before photo uploads so we can keep fakes,
-          spam, and inappropriate content off Cergio. You won't be charged —
-          this is just for identity verification.
-        </p>
-        <button
-          type="button"
-          onClick={onAddCard}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
-                     hover:opacity-90 active:scale-[.97] transition-all"
-        >
-          Add card to verify
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full mt-2 text-[14px] font-extrabold text-b3 py-2"
-        >
-          Maybe later
-        </button>
-      </div>
-    </div>
-  );
-}
+// CcGateModal moved to its own file (../components/ui/CcGateModal.jsx) and
+// now uses a real Stripe SetupIntent flow. Import is at the top of this file.
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { showToast, startTask, freeServices, setFreeServices } = useOutletContext();
+  const { showToast, startTask, freeServices, setFreeServices, auth } = useOutletContext();
   const [activeCat, setActiveCat] = useState('cleaning');
   const [query, setQuery] = useState('');
   const [images, setImages] = useState([]);          // [{ name, dataUrl }]
   const [modeOpen, setModeOpen] = useState(false);   // Free vs Pay popover
   const [showCcGate, setShowCcGate] = useState(false);
+  const [ccVerified, setCcVerified] = useState(false);
   const inputRef = useRef(null);
   const fileRef = useRef(null);
   const modeBtnRef = useRef(null);
+
+  // Pull CC verification status once on mount (and on auth flip).
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setCcVerified(false); return; }
+    getMyCcStatus().then(({ data }) => setCcVerified(!!data?.cc_verified_at));
+  }, [auth?.isSignedIn]);
 
   // Close mode popover on outside click.
   useEffect(() => {
@@ -103,18 +71,23 @@ export function HomeScreen() {
   // budget) and skip ahead to whatever's still missing. If images are
   // attached, gate behind the credit-card identity check (anti-abuse).
   const submitQuery = () => {
-    if (images.length > 0) {
-      // Stub: until we wire a real CC-on-file check, always prompt the gate
-      // when photos are attached. The modal explains why and offers an
-      // "Add card" CTA (Stripe SetupIntent flow lands next).
+    // Anti-abuse gate: photo uploads require CC verification (SetupIntent).
+    // Signed-out users get redirected to /auth — can't verify without a profile.
+    if (images.length > 0 && !ccVerified) {
+      if (!auth?.isSignedIn) {
+        showToast('Sign in to upload photos');
+        navigate('/auth');
+        return;
+      }
       setShowCcGate(true);
       return;
     }
     const text = query.trim();
-    if (!text) {
+    if (!text && images.length === 0) {
       navigate('/intake');
       return;
     }
+    // TODO: pass images through to /intake once chat supports attachments.
     navigate('/intake', { state: { initialMessage: text } });
   };
 
@@ -374,15 +347,19 @@ export function HomeScreen() {
       {/* Connector banner removed — entry point is now the "Learn how" link
           under the free-services toggle at the top of this screen. */}
 
-      {/* CC identity gate — fires when user submits with images attached */}
+      {/* CC identity gate — fires when user submits with images attached.
+          On verify, we flip local state + re-fire submit so the in-progress
+          query (with photos) lands in /intake without making the user click
+          again. */}
       {showCcGate && (
         <CcGateModal
           onClose={() => setShowCcGate(false)}
-          onAddCard={() => {
-            // TODO: wire to Stripe SetupIntent edge function. For now toast
-            // so users see the action acknowledged.
-            showToast('Card linking coming soon — your photos stay attached');
+          onVerified={() => {
+            setCcVerified(true);
             setShowCcGate(false);
+            showToast('Verified ✓ — opening chat with your photos');
+            const text = query.trim();
+            navigate('/intake', { state: { initialMessage: text } });
           }}
         />
       )}

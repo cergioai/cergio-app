@@ -691,6 +691,44 @@ export async function setSpotlightRequestStatus(id, status) {
   return res;
 }
 
+// ─── CC identity verification (v13 + create-setup-intent edge fn) ──────────
+
+/** Create a Stripe SetupIntent for the signed-in user (creates Customer if
+ *  missing). Returns { client_secret, customer_id } for the frontend to
+ *  feed into Stripe Elements' confirmSetup. */
+export async function createSetupIntent() {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data, error } = await supabase.functions.invoke('create-setup-intent', { body: {} });
+  if (error) return { data: null, error };
+  return { data, error: null };
+}
+
+/** Read the signed-in user's CC verification state. */
+export async function getMyCcStatus() {
+  if (!supabaseReady) return { data: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: null };
+  return await supabase
+    .from('profiles')
+    .select('stripe_customer_id, cc_verified_at')
+    .eq('id', userRes.user.id)
+    .maybeSingle();
+}
+
+/** Optimistic flip — frontend calls this after stripe.confirmSetup succeeds.
+ *  Real source of truth is the setup_intent.succeeded webhook (future). */
+export async function markCcVerified() {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  return await supabase
+    .from('profiles')
+    .update({ cc_verified_at: new Date().toISOString() })
+    .eq('id', userRes.user.id)
+    .select('cc_verified_at')
+    .single();
+}
+
 /**
  * Read the signed-in user's earnings ledger (bookings + spotlights merged).
  * Returns rows ordered by created_at desc, capped at `limit`. Each row has
