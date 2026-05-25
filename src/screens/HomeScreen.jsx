@@ -297,10 +297,22 @@ export function HomeScreen() {
     setSubmittedAt(new Date().toISOString());
     setSubmitted(true);
     setEngineStarted(false);
-    // Kick off the chat parser inline. If everything is captured in the
-    // first message it goes straight to phase 'ready' and the engine
-    // starts. Otherwise Cergio asks for the missing field (what / when /
-    // where) right here on Home — no /intake redirect.
+
+    // Spotlight requests don't need what/when/where — the pitch already
+    // contains the Connector niche, follower threshold, and the service
+    // being spotlighted. Skip the chat parser and run the engine right
+    // away so the user doesn't get asked irrelevant booking questions.
+    if (intent === 'spotlight') {
+      setEngineStarted(true);
+      startEngine('spotlight');
+      return;
+    }
+
+    // Find mode: kick off the chat parser inline. If everything is
+    // captured in the first message it goes straight to phase 'ready'
+    // and the engine starts. Otherwise Cergio asks for the missing
+    // field (what / when / where) right here on Home — no /intake
+    // redirect.
     chat?.init?.({
       initialMessage:  text,
       default_address: locationText || null,
@@ -368,9 +380,9 @@ export function HomeScreen() {
 
   const removeImage = (i) => setImages(prev => prev.filter((_, idx) => idx !== i));
 
-  // Pill click — populates input and runs the same submit path so the
-  // chat parser kicks in and the engine fires after mandatory fields
-  // are captured.
+  // Pill click — populates input and runs the same submit path. For
+  // spotlight pills we skip the chat parser and go straight to the
+  // engine (same logic as the typed-submit path).
   const onPillClick = (task) => {
     setQuery(task);
     setTimeout(() => {
@@ -378,6 +390,11 @@ export function HomeScreen() {
       setSubmittedAt(new Date().toISOString());
       setSubmitted(true);
       setEngineStarted(false);
+      if (intent === 'spotlight') {
+        setEngineStarted(true);
+        startEngine('spotlight');
+        return;
+      }
       chat?.init?.({
         initialMessage:  task,
         default_address: locationText || null,
@@ -715,9 +732,9 @@ export function HomeScreen() {
             ref={threadRef}
             className="flex-1 overflow-y-auto px-5 pt-2 pb-3 flex flex-col gap-1.5 min-h-0"
           >
-            {/* Chat messages (visible in both 'chat' and 'ready' phases —
-                we don't hide history just because the engine started). */}
-            {(chat?.messages || []).map(m => (
+            {/* Chat messages — only render in find mode. Spotlight skips
+                the chat parser entirely so there's no thread to show. */}
+            {intent === 'find' && (chat?.messages || []).map(m => (
               <div
                 key={m.id}
                 className={m.role === 'user'
@@ -727,7 +744,7 @@ export function HomeScreen() {
                 {m.text}
               </div>
             ))}
-            {chat?.typing && (
+            {intent === 'find' && chat?.typing && (
               <div className="self-start bg-white border border-bdr rounded-[14px] rounded-bl-[4px] px-3 py-1.5 flex items-center gap-1">
                 <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" />
                 <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" style={{ animationDelay: '120ms' }} />
@@ -735,9 +752,10 @@ export function HomeScreen() {
               </div>
             )}
 
-            {/* Engine ticker — appears once chat reaches 'ready'. Leaf
-                rotates while searching, goes still at planDone. */}
-            {chat?.phase === 'ready' && (
+            {/* Engine ticker — appears as soon as the engine has fired
+                (either because chat reached 'ready' in find mode, or
+                because we bypassed chat in spotlight mode). */}
+            {engineStarted && (
               <div className="mt-2 px-1 self-start" aria-live="polite">
                 <div className="flex items-center gap-2">
                   <LeafLogo working={engineSearching} size={16} />
@@ -781,10 +799,10 @@ export function HomeScreen() {
           </div>
 
           {/* STICKY BOTTOM — reply input pinned above the BottomNav while
-              chat is asking follow-on questions. Disappears once the
-              engine takes over so the result CTAs in the middle aren't
-              competing with another input. */}
-          {chat?.phase === 'chat' && (
+              the find-mode chat is asking follow-on questions. Hidden in
+              spotlight mode (no chat) and once the engine takes over so
+              the result CTAs aren't competing with another input. */}
+          {intent === 'find' && chat?.phase === 'chat' && (
             <div className="flex-shrink-0 px-5 pt-1 pb-2 bg-cream">
               {/* Quick-reply chips */}
               {(chat?.quickReplies?.length || 0) > 0 && (

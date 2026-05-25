@@ -197,21 +197,29 @@ function naiveParse(text, state = {}) {
 
 function fallbackPlan(text, state) {
   const parsed = naiveParse(text, state);
+
+  // A flexible answer ("I'm flexible", "anytime", "whenever") counts as
+  // a satisfied when. Previously we still asked the user for a time even
+  // after they said flexible, which led to the bot looping.
+  const whenSatisfied = !!parsed.when || !!parsed.flexible_time;
+
   const missing =
-    !parsed.what  ? 'what'  :
-    !parsed.when  ? 'when'  :
-    !parsed.where ? 'where' :
+    !parsed.what     ? 'what'  :
+    !whenSatisfied   ? 'when'  :
+    !parsed.where    ? 'where' :
     'done';
   const promptByStep = {
     what:  "What service do you need? (e.g. handyman, cleaning, tutor, cat sitter, driver, personal assistant…)",
     when:  "When do you need this done? A specific date, time, or open range like \"any evening next week\" works.",
     where: "Where should the provider come to? An address or area is fine.",
   };
-  // Build an acknowledgement line for what WAS captured so the user knows
-  // their query landed.
+
+  // Acknowledgement line — surface what we captured so the user trusts
+  // their answer landed. Flexible counts: show "Flexible time ✓".
   const ack = [
     parsed.what  && `${parsed.what} ✓`,
     parsed.when  && `${parsed.when} ✓`,
+    !parsed.when && parsed.flexible_time && 'Flexible time ✓',
     parsed.where && `📍 ${parsed.where} ✓`,
     parsed.budget && `Budget ${parsed.budget} ✓`,
   ].filter(Boolean).join(' · ');
