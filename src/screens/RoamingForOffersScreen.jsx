@@ -1,25 +1,26 @@
-// Per design-spec.md — post-submit confirmation: Cergio is hunting offers in background.
-import { useNavigate } from 'react-router-dom';
-
-const REQUEST = {
-  category: 'Housekeepers',
-  detail:   'Apartment Clean',
-  details2: '2 Bedroom, 1 Laundry, Needs Supplies',
-  date:     'Wednesday, May 27',
-  time:     'at 10:00 AM',
-  line1:    '1145 Broadway St',
-  line2:    'New York, NY',
-};
-
-function getInitials(s) {
-  return s.split(' ').map(x => x[0] || '').join('').slice(0, 2).toUpperCase();
-}
+// Per design-spec.md — post-submit confirmation: Cergio is hunting offers
+// in the background. Wired to real chat state (no hardcoded "1145 Broadway"
+// / "Wednesday, May 27" / "2 Bedroom, 1 Laundry, Needs Supplies"). The
+// previous screen (ConfirmSubmit) forwards what/when/where/notes via
+// router state; we also fall back to chat.state if the user lands here
+// directly.
+import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 
 export function RoamingForOffersScreen() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const { chat }  = useOutletContext() || {};
+
+  // Prefer router-state (passed by ConfirmSubmit), then fall back to live
+  // chat state. Either source — empty fields render an Add-style affordance.
+  const from = location.state || {};
+  const what  = from.what  ?? chat?.state?.what  ?? null;
+  const when  = from.when  ?? chat?.state?.when  ?? null;
+  const where = from.where ?? chat?.state?.where ?? null;
+  const notes = from.notes ?? chat?.state?.notes ?? null;
 
   return (
-    <div className="flex-1 flex flex-col bg-cr pb-8 overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-cream pb-8 overflow-y-auto">
       {/* close */}
       <div className="px-5 pt-5">
         <button
@@ -34,7 +35,7 @@ export function RoamingForOffersScreen() {
       {/* avatars: requester + Connector badge */}
       <div className="flex items-center justify-center gap-3 pt-2 pb-5">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#4478aa] to-[#2a5070]
-                        flex items-center justify-center text-white text-[22px] font-extrabold">
+                        flex items-center justify-center text-white text-[20px] font-extrabold">
           You
         </div>
         <div className="w-20 h-20 rounded-full bg-gl flex items-center justify-center">
@@ -48,35 +49,46 @@ export function RoamingForOffersScreen() {
         </div>
       </div>
 
-      {/* headline + body — updated copy per Tarik */}
+      {/* headline + body */}
       <div className="px-7 text-center">
-        <h1 className="text-[24px] font-extrabold text-black mb-3">We're roaming for offers!</h1>
-        <p className="text-[15px] text-b3 leading-relaxed">
-          Cergio is roaming and negotiating offers for you. We'll notify you with a few options
-          once they're confirmed.
+        <h1 className="text-[24px] font-extrabold text-black mb-3 leading-tight">
+          We're roaming for offers!
+        </h1>
+        <p className="text-[14px] text-b3 leading-relaxed font-medium">
+          Cergio is negotiating offers for you. We'll notify you with a few
+          options once they're confirmed.
         </p>
       </div>
 
-      {/* request details */}
+      {/* Real request details — only rows with values render. No more
+          hardcoded "1145 Broadway St" / "Wednesday, May 27". */}
       <div className="px-7 pt-8 flex flex-col gap-4 flex-1">
-        <Row icon="user" title={REQUEST.category} />
-        <Row icon="square" title={REQUEST.detail} sub={REQUEST.details2} />
-        <Row icon="calendar" title={REQUEST.date} sub={REQUEST.time} />
-        <Row icon="pin" title={REQUEST.line1} sub={REQUEST.line2} />
+        {what  && <Row icon="user"     title={what} />}
+        {notes && <Row icon="square"   title="Notes" sub={notes} />}
+        {when  && <Row icon="calendar" title={when} />}
+        {where && <Row icon="pin"      title={where} />}
+        {!what && !when && !where && (
+          <p className="text-[13px] text-b3 text-center font-medium leading-relaxed">
+            No request details on file. Start over from <button
+              onClick={() => navigate('/home')}
+              className="text-g font-bold underline underline-offset-2"
+            >Home</button> to send a new one.
+          </p>
+        )}
       </div>
 
       {/* CTAs */}
       <div className="px-5 pt-6 flex flex-col gap-3">
         <button
           onClick={() => navigate('/inbox')}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-[16px] font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Go to inbox
         </button>
         <button
-          onClick={() => navigate(-1)}
-          className="w-full bg-soft rounded-[24px] py-4 text-[15px] font-extrabold text-b2"
+          onClick={() => navigate('/find-friends')}
+          className="w-full bg-white border border-bdr rounded-[24px] py-4 text-[14px] font-extrabold text-black"
         >
           Share request with friends
         </button>
@@ -92,9 +104,9 @@ function Row({ icon, title, sub }) {
       <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center flex-shrink-0">
         <Icon />
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <p className="text-[15px] font-extrabold text-black leading-tight">{title}</p>
-        {sub && <p className="text-[13px] text-b3 mt-0.5">{sub}</p>}
+        {sub && <p className="text-[13px] text-b3 mt-0.5 leading-snug">{sub}</p>}
       </div>
     </div>
   );
