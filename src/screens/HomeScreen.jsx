@@ -1,26 +1,38 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
-import { FEED } from '../data/mock';
 import { CcGateModal } from '../components/ui/CcGateModal';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
+import { REWARDS } from '../lib/rewards';
 
-// Examples — short, punchy. Two sets that swap with intent:
-//   - FIND_EXAMPLES: consumer-side single tasks + budget bundles
-//   - SPOTLIGHT_EXAMPLES: provider-side pitches that name the kind of
-//     Connector + audience size they're looking for
-// Three examples per mode — kept tight so the suggested-chips row fits on
-// one line and doesn't push the input box off-screen.
+// Example chips — conversational, single-task. Three per mode.
+// Tone match: the kind of thing the user would actually type — short,
+// budget-anchored, mentions a real constraint (language, time, vibe).
 const FIND_EXAMPLES = [
-  { label: 'Wedding under $100k', task: 'Plan my wedding under $100k' },
-  { label: 'Move under $1k',      task: 'Help me move under $1,000' },
-  { label: 'Deep clean',          task: 'Deep clean my home' },
+  { label: 'Deep cleaning under $250',           task: 'Need deep cleaning under $250' },
+  { label: 'Spanish-speaking sitter · Tue · $55', task: 'Need a babysitter who speaks Spanish Tuesday night under $55' },
+  { label: 'Dog walker after 5pm · $40',         task: 'Need a dog walker after 5pm under $40' },
 ];
 const SPOTLIGHT_EXAMPLES = [
   { label: 'Cat sitter · pets Connector 5K+',      task: 'Cat sitter looking for a pets Connector with 5K+ followers' },
   { label: 'Chef · fashion/events Connector 7K+',  task: 'Chef looking for a fashion or events Connector with 7K+ followers' },
   { label: 'Yoga studio · fitness Connector 10K+', task: 'Yoga studio looking for a fitness Connector with 10K+ followers' },
+];
+
+// Status ticker lines — shown one-by-one after Send is tapped. Mode-aware
+// so the metaphor matches the user's intent. Each line lives for ~1.1s
+// before being replaced, then we route to /intake (find) or
+// /connectors/browse (spotlight).
+const FIND_STATUS = [
+  "Connecting with your friends' recommended providers",
+  'Notifying providers',
+  'Negotiating on your behalf',
+];
+const SPOTLIGHT_STATUS = [
+  'Finding Connectors who match your audience',
+  'Checking follower overlap',
+  'Sending your pitch',
 ];
 
 // Single option inside the mode-picker popover.
@@ -43,8 +55,28 @@ function ModeOption({ active, label, sub, onClick }) {
   );
 }
 
-// CcGateModal moved to its own file (../components/ui/CcGateModal.jsx) and
-// now uses a real Stripe SetupIntent flow. Import is at the top of this file.
+// Leaf icon — used inside the green send button. When `working` is true,
+// the leaf "opens" — a tiny unfold + rotate that signals Cergio is on it.
+// The animation classes are inline so we don't have to touch the Tailwind
+// config: a custom keyframes block lives in index.css under .cg-leaf-open.
+function LeafIcon({ working }) {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24" fill="none"
+      className={working ? 'cg-leaf-open' : 'cg-leaf-rest'}
+      style={{ transformOrigin: '50% 70%' }}
+    >
+      {/* Stem */}
+      <path d="M12 22V13" stroke="white" strokeWidth="2" strokeLinecap="round" />
+      {/* Leaf body — a teardrop. The opening animation tilts + scales
+          this shape, so it reads as a folded leaf unfurling. */}
+      <path
+        d="M12 13c-4 0-7-3-7-7 0-1.2.3-2.3.7-3.3C7.2 3.6 9.5 5 12 5s4.8-1.4 6.3-2.3c.4 1 .7 2.1.7 3.3 0 4-3 7-7 7z"
+        fill="white"
+      />
+    </svg>
+  );
+}
 
 export function HomeScreen() {
   const navigate = useNavigate();
@@ -58,13 +90,19 @@ export function HomeScreen() {
   // 'spotlight' (user is a Provider; they want a Connector to spotlight
   // THEIR service in exchange for a free job). The toggle UNDER the search
   // box flips the placeholder + submit destination without changing layout.
-  // Per Tarik: if user has no service listed yet, route through /list-service
-  // first so they have something to spotlight.
   const [intent, setIntent] = useState('find');
   const [hasService, setHasService] = useState(null); // null=unknown, true/false once loaded
   const inputRef = useRef(null);
   const fileRef = useRef(null);
   const modeBtnRef = useRef(null);
+
+  // Status ticker — one-line "Claude is working" indicator that runs after
+  // a submit. `statusIdx` walks through FIND_STATUS / SPOTLIGHT_STATUS, then
+  // we route to the next screen. While `working` is true, send button + leaf
+  // are in their animated state and inputs are visually paused (not disabled
+  // — user can still cancel via tap-outside or just wait).
+  const [working, setWorking] = useState(false);
+  const [statusIdx, setStatusIdx] = useState(0);
 
   // Pull CC verification status once on mount (and on auth flip).
   useEffect(() => {
@@ -79,20 +117,16 @@ export function HomeScreen() {
     listMyServices().then(({ data }) => setHasService((data || []).length > 0));
   }, [auth?.isSignedIn]);
 
-  // Location — prefilled from the user's saved default address. Editing
-  // expands an AddressAutocomplete; picking a Place auto-saves it as the
-  // new default so future visits land on it.
+  // Location — prefilled from the user's saved default address. First-time
+  // users see no address chip at all (clean Home). Once they set one, the
+  // chip appears with "Change" next to it. Same pattern for find + spotlight.
   const [locationText, setLocationText] = useState('');
   const [locationCoords, setLocationCoords] = useState(null);
   const [locEditing, setLocEditing] = useState(false);
 
-  // Travel radius — only relevant in spotlight (provider) mode. Tells the
-  // Connector how far the provider will travel to deliver the service.
-  // 'onsite' = customers come to the provider; numeric values = miles from
-  // the location; 'anywhere' = no constraint (provider will travel nationally).
-  // Stored client-side for now; forwarded to /connectors/browse on submit.
+  // Travel radius — spotlight (provider) mode only.
   const [travelRadius, setTravelRadius] = useState('10mi');
-  const [showMapDraw, setShowMapDraw] = useState(false); // stub for future map drawer
+  const [showMapDraw, setShowMapDraw] = useState(false);
   useEffect(() => {
     if (!auth?.isSignedIn) return;
     getDefaultAddress().then(({ data }) => {
@@ -117,39 +151,50 @@ export function HomeScreen() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [modeOpen]);
 
-  // Submit the home-bar query — branches on `intent`:
-  //   - 'find' (default): route to /intake with the typed text as the chat's
-  //     first user message. useChat parses it (service + when + where + budget)
-  //     and skips ahead to whatever's missing. Images gate behind CC.
-  //   - 'spotlight': user is offering a service to Connectors.
-  //       • not signed in → /auth
-  //       • signed in, no service listed → /list-service (with a toast)
-  //       • signed in, has service(s) → /connectors/browse with the typed
-  //         pitch in state so the next screen can pre-populate the request.
-  const submitSpotlight = () => {
-    if (!auth?.isSignedIn) {
-      showToast('Sign in to send a spotlight request');
-      navigate('/auth');
-      return;
-    }
-    if (hasService === false) {
-      showToast("First list your service — we'll bring you right back.");
-      navigate('/list-service');
-      return;
-    }
-    navigate('/connectors/browse', {
-      state: {
-        pitch: query.trim(),
-        serviceLocation: locationText || null,
-        serviceCoords:   locationCoords || null,
-        travelRadius,
-      },
+  // Run the status ticker for the current intent, then call `after()` once
+  // the last line has been shown. Returns a cancel fn so we can clean up
+  // if the user navigates away mid-sequence.
+  const runStatusTicker = (after) => {
+    const lines = intent === 'spotlight' ? SPOTLIGHT_STATUS : FIND_STATUS;
+    const PER_LINE_MS = 1100;
+    setWorking(true);
+    setStatusIdx(0);
+    const timers = [];
+    lines.forEach((_, i) => {
+      if (i === 0) return; // first line already shown by setStatusIdx(0)
+      timers.push(setTimeout(() => setStatusIdx(i), i * PER_LINE_MS));
     });
+    timers.push(setTimeout(() => {
+      setWorking(false);
+      after();
+    }, lines.length * PER_LINE_MS));
+    return () => timers.forEach(clearTimeout);
   };
-  const submitQuery = () => {
-    if (intent === 'spotlight') { submitSpotlight(); return; }
-    // Anti-abuse gate: photo uploads require CC verification (SetupIntent).
-    // Signed-out users get redirected to /auth — can't verify without a profile.
+
+  // The actual nav decision — extracted so the status ticker can fire it.
+  const doRoute = () => {
+    if (intent === 'spotlight') {
+      if (!auth?.isSignedIn) {
+        showToast('Sign in to send a spotlight request');
+        navigate('/auth');
+        return;
+      }
+      if (hasService === false) {
+        showToast("First list your service — we'll bring you right back.");
+        navigate('/list-service');
+        return;
+      }
+      navigate('/connectors/browse', {
+        state: {
+          pitch: query.trim(),
+          serviceLocation: locationText || null,
+          serviceCoords:   locationCoords || null,
+          travelRadius,
+        },
+      });
+      return;
+    }
+    // find mode
     if (images.length > 0 && !ccVerified) {
       if (!auth?.isSignedIn) {
         showToast('Sign in to upload photos');
@@ -164,7 +209,6 @@ export function HomeScreen() {
       navigate('/intake', { state: { initialLocation: locationText, initialCoords: locationCoords } });
       return;
     }
-    // TODO: pass images through to /intake once chat supports attachments.
     navigate('/intake', {
       state: {
         initialMessage:  text,
@@ -174,11 +218,38 @@ export function HomeScreen() {
     });
   };
 
-  // Image attach handler — read selected files as data URLs so we can
-  // preview thumbs inline. Real upload happens once the user signs in +
-  // passes the identity gate (deferred to a follow-up commit).
+  const submitQuery = () => {
+    if (working) return; // already in progress — ignore double-taps
+    // Gate before we even start the ticker, so we don't show "negotiating"
+    // and then bounce them to /auth. Re-uses the same checks doRoute() does
+    // but only for the blocking redirects.
+    if (intent === 'spotlight') {
+      if (!auth?.isSignedIn) {
+        showToast('Sign in to send a spotlight request');
+        navigate('/auth');
+        return;
+      }
+      if (hasService === false) {
+        showToast("First list your service — we'll bring you right back.");
+        navigate('/list-service');
+        return;
+      }
+    } else if (images.length > 0 && !ccVerified) {
+      if (!auth?.isSignedIn) {
+        showToast('Sign in to upload photos');
+        navigate('/auth');
+        return;
+      }
+      setShowCcGate(true);
+      return;
+    }
+    // Run the status ticker, THEN route.
+    runStatusTicker(() => doRoute());
+  };
+
+  // Image attach handler.
   const onFilesPicked = (e) => {
-    const files = Array.from(e.target.files || []).slice(0, 4); // cap at 4
+    const files = Array.from(e.target.files || []).slice(0, 4);
     files.forEach(file => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -186,15 +257,17 @@ export function HomeScreen() {
       };
       reader.readAsDataURL(file);
     });
-    e.target.value = ''; // allow re-picking same file later
+    e.target.value = '';
   };
 
   const removeImage = (i) => setImages(prev => prev.filter((_, idx) => idx !== i));
 
+  const statusLines = intent === 'spotlight' ? SPOTLIGHT_STATUS : FIND_STATUS;
+
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cream">
 
-      {/* header — tighter padding + smaller avatar to claw back vertical space */}
+      {/* header */}
       <div className="flex justify-between items-center px-5 pt-3">
         <div className="flex items-center gap-2">
           <Logo size={28} />
@@ -209,9 +282,7 @@ export function HomeScreen() {
         </button>
       </div>
 
-      {/* Cergio voice headline — Claude-search proportions: 17px serif-
-          equivalent weight, tight leading, minimal vertical space so the
-          input box is visible above the fold. */}
+      {/* Cergio voice headline */}
       <div className="px-5 pt-3 pb-0.5">
         <h1 className="text-[17px] font-bold text-black leading-snug tracking-tight">
           {intent === 'find'
@@ -220,59 +291,57 @@ export function HomeScreen() {
         </h1>
       </div>
 
-      {/* Location chip — shown in BOTH modes now. Label adapts:
-          - find:      "Add your address" (where you need the service)
-          - spotlight: "Service location" (where you offer it)
-          Spotlight mode also gets a travel-radius row right below. */}
-      <div className="px-5 mt-1 mb-1 flex items-center gap-2 text-[11px] text-b3">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-          <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-          <circle cx="12" cy="9" r="2.5" />
-        </svg>
-        {locEditing ? (
-          <div className="flex-1 flex items-center gap-2">
-            <AddressAutocomplete
-              value={locationText}
-              onChange={setLocationText}
-              onSelect={async ({ lat, lng, address }) => {
-                setLocationText(address);
-                setLocationCoords({ lat, lng });
-                setLocEditing(false);
-                // Auto-save as default for next visit. Best-effort.
-                if (auth?.isSignedIn) {
-                  await saveAddress({
-                    label: 'Home',
-                    formattedAddress: address,
-                    lat, lng,
-                    makeDefault: true,
-                  }).catch(() => {});
-                }
-              }}
-              placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
-              className=""
-            />
-            <button onClick={() => setLocEditing(false)}
-              className="text-[12px] font-extrabold text-b3">Cancel</button>
-          </div>
-        ) : (
-          <>
-            <span className="flex-1 truncate font-bold text-b2">
-              {locationText
-                || (intent === 'spotlight' ? 'Service location' : 'Add your address')}
-            </span>
-            <button onClick={() => setLocEditing(true)}
-              className="text-[12px] font-extrabold text-g underline underline-offset-2">
-              {locationText ? 'Change' : 'Set'}
-            </button>
-          </>
-        )}
-      </div>
+      {/* Location chip — ONLY appears once an address is set.
+          First-time users see no chip at all (clean Home). Once saved, the
+          row shows the address with a "Change" button next to it. While
+          editing, the autocomplete unfolds in-line. Identical in both modes;
+          the in-edit placeholder is mode-aware. */}
+      {(locationText || locEditing) && (
+        <div className="px-5 mt-1 mb-1 flex items-center gap-2 text-[11px] text-b3">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+            <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+            <circle cx="12" cy="9" r="2.5" />
+          </svg>
+          {locEditing ? (
+            <div className="flex-1 flex items-center gap-2">
+              <AddressAutocomplete
+                value={locationText}
+                onChange={setLocationText}
+                onSelect={async ({ lat, lng, address }) => {
+                  setLocationText(address);
+                  setLocationCoords({ lat, lng });
+                  setLocEditing(false);
+                  if (auth?.isSignedIn) {
+                    await saveAddress({
+                      label: 'Home',
+                      formattedAddress: address,
+                      lat, lng,
+                      makeDefault: true,
+                    }).catch(() => {});
+                  }
+                }}
+                placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
+                className=""
+              />
+              <button onClick={() => setLocEditing(false)}
+                className="text-[12px] font-extrabold text-b3">Cancel</button>
+            </div>
+          ) : (
+            <>
+              <span className="flex-1 truncate font-bold text-b2">{locationText}</span>
+              <button onClick={() => setLocEditing(true)}
+                className="text-[12px] font-extrabold text-g underline underline-offset-2">
+                Change
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
-      {/* Travel-radius picker — spotlight mode only. Tiny preset chips +
-          a "Draw on map" link that opens the map drawer (stubbed for now).
-          Selection state is local; gets forwarded to the request flow. */}
-      {intent === 'spotlight' && (
+      {/* Travel-radius picker — spotlight mode only, AND only once a service
+          location exists (otherwise it's noise on a blank-state Home). */}
+      {intent === 'spotlight' && locationText && (
         <div className="px-5 mt-0 mb-2 flex items-center gap-1.5 text-[11px] text-b3 flex-wrap">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -313,18 +382,12 @@ export function HomeScreen() {
         </div>
       )}
 
-      {/* Claude-style submit box — single rounded container with the input
-          at the top and a chip toolbar at the bottom where Claude shows the
-          model selector. We put the "Free services for Connectors" toggle in
-          that bottom-left slot, and the green send arrow at the bottom-right.
-          This is the primary UX: dump what/when/where/budget in one go and
-          the chat only asks about what's still missing. */}
+      {/* Submit box — Claude-search proportions. */}
       <div className="px-5 py-2">
         <div
           className="bg-white border border-bdr rounded-[24px] transition-all
                      focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA]"
         >
-          {/* row 1: textarea — Claude-search proportions (14px, snug). */}
           <textarea
             ref={inputRef}
             value={query}
@@ -342,8 +405,6 @@ export function HomeScreen() {
             className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
                        text-[14px] text-black placeholder-b3 font-medium leading-snug"
           />
-          {/* Image thumbnails — shown above the toolbar when attached.
-              Tap × to remove. Cap of 4 enforced in onFilesPicked. */}
           {images.length > 0 && (
             <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
               {images.map((img, i) => (
@@ -366,16 +427,8 @@ export function HomeScreen() {
             </div>
           )}
 
-          {/* Hint inside the box, left-aligned. Subtle so it doesn't compete
-              with the input but visible enough to teach the "dump it all in
-              one go" pattern. */}
-          {/* Tip hint removed — was redundant with placeholder. */}
-
-          {/* row 2: chip toolbar — + attach, mode dropdown, then send arrow. */}
+          {/* row 2: chip toolbar */}
           <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-            {/* + attach button (Claude-style). Hidden file input triggered
-                via click. Submission with images is gated behind the
-                credit-card identity modal. */}
             <input
               ref={fileRef}
               type="file"
@@ -391,18 +444,12 @@ export function HomeScreen() {
               className="w-8 h-8 rounded-full bg-bg5 border border-bdr text-b2 flex items-center justify-center
                          hover:border-g/40 hover:text-g transition-colors flex-shrink-0"
             >
-              {/* Ultra-thin SVG plus — Claude style */}
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M7 1.5v11M1.5 7h11" stroke="currentColor"
                       strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </button>
 
-            {/* Mode dropdown — shown in BOTH directions. In find mode it
-                means "I want a free service in exchange for posting" vs
-                "I'll pay normal price". In spotlight mode (provider side)
-                it flips perspective: "I'll offer free in exchange for a
-                Connector post" vs "I'll pay the Connector's spotlight rate". */}
             <div ref={modeBtnRef} className="relative">
               <button
                 type="button"
@@ -442,55 +489,66 @@ export function HomeScreen() {
               )}
             </div>
 
-            {/* FAQ link removed — the flip-line under the box now carries
-                the "Learn about Connectors" message in find mode. */}
             <div className="flex-1" />
-            {/* Send — green circle with up arrow (small cute), matches Claude */}
+            {/* Send — animated leaf inside a green pill-box. Boxy with
+                rounded corners (not a circle) so it reads as a "send" button,
+                not a status indicator. Idle = folded leaf; active = leaf
+                unfolds + tilts to signal "Cergio is on it". */}
             <button
               type="button"
               onClick={submitQuery}
+              disabled={working}
               aria-label="Search"
-              className="w-9 h-9 bg-g rounded-full flex items-center justify-center flex-shrink-0
-                         hover:opacity-90 active:scale-95 transition-transform"
+              className={`h-9 px-3 bg-g rounded-[10px] flex items-center justify-center flex-shrink-0
+                          transition-transform ${working ? 'cg-leaf-btn-working' : 'hover:opacity-90 active:scale-95'}`}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M12 19V5M5 12l7-7 7 7" stroke="white"
-                      strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <LeafIcon working={working} />
             </button>
           </div>
         </div>
-        {/* Direction switch — sits on cream (no card), tiny type. Tap to
-            flip search direction. In find mode this prompts providers
-            ("Have a service? Learn about Connectors →") and in spotlight
-            mode it offers the way back ("Need to book a service? →"). */}
-        <button
-          type="button"
-          onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
-          className="w-full mt-2 px-2 py-2 flex items-center gap-2 text-left
-                     hover:opacity-90 transition-opacity"
-          aria-pressed={intent === 'spotlight'}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
-                            ${intent === 'spotlight' ? 'bg-g' : 'bg-b3/40'}`} />
-          <p className={`flex-1 text-[11px] leading-snug font-medium
-                         ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
-            {intent === 'find'
-              ? <>Offer a service to a Connector in exchange for an <span className="font-bold">Instagram or TikTok post</span></>
-              : <>Need to <span className="font-bold">book a service</span> instead?</>}
-          </p>
-          {/* Flip arrow — tiny rotating chevron */}
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-               className={`flex-shrink-0 transition-transform ${intent === 'spotlight' ? 'text-g rotate-180' : 'text-b3'}`}>
-            <path d="M3 12h18M13 6l6 6-6 6" />
-          </svg>
-        </button>
+
+        {/* Status ticker — sits directly under the box, single line, swaps
+            text every ~1.1s. Cream background, no card. Tiny green dot to
+            the left to echo the "working" state. Mirrors Claude's bottom-bar
+            status line. */}
+        {working && (
+          <div className="mt-2 px-2 flex items-center gap-2" aria-live="polite">
+            <span className="w-1.5 h-1.5 rounded-full bg-g animate-pulse flex-shrink-0" />
+            <p className="text-[11px] text-gd font-bold leading-snug truncate">
+              {statusLines[Math.min(statusIdx, statusLines.length - 1)]}…
+            </p>
+          </div>
+        )}
+
+        {/* Direction switch — flip between find / spotlight intents. Hidden
+            while the ticker is running so the user doesn't accidentally swap
+            mid-submit. */}
+        {!working && (
+          <button
+            type="button"
+            onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
+            className="w-full mt-2 px-2 py-2 flex items-center gap-2 text-left
+                       hover:opacity-90 transition-opacity"
+            aria-pressed={intent === 'spotlight'}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
+                              ${intent === 'spotlight' ? 'bg-g' : 'bg-b3/40'}`} />
+            <p className={`flex-1 text-[11px] leading-snug font-medium
+                           ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
+              {intent === 'find'
+                ? <>Offer a service to a Connector in exchange for an <span className="font-bold">Instagram or TikTok post</span></>
+                : <>Need to <span className="font-bold">book a service</span> instead?</>}
+            </p>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+                 className={`flex-shrink-0 transition-transform ${intent === 'spotlight' ? 'text-g rotate-180' : 'text-b3'}`}>
+              <path d="M3 12h18M13 6l6 6-6 6" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {/* Examples — tiny chips, no eyebrow header. The list itself swaps
-          with intent: consumer prompts in find mode, provider-pitch
-          prompts in spotlight mode. Tapping seeds /intake. */}
+      {/* Example chips — conversational, one tap to seed /intake. */}
       <div className="flex flex-wrap gap-1.5 px-5 mt-2 mb-4">
         {(intent === 'find' ? FIND_EXAMPLES : SPOTLIGHT_EXAMPLES).map(e => (
           <button
@@ -505,13 +563,40 @@ export function HomeScreen() {
         ))}
       </div>
 
-      {/* Connector banner removed — entry point is now the "Learn how" link
-          under the free-services toggle at the top of this screen. */}
+      {/* Invite & earn ad card — replaces the old "Friends recently booked"
+          strip. Big green hero number, single CTA. Network-effect engine:
+          gets more friends on Cergio so the friends-of-friends value prop
+          fills in. Only shown in find mode (in spotlight mode the user is
+          focused on Connector outreach, different headspace). */}
+      {intent === 'find' && (
+        <div className="px-5 mt-1 mb-6">
+          <button
+            onClick={() => navigate('/find-friends')}
+            className="w-full bg-g text-white rounded-[20px] p-4 flex items-center gap-3 text-left
+                       hover:opacity-95 active:scale-[.99] transition-all shadow-card"
+          >
+            <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 11h-6M19 8v6"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-extrabold leading-tight">
+                Invite & earn — ${REWARDS.perFriend} per friend
+              </p>
+              <p className="text-[11px] text-white/80 mt-0.5 leading-snug font-medium">
+                Bring friends on Cergio so we can find services they trust — and you earn for every join.
+              </p>
+            </div>
+            <span className="text-white text-lg flex-shrink-0">›</span>
+          </button>
+        </div>
+      )}
 
-      {/* CC identity gate — fires when user submits with images attached.
-          On verify, we flip local state + re-fire submit so the in-progress
-          query (with photos) lands in /intake without making the user click
-          again. */}
+      {/* CC identity gate */}
       {showCcGate && (
         <CcGateModal
           onClose={() => setShowCcGate(false)}
@@ -523,29 +608,6 @@ export function HomeScreen() {
             navigate('/intake', { state: { initialMessage: text } });
           }}
         />
-      )}
-
-      {/* Friend activity — tiny strip, hidden in spotlight mode (irrelevant
-          to providers asking Connectors). Compact rows so the whole feed
-          takes ~half the space it used to. */}
-      {intent === 'find' && (
-        <>
-          <p className="px-5 text-[10px] font-extrabold uppercase tracking-widest text-b3 mb-2">
-            Friends recently booked
-          </p>
-          {FEED.map(item => (
-            <div key={item.id} className="mx-5 mb-1.5 bg-soft rounded-[14px] p-2.5 flex gap-2.5 items-center">
-              <div className="w-7 h-7 rounded-full bg-gl flex items-center justify-center text-[13px] flex-shrink-0">😊</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] text-black leading-tight">
-                  <span className="font-bold">{item.name}</span> booked{' '}
-                  <span className="font-bold text-g">{item.service}</span>
-                </p>
-                <p className="text-[10px] text-b3 mt-0.5">{item.time}{item.saved ? ` · saved ${item.saved}` : ''}</p>
-              </div>
-            </div>
-          ))}
-        </>
       )}
     </div>
   );
