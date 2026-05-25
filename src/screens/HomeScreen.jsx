@@ -195,7 +195,7 @@ export function HomeScreen() {
         <h1 className="text-[17px] font-bold text-black leading-snug tracking-tight">
           {intent === 'find'
             ? <>Hi, I'm Cergio — I'll <span className="text-g">negotiate and book</span> services your friends trust.</>
-            : <>Hi, I'm Cergio — describe your <span className="text-g">service and ideal audience</span>.</>}
+            : <>Hi, I'm Cergio — I'll match you with a <span className="text-g">Connector</span> who can spotlight you on <span className="text-g">Instagram / TikTok</span>.</>}
         </h1>
       </div>
 
@@ -272,7 +272,7 @@ export function HomeScreen() {
             }}
             placeholder={intent === 'find'
               ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
-              : 'Describe your service + ideal audience…'}
+              : 'Describe your service and what you need… e.g. boxing trainer, want a fitness influencer w/ 10K+'}
             rows={2}
             className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
                        text-[14px] text-black placeholder-b3 font-medium leading-snug"
