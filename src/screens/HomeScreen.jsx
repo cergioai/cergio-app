@@ -137,6 +137,11 @@ function LeafLogo({ working = false, size = 22 }) {
 // server-side default once they sign in (auth flip reloads from Supabase).
 const GUEST_ADDR_KEY = 'cergio.guestAddress';
 
+// sessionStorage marker — once the Hi-I'm-Cergio toast has played in this
+// browser session, we skip it on subsequent Home mounts. Resets when the
+// tab/window closes (session storage scope).
+const TOAST_SHOWN_KEY = 'cergio.toastShown';
+
 export function HomeScreen() {
   const navigate = useNavigate();
   const {
@@ -161,10 +166,16 @@ export function HomeScreen() {
   const threadRef = useRef(null);
 
   // Headline phase — 'rolling' shows the long Cergio greeting word-by-
-  // word as a toast (it fades out after ~4s). 'collapsed' shows a
-  // compact persistent line + a "start typing" hint. Resets on every
-  // mount and on intent flip so the user sees the toast each time.
-  const [headlinePhase, setHeadlinePhase] = useState('rolling');
+  // word as a toast. 'collapsed' shows the compact persistent line.
+  // Initial value reads sessionStorage: if the toast has already played
+  // this session, we go straight to collapsed (no replay on intent flip
+  // or route round-trip).
+  const [headlinePhase, setHeadlinePhase] = useState(() => {
+    try {
+      if (sessionStorage.getItem(TOAST_SHOWN_KEY)) return 'collapsed';
+    } catch { /* ignore */ }
+    return 'rolling';
+  });
 
   // Engine state — kicks off once chat.phase flips to 'ready' (all
   // mandatory fields captured). We stay on Home through the whole thing.
@@ -297,16 +308,19 @@ export function HomeScreen() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [modeOpen]);
 
-  // Headline toast lifecycle — reset to rolling on mount + on intent
-  // flip; collapse to the compact line after ~9s (matches the 2x-slowed
-  // word roll-in). If the user submits before then, jump straight to
-  // collapsed.
+  // Headline toast lifecycle — collapses to the compact line after ~9s
+  // (matches the 2x-slowed word roll-in). Only plays if we're actually
+  // in 'rolling' phase (i.e. first time this session). Submitting or
+  // intent flipping jumps straight to collapsed without replaying.
   useEffect(() => {
     if (submitted) { setHeadlinePhase('collapsed'); return; }
-    setHeadlinePhase('rolling');
-    const t = setTimeout(() => setHeadlinePhase('collapsed'), 9000);
+    if (headlinePhase !== 'rolling') return;
+    const t = setTimeout(() => {
+      setHeadlinePhase('collapsed');
+      try { sessionStorage.setItem(TOAST_SHOWN_KEY, '1'); } catch { /* ignore */ }
+    }, 9000);
     return () => clearTimeout(t);
-  }, [submitted, intent]);
+  }, [submitted, headlinePhase]);
 
   // Kick the engine ticker. Sets up timers that advance planIdx through
   // the stages, then sets planDone when the last stage finishes.
@@ -550,87 +564,9 @@ export function HomeScreen() {
         );
       })()}
 
-      {/* Location chip — only after an address exists. */}
-      {(locationText || locEditing) && (
-        <div className="px-5 mt-1 mb-1 flex items-center gap-2 text-[11px] text-b3">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-            <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-            <circle cx="12" cy="9" r="2.5" />
-          </svg>
-          {locEditing ? (
-            <div className="flex-1 flex items-center gap-2">
-              <AddressAutocomplete
-                value={locationText}
-                onChange={setLocationText}
-                onSelect={async ({ lat, lng, address, placeId }) => {
-                  setLocationText(address);
-                  setLocationCoords({ lat, lng });
-                  setLocEditing(false);
-                  // Persist for non-logged-in users via localStorage so it
-                  // survives reloads. Once they sign in, it gets promoted
-                  // to a server-side default on the next pick.
-                  try {
-                    localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ address, lat, lng, placeId }));
-                  } catch { /* ignore */ }
-                  if (auth?.isSignedIn) {
-                    const { error } = await saveAddress({
-                      label: 'Home',
-                      formattedAddress: address,
-                      lat, lng,
-                      placeId,
-                      makeDefault: true,
-                    });
-                    if (error) {
-                      showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                    } else {
-                      showToast('Saved as your default location ✓');
-                    }
-                  } else {
-                    showToast('Saved on this device. Sign in to sync it.');
-                  }
-                }}
-                placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
-                className=""
-              />
-              {/* Save — commits the typed text even if the user didn't
-                  pick a Google Places suggestion. The mirror useEffect
-                  has already written it to localStorage; for signed-in
-                  users we also push to Supabase here. This is the safety
-                  net for "typed but not picked" addresses. */}
-              <button
-                onClick={async () => {
-                  setLocEditing(false);
-                  if (auth?.isSignedIn && locationText) {
-                    const { error } = await saveAddress({
-                      label: 'Home',
-                      formattedAddress: locationText,
-                      lat: locationCoords?.lat ?? null,
-                      lng: locationCoords?.lng ?? null,
-                      makeDefault: true,
-                    });
-                    if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                    else       showToast('Saved as your default location ✓');
-                  } else if (locationText) {
-                    showToast('Saved on this device.');
-                  }
-                }}
-                className="text-[12px] font-extrabold text-g underline underline-offset-2"
-              >
-                Save
-              </button>
-            </div>
-          ) : (
-            <>
-              <span className="flex-1 truncate font-bold text-b2">{locationText}</span>
-              <button onClick={() => setLocEditing(true)}
-                className="text-[12px] font-extrabold text-g underline underline-offset-2">
-                Change
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      {/* Location chip moved INSIDE the search box (below the textarea,
+          above the toolbar). See the locationRow block down where the
+          box renders. */}
 
       {/* Spotlight travel-radius — only after a location exists. */}
       {intent === 'spotlight' && locationText && !submitted && (
@@ -711,6 +647,86 @@ export function HomeScreen() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Location row INSIDE the box, sits just above the toolbar.
+                  Shown only when an address exists or the user is editing.
+                  Change is now placed directly after the address text and
+                  rendered in normal weight (no bold). */}
+              {(locationText || locEditing) && (
+                <div className="px-4 pb-1 flex items-center gap-1.5 text-[11px] text-b3">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                    <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                  {locEditing ? (
+                    <div className="flex-1 flex items-center gap-2">
+                      <AddressAutocomplete
+                        value={locationText}
+                        onChange={setLocationText}
+                        onSelect={async ({ lat, lng, address, placeId }) => {
+                          setLocationText(address);
+                          setLocationCoords({ lat, lng });
+                          setLocEditing(false);
+                          try {
+                            localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ address, lat, lng, placeId }));
+                          } catch { /* ignore */ }
+                          if (auth?.isSignedIn) {
+                            const { error } = await saveAddress({
+                              label: 'Home',
+                              formattedAddress: address,
+                              lat, lng, placeId,
+                              makeDefault: true,
+                            });
+                            if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                            else       showToast('Saved as your default location ✓');
+                          } else {
+                            showToast('Saved on this device. Sign in to sync it.');
+                          }
+                        }}
+                        placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
+                        className=""
+                      />
+                      <button
+                        onClick={async () => {
+                          setLocEditing(false);
+                          if (auth?.isSignedIn && locationText) {
+                            const { error } = await saveAddress({
+                              label: 'Home',
+                              formattedAddress: locationText,
+                              lat: locationCoords?.lat ?? null,
+                              lng: locationCoords?.lng ?? null,
+                              makeDefault: true,
+                            });
+                            if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                            else       showToast('Saved as your default location ✓');
+                          } else if (locationText) {
+                            showToast('Saved on this device.');
+                          }
+                        }}
+                        className="text-[11px] font-normal text-g underline underline-offset-2"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    // Address text + Change link sit together as one phrase
+                    // (font-normal so neither competes with the input). The
+                    // outer container takes the rest of the row width but
+                    // they read as a single line "1145 Broadway · Change".
+                    <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug">
+                      <span>{locationText}</span>
+                      <button
+                        type="button"
+                        onClick={() => setLocEditing(true)}
+                        className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
+                      >
+                        Change
+                      </button>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -799,7 +815,7 @@ export function HomeScreen() {
                 aria-pressed={intent === 'spotlight'}
               >
                 {intent === 'find'
-                  ? 'Have a service? Spotlight it free (Instagram/TikTok) →'
+                  ? 'Have a service? Spotlight it free (IG/TT) →'
                   : '← Book a service instead'}
               </button>
             </div>
