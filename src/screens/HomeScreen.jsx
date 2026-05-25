@@ -228,14 +228,22 @@ export function HomeScreen() {
   const [travelRadius, setTravelRadius] = useState('10mi');
 
   // Persist the address the chat parser captures into HomeScreen's
-  // locationText + localStorage + Supabase. This is the FIFTH and most
-  // important location-persistence fix — addresses entered through the
-  // chat ask flow (chat.state.where) were never propagated anywhere
-  // else, so they "didn't hold". Now they do.
+  // locationText + localStorage + Supabase. Writes localStorage
+  // EAGERLY (not waiting for the async mirror useEffect) so the value
+  // is on disk before the user can navigate away.
   useEffect(() => {
     const where = chat?.state?.where;
     if (!where || where === locationText) return;
     setLocationText(where);
+    // Eager localStorage write — don't rely on the mirror effect
+    // because the user may log in/navigate before it runs.
+    try {
+      const existing = JSON.parse(localStorage.getItem(GUEST_ADDR_KEY) || '{}');
+      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+        ...existing,
+        address: where,
+      }));
+    } catch { /* ignore */ }
     if (auth?.isSignedIn) {
       saveAddress({
         label: 'Home',
@@ -274,17 +282,22 @@ export function HomeScreen() {
   useEffect(() => {
     // Server-side default for signed-in users. Local cache already
     // painted the chip on first render via the useState initializer
-    // above, so this is purely the canonical-truth refresh.
+    // above, so this is the canonical-truth refresh.
+    //
+    // Critical bridge: if Supabase has no default for this user BUT
+    // localStorage has one (e.g. address was captured during a guest
+    // session, or saveAddress failed silently), we PROMOTE the local
+    // address up to Supabase here. That way subsequent logins survive
+    // localStorage clears, and the address actually lives in the
+    // user_addresses table where it belongs.
 
     if (!auth?.isSignedIn) return;
-    getDefaultAddress().then(({ data }) => {
+    getDefaultAddress().then(async ({ data }) => {
       if (data?.formatted_address) {
         setLocationText(data.formatted_address);
         if (data.lat != null && data.lng != null) {
           setLocationCoords({ lat: data.lat, lng: data.lng });
         }
-        // Mirror to localStorage so the next load paints instantly even
-        // before the Supabase round-trip returns.
         try {
           localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
             address: data.formatted_address,
@@ -293,7 +306,26 @@ export function HomeScreen() {
             placeId: data.place_id ?? null,
           }));
         } catch { /* ignore */ }
+        return;
       }
+      // Server has no default — try to promote whatever localStorage holds.
+      try {
+        const raw = localStorage.getItem(GUEST_ADDR_KEY);
+        if (!raw) return;
+        const g = JSON.parse(raw);
+        if (!g?.address) return;
+        await saveAddress({
+          label: 'Home',
+          formattedAddress: g.address,
+          lat:     g.lat     ?? null,
+          lng:     g.lng     ?? null,
+          placeId: g.placeId ?? null,
+          makeDefault: true,
+        });
+        // Update local state so the chip shows even if it was empty.
+        setLocationText(g.address);
+        if (g.lat != null && g.lng != null) setLocationCoords({ lat: g.lat, lng: g.lng });
+      } catch { /* ignore — chip will still paint from localStorage on next mount */ }
     });
   }, [auth?.isSignedIn]);
 
