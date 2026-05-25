@@ -154,9 +154,23 @@ serve(async (req: Request) => {
       }, { onConflict: 'id' });
 
       // Generate a magic link the opener can use to complete the session.
+      // Override redirectTo to match the opener's origin if we got it through
+      // the state param (encoded as base64 in the third dot-segment) — this
+      // way local dev (5173 / 5175) and production (vercel / cergio.ai) all
+      // work without depending on Supabase's hard-coded Site URL setting.
+      let redirectTo: string | undefined;
+      try {
+        const parts = state.split('.');
+        if (parts[2]) {
+          const decoded = atob(parts[2]);
+          if (/^https?:\/\//.test(decoded)) redirectTo = `${decoded}/home`;
+        }
+      } catch { /* fall back to Supabase Site URL */ }
+
       const { data: linkData, error: linkErr } = await supaAdmin.auth.admin.generateLink({
         type:  'magiclink',
         email: synthEmail,
+        options: redirectTo ? { redirectTo } : undefined,
       });
       if (linkErr || !linkData?.properties?.action_link) {
         throw new Error(`Magic link generation failed: ${linkErr?.message}`);

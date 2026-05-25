@@ -122,7 +122,12 @@ export function AuthScreen() {
           showToast('TikTok sign-in launching soon — use email or Google for now.');
           return;
         }
-        const state = `${crypto.randomUUID()}.signin`;
+        // state format: {uuid}.{mode}.{base64(origin)}
+        // The edge function decodes origin and uses it as the magic-link
+        // redirectTo, so dev (any port) + prod (vercel/cergio.ai) work
+        // without depending on Supabase's hard-coded Site URL setting.
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const state = `${crypto.randomUUID()}.signin.${btoa(origin)}`;
         const w = 540, h = 720;
         const left = window.screenX + Math.max(0, (window.outerWidth  - w) / 2);
         const top  = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
