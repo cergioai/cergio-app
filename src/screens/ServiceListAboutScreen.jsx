@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RegHeader, RegFooter } from '../components/ui/RegHeader';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
-import { TaxonomyMatchBadge } from '../components/ui/TaxonomyMatchBadge';
+// TaxonomyMatchBadge removed from the visible UI — taxonomy is only
+// used internally (provider_type / offering_id are still resolved and
+// saved on submit so we can route notifications to matching providers
+// and surface this listing in the right consumer searches).
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
 import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
@@ -68,13 +71,11 @@ export function ServiceListAboutScreen() {
       <div className="bg-cr rounded-t-[28px] -mt-7 px-7 pt-7 flex-1 pb-32 overflow-y-auto">
         <Field label="Service type" placeholder="e.g. Plumber, Cleaning, Dog walker"
                value={serviceType} onChange={v => { setServiceType(v); setOverrideTaxonomy(false); }} />
-        <TaxonomyMatchBadge
-          resolving={resolving}
-          result={result}
-          overridden={overrideTaxonomy}
-          onOverride={() => setOverrideTaxonomy(true)}
-          onUndoOverride={() => setOverrideTaxonomy(false)}
-        />
+        {/* Taxonomy match badge intentionally hidden. We still call
+            useTaxonomyResolve in the background so taxo.provider_type /
+            offering_id is captured on submit — but providers no longer
+            see "We matched you to Drain unclogging" or similar
+            suggestions. Their typed service stays the headline. */}
         <div className="mb-6 mt-6">
           <label className="block text-[18px] font-extrabold text-black mb-2.5">Service location</label>
           <AddressAutocomplete

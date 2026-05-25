@@ -268,7 +268,18 @@ export function useChat() {
     setMessages(m => [...m, { id: `${Date.now()}-${Math.random()}`, text, role, ...extra }]);
   }, []);
 
-  // Render Claude's response onto the chat surface.
+  // Render the parsed result onto the chat surface.
+  //
+  // IMPORTANT — taxonomy stays internal. The chat-parse edge function
+  // can return a bot_reply like "Drain unclogging ✓ · Budget $500 ✓ …"
+  // because Claude may resolve the user's text to a taxonomy offering.
+  // We DO NOT show that to the user — it implies we're rewriting their
+  // request as an offering name. Instead we build our own bot reply
+  // here that only asks the next missing question. The resolver fields
+  // (provider_type, offering_id, category, bundle) are kept in state
+  // for internal routing — /results uses them to filter the right
+  // providers + we notify the right provider_type — but they never
+  // surface in the chat copy.
   const applyParseResult = useCallback((res, prevState) => {
     const fields = res.parsed ?? {};
     const resolver = res._resolver ?? {};
@@ -279,9 +290,6 @@ export function useChat() {
       budget:         fields.budget        ?? prevState.budget        ?? null,
       details:        fields.details       ?? prevState.details       ?? null,
       flexible_time:  res.is_flexible_time ?? prevState.flexible_time ?? null,
-      // ── resolver-sourced fields. Carry forward when the new turn didn't
-      // produce a fresh value so a follow-up "where is …" doesn't blank
-      // out the offering_id we already locked in.
       category:       resolver.category       ?? prevState.category       ?? null,
       provider_type:  resolver.provider_type  ?? prevState.provider_type  ?? null,
       offering_id:    resolver.offering_id    ?? prevState.offering_id    ?? null,
@@ -290,17 +298,28 @@ export function useChat() {
     };
     setState(merged);
 
-    addMsg(res.bot_reply || 'Got it.', 'bot');
+    // Build a clean bot reply locally — no offering names, no field
+    // dumps. Just the next thing we need from the user, or "all set".
+    const whenSatisfied = !!merged.when || !!merged.flexible_time;
+    let reply;
+    if (!merged.what) {
+      reply = "What service do you need? (e.g. plumber, sitter, cleaner, tutor…)";
+    } else if (!whenSatisfied) {
+      reply = "When do you need this? A date, time window, or just \"flexible\" works.";
+    } else if (!merged.where) {
+      reply = "Where should the provider come to? An address or area is fine.";
+    } else {
+      reply = "Got it — finding your best matches now.";
+    }
+    addMsg(reply, 'bot');
     setQR(Array.isArray(res.quick_replies) ? res.quick_replies : []);
-    setLastBot(res.bot_reply);
+    setLastBot(reply);
 
     if (res.switch_to_form) setNeedsForm(true);
 
-    if (res.next_step === 'done') {
-      setPhase('ready');
-    } else {
-      setPhase('chat');
-    }
+    // Phase reflects what we actually have, not what the parser claims.
+    const allCaptured = !!merged.what && whenSatisfied && !!merged.where;
+    setPhase(allCaptured ? 'ready' : 'chat');
 
     return merged;
   }, [addMsg]);
@@ -343,7 +362,14 @@ export function useChat() {
     const defaultAddress = typeof arg === 'object' && arg ? arg.default_address ?? null : null;
     const isRepeatUser   = typeof arg === 'object' && arg ? !!arg.is_repeat_user      : false;
 
-    setState(INITIAL_STATE);
+    // Seed state with the user's saved default address so the parser
+    // never re-asks "Where?" when we already know it. The cloud
+    // resolver also gets defaultAddress via runParse for redundancy.
+    const seededState = {
+      ...INITIAL_STATE,
+      where: defaultAddress || null,
+    };
+    setState(seededState);
     setMessages([]);
     setQR([]);
     setPhase('chat');
@@ -354,7 +380,7 @@ export function useChat() {
       addMsg(initialMessage, 'user');
       await runParse({
         user_message:    initialMessage,
-        baseState:       INITIAL_STATE,
+        baseState:       seededState,
         defaultAddress,
         isRepeatUser,
       });
@@ -365,7 +391,7 @@ export function useChat() {
       addMsg(`I need help with: ${seedTask}`, 'user');
       await runParse({
         user_message:    seedTask,
-        baseState:       INITIAL_STATE,
+        baseState:       seededState,
         defaultAddress,
         isRepeatUser,
       });

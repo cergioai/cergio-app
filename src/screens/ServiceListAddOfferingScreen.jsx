@@ -2,7 +2,9 @@
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RegHeader, RegFooter } from '../components/ui/RegHeader';
-import { TaxonomyMatchBadge } from '../components/ui/TaxonomyMatchBadge';
+// TaxonomyMatchBadge import removed — taxonomy is resolved silently
+// in the background (still saves taxonomy_offering_id for routing)
+// but no longer shown as a suggestion chip to the provider.
 import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
 
 export function ServiceListAddOfferingScreen() {
@@ -38,13 +40,8 @@ export function ServiceListAddOfferingScreen() {
             className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
-          <TaxonomyMatchBadge
-            resolving={resolving}
-            result={result}
-            overridden={override}
-            onOverride={() => setOverride(true)}
-            onUndoOverride={() => setOverride(false)}
-          />
+          {/* Match badge hidden — provider's typed offering name is the
+              source of truth. Taxonomy resolves silently for routing. */}
         </div>
         <div className="mb-6">
           <label className="block text-[18px] font-extrabold text-black mb-2.5">Hourly rate</label>

@@ -454,16 +454,44 @@ export function HomeScreen() {
     });
   };
 
-  // When chat reaches 'ready' phase, fire the engine ticker once. This is
-  // how the "missing-fields ask" flow on Home transitions into the
-  // "engine doing work" flow without a route change.
+  // Find mode: as soon as chat parser reaches 'ready' (all mandatory
+  // fields captured), route to /results. That screen has its own
+  // status reel and queries the REAL Supabase providers (listServices
+  // with offering_id / provider_type / category + geocoded location).
+  // Skipping the Home engine ticker for find — it was a mock that
+  // ended in a dead-end CTA, which is what made the user feel stuck.
   useEffect(() => {
     if (!submitted) return;
-    if (chat?.phase === 'ready' && !engineStarted) {
-      setEngineStarted(true);
-      startEngine(intent);
-    }
-  }, [chat?.phase, submitted, engineStarted, intent]);
+    if (intent !== 'find') return;
+    if (chat?.phase !== 'ready') return;
+    // Small beat so the "All set! Ready to find your best matches"
+    // chat message has time to land before route swap.
+    const t = setTimeout(() => {
+      navigate('/results', {
+        state: { fromHome: true, query: submittedText },
+      });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [chat?.phase, submitted, intent, navigate, submittedText]);
+
+  // Spotlight mode: keep the Home engine ticker (skipped the chat,
+  // started engine directly in submitQuery). When ticker completes
+  // route to /connectors/browse with the pitch + location.
+  useEffect(() => {
+    if (!planDone) return;
+    if (intent !== 'spotlight') return;
+    const t = setTimeout(() => {
+      navigate('/connectors/browse', {
+        state: {
+          pitch:           submittedText,
+          serviceLocation: locationText || null,
+          serviceCoords:   locationCoords || null,
+          travelRadius,
+        },
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [planDone, intent, navigate, submittedText, locationText, locationCoords, travelRadius]);
 
   // Auto-scroll the inline thread to the bottom when new messages arrive.
   useEffect(() => {
@@ -1024,9 +1052,12 @@ export function HomeScreen() {
                   ))}
                 </div>
               )}
-              <div className="flex items-center gap-2 bg-white border border-bdr rounded-pill px-3 py-1.5
+              {/* Reply box — tripled in height (single-line input →
+                  3-row textarea, min-height 96px). Send button anchors
+                  to the bottom-right so the textarea can grow freely. */}
+              <div className="flex items-end gap-2 bg-white border border-bdr rounded-[18px] px-3 py-2
                               focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA] transition-all">
-                <input
+                <textarea
                   ref={replyRef}
                   value={reply}
                   onChange={e => setReply(e.target.value)}
@@ -1037,14 +1068,16 @@ export function HomeScreen() {
                     }
                   }}
                   placeholder="Your reply…"
-                  className="flex-1 bg-transparent outline-none text-[13px] text-black placeholder-b3 font-medium"
+                  rows={3}
+                  style={{ minHeight: 96 }}
+                  className="flex-1 bg-transparent outline-none resize-none text-[13px] text-black placeholder-b3 font-medium leading-snug"
                   autoFocus
                 />
                 <button
                   type="button"
                   onClick={sendReply}
                   aria-label="Send reply"
-                  className="h-7 px-2.5 bg-g rounded-[8px] flex items-center justify-center
+                  className="h-8 px-3 bg-g rounded-[10px] flex items-center justify-center flex-shrink-0
                              hover:opacity-90 active:scale-95 transition-transform"
                 >
                   <SendArrowIcon />
@@ -1073,7 +1106,7 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Invite · recommend · barter · earn
+                Invite · reco · barter · earn
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
                 Cash + free services + growth income, while helping friends.
@@ -1125,12 +1158,13 @@ export function HomeScreen() {
         </div>
       )}
 
-      {/* Footer tagline — pinned just above the BottomNav. Tiny,
-          centered, decoration-only (pointer-events-none) so it never
-          intercepts taps on the nav or sticky reply input. */}
-      <div className="fixed bottom-[64px] left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 z-40 pointer-events-none">
-        <p className="text-center text-[10px] text-b3 font-normal leading-snug">
-          Cergio · human-powered AI for shared prosperity
+      {/* Footer tagline — Claude-style disclaimer floating just ABOVE
+          the BottomNav (nav is ~62px tall + has shadow-up). z-[60] so
+          it sits over the nav, pointer-events-none so it can't block
+          taps on the nav tabs underneath. */}
+      <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 z-[60] pointer-events-none">
+        <p className="text-center text-[11px] text-b3 font-normal leading-snug">
+          Cergio is human-powered AI for shared prosperity
         </p>
       </div>
 

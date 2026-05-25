@@ -88,31 +88,39 @@ export function ResultsScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    // Hard timeout so the user is never stuck on the status reel — if
+    // Supabase / geocode is slow or hanging, we fall through to mock
+    // providers after 6s.
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) setServices([]);
+    }, 6000);
+
     (async () => {
-      // If the AI chat captured an address, try to geocode it so we can rank
-      // by distance. If no API key (or no address), fall back to plain list.
-      let lat = null, lng = null;
-      if (where) {
-        const g = await geocodeAddress(where);
-        if (g) { lat = g.lat; lng = g.lng; }
+      try {
+        let lat = null, lng = null;
+        if (where) {
+          const g = await geocodeAddress(where).catch(() => null);
+          if (g) { lat = g.lat; lng = g.lng; }
+        }
+        const { offering_id: resolvedOfferingId } = chatState;
+        const filterCategory = category || what || null;
+        const { data, error } = await listServices({
+          offering_id:   resolvedOfferingId || null,
+          provider_type: provider_type      || null,
+          category:      filterCategory,
+          lat, lng, radiusMiles: 25,
+        });
+        if (cancelled) return;
+        clearTimeout(timeoutId);
+        if (error || !data) { setServices([]); return; }
+        setServices(data);
+      } catch (_e) {
+        if (cancelled) return;
+        clearTimeout(timeoutId);
+        setServices([]); // graceful fallback to mock providers
       }
-      // Prefer the exact taxonomy_offering_id when we have one (resolver
-      // confident on the user's query). Falls back to provider_type, then
-      // broader category text, then nothing. Always over-fetches and lets
-      // the mock fallback fill in if no real matches.
-      const { offering_id: resolvedOfferingId } = chatState;
-      const filterCategory = category || what || null;
-      const { data, error } = await listServices({
-        offering_id:   resolvedOfferingId || null,
-        provider_type: provider_type      || null,
-        category:      filterCategory,
-        lat, lng, radiusMiles: 25,
-      });
-      if (cancelled) return;
-      if (error || !data) { setServices([]); return; }
-      setServices(data);
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, [what, category, where, provider_type, chatState.offering_id]);
 
   const budgetCents = parseBudgetCents(budget);
@@ -120,14 +128,13 @@ export function ResultsScreen() {
     ? services.map((s, i) => serviceToProvider(s, i, budgetCents))
     : PROVIDERS; // fallback to mock
 
-  const usingReal  = services && services.length > 0;
-  const headerNoun =
-    provider_type ? `${provider_type.toLowerCase()}s` :
-    what          ? what.toLowerCase()                :
-    'matching';
-  const titleText  = usingReal
-    ? `Showing ${providers.length} ${headerNoun} providers`
-    : (what ? `Showing ${providers.length} ${headerNoun} providers` : 'Here are your matches');
+  // Title — neutral copy. No taxonomy noun echo (which used to produce
+  // bugs like "service providers providers"). User's typed request is
+  // still visible via the pills below.
+  const n = providers.length;
+  const titleText = n > 0
+    ? `Showing ${n} match${n === 1 ? '' : 'es'}`
+    : 'Here are your matches';
   const pills = [when, where, budget && `Budget ${budget}`].filter(Boolean);
 
   return (
@@ -163,28 +170,9 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* wait strip — soft info card */}
-      <div className="mx-5 mb-5 bg-soft rounded-[18px] p-4">
-        <p className="text-[13px] text-b3 leading-relaxed mb-3">
-          I can keep searching for a better deal over the next 24 hours — at no extra cost.
-        </p>
-        <div className="flex gap-2">
-          <button
-            onClick={() => showToast('Showing results now…')}
-            className="flex-1 bg-white rounded-pill py-2.5
-                       text-[12px] font-semibold text-b3 cursor-pointer hover:text-b2 transition-colors"
-          >
-            Show now
-          </button>
-          <button
-            onClick={() => showToast('✓ Searching for a better deal in 24hrs!')}
-            className="flex-[1.6] bg-g rounded-pill py-2.5
-                       text-[12px] font-bold text-white cursor-pointer hover:opacity-90 transition-opacity"
-          >
-            Wait 24hrs &amp; save more ↗
-          </button>
-        </div>
-      </div>
+      {/* "Wait 24hrs / Show now" walkthrough strip removed — the AI now
+          runs the search directly and surfaces matches as soon as they
+          land. No interstitial CTA. */}
 
       {services === null && (
         <div className="mx-5 mb-5 bg-white border border-bdr rounded-[18px] p-4">

@@ -3,7 +3,7 @@
 // "Delete offering" / "Add" instead of "Back" / "Next".
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { TaxonomyMatchBadge } from '../components/ui/TaxonomyMatchBadge';
+// TaxonomyMatchBadge removed — taxonomy resolves silently for routing.
 import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
 
 const DURATION_UNITS = ['minutes', 'hours', 'days'];
@@ -62,13 +62,8 @@ export function ServiceListAddNewOfferingScreen() {
 
         <Field label="Title" placeholder="Pilates Session, Haircut, etc."
                value={title} onChange={v => { setTitle(v); setOverride(false); }} />
-        <TaxonomyMatchBadge
-          resolving={resolving}
-          result={result}
-          overridden={override}
-          onOverride={() => setOverride(true)}
-          onUndoOverride={() => setOverride(false)}
-        />
+        {/* Match badge hidden — provider's typed title is the source
+            of truth. Taxonomy resolves silently in the background. */}
 
         {mode === 'hourly' ? (
           <Field label="Hourly price" placeholder="$ USD"
