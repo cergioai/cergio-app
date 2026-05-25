@@ -103,7 +103,13 @@ const GUEST_ADDR_KEY = 'cergio.guestAddress';
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { showToast, freeServices, setFreeServices, auth } = useOutletContext();
+  const {
+    showToast,
+    freeServices,
+    setFreeServices,
+    auth,
+    chat,            // useChat hook — gives us the ask-for-missing-fields flow inline
+  } = useOutletContext();
   const [query, setQuery] = useState('');
   const [images, setImages] = useState([]);
   const [modeOpen, setModeOpen] = useState(false);
@@ -111,17 +117,21 @@ export function HomeScreen() {
   const [ccVerified, setCcVerified] = useState(false);
   const [intent, setIntent] = useState('find');
   const [hasService, setHasService] = useState(null);
+  const [reply, setReply] = useState('');   // inline mini-chat reply input
   const inputRef = useRef(null);
   const fileRef = useRef(null);
   const modeBtnRef = useRef(null);
+  const replyRef = useRef(null);
+  const threadRef = useRef(null);
 
-  // Engine state — once submitted we run the plan stage-by-stage. The
-  // user stays on Home throughout.
+  // Engine state — kicks off once chat.phase flips to 'ready' (all
+  // mandatory fields captured). We stay on Home through the whole thing.
   const [submitted, setSubmitted] = useState(false);
   const [submittedAt, setSubmittedAt] = useState(null);   // ISO for timestamping the summary
   const [submittedText, setSubmittedText] = useState(''); // their actual typed query
   const [planIdx, setPlanIdx] = useState(0);
   const [planDone, setPlanDone] = useState(false);
+  const [engineStarted, setEngineStarted] = useState(false);
   const timersRef = useRef([]);
 
   // Mode-aware plan reference — rebuilt on each submit so the inline log
@@ -253,19 +263,62 @@ export function HomeScreen() {
     setSubmittedText(text || (images.length ? `${images.length} photo${images.length > 1 ? 's' : ''} attached` : ''));
     setSubmittedAt(new Date().toISOString());
     setSubmitted(true);
-    startEngine(intent);
+    setEngineStarted(false);
+    // Kick off the chat parser inline. If everything is captured in the
+    // first message it goes straight to phase 'ready' and the engine
+    // starts. Otherwise Cergio asks for the missing field (what / when /
+    // where) right here on Home — no /intake redirect.
+    chat?.init?.({
+      initialMessage:  text,
+      default_address: locationText || null,
+      is_repeat_user:  !!auth?.isSignedIn,
+    });
   };
 
-  // Reset to a fresh search state. Used by "Send another request".
-  const resetSubmit = () => {
+  // When chat reaches 'ready' phase, fire the engine ticker once. This is
+  // how the "missing-fields ask" flow on Home transitions into the
+  // "engine doing work" flow without a route change.
+  useEffect(() => {
+    if (!submitted) return;
+    if (chat?.phase === 'ready' && !engineStarted) {
+      setEngineStarted(true);
+      startEngine(intent);
+    }
+  }, [chat?.phase, submitted, engineStarted, intent]);
+
+  // Auto-scroll the inline thread to the bottom when new messages arrive.
+  useEffect(() => {
+    if (!threadRef.current) return;
+    threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [chat?.messages?.length, chat?.typing]);
+
+  // Send a reply in the inline mini-chat (used while chat.phase === 'chat').
+  const sendReply = () => {
+    const text = reply.trim();
+    if (!text) return;
+    setReply('');
+    chat?.send?.(text);
+    // Re-focus the reply box so the user can keep answering follow-ups.
+    setTimeout(() => replyRef.current?.focus(), 0);
+  };
+
+  // Reset back to the search box. If `keepQuery` is true (the Edit
+  // affordance on the summary card) we leave the original typed text in
+  // the input so the user can tweak it instead of starting over.
+  const resetSubmit = ({ keepQuery = false } = {}) => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
     setSubmitted(false);
-    setSubmittedText('');
     setSubmittedAt(null);
     setPlanIdx(0);
     setPlanDone(false);
-    setQuery('');
+    setEngineStarted(false);
+    if (keepQuery) {
+      setQuery(submittedText);
+    } else {
+      setSubmittedText('');
+      setQuery('');
+    }
   };
 
   const onFilesPicked = (e) => {
@@ -282,16 +335,21 @@ export function HomeScreen() {
 
   const removeImage = (i) => setImages(prev => prev.filter((_, idx) => idx !== i));
 
-  // Pill click — populates input and triggers submit so the engine
-  // ticker runs (same UX as typing + send).
+  // Pill click — populates input and runs the same submit path so the
+  // chat parser kicks in and the engine fires after mandatory fields
+  // are captured.
   const onPillClick = (task) => {
     setQuery(task);
-    // Defer one frame so React has the new query before submitQuery reads it.
     setTimeout(() => {
       setSubmittedText(task);
       setSubmittedAt(new Date().toISOString());
       setSubmitted(true);
-      startEngine(intent);
+      setEngineStarted(false);
+      chat?.init?.({
+        initialMessage:  task,
+        default_address: locationText || null,
+        is_repeat_user:  !!auth?.isSignedIn,
+      });
     }, 0);
   };
 
@@ -317,12 +375,13 @@ export function HomeScreen() {
         </button>
       </div>
 
-      {/* Cergio voice headline */}
+      {/* Cergio voice headline — slim, light on the eye. No bold; green
+          accent only on the verb/noun that carries the value prop. */}
       <div className="px-5 pt-3 pb-0.5">
-        <h1 className="text-[17px] font-bold text-black leading-snug tracking-tight">
+        <h1 className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight">
           {intent === 'find'
-            ? <>Hi, I'm Cergio — I'll <span className="text-g">negotiate and book</span> services your friends trust.</>
-            : <>Hi, I'm Cergio — I'll match you with a <span className="text-g">Connector</span> who can spotlight you on <span className="text-g">Instagram / TikTok</span>.</>}
+            ? <>Hi, I'm Cergio — I'll <span className="text-g font-medium">negotiate and book</span> services your friends trust.</>
+            : <>Hi, I'm Cergio — I'll match you with a <span className="text-g font-medium">Connector</span> who can spotlight you on <span className="text-g font-medium">Instagram / TikTok</span>.</>}
         </h1>
       </div>
 
@@ -534,27 +593,20 @@ export function HomeScreen() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
-              className="w-full mt-2 px-2 py-2 flex items-center gap-2 text-left
-                         hover:opacity-90 transition-opacity"
-              aria-pressed={intent === 'spotlight'}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
-                                ${intent === 'spotlight' ? 'bg-g' : 'bg-b3/40'}`} />
-              <p className={`flex-1 text-[11px] leading-snug font-medium
-                             ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
+            {/* Direction switch — slim text link, right-aligned. Way less
+                visual weight than the previous full-width row. */}
+            <div className="mt-1.5 flex justify-end px-1">
+              <button
+                type="button"
+                onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
+                className="text-[11px] text-b3 font-normal hover:text-g transition-colors"
+                aria-pressed={intent === 'spotlight'}
+              >
                 {intent === 'find'
-                  ? <>Offer a service to a Connector in exchange for an <span className="font-bold">Instagram or TikTok post</span></>
-                  : <>Need to <span className="font-bold">book a service</span> instead?</>}
-              </p>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-                   className={`flex-shrink-0 transition-transform ${intent === 'spotlight' ? 'text-g rotate-180' : 'text-b3'}`}>
-                <path d="M3 12h18M13 6l6 6-6 6" />
-              </svg>
-            </button>
+                  ? 'Have a service? Spotlight it →'
+                  : '← Book a service instead'}
+              </button>
+            </div>
           </div>
 
           {/* Example chips */}
@@ -597,29 +649,106 @@ export function HomeScreen() {
               </p>
             </div>
             <button
-              onClick={resetSubmit}
+              onClick={() => resetSubmit({ keepQuery: true })}
               className="text-[11px] font-extrabold text-g underline underline-offset-2 flex-shrink-0 mt-0.5"
             >
               Edit
             </button>
           </div>
 
-          {/* Live engine ticker — single line, animated dot. Optional
-              detail row appears under stages that have one (e.g. friend
-              names). Mirrors Claude's status pattern. */}
-          <div className="mt-3 px-1" aria-live="polite">
-            <div className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${planDone ? 'bg-g' : 'bg-g animate-pulse'}`} />
-              <p className="text-[13px] text-gd font-bold leading-snug truncate">
-                {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
-              </p>
+          {/* Inline mini-chat — while chat.phase === 'chat', Cergio asks
+              for missing mandatory fields (what / when / where) one at a
+              time. Bubbles render compactly so the thread doesn't take
+              over the screen. Disappears once phase flips to 'ready'. */}
+          {chat?.phase === 'chat' && (
+            <>
+              <div
+                ref={threadRef}
+                className="mt-3 max-h-[180px] overflow-y-auto flex flex-col gap-1.5"
+              >
+                {(chat?.messages || []).map(m => (
+                  <div
+                    key={m.id}
+                    className={m.role === 'user'
+                      ? 'self-end max-w-[80%] bg-gl text-black rounded-[14px] rounded-br-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug'
+                      : 'self-start max-w-[85%] bg-white border border-bdr text-black rounded-[14px] rounded-bl-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug whitespace-pre-line'}
+                  >
+                    {m.text}
+                  </div>
+                ))}
+                {chat?.typing && (
+                  <div className="self-start bg-white border border-bdr rounded-[14px] rounded-bl-[4px] px-3 py-1.5 flex items-center gap-1">
+                    <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" />
+                    <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" style={{ animationDelay: '120ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" style={{ animationDelay: '240ms' }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Quick-reply chips from the bot (e.g. "any evening", "tomorrow"). */}
+              {(chat?.quickReplies?.length || 0) > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {chat.quickReplies.map(q => (
+                    <button
+                      key={q}
+                      onClick={() => { setReply(''); chat?.send?.(q); }}
+                      className="bg-white border border-bdr rounded-pill px-2.5 py-1
+                                 text-[11px] font-bold text-b2 hover:border-g hover:text-gd transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Reply input — single-line, sits at the bottom of the thread. */}
+              <div className="mt-2 flex items-center gap-2 bg-white border border-bdr rounded-pill px-3 py-1.5
+                              focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA] transition-all">
+                <input
+                  ref={replyRef}
+                  value={reply}
+                  onChange={e => setReply(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendReply();
+                    }
+                  }}
+                  placeholder="Your reply…"
+                  className="flex-1 bg-transparent outline-none text-[13px] text-black placeholder-b3 font-medium"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={sendReply}
+                  aria-label="Send reply"
+                  className="h-7 px-2.5 bg-g rounded-[8px] flex items-center justify-center
+                             hover:opacity-90 active:scale-95 transition-transform"
+                >
+                  <LeafIcon working={false} />
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Live engine ticker — fires once chat reaches 'ready'.
+              Single line, animated dot. Optional detail line under it
+              when the stage carries one (friend names, etc.). */}
+          {chat?.phase === 'ready' && (
+            <div className="mt-3 px-1" aria-live="polite">
+              <div className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${planDone ? 'bg-g' : 'bg-g animate-pulse'}`} />
+                <p className="text-[13px] text-gd font-bold leading-snug truncate">
+                  {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
+                </p>
+              </div>
+              {!planDone && activeStage?.detail && (
+                <p className="ml-3.5 mt-1 text-[11px] text-b3 font-medium leading-snug truncate">
+                  {activeStage.detail}
+                </p>
+              )}
             </div>
-            {!planDone && activeStage?.detail && (
-              <p className="ml-3.5 mt-1 text-[11px] text-b3 font-medium leading-snug truncate">
-                {activeStage.detail}
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Inline result CTA — once the engine settles, surface a
               tappable row pointing at Inbox where the actual offers
