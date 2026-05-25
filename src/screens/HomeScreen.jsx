@@ -188,20 +188,22 @@ export function HomeScreen() {
         </button>
       </div>
 
-      {/* greeting — Profile is the canon (30px h1). Headline doubles as
-          guidance; subtitle (15px b3 medium) mirrors Profile's row-subtitle
-          treatment so the whole app reads as one type system. */}
+      {/* Cergio's voice headline — first-person greeting that flips with
+          intent. In find mode (default): negotiate-and-book promise.
+          In spotlight mode: prompt the provider to describe themselves +
+          their ideal audience, with an example so they know the shape
+          of what to type. */}
       <div className="px-5 pt-4 pb-1">
-        <h1 className="text-[30px] font-extrabold text-black leading-tight">
+        <h1 className="text-[22px] font-extrabold text-black leading-snug">
           {intent === 'find'
-            ? <>What do you <span className="text-g">need done?</span></>
-            : <>Get a <span className="text-g">Connector spotlight</span></>}
+            ? <>Hi, I'm Cergio — I'll <span className="text-g">negotiate and book</span> services your friends trust.</>
+            : <>Hi, I'm Cergio — describe your <span className="text-g">service and ideal audience</span>.</>}
         </h1>
-        <p className="text-[15px] text-b3 leading-snug mt-1.5 font-medium">
-          {intent === 'find'
-            ? "Tell me what you need — I'll find someone trusted by friends-of-friends."
-            : "Describe your service + audience target. We'll match you with Connectors."}
-        </p>
+        {intent === 'spotlight' && (
+          <p className="text-[13px] text-b3 leading-snug mt-1.5 font-medium italic">
+            e.g. boxing trainer, want a fitness Connector with 10K+ followers.
+          </p>
+        )}
       </div>
 
       {/* Location chip — shows the user's default address (from user_addresses
@@ -376,13 +378,8 @@ export function HomeScreen() {
             </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => navigate('/rainmakers')}
-              className="text-[11px] font-bold text-b3 underline underline-offset-2 hover:text-g transition-colors"
-            >
-              {intent === 'find' ? 'Learn how' : 'Connector FAQ'}
-            </button>
+            {/* FAQ link removed — the flip-line under the box now carries
+                the "Learn about Connectors" message in find mode. */}
             <div className="flex-1" />
             {/* Send — green circle with up arrow (small cute), matches Claude */}
             <button
@@ -399,11 +396,10 @@ export function HomeScreen() {
             </button>
           </div>
         </div>
-        {/* Cergio voice line — sits on the cream bg (NO white card), tiny
-            font, with a flip arrow. Default = "I'll negotiate + book for
-            you" (find mode). Tap the flip arrow → green-tinted spotlight
-            mode = "I'll connect you with a Connector who can spotlight your
-            service". Visual cue: green dot + green underline in spotlight. */}
+        {/* Direction switch — sits on cream (no card), tiny type. Tap to
+            flip search direction. In find mode this prompts providers
+            ("Have a service? Learn about Connectors →") and in spotlight
+            mode it offers the way back ("Need to book a service? →"). */}
         <button
           type="button"
           onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
@@ -415,11 +411,9 @@ export function HomeScreen() {
                             ${intent === 'spotlight' ? 'bg-g' : 'bg-b3/40'}`} />
           <p className={`flex-1 text-[11px] leading-snug font-medium
                          ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
-            {intent === 'find' ? (
-              <>Hi, I'm Cergio — I'll <span className="font-bold">negotiate and book</span> services your friends trust.</>
-            ) : (
-              <>Hi, I'm Cergio — I'll <span className="font-bold">connect you with a Connector</span> who can spotlight your service.</>
-            )}
+            {intent === 'find'
+              ? <>Have a service? <span className="font-bold">Learn about Connectors</span></>
+              : <>Need to <span className="font-bold">book a service</span> instead?</>}
           </p>
           {/* Flip arrow — tiny rotating chevron */}
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
