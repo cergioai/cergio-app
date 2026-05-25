@@ -382,8 +382,13 @@ export function HomeScreen() {
     }, 0);
   };
 
-  // Working = engine is mid-run.
-  const working = submitted && !planDone;
+  // Engine searching = the moment the ticker is actually walking through
+  // stages (Connecting → Notifying → Negotiating). NOT true during the
+  // chat ask-for-missing-fields phase, NOT true once results have landed.
+  // This is what drives the leaf-logo rotation — so the user only sees
+  // motion when Cergio is really searching.
+  const engineSearching = submitted && chat?.phase === 'ready' && !planDone;
+  const working = submitted && !planDone; // (kept for any place that needs the broader "in flight" flag)
   const activeStage = plan[Math.min(planIdx, plan.length - 1)];
 
   return (
@@ -398,7 +403,7 @@ export function HomeScreen() {
           thinking (Claude-style). Greeting is personalized for signed-in
           users using their display name. */}
       <div className="px-5 pt-5 pb-0.5 flex items-start gap-2.5">
-        <LeafLogo working={working || !!chat?.typing} size={22} />
+        <LeafLogo working={engineSearching} size={22} />
         <h1 className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight">
           {(() => {
             const display = auth?.user?.user_metadata?.display_name || '';
@@ -554,34 +559,36 @@ export function HomeScreen() {
                   hidden
                   onChange={onFilesPicked}
                 />
+                {/* Attach — flat icon, no circle. Claude-style. */}
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   aria-label="Attach photos"
-                  className="w-8 h-8 rounded-full bg-bg5 border border-bdr text-b2 flex items-center justify-center
-                             hover:border-g/40 hover:text-g transition-colors flex-shrink-0"
+                  className="p-1 text-b3 hover:text-g transition-colors flex-shrink-0"
                 >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M7 1.5v11M1.5 7h11" stroke="currentColor"
-                          strokeWidth="1.4" strokeLinecap="round" />
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 2v12M2 8h12" stroke="currentColor"
+                          strokeWidth="1.6" strokeLinecap="round" />
                   </svg>
                 </button>
 
                 <div ref={modeBtnRef} className="relative">
+                  {/* Free/Pay mode — flat text + chevron. No pill, no
+                      background. A small green dot signals the active
+                      Free-for-Connectors state without shouting. */}
                   <button
                     type="button"
                     onClick={() => setModeOpen(o => !o)}
                     aria-haspopup="listbox"
                     aria-expanded={modeOpen}
-                    className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-extrabold
-                                transition-all
-                                ${freeServices
-                                  ? 'bg-gl text-gd border border-g/30'
-                                  : 'bg-bg5 text-b2 border border-bdr hover:border-g/40'}`}
+                    className={`flex items-center gap-1.5 px-1 text-[12px] font-normal
+                                transition-colors
+                                ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
                   >
+                    {freeServices && <span className="w-1.5 h-1.5 rounded-full bg-g flex-shrink-0" />}
                     {freeServices ? 'Free for Connectors' : 'Pay full price'}
-                    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5">
-                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5 opacity-70">
+                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
                   {modeOpen && (
@@ -635,14 +642,15 @@ export function HomeScreen() {
             </div>
           </div>
 
-          {/* Example chips */}
+          {/* Example chips — softer weight (font-normal) so they read as
+              gentle suggestions, not strong CTAs. */}
           <div className="flex flex-wrap gap-1.5 px-5 mt-2 mb-4">
             {(intent === 'find' ? FIND_EXAMPLES : SPOTLIGHT_EXAMPLES).map(e => (
               <button
                 key={e.label}
                 onClick={() => onPillClick(e.task)}
                 className="bg-white border border-bdr rounded-pill px-2.5 py-1
-                           text-[11px] font-bold text-b2 cursor-pointer
+                           text-[11px] font-normal text-b2 cursor-pointer
                            hover:border-g hover:text-gd transition-colors"
               >
                 {e.label}
@@ -758,18 +766,21 @@ export function HomeScreen() {
           )}
 
           {/* Live engine ticker — fires once chat reaches 'ready'.
-              Single line, animated dot. Optional detail line under it
-              when the stage carries one (friend names, etc.). */}
+              When results have settled, the leaf logo slides in next to
+              the line so the brand mark visually accompanies the outcome.
+              Text is slim (font-medium) — not the bold status of before. */}
           {chat?.phase === 'ready' && (
             <div className="mt-3 px-1" aria-live="polite">
               <div className="flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${planDone ? 'bg-g' : 'bg-g animate-pulse'}`} />
-                <p className="text-[13px] text-gd font-bold leading-snug truncate">
+                {planDone
+                  ? <LeafLogo working={false} size={16} />
+                  : <span className="w-1.5 h-1.5 rounded-full bg-g animate-pulse flex-shrink-0" />}
+                <p className="text-[13px] text-gd font-medium leading-snug truncate">
                   {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
                 </p>
               </div>
               {!planDone && activeStage?.detail && (
-                <p className="ml-3.5 mt-1 text-[11px] text-b3 font-medium leading-snug truncate">
+                <p className="ml-3.5 mt-1 text-[11px] text-b3 font-normal leading-snug truncate">
                   {activeStage.detail}
                 </p>
               )}
