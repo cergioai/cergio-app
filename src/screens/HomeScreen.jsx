@@ -585,10 +585,10 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Invite & earn — ${REWARDS.perFriend} per friend
+                Invite & earn — ${REWARDS.perFriend}/friend
               </p>
-              <p className="text-[11px] text-white/80 mt-0.5 leading-snug font-medium">
-                Bring friends on Cergio so we can find services they trust — and you earn for every join.
+              <p className="text-[11px] text-white/85 mt-0.5 leading-snug font-medium">
+                10 friends in a month → Connector status, free services.
               </p>
             </div>
             <span className="text-white text-lg flex-shrink-0">›</span>

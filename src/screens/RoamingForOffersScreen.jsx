@@ -1,10 +1,24 @@
-// Per design-spec.md — post-submit confirmation: Cergio is hunting offers
-// in the background. Wired to real chat state (no hardcoded "1145 Broadway"
-// / "Wednesday, May 27" / "2 Bedroom, 1 Laundry, Needs Supplies"). The
-// previous screen (ConfirmSubmit) forwards what/when/where/notes via
-// router state; we also fall back to chat.state if the user lands here
-// directly.
+// Post-submit "we're working on it" screen.
+//
+// The hardcoded "We're roaming for offers!" line has been replaced by a
+// live Claude-style status ticker that cycles through the real steps:
+//   1. Connecting with your friends' recommended providers
+//   2. Notifying providers
+//   3. Negotiating on your behalf
+//   4. Watching for offers
+// The cycle loops until the user navigates away — so they actually see
+// something happening instead of a frozen confirmation. The request
+// details (what/when/where/notes) come from router-state (passed by
+// ConfirmSubmit) or fall back to live chat.state.
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
+
+const STATUS_LINES = [
+  "Connecting with your friends' recommended providers",
+  'Notifying providers',
+  'Negotiating on your behalf',
+  'Watching for offers',
+];
 
 export function RoamingForOffersScreen() {
   const navigate  = useNavigate();
@@ -19,6 +33,15 @@ export function RoamingForOffersScreen() {
   const where = from.where ?? chat?.state?.where ?? null;
   const notes = from.notes ?? chat?.state?.notes ?? null;
 
+  // Status ticker — advance every 1.4s, loop forever until the user leaves.
+  const [statusIdx, setStatusIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => {
+      setStatusIdx(i => (i + 1) % STATUS_LINES.length);
+    }, 1400);
+    return () => clearInterval(t);
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col bg-cream pb-8 overflow-y-auto">
       {/* close */}
@@ -32,37 +55,44 @@ export function RoamingForOffersScreen() {
         </button>
       </div>
 
-      {/* avatars: requester + Connector badge */}
+      {/* avatars: requester + animated leaf */}
       <div className="flex items-center justify-center gap-3 pt-2 pb-5">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#4478aa] to-[#2a5070]
                         flex items-center justify-center text-white text-[20px] font-extrabold">
           You
         </div>
         <div className="w-20 h-20 rounded-full bg-gl flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-g flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full bg-g flex items-center justify-center cg-leaf-btn-working">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                 stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" fill="rgba(255,255,255,0.18)" />
-              <path d="M9 12l2 2 4-4" />
+                 className="cg-leaf-open" style={{ transformOrigin: '50% 70%' }}>
+              <path d="M12 22V13" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              <path
+                d="M12 13c-4 0-7-3-7-7 0-1.2.3-2.3.7-3.3C7.2 3.6 9.5 5 12 5s4.8-1.4 6.3-2.3c.4 1 .7 2.1.7 3.3 0 4-3 7-7 7z"
+                fill="white"
+              />
             </svg>
           </div>
         </div>
       </div>
 
-      {/* headline + body */}
+      {/* headline + live status ticker */}
       <div className="px-7 text-center">
-        <h1 className="text-[24px] font-extrabold text-black mb-3 leading-tight">
-          We're roaming for offers!
+        <h1 className="text-[22px] font-extrabold text-black mb-3 leading-tight">
+          Cergio is on it
         </h1>
-        <p className="text-[14px] text-b3 leading-relaxed font-medium">
-          Cergio is negotiating offers for you. We'll notify you with a few
-          options once they're confirmed.
+        <div className="flex items-center justify-center gap-2" aria-live="polite">
+          <span className="w-1.5 h-1.5 rounded-full bg-g animate-pulse flex-shrink-0" />
+          <p className="text-[13px] text-gd font-bold leading-snug">
+            {STATUS_LINES[statusIdx]}…
+          </p>
+        </div>
+        <p className="text-[12px] text-b3 leading-relaxed font-medium mt-3">
+          We'll notify you with a few options once offers come in.
         </p>
       </div>
 
-      {/* Real request details — only rows with values render. No more
-          hardcoded "1145 Broadway St" / "Wednesday, May 27". */}
-      <div className="px-7 pt-8 flex flex-col gap-4 flex-1">
+      {/* Request details — only rows with values render. */}
+      <div className="px-7 pt-7 flex flex-col gap-4 flex-1">
         {what  && <Row icon="user"     title={what} />}
         {notes && <Row icon="square"   title="Notes" sub={notes} />}
         {when  && <Row icon="calendar" title={when} />}
