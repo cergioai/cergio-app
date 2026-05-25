@@ -77,14 +77,17 @@ body {
 }
 .cg-word-roll {
   opacity: 0;
-  animation: cgWordRoll .5s ease-out forwards;
+  /* 2x slower per-word fade-in so the headline reads at a calmer pace. */
+  animation: cgWordRoll 1s ease-out forwards;
 }
 @keyframes cgHeadlineToast {
   0%, 78% { opacity: 1; transform: translateY(0); }
   100%    { opacity: 0; transform: translateY(-4px); }
 }
 .cg-headline-toast {
-  animation: cgHeadlineToast 4.5s ease-out forwards;
+  /* Total visible window doubled to 9s so the slower roll-in has room to
+     finish before the toast fades out. Visible until 78%, then lift+fade. */
+  animation: cgHeadlineToast 9s ease-out forwards;
 }
 @keyframes cgFadeInSoft {
   from { opacity: 0; transform: translateY(2px); }

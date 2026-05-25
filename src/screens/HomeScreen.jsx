@@ -41,6 +41,8 @@ function buildFindPlan() {
   // Friend-recommended provider pool — picked from the same mock cohort
   // the Activity tab uses. Real backend will replace this with the live
   // friends-of-friends recommendation set.
+  // Stage durations doubled (~2x) so each notification lingers long
+  // enough to actually read before the next one swaps in.
   const pool = [
     { name: 'Jamie (cleaning)',  by: 'Sara' },
     { name: 'John (handyman)',   by: 'Mike' },
@@ -48,20 +50,21 @@ function buildFindPlan() {
     { name: 'Ana (sitter)',      by: 'Priya' },
   ];
   return [
-    { label: "Selecting providers your friends recommend",   ms: 1100 },
-    { label: `Found ${pool.length} in your network`,         ms: 900,  detail: pool.map(p => p.name).join(' · ') },
-    { label: 'Notifying providers',                          ms: 1100 },
-    { label: 'Negotiating offers on your behalf',            ms: 1300 },
-    { label: 'Awaiting first offer',                         ms: 900 },
+    { label: "Selecting providers your friends recommend",   ms: 2200 },
+    { label: `Found ${pool.length} in your network`,         ms: 1800, detail: pool.map(p => p.name).join(' · ') },
+    { label: 'Notifying providers',                          ms: 2200 },
+    { label: 'Negotiating offers on your behalf',            ms: 2600 },
+    { label: 'Awaiting first offer',                         ms: 1800 },
   ];
 }
 function buildSpotlightPlan() {
+  // Stage durations doubled to match the find plan's pacing.
   return [
-    { label: 'Matching Connectors who fit your audience',    ms: 1100 },
-    { label: 'Found 6 Connectors in your area',              ms: 900,  detail: 'Pets · Fitness · Fashion · Food · Local · Lifestyle' },
-    { label: 'Checking follower overlap',                    ms: 1100 },
-    { label: 'Sending your pitch',                           ms: 1100 },
-    { label: 'Awaiting Connector responses',                 ms: 900 },
+    { label: 'Matching Connectors who fit your audience',    ms: 2200 },
+    { label: 'Found 6 Connectors in your area',              ms: 1800, detail: 'Pets · Fitness · Fashion · Food · Local · Lifestyle' },
+    { label: 'Checking follower overlap',                    ms: 2200 },
+    { label: 'Sending your pitch',                           ms: 2200 },
+    { label: 'Awaiting Connector responses',                 ms: 1800 },
   ];
 }
 
@@ -213,6 +216,25 @@ export function HomeScreen() {
   const [locEditing, setLocEditing] = useState(false);
   const [travelRadius, setTravelRadius] = useState('10mi');
 
+  // Persist the address the chat parser captures into HomeScreen's
+  // locationText + localStorage + Supabase. This is the FIFTH and most
+  // important location-persistence fix — addresses entered through the
+  // chat ask flow (chat.state.where) were never propagated anywhere
+  // else, so they "didn't hold". Now they do.
+  useEffect(() => {
+    const where = chat?.state?.where;
+    if (!where || where === locationText) return;
+    setLocationText(where);
+    if (auth?.isSignedIn) {
+      saveAddress({
+        label: 'Home',
+        formattedAddress: where,
+        lat: null, lng: null,
+        makeDefault: true,
+      }).catch(() => { /* silent — local + chip still works */ });
+    }
+  }, [chat?.state?.where, auth?.isSignedIn, locationText]);
+
   // Mirror locationText → localStorage on every change. This is the
   // safety net: even if the user types an address without picking a
   // Google Places suggestion (no onSelect), the typed value still
@@ -276,12 +298,13 @@ export function HomeScreen() {
   }, [modeOpen]);
 
   // Headline toast lifecycle — reset to rolling on mount + on intent
-  // flip; collapse to the compact line after ~4.5s. If the user
-  // submits before then, jump straight to collapsed.
+  // flip; collapse to the compact line after ~9s (matches the 2x-slowed
+  // word roll-in). If the user submits before then, jump straight to
+  // collapsed.
   useEffect(() => {
     if (submitted) { setHeadlinePhase('collapsed'); return; }
     setHeadlinePhase('rolling');
-    const t = setTimeout(() => setHeadlinePhase('collapsed'), 4500);
+    const t = setTimeout(() => setHeadlinePhase('collapsed'), 9000);
     return () => clearTimeout(t);
   }, [submitted, intent]);
 
@@ -507,7 +530,7 @@ export function HomeScreen() {
                     <span
                       key={i}
                       className="inline-block cg-word-roll"
-                      style={{ animationDelay: `${i * 60}ms` }}
+                      style={{ animationDelay: `${i * 120}ms` }}
                     >
                       {w}{i < longWords.length - 1 ? ' ' : ''}
                     </span>
@@ -518,11 +541,8 @@ export function HomeScreen() {
                   <h1 className="text-[14px] font-normal text-b2 leading-snug">
                     {compactText}
                   </h1>
-                  {!submitted && (
-                    <p className="text-[11px] text-b3 font-normal mt-0.5">
-                      Start typing below ↓
-                    </p>
-                  )}
+                  {/* "Start typing" hint moved into the box placeholder
+                      below — no separate hint line under the headline. */}
                 </div>
               )}
             </div>
@@ -665,8 +685,8 @@ export function HomeScreen() {
                   }
                 }}
                 placeholder={intent === 'find'
-                  ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
-                  : 'Need an Instagram pets Connector w/ 5K+ followers to spotlight my new dog training program (add pics)'}
+                  ? 'e.g. deep cleaning under $200 this tuesday'
+                  : 'e.g. Instagram pets Connector w/ 5K+ to spotlight my dog training program'}
                 rows={intent === 'spotlight' ? 4 : 3}
                 style={{ minHeight: intent === 'spotlight' ? 96 : 72 }}
                 className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
