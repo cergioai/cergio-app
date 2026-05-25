@@ -6,15 +6,15 @@ import { CcGateModal } from '../components/ui/CcGateModal';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 
-// Examples — mix of single tasks + bundles with budget hints. Replaces
-// the old icon-pill category strip that was redundant with the search box.
+// Examples — short, punchy. Mix of single tasks + budget-bundled requests.
+// Labels kept tight so the row doesn't push the search box off-screen.
 const EXAMPLES = [
-  { label: 'Plan my wedding under $100k',  task: 'Plan my wedding under $100k' },
-  { label: 'Help me move under $1,000',    task: 'Help me move under $1,000' },
-  { label: 'Deep clean my home',           task: 'Deep clean my home' },
-  { label: 'Birthday party under $5k',     task: 'Birthday party under $5,000' },
-  { label: 'Find me a dog walker',         task: 'Find a dog walker' },
-  { label: 'Renovate my kitchen under $50k', task: 'Renovate my kitchen under $50k' },
+  { label: 'Wedding under $100k',     task: 'Plan my wedding under $100k' },
+  { label: 'Move under $1k',          task: 'Help me move under $1,000' },
+  { label: 'Deep clean',              task: 'Deep clean my home' },
+  { label: 'Birthday under $5k',      task: 'Birthday party under $5,000' },
+  { label: 'Dog walker',              task: 'Find a dog walker' },
+  { label: 'Kitchen reno under $50k', task: 'Renovate my kitchen under $50k' },
 ];
 
 // Single option inside the mode-picker popover.
@@ -173,43 +173,37 @@ export function HomeScreen() {
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cream">
 
-      {/* header */}
-      <div className="flex justify-between items-center px-5 pt-4">
-        <div className="flex items-center gap-2.5">
-          <Logo size={36} />
-          <span className="text-[13px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
+      {/* header — tighter padding + smaller avatar to claw back vertical space */}
+      <div className="flex justify-between items-center px-5 pt-3">
+        <div className="flex items-center gap-2">
+          <Logo size={28} />
+          <span className="text-[11px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
         </div>
         <button
           onClick={() => navigate('/profile')}
-          className="w-10 h-10 rounded-full bg-gl flex items-center justify-center border-none text-lg cursor-pointer"
+          className="w-9 h-9 rounded-full bg-gl flex items-center justify-center border-none text-base cursor-pointer"
           aria-label="Profile"
         >
           👤
         </button>
       </div>
 
-      {/* Cergio's voice headline — first-person greeting that flips with
-          intent. In find mode (default): negotiate-and-book promise.
-          In spotlight mode: prompt the provider to describe themselves +
-          their ideal audience, with an example so they know the shape
-          of what to type. */}
-      <div className="px-5 pt-4 pb-1">
-        <h1 className="text-[22px] font-extrabold text-black leading-snug">
+      {/* Cergio voice headline — Claude-search proportions: 17px serif-
+          equivalent weight, tight leading, minimal vertical space so the
+          input box is visible above the fold. */}
+      <div className="px-5 pt-3 pb-0.5">
+        <h1 className="text-[17px] font-bold text-black leading-snug tracking-tight">
           {intent === 'find'
             ? <>Hi, I'm Cergio — I'll <span className="text-g">negotiate and book</span> services your friends trust.</>
             : <>Hi, I'm Cergio — describe your <span className="text-g">service and ideal audience</span>.</>}
         </h1>
-        {intent === 'spotlight' && (
-          <p className="text-[13px] text-b3 leading-snug mt-1.5 font-medium italic">
-            e.g. boxing trainer, want a fitness Connector with 10K+ followers.
-          </p>
-        )}
       </div>
 
-      {/* Location chip — shows the user's default address (from user_addresses
-          table). Tap "Change" to swap, which opens Google Places autocomplete
-          inline and auto-saves the pick as the new default. */}
-      <div className="px-5 mt-1 mb-2 flex items-center gap-2 text-[12px] text-b3">
+      {/* Location chip — only relevant in FIND mode. In spotlight mode the
+          search is about the user's service, not where they need it, so we
+          hide the row entirely to declutter and save vertical space. */}
+      {intent === 'find' && (
+      <div className="px-5 mt-1 mb-2 flex items-center gap-2 text-[11px] text-b3">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
           <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
@@ -252,6 +246,7 @@ export function HomeScreen() {
           </>
         )}
       </div>
+      )}
 
       {/* Claude-style submit box — single rounded container with the input
           at the top and a chip toolbar at the bottom where Claude shows the
@@ -259,12 +254,12 @@ export function HomeScreen() {
           that bottom-left slot, and the green send arrow at the bottom-right.
           This is the primary UX: dump what/when/where/budget in one go and
           the chat only asks about what's still missing. */}
-      <div className="px-5 py-3">
+      <div className="px-5 py-2">
         <div
-          className="bg-white border border-bdr rounded-[28px] transition-all
-                     focus-within:border-g focus-within:shadow-[0_0_0_3px_#F3FFEA]"
+          className="bg-white border border-bdr rounded-[24px] transition-all
+                     focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA]"
         >
-          {/* row 1: the textarea-ish input */}
+          {/* row 1: textarea — Claude-search proportions (14px, snug). */}
           <textarea
             ref={inputRef}
             value={query}
@@ -276,11 +271,11 @@ export function HomeScreen() {
               }
             }}
             placeholder={intent === 'find'
-              ? 'Tell me what you need…  e.g. deep clean Mon 2pm, flexible, max $200'
-              : "Describe your service + ideal audience… e.g. yoga studio in Brooklyn, want a fitness Connector w/ 10K+"}
+              ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
+              : 'Describe your service + ideal audience…'}
             rows={2}
-            className="w-full bg-transparent outline-none resize-none px-5 pt-4 pb-2
-                       text-[15px] text-black placeholder-b3 font-medium leading-snug"
+            className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
+                       text-[14px] text-black placeholder-b3 font-medium leading-snug"
           />
           {/* Image thumbnails — shown above the toolbar when attached.
               Tap × to remove. Cap of 4 enforced in onFilesPicked. */}
@@ -424,18 +419,16 @@ export function HomeScreen() {
         </button>
       </div>
 
-      {/* Examples — single tasks + bundles with budget hints. Replaces
-          the old category pills row entirely. Tapping seeds /intake. */}
-      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mt-2 mb-3">
-        Try one of these
-      </p>
-      <div className="flex flex-wrap gap-2 px-5 mb-6">
+      {/* Examples — tiny chips, no eyebrow header. Matches Claude's
+          "suggested prompts" row under the input box. */}
+      <div className="flex flex-wrap gap-1.5 px-5 mt-2 mb-4">
         {EXAMPLES.map(e => (
           <button
             key={e.label}
             onClick={() => startTask(e.task)}
-            className="bg-white border border-bdr rounded-pill px-3.5 py-1.5
-                       text-[12px] font-bold text-b2 cursor-pointer hover:border-g hover:text-gd transition-colors"
+            className="bg-white border border-bdr rounded-pill px-2.5 py-1
+                       text-[11px] font-bold text-b2 cursor-pointer
+                       hover:border-g hover:text-gd transition-colors"
           >
             {e.label}
           </button>
@@ -462,20 +455,28 @@ export function HomeScreen() {
         />
       )}
 
-      {/* friend activity */}
-      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">Friends recently booked</p>
-      {FEED.map(item => (
-        <div key={item.id} className="mx-5 mb-3 bg-soft rounded-[20px] p-3.5 flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-gl flex items-center justify-center text-lg flex-shrink-0">😊</div>
-          <div>
-            <p className="text-[13px] font-bold text-black">{item.name}</p>
-            <p className="text-[12px] text-b3 font-medium mt-0.5">
-              booked <span className="font-bold text-g">{item.service}</span>
-            </p>
-            <p className="text-[11px] text-b3 mt-1">{item.time}{item.saved ? ` · saved ${item.saved}` : ''}</p>
-          </div>
-        </div>
-      ))}
+      {/* Friend activity — tiny strip, hidden in spotlight mode (irrelevant
+          to providers asking Connectors). Compact rows so the whole feed
+          takes ~half the space it used to. */}
+      {intent === 'find' && (
+        <>
+          <p className="px-5 text-[10px] font-extrabold uppercase tracking-widest text-b3 mb-2">
+            Friends recently booked
+          </p>
+          {FEED.map(item => (
+            <div key={item.id} className="mx-5 mb-1.5 bg-soft rounded-[14px] p-2.5 flex gap-2.5 items-center">
+              <div className="w-7 h-7 rounded-full bg-gl flex items-center justify-center text-[13px] flex-shrink-0">😊</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] text-black leading-tight">
+                  <span className="font-bold">{item.name}</span> booked{' '}
+                  <span className="font-bold text-g">{item.service}</span>
+                </p>
+                <p className="text-[10px] text-b3 mt-0.5">{item.time}{item.saved ? ` · saved ${item.saved}` : ''}</p>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
