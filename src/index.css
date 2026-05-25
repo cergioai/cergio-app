@@ -65,6 +65,35 @@ body {
 }
 .animate-pop-in { animation: popIn .5s cubic-bezier(.34,1.56,.64,1) both; }
 
+/* ── Toast-style headline ─────────────────────────────────────────────
+   On mount, the long Cergio greeting rolls in word-by-word (cg-word-roll),
+   lingers, then fades out (cg-headline-toast). At the end of the toast
+   we swap in a compact persistent greeting that fades in softly
+   (cg-fade-in-soft). Times are tuned so the whole sequence reads as
+   a friendly "Hi" without holding up the input. */
+@keyframes cgWordRoll {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.cg-word-roll {
+  opacity: 0;
+  animation: cgWordRoll .5s ease-out forwards;
+}
+@keyframes cgHeadlineToast {
+  0%, 78% { opacity: 1; transform: translateY(0); }
+  100%    { opacity: 0; transform: translateY(-4px); }
+}
+.cg-headline-toast {
+  animation: cgHeadlineToast 4.5s ease-out forwards;
+}
+@keyframes cgFadeInSoft {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cg-fade-in-soft {
+  animation: cgFadeInSoft .45s ease-out both;
+}
+
 /* ── Cergio leaf brand mark animation ────────────────────────────────
    The leaf logo sits inline next to the headline. When the engine is
    "thinking" (post-submit / chat parsing / engine running), it does a

@@ -157,6 +157,12 @@ export function HomeScreen() {
   const replyRef = useRef(null);
   const threadRef = useRef(null);
 
+  // Headline phase — 'rolling' shows the long Cergio greeting word-by-
+  // word as a toast (it fades out after ~4s). 'collapsed' shows a
+  // compact persistent line + a "start typing" hint. Resets on every
+  // mount and on intent flip so the user sees the toast each time.
+  const [headlinePhase, setHeadlinePhase] = useState('rolling');
+
   // Engine state — kicks off once chat.phase flips to 'ready' (all
   // mandatory fields captured). We stay on Home through the whole thing.
   const [submitted, setSubmitted] = useState(false);
@@ -268,6 +274,16 @@ export function HomeScreen() {
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [modeOpen]);
+
+  // Headline toast lifecycle — reset to rolling on mount + on intent
+  // flip; collapse to the compact line after ~4.5s. If the user
+  // submits before then, jump straight to collapsed.
+  useEffect(() => {
+    if (submitted) { setHeadlinePhase('collapsed'); return; }
+    setHeadlinePhase('rolling');
+    const t = setTimeout(() => setHeadlinePhase('collapsed'), 4500);
+    return () => clearTimeout(t);
+  }, [submitted, intent]);
 
   // Kick the engine ticker. Sets up timers that advance planIdx through
   // the stages, then sets planDone when the last stage finishes.
@@ -458,23 +474,61 @@ export function HomeScreen() {
           inline at the start and slowly rotates while the engine is
           thinking (Claude-style). Greeting is personalized for signed-in
           users using their display name. */}
-      <div className="px-5 pt-5 pb-0.5 flex items-start gap-2.5">
-        {/* Headline leaf — only shown before the user fires a search.
-            Once submitted, the leaf "moves down" and lives next to the
-            streaming notification so motion happens at the work site,
-            not next to the greeting. */}
-        {!submitted && <LeafLogo working={false} size={22} />}
-        <h1 className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight">
-          {(() => {
-            const display = auth?.user?.user_metadata?.display_name || '';
-            const firstName = display.trim().split(/\s+/)[0] || '';
-            const greeting = firstName ? `Hi ${firstName}, I'm Cergio` : `Hi, I'm Cergio`;
-            return intent === 'find'
-              ? <>{greeting} — I'll <span className="text-g font-medium">negotiate and book</span> services your friends trust.</>
-              : <>{greeting} — I'll match you with a <span className="text-g font-medium">Connector</span> who can spotlight you on <span className="text-g font-medium">Instagram / TikTok</span>.</>;
-          })()}
-        </h1>
-      </div>
+      {/* Headline area — two phases. Phase 1 (rolling): the long Cergio
+          greeting rolls in word-by-word, lingers, then fades out
+          (toast-style). Phase 2 (collapsed): a compact "Hi {firstName},
+          tell me what you need" line + a Start typing ↓ hint. Leaf logo
+          persists across both phases (only hidden after submit, when it
+          lives next to the streaming status instead). */}
+      {(() => {
+        const display = auth?.user?.user_metadata?.display_name || '';
+        const firstName = display.trim().split(/\s+/)[0] || '';
+        const greetingName = firstName ? `Hi ${firstName}` : 'Hi';
+
+        const findLong      = `${greetingName}, I'm Cergio — I'll negotiate and book services your friends trust.`;
+        const spotlightLong = `${greetingName}, I'm Cergio — I'll match you with a Connector who can spotlight you on Instagram / TikTok.`;
+        const longText      = intent === 'find' ? findLong : spotlightLong;
+        const longWords     = longText.split(' ');
+
+        const compactText = intent === 'find'
+          ? `${greetingName}, tell me what you need.`
+          : `${greetingName}, tell me the Connector you need.`;
+
+        return (
+          <div className="px-5 pt-5 pb-0.5 flex items-start gap-2.5">
+            {!submitted && <LeafLogo working={false} size={22} />}
+            <div className="flex-1 min-w-0">
+              {headlinePhase === 'rolling' && !submitted ? (
+                <h1
+                  key={`rolling-${intent}`}
+                  className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight cg-headline-toast"
+                >
+                  {longWords.map((w, i) => (
+                    <span
+                      key={i}
+                      className="inline-block cg-word-roll"
+                      style={{ animationDelay: `${i * 60}ms` }}
+                    >
+                      {w}{i < longWords.length - 1 ? ' ' : ''}
+                    </span>
+                  ))}
+                </h1>
+              ) : (
+                <div className="cg-fade-in-soft">
+                  <h1 className="text-[14px] font-normal text-b2 leading-snug">
+                    {compactText}
+                  </h1>
+                  {!submitted && (
+                    <p className="text-[11px] text-b3 font-normal mt-0.5">
+                      Start typing below ↓
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Location chip — only after an address exists. */}
       {(locationText || locEditing) && (
