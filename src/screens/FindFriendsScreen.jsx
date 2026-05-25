@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
+import { notifyUser } from '../lib/api';
 
 const INVITE_BASE = (typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai');
 
@@ -274,7 +275,24 @@ export function FindFriendsScreen() {
                 <p className="text-[11px] text-b3 truncate">{c.email || c.phone}</p>
               </div>
               <button
-                onClick={() => { copyInvite(); showToast(`Invite link copied — paste in a text to ${c.name}`); }}
+                onClick={async () => {
+                  // Fire real notification (email if we have email, SMS if phone).
+                  // Falls back to copying the invite link when neither is set.
+                  if (!c.email && !c.phone) {
+                    copyInvite();
+                    showToast(`Invite link copied — paste in a text to ${c.name}`);
+                    return;
+                  }
+                  const { error } = await notifyUser({
+                    event: 'invite_received',
+                    recipient: { name: c.name, email: c.email || undefined, phone: c.phone || undefined },
+                    data: {
+                      inviter_name: auth?.user?.user_metadata?.display_name || 'A friend',
+                      inviter_id:   auth?.user?.id || '',
+                    },
+                  });
+                  showToast(error ? `Send failed: ${error.message}` : `Invite sent to ${c.name} ✓`);
+                }}
                 className="bg-white border border-bdr text-black rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold hover:border-g/40">
                 Invite
               </button>

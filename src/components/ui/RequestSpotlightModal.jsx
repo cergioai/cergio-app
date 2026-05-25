@@ -3,8 +3,8 @@
 // provider pick a platform if both are offered, adds a short message, and
 // fires createSpotlightRequest(). The Connector sees this in their inbox
 // and can Accept / Counter (lower price) / Decline.
-import { useState } from 'react';
-import { createSpotlightRequest } from '../../lib/api';
+import { useEffect, useState } from 'react';
+import { createSpotlightRequest, listMyServices } from '../../lib/api';
 import { PLATFORM_FEE_RATE, platformFeeCents, sellerEarningsCents, fmtDollars } from '../../lib/fees';
 
 const fmtPrice = fmtDollars;
@@ -21,6 +21,17 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  // Provider picks which of their listings to spotlight — required when
+  // they have any services listed; falls back to null when they have none.
+  const [myServices, setMyServices] = useState([]);
+  const [serviceId, setServiceId]   = useState('');
+  useEffect(() => {
+    listMyServices().then(({ data }) => {
+      const list = data || [];
+      setMyServices(list);
+      if (list.length === 1) setServiceId(list[0].id); // auto-pick if only one
+    });
+  }, []);
 
   const picked = platforms.find(p => p.id === platform) || platforms[0];
 
@@ -34,6 +45,7 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
       platform:    picked.id,
       officialPriceCents: picked.cents,
       message,
+      serviceId:   serviceId || null,
     });
     setBusy(false);
     if (error) {
@@ -108,6 +120,24 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
         )}
 
         <form onSubmit={submit} className="flex flex-col gap-3">
+          {/* Service picker — only if Provider has services listed */}
+          {myServices.length > 0 && (
+            <div>
+              <label className="block text-[12px] font-extrabold text-black mb-1">Which service?</label>
+              <select
+                value={serviceId}
+                onChange={e => setServiceId(e.target.value)}
+                className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-[13px] text-black outline-none focus:ring-2 focus:ring-g/30"
+              >
+                <option value="">— Pick a service —</option>
+                {myServices.map(s => (
+                  <option key={s.id} value={s.id}>{s.title || s.category}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-b3 mt-1">The Connector sees what they're promoting.</p>
+            </div>
+          )}
+
           <div>
             <label className="block text-[12px] font-extrabold text-black mb-1">Message (optional)</label>
             <textarea

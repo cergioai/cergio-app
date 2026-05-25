@@ -623,14 +623,15 @@ export async function listMyOutboundSpotlightRequests({ limit = 50 } = {}) {
     .limit(limit);
 }
 
-/** List requests addressed to the signed-in user (their inbound, as Connector). */
+/** List requests addressed to the signed-in user (their inbound, as Connector).
+ *  Joins service so the InboundCard can show "spotlight for {service title}". */
 export async function listMyInboundSpotlightRequests({ limit = 50 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
   const { data: userRes } = await supabase.auth.getUser();
   if (!userRes?.user) return { data: [], error: null };
   return await supabase
     .from('spotlight_requests')
-    .select('*')
+    .select('*, service:services(id, title, category)')
     .eq('connector_id', userRes.user.id)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -826,6 +827,24 @@ function fireSpotlightNotify(requestId, event) {
       // eslint-disable-next-line no-console
       console.warn('[notify-spotlight] best-effort send failed', err);
     });
+}
+
+// ─── Generic user notifications (notify-user edge fn) ──────────────────────
+
+/**
+ * Dispatch a templated notification via email + SMS (where applicable).
+ * Events implemented in notify-user: signup_welcome, invite_received,
+ * invite_joined, service_recommended, first_booking, become_connector_prompt.
+ * Fire-and-forget — never blocks the caller's UI.
+ */
+export async function notifyUser({ event, recipient, data = {} } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!event || !recipient) return { data: null, error: { message: 'event + recipient required' } };
+  const app_url = typeof window !== 'undefined' ? window.location.origin : undefined;
+  const { data: res, error } = await supabase.functions.invoke('notify-user', {
+    body: { event, recipient, data, app_url },
+  });
+  return { data: res, error };
 }
 
 // ─── Booking notifications ──────────────────────────────────────────────────

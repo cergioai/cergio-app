@@ -192,6 +192,11 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
           {pill.label}
         </span>
       </div>
+      {r.service?.title && (
+        <p className="text-[12px] text-b3 mb-2">
+          For service: <strong className="text-black">{r.service.title}</strong>
+        </p>
+      )}
       {r.message && (
         <p className="text-[13px] text-b2 leading-relaxed mb-3 line-clamp-3">"{r.message}"</p>
       )}
