@@ -1,7 +1,7 @@
 // Per design-spec.md — Bottom-sheet popup for invite/recommend actions.
-// Copy + numbers pull from src/lib/rewards.js so the hero ($250 max),
-// the "$25 when they join" base, and the +$125 first-booking bonus stay
-// in lockstep across every surface that mentions earnings.
+// Single canonical "$250 per friend" headline — the $25/$125 stacking
+// breakdown lives inside /earnings/how, NOT here. Don't surface the
+// internal numbers at the entry point.
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
@@ -24,33 +24,29 @@ export function InviteFriendPopupScreen() {
 
         <div className="mt-10 mb-4 flex items-start gap-3">
           <div className="flex-1">
-            <h1 className="text-[26px] font-extrabold text-black leading-tight tracking-tight">
-              Invite a friend, earn up to ${REWARDS.maxPerInvite}
+            <h1 className="text-[24px] font-extrabold text-black leading-tight tracking-tight">
+              Refer & earn — ${REWARDS.perFriend} per friend
             </h1>
+            <p className="text-[13px] text-b3 font-medium mt-2 leading-snug">
+              Friends-of-friends grow the network. You earn when they join + book.
+            </p>
           </div>
-          <div className="w-14 h-14 rounded-full bg-g flex items-center justify-center flex-shrink-0">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+          <div className="w-12 h-12 rounded-full bg-g flex items-center justify-center flex-shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
               <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
               <circle cx="12" cy="9" r="2.5" />
             </svg>
           </div>
         </div>
 
-        {/* Step list — concrete numbers so the user knows exactly what they
-            earn at each step. Replaces the old vague "25% of first few bookings". */}
-        <ol className="mb-4 flex flex-col gap-2.5">
-          <Step n="1" green={`+$${REWARDS.friendJoinCredit}`} body="when your friend signs up" />
-          <Step n="2" green={`+$${REWARDS.friendFirstBookingBonus}`} body="when they complete their first booking" />
-          <Step n="3" green={`up to $${REWARDS.maxPerInvite}`} body="total per invite as they keep booking" />
-        </ol>
         <button
           onClick={() => navigate('/earnings/how')}
-          className="text-[13px] font-bold text-g underline underline-offset-2 mb-6"
+          className="text-[12px] font-bold text-g underline underline-offset-2 mb-5"
         >
           How earnings work →
         </button>
 
-        <div className="border-t border-bdr -mx-7 px-7 pt-4 flex flex-col">
+        <div className="border-t border-bdr -mx-7 px-7 pt-3 flex flex-col">
           <ActionRow icon="message" label="Invite from contacts" sub="Tap and pick — we send the message"
             onClick={() => navigate('/invite/friends')} />
           <ActionRow icon="link" label="Copy my invite link" sub="Paste it in any chat or DM"
@@ -60,23 +56,6 @@ export function InviteFriendPopupScreen() {
         </div>
       </div>
     </div>
-  );
-}
-
-// Numbered step — small green bubble + dollar amount in brand green +
-// short description in body gray. Keeps every reward visible at once.
-function Step({ n, green, body }) {
-  return (
-    <li className="flex items-center gap-3">
-      <span className="w-6 h-6 rounded-full bg-gl text-gd text-[11px] font-extrabold
-                       flex items-center justify-center flex-shrink-0">
-        {n}
-      </span>
-      <p className="text-[14px] text-black leading-snug">
-        <span className="text-g font-extrabold">{green}</span>{' '}
-        <span className="text-b2 font-medium">{body}</span>
-      </p>
-    </li>
   );
 }
 

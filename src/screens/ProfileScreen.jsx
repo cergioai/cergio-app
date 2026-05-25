@@ -23,25 +23,25 @@ function fmtFollowers(n) {
   return String(x);
 }
 
-// Big-row pattern per Figma: title (text-[18px] bold) + optional subtitle
-// (text-[15px] b3) + optional inline mint pill, with a fat chevron at right.
-// No bottom-border — separation comes from generous py-4.5 spacing alone.
+// Row pattern — sized down per Tarik's audit (title 18→16, subtitle 15→13).
+// Rows are dense + numerous on this screen; smaller type makes the section
+// hierarchy breathe.
 function Row({ title, subtitle, pill, onClick, disabled = false }) {
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`w-full px-5 py-4 flex items-center justify-between text-left
+      className={`w-full px-5 py-3.5 flex items-center justify-between text-left
                   ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-bg5/30 transition-colors'}`}
     >
       <div className="flex-1 pr-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[18px] font-bold text-black leading-tight">{title}</span>
+          <span className="text-[16px] font-bold text-black leading-tight">{title}</span>
           {pill && pill}
         </div>
         {subtitle && (
-          <p className="text-[15px] text-b3 mt-1 leading-snug font-medium">{subtitle}</p>
+          <p className="text-[13px] text-b3 mt-1 leading-snug font-medium">{subtitle}</p>
         )}
       </div>
       <Chevron />
@@ -60,11 +60,11 @@ function Chevron() {
   );
 }
 
-// Section header — big, bold, generous top margin to define rhythm
-// between sections. Sits at the same px-5 inset as rows.
+// Section header — sized down per Tarik's audit (was 26, now 20). Still
+// reads as a major divider thanks to the generous mt-8 vertical rhythm.
 function SectionHeader({ title }) {
   return (
-    <h2 className="px-5 text-[26px] font-extrabold text-black mt-10 mb-1 leading-tight">{title}</h2>
+    <h2 className="px-5 text-[20px] font-extrabold text-black mt-8 mb-1 leading-tight">{title}</h2>
   );
 }
 
@@ -165,14 +165,30 @@ export function ProfileScreen() {
 
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
-      {/* ── Top: greeting + avatar ─────────────────────────────────────────── */}
-      <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
-        <h1 className="text-[30px] font-extrabold text-black leading-tight">
+      {/* ── Top: greeting + avatar (greeting 30→24 per audit) ──────────────── */}
+      <div className="px-5 pt-8 pb-2 flex items-start justify-between gap-4">
+        <h1 className="text-[24px] font-extrabold text-black leading-tight">
           Hi {firstName}!
         </h1>
-        <div className="w-14 h-14 rounded-full bg-bg5 flex items-center justify-center text-black text-[20px] font-extrabold flex-shrink-0 overflow-hidden">
+        <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-[16px] font-extrabold flex-shrink-0 overflow-hidden">
           {initials}
         </div>
+      </div>
+
+      {/* ── Switch view CTA — MOVED to the top per audit, right under the
+          greeting and above Account. The primary action on this screen
+          should be the most visible. ─────────────────────────────────── */}
+      <div className="px-5 mt-3 mb-2">
+        <button
+          onClick={() => {
+            setServiceMode(!serviceMode);
+            showToast(serviceMode ? 'Back to user view' : 'You\'re now in Service view');
+          }}
+          className="w-full bg-g text-white rounded-[24px] py-3.5 text-[16px] font-extrabold
+                     hover:opacity-90 active:scale-[.98] transition-all"
+        >
+          {serviceMode ? 'Switch to User View' : 'Switch to Service View'}
+        </button>
       </div>
 
       {/* ── Account ────────────────────────────────────────────────────────── */}
@@ -234,7 +250,8 @@ export function ProfileScreen() {
         </>
       )}
 
-      {/* ── Services — GREEN switch CTA right at the top of the section ────── */}
+      {/* ── Services — the Switch button moved up to the top of the screen.
+          This section now just hosts the manage/list rows. ──────────── */}
       <SectionHeader title="Services" />
       <Row
         title="List a new service"
@@ -243,21 +260,6 @@ export function ProfileScreen() {
           : 'Offer your service on Cergio'}
         onClick={onListService}
       />
-      {/* Switch button — full-width GREEN per Figma. Moved to TOP of
-          Services per user direction (was previously below the list at the
-          bottom of the screen). */}
-      <div className="px-5 mt-3 mb-1">
-        <button
-          onClick={() => {
-            setServiceMode(!serviceMode);
-            showToast(serviceMode ? 'Back to user view' : 'You\'re now in Service view');
-          }}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
-                     hover:opacity-90 active:scale-[.98] transition-all"
-        >
-          {serviceMode ? 'Switch to User View' : 'Switch to Service View'}
-        </button>
-      </div>
       {serviceMode && (
         <>
           <Row
@@ -284,12 +286,12 @@ export function ProfileScreen() {
       />
       <Row
         title="Invite friends"
-        subtitle={`Earn $${REWARDS.friendJoinCredit} per join · up to $${REWARDS.maxPerInvite} per invite`}
+        subtitle={`Earn $${REWARDS.perFriend} per friend who joins`}
         onClick={() => navigate('/invite/friends-popup')}
       />
       <Row
         title="Recommend services"
-        subtitle={`Earn $${REWARDS.serviceRecoCredit} per booked recommendation`}
+        subtitle={`Earn $${REWARDS.perFriend} per friend you recommend to`}
         onClick={() => navigate('/invite/recommend-popup')}
       />
       <Row

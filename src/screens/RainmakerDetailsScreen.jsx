@@ -1,6 +1,9 @@
 // Per design-spec.md — step 2 of Connector reg, fields vary by type.
+// `location` field now uses Google Places AddressAutocomplete so the
+// address is real and we can geocode it for proximity matching.
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 
 // Field configuration per type
 const TYPE_CONFIG = {
@@ -27,17 +30,17 @@ const TYPE_CONFIG = {
 const FIELD_META = {
   businessName: { label: 'Business name', placeholder: 'Enter business entity', type: 'input' },
   industry:     { label: 'Industry',      placeholder: 'Select an industry',     type: 'input' },
-  location:     { label: 'Your location', placeholder: 'Add your address',       type: 'input' },
+  location:     { label: 'Your location', placeholder: 'Start typing your address…', type: 'address' },
   bio:          { label: 'Bio',           placeholder: '',                        type: 'textarea' },
 };
 
-function Field({ name, value, onChange, hint }) {
+function Field({ name, value, onChange, onAddressSelect, hint }) {
   const meta = FIELD_META[name];
   const placeholder = name === 'bio' ? hint : meta.placeholder;
 
   return (
     <div className="mb-6">
-      <label className="block text-[18px] font-extrabold text-black mb-2.5">
+      <label className="block text-[16px] font-extrabold text-black mb-2">
         {meta.label}
       </label>
       {meta.type === 'textarea' ? (
@@ -49,6 +52,19 @@ function Field({ name, value, onChange, hint }) {
           className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
                      placeholder-b3 outline-none focus:ring-2 focus:ring-g/30
                      resize-none font-sans"
+        />
+      ) : meta.type === 'address' ? (
+        // Google Places autocomplete — picks resolve to lat/lng so the
+        // address is geocoded at sign-up rather than later. Falls back to
+        // a plain input gracefully if the Maps script fails to load.
+        <AddressAutocomplete
+          value={value}
+          onChange={(v) => onChange(name, v)}
+          onSelect={({ address, lat, lng }) => {
+            onChange(name, address);
+            onAddressSelect && onAddressSelect({ address, lat, lng });
+          }}
+          placeholder={placeholder}
         />
       ) : (
         <input
@@ -73,6 +89,11 @@ export function RainmakerDetailsScreen() {
   const [values, setValues] = useState(
     Object.fromEntries(config.fields.map(f => [f, '']))
   );
+  // Keep the picked address's lat/lng around so the next step (or the
+  // submit handler) can persist coords alongside the typed address string.
+  // Stored as a side-cache; not surfaced in `values` to avoid breaking
+  // the existing `allFilled` validation.
+  const [addressCoords, setAddressCoords] = useState(null);
 
   const handleChange = (name, val) => setValues(v => ({ ...v, [name]: val }));
 
@@ -81,7 +102,11 @@ export function RainmakerDetailsScreen() {
 
   const next = () => {
     if (!allFilled) return;
-    navigate(`/rainmaker/apply/instagram?type=${type}`);
+    // Forward the typed values + geocoded coords to the next step so the
+    // final submit handler can save a complete location record.
+    navigate(`/rainmaker/apply/instagram?type=${type}`, {
+      state: { details: { ...values, coords: addressCoords } },
+    });
   };
 
   return (
@@ -101,6 +126,7 @@ export function RainmakerDetailsScreen() {
             name={f}
             value={values[f]}
             onChange={handleChange}
+            onAddressSelect={({ lat, lng }) => setAddressCoords({ lat, lng })}
             hint={config.bioHint}
           />
         ))}

@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
-import { CATEGORIES, FEED } from '../data/mock';
+import { FEED } from '../data/mock';
 import { CcGateModal } from '../components/ui/CcGateModal';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 
-const BUNDLES = [
-  { icon: '💍', label: 'Plan my wedding', task: 'Plan my wedding' },
-  { icon: '🏠', label: 'Move in bundle',  task: 'Set up my new home' },
-  { icon: '🎂', label: 'Birthday party',  task: 'Birthday party' },
-  { icon: '🔨', label: 'Kitchen reno',    task: 'Renovate my kitchen' },
+// Examples — mix of single tasks + bundles with budget hints. Replaces
+// the old icon-pill category strip that was redundant with the search box.
+const EXAMPLES = [
+  { label: 'Plan my wedding under $100k',  task: 'Plan my wedding under $100k' },
+  { label: 'Help me move under $1,000',    task: 'Help me move under $1,000' },
+  { label: 'Deep clean my home',           task: 'Deep clean my home' },
+  { label: 'Birthday party under $5k',     task: 'Birthday party under $5,000' },
+  { label: 'Find me a dog walker',         task: 'Find a dog walker' },
+  { label: 'Renovate my kitchen under $50k', task: 'Renovate my kitchen under $50k' },
 ];
 
 // Single option inside the mode-picker popover.
@@ -39,7 +43,6 @@ function ModeOption({ active, label, sub, onClick }) {
 export function HomeScreen() {
   const navigate = useNavigate();
   const { showToast, startTask, freeServices, setFreeServices, auth } = useOutletContext();
-  const [activeCat, setActiveCat] = useState('cleaning');
   const [query, setQuery] = useState('');
   const [images, setImages] = useState([]);          // [{ name, dataUrl }]
   const [modeOpen, setModeOpen] = useState(false);   // Free vs Pay popover
@@ -304,15 +307,7 @@ export function HomeScreen() {
           {/* Hint inside the box, left-aligned. Subtle so it doesn't compete
               with the input but visible enough to teach the "dump it all in
               one go" pattern. */}
-          <p className="px-5 pb-1 text-[11px] text-b3 leading-snug">
-            {intent === 'find' ? (
-              <>Tip — say it like a friend would:{' '}
-                <span className="font-bold text-b2">"deep clean Mon 2pm, max $200"</span>.</>
-            ) : (
-              <>Tip — be specific about audience:{' '}
-                <span className="font-bold text-b2">"foodie Connector, NYC, 5K+ followers"</span>.</>
-            )}
-          </p>
+          {/* Tip hint removed — was redundant with placeholder. */}
 
           {/* row 2: chip toolbar — + attach, mode dropdown, then send arrow. */}
           <div className="flex items-center gap-2 px-3 pb-3 pt-1">
@@ -404,77 +399,51 @@ export function HomeScreen() {
             </button>
           </div>
         </div>
-        {/* Intent toggle — flips the search box from "I need a service"
-            (default) to "I offer a service and want a Connector to spotlight
-            it". Stays compact + adjacent to the box so it reads as a mode
-            switch, not a separate CTA. Replaces the old standalone "Have a
-            service?" card per design direction. */}
+        {/* Cergio voice line — sits on the cream bg (NO white card), tiny
+            font, with a flip arrow. Default = "I'll negotiate + book for
+            you" (find mode). Tap the flip arrow → green-tinted spotlight
+            mode = "I'll connect you with a Connector who can spotlight your
+            service". Visual cue: green dot + green underline in spotlight. */}
         <button
           type="button"
           onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
-          className={`w-full mt-3 rounded-[16px] px-4 py-3 flex items-center gap-3 text-left
-                      transition-colors border
-                      ${intent === 'spotlight'
-                        ? 'bg-gl border-g/40'
-                        : 'bg-white border-bdr hover:border-g/40'}`}
+          className="w-full mt-2 px-2 py-2 flex items-center gap-2 text-left
+                     hover:opacity-90 transition-opacity"
           aria-pressed={intent === 'spotlight'}
         >
-          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0
-                          ${intent === 'spotlight' ? 'bg-g' : 'bg-gl'}`}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                 stroke={intent === 'spotlight' ? 'white' : '#3D8B00'}
-                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[14px] font-extrabold text-black leading-tight">
-              Have a service? Offer it free for a spotlight
-            </p>
-            <p className="text-[12px] text-b3 mt-0.5 leading-snug">
-              {intent === 'spotlight'
-                ? "On ✓ — describe what you offer + your ideal Connector above."
-                : 'Trade a free job for an Instagram or TikTok post by an influencer.'}
-            </p>
-          </div>
-          {/* Small toggle pill — visual on/off cue */}
-          <span className={`flex-shrink-0 w-9 h-5 rounded-pill flex items-center transition-colors
-                            ${intent === 'spotlight' ? 'bg-g justify-end' : 'bg-bdr justify-start'}`}>
-            <span className="w-4 h-4 rounded-full bg-white mx-0.5 shadow-card" />
-          </span>
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
+                            ${intent === 'spotlight' ? 'bg-g' : 'bg-b3/40'}`} />
+          <p className={`flex-1 text-[11px] leading-snug font-medium
+                         ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
+            {intent === 'find' ? (
+              <>Hi, I'm Cergio — I'll <span className="font-bold">negotiate and book</span> services your friends trust.</>
+            ) : (
+              <>Hi, I'm Cergio — I'll <span className="font-bold">connect you with a Connector</span> who can spotlight your service.</>
+            )}
+          </p>
+          {/* Flip arrow — tiny rotating chevron */}
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+               className={`flex-shrink-0 transition-transform ${intent === 'spotlight' ? 'text-g rotate-180' : 'text-b3'}`}>
+            <path d="M3 12h18M13 6l6 6-6 6" />
+          </svg>
         </button>
       </div>
 
-      {/* categories */}
-      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">Services</p>
-      <div className="flex gap-2.5 overflow-x-auto px-5 pb-1 scrollbar-hide mb-5">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => { setActiveCat(cat.id); startTask(cat.label); }}
-            className={`flex-shrink-0 flex items-center gap-1.5 border rounded-pill
-                        px-3.5 py-2 text-[13px] font-semibold cursor-pointer transition-all
-                        ${activeCat === cat.id
-                          ? 'border-g bg-gl text-gd'
-                          : 'border-bdr bg-white text-b2 hover:border-g hover:bg-gl'}`}
-          >
-            <span className="text-base">{cat.icon}</span>
-            <span>{cat.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* bundles */}
-      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">Bundle requests</p>
+      {/* Examples — single tasks + bundles with budget hints. Replaces
+          the old category pills row entirely. Tapping seeds /intake. */}
+      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mt-2 mb-3">
+        Try one of these
+      </p>
       <div className="flex flex-wrap gap-2 px-5 mb-6">
-        {BUNDLES.map(b => (
+        {EXAMPLES.map(e => (
           <button
-            key={b.label}
-            onClick={() => startTask(b.task)}
+            key={e.label}
+            onClick={() => startTask(e.task)}
             className="bg-white border border-bdr rounded-pill px-3.5 py-1.5
                        text-[12px] font-bold text-b2 cursor-pointer hover:border-g hover:text-gd transition-colors"
           >
-            {b.icon} {b.label}
+            {e.label}
           </button>
         ))}
       </div>

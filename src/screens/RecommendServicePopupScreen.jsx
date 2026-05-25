@@ -1,6 +1,6 @@
-// Per design-spec.md — Bottom-sheet popup for "Recommend a service" actions.
-// Mirror of InviteFriendPopup so the two flows feel like siblings, with
-// the reward language shifted to the per-recommendation context.
+// Per design-spec.md — "Recommend a service" popup. Mirror of InviteFriendPopup.
+// Single $250-per-friend hero — keeps the messaging consistent across every
+// surface that mentions referral earnings.
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
 
@@ -22,30 +22,28 @@ export function RecommendServicePopupScreen() {
 
         <div className="mt-10 mb-4 flex items-start gap-3">
           <div className="flex-1">
-            <h1 className="text-[26px] font-extrabold text-black leading-tight tracking-tight">
-              Recommend, earn ${REWARDS.serviceRecoCredit}+ per friend
+            <h1 className="text-[24px] font-extrabold text-black leading-tight tracking-tight">
+              Recommend a service — ${REWARDS.perFriend} per friend
             </h1>
+            <p className="text-[13px] text-b3 font-medium mt-2 leading-snug">
+              Pick a contact, tell them what to book. You earn when they do.
+            </p>
           </div>
-          <div className="w-14 h-14 rounded-full bg-g flex items-center justify-center flex-shrink-0">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M9 6V4h6v2"/></svg>
+          <div className="w-12 h-12 rounded-full bg-g flex items-center justify-center flex-shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M9 6V4h6v2"/></svg>
           </div>
         </div>
 
-        <ol className="mb-4 flex flex-col gap-2.5">
-          <Step n="1" green={`+$${REWARDS.serviceRecoCredit}`} body="every time a friend books a service you recommended" />
-          <Step n="2" green={`+$${REWARDS.friendJoinCredit}`} body="if they're new to Cergio" />
-          <Step n="3" green={`up to $${REWARDS.maxPerInvite}`} body="combined ceiling per friend" />
-        </ol>
         <button
           onClick={() => navigate('/earnings/how')}
-          className="text-[13px] font-bold text-g underline underline-offset-2 mb-6"
+          className="text-[12px] font-bold text-g underline underline-offset-2 mb-5"
         >
           How earnings work →
         </button>
 
-        <div className="border-t border-bdr -mx-7 px-7 pt-4 flex flex-col">
-          <ActionRow icon="message" label="Pick from contacts"
-            sub="Tap a friend — we pre-fill their details"
+        <div className="border-t border-bdr -mx-7 px-7 pt-3 flex flex-col">
+          <ActionRow icon="message" label="Recommend from contacts"
+            sub="Pick a friend — we pre-fill their details automatically"
             onClick={() => navigate('/invite/friends?mode=reco')} />
           <ActionRow icon="pencil" label="Write a recommendation"
             sub="Free-form blurb explaining why you trust this service"
@@ -53,21 +51,6 @@ export function RecommendServicePopupScreen() {
         </div>
       </div>
     </div>
-  );
-}
-
-function Step({ n, green, body }) {
-  return (
-    <li className="flex items-center gap-3">
-      <span className="w-6 h-6 rounded-full bg-gl text-gd text-[11px] font-extrabold
-                       flex items-center justify-center flex-shrink-0">
-        {n}
-      </span>
-      <p className="text-[14px] text-black leading-snug">
-        <span className="text-g font-extrabold">{green}</span>{' '}
-        <span className="text-b2 font-medium">{body}</span>
-      </p>
-    </li>
   );
 }
 

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { INBOX_REQUESTS } from '../data/mock';
 import { listProviderBookings } from '../lib/api';
 
 // Map a Supabase bookings row → the same shape the existing UI uses.
@@ -54,7 +53,6 @@ function Avatar({ name, idx }) {
 }
 
 const TABS = ['Requests', 'Upcoming', 'Past'];
-const FILTERS = ['Filter (All)', 'Status'];
 
 export function JobsInboxScreen() {
   const navigate = useNavigate();
@@ -72,10 +70,8 @@ export function JobsInboxScreen() {
     return () => { cancelled = true; };
   }, [auth?.isSignedIn]);
 
-  // Real bookings first; pad with mock so the demo always has visual content.
-  const requests   = real === null
-    ? INBOX_REQUESTS
-    : (real.length > 0 ? real : INBOX_REQUESTS);
+  // Real bookings only — empty state when there are none. No more mock pad.
+  const requests   = real ?? [];
   const badgeCount = requests.filter(r => r.isUnread).length;
 
   return (
@@ -127,23 +123,22 @@ export function JobsInboxScreen() {
         })}
       </div>
 
-      {/* filters */}
-      <div className="flex gap-2 px-5 py-3.5">
-        {FILTERS.map(f => (
-          <button
-            key={f}
-            onClick={() => showToast(`${f} — filters coming soon`)}
-            className="border border-bdr rounded-pill px-3.5 py-1.5
-                       text-[13px] font-semibold text-b2 bg-white
-                       hover:border-g hover:text-gd transition-colors"
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-
-      {/* request list */}
-      <div className="px-5 flex flex-col gap-3">
+      {/* request list — filter pills removed per audit */}
+      <div className="px-5 flex flex-col gap-3 pt-4">
+        {activeTab === 'Requests' && requests.length === 0 && (
+          <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
+            <p className="text-[14px] font-extrabold text-black">No requests yet</p>
+            <p className="text-[12px] text-b3 font-medium mt-1 leading-snug">
+              Booking requests from Cergio users show up here. List a service to get found.
+            </p>
+            <button
+              onClick={() => navigate('/list-service')}
+              className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-[14px] font-extrabold"
+            >
+              List a service →
+            </button>
+          </div>
+        )}
         {activeTab === 'Requests' && requests.map((req, i) => (
           <div
             key={req.id}

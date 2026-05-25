@@ -239,8 +239,7 @@ export function FindFriendsScreen() {
           Share invite
         </button>
         <p className="text-[11px] text-b3 mt-2 leading-snug text-center">
-          You earn <strong className="text-g">${REWARDS.friendJoinCredit} credit</strong> when a friend joins,
-          plus up to <strong className="text-g">${REWARDS.maxPerInvite}</strong> total per invite as they book.
+          Earn <strong className="text-g">${REWARDS.perFriend} per friend</strong> who joins + books.
         </p>
       </div>
 
