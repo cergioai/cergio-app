@@ -17,20 +17,18 @@ import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 import { REWARDS } from '../lib/rewards';
 
-// Example chips — conversational, single-task.
-const FIND_EXAMPLES = [
-  { label: 'Deep cleaning under $250',           task: 'Need deep cleaning under $250' },
-  { label: 'Spanish-speaking sitter · Tue · $55', task: 'Need a babysitter who speaks Spanish Tuesday night under $55' },
-  { label: 'Dog walker after 5pm · $40',         task: 'Need a dog walker after 5pm under $40' },
+// Rotating example overlays — shown one at a time inside the search box
+// when the input is empty. They cross-fade every ~4.5s like Claude's
+// suggestion carousel. Tap an example to populate the input.
+const ROTATING_FIND_EXAMPLES = [
+  { hint: 'e.g. deep cleaning under $200 this tuesday',         task: 'Need deep cleaning under $200 this tuesday' },
+  { hint: 'e.g. Spanish-speaking sitter tue night, max $55',    task: 'Need a babysitter who speaks Spanish Tuesday night under $55' },
+  { hint: 'e.g. dog walker after 5pm, $40',                     task: 'Need a dog walker after 5pm under $40' },
 ];
-// Spotlight examples — lead with "Instagram" so the social channel is
-// unmistakable, then the Connector niche + audience, then the service
-// being spotlighted. Providers shouldn't have to guess this is a
-// social-media post — it should pop the moment they read the pill.
-const SPOTLIGHT_EXAMPLES = [
-  { label: 'Instagram pets Connector 5K+ · dog training',    task: 'Need an Instagram pets Connector w/ 5K+ followers to spotlight my new dog training program' },
-  { label: 'Instagram fashion Connector 7K+ · private chef', task: 'Need an Instagram fashion Connector w/ 7K+ followers to spotlight my private chef service' },
-  { label: 'Instagram fitness Connector 10K+ · yoga studio', task: 'Need an Instagram fitness Connector w/ 10K+ followers to spotlight my new yoga studio' },
+const ROTATING_SPOTLIGHT_EXAMPLES = [
+  { hint: 'e.g. Instagram pets Connector w/ 5K+ to spotlight my dog training',     task: 'Need an Instagram pets Connector w/ 5K+ followers to spotlight my new dog training program' },
+  { hint: 'e.g. Instagram fashion Connector w/ 7K+ for my private chef',           task: 'Need an Instagram fashion Connector w/ 7K+ followers to spotlight my private chef service' },
+  { hint: 'e.g. Instagram fitness Connector w/ 10K+ for my yoga studio',           task: 'Need an Instagram fitness Connector w/ 10K+ followers to spotlight my new yoga studio' },
 ];
 
 // Engine plan — what the "backend" appears to be doing, in order. Each
@@ -159,6 +157,7 @@ export function HomeScreen() {
   const [intent, setIntent] = useState('find');
   const [hasService, setHasService] = useState(null);
   const [reply, setReply] = useState('');   // inline mini-chat reply input
+  const [exampleIdx, setExampleIdx] = useState(0); // rotating example overlay
   const inputRef = useRef(null);
   const fileRef = useRef(null);
   const modeBtnRef = useRef(null);
@@ -339,6 +338,26 @@ export function HomeScreen() {
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [modeOpen]);
+
+  // Rotating example placeholder — advances through ROTATING_*_EXAMPLES
+  // one at a time (every ~6.75s, 50% slower than before). After ONE full
+  // pass (idx reaches list.length-1) the rotation freezes on the final
+  // example — no infinite loop. Resets if intent changes or query clears.
+  useEffect(() => {
+    setExampleIdx(0);
+    if (submitted) return;
+    if (query) return;
+    const list = intent === 'spotlight' ? ROTATING_SPOTLIGHT_EXAMPLES : ROTATING_FIND_EXAMPLES;
+    let tick = 0;
+    const t = setInterval(() => {
+      tick += 1;
+      setExampleIdx(tick);
+      if (tick >= list.length - 1) {
+        clearInterval(t);
+      }
+    }, 6750);
+    return () => clearInterval(t);
+  }, [intent, submitted, query]);
 
   // Headline toast lifecycle — collapses to the compact line after ~9s
   // (matches the 2x-slowed word roll-in). Only plays if we're actually
@@ -596,9 +615,81 @@ export function HomeScreen() {
         );
       })()}
 
-      {/* Location chip moved INSIDE the search box (below the textarea,
-          above the toolbar). See the locationRow block down where the
-          box renders. */}
+      {/* Location chip — sits ABOVE the search box. Shows once an
+          address exists (or while editing). Address + Change render as
+          one phrase, both font-normal so neither competes with the
+          input below. */}
+      {(locationText || locEditing) && (
+        <div className="px-5 mt-1 mb-1 flex items-center gap-1.5 text-[11px] text-b3">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+            <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+            <circle cx="12" cy="9" r="2.5" />
+          </svg>
+          {locEditing ? (
+            <div className="flex-1 flex items-center gap-2">
+              <AddressAutocomplete
+                value={locationText}
+                onChange={setLocationText}
+                onSelect={async ({ lat, lng, address, placeId }) => {
+                  setLocationText(address);
+                  setLocationCoords({ lat, lng });
+                  setLocEditing(false);
+                  try {
+                    localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ address, lat, lng, placeId }));
+                  } catch { /* ignore */ }
+                  if (auth?.isSignedIn) {
+                    const { error } = await saveAddress({
+                      label: 'Home',
+                      formattedAddress: address,
+                      lat, lng, placeId,
+                      makeDefault: true,
+                    });
+                    if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                    else       showToast('Saved as your default location ✓');
+                  } else {
+                    showToast('Saved on this device. Sign in to sync it.');
+                  }
+                }}
+                placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
+                className=""
+              />
+              <button
+                onClick={async () => {
+                  setLocEditing(false);
+                  if (auth?.isSignedIn && locationText) {
+                    const { error } = await saveAddress({
+                      label: 'Home',
+                      formattedAddress: locationText,
+                      lat: locationCoords?.lat ?? null,
+                      lng: locationCoords?.lng ?? null,
+                      makeDefault: true,
+                    });
+                    if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                    else       showToast('Saved as your default location ✓');
+                  } else if (locationText) {
+                    showToast('Saved on this device.');
+                  }
+                }}
+                className="text-[11px] font-normal text-g underline underline-offset-2"
+              >
+                Save
+              </button>
+            </div>
+          ) : (
+            <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug">
+              <span>{locationText}</span>
+              <button
+                type="button"
+                onClick={() => setLocEditing(true)}
+                className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
+              >
+                Change
+              </button>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Spotlight travel-radius — only after a location exists. */}
       {intent === 'spotlight' && locationText && !submitted && (
@@ -634,14 +725,40 @@ export function HomeScreen() {
         <>
           <div className="px-5 py-2">
             <div
-              className="bg-white border border-bdr rounded-[24px] transition-all
+              className="bg-white border border-bdr rounded-[24px] transition-all relative
                          focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA]"
             >
-              {/* Textarea — grows tall enough that the longer spotlight
-                  placeholder fits without forcing scroll INSIDE the box.
-                  Spotlight: 4 rows + min-height so the entire pitch is
-                  visible at a glance. Find: same shape; smaller content
-                  just leaves whitespace, which reads as breathing room. */}
+              {/* Rotating example overlay — sits over the textarea when
+                  it's empty, cycles through ROTATING_*_EXAMPLES every
+                  ~4.5s with a fade in/out. Tap to populate the input.
+                  Disappears the moment the user starts typing. */}
+              {!query && (() => {
+                const list = intent === 'spotlight' ? ROTATING_SPOTLIGHT_EXAMPLES : ROTATING_FIND_EXAMPLES;
+                const idx = Math.min(exampleIdx, list.length - 1);
+                const cur = list[idx];
+                // Last example uses cg-example-settle (fade-in + stay).
+                // Earlier ones use cg-example-rotate (fade-in + linger +
+                // fade-out) so the next one can swap in cleanly.
+                const isLast = idx === list.length - 1;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => { setQuery(cur.task); inputRef.current?.focus(); }}
+                    aria-label="Use this example"
+                    className="absolute top-3 left-4 right-4 text-left z-10 cursor-text"
+                  >
+                    <span
+                      key={`${intent}-${idx}`}
+                      className={`block text-[14px] text-b3 font-medium leading-snug ${isLast ? 'cg-example-settle' : 'cg-example-rotate'}`}
+                    >
+                      {cur.hint}
+                    </span>
+                  </button>
+                );
+              })()}
+              {/* Textarea — empty placeholder so it doesn't compete with
+                  the rotating overlay above. Tall enough that long
+                  spotlight pitches fit without internal scroll. */}
               <textarea
                 ref={inputRef}
                 value={query}
@@ -652,9 +769,7 @@ export function HomeScreen() {
                     submitQuery();
                   }
                 }}
-                placeholder={intent === 'find'
-                  ? 'e.g. deep cleaning under $200 this tuesday'
-                  : 'e.g. Instagram pets Connector w/ 5K+ to spotlight my dog training program'}
+                placeholder=""
                 rows={intent === 'spotlight' ? 4 : 3}
                 style={{ minHeight: intent === 'spotlight' ? 96 : 72 }}
                 className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
@@ -679,86 +794,6 @@ export function HomeScreen() {
                       </button>
                     </div>
                   ))}
-                </div>
-              )}
-
-              {/* Location row INSIDE the box, sits just above the toolbar.
-                  Shown only when an address exists or the user is editing.
-                  Change is now placed directly after the address text and
-                  rendered in normal weight (no bold). */}
-              {(locationText || locEditing) && (
-                <div className="px-4 pb-1 flex items-center gap-1.5 text-[11px] text-b3">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                    <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-                    <circle cx="12" cy="9" r="2.5" />
-                  </svg>
-                  {locEditing ? (
-                    <div className="flex-1 flex items-center gap-2">
-                      <AddressAutocomplete
-                        value={locationText}
-                        onChange={setLocationText}
-                        onSelect={async ({ lat, lng, address, placeId }) => {
-                          setLocationText(address);
-                          setLocationCoords({ lat, lng });
-                          setLocEditing(false);
-                          try {
-                            localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ address, lat, lng, placeId }));
-                          } catch { /* ignore */ }
-                          if (auth?.isSignedIn) {
-                            const { error } = await saveAddress({
-                              label: 'Home',
-                              formattedAddress: address,
-                              lat, lng, placeId,
-                              makeDefault: true,
-                            });
-                            if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                            else       showToast('Saved as your default location ✓');
-                          } else {
-                            showToast('Saved on this device. Sign in to sync it.');
-                          }
-                        }}
-                        placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
-                        className=""
-                      />
-                      <button
-                        onClick={async () => {
-                          setLocEditing(false);
-                          if (auth?.isSignedIn && locationText) {
-                            const { error } = await saveAddress({
-                              label: 'Home',
-                              formattedAddress: locationText,
-                              lat: locationCoords?.lat ?? null,
-                              lng: locationCoords?.lng ?? null,
-                              makeDefault: true,
-                            });
-                            if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                            else       showToast('Saved as your default location ✓');
-                          } else if (locationText) {
-                            showToast('Saved on this device.');
-                          }
-                        }}
-                        className="text-[11px] font-normal text-g underline underline-offset-2"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  ) : (
-                    // Address text + Change link sit together as one phrase
-                    // (font-normal so neither competes with the input). The
-                    // outer container takes the rest of the row width but
-                    // they read as a single line "1145 Broadway · Change".
-                    <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug">
-                      <span>{locationText}</span>
-                      <button
-                        type="button"
-                        onClick={() => setLocEditing(true)}
-                        className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
-                      >
-                        Change
-                      </button>
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -853,21 +888,9 @@ export function HomeScreen() {
             </div>
           </div>
 
-          {/* Example chips — softer weight (font-normal) so they read as
-              gentle suggestions, not strong CTAs. */}
-          <div className="flex flex-wrap gap-1.5 px-5 mt-2 mb-4">
-            {(intent === 'find' ? FIND_EXAMPLES : SPOTLIGHT_EXAMPLES).map(e => (
-              <button
-                key={e.label}
-                onClick={() => onPillClick(e.task)}
-                className="bg-white border border-bdr rounded-pill px-2.5 py-1
-                           text-[11px] font-normal text-b2 cursor-pointer
-                           hover:border-g hover:text-gd transition-colors"
-              >
-                {e.label}
-              </button>
-            ))}
-          </div>
+          {/* Example pills removed — examples now rotate INSIDE the
+              search box as a toast-style overlay (see ROTATING_*_EXAMPLES
+              + the cg-example-rotate animation). */}
         </>
       )}
 
@@ -1032,12 +1055,7 @@ export function HomeScreen() {
         </>
       )}
 
-      {/* Invite + recommend = recurring income card. Replaces the
-          previous "Invite & earn" card with a story that frames the
-          three income streams (cash, free services, platform-growth
-          bonus) as the shared upside of helping friends. Softer green
-          palette — bg-gl + text-gd instead of solid bg-g/text-white —
-          so the card calms down visually. */}
+      {/* Find-side house ad — shared economics frame. Soft green wash. */}
       {intent === 'find' && !submitted && (
         <div className="px-5 mt-1 mb-6">
           <button
@@ -1059,6 +1077,36 @@ export function HomeScreen() {
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
                 Weekly cash, free services + a platform-growth bonus. Shared upside, every week.
+              </p>
+            </div>
+            <span className="text-gd text-lg flex-shrink-0">›</span>
+          </button>
+        </div>
+      )}
+
+      {/* Spotlight-side house ad — provider parallel to the find-side
+          card. Same soft-green palette + shared-economics framing,
+          but copy is provider-flavored: turn your social into a
+          referral network, earn cash + growth income. */}
+      {intent === 'spotlight' && !submitted && (
+        <div className="px-5 mt-1 mb-6">
+          <button
+            onClick={() => navigate('/find-friends')}
+            className="w-full bg-gl text-gd border border-g/25 rounded-[20px] p-4 flex items-center gap-3 text-left
+                       hover:bg-gl/80 active:scale-[.99] transition-all"
+          >
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-g/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-extrabold leading-tight">
+                Spotlight + invite = recurring income
+              </p>
+              <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
+                Turn customers into your referral network. Cash + platform growth income. Shared upside.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>

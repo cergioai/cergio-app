@@ -97,6 +97,29 @@ body {
   animation: cgFadeInSoft .45s ease-out both;
 }
 
+/* Example-overlay rotation — each example fades up into view, lingers,
+   then fades out. Duration matches the JS setInterval (6.75s — 50%
+   slower than before) so each idx change re-mounts the element and
+   replays this one-shot animation. */
+@keyframes cgExampleSwap {
+  0%   { opacity: 0; transform: translateY(4px); }
+  10%  { opacity: 1; transform: translateY(0); }
+  90%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+.cg-example-rotate {
+  animation: cgExampleSwap 6.75s ease-in-out both;
+}
+/* Final-frame variant — used on the LAST example after the rotation
+   has frozen. Fades in once and stays put (no fade-out tail). */
+@keyframes cgExampleSettle {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.cg-example-settle {
+  animation: cgExampleSettle .6s ease-out both;
+}
+
 /* ── Cergio leaf brand mark animation ────────────────────────────────
    The leaf logo sits inline next to the headline. When the engine is
    "thinking" (post-submit / chat parsing / engine running), it does a
