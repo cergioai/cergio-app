@@ -1073,10 +1073,10 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Help friends. Earn recurring income.
+                Invite · recommend · barter · earn
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Cash + free services + growth income. Human-powered AI for shared prosperity.
+                Cash + free services + growth income, while helping friends.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
@@ -1096,24 +1096,43 @@ export function HomeScreen() {
             className="w-full bg-gl text-gd border border-g/25 rounded-[20px] p-4 flex items-center gap-3 text-left
                        hover:bg-gl/80 active:scale-[.99] transition-all"
           >
+            {/* Earthy sprout — coin-sized seedling rising from a ground
+                line. Reads as "growth + earth + prosperity" without
+                competing with the brand leaf logo (which has splayed
+                top leaves). Simple two-tone fill. */}
             <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-g/20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
-                   strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                {/* ground */}
+                <path d="M4 20 H20" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
+                {/* stem */}
+                <path d="M12 20 V12" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
+                {/* left leaf */}
+                <path d="M12 16 C 8 16, 6 13, 6 10 C 9 11, 12 13, 12 16 Z" fill="#3D8B00" />
+                {/* right leaf */}
+                <path d="M12 13 C 16 13, 18 10, 18 7 C 15 8, 12 10, 12 13 Z" fill="#5BC404" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Turn clients + social into your referral network.
+                Spotlight · invite · barter · earn
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Cash + growth income. Human-powered AI for shared prosperity.
+                Cash + growth income. Turn clients + social into a referral network.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
           </button>
         </div>
       )}
+
+      {/* Footer tagline — pinned just above the BottomNav. Tiny,
+          centered, decoration-only (pointer-events-none) so it never
+          intercepts taps on the nav or sticky reply input. */}
+      <div className="fixed bottom-[64px] left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 z-40 pointer-events-none">
+        <p className="text-center text-[10px] text-b3 font-normal leading-snug">
+          Cergio · human-powered AI for shared prosperity
+        </p>
+      </div>
 
       {/* CC identity gate */}
       {showCcGate && (
