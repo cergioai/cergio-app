@@ -23,13 +23,14 @@ const FIND_EXAMPLES = [
   { label: 'Spanish-speaking sitter · Tue · $55', task: 'Need a babysitter who speaks Spanish Tuesday night under $55' },
   { label: 'Dog walker after 5pm · $40',         task: 'Need a dog walker after 5pm under $40' },
 ];
-// Spotlight examples — lead with the Connector ask so the provider-side
-// intent is obvious at a glance ("you're asking for an influencer").
-// Service comes after as the thing being spotlighted.
+// Spotlight examples — lead with "Instagram" so the social channel is
+// unmistakable, then the Connector niche + audience, then the service
+// being spotlighted. Providers shouldn't have to guess this is a
+// social-media post — it should pop the moment they read the pill.
 const SPOTLIGHT_EXAMPLES = [
-  { label: 'Pets Connector 5K+ · dog training',    task: 'Need a pets Connector w/ 5K+ followers to spotlight my new dog training program' },
-  { label: 'Fashion Connector 7K+ · private chef', task: 'Need a fashion Connector w/ 7K+ followers to spotlight my private chef service' },
-  { label: 'Fitness Connector 10K+ · yoga studio', task: 'Need a fitness Connector w/ 10K+ followers to spotlight my new yoga studio' },
+  { label: 'Instagram pets Connector 5K+ · dog training',    task: 'Need an Instagram pets Connector w/ 5K+ followers to spotlight my new dog training program' },
+  { label: 'Instagram fashion Connector 7K+ · private chef', task: 'Need an Instagram fashion Connector w/ 7K+ followers to spotlight my private chef service' },
+  { label: 'Instagram fitness Connector 10K+ · yoga studio', task: 'Need an Instagram fitness Connector w/ 10K+ followers to spotlight my new yoga studio' },
 ];
 
 // Engine plan — what the "backend" appears to be doing, in order. Each
@@ -395,7 +396,12 @@ export function HomeScreen() {
   const activeStage = plan[Math.min(planIdx, plan.length - 1)];
 
   return (
-    <div className="flex-1 overflow-y-auto pb-20 bg-cream">
+    // Outer container — flex column when submitted (Claude-style: history
+    // scrolls in the middle, reply input pinned at bottom). For the
+    // pre-submit landing state we keep the single-scroll layout.
+    <div className={submitted
+      ? 'flex-1 flex flex-col bg-cream pb-20 overflow-hidden min-h-0'
+      : 'flex-1 overflow-y-auto pb-20 bg-cream'}>
 
       {/* Header removed — profile is reachable via the bottom-nav Profile
           tab, so the top-right avatar was redundant. The Cergio brand mark
@@ -530,7 +536,7 @@ export function HomeScreen() {
                 }}
                 placeholder={intent === 'find'
                   ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
-                  : 'Need a pets Connector w/ 5K+ followers to spotlight my new dog training program (add pics)'}
+                  : 'Need an Instagram pets Connector w/ 5K+ followers to spotlight my new dog training program (add pics)'}
                 rows={2}
                 className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
                            text-[14px] text-black placeholder-b3 font-medium leading-snug"
@@ -666,83 +672,136 @@ export function HomeScreen() {
         </>
       )}
 
-      {/* ─── Post-submit: summary + engine + offers ──────────────────── */}
+      {/* ─── Post-submit: Claude-style three-region layout ────────────
+          - Summary card pinned just under the headline (flex-shrink-0)
+          - Middle (flex-1, overflow-y-auto): chat thread + engine ticker
+            + result CTAs. User scrolls up here to see earlier messages.
+          - Bottom (flex-shrink-0): reply input sticks above BottomNav
+            while chat is asking for missing fields. */}
       {submitted && (
-        <div className="px-5 py-2">
-          {/* Compact summary — profile-style typography (11px label /
-              13px value), side-aligned, no big takeover card. */}
-          <div className="bg-white border border-bdr rounded-[14px] px-3 py-2.5 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-[10px] bg-gl flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
-                   strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
-              </svg>
+        <>
+          {/* SUMMARY — sits at top of the post-submit area, doesn't scroll. */}
+          <div className="px-5 pt-2 pb-1 flex-shrink-0">
+            <div className="bg-white border border-bdr rounded-[14px] px-3 py-2.5 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-[10px] bg-gl flex items-center justify-center flex-shrink-0 mt-0.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
+                     strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-b3">Your request</p>
+                <p className="text-[13px] font-medium text-black leading-snug mt-0.5 break-words">
+                  {submittedText}
+                </p>
+                <p className="text-[11px] text-b3 mt-1 leading-snug truncate">
+                  {locationText ? `${locationText} · ` : ''}
+                  {freeServices ? 'Free for Connectors' : 'Pay full price'}
+                </p>
+              </div>
+              <button
+                onClick={() => resetSubmit({ keepQuery: true })}
+                className="text-[11px] font-medium text-g underline underline-offset-2 flex-shrink-0 mt-0.5"
+              >
+                Edit
+              </button>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-b3">Your request</p>
-              <p className="text-[13px] font-extrabold text-black leading-snug mt-0.5 break-words">
-                {submittedText}
-              </p>
-              <p className="text-[11px] text-b3 mt-1 leading-snug truncate">
-                {locationText ? `${locationText} · ` : ''}
-                {freeServices ? 'Free for Connectors' : 'Pay full price'}
-              </p>
-            </div>
-            <button
-              onClick={() => resetSubmit({ keepQuery: true })}
-              className="text-[11px] font-extrabold text-g underline underline-offset-2 flex-shrink-0 mt-0.5"
-            >
-              Edit
-            </button>
           </div>
 
-          {/* Inline mini-chat — while chat.phase === 'chat', Cergio asks
-              for missing mandatory fields (what / when / where) one at a
-              time. Bubbles render compactly so the thread doesn't take
-              over the screen. Disappears once phase flips to 'ready'. */}
-          {chat?.phase === 'chat' && (
-            <>
+          {/* MIDDLE — scrollable history. Chat bubbles + engine ticker
+              + result CTAs all live here. User can scroll up at any
+              time to read earlier messages (Claude pattern). */}
+          <div
+            ref={threadRef}
+            className="flex-1 overflow-y-auto px-5 pt-2 pb-3 flex flex-col gap-1.5 min-h-0"
+          >
+            {/* Chat messages (visible in both 'chat' and 'ready' phases —
+                we don't hide history just because the engine started). */}
+            {(chat?.messages || []).map(m => (
               <div
-                ref={threadRef}
-                className="mt-3 max-h-[180px] overflow-y-auto flex flex-col gap-1.5"
+                key={m.id}
+                className={m.role === 'user'
+                  ? 'self-end max-w-[80%] bg-gl text-black rounded-[14px] rounded-br-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug'
+                  : 'self-start max-w-[85%] bg-white border border-bdr text-black rounded-[14px] rounded-bl-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug whitespace-pre-line'}
               >
-                {(chat?.messages || []).map(m => (
-                  <div
-                    key={m.id}
-                    className={m.role === 'user'
-                      ? 'self-end max-w-[80%] bg-gl text-black rounded-[14px] rounded-br-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug'
-                      : 'self-start max-w-[85%] bg-white border border-bdr text-black rounded-[14px] rounded-bl-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug whitespace-pre-line'}
-                  >
-                    {m.text}
-                  </div>
-                ))}
-                {chat?.typing && (
-                  <div className="self-start bg-white border border-bdr rounded-[14px] rounded-bl-[4px] px-3 py-1.5 flex items-center gap-1">
-                    <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" />
-                    <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" style={{ animationDelay: '120ms' }} />
-                    <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" style={{ animationDelay: '240ms' }} />
-                  </div>
+                {m.text}
+              </div>
+            ))}
+            {chat?.typing && (
+              <div className="self-start bg-white border border-bdr rounded-[14px] rounded-bl-[4px] px-3 py-1.5 flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" />
+                <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" style={{ animationDelay: '120ms' }} />
+                <span className="w-1 h-1 rounded-full bg-b3 animate-pulse" style={{ animationDelay: '240ms' }} />
+              </div>
+            )}
+
+            {/* Engine ticker — appears once chat reaches 'ready'. Leaf
+                rotates while searching, goes still at planDone. */}
+            {chat?.phase === 'ready' && (
+              <div className="mt-2 px-1 self-start" aria-live="polite">
+                <div className="flex items-center gap-2">
+                  <LeafLogo working={engineSearching} size={16} />
+                  <p className="text-[13px] text-gd font-medium leading-snug">
+                    {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
+                  </p>
+                </div>
+                {!planDone && activeStage?.detail && (
+                  <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug">
+                    {activeStage.detail}
+                  </p>
                 )}
               </div>
+            )}
 
-              {/* Quick-reply chips from the bot (e.g. "any evening", "tomorrow"). */}
+            {/* Result CTAs once the engine settles. */}
+            {planDone && (
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  onClick={() => navigate('/inbox')}
+                  className="w-full bg-g text-white rounded-[14px] px-4 py-3 flex items-center justify-between text-left
+                             hover:opacity-95 active:scale-[.99] transition-all"
+                >
+                  <div>
+                    <p className="text-[13px] font-extrabold leading-tight">Go to inbox</p>
+                    <p className="text-[11px] text-white/85 mt-0.5 font-medium">
+                      Offers land there. We'll text + email you when they come in.
+                    </p>
+                  </div>
+                  <span className="text-white text-lg flex-shrink-0">›</span>
+                </button>
+                <button
+                  onClick={resetSubmit}
+                  className="w-full bg-white border border-bdr rounded-[14px] px-4 py-2.5
+                             text-[12px] font-medium text-b2 hover:border-g/40 transition-colors"
+                >
+                  Send another request
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* STICKY BOTTOM — reply input pinned above the BottomNav while
+              chat is asking follow-on questions. Disappears once the
+              engine takes over so the result CTAs in the middle aren't
+              competing with another input. */}
+          {chat?.phase === 'chat' && (
+            <div className="flex-shrink-0 px-5 pt-1 pb-2 bg-cream">
+              {/* Quick-reply chips */}
               {(chat?.quickReplies?.length || 0) > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mb-2 flex flex-wrap gap-1.5">
                   {chat.quickReplies.map(q => (
                     <button
                       key={q}
                       onClick={() => { setReply(''); chat?.send?.(q); }}
                       className="bg-white border border-bdr rounded-pill px-2.5 py-1
-                                 text-[11px] font-bold text-b2 hover:border-g hover:text-gd transition-colors"
+                                 text-[11px] font-normal text-b2 hover:border-g hover:text-gd transition-colors"
                     >
                       {q}
                     </button>
                   ))}
                 </div>
               )}
-
-              {/* Reply input — single-line, sits at the bottom of the thread. */}
-              <div className="mt-2 flex items-center gap-2 bg-white border border-bdr rounded-pill px-3 py-1.5
+              <div className="flex items-center gap-2 bg-white border border-bdr rounded-pill px-3 py-1.5
                               focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA] transition-all">
                 <input
                   ref={replyRef}
@@ -768,57 +827,9 @@ export function HomeScreen() {
                   <SendArrowIcon />
                 </button>
               </div>
-            </>
-          )}
-
-          {/* Live engine ticker — fires once chat reaches 'ready'.
-              Leaf logo sits inline with the status line and rotates while
-              the engine is searching. When results settle it goes still.
-              Text is slim (font-medium). */}
-          {chat?.phase === 'ready' && (
-            <div className="mt-3 px-1" aria-live="polite">
-              <div className="flex items-center gap-2">
-                <LeafLogo working={engineSearching} size={16} />
-                <p className="text-[13px] text-gd font-medium leading-snug truncate">
-                  {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
-                </p>
-              </div>
-              {!planDone && activeStage?.detail && (
-                <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug truncate">
-                  {activeStage.detail}
-                </p>
-              )}
             </div>
           )}
-
-          {/* Inline result CTA — once the engine settles, surface a
-              tappable row pointing at Inbox where the actual offers
-              will land. Keeps the user on Home; the route is opt-in. */}
-          {planDone && (
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                onClick={() => navigate('/inbox')}
-                className="w-full bg-g text-white rounded-[14px] px-4 py-3 flex items-center justify-between text-left
-                           hover:opacity-95 active:scale-[.99] transition-all"
-              >
-                <div>
-                  <p className="text-[13px] font-extrabold leading-tight">Go to inbox</p>
-                  <p className="text-[11px] text-white/85 mt-0.5 font-medium">
-                    Offers land there. We'll text + email you when they come in.
-                  </p>
-                </div>
-                <span className="text-white text-lg flex-shrink-0">›</span>
-              </button>
-              <button
-                onClick={resetSubmit}
-                className="w-full bg-white border border-bdr rounded-[14px] px-4 py-2.5
-                           text-[12px] font-extrabold text-b2 hover:border-g/40 transition-colors"
-              >
-                Send another request
-              </button>
-            </div>
-          )}
-        </div>
+        </>
       )}
 
       {/* Invite & earn ad — hidden once submitted, so the engine state
