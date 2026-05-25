@@ -111,7 +111,22 @@ const MONTHS = [
   'september', 'october', 'november', 'december',
 ];
 const MONTH_RE  = new RegExp(`\\b(${MONTHS.join('|')})\\b[a-z0-9 ,/.\\-:]*`, 'i');
-const DAY_RE    = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|weekend|next week|this week)\b[^,.]*/i;
+
+// Day names — accept plural ("tuesdays") and optional "every" prefix
+// ("every tuesday"). Previously the \b before the day name + \b after
+// rejected "tuesdays" entirely, causing the bot to ignore the user's reply.
+const DAY_NAMES   = '(monday|tuesday|wednesday|thursday|friday|saturday|sunday)';
+const DAY_RE      = new RegExp(`\\b(every\\s+)?${DAY_NAMES}s?\\b[^,.]*`, 'i');
+const QUICK_WHEN  = /\b(today|tomorrow|tonight|this\s+(?:weekend|week|month)|next\s+(?:weekend|week|month))\b[^,.]*/i;
+
+// Time-of-day windows in plain English.
+const TIME_OF_DAY_RE = /\b(morning|afternoon|evening|night|midday|noon|midnight)\b/i;
+
+// Time ranges: "3-5pm", "3 to 5pm", "3:30-5:00pm", "from 3 to 5pm".
+const TIME_RANGE_RE  = /\b(?:from\s+)?(\d{1,2})(?::\d{2})?\s*(?:am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::\d{2})?\s*(am|pm)\b/i;
+
+// Single specific time: "3pm", "11:30am".
+const SINGLE_TIME_RE = /\b(\d{1,2})(?::\d{2})?\s*(am|pm)\b/i;
 
 function naiveParse(text, state = {}) {
   const l = text.toLowerCase();
@@ -128,13 +143,29 @@ function naiveParse(text, state = {}) {
     what = bestKey ? bestKey[1] : null;
   }
 
-  // When: months OR day-words. Months catch "jan wedding", "start nov".
+  // When: build it from any of the strongest signals we can find. We
+  // prefer the richer string (e.g. "tuesdays 3-5pm") over a bare day name.
+  // Previously this was a single .match() that missed plural days and
+  // time ranges, so the chat would ask "When?" over and over.
   let when = state.when;
   if (!when) {
-    const mMatch = text.match(MONTH_RE);
-    const dMatch = text.match(DAY_RE);
-    when = (mMatch?.[0] || dMatch?.[0] || null);
-    if (when) when = when.trim();
+    const day        = text.match(DAY_RE);          // tuesday(s), every monday
+    const quick      = text.match(QUICK_WHEN);      // today / tomorrow / this weekend
+    const month      = text.match(MONTH_RE);        // jan 14
+    const timeRange  = text.match(TIME_RANGE_RE);   // 3-5pm
+    const singleTime = text.match(SINGLE_TIME_RE);  // 3pm
+    const tod        = text.match(TIME_OF_DAY_RE);  // evening / morning
+
+    const parts = [];
+    if (day)        parts.push(day[0]);
+    else if (quick) parts.push(quick[0]);
+    else if (month) parts.push(month[0]);
+
+    if (timeRange)        parts.push(timeRange[0]);
+    else if (singleTime)  parts.push(singleTime[0]);
+    else if (tod)         parts.push(tod[0]);
+
+    if (parts.length) when = parts.join(' ').replace(/\s+/g, ' ').trim();
   }
 
   // Budget: $200, 200 dollars, max 200

@@ -188,33 +188,13 @@ export function HomeScreen() {
   const [travelRadius, setTravelRadius] = useState('10mi');
 
   useEffect(() => {
-    // Signed-in: hydrate from Supabase default. If none, fall back to any
-    // localStorage guest value the user had set pre-signin (we'll then
-    // promote it to a real saved default on next pick).
-    if (auth?.isSignedIn) {
-      getDefaultAddress().then(({ data }) => {
-        if (data?.formatted_address) {
-          setLocationText(data.formatted_address);
-          if (data.lat != null && data.lng != null) {
-            setLocationCoords({ lat: data.lat, lng: data.lng });
-          }
-          return;
-        }
-        // No server default — try guest cache.
-        try {
-          const raw = localStorage.getItem(GUEST_ADDR_KEY);
-          if (raw) {
-            const g = JSON.parse(raw);
-            if (g?.address) {
-              setLocationText(g.address);
-              if (g.lat != null && g.lng != null) setLocationCoords({ lat: g.lat, lng: g.lng });
-            }
-          }
-        } catch { /* ignore */ }
-      });
-      return;
-    }
-    // Signed-out: just guest cache.
+    // Hydrate strategy — show *something* as fast as possible so the
+    // address chip is always populated for returning users:
+    //   1. Read the localStorage cache synchronously (works for guest
+    //      AND signed-in users). This paints the chip immediately on
+    //      page load even before Supabase responds.
+    //   2. Then, if signed in, fetch the canonical Supabase default.
+    //      That overwrites the local cache if they differ.
     try {
       const raw = localStorage.getItem(GUEST_ADDR_KEY);
       if (raw) {
@@ -225,6 +205,26 @@ export function HomeScreen() {
         }
       }
     } catch { /* ignore */ }
+
+    if (!auth?.isSignedIn) return;
+    getDefaultAddress().then(({ data }) => {
+      if (data?.formatted_address) {
+        setLocationText(data.formatted_address);
+        if (data.lat != null && data.lng != null) {
+          setLocationCoords({ lat: data.lat, lng: data.lng });
+        }
+        // Mirror to localStorage so the next load paints instantly even
+        // before the Supabase round-trip returns.
+        try {
+          localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+            address: data.formatted_address,
+            lat:     data.lat ?? null,
+            lng:     data.lng ?? null,
+            placeId: data.place_id ?? null,
+          }));
+        } catch { /* ignore */ }
+      }
+    });
   }, [auth?.isSignedIn]);
 
   useEffect(() => {
@@ -406,7 +406,11 @@ export function HomeScreen() {
           thinking (Claude-style). Greeting is personalized for signed-in
           users using their display name. */}
       <div className="px-5 pt-5 pb-0.5 flex items-start gap-2.5">
-        <LeafLogo working={engineSearching} size={22} />
+        {/* Headline leaf — only shown before the user fires a search.
+            Once submitted, the leaf "moves down" and lives next to the
+            streaming notification so motion happens at the work site,
+            not next to the greeting. */}
+        {!submitted && <LeafLogo working={false} size={22} />}
         <h1 className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight">
           {(() => {
             const display = auth?.user?.user_metadata?.display_name || '';
@@ -768,21 +772,19 @@ export function HomeScreen() {
           )}
 
           {/* Live engine ticker — fires once chat reaches 'ready'.
-              When results have settled, the leaf logo slides in next to
-              the line so the brand mark visually accompanies the outcome.
-              Text is slim (font-medium) — not the bold status of before. */}
+              Leaf logo sits inline with the status line and rotates while
+              the engine is searching. When results settle it goes still.
+              Text is slim (font-medium). */}
           {chat?.phase === 'ready' && (
             <div className="mt-3 px-1" aria-live="polite">
               <div className="flex items-center gap-2">
-                {planDone
-                  ? <LeafLogo working={false} size={16} />
-                  : <span className="w-1.5 h-1.5 rounded-full bg-g animate-pulse flex-shrink-0" />}
+                <LeafLogo working={engineSearching} size={16} />
                 <p className="text-[13px] text-gd font-medium leading-snug truncate">
                   {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
                 </p>
               </div>
               {!planDone && activeStage?.detail && (
-                <p className="ml-3.5 mt-1 text-[11px] text-b3 font-normal leading-snug truncate">
+                <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug truncate">
                   {activeStage.detail}
                 </p>
               )}
