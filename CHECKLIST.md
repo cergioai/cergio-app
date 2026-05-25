@@ -66,6 +66,22 @@ touching one of these areas.
       actually searching — not during chat ask phase, not after
       results land.
 
+## 6. List-service flow
+
+- [ ] **Next** on `ServiceListAboutScreen` ALWAYS advances, even when
+      the geocode or taxonomy resolver hangs. Each external call is
+      raced against a 2s timeout; whatever resolves first wins.
+      _Guard: ServiceListAboutScreen.jsx onNext._
+
+- [ ] Service-type quick-suggest chips below the field are
+      **provider-type level only** (Plumber / Cleaner / Driver / …),
+      never specific offering names (no "Drain unclogging" chips).
+
+- [ ] Address field uses `AddressAutocomplete` (Google Places when
+      `VITE_GOOGLE_MAPS_KEY` is set, degrades to a plain text input
+      otherwise). The form must still submit cleanly when the key is
+      missing.
+
 ## 5. Home polish (cosmetic regressions to watch)
 
 - [ ] "Hi, I'm Cergio" toast plays **once per session**

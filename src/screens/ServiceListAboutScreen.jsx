@@ -8,6 +8,16 @@ import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 // saved on submit so we can route notifications to matching providers
 // and surface this listing in the right consumer searches).
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
+
+// Broad provider-type quick-suggest chips. CERGIO-GUARD: these are
+// PROVIDER_TYPE level only (Driver / Plumber / Cleaner …), never
+// specific offerings like "Drain unclogging". Used as fast-fill chips
+// beneath the Service Type field. See CHECKLIST §2.
+const SERVICE_TYPE_CHIPS = [
+  'Plumber', 'Cleaner', 'Driver', 'Sitter',
+  'Tutor', 'Personal Trainer', 'Handyman', 'Mover',
+  'Chef', 'Dog walker', 'Photographer', 'Stylist',
+];
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
 import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
 import { getMyInstagram, saveInstagram, getMyTikTok, saveTikTok } from '../lib/api';
@@ -71,11 +81,25 @@ export function ServiceListAboutScreen() {
       <div className="bg-cr rounded-t-[28px] -mt-7 px-7 pt-7 flex-1 pb-32 overflow-y-auto">
         <Field label="Service type" placeholder="e.g. Plumber, Cleaning, Dog walker"
                value={serviceType} onChange={v => { setServiceType(v); setOverrideTaxonomy(false); }} />
-        {/* Taxonomy match badge intentionally hidden. We still call
-            useTaxonomyResolve in the background so taxo.provider_type /
-            offering_id is captured on submit — but providers no longer
-            see "We matched you to Drain unclogging" or similar
-            suggestions. Their typed service stays the headline. */}
+        {/* Broad provider-type chips — tap to fast-fill. These are
+            high-level categories only (CERGIO-GUARD: never offering
+            names). Hide once the field has typed content so they
+            don't compete with the input. */}
+        {!serviceType.trim() && (
+          <div className="mt-2 -mt-4 mb-2 flex flex-wrap gap-1.5">
+            {SERVICE_TYPE_CHIPS.map(chip => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => { setServiceType(chip); setOverrideTaxonomy(false); }}
+                className="bg-white border border-bdr rounded-pill px-2.5 py-1
+                           text-[11px] font-normal text-b2 hover:border-g hover:text-gd transition-colors"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="mb-6 mt-6">
           <label className="block text-[18px] font-extrabold text-black mb-2.5">Service location</label>
           <AddressAutocomplete
@@ -217,39 +241,54 @@ export function ServiceListAboutScreen() {
       <RegFooter
         progress={0.1}
         onNext={async () => {
-          resetListingDraft();
-          // If the user just typed an address without picking from autocomplete,
-          // try a one-shot geocode so we still capture lat/lng. Wrapped in
-          // try/catch so a Google Maps failure (bad key, blocked referrer,
-          // offline) doesn't kill the form — proximity ranking just degrades
-          // to recency-ordered until the next time we capture coords.
-          let lat = coords?.lat ?? null;
-          let lng = coords?.lng ?? null;
-          if (!lat && location.trim()) {
-            try {
-              const { geocodeAddress } = await import('../lib/google');
-              const g = await geocodeAddress(location);
-              if (g) { lat = g.lat; lng = g.lng; }
-            } catch (e) {
-              // eslint-disable-next-line no-console
-              console.warn('[list-service] geocode failed; saving without coords', e);
+          // CERGIO-GUARD: Next MUST always advance even if geocode or
+          // resolveNow stalls. Each external call is wrapped with a
+          // 2s race; whatever resolves first wins, and the provider
+          // moves forward either way. See CHECKLIST.md §6.
+          try {
+            resetListingDraft();
+            let lat = coords?.lat ?? null;
+            let lng = coords?.lng ?? null;
+            if (!lat && location.trim()) {
+              try {
+                const { geocodeAddress } = await import('../lib/google');
+                const g = await Promise.race([
+                  geocodeAddress(location),
+                  new Promise(res => setTimeout(() => res(null), 2000)),
+                ]);
+                if (g) { lat = g.lat; lng = g.lng; }
+              } catch (e) {
+                // eslint-disable-next-line no-console
+                console.warn('[list-service] geocode failed; saving without coords', e);
+              }
             }
+
+            // Resolve taxonomy with a hard 2s timeout. Stale or hanging
+            // edge functions can no longer block the user from advancing.
+            let taxo = result;
+            if (!taxo) {
+              try {
+                taxo = await Promise.race([
+                  resolveNow(),
+                  new Promise(res => setTimeout(() => res(null), 2000)),
+                ]);
+              } catch (_e) { taxo = null; }
+            }
+            const useTaxo = !overrideTaxonomy && taxo?.ok;
+
+            updateListingDraft({
+              category:    serviceType.trim(),
+              location:    location.trim(),
+              description: headline.trim(),
+              lat, lng,
+              taxonomy_category:      useTaxo ? (taxo.category || null) : null,
+              taxonomy_provider_type: useTaxo ? (taxo.provider_type || null) : null,
+              taxonomy_offering_id:   useTaxo ? (taxo.offering_id || null) : null,
+            });
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn('[list-service] onNext error, advancing anyway', e);
           }
-
-          // Make sure we have a resolver result before saving. The debounce
-          // may not have fired yet if the user submitted quickly.
-          const taxo = result ?? await resolveNow();
-          const useTaxo = !overrideTaxonomy && taxo?.ok;
-
-          updateListingDraft({
-            category:    serviceType.trim(),
-            location:    location.trim(),
-            description: headline.trim(),
-            lat, lng,
-            taxonomy_category:      useTaxo ? (taxo.category || null) : null,
-            taxonomy_provider_type: useTaxo ? (taxo.provider_type || null) : null,
-            taxonomy_offering_id:   useTaxo ? (taxo.offering_id || null) : null,
-          });
           navigate('/list-service/hourly-or-session');
         }}
         nextEnabled={valid}
