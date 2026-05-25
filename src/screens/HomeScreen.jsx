@@ -1000,17 +1000,21 @@ export function HomeScreen() {
         </>
       )}
 
-      {/* Invite & earn ad — hidden once submitted, so the engine state
-          is the focus. */}
+      {/* Invite + recommend = recurring income card. Replaces the
+          previous "Invite & earn" card with a story that frames the
+          three income streams (cash, free services, platform-growth
+          bonus) as the shared upside of helping friends. Softer green
+          palette — bg-gl + text-gd instead of solid bg-g/text-white —
+          so the card calms down visually. */}
       {intent === 'find' && !submitted && (
         <div className="px-5 mt-1 mb-6">
           <button
             onClick={() => navigate('/find-friends')}
-            className="w-full bg-g text-white rounded-[20px] p-4 flex items-center gap-3 text-left
-                       hover:opacity-95 active:scale-[.99] transition-all shadow-card"
+            className="w-full bg-gl text-gd border border-g/25 rounded-[20px] p-4 flex items-center gap-3 text-left
+                       hover:bg-gl/80 active:scale-[.99] transition-all"
           >
-            <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-g/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
                    strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
@@ -1019,13 +1023,13 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Invite & earn — ${REWARDS.perFriend}/friend
+                Invite + recommend = recurring income
               </p>
-              <p className="text-[11px] text-white/85 mt-0.5 leading-snug font-medium">
-                10 friends in a month → Connector status, free services.
+              <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
+                Weekly cash, free services + a platform-growth bonus. Shared upside, every week.
               </p>
             </div>
-            <span className="text-white text-lg flex-shrink-0">›</span>
+            <span className="text-gd text-lg flex-shrink-0">›</span>
           </button>
         </div>
       )}
