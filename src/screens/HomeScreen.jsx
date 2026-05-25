@@ -3,7 +3,8 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
 import { CATEGORIES, FEED } from '../data/mock';
 import { CcGateModal } from '../components/ui/CcGateModal';
-import { getMyCcStatus } from '../lib/api';
+import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
+import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 
 const BUNDLES = [
   { icon: '💍', label: 'Plan my wedding', task: 'Plan my wedding' },
@@ -44,6 +45,14 @@ export function HomeScreen() {
   const [modeOpen, setModeOpen] = useState(false);   // Free vs Pay popover
   const [showCcGate, setShowCcGate] = useState(false);
   const [ccVerified, setCcVerified] = useState(false);
+  // Search intent — 'find' (default; user is looking for a service) vs
+  // 'spotlight' (user is a Provider; they want a Connector to spotlight
+  // THEIR service in exchange for a free job). The toggle UNDER the search
+  // box flips the placeholder + submit destination without changing layout.
+  // Per Tarik: if user has no service listed yet, route through /list-service
+  // first so they have something to spotlight.
+  const [intent, setIntent] = useState('find');
+  const [hasService, setHasService] = useState(null); // null=unknown, true/false once loaded
   const inputRef = useRef(null);
   const fileRef = useRef(null);
   const modeBtnRef = useRef(null);
@@ -52,6 +61,31 @@ export function HomeScreen() {
   useEffect(() => {
     if (!auth?.isSignedIn) { setCcVerified(false); return; }
     getMyCcStatus().then(({ data }) => setCcVerified(!!data?.cc_verified_at));
+  }, [auth?.isSignedIn]);
+
+  // Detect if the signed-in user already has at least one listed service —
+  // determines where the spotlight-intent send-arrow routes.
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setHasService(null); return; }
+    listMyServices().then(({ data }) => setHasService((data || []).length > 0));
+  }, [auth?.isSignedIn]);
+
+  // Location — prefilled from the user's saved default address. Editing
+  // expands an AddressAutocomplete; picking a Place auto-saves it as the
+  // new default so future visits land on it.
+  const [locationText, setLocationText] = useState('');
+  const [locationCoords, setLocationCoords] = useState(null);
+  const [locEditing, setLocEditing] = useState(false);
+  useEffect(() => {
+    if (!auth?.isSignedIn) return;
+    getDefaultAddress().then(({ data }) => {
+      if (data?.formatted_address) {
+        setLocationText(data.formatted_address);
+        if (data.lat != null && data.lng != null) {
+          setLocationCoords({ lat: data.lat, lng: data.lng });
+        }
+      }
+    });
   }, [auth?.isSignedIn]);
 
   // Close mode popover on outside click.
@@ -66,11 +100,30 @@ export function HomeScreen() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [modeOpen]);
 
-  // Submit the home-bar query: route to /intake with the typed text as the
-  // chat's first user message. useChat will parse it (service + when + where +
-  // budget) and skip ahead to whatever's still missing. If images are
-  // attached, gate behind the credit-card identity check (anti-abuse).
+  // Submit the home-bar query — branches on `intent`:
+  //   - 'find' (default): route to /intake with the typed text as the chat's
+  //     first user message. useChat parses it (service + when + where + budget)
+  //     and skips ahead to whatever's missing. Images gate behind CC.
+  //   - 'spotlight': user is offering a service to Connectors.
+  //       • not signed in → /auth
+  //       • signed in, no service listed → /list-service (with a toast)
+  //       • signed in, has service(s) → /connectors/browse with the typed
+  //         pitch in state so the next screen can pre-populate the request.
+  const submitSpotlight = () => {
+    if (!auth?.isSignedIn) {
+      showToast('Sign in to send a spotlight request');
+      navigate('/auth');
+      return;
+    }
+    if (hasService === false) {
+      showToast("First list your service — we'll bring you right back.");
+      navigate('/list-service');
+      return;
+    }
+    navigate('/connectors/browse', { state: { pitch: query.trim() } });
+  };
   const submitQuery = () => {
+    if (intent === 'spotlight') { submitSpotlight(); return; }
     // Anti-abuse gate: photo uploads require CC verification (SetupIntent).
     // Signed-out users get redirected to /auth — can't verify without a profile.
     if (images.length > 0 && !ccVerified) {
@@ -84,11 +137,17 @@ export function HomeScreen() {
     }
     const text = query.trim();
     if (!text && images.length === 0) {
-      navigate('/intake');
+      navigate('/intake', { state: { initialLocation: locationText, initialCoords: locationCoords } });
       return;
     }
     // TODO: pass images through to /intake once chat supports attachments.
-    navigate('/intake', { state: { initialMessage: text } });
+    navigate('/intake', {
+      state: {
+        initialMessage:  text,
+        initialLocation: locationText,
+        initialCoords:   locationCoords,
+      },
+    });
   };
 
   // Image attach handler — read selected files as data URLs so we can
@@ -126,11 +185,67 @@ export function HomeScreen() {
         </button>
       </div>
 
-      {/* greeting */}
+      {/* greeting — Profile is the canon (30px h1). Headline doubles as
+          guidance; subtitle (15px b3 medium) mirrors Profile's row-subtitle
+          treatment so the whole app reads as one type system. */}
       <div className="px-5 pt-4 pb-1">
-        <h1 className="text-[22px] font-extrabold text-black leading-tight">
-          Hi there 👋<br />What do you <span className="text-g">need today?</span>
+        <h1 className="text-[30px] font-extrabold text-black leading-tight">
+          {intent === 'find'
+            ? <>What do you <span className="text-g">need done?</span></>
+            : <>Get a <span className="text-g">Connector spotlight</span></>}
         </h1>
+        <p className="text-[15px] text-b3 leading-snug mt-1.5 font-medium">
+          {intent === 'find'
+            ? "Tell me what you need — I'll find someone trusted by friends-of-friends."
+            : "Describe your service + audience target. We'll match you with Connectors."}
+        </p>
+      </div>
+
+      {/* Location chip — shows the user's default address (from user_addresses
+          table). Tap "Change" to swap, which opens Google Places autocomplete
+          inline and auto-saves the pick as the new default. */}
+      <div className="px-5 mt-1 mb-2 flex items-center gap-2 text-[12px] text-b3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+          <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+          <circle cx="12" cy="9" r="2.5" />
+        </svg>
+        {locEditing ? (
+          <div className="flex-1 flex items-center gap-2">
+            <AddressAutocomplete
+              value={locationText}
+              onChange={setLocationText}
+              onSelect={async ({ lat, lng, address }) => {
+                setLocationText(address);
+                setLocationCoords({ lat, lng });
+                setLocEditing(false);
+                // Auto-save as default for next visit. Best-effort.
+                if (auth?.isSignedIn) {
+                  await saveAddress({
+                    label: 'Home',
+                    formattedAddress: address,
+                    lat, lng,
+                    makeDefault: true,
+                  }).catch(() => {});
+                }
+              }}
+              placeholder="Add your address"
+              className=""
+            />
+            <button onClick={() => setLocEditing(false)}
+              className="text-[12px] font-extrabold text-b3">Cancel</button>
+          </div>
+        ) : (
+          <>
+            <span className="flex-1 truncate font-bold text-b2">
+              {locationText || 'Add your address'}
+            </span>
+            <button onClick={() => setLocEditing(true)}
+              className="text-[12px] font-extrabold text-g underline underline-offset-2">
+              {locationText ? 'Change' : 'Set'}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Claude-style submit box — single rounded container with the input
@@ -155,7 +270,9 @@ export function HomeScreen() {
                 submitQuery();
               }
             }}
-            placeholder="Tell me what you need…  e.g. deep clean Mon 2pm, flexible, max $200"
+            placeholder={intent === 'find'
+              ? 'Tell me what you need…  e.g. deep clean Mon 2pm, flexible, max $200'
+              : "Describe your service + ideal audience… e.g. yoga studio in Brooklyn, want a fitness Connector w/ 10K+"}
             rows={2}
             className="w-full bg-transparent outline-none resize-none px-5 pt-4 pb-2
                        text-[15px] text-black placeholder-b3 font-medium leading-snug"
@@ -188,8 +305,13 @@ export function HomeScreen() {
               with the input but visible enough to teach the "dump it all in
               one go" pattern. */}
           <p className="px-5 pb-1 text-[11px] text-b3 leading-snug">
-            Mention <span className="font-bold text-b2">what · when · where · budget</span>{' '}
-            — I'll only ask about what's missing.
+            {intent === 'find' ? (
+              <>Tip — say it like a friend would:{' '}
+                <span className="font-bold text-b2">"deep clean Mon 2pm, max $200"</span>.</>
+            ) : (
+              <>Tip — be specific about audience:{' '}
+                <span className="font-bold text-b2">"foodie Connector, NYC, 5K+ followers"</span>.</>
+            )}
           </p>
 
           {/* row 2: chip toolbar — + attach, mode dropdown, then send arrow. */}
@@ -219,9 +341,10 @@ export function HomeScreen() {
               </svg>
             </button>
 
-            {/* Mode dropdown — replaces the on/off toggle. Single pill shows
-                the current mode + ▾; tapping opens a small popover with
-                both options. Mirrors Claude's model-selector pattern. */}
+            {/* Mode dropdown — Free vs Pay only makes sense in the FIND
+                direction. In spotlight intent the user IS the provider, so
+                we hide the picker to keep the toolbar uncluttered. */}
+            {intent === 'find' && (
             <div ref={modeBtnRef} className="relative">
               <button
                 type="button"
@@ -256,13 +379,14 @@ export function HomeScreen() {
                 </div>
               )}
             </div>
+            )}
 
             <button
               type="button"
               onClick={() => navigate('/rainmakers')}
               className="text-[11px] font-bold text-b3 underline underline-offset-2 hover:text-g transition-colors"
             >
-              Learn how
+              {intent === 'find' ? 'Learn how' : 'Connector FAQ'}
             </button>
             <div className="flex-1" />
             {/* Send — green circle with up arrow (small cute), matches Claude */}
@@ -280,33 +404,44 @@ export function HomeScreen() {
             </button>
           </div>
         </div>
-        {/* Service-side entry: a separate compact CTA for providers who want
-            a Connector to spotlight their service (the reverse direction of
-            the main flow). Routes to the placeholder marketplace stub. */}
+        {/* Intent toggle — flips the search box from "I need a service"
+            (default) to "I offer a service and want a Connector to spotlight
+            it". Stays compact + adjacent to the box so it reads as a mode
+            switch, not a separate CTA. Replaces the old standalone "Have a
+            service?" card per design direction. */}
         <button
           type="button"
-          onClick={() => navigate('/connectors/browse')}
-          className="w-full mt-3 bg-white border border-bdr rounded-[16px] px-4 py-3
-                     flex items-center gap-3 text-left hover:border-g/40 transition-colors"
+          onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
+          className={`w-full mt-3 rounded-[16px] px-4 py-3 flex items-center gap-3 text-left
+                      transition-colors border
+                      ${intent === 'spotlight'
+                        ? 'bg-gl border-g/40'
+                        : 'bg-white border-bdr hover:border-g/40'}`}
+          aria-pressed={intent === 'spotlight'}
         >
-          <div className="w-9 h-9 rounded-full bg-gl flex items-center justify-center flex-shrink-0">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0
+                          ${intent === 'spotlight' ? 'bg-g' : 'bg-gl'}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                 stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                 stroke={intent === 'spotlight' ? 'white' : '#3D8B00'}
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-[14px] font-extrabold text-black leading-tight">
-              Have a service? Ask a Connector to spotlight it
+              Have a service? Offer it free for a spotlight
             </p>
             <p className="text-[12px] text-b3 mt-0.5 leading-snug">
-              Browse Connectors by audience size + rate. Negotiate below the rate card.
+              {intent === 'spotlight'
+                ? "On ✓ — describe what you offer + your ideal Connector above."
+                : 'Trade a free job for an Instagram or TikTok post by an influencer.'}
             </p>
           </div>
-          <svg width="9" height="14" viewBox="0 0 11 18" fill="none" className="flex-shrink-0">
-            <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor"
-                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="text-black/60" />
-          </svg>
+          {/* Small toggle pill — visual on/off cue */}
+          <span className={`flex-shrink-0 w-9 h-5 rounded-pill flex items-center transition-colors
+                            ${intent === 'spotlight' ? 'bg-g justify-end' : 'bg-bdr justify-start'}`}>
+            <span className="w-4 h-4 rounded-full bg-white mx-0.5 shadow-card" />
+          </span>
         </button>
       </div>
 

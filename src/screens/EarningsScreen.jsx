@@ -1,9 +1,9 @@
 // Per design-spec.md — Earnings tab: balance, network feed, invite cards.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { NETWORK_EARNINGS } from '../data/mock';
 import { getMyEarnings } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
+import { REWARDS, REWARD_COPY } from '../lib/rewards';
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -14,10 +14,8 @@ function timeAgo(iso) {
   return `${Math.floor(sec/86400)}d ago`;
 }
 
-// For demo: balance is $1000 (Cash-out eligible). Tarik can flip to $0 or $75.
-const BALANCE = '$1000';
-const BALANCE_UNIT = 'RC';
-const CASH_OUT_THRESHOLD = 250; // numeric for compare; UI shows $250
+const BALANCE_UNIT = 'USD';
+const CASH_OUT_THRESHOLD_CENTS = 250 * 100; // $250 to cash out (matches reward ceiling)
 
 function getInitials(name) {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
@@ -26,10 +24,9 @@ function getInitials(name) {
 export function EarningsScreen() {
   const navigate = useNavigate();
   const { showToast, auth } = useOutletContext();
-  const balanceNum = parseFloat(BALANCE.replace(/[^0-9.]/g, '')) || 0;
-  const canCashOut = balanceNum >= CASH_OUT_THRESHOLD;
 
-  // Real earnings from the ledger (bookings + spotlights).
+  // Real earnings from the ledger (bookings + spotlights). Drives the
+  // balance card, the filter pills, and the row list. No more mock $1000.
   const [earnings, setEarnings]   = useState([]);
   const [earnFilter, setEarnFilter] = useState('all'); // 'all' | 'booking' | 'spotlight'
   useEffect(() => {
@@ -43,18 +40,29 @@ export function EarningsScreen() {
     acc[e.kind]   = (acc[e.kind] || 0) + e.amount_cents;
     return acc;
   }, { all: 0 });
+  const balanceCents = totals.all;
+  const balanceStr   = fmtDollars(balanceCents);
+  const canCashOut   = balanceCents >= CASH_OUT_THRESHOLD_CENTS;
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
-      <h1 className="px-5 pt-6 pb-4 text-[28px] font-extrabold text-black tracking-tight">Earnings</h1>
+      {/* Page title aligns with Profile canon: 30px / 800 / leading-tight,
+          generous top padding to match the rhythm Profile sets. */}
+      <h1 className="px-5 pt-10 pb-4 text-[30px] font-extrabold text-black leading-tight">Earnings</h1>
 
-      {/* hero balance card — kelly-green gradient outer, white inner */}
+      {/* hero balance card — kelly-green gradient outer, white inner.
+          Balance = real summed cleared earnings (booking + spotlight). */}
       <div className="mx-5 rounded-[20px] bg-gradient-to-br from-gm to-g p-3 mb-5 shadow-card">
         <div className="bg-white rounded-[14px] p-4 flex items-center justify-between">
           <div>
             <p className="text-[28px] font-extrabold text-black leading-none">
-              {BALANCE}<span className="text-[14px] text-b3 font-bold ml-1">.00 {BALANCE_UNIT}</span>
+              {balanceStr}<span className="text-[14px] text-b3 font-bold ml-1">{BALANCE_UNIT}</span>
             </p>
+            {!canCashOut && balanceCents > 0 && (
+              <p className="text-[11px] text-b3 mt-1">
+                ${(CASH_OUT_THRESHOLD_CENTS - balanceCents) / 100} more to cash out
+              </p>
+            )}
           </div>
           <button
             onClick={() => navigate('/earnings/breakdown')}
@@ -155,52 +163,13 @@ export function EarningsScreen() {
         </>
       )}
 
-      {/* latest network earnings */}
-      <p className="px-5 text-[16px] font-extrabold text-black mb-3">Latest network earnings</p>
-      {NETWORK_EARNINGS.length === 0 ? (
-        <div className="mx-5 bg-soft rounded-[18px] py-10 text-center">
-          <p className="text-[14px] text-b3 leading-relaxed">
-            You haven't received<br />earnings from redeemed invites
-          </p>
-        </div>
-      ) : (
-        <div className="px-5 flex flex-col gap-3 mb-2">
-          {NETWORK_EARNINGS.slice(0, 3).map(item => (
-            <div key={item.id} className="flex items-center gap-3 py-2 border-b border-bdr last:border-0">
-              {item.isSystem ? (
-                <div className="w-11 h-11 rounded-full bg-g flex items-center justify-center flex-shrink-0">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                    <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-                    <circle cx="12" cy="9" r="2.5" />
-                  </svg>
-                </div>
-              ) : (
-                <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${item.avatarBg}
-                                 flex items-center justify-center text-white text-[14px] font-extrabold flex-shrink-0`}>
-                  {getInitials(item.who)}
-                </div>
-              )}
-              <div className="flex-1">
-                <p className="text-[14px] text-black leading-tight">
-                  <span className="font-extrabold">{item.who}</span> {item.action}{' '}
-                  <span className="font-extrabold">{item.what}</span>
-                </p>
-              </div>
-              <span className="text-[15px] font-extrabold text-black flex-shrink-0">{item.amount}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      <button
-        onClick={() => navigate('/earnings/network')}
-        className="px-5 mb-6 text-[14px] font-extrabold text-black underline underline-offset-2 text-left"
-      >
-        View all network earnings (154) ›
-      </button>
+      {/* Network feed removed (mock-only). Real referral counts come from
+          the invitations system once that's wired — for now the Earn cards
+          below carry the conversion message. */}
 
-      {/* Earn up to $250 per invite */}
+      {/* Earn — uses canonical rewards values from src/lib/rewards.js */}
       <div className="flex items-center gap-1.5 px-5 mb-3">
-        <p className="text-[16px] font-extrabold text-black">Earn up to $250 per invite</p>
+        <p className="text-[16px] font-extrabold text-black">{REWARD_COPY.maxPerInviteHero}</p>
         <button
           onClick={() => navigate('/earnings/how')}
           className="w-5 h-5 rounded-full border border-black flex items-center justify-center text-[10px] font-extrabold"
@@ -210,21 +179,21 @@ export function EarningsScreen() {
       </div>
       <div className="px-5 flex flex-col gap-2 mb-6">
         <ActionCard
-          onClick={() => navigate('/invite/friends-popup')}
+          onClick={() => navigate('/find-friends')}
           icon="people"
           label="Invite friends"
-          right={<span className="text-[13px] text-g font-bold">23 joined</span>}
+          right={<span className="text-[12px] text-g font-extrabold">${REWARDS.friendJoinCredit}/friend</span>}
         />
         <ActionCard
           onClick={() => navigate('/invite/recommend-popup')}
           icon="briefcase"
           label="Recommend services"
-          right={<span className="text-[13px] text-g font-bold">13 joined</span>}
+          right={<span className="text-[12px] text-g font-extrabold">${REWARDS.serviceRecoCredit}/service</span>}
         />
         <ActionCard
-          onClick={() => navigate('/earnings/track')}
+          onClick={() => navigate('/find-friends')}
           icon="track"
-          label="Track my invites"
+          label="Share Cergio with your network"
         />
       </div>
 

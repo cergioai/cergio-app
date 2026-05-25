@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { notifyUser } from '../lib/api';
+import { REWARDS, REWARD_COPY } from '../lib/rewards';
 
 const INVITE_BASE = (typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai');
 
@@ -138,8 +139,10 @@ export function FindFriendsScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
       <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
-        <h1 className="text-[28px] font-extrabold text-black leading-tight">
-          Find friends<br />on Cergio
+        {/* Page title — Profile canon (30px / 800). One-line headline reads
+            cleaner than the previous two-line break. */}
+        <h1 className="text-[30px] font-extrabold text-black leading-tight">
+          Find friends
         </h1>
         <button
           onClick={() => navigate(-1)}
@@ -155,7 +158,7 @@ export function FindFriendsScreen() {
       </p>
 
       {/* ── Connect sources ───────────────────────────────────────────────── */}
-      <h2 className="px-5 mt-7 mb-2 text-[18px] font-extrabold text-black">Connect</h2>
+      <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">Connect</h2>
       <SourceRow
         icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>}
         title="Sync phone contacts"
@@ -185,7 +188,7 @@ export function FindFriendsScreen() {
       />
 
       {/* ── Manual search ─────────────────────────────────────────────────── */}
-      <h2 className="px-5 mt-7 mb-2 text-[18px] font-extrabold text-black">Find by handle</h2>
+      <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">Find by handle</h2>
       <div className="px-5">
         <input
           type="text"
@@ -220,7 +223,7 @@ export function FindFriendsScreen() {
       </div>
 
       {/* ── Share invite ──────────────────────────────────────────────────── */}
-      <h2 className="px-5 mt-8 mb-2 text-[18px] font-extrabold text-black">Or just share your link</h2>
+      <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">Or just share your link</h2>
       <div className="px-5">
         <div className="bg-white border border-bdr rounded-[14px] p-3 flex items-center gap-2">
           <code className="flex-1 text-[12px] text-b2 font-mono truncate">{inviteUrl.replace(/^https?:\/\//, '')}</code>
@@ -236,14 +239,15 @@ export function FindFriendsScreen() {
           Share invite
         </button>
         <p className="text-[11px] text-b3 mt-2 leading-snug text-center">
-          You earn <strong className="text-g">$25 credit</strong> per friend who joins and books.
+          You earn <strong className="text-g">${REWARDS.friendJoinCredit} credit</strong> when a friend joins,
+          plus up to <strong className="text-g">${REWARDS.maxPerInvite}</strong> total per invite as they book.
         </p>
       </div>
 
       {/* ── Imported matches (after contact sync) ─────────────────────────── */}
       {(matches.found.length > 0 || matches.invitable.length > 0) && (
         <>
-          <h2 className="px-5 mt-8 mb-2 text-[18px] font-extrabold text-black">
+          <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">
             From your contacts
           </h2>
           {matches.found.length > 0 && (

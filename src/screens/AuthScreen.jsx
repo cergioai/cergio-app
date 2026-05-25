@@ -155,9 +155,12 @@ export function AuthScreen() {
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-8 overflow-y-auto">
-      <div className="flex flex-col items-center pt-14 pb-6">
+      <div className="flex flex-col items-center pt-14 pb-6 px-7 text-center">
         <Logo size={64} />
-        <h1 className="text-[28px] font-extrabold text-black tracking-wide mt-4">Cergio</h1>
+        <h1 className="text-[30px] font-extrabold text-black tracking-wide mt-4 leading-tight">Cergio</h1>
+        <p className="text-[13px] text-b3 leading-snug mt-2 font-medium max-w-[280px]">
+          Services your friends actually trust. Book, host, or earn — all in one place.
+        </p>
       </div>
 
       <div className="px-7">
@@ -278,8 +281,12 @@ export function AuthScreen() {
                           placeholder-b3 outline-none focus:ring-2 focus:ring-g/30
                           ${phone && !phoneValid(phone) ? 'ring-2 ring-danger/40' : ''}`}
             />
-            {phone && !phoneValid(phone) && (
+            {phone && !phoneValid(phone) ? (
               <p className="text-[11px] text-danger mt-1.5">Enter 7–15 digits (include country code).</p>
+            ) : (
+              <p className="text-[11px] text-b3 mt-1.5 leading-snug">
+                We text only booking + invite alerts — never marketing.
+              </p>
             )}
           </div>
         )}
@@ -301,13 +308,19 @@ export function AuthScreen() {
         <button
           onClick={submit}
           disabled={!valid || busy}
-          className={`w-full rounded-[24px] py-4 text-[15px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-[17px] font-extrabold transition-all
             ${valid && !busy
               ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}
         >
           {busy ? 'Please wait…' : (isSignup ? 'Create account' : 'Sign in')}
         </button>
+        {isSignup && (
+          <p className="text-[11px] text-b3 mt-3 leading-snug text-center">
+            By creating an account you agree to our{' '}
+            <a href="/privacy" className="text-g font-bold underline underline-offset-2">privacy policy</a>.
+          </p>
+        )}
 
         <button
           onClick={() => navigate('/home')}

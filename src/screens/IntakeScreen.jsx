@@ -259,7 +259,7 @@ export function IntakeScreen() {
         <div className="px-4 pb-3 flex flex-col gap-2">
           <button
             onClick={() => navigate(freeServices ? '/enable-free-offers' : '/results')}
-            className="w-full bg-g text-white rounded-[24px] py-3.5 text-[15px] font-extrabold
+            className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
                        hover:opacity-90 active:scale-[.97] transition-all"
           >
             {freeServices ? 'Get my free offers →' : 'Show me providers →'}

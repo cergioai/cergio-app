@@ -1,6 +1,10 @@
-// Per design-spec.md — manual recommendation blurb form.
+// Per design-spec.md (and Profile-as-canon) — manual recommendation blurb form.
+// Aligned to app-wide canon: cream bg, 30px page title, 17px primary CTA,
+// supportive microcopy that walks the user through what's about to happen +
+// what they'll earn (REWARDS-driven).
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { REWARDS } from '../lib/rewards';
 
 export function RecommendServiceFormScreen() {
   const navigate = useNavigate();
@@ -8,9 +12,10 @@ export function RecommendServiceFormScreen() {
   const [text, setText] = useState('');
 
   const valid = text.trim().length > 0;
+  const remaining = Math.max(0, 280 - text.length);
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-24">
+    <div className="flex-1 flex flex-col bg-cream pb-24">
       <div className="px-5 pt-5">
         <button
           onClick={() => navigate(-1)}
@@ -21,10 +26,16 @@ export function RecommendServiceFormScreen() {
       </div>
 
       <div className="px-5 pt-2 pb-5">
-        <h1 className="text-[24px] font-extrabold text-black">Tell us about this service</h1>
-        <p className="text-[14px] text-b3 leading-relaxed mt-2">
-          Write a quick blurb about why you recommend this service. Users looking to book this service
-          will see your recommendation.
+        <h1 className="text-[30px] font-extrabold text-black leading-tight">
+          Tell us about this service
+        </h1>
+        <p className="text-[15px] text-b3 font-medium leading-relaxed mt-2">
+          Friends-of-friends trust short, honest blurbs. Say why you'd send a
+          friend here and what stood out.
+        </p>
+        {/* Reward hint — keep the user motivated without burying the form. */}
+        <p className="text-[12px] text-gd font-extrabold mt-3">
+          You earn ${REWARDS.serviceRecoCredit} every time a friend books from your recommendation.
         </p>
       </div>
 
@@ -32,21 +43,24 @@ export function RecommendServiceFormScreen() {
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="I recommend this service because…"
-          className="w-full h-[260px] border border-bdr rounded-[18px] p-4 text-[14px] text-black
-                     placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans"
+          maxLength={280}
+          placeholder={`Try: "Maria did our deep clean before move-out — fast, friendly, fair price. Ask for the deep clean package."`}
+          className="w-full h-[240px] bg-white border border-bdr rounded-[18px] p-4 text-[15px] text-black
+                     placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans
+                     leading-relaxed"
         />
+        <p className="text-[11px] text-b3 mt-2 text-right">{remaining} characters left</p>
       </div>
 
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-bdr px-5 pt-3 pb-5">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-cream border-t border-bdr px-5 pt-3 pb-5">
         <button
           onClick={() => {
             if (!valid) return;
-            showToast('Recommendation sent');
+            showToast('Recommendation sent ✓');
             navigate('/earnings');
           }}
           disabled={!valid}
-          className={`w-full rounded-[24px] py-3.5 text-[15px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-[17px] font-extrabold transition-all
             ${valid
               ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}

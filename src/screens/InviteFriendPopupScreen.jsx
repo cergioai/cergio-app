@@ -1,6 +1,10 @@
 // Per design-spec.md — Bottom-sheet popup for invite/recommend actions.
+// Copy + numbers pull from src/lib/rewards.js so the hero ($250 max),
+// the "$25 when they join" base, and the +$125 first-booking bonus stay
+// in lockstep across every surface that mentions earnings.
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
+import { REWARDS } from '../lib/rewards';
 
 export function InviteFriendPopupScreen() {
   const navigate = useNavigate();
@@ -18,10 +22,10 @@ export function InviteFriendPopupScreen() {
           ✕
         </button>
 
-        <div className="mt-10 mb-5 flex items-start gap-3">
+        <div className="mt-10 mb-4 flex items-start gap-3">
           <div className="flex-1">
-            <h1 className="text-[24px] font-extrabold text-black leading-tight">
-              Invite a friend and<br />earn up to $250
+            <h1 className="text-[26px] font-extrabold text-black leading-tight tracking-tight">
+              Invite a friend, earn up to ${REWARDS.maxPerInvite}
             </h1>
           </div>
           <div className="w-14 h-14 rounded-full bg-g flex items-center justify-center flex-shrink-0">
@@ -32,37 +36,64 @@ export function InviteFriendPopupScreen() {
           </div>
         </div>
 
-        <p className="text-[14px] text-b3 leading-relaxed mb-3">
-          You will earn 25% of the first few bookings your friend completes, up to $250.
-        </p>
+        {/* Step list — concrete numbers so the user knows exactly what they
+            earn at each step. Replaces the old vague "25% of first few bookings". */}
+        <ol className="mb-4 flex flex-col gap-2.5">
+          <Step n="1" green={`+$${REWARDS.friendJoinCredit}`} body="when your friend signs up" />
+          <Step n="2" green={`+$${REWARDS.friendFirstBookingBonus}`} body="when they complete their first booking" />
+          <Step n="3" green={`up to $${REWARDS.maxPerInvite}`} body="total per invite as they keep booking" />
+        </ol>
         <button
           onClick={() => navigate('/earnings/how')}
-          className="text-[14px] font-bold text-g underline underline-offset-2 mb-6"
+          className="text-[13px] font-bold text-g underline underline-offset-2 mb-6"
         >
-          See examples
+          How earnings work →
         </button>
 
         <div className="border-t border-bdr -mx-7 px-7 pt-4 flex flex-col">
-          <ActionRow icon="message" label="Invite from contacts" onClick={() => navigate('/invite/friends')} />
-          <ActionRow icon="link"    label="Copy invite link"     onClick={() => showToast('Your link has been copied!')} />
-          <ActionRow icon="dots"    label="More"                 onClick={() => showToast('Share via system — coming soon')} />
+          <ActionRow icon="message" label="Invite from contacts" sub="Tap and pick — we send the message"
+            onClick={() => navigate('/invite/friends')} />
+          <ActionRow icon="link" label="Copy my invite link" sub="Paste it in any chat or DM"
+            onClick={() => showToast('Your link has been copied!')} />
+          <ActionRow icon="dots" label="Share via…" sub="iMessage, WhatsApp, IG, more"
+            onClick={() => showToast('Share via system — coming soon')} />
         </div>
       </div>
     </div>
   );
 }
 
-function ActionRow({ icon, label, onClick }) {
+// Numbered step — small green bubble + dollar amount in brand green +
+// short description in body gray. Keeps every reward visible at once.
+function Step({ n, green, body }) {
+  return (
+    <li className="flex items-center gap-3">
+      <span className="w-6 h-6 rounded-full bg-gl text-gd text-[11px] font-extrabold
+                       flex items-center justify-center flex-shrink-0">
+        {n}
+      </span>
+      <p className="text-[14px] text-black leading-snug">
+        <span className="text-g font-extrabold">{green}</span>{' '}
+        <span className="text-b2 font-medium">{body}</span>
+      </p>
+    </li>
+  );
+}
+
+function ActionRow({ icon, label, sub, onClick }) {
   const Icon = ICONS[icon];
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-4 py-4 border-b border-bdr last:border-0 text-left"
+      className="flex items-center gap-4 py-3.5 border-b border-bdr last:border-0 text-left"
     >
       <div className="w-10 h-10 rounded-[10px] bg-g flex items-center justify-center text-white flex-shrink-0">
         <Icon />
       </div>
-      <span className="flex-1 text-[16px] font-extrabold text-black">{label}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[15px] font-extrabold text-black leading-tight">{label}</p>
+        {sub && <p className="text-[12px] text-b3 mt-0.5 leading-snug">{sub}</p>}
+      </div>
       <span className="text-b3 text-lg">›</span>
     </button>
   );

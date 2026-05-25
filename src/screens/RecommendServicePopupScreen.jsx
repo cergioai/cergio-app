@@ -1,5 +1,8 @@
 // Per design-spec.md — Bottom-sheet popup for "Recommend a service" actions.
+// Mirror of InviteFriendPopup so the two flows feel like siblings, with
+// the reward language shifted to the per-recommendation context.
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { REWARDS } from '../lib/rewards';
 
 export function RecommendServicePopupScreen() {
   const navigate = useNavigate();
@@ -17,10 +20,10 @@ export function RecommendServicePopupScreen() {
           ✕
         </button>
 
-        <div className="mt-10 mb-5 flex items-start gap-3">
+        <div className="mt-10 mb-4 flex items-start gap-3">
           <div className="flex-1">
-            <h1 className="text-[24px] font-extrabold text-black leading-tight">
-              Recommend a service<br />and earn up to $250
+            <h1 className="text-[26px] font-extrabold text-black leading-tight tracking-tight">
+              Recommend, earn ${REWARDS.serviceRecoCredit}+ per friend
             </h1>
           </div>
           <div className="w-14 h-14 rounded-full bg-g flex items-center justify-center flex-shrink-0">
@@ -28,36 +31,60 @@ export function RecommendServicePopupScreen() {
           </div>
         </div>
 
-        <p className="text-[14px] text-b3 leading-relaxed mb-3">
-          You will earn 25% of the first few bookings your friend completes, up to $250.
-        </p>
+        <ol className="mb-4 flex flex-col gap-2.5">
+          <Step n="1" green={`+$${REWARDS.serviceRecoCredit}`} body="every time a friend books a service you recommended" />
+          <Step n="2" green={`+$${REWARDS.friendJoinCredit}`} body="if they're new to Cergio" />
+          <Step n="3" green={`up to $${REWARDS.maxPerInvite}`} body="combined ceiling per friend" />
+        </ol>
         <button
           onClick={() => navigate('/earnings/how')}
-          className="text-[14px] font-bold text-g underline underline-offset-2 mb-6"
+          className="text-[13px] font-bold text-g underline underline-offset-2 mb-6"
         >
-          See examples
+          How earnings work →
         </button>
 
         <div className="border-t border-bdr -mx-7 px-7 pt-4 flex flex-col">
-          <ActionRow icon="message" label="Invite from contacts" onClick={() => navigate('/invite/friends?mode=reco')} />
-          <ActionRow icon="pencil"  label="Invite manually"      onClick={() => navigate('/invite/recommend')} />
+          <ActionRow icon="message" label="Pick from contacts"
+            sub="Tap a friend — we pre-fill their details"
+            onClick={() => navigate('/invite/friends?mode=reco')} />
+          <ActionRow icon="pencil" label="Write a recommendation"
+            sub="Free-form blurb explaining why you trust this service"
+            onClick={() => navigate('/invite/recommend')} />
         </div>
       </div>
     </div>
   );
 }
 
-function ActionRow({ icon, label, onClick }) {
+function Step({ n, green, body }) {
+  return (
+    <li className="flex items-center gap-3">
+      <span className="w-6 h-6 rounded-full bg-gl text-gd text-[11px] font-extrabold
+                       flex items-center justify-center flex-shrink-0">
+        {n}
+      </span>
+      <p className="text-[14px] text-black leading-snug">
+        <span className="text-g font-extrabold">{green}</span>{' '}
+        <span className="text-b2 font-medium">{body}</span>
+      </p>
+    </li>
+  );
+}
+
+function ActionRow({ icon, label, sub, onClick }) {
   const Icon = ICONS[icon];
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-4 py-4 border-b border-bdr last:border-0 text-left"
+      className="flex items-center gap-4 py-3.5 border-b border-bdr last:border-0 text-left"
     >
       <div className="w-10 h-10 rounded-[10px] bg-g flex items-center justify-center text-white flex-shrink-0">
         <Icon />
       </div>
-      <span className="flex-1 text-[16px] font-extrabold text-black">{label}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[15px] font-extrabold text-black leading-tight">{label}</p>
+        {sub && <p className="text-[12px] text-b3 mt-0.5 leading-snug">{sub}</p>}
+      </div>
       <span className="text-b3 text-lg">›</span>
     </button>
   );

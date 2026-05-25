@@ -133,7 +133,8 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         </ul>`,
       cta_label: 'Open Cergio →',
       cta_link:  link,
-      sms: `Welcome to Cergio, ${first}! Open the app: ${link}`,
+      // SMS — keep tight, every variation < 160 chars, always include link.
+      sms: `Welcome to Cergio, ${first} 🌿 services your friends trust. Start: ${link}`,
       text: `Welcome to Cergio, ${first}!`,
     };
   },
@@ -150,7 +151,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Sign up and book your first service — ${escapeHtml(inviterName)} earns $25 in credits when you do.</p>`,
       cta_label: 'Sign up free →',
       cta_link:  link,
-      sms: `${inviterName} invited you to Cergio. Sign up: ${link}`,
+      sms: `${inviterName} invited you to Cergio — services your friends actually trust. Join: ${link}`,
       text: `${inviterName} invited you to Cergio.`,
     };
   },
@@ -167,7 +168,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Invite 10 friends + get one to book → you unlock <strong>Connector</strong> status.</p>`,
       cta_label: 'See earnings →',
       cta_link:  link,
-      sms: `${friendName} joined Cergio — $25 credit added. ${link}`,
+      sms: `🎉 ${friendName} joined Cergio. +$25 credit yours. See balance: ${link}`,
       text: `${friendName} joined Cergio.`,
     };
   },
@@ -185,7 +186,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Open the listing and book if it looks like a fit. First booking earns ${escapeHtml(recommender)} a $100 credit.</p>`,
       cta_label: 'See the service →',
       cta_link:  link,
-      sms: `${recommender} recommended ${serviceTitle} on Cergio: ${link}`,
+      sms: `${recommender} recommends ${serviceTitle} on Cergio: ${link}`,
       text: `${recommender} recommended ${serviceTitle}.`,
     };
   },
@@ -203,7 +204,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         </ul>`,
       cta_label: 'Set your rate →',
       cta_link:  link,
-      sms: `Your first Cergio booking landed — open the app to set your spotlight rate: ${link}`,
+      sms: `${first}, first booking landed 🌿 set your spotlight rate next: ${link}`,
       text: `Your first Cergio booking landed.`,
     };
   },
@@ -218,7 +219,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         <p style="font-size:14px;color:#3A3A3A;margin:0 0 8px;">As a <strong>Connector</strong>, providers pay you for an Instagram or TikTok spotlight at your set rate. Cergio takes 10%; you keep the rest. You can also negotiate down per request.</p>`,
       cta_label: 'Become a Connector →',
       cta_link:  link,
-      sms: `Cergio: you've earned Connector eligibility. Set your spotlight rate: ${link}`,
+      sms: `Cergio: you've unlocked Connector. Set your IG/TT spotlight rate: ${link}`,
       text: `Become a Connector on Cergio.`,
     };
   },

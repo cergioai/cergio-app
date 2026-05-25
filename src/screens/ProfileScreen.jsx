@@ -13,6 +13,7 @@ import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, sav
 import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
+import { REWARDS } from '../lib/rewards';
 
 function fmtFollowers(n) {
   if (!Number.isFinite(+n)) return '';
@@ -151,9 +152,10 @@ export function ProfileScreen() {
     navigate('/list-service');
   };
 
-  // Inline pills used inside row titles.
+  // Inline pills used inside row titles. Spec puts badges at 11-12px so they
+  // sit next to the 18px row title without competing for visual weight.
   const MintPill = ({ children }) => (
-    <span className="bg-gl text-gd rounded-pill px-3 py-0.5 text-[14px] font-extrabold whitespace-nowrap">
+    <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold whitespace-nowrap">
       {children}
     </span>
   );
@@ -277,17 +279,17 @@ export function ProfileScreen() {
       />
       <Row
         title="Find friends on Cergio"
-        subtitle="Sync contacts · Instagram · TikTok — see who's already here"
+        subtitle="See who's already here · sync contacts in one tap"
         onClick={() => navigate('/find-friends')}
       />
       <Row
         title="Invite friends"
-        subtitle="Earn $25 credit per friend"
+        subtitle={`Earn $${REWARDS.friendJoinCredit} per join · up to $${REWARDS.maxPerInvite} per invite`}
         onClick={() => navigate('/invite/friends-popup')}
       />
       <Row
         title="Recommend services"
-        subtitle="Earn $100 credit per service"
+        subtitle={`Earn $${REWARDS.serviceRecoCredit} per booked recommendation`}
         onClick={() => navigate('/invite/recommend-popup')}
       />
       <Row
@@ -328,7 +330,7 @@ export function ProfileScreen() {
       </div>
       <button
         onClick={() => navigate('/home')}
-        className="text-center text-[16px] font-extrabold text-b3 py-3 mx-auto"
+        className="text-center text-[14px] font-bold text-b3 py-3 mx-auto underline underline-offset-2"
       >
         I'll do this later
       </button>

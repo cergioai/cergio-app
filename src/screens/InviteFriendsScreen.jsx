@@ -47,8 +47,9 @@ export function InviteFriendsScreen() {
   const altPath     = mode === 'reco' ? '/invite/friends' : '/invite/friends?mode=reco';
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-24 overflow-hidden">
-      {/* header */}
+    <div className="flex-1 flex flex-col bg-cream pb-24 overflow-hidden">
+      {/* header — cream bg per app-wide canon. Page title 30px / 800 to
+          match Profile. Helper microcopy below explains what tapping does. */}
       <div className="px-5 pt-5">
         <button
           onClick={() => navigate(-1)}
@@ -58,10 +59,15 @@ export function InviteFriendsScreen() {
         </button>
       </div>
       <div className="px-5 pt-2 pb-4">
-        <h1 className="text-[24px] font-extrabold text-black">{headerTitle}</h1>
+        <h1 className="text-[30px] font-extrabold text-black leading-tight">{headerTitle}</h1>
+        <p className="text-[13px] text-b3 font-medium mt-1.5 leading-snug">
+          {mode === 'reco'
+            ? 'Pick contacts and we send them your recommendation — they tap one link to book.'
+            : 'Pick contacts and we send a friendly invite — you earn when they join.'}
+        </p>
         <button
           onClick={() => navigate(altPath)}
-          className="text-[14px] font-bold text-g underline underline-offset-2 mt-1"
+          className="text-[13px] font-bold text-g underline underline-offset-2 mt-2"
         >
           {altLink}
         </button>
@@ -130,7 +136,7 @@ export function InviteFriendsScreen() {
           )}
           <button
             onClick={() => navigate('/invite/review', { state: { mode, selectedIds: Array.from(selected) } })}
-            className="w-full bg-g text-white rounded-[24px] py-3.5 text-[15px] font-extrabold
+            className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
                        hover:opacity-90 active:scale-[.97] transition-all"
           >
             {mode === 'reco' ? 'Continue' : `Invite selected (${selectedList.length})`}
