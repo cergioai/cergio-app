@@ -182,30 +182,60 @@ export function HomeScreen() {
     listMyServices().then(({ data }) => setHasService((data || []).length > 0));
   }, [auth?.isSignedIn]);
 
-  // Location — saved-default-first, then guest localStorage, then blank.
-  const [locationText, setLocationText] = useState('');
-  const [locationCoords, setLocationCoords] = useState(null);
+  // Location — read localStorage synchronously on FIRST render via the
+  // useState initializer so the chip is painted on the very first paint,
+  // not after a re-render. This is the difference between "address
+  // sticks" and "address blank for a frame, then appears". The lazy
+  // initializer runs once per mount.
+  const [locationText, setLocationText] = useState(() => {
+    try {
+      const raw = localStorage.getItem(GUEST_ADDR_KEY);
+      if (!raw) return '';
+      const g = JSON.parse(raw);
+      return g?.address || '';
+    } catch { return ''; }
+  });
+  const [locationCoords, setLocationCoords] = useState(() => {
+    try {
+      const raw = localStorage.getItem(GUEST_ADDR_KEY);
+      if (!raw) return null;
+      const g = JSON.parse(raw);
+      if (g?.lat != null && g?.lng != null) return { lat: g.lat, lng: g.lng };
+      return null;
+    } catch { return null; }
+  });
   const [locEditing, setLocEditing] = useState(false);
   const [travelRadius, setTravelRadius] = useState('10mi');
 
+  // Mirror locationText → localStorage on every change. This is the
+  // safety net: even if the user types an address without picking a
+  // Google Places suggestion (no onSelect), the typed value still
+  // persists across reloads. Previously only the onSelect path saved,
+  // so typed-but-not-picked addresses were lost on refresh.
   useEffect(() => {
-    // Hydrate strategy — show *something* as fast as possible so the
-    // address chip is always populated for returning users:
-    //   1. Read the localStorage cache synchronously (works for guest
-    //      AND signed-in users). This paints the chip immediately on
-    //      page load even before Supabase responds.
-    //   2. Then, if signed in, fetch the canonical Supabase default.
-    //      That overwrites the local cache if they differ.
+    if (!locationText) return;
     try {
-      const raw = localStorage.getItem(GUEST_ADDR_KEY);
-      if (raw) {
-        const g = JSON.parse(raw);
-        if (g?.address) {
-          setLocationText(g.address);
-          if (g.lat != null && g.lng != null) setLocationCoords({ lat: g.lat, lng: g.lng });
-        }
+      const existing = JSON.parse(localStorage.getItem(GUEST_ADDR_KEY) || '{}');
+      const next = {
+        ...existing,
+        address: locationText,
+        lat:     locationCoords?.lat ?? existing.lat ?? null,
+        lng:     locationCoords?.lng ?? existing.lng ?? null,
+      };
+      // Only write if something actually changed — avoids redundant
+      // writes that could cause React to loop.
+      if (existing.address !== next.address
+          || existing.lat !== next.lat
+          || existing.lng !== next.lng) {
+        localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify(next));
       }
     } catch { /* ignore */ }
+  }, [locationText, locationCoords]);
+
+  useEffect(() => {
+    // Server-side default for signed-in users. Local cache already
+    // painted the chip on first render via the useState initializer
+    // above, so this is purely the canonical-truth refresh.
 
     if (!auth?.isSignedIn) return;
     getDefaultAddress().then(({ data }) => {
@@ -489,8 +519,32 @@ export function HomeScreen() {
                 placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
                 className=""
               />
-              <button onClick={() => setLocEditing(false)}
-                className="text-[12px] font-extrabold text-b3">Cancel</button>
+              {/* Save — commits the typed text even if the user didn't
+                  pick a Google Places suggestion. The mirror useEffect
+                  has already written it to localStorage; for signed-in
+                  users we also push to Supabase here. This is the safety
+                  net for "typed but not picked" addresses. */}
+              <button
+                onClick={async () => {
+                  setLocEditing(false);
+                  if (auth?.isSignedIn && locationText) {
+                    const { error } = await saveAddress({
+                      label: 'Home',
+                      formattedAddress: locationText,
+                      lat: locationCoords?.lat ?? null,
+                      lng: locationCoords?.lng ?? null,
+                      makeDefault: true,
+                    });
+                    if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                    else       showToast('Saved as your default location ✓');
+                  } else if (locationText) {
+                    showToast('Saved on this device.');
+                  }
+                }}
+                className="text-[12px] font-extrabold text-g underline underline-offset-2"
+              >
+                Save
+              </button>
             </div>
           ) : (
             <>
