@@ -11,10 +11,12 @@ import {
   listMyInboundSpotlightRequests,
   listMyOutboundSpotlightRequests,
   setSpotlightRequestStatus,
+  confirmSpotlightPost,
 } from '../lib/api';
 import { fmtDollars, sellerEarningsCents, platformFeeCents, PLATFORM_FEE_RATE } from '../lib/fees';
 import { CounterSpotlightModal } from '../components/ui/CounterSpotlightModal';
 import { SpotlightPaymentModal } from '../components/ui/SpotlightPaymentModal';
+import { MarkPostedModal } from '../components/ui/MarkPostedModal';
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -43,6 +45,7 @@ export function ConnectorRequestsScreen() {
   const [loading, setLoading] = useState(true);
   const [counterTarget, setCounterTarget] = useState(null);  // request open in counter modal
   const [payTarget,     setPayTarget]     = useState(null);  // request open in payment modal
+  const [postedTarget,  setPostedTarget]  = useState(null);  // request open in "mark posted" modal
 
   const refresh = async () => {
     setLoading(true);
@@ -73,6 +76,12 @@ export function ConnectorRequestsScreen() {
     const { error } = await setSpotlightRequestStatus(r.id, 'cancelled');
     if (error) { showToast(error.message); return; }
     showToast('Cancelled');
+    refresh();
+  };
+  const handleConfirmPost = async (r) => {
+    const { error } = await confirmSpotlightPost(r.id);
+    if (error) { showToast(error.message); return; }
+    showToast('Confirmed — funds released ✓');
     refresh();
   };
 
@@ -120,12 +129,14 @@ export function ConnectorRequestsScreen() {
             ? <InboundCard key={r.id} request={r}
                 onAccept={() => handleAccept(r)}
                 onCounter={() => setCounterTarget(r)}
-                onDecline={() => handleDecline(r)} />
+                onDecline={() => handleDecline(r)}
+                onMarkPosted={() => setPostedTarget(r)} />
             : <OutboundCard key={r.id} request={r}
                 onAccept={() => handleAccept(r)}
                 onCounter={() => setCounterTarget(r)}
                 onDecline={() => handleDecline(r)}
                 onPay={() => setPayTarget(r)}
+                onConfirmPost={() => handleConfirmPost(r)}
                 onCancel={() => handleCancel(r)} />
           )}
         </div>
@@ -147,11 +158,19 @@ export function ConnectorRequestsScreen() {
           onSuccess={() => { showToast('Paid ✓ — Connector notified'); setPayTarget(null); refresh(); }}
         />
       )}
+
+      {postedTarget && (
+        <MarkPostedModal
+          request={postedTarget}
+          onClose={() => setPostedTarget(null)}
+          onPosted={() => { showToast('Marked as posted ✓ — Provider notified'); refresh(); }}
+        />
+      )}
     </div>
   );
 }
 
-function InboundCard({ request: r, onAccept, onCounter, onDecline }) {
+function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted }) {
   const pill = STATUS_PILL[r.status] || STATUS_PILL.pending;
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
   const effective = r.offered_price_cents ?? r.official_price_cents;
@@ -208,11 +227,29 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline }) {
           Waiting on Provider to respond to your counter of {fmtDollars(effective)}…
         </p>
       )}
+
+      {/* Accepted + paid → time to post (Connector action) */}
+      {r.status === 'accepted' && r.paid_at && !r.posted_at && (
+        <button onClick={onMarkPosted}
+          className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all mt-1">
+          Mark as posted
+        </button>
+      )}
+      {r.status === 'accepted' && r.posted_at && !r.confirmed_at && (
+        <div className="bg-warnBg border border-warn/40 text-warnText rounded-[12px] px-3 py-2 text-[12px] font-bold text-center mt-1">
+          Posted ✓ — waiting on Provider to confirm + release funds
+        </div>
+      )}
+      {r.confirmed_at && (
+        <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-bold text-center mt-1">
+          Funds released ✓
+        </div>
+      )}
     </div>
   );
 }
 
-function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCancel }) {
+function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onConfirmPost, onCancel }) {
   const pill = STATUS_PILL[r.status] || STATUS_PILL.pending;
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
   const isCountered = r.status === 'countered' && r.offered_price_cents != null;
@@ -288,9 +325,29 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCan
           Pay {fmtDollars(r.offered_price_cents ?? r.official_price_cents)} to confirm
         </button>
       )}
-      {r.status === 'accepted' && r.paid_at && (
+      {r.status === 'accepted' && r.paid_at && !r.posted_at && (
         <div className="bg-gl text-gd rounded-[14px] py-2.5 text-[13px] font-extrabold text-center">
-          Paid ✓ — waiting for the post
+          Paid ✓ — waiting for Connector to post
+        </div>
+      )}
+      {/* Connector posted → Provider needs to confirm */}
+      {r.posted_at && !r.confirmed_at && (
+        <div className="flex flex-col gap-2 mt-1">
+          {r.posted_url && (
+            <a href={r.posted_url} target="_blank" rel="noopener noreferrer"
+               className="text-[12px] font-extrabold text-g underline underline-offset-2 text-center">
+              View post →
+            </a>
+          )}
+          <button onClick={onConfirmPost}
+            className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all">
+            Confirm post is live · release funds
+          </button>
+        </div>
+      )}
+      {r.confirmed_at && (
+        <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-bold text-center mt-1">
+          Confirmed ✓ — funds released to Connector
         </div>
       )}
     </div>

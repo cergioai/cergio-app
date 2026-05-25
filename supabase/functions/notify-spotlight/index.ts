@@ -9,6 +9,8 @@
 //   declined  → Provider receives "{Connector} declined"
 //   cancelled → Connector receives "{Provider} cancelled their request"
 //   paid      → Connector receives "You got paid $X — post your spotlight"
+//   posted    → Provider receives "{Connector} posted — please confirm" with link
+//   confirmed → Connector receives "Provider confirmed — funds released"
 //
 // Caller payload:
 //   { requestId: string, event: 'created'|'countered'|'accepted'|'declined'|'cancelled', app_url?: string }
@@ -51,6 +53,7 @@ serve(async (req: Request) => {
       .from('spotlight_requests')
       .select(`
         id, platform, official_price_cents, offered_price_cents, message, status, created_at, last_counter_by,
+        posted_url, posted_at, confirmed_at,
         provider:profiles!spotlight_requests_provider_id_fkey ( id, display_name, instagram_handle, tiktok_handle ),
         connector:profiles!spotlight_requests_connector_id_fkey ( id, display_name, instagram_handle, tiktok_handle )
       `)
@@ -59,13 +62,13 @@ serve(async (req: Request) => {
     if (rErr || !r) return json({ error: 'request not found', detail: rErr?.message }, 404);
 
     // Pick recipient (auth.users.email is canonical).
-    //   created/cancelled/paid       → Connector receives.
-    //   accepted/declined            → Provider receives.
+    //   created/cancelled/paid/confirmed → Connector receives.
+    //   accepted/declined/posted         → Provider receives.
     //   countered → routes to the party who DIDN'T counter (their turn now).
     let recipientUser;
     if (event === 'countered') {
       recipientUser = r.last_counter_by === 'provider' ? r.connector : r.provider;
-    } else if (['created', 'cancelled', 'paid'].includes(event)) {
+    } else if (['created', 'cancelled', 'paid', 'confirmed'].includes(event)) {
       recipientUser = r.connector;
     } else {
       recipientUser = r.provider;
@@ -155,6 +158,38 @@ serve(async (req: Request) => {
           </p>
           ${priceTable(paidCents)}`;
         cta_label = 'Open request →';
+        break;
+      }
+      case 'posted': {
+        subject = `${connectorName} posted your ${platformLabel} spotlight — please confirm`;
+        heading = `Spotlight posted 🎉`;
+        body_html = `
+          <p style="font-size:15px;color:#3A3A3A;margin:0 0 12px;">
+            <strong>${escapeHtml(connectorName)}</strong> just posted your ${platformLabel} spotlight.
+          </p>
+          ${r.posted_url ? `
+          <p style="font-size:14px;color:#3A3A3A;margin:0 0 18px;">
+            View the post: <a href="${escapeHtml(r.posted_url)}" style="color:#4AA901;font-weight:700;">${escapeHtml(r.posted_url)}</a>
+          </p>` : ''}
+          <p style="font-size:14px;color:#3A3A3A;margin:0 0 18px;">
+            Confirm the post is live and funds release to the Connector. If
+            something looks off, open the request to dispute.
+          </p>`;
+        cta_label = 'Confirm post →';
+        break;
+      }
+      case 'confirmed': {
+        const paidCents = r.offered_price_cents || r.official_price_cents;
+        const earn = paidCents - feeCents(paidCents);
+        subject = `Provider confirmed — ${fmt(earn)} released to your account`;
+        heading = `Funds released ✓`;
+        body_html = `
+          <p style="font-size:15px;color:#3A3A3A;margin:0 0 18px;">
+            <strong>${escapeHtml(providerName)}</strong> confirmed your ${platformLabel} spotlight is live.
+            <strong>${fmt(earn)}</strong> has been released to your Stripe Connect balance — payout per your usual schedule.
+          </p>
+          ${priceTable(paidCents)}`;
+        cta_label = 'View earnings →';
         break;
       }
       default:

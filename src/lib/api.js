@@ -673,6 +673,55 @@ export async function counterSpotlightRequest(id, { offeredPriceCents } = {}) {
   return res;
 }
 
+/**
+ * Connector marks the spotlight as posted with the public URL of the
+ * IG/TT post. Status semantics stay 'accepted' (we use posted_at + URL
+ * to convey the new sub-state). Fires notify-spotlight event=posted →
+ * provider gets "{Connector} posted your spotlight" email asking to
+ * confirm.
+ */
+export async function markSpotlightPosted(id, { postedUrl } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!id) return { data: null, error: { message: 'id required' } };
+  const url = (postedUrl || '').trim();
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return { data: null, error: { message: 'Valid post URL required (must start with https://)' } };
+  }
+  const res = await supabase
+    .from('spotlight_requests')
+    .update({
+      posted_at:  new Date().toISOString(),
+      posted_url: url.slice(0, 500),
+    })
+    .eq('id', id)
+    .is('posted_at', null)   // idempotent — don't overwrite the first post
+    .select()
+    .single();
+  if (!res.error && res.data?.id) fireSpotlightNotify(res.data.id, 'posted');
+  return res;
+}
+
+/**
+ * Provider confirms the spotlight is live. Stamps confirmed_at + released_at
+ * (today they're the same; future migration to escrow will split them).
+ * Fires notify-spotlight event=confirmed → Connector gets "Provider
+ * confirmed — your funds are released" email.
+ */
+export async function confirmSpotlightPost(id) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!id) return { data: null, error: { message: 'id required' } };
+  const now = new Date().toISOString();
+  const res = await supabase
+    .from('spotlight_requests')
+    .update({ confirmed_at: now, released_at: now })
+    .eq('id', id)
+    .is('confirmed_at', null)
+    .select()
+    .single();
+  if (!res.error && res.data?.id) fireSpotlightNotify(res.data.id, 'confirmed');
+  return res;
+}
+
 /** Set request status (accept / decline / cancel).
  *  Fires notify-spotlight with matching event fire-and-forget on success. */
 export async function setSpotlightRequestStatus(id, status) {
