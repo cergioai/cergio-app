@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { CcGateModal } from '../components/ui/CcGateModal';
+import { LeafLogo } from '../components/ui/LeafLogo';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 import { REWARDS } from '../lib/rewards';
@@ -96,40 +97,8 @@ function SendArrowIcon() {
   );
 }
 
-// Cergio brand mark — a small plant with a stem and two unfurled leaves.
-// `working` triggers a slow Claude-style rotation so the user can see the
-// engine "thinking" without a separate spinner. The mark sits inline with
-// the greeting at the top of Home.
-function LeafLogo({ working = false, size = 22 }) {
-  return (
-    <span
-      className={`inline-flex items-center justify-center flex-shrink-0 ${working ? 'cg-leaf-think' : ''}`}
-      style={{ width: size, height: size, transformOrigin: '50% 60%' }}
-      aria-hidden="true"
-    >
-      <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
-        {/* Stem — a thin curve growing up from the bottom. */}
-        <path
-          d="M14 26 C14 22 14 18 14 14"
-          stroke="#3D8B00" strokeWidth="2" strokeLinecap="round"
-        />
-        {/* Left leaf — wide teardrop. */}
-        <path
-          d="M14 17 C 8 17, 4 14, 4 9 C 4 7, 5 5.5, 6 4.5 C 9 6, 12 8.5, 14 14 Z"
-          fill="#4AA901"
-        />
-        {/* Right leaf — mirrored, slightly larger so the mark feels alive. */}
-        <path
-          d="M14 14 C 16 9, 19 5.5, 22.5 4 C 23.5 5, 24.5 7, 24.5 9 C 24.5 14, 20 17, 14 17 Z"
-          fill="#5BC404"
-        />
-        {/* Leaf veins — tiny lines to add detail without being noisy. */}
-        <path d="M14 14 L 8 9" stroke="#2F6E00" strokeWidth="0.8" strokeLinecap="round" opacity=".55" />
-        <path d="M14 14 L 20 8" stroke="#2F6E00" strokeWidth="0.8" strokeLinecap="round" opacity=".55" />
-      </svg>
-    </span>
-  );
-}
+// LeafLogo moved to ../components/ui/LeafLogo so other screens
+// (ResultsScreen header + status, etc.) share the same brand mark.
 
 // localStorage key for signed-out users' "guest" address. Replaced by the
 // server-side default once they sign in (auth flip reloads from Supabase).
@@ -454,12 +423,9 @@ export function HomeScreen() {
     });
   };
 
-  // Find mode: as soon as chat parser reaches 'ready' (all mandatory
-  // fields captured), route to /results. That screen has its own
-  // status reel and queries the REAL Supabase providers (listServices
-  // with offering_id / provider_type / category + geocoded location).
-  // Skipping the Home engine ticker for find — it was a mock that
-  // ended in a dead-end CTA, which is what made the user feel stuck.
+  // CERGIO-GUARD: find-mode submit MUST route to /results — the SRP
+  // is where the real Supabase search lives. Do not short-circuit this
+  // into a mock CTA on Home. See CHECKLIST.md §1.
   useEffect(() => {
     if (!submitted) return;
     if (intent !== 'find') return;

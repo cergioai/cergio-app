@@ -270,16 +270,15 @@ export function useChat() {
 
   // Render the parsed result onto the chat surface.
   //
-  // IMPORTANT — taxonomy stays internal. The chat-parse edge function
+  // CERGIO-GUARD: taxonomy stays internal. The chat-parse edge function
   // can return a bot_reply like "Drain unclogging ✓ · Budget $500 ✓ …"
   // because Claude may resolve the user's text to a taxonomy offering.
-  // We DO NOT show that to the user — it implies we're rewriting their
-  // request as an offering name. Instead we build our own bot reply
-  // here that only asks the next missing question. The resolver fields
+  // We DO NOT show that to the user. Instead we build our own bot reply
+  // below that only asks the next missing question. The resolver fields
   // (provider_type, offering_id, category, bundle) are kept in state
   // for internal routing — /results uses them to filter the right
-  // providers + we notify the right provider_type — but they never
-  // surface in the chat copy.
+  // providers and we notify the right provider_type — but they never
+  // surface in the chat copy. See CHECKLIST.md §2.
   const applyParseResult = useCallback((res, prevState) => {
     const fields = res.parsed ?? {};
     const resolver = res._resolver ?? {};

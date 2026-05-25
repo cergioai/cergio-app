@@ -1,30 +1,28 @@
 // Per design-spec.md — Results / SRP.
-// Fetches real listed services from Supabase, falls back to mock when empty
-// or when Supabase isn't configured. While fetching, runs a Claude-style
-// status reel ("pinging providers… scanning friends' recos…") instead of
-// showing a static spinner.
-import { useEffect, useMemo, useState } from 'react';
+//
+// CERGIO-GUARD: this screen MUST query Supabase via listServices() and
+// MUST NOT fall back to the PROVIDERS mock array under any condition.
+// When 0 services match, render the EmptyState block — never fake
+// providers. The leaf logo (shared brand mark) is the canonical visual;
+// do not swap it for the legacy spinner Logo or any other icon.
+import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Logo } from '../components/ui/Logo';
+import { LeafLogo } from '../components/ui/LeafLogo';
 import { ProviderCard } from '../components/ui/ProviderCard';
-import { PROVIDERS } from '../data/mock';
 import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
 
-// Sequence of status lines shown while we hunt for providers. When the
-// resolver gave us a provider_type ("Plumber", "Pet Sitter"…) we splice
-// it in to make the copy specific instead of generic. The last step
-// repeats its ellipsis until real data lands; its sub-hint signals it's
-// the slow one and offers a Notify-me bail.
-const STATUS_STEP_MS = 900;
+// Status lines shown while the leaf is rotating + Supabase is searching.
+// Each line dwells for STATUS_STEP_MS; the last one stays until real
+// data lands (or the 6s timeout falls through to the empty state).
+const STATUS_STEP_MS = 1100;
 function buildStatusSteps(providerType) {
-  const plural = providerType ? `${providerType}s` : 'providers';
+  const plural = providerType ? `${providerType.toLowerCase()}s` : 'providers';
   return [
-    { label: `Pinging local ${plural}` },
-    { label: `Scanning your friends' ${plural.toLowerCase()} recos` },
-    { label: 'Looking up your network' },
-    { label: providerType ? `Getting quotes from ${plural}` : 'Getting quotes' },
-    { label: 'Negotiating offers', hint: 'This may take a while…' },
+    `Connecting with your friends' ${plural} recos`,
+    `Looking up your local network`,
+    `Pinging matching ${plural}`,
+    `Negotiating offers on your behalf`,
   ];
 }
 
@@ -68,16 +66,15 @@ export function ResultsScreen() {
   const chatState = chat.state;
   const { what, when, where, budget, category, provider_type } = chatState;
 
-  // Build the status reel from the resolver's provider_type so the user
-  // sees "Pinging local Plumbers" instead of generic copy when known.
-  const statusSteps = useMemo(() => buildStatusSteps(provider_type), [provider_type]);
+  const statusSteps = buildStatusSteps(provider_type);
 
-  const [services, setServices]     = useState(null); // null = loading
+  // services === null  → still searching (leaf rotates, status line ticks)
+  // services === []    → search completed, zero matches (EmptyState)
+  // services has rows → render ProviderCards
+  const [services, setServices]     = useState(null);
   const [statusStep, setStatusStep] = useState(0);
 
-  // While services is still loading, advance through the status reel.
-  // Stops at the last item and lets it cycle the ellipsis there until
-  // data arrives.
+  // Advance status line every STATUS_STEP_MS while loading, stop on last.
   useEffect(() => {
     if (services !== null) return;
     const t = setInterval(() => {
@@ -88,12 +85,12 @@ export function ResultsScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    // Hard timeout so the user is never stuck on the status reel — if
-    // Supabase / geocode is slow or hanging, we fall through to mock
-    // providers after 6s.
     const timeoutId = setTimeout(() => {
+      // CERGIO-GUARD: timeout sets services to [] (empty array, not mock).
+      // The render path branches on length === 0 → EmptyState, never the
+      // PROVIDERS mock import.
       if (!cancelled) setServices([]);
-    }, 6000);
+    }, 8000);
 
     (async () => {
       try {
@@ -117,20 +114,19 @@ export function ResultsScreen() {
       } catch (_e) {
         if (cancelled) return;
         clearTimeout(timeoutId);
-        setServices([]); // graceful fallback to mock providers
+        setServices([]);
       }
     })();
     return () => { cancelled = true; clearTimeout(timeoutId); };
   }, [what, category, where, provider_type, chatState.offering_id]);
 
   const budgetCents = parseBudgetCents(budget);
-  const providers   = (services && services.length > 0)
+  // CERGIO-GUARD: providers list comes ONLY from real Supabase rows.
+  // Do NOT add PROVIDERS mock fallback here — empty results render the
+  // EmptyState block below instead of fake cards.
+  const providers = (services && services.length > 0)
     ? services.map((s, i) => serviceToProvider(s, i, budgetCents))
-    : PROVIDERS; // fallback to mock
-
-  // Title — neutral copy. No taxonomy noun echo (which used to produce
-  // bugs like "service providers providers"). User's typed request is
-  // still visible via the pills below.
+    : [];
   const n = providers.length;
   const titleText = n > 0
     ? `Showing ${n} match${n === 1 ? '' : 'es'}`
@@ -139,27 +135,30 @@ export function ResultsScreen() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cr">
-      {/* header */}
+      {/* header — leaf brand mark + slim wordmark + back arrow.
+          CERGIO-GUARD: do NOT swap LeafLogo for the legacy spinner Logo. */}
       <div className="flex justify-between items-center px-5 py-3.5">
         <button
           onClick={() => navigate(-1)}
           className="text-[20px] text-b3 bg-transparent border-none cursor-pointer"
+          aria-label="Back"
         >
           ←
         </button>
         <div className="flex items-center gap-2">
-          <Logo size={36} />
-          <span className="text-[13px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
+          <LeafLogo working={services === null} size={26} />
+          <span className="text-[12px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
         </div>
         <button
           onClick={() => showToast('Share coming soon!')}
           className="w-10 h-10 rounded-full bg-gl flex items-center justify-center border-none cursor-pointer text-lg"
+          aria-label="Share"
         >
           🔗
         </button>
       </div>
 
-      <h2 className="px-5 text-[22px] font-extrabold text-black leading-tight mb-3">{titleText}</h2>
+      <h2 className="px-5 text-[20px] font-extrabold text-black leading-tight mb-3">{titleText}</h2>
 
       {pills.length > 0 && (
         <div className="flex flex-wrap gap-2 px-5 mb-4">
@@ -170,75 +169,50 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* "Wait 24hrs / Show now" walkthrough strip removed — the AI now
-          runs the search directly and surfaces matches as soon as they
-          land. No interstitial CTA. */}
-
+      {/* Loading status — single line, leaf rotates beside it. Mirrors
+          the Home engine ticker styling. */}
       {services === null && (
-        <div className="mx-5 mb-5 bg-white border border-bdr rounded-[18px] p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Logo size={20} />
-            <span className="text-[12px] font-extrabold tracking-widest uppercase text-g">
-              Cergio AI is on it
-            </span>
+        <div className="mx-5 mb-5" aria-live="polite">
+          <div className="flex items-center gap-2">
+            <LeafLogo working={true} size={16} />
+            <p className="text-[13px] text-gd font-medium leading-snug truncate">
+              {statusSteps[Math.min(statusStep, statusSteps.length - 1)]}…
+            </p>
           </div>
-          <ul className="flex flex-col gap-2">
-            {statusSteps.map((step, i) => {
-              const done   = i < statusStep;
-              const active = i === statusStep;
-              return (
-                <li
-                  key={step.label}
-                  className={`flex items-start gap-2.5 text-[13px] leading-tight transition-opacity
-                              ${i > statusStep ? 'opacity-40' : 'opacity-100'}`}
-                >
-                  <span className="pt-0.5">
-                    {done ? (
-                      <span className="w-4 h-4 rounded-full bg-g text-white text-[10px] font-extrabold
-                                       flex items-center justify-center flex-shrink-0">✓</span>
-                    ) : active ? (
-                      <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                        <span className="w-3 h-3 border-2 border-g border-t-transparent rounded-full animate-spin" />
-                      </span>
-                    ) : (
-                      <span className="w-4 h-4 rounded-full border-2 border-bdr flex-shrink-0" />
-                    )}
-                  </span>
-                  <span className="flex flex-col">
-                    <span className={done ? 'text-b2 font-medium' : active ? 'text-black font-extrabold' : 'text-b3 font-medium'}>
-                      {step.label}{active ? '…' : ''}
-                    </span>
-                    {/* slow-step hint surfaces only while we're on it */}
-                    {active && step.hint && (
-                      <span className="text-[11px] text-b3 mt-0.5 italic">{step.hint}</span>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* Notify-me opt-out so the user doesn't feel stuck on this screen
-              while the slow Negotiating step runs in the background. */}
-          <div className="mt-4 pt-3 border-t border-bdr flex items-start gap-2.5">
-            <div className="flex-1">
-              <p className="text-[12px] text-b2 leading-relaxed">
-                We'll keep negotiating in the background.{' '}
-                <button
-                  type="button"
-                  onClick={() => showToast("Got it — we'll ping you when offers land.")}
-                  className="text-g font-extrabold underline underline-offset-2"
-                >
-                  Notify me when offers are ready
-                </button>
-              </p>
-            </div>
-          </div>
+          <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug">
+            We'll keep going in the background.{' '}
+            <button
+              type="button"
+              onClick={() => showToast("Got it — we'll ping you when offers land.")}
+              className="text-g font-medium underline underline-offset-2"
+            >
+              Notify me when ready
+            </button>
+          </p>
         </div>
       )}
 
-      {/* cards */}
-      {services !== null && providers.map(p => (
+      {/* No matches yet — real empty state, NOT mock providers. */}
+      {services !== null && providers.length === 0 && (
+        <div className="mx-5 mb-5 bg-white border border-bdr rounded-[18px] p-5 text-center">
+          <div className="flex justify-center mb-3"><LeafLogo size={28} /></div>
+          <p className="text-[15px] font-extrabold text-black leading-tight">
+            No matches yet
+          </p>
+          <p className="text-[12px] text-b3 mt-1.5 leading-relaxed">
+            We're still growing in your area. Cergio will notify you the moment a matching provider joins or sends you an offer.
+          </p>
+          <button
+            onClick={() => navigate('/find-friends')}
+            className="mt-4 inline-block bg-g text-white rounded-pill px-5 py-2 text-[13px] font-extrabold"
+          >
+            Invite friends to speed it up →
+          </button>
+        </div>
+      )}
+
+      {/* cards — only when we have real Supabase rows. */}
+      {services !== null && providers.length > 0 && providers.map(p => (
         <ProviderCard
           key={p.id}
           provider={p}
@@ -247,8 +221,7 @@ export function ResultsScreen() {
         />
       ))}
 
-      {/* see more */}
-      {services !== null && (
+      {services !== null && providers.length > 0 && (
         <div className="text-center py-4">
           <button
             onClick={() => showToast('Loading more providers…')}
