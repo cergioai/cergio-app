@@ -65,10 +65,25 @@ body {
 }
 .animate-pop-in { animation: popIn .5s cubic-bezier(.34,1.56,.64,1) both; }
 
-/* ── Leaf send-button animation ──────────────────────────────────────
-   Idle (cg-leaf-rest): folded leaf, slight inward scale so it reads as a
-   bud. Working (cg-leaf-open): leaf unfurls — gentle tilt + scale up +
-   tiny sway, looping. Used inside the green Send button on Home. */
+/* ── Cergio leaf brand mark animation ────────────────────────────────
+   The leaf logo sits inline next to the headline. When the engine is
+   "thinking" (post-submit / chat parsing / engine running), it does a
+   slow Claude-star-style rotation with a subtle scale breath. 3.5s loop
+   — slow enough to feel ambient, not dizzying.
+
+   Legacy classes (.cg-leaf-rest, .cg-leaf-open, .cg-leaf-btn-working)
+   are kept for the roaming screen + any other place that still uses
+   the inside-the-button leaf animation. */
+@keyframes cgLeafThink {
+  0%   { transform: rotate(0deg)   scale(1); }
+  50%  { transform: rotate(180deg) scale(1.06); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.cg-leaf-think {
+  animation: cgLeafThink 3.5s ease-in-out infinite;
+}
+
+/* Legacy leaf-in-button animations (still used on /roaming). */
 .cg-leaf-rest {
   transform: scale(.92) rotate(-8deg);
   transition: transform .25s ease;
@@ -82,7 +97,6 @@ body {
 .cg-leaf-open {
   animation: leafUnfurl 1.4s ease-in-out infinite alternate;
 }
-/* Slight breathing on the button when working, so the whole pill feels alive. */
 @keyframes leafBtnBreathe {
   0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(74,169,1,.35); }
   50%      { transform: scale(1.04); box-shadow: 0 0 0 6px rgba(74,169,1,0); }

@@ -12,7 +12,6 @@
 // no /roaming / /intake takeover unless they need to chat for missing fields.
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Logo } from '../components/ui/Logo';
 import { CcGateModal } from '../components/ui/CcGateModal';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
@@ -81,19 +80,49 @@ function ModeOption({ active, label, sub, onClick }) {
   );
 }
 
-function LeafIcon({ working }) {
+// Up-arrow used on the green send button. Replaces the old leaf-in-button
+// icon — the leaf now lives next to the headline as the brand mark.
+function SendArrowIcon() {
   return (
-    <svg
-      width="16" height="16" viewBox="0 0 24 24" fill="none"
-      className={working ? 'cg-leaf-open' : 'cg-leaf-rest'}
-      style={{ transformOrigin: '50% 70%' }}
-    >
-      <path d="M12 22V13" stroke="white" strokeWidth="2" strokeLinecap="round" />
-      <path
-        d="M12 13c-4 0-7-3-7-7 0-1.2.3-2.3.7-3.3C7.2 3.6 9.5 5 12 5s4.8-1.4 6.3-2.3c.4 1 .7 2.1.7 3.3 0 4-3 7-7 7z"
-        fill="white"
-      />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path d="M12 19V5M5 12l7-7 7 7" stroke="white"
+            strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+// Cergio brand mark — a small plant with a stem and two unfurled leaves.
+// `working` triggers a slow Claude-style rotation so the user can see the
+// engine "thinking" without a separate spinner. The mark sits inline with
+// the greeting at the top of Home.
+function LeafLogo({ working = false, size = 22 }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center flex-shrink-0 ${working ? 'cg-leaf-think' : ''}`}
+      style={{ width: size, height: size, transformOrigin: '50% 60%' }}
+      aria-hidden="true"
+    >
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+        {/* Stem — a thin curve growing up from the bottom. */}
+        <path
+          d="M14 26 C14 22 14 18 14 14"
+          stroke="#3D8B00" strokeWidth="2" strokeLinecap="round"
+        />
+        {/* Left leaf — wide teardrop. */}
+        <path
+          d="M14 17 C 8 17, 4 14, 4 9 C 4 7, 5 5.5, 6 4.5 C 9 6, 12 8.5, 14 14 Z"
+          fill="#4AA901"
+        />
+        {/* Right leaf — mirrored, slightly larger so the mark feels alive. */}
+        <path
+          d="M14 14 C 16 9, 19 5.5, 22.5 4 C 23.5 5, 24.5 7, 24.5 9 C 24.5 14, 20 17, 14 17 Z"
+          fill="#5BC404"
+        />
+        {/* Leaf veins — tiny lines to add detail without being noisy. */}
+        <path d="M14 14 L 8 9" stroke="#2F6E00" strokeWidth="0.8" strokeLinecap="round" opacity=".55" />
+        <path d="M14 14 L 20 8" stroke="#2F6E00" strokeWidth="0.8" strokeLinecap="round" opacity=".55" />
+      </svg>
+    </span>
   );
 }
 
@@ -360,28 +389,25 @@ export function HomeScreen() {
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cream">
 
-      {/* header */}
-      <div className="flex justify-between items-center px-5 pt-3">
-        <div className="flex items-center gap-2">
-          <Logo size={28} />
-          <span className="text-[11px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
-        </div>
-        <button
-          onClick={() => navigate('/profile')}
-          className="w-9 h-9 rounded-full bg-gl flex items-center justify-center border-none text-base cursor-pointer"
-          aria-label="Profile"
-        >
-          👤
-        </button>
-      </div>
+      {/* Header removed — profile is reachable via the bottom-nav Profile
+          tab, so the top-right avatar was redundant. The Cergio brand mark
+          now lives inline with the greeting below. */}
 
-      {/* Cergio voice headline — slim, light on the eye. No bold; green
-          accent only on the verb/noun that carries the value prop. */}
-      <div className="px-5 pt-3 pb-0.5">
+      {/* Cergio voice headline — slim, light on the eye. Leaf logo sits
+          inline at the start and slowly rotates while the engine is
+          thinking (Claude-style). Greeting is personalized for signed-in
+          users using their display name. */}
+      <div className="px-5 pt-5 pb-0.5 flex items-start gap-2.5">
+        <LeafLogo working={working || !!chat?.typing} size={22} />
         <h1 className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight">
-          {intent === 'find'
-            ? <>Hi, I'm Cergio — I'll <span className="text-g font-medium">negotiate and book</span> services your friends trust.</>
-            : <>Hi, I'm Cergio — I'll match you with a <span className="text-g font-medium">Connector</span> who can spotlight you on <span className="text-g font-medium">Instagram / TikTok</span>.</>}
+          {(() => {
+            const display = auth?.user?.user_metadata?.display_name || '';
+            const firstName = display.trim().split(/\s+/)[0] || '';
+            const greeting = firstName ? `Hi ${firstName}, I'm Cergio` : `Hi, I'm Cergio`;
+            return intent === 'find'
+              ? <>{greeting} — I'll <span className="text-g font-medium">negotiate and book</span> services your friends trust.</>
+              : <>{greeting} — I'll match you with a <span className="text-g font-medium">Connector</span> who can spotlight you on <span className="text-g font-medium">Instagram / TikTok</span>.</>;
+          })()}
         </h1>
       </div>
 
@@ -588,7 +614,7 @@ export function HomeScreen() {
                   className="h-9 px-3 bg-g rounded-[10px] flex items-center justify-center flex-shrink-0
                              hover:opacity-90 active:scale-95 transition-transform"
                 >
-                  <LeafIcon working={false} />
+                  <SendArrowIcon />
                 </button>
               </div>
             </div>
@@ -725,7 +751,7 @@ export function HomeScreen() {
                   className="h-7 px-2.5 bg-g rounded-[8px] flex items-center justify-center
                              hover:opacity-90 active:scale-95 transition-transform"
                 >
-                  <LeafIcon working={false} />
+                  <SendArrowIcon />
                 </button>
               </div>
             </>
