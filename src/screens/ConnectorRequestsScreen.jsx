@@ -232,17 +232,17 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
       {r.status === 'accepted' && r.paid_at && !r.posted_at && (
         <button onClick={onMarkPosted}
           className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all mt-1">
-          Mark as posted
+          Mark posted
         </button>
       )}
       {r.status === 'accepted' && r.posted_at && !r.confirmed_at && (
-        <div className="bg-warnBg border border-warn/40 text-warnText rounded-[12px] px-3 py-2 text-[12px] font-bold text-center mt-1">
-          Posted ✓ — waiting on Provider to confirm + release funds
+        <div className="bg-warnBg border border-warn/40 text-warnText rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center mt-1">
+          Posted · awaiting confirmation
         </div>
       )}
       {r.confirmed_at && (
-        <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-bold text-center mt-1">
-          Funds released ✓
+        <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center mt-1">
+          Funds released
         </div>
       )}
     </div>
@@ -326,8 +326,8 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
         </button>
       )}
       {r.status === 'accepted' && r.paid_at && !r.posted_at && (
-        <div className="bg-gl text-gd rounded-[14px] py-2.5 text-[13px] font-extrabold text-center">
-          Paid ✓ — waiting for Connector to post
+        <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center">
+          Paid · awaiting post
         </div>
       )}
       {/* Connector posted → Provider needs to confirm */}
@@ -341,13 +341,13 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
           )}
           <button onClick={onConfirmPost}
             className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all">
-            Confirm post is live · release funds
+            Confirm · release funds
           </button>
         </div>
       )}
       {r.confirmed_at && (
-        <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-bold text-center mt-1">
-          Confirmed ✓ — funds released to Connector
+        <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center mt-1">
+          Confirmed · released
         </div>
       )}
     </div>
