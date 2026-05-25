@@ -343,10 +343,11 @@ export function HomeScreen() {
               </svg>
             </button>
 
-            {/* Mode dropdown — Free vs Pay only makes sense in the FIND
-                direction. In spotlight intent the user IS the provider, so
-                we hide the picker to keep the toolbar uncluttered. */}
-            {intent === 'find' && (
+            {/* Mode dropdown — shown in BOTH directions. In find mode it
+                means "I want a free service in exchange for posting" vs
+                "I'll pay normal price". In spotlight mode (provider side)
+                it flips perspective: "I'll offer free in exchange for a
+                Connector post" vs "I'll pay the Connector's spotlight rate". */}
             <div ref={modeBtnRef} className="relative">
               <button
                 type="button"
@@ -365,23 +366,26 @@ export function HomeScreen() {
                 </svg>
               </button>
               {modeOpen && (
-                <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[200px]">
+                <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[220px]">
                   <ModeOption
                     active={freeServices}
                     label="Free for Connectors"
-                    sub="Providers offer free in exchange for IG/TT post"
+                    sub={intent === 'find'
+                      ? 'Provider offers free in exchange for IG/TT post'
+                      : "Offer free in exchange for the Connector's post"}
                     onClick={() => { setFreeServices(true); setModeOpen(false); }}
                   />
                   <ModeOption
                     active={!freeServices}
                     label="Pay full price"
-                    sub="Normal paid booking"
+                    sub={intent === 'find'
+                      ? 'Normal paid booking'
+                      : "Pay the Connector's spotlight rate"}
                     onClick={() => { setFreeServices(false); setModeOpen(false); }}
                   />
                 </div>
               )}
             </div>
-            )}
 
             {/* FAQ link removed — the flip-line under the box now carries
                 the "Learn about Connectors" message in find mode. */}
