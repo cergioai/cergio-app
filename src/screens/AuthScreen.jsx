@@ -13,7 +13,10 @@ import { Logo } from '../components/ui/Logo';
 // modals). Public client_key + redirect URI from build env.
 const TIKTOK_CLIENT_KEY = import.meta.env.VITE_TIKTOK_CLIENT_KEY || '';
 const TIKTOK_REDIRECT   = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiktok-oauth/callback`;
-const TIKTOK_SCOPES     = 'user.info.basic,user.info.profile';
+// Sandbox / unreviewed apps only get user.info.basic. After TikTok App
+// Review approves `user.info.profile`, set VITE_TIKTOK_SCOPES in env to
+// "user.info.basic,user.info.profile" — no code change needed.
+const TIKTOK_SCOPES = import.meta.env.VITE_TIKTOK_SCOPES || 'user.info.basic';
 
 function buildTikTokSigninUrl(state) {
   const params = new URLSearchParams({

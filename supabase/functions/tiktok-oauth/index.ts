@@ -80,16 +80,29 @@ serve(async (req: Request) => {
       const accessToken: string = tokenJson.access_token;
       const openId:      string = tokenJson.open_id;
 
-      // ── 2. Fetch profile (username + follower count if user.info.profile scope granted) ─
+      // ── 2. Fetch profile. Field selection depends on scopes:
+      //      user.info.basic   → open_id, union_id, avatar_url, display_name
+      //      user.info.profile → username, bio_description, profile_deep_link, is_verified
+      //      user.info.stats   → follower_count, following_count, likes_count, video_count
+      //  Sandbox / unreviewed apps only have basic. We request the wider set
+      //  ONLY when an env hint says we have those scopes. Otherwise we'd
+      //  fail with scope_not_authorized on the user/info call.
+      const hasProfileScope = (Deno.env.get('TIKTOK_HAVE_PROFILE_SCOPE') || '') === 'true';
+      const fields = hasProfileScope
+        ? 'open_id,union_id,avatar_url,display_name,username,follower_count'
+        : 'open_id,union_id,avatar_url,display_name';
       const meResp = await fetch(
-        'https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name,username,follower_count',
+        `https://open.tiktokapis.com/v2/user/info/?fields=${encodeURIComponent(fields)}`,
         { headers: { 'Authorization': `Bearer ${accessToken}` } },
       );
       const meJson = await meResp.json();
       const me = meJson?.data?.user;
-      if (!me?.username && !me?.display_name) {
+      if (!me?.display_name) {
         throw new Error(`TikTok /user/info failed: ${JSON.stringify(meJson).slice(0, 400)}`);
       }
+      // Without profile scope, `username` is undefined — fall back to
+      // display_name as the user-facing handle. The user can edit it
+      // manually in TikTokConnectModal later.
       const handle    = me.username || me.display_name;
       const followers = typeof me.follower_count === 'number' ? me.follower_count : null;
 

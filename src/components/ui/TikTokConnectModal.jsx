@@ -17,8 +17,10 @@ import { useEffect, useRef, useState } from 'react';
 const TIKTOK_CLIENT_KEY = import.meta.env.VITE_TIKTOK_CLIENT_KEY || '';
 const TIKTOK_REDIRECT   = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiktok-oauth/callback`;
 // user.info.basic gives open_id + display_name + avatar. follower_count needs
-// the Research API approval — for v1 we collect manually until then.
-const TIKTOK_SCOPES     = 'user.info.basic';
+// user.info.profile, which is only granted post-App-Review. Flip via env:
+//   VITE_TIKTOK_SCOPES=user.info.basic,user.info.profile
+// when the production TikTok app passes review.
+const TIKTOK_SCOPES = import.meta.env.VITE_TIKTOK_SCOPES || 'user.info.basic';
 
 function buildTikTokAuthUrl(state) {
   const params = new URLSearchParams({
