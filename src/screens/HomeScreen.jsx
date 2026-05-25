@@ -23,10 +23,13 @@ const FIND_EXAMPLES = [
   { label: 'Spanish-speaking sitter · Tue · $55', task: 'Need a babysitter who speaks Spanish Tuesday night under $55' },
   { label: 'Dog walker after 5pm · $40',         task: 'Need a dog walker after 5pm under $40' },
 ];
+// Spotlight examples — lead with the Connector ask so the provider-side
+// intent is obvious at a glance ("you're asking for an influencer").
+// Service comes after as the thing being spotlighted.
 const SPOTLIGHT_EXAMPLES = [
-  { label: 'Cat sitter · pets Connector 5K+',      task: 'Cat sitter looking for a pets Connector with 5K+ followers' },
-  { label: 'Chef · fashion/events Connector 7K+',  task: 'Chef looking for a fashion or events Connector with 7K+ followers' },
-  { label: 'Yoga studio · fitness Connector 10K+', task: 'Yoga studio looking for a fitness Connector with 10K+ followers' },
+  { label: 'Pets Connector 5K+ · dog training',    task: 'Need a pets Connector w/ 5K+ followers to spotlight my new dog training program' },
+  { label: 'Fashion Connector 7K+ · private chef', task: 'Need a fashion Connector w/ 7K+ followers to spotlight my private chef service' },
+  { label: 'Fitness Connector 10K+ · yoga studio', task: 'Need a fitness Connector w/ 10K+ followers to spotlight my new yoga studio' },
 ];
 
 // Engine plan — what the "backend" appears to be doing, in order. Each
@@ -523,7 +526,7 @@ export function HomeScreen() {
                 }}
                 placeholder={intent === 'find'
                   ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
-                  : 'Describe your service and what you need… e.g. boxing trainer, want a fitness influencer w/ 10K+'}
+                  : 'Need a pets Connector w/ 5K+ followers to spotlight my new dog training program (add pics)'}
                 rows={2}
                 className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
                            text-[14px] text-black placeholder-b3 font-medium leading-snug"
@@ -581,11 +584,10 @@ export function HomeScreen() {
                     onClick={() => setModeOpen(o => !o)}
                     aria-haspopup="listbox"
                     aria-expanded={modeOpen}
-                    className={`flex items-center gap-1.5 px-1 text-[12px] font-normal
+                    className={`flex items-center gap-1 px-1 text-[12px] font-normal
                                 transition-colors
                                 ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
                   >
-                    {freeServices && <span className="w-1.5 h-1.5 rounded-full bg-g flex-shrink-0" />}
                     {freeServices ? 'Free for Connectors' : 'Pay full price'}
                     <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5 opacity-70">
                       <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
