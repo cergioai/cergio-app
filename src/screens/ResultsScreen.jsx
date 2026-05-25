@@ -128,10 +128,27 @@ export function ResultsScreen() {
     ? services.map((s, i) => serviceToProvider(s, i, budgetCents))
     : [];
   const n = providers.length;
-  const titleText = n > 0
-    ? `Showing ${n} match${n === 1 ? '' : 'es'}`
-    : 'Here are your matches';
-  const pills = [when, where, budget && `Budget ${budget}`].filter(Boolean);
+
+  // Surface the inferred provider_type (broad category like "Driver" or
+  // "Plumber") in the title — never the specific offering name. This
+  // is the user's verification that Cergio understood their request.
+  // If the resolver didn't capture provider_type, we use a neutral
+  // fallback so we never echo a wrong offering.
+  const inferredType = (provider_type || '').trim();
+  const titleText = inferredType
+    ? (n > 0
+        ? `Showing ${n} ${inferredType.toLowerCase()}${n === 1 ? '' : 's'}`
+        : `Looking for ${inferredType.toLowerCase()}s`)
+    : (n > 0 ? `Showing ${n} match${n === 1 ? '' : 'es'}` : 'Here are your matches');
+
+  // Pills — keep them short so a long when/where doesn't bleed across
+  // the row. Trim anything > 36 chars with an ellipsis.
+  const trimPill = (s) => {
+    if (!s) return s;
+    const t = String(s).trim();
+    return t.length > 36 ? `${t.slice(0, 34)}…` : t;
+  };
+  const pills = [trimPill(when), trimPill(where), budget && `Budget ${budget}`].filter(Boolean);
 
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cr">
@@ -192,15 +209,21 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* No matches yet — real empty state, NOT mock providers. */}
+      {/* No matches yet — real empty state, NOT mock providers. Headline
+          mentions the inferred provider_type so the user can see Cergio
+          did understand their request, even though we have no rows. */}
       {services !== null && providers.length === 0 && (
         <div className="mx-5 mb-5 bg-white border border-bdr rounded-[18px] p-5 text-center">
           <div className="flex justify-center mb-3"><LeafLogo size={28} /></div>
           <p className="text-[15px] font-extrabold text-black leading-tight">
-            No matches yet
+            {inferredType
+              ? `No ${inferredType.toLowerCase()}s in your area yet`
+              : 'No matches yet'}
           </p>
           <p className="text-[12px] text-b3 mt-1.5 leading-relaxed">
-            We're still growing in your area. Cergio will notify you the moment a matching provider joins or sends you an offer.
+            {inferredType
+              ? `Cergio is watching for ${inferredType.toLowerCase()}s near you. We'll notify you the moment one joins or sends an offer.`
+              : "We're still growing in your area. Cergio will notify you the moment a matching provider joins or sends an offer."}
           </p>
           <button
             onClick={() => navigate('/find-friends')}
@@ -239,7 +262,10 @@ export function ResultsScreen() {
           Get <span className="text-g">recommendations</span> from your friends
         </p>
         <p className="text-[13px] text-b3 leading-relaxed mb-4">
-          Thinking for a {what ? what.toLowerCase() : 'housekeeper'}? Recommend one for free to earn,
+          {/* Use provider_type when available (clean noun like "driver"),
+              fall back to a generic "service" so the full pitch text
+              never leaks here. */}
+          Thinking of a {inferredType ? inferredType.toLowerCase() : 'service'}? Recommend one for free to earn,
           and we can show you their listings too.
         </p>
         <div className="flex flex-col">

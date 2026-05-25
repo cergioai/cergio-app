@@ -41,10 +41,20 @@ const SERVICE_MAP = [
   ['personal assistant',   'Personal Assistant'],
   ['errand',               'Personal Assistant'],
   ['concierge',            'Personal Assistant'],
-  // mobility / drivers
+  // mobility / drivers — keep broad. "go around the city",
+  // "drive me to meetings", "airport pickup" should all map to Driver
+  // even when Claude isn't reachable. Note: 'errand'/'errands' stay
+  // mapped to Personal Assistant above to avoid duplicate-key collisions.
   ['driver',               'Driver'],
-  ['chauffeur',             'Driver'],
+  ['chauffeur',            'Driver'],
   ['ride',                 'Driver'],
+  ['drive me',             'Driver'],
+  ['around the city',      'Driver'],
+  ['around town',          'Driver'],
+  ['airport pickup',       'Driver'],
+  ['airport drop',         'Driver'],
+  ['transportation',       'Driver'],
+  ['city tour',            'Driver'],
   // home services
   ['housekeeper',          'Cleaning'],
   ['house cleaner',        'Cleaning'],
