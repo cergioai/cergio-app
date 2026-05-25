@@ -412,7 +412,7 @@ export function HomeScreen() {
           <p className={`flex-1 text-[11px] leading-snug font-medium
                          ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
             {intent === 'find'
-              ? <>Have a service? <span className="font-bold">Learn about Connectors</span></>
+              ? <>Offer a service to a Connector in exchange for an <span className="font-bold">Instagram or TikTok post</span></>
               : <>Need to <span className="font-bold">book a service</span> instead?</>}
           </p>
           {/* Flip arrow — tiny rotating chevron */}
