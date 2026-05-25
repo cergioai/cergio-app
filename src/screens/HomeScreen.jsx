@@ -541,6 +541,11 @@ export function HomeScreen() {
               className="bg-white border border-bdr rounded-[24px] transition-all
                          focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA]"
             >
+              {/* Textarea — grows tall enough that the longer spotlight
+                  placeholder fits without forcing scroll INSIDE the box.
+                  Spotlight: 4 rows + min-height so the entire pitch is
+                  visible at a glance. Find: same shape; smaller content
+                  just leaves whitespace, which reads as breathing room. */}
               <textarea
                 ref={inputRef}
                 value={query}
@@ -554,7 +559,8 @@ export function HomeScreen() {
                 placeholder={intent === 'find'
                   ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
                   : 'Need an Instagram pets Connector w/ 5K+ followers to spotlight my new dog training program (add pics)'}
-                rows={2}
+                rows={intent === 'spotlight' ? 4 : 3}
+                style={{ minHeight: intent === 'spotlight' ? 96 : 72 }}
                 className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
                            text-[14px] text-black placeholder-b3 font-medium leading-snug"
               />
