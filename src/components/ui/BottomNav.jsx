@@ -7,7 +7,7 @@ const NAV_CONSUMER = [
   { id: 'search',   label: 'Search',   path: '/home' },
   { id: 'inbox',    label: 'Inbox',    path: '/inbox' },
   { id: 'earnings', label: 'Earnings', path: '/earnings' },
-  { id: 'activity', label: 'Requests', path: '/activity' },
+  { id: 'activity', label: 'Activity', path: '/activity' },
   { id: 'profile',  label: 'Profile',  path: '/profile' },
 ];
 
