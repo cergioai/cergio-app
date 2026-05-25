@@ -1,11 +1,13 @@
-// 5-tab unified nav. When serviceMode is true (provider view), Activity → Calendar.
+// 5-tab unified nav. Consumer view: Search · Inbox · Earnings · Requests · Profile.
+// Provider view: Home · Inbox · Calendar · Earnings · Profile (their outgoing
+// spotlight requests live INSIDE Inbox as a second tab, see JobsInboxScreen).
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const NAV_CONSUMER = [
   { id: 'search',   label: 'Search',   path: '/home' },
   { id: 'inbox',    label: 'Inbox',    path: '/inbox' },
   { id: 'earnings', label: 'Earnings', path: '/earnings' },
-  { id: 'activity', label: 'Activity', path: '/activity' },
+  { id: 'activity', label: 'Requests', path: '/activity' },
   { id: 'profile',  label: 'Profile',  path: '/profile' },
 ];
 

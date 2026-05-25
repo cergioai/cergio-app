@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { listProviderBookings } from '../lib/api';
+import { listProviderBookings, listMyOutboundSpotlightRequests } from '../lib/api';
 
 // Map a Supabase bookings row → the same shape the existing UI uses.
 function bookingToRequest(b) {
@@ -52,7 +52,7 @@ function Avatar({ name, idx }) {
   );
 }
 
-const TABS = ['Requests', 'Upcoming', 'Past'];
+const TABS = ['Requests', 'Sent', 'Upcoming', 'Past'];
 
 export function JobsInboxScreen() {
   const navigate = useNavigate();
@@ -73,6 +73,17 @@ export function JobsInboxScreen() {
   // Real bookings only — empty state when there are none. No more mock pad.
   const requests   = real ?? [];
   const badgeCount = requests.filter(r => r.isUnread).length;
+
+  // Sent — provider's outgoing spotlight asks. Loaded lazily so the
+  // Inbox tab doesn't pay the cost until the user opens the Sent tab.
+  const [sent, setSent] = useState(null);
+  useEffect(() => {
+    if (activeTab !== 'Sent' || !auth?.isSignedIn) return;
+    if (sent !== null) return;
+    listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => {
+      setSent(data || []);
+    });
+  }, [activeTab, auth?.isSignedIn, sent]);
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 bg-cr">
@@ -192,8 +203,55 @@ export function JobsInboxScreen() {
           </div>
         ))}
 
-        {/* empty states for Upcoming / Past */}
-        {activeTab !== 'Requests' && (
+        {/* SENT tab — outgoing spotlight requests this provider sent to
+            Connectors. Each row tappable, routes to the full Connector
+            inbox where they can manage / counter / pay. */}
+        {activeTab === 'Sent' && sent !== null && sent.length === 0 && (
+          <div className="bg-white border border-bdr rounded-[20px] p-6 text-center">
+            <p className="text-[14px] font-extrabold text-black">No spotlight requests sent yet</p>
+            <p className="text-[12px] text-b3 font-medium mt-1 leading-snug">
+              Ask a Connector to spotlight your service on Instagram or TikTok.
+            </p>
+            <button
+              onClick={() => navigate('/connectors/browse')}
+              className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-[13px] font-extrabold"
+            >
+              Browse Connectors →
+            </button>
+          </div>
+        )}
+        {activeTab === 'Sent' && (sent || []).map(s => {
+          const platform = s.platform === 'tiktok' ? 'TikTok' : 'Instagram';
+          const price = s.accepted_price_cents || s.offered_price_cents || s.official_price_cents || 0;
+          const created = s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+          return (
+            <button
+              key={s.id}
+              onClick={() => navigate('/connectors/requests')}
+              className="bg-white border border-bdr rounded-[20px] p-4 flex items-center gap-3 text-left
+                         hover:border-g/40 transition-colors"
+            >
+              <div className="w-12 h-12 rounded-full bg-gl flex items-center justify-center flex-shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#3D8B00">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-extrabold text-black leading-tight truncate">
+                  {platform} spotlight request
+                </p>
+                <p className="text-[12px] text-b3 mt-0.5 leading-snug">
+                  {created} · {s.status}
+                  {price ? ` · $${(price / 100).toFixed(0)}` : ''}
+                </p>
+              </div>
+              <span className="text-b3 text-base">›</span>
+            </button>
+          );
+        })}
+
+        {/* Empty states for Upcoming / Past */}
+        {(activeTab === 'Upcoming' || activeTab === 'Past') && (
           <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
             <p className="text-[14px] text-b3 font-medium">
               No {activeTab.toLowerCase()} jobs yet.
