@@ -256,51 +256,94 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* end-of-list reco card — touch-point for the invite/reco modules */}
-      <div className="mx-5 my-4 bg-soft rounded-[18px] p-5">
-        <p className="text-[16px] font-extrabold text-black leading-tight mb-1">
-          Get <span className="text-g">recommendations</span> from your friends
-        </p>
-        <p className="text-[13px] text-b3 leading-relaxed mb-4">
-          {/* Use provider_type when available (clean noun like "driver"),
-              fall back to a generic "service" so the full pitch text
-              never leaks here. */}
-          Thinking of a {inferredType ? inferredType.toLowerCase() : 'service'}? Recommend one for free to earn,
-          and we can show you their listings too.
-        </p>
-        <div className="flex flex-col">
-          <button
-            onClick={() => navigate('/invite/friends?mode=reco')}
-            className="flex items-center justify-between py-3 border-b border-bdr text-left"
-          >
-            <span className="text-[14px] font-extrabold text-black">Invite from contacts</span>
-            <span className="text-b3 text-lg">›</span>
-          </button>
-          <button
-            onClick={() => showToast('Your link has been copied!')}
-            className="flex items-center justify-between py-3 border-b border-bdr text-left"
-          >
-            <span className="text-[14px] font-extrabold text-black">Copy invite link</span>
-            <span className="text-b3 text-lg">›</span>
-          </button>
-          <button
-            onClick={() => showToast('Share via system — coming soon')}
-            className="flex items-center justify-between py-3 text-left"
-          >
-            <span className="text-[14px] font-extrabold text-black">More</span>
-            <span className="text-b3 text-lg">›</span>
-          </button>
-        </div>
-      </div>
+      {/* Smart reco/share card — visually consistent with the Home
+          house ad (soft-green wash, sprout icon, clean CTAs). The share
+          message is BUILT from chat.state so it lands prefilled in any
+          channel: "Hey — looking for a barber under $80 tuesday in
+          NYC. Any recs?". CERGIO-GUARD: keep this aligned with the
+          Home invite-ad palette. */}
+      {(() => {
+        const noun = inferredType ? inferredType.toLowerCase() : (what || 'someone good');
+        const parts = [];
+        if (budget) parts.push(`under ${budget}`);
+        if (when)   parts.push(when);
+        if (where)  parts.push(`in ${where}`);
+        const tail = parts.join(' ');
+        const shareMsg = `Hey — I'm looking for a ${noun}${tail ? ' ' + tail : ''}. Any recs you'd trust?`;
 
-      {/* share */}
-      <button
-        onClick={() => showToast('Share link copied! 🔗')}
-        className="block w-[calc(100%-40px)] mx-5 mb-4 bg-white border border-bdr rounded-pill
-                   py-3.5 text-[14px] font-bold text-b2 cursor-pointer hover:border-g hover:text-gd transition-colors"
-      >
-        Share request with friends
-      </button>
+        const doNativeShare = async () => {
+          try {
+            if (navigator.share) {
+              await navigator.share({ text: shareMsg, title: 'Cergio request' });
+              return;
+            }
+          } catch { /* user cancelled */ }
+          try {
+            await navigator.clipboard.writeText(shareMsg);
+            showToast('Copied — paste it to a friend ✓');
+          } catch {
+            showToast('Share is unavailable — try Invite from contacts.');
+          }
+        };
+        const goReco = () => navigate('/invite/friends?mode=reco', {
+          state: { prefilledMessage: shareMsg, what: noun, when, where, budget },
+        });
+
+        return (
+          <div className="mx-5 my-4 bg-gl border border-g/25 rounded-[20px] p-4">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-g/20 mt-0.5">
+                {/* same sprout glyph as Home spotlight house ad */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 20 H20" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M12 20 V12" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M12 16 C 8 16, 6 13, 6 10 C 9 11, 12 13, 12 16 Z" fill="#3D8B00" />
+                  <path d="M12 13 C 16 13, 18 10, 18 7 C 15 8, 12 10, 12 13 Z" fill="#5BC404" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-extrabold text-gd leading-tight">
+                  Ask friends for a {noun} reco
+                </p>
+                <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
+                  We'll send them your request — they reco one back, you earn for any friend that joins.
+                </p>
+              </div>
+            </div>
+
+            {/* Prefilled share message — visible so the user sees
+                exactly what gets sent. Click to tweak in clipboard. */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={doNativeShare}
+              onKeyDown={(e) => { if (e.key === 'Enter') doNativeShare(); }}
+              className="bg-white border border-bdr rounded-[14px] px-3 py-2.5 text-[12px] text-b2 leading-snug
+                         font-medium cursor-pointer hover:border-g/40 transition-colors"
+            >
+              {shareMsg}
+            </div>
+
+            {/* Two clean CTAs, same shape as Home house ad */}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={goReco}
+                className="flex-1 bg-g text-white rounded-pill py-2.5 text-[12px] font-extrabold
+                           hover:opacity-90 active:scale-[.98] transition-all"
+              >
+                Send to friends →
+              </button>
+              <button
+                onClick={doNativeShare}
+                className="bg-white border border-bdr rounded-pill px-4 py-2.5 text-[12px] font-extrabold text-b2
+                           hover:border-g hover:text-gd transition-colors"
+              >
+                Copy / share
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
