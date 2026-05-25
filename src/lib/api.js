@@ -39,28 +39,48 @@ export async function createService(draft) {
   }
   const ownerId = userRes.user.id;
 
-  // 1. Insert service. taxonomy_* fields are populated when the
-  //    /list-service/about screen ran the provider's typed "Service type"
-  //    through resolveOffering(). Null is fine — service still works,
-  //    matching falls back to text category.
-  const { data: svc, error: svcErr } = await supabase
-    .from('services')
-    .insert({
-      owner_id:     ownerId,
-      title:        makeTitle(draft.category, draft.location),
-      category:     draft.category || null,
-      description:  draft.description || null,
-      location_text: draft.location || null,
-      lat:          draft.lat ?? null,
-      lng:          draft.lng ?? null,
-      photo_class:  draft.photoClass || 'fv-jamie',
-      status:       'listed',
-      taxonomy_category:      draft.taxonomy_category      || null,
-      taxonomy_provider_type: draft.taxonomy_provider_type || null,
-      taxonomy_offering_id:   draft.taxonomy_offering_id   || null,
-    })
-    .select()
-    .single();
+  // 1. Insert service. taxonomy_* fields are *optional* in the schema —
+  //    older deployments don't have those columns yet (the PostgREST
+  //    cache returns "Could not find the 'taxonomy_category' column"
+  //    when it tries to insert them). We retry without taxonomy fields
+  //    on that specific failure so the listing still saves; routing
+  //    just degrades to text category until the migration lands.
+  const baseRow = {
+    owner_id:     ownerId,
+    title:        makeTitle(draft.category, draft.location),
+    category:     draft.category || null,
+    description:  draft.description || null,
+    location_text: draft.location || null,
+    lat:          draft.lat ?? null,
+    lng:          draft.lng ?? null,
+    photo_class:  draft.photoClass || 'fv-jamie',
+    status:       'listed',
+  };
+  const taxonomyRow = {
+    taxonomy_category:      draft.taxonomy_category      || null,
+    taxonomy_provider_type: draft.taxonomy_provider_type || null,
+    taxonomy_offering_id:   draft.taxonomy_offering_id   || null,
+  };
+  let svc; let svcErr;
+  {
+    const r = await supabase
+      .from('services')
+      .insert({ ...baseRow, ...taxonomyRow })
+      .select()
+      .single();
+    svc = r.data; svcErr = r.error;
+  }
+  // Schema cache miss → retry without taxonomy_* columns.
+  if (svcErr && /taxonomy_(category|provider_type|offering_id)/.test(svcErr.message || '')) {
+    // eslint-disable-next-line no-console
+    console.warn('[createService] taxonomy_* columns missing in schema; retrying without. Apply the migration to enable taxonomy routing.', svcErr.message);
+    const r = await supabase
+      .from('services')
+      .insert(baseRow)
+      .select()
+      .single();
+    svc = r.data; svcErr = r.error;
+  }
 
   if (svcErr) return { data: null, error: svcErr };
 
@@ -69,7 +89,7 @@ export async function createService(draft) {
   //    name) plus taxonomy_override=true if we couldn't confidently match
   //    it. Override rows surface in the admin curation queue later.
   if (Array.isArray(draft.offerings) && draft.offerings.length > 0) {
-    const rows = draft.offerings.map(o => ({
+    const baseRows = draft.offerings.map(o => ({
       service_id:        svc.id,
       name:              o.name || (o.kind === 'hourly' ? 'Hourly rate' : 'Session'),
       description:       o.description || null,
@@ -78,10 +98,26 @@ export async function createService(draft) {
       duration_minutes:  o.kind === 'session' ? (parseInt(o.durationMinutes, 10) || null) : null,
       currency:          'USD',
       is_default:        true,
-      taxonomy_offering_id: o.taxonomy_offering_id || null,
-      taxonomy_override:   !!o.taxonomy_override,
     }));
-    const { error: offErr } = await supabase.from('offerings').insert(rows);
+    const taxonomyRows = draft.offerings.map(o => ({
+      taxonomy_offering_id: o.taxonomy_offering_id || null,
+      taxonomy_override:    !!o.taxonomy_override,
+    }));
+    // Same defensive pattern as the services insert above — try with
+    // taxonomy columns; if PostgREST schema cache rejects them, retry
+    // without so the listing still publishes.
+    let offErr;
+    {
+      const rows = baseRows.map((r, i) => ({ ...r, ...taxonomyRows[i] }));
+      const r = await supabase.from('offerings').insert(rows);
+      offErr = r.error;
+    }
+    if (offErr && /taxonomy_(offering_id|override)/.test(offErr.message || '')) {
+      // eslint-disable-next-line no-console
+      console.warn('[createService] offerings taxonomy_* columns missing; retrying without.', offErr.message);
+      const r = await supabase.from('offerings').insert(baseRows);
+      offErr = r.error;
+    }
     if (offErr) return { data: svc, error: offErr };
   }
 
