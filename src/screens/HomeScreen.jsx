@@ -6,15 +6,25 @@ import { CcGateModal } from '../components/ui/CcGateModal';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 
-// Examples — short, punchy. Mix of single tasks + budget-bundled requests.
-// Labels kept tight so the row doesn't push the search box off-screen.
-const EXAMPLES = [
+// Examples — short, punchy. Two sets that swap with intent:
+//   - FIND_EXAMPLES: consumer-side single tasks + budget bundles
+//   - SPOTLIGHT_EXAMPLES: provider-side pitches that name the kind of
+//     Connector + audience size they're looking for
+const FIND_EXAMPLES = [
   { label: 'Wedding under $100k',     task: 'Plan my wedding under $100k' },
   { label: 'Move under $1k',          task: 'Help me move under $1,000' },
   { label: 'Deep clean',              task: 'Deep clean my home' },
   { label: 'Birthday under $5k',      task: 'Birthday party under $5,000' },
   { label: 'Dog walker',              task: 'Find a dog walker' },
   { label: 'Kitchen reno under $50k', task: 'Renovate my kitchen under $50k' },
+];
+const SPOTLIGHT_EXAMPLES = [
+  { label: 'Cat sitter · pets Connector 5K+',     task: 'Cat sitter looking for a pets Connector with 5K+ followers' },
+  { label: 'Chef · fashion/events Connector 7K+', task: 'Chef looking for a fashion or events Connector with 7K+ followers' },
+  { label: 'Yoga studio · fitness Connector 10K+', task: 'Yoga studio looking for a fitness Connector with 10K+ followers' },
+  { label: 'Stylist · beauty Connector 8K+',      task: 'Hair stylist looking for a beauty Connector with 8K+ followers' },
+  { label: 'Bakery · food Connector 5K+',         task: 'Bakery looking for a food Connector with 5K+ followers' },
+  { label: 'Trainer · health Connector 10K+',     task: 'Personal trainer looking for a health Connector with 10K+ followers' },
 ];
 
 // Single option inside the mode-picker popover.
@@ -419,10 +429,11 @@ export function HomeScreen() {
         </button>
       </div>
 
-      {/* Examples — tiny chips, no eyebrow header. Matches Claude's
-          "suggested prompts" row under the input box. */}
+      {/* Examples — tiny chips, no eyebrow header. The list itself swaps
+          with intent: consumer prompts in find mode, provider-pitch
+          prompts in spotlight mode. Tapping seeds /intake. */}
       <div className="flex flex-wrap gap-1.5 px-5 mt-2 mb-4">
-        {EXAMPLES.map(e => (
+        {(intent === 'find' ? FIND_EXAMPLES : SPOTLIGHT_EXAMPLES).map(e => (
           <button
             key={e.label}
             onClick={() => startTask(e.task)}
