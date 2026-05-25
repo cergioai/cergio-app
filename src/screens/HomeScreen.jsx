@@ -85,6 +85,14 @@ export function HomeScreen() {
   const [locationText, setLocationText] = useState('');
   const [locationCoords, setLocationCoords] = useState(null);
   const [locEditing, setLocEditing] = useState(false);
+
+  // Travel radius — only relevant in spotlight (provider) mode. Tells the
+  // Connector how far the provider will travel to deliver the service.
+  // 'onsite' = customers come to the provider; numeric values = miles from
+  // the location; 'anywhere' = no constraint (provider will travel nationally).
+  // Stored client-side for now; forwarded to /connectors/browse on submit.
+  const [travelRadius, setTravelRadius] = useState('10mi');
+  const [showMapDraw, setShowMapDraw] = useState(false); // stub for future map drawer
   useEffect(() => {
     if (!auth?.isSignedIn) return;
     getDefaultAddress().then(({ data }) => {
@@ -129,7 +137,14 @@ export function HomeScreen() {
       navigate('/list-service');
       return;
     }
-    navigate('/connectors/browse', { state: { pitch: query.trim() } });
+    navigate('/connectors/browse', {
+      state: {
+        pitch: query.trim(),
+        serviceLocation: locationText || null,
+        serviceCoords:   locationCoords || null,
+        travelRadius,
+      },
+    });
   };
   const submitQuery = () => {
     if (intent === 'spotlight') { submitSpotlight(); return; }
@@ -205,11 +220,11 @@ export function HomeScreen() {
         </h1>
       </div>
 
-      {/* Location chip — only relevant in FIND mode. In spotlight mode the
-          search is about the user's service, not where they need it, so we
-          hide the row entirely to declutter and save vertical space. */}
-      {intent === 'find' && (
-      <div className="px-5 mt-1 mb-2 flex items-center gap-2 text-[11px] text-b3">
+      {/* Location chip — shown in BOTH modes now. Label adapts:
+          - find:      "Add your address" (where you need the service)
+          - spotlight: "Service location" (where you offer it)
+          Spotlight mode also gets a travel-radius row right below. */}
+      <div className="px-5 mt-1 mb-1 flex items-center gap-2 text-[11px] text-b3">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
           <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
@@ -234,7 +249,7 @@ export function HomeScreen() {
                   }).catch(() => {});
                 }
               }}
-              placeholder="Add your address"
+              placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
               className=""
             />
             <button onClick={() => setLocEditing(false)}
@@ -243,7 +258,8 @@ export function HomeScreen() {
         ) : (
           <>
             <span className="flex-1 truncate font-bold text-b2">
-              {locationText || 'Add your address'}
+              {locationText
+                || (intent === 'spotlight' ? 'Service location' : 'Add your address')}
             </span>
             <button onClick={() => setLocEditing(true)}
               className="text-[12px] font-extrabold text-g underline underline-offset-2">
@@ -252,6 +268,49 @@ export function HomeScreen() {
           </>
         )}
       </div>
+
+      {/* Travel-radius picker — spotlight mode only. Tiny preset chips +
+          a "Draw on map" link that opens the map drawer (stubbed for now).
+          Selection state is local; gets forwarded to the request flow. */}
+      {intent === 'spotlight' && (
+        <div className="px-5 mt-0 mb-2 flex items-center gap-1.5 text-[11px] text-b3 flex-wrap">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+            <path d="M5 12a7 7 0 0 1 14 0"/><path d="M12 19v-7"/>
+          </svg>
+          <span className="font-medium mr-0.5">Willing to travel:</span>
+          {[
+            { id: 'onsite',   label: 'On-site only' },
+            { id: '5mi',      label: '5 mi' },
+            { id: '10mi',     label: '10 mi' },
+            { id: '25mi',     label: '25 mi' },
+            { id: 'anywhere', label: 'Anywhere' },
+          ].map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setTravelRadius(opt.id)}
+              className={`rounded-pill px-2 py-0.5 text-[10px] font-extrabold transition-colors
+                          ${travelRadius === opt.id
+                            ? 'bg-gl text-gd border border-g/40'
+                            : 'bg-white text-b2 border border-bdr hover:border-g/40'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              if (!locationCoords) {
+                showToast('Set your service location first.');
+                return;
+              }
+              setShowMapDraw(true);
+              showToast('Draw on map — coming soon. Pick a radius preset for now.');
+            }}
+            className="text-[10px] font-bold text-g underline underline-offset-2 ml-1"
+          >
+            Draw on map
+          </button>
+        </div>
       )}
 
       {/* Claude-style submit box — single rounded container with the input
