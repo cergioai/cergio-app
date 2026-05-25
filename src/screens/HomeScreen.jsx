@@ -1073,10 +1073,10 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Invite + recommend = recurring income
+                Help friends. Earn recurring income.
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Weekly cash, free services + a platform-growth bonus. Shared upside, every week.
+                Cash + free services + growth income. Human-powered AI for shared prosperity.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
@@ -1085,9 +1085,10 @@ export function HomeScreen() {
       )}
 
       {/* Spotlight-side house ad — provider parallel to the find-side
-          card. Same soft-green palette + shared-economics framing,
-          but copy is provider-flavored: turn your social into a
-          referral network, earn cash + growth income. */}
+          card. Same soft-green palette. Copy leads with the provider
+          flip: turn your existing clients + social into a referral
+          network, then closes on the same shared-prosperity line so
+          both sides read as one platform. */}
       {intent === 'spotlight' && !submitted && (
         <div className="px-5 mt-1 mb-6">
           <button
@@ -1103,10 +1104,10 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Spotlight + invite = recurring income
+                Turn clients + social into your referral network.
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Turn customers into your referral network. Cash + platform growth income. Shared upside.
+                Cash + growth income. Human-powered AI for shared prosperity.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
