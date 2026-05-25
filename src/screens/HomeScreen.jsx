@@ -725,7 +725,7 @@ export function HomeScreen() {
                 aria-pressed={intent === 'spotlight'}
               >
                 {intent === 'find'
-                  ? 'Have a service? Spotlight it (Instagram/TikTok) →'
+                  ? 'Have a service? Spotlight it free (Instagram/TikTok) →'
                   : '← Book a service instead'}
               </button>
             </div>
