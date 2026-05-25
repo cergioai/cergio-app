@@ -1,3 +1,15 @@
+// Home — single-screen search experience. After submit, we DO NOT navigate
+// away. The entire post-submit flow happens inline:
+//   1. A compact "Your request" summary card slides in above the input
+//      (profile-style typography: 13/11px, on the side, not a takeover).
+//   2. A live engine ticker streams what the backend is doing — selecting
+//      providers your friends recommend → notifying → negotiating → offers
+//      in. Matches the Claude-status pattern (single-line, animated).
+//   3. As offers come back they stream in as tappable rows, right under
+//      the status. Tap to open the request detail / inbox.
+//
+// We keep the user on this screen so the experience feels seamless —
+// no /roaming / /intake takeover unless they need to chat for missing fields.
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
@@ -6,9 +18,7 @@ import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 import { REWARDS } from '../lib/rewards';
 
-// Example chips — conversational, single-task. Three per mode.
-// Tone match: the kind of thing the user would actually type — short,
-// budget-anchored, mentions a real constraint (language, time, vibe).
+// Example chips — conversational, single-task.
 const FIND_EXAMPLES = [
   { label: 'Deep cleaning under $250',           task: 'Need deep cleaning under $250' },
   { label: 'Spanish-speaking sitter · Tue · $55', task: 'Need a babysitter who speaks Spanish Tuesday night under $55' },
@@ -20,22 +30,38 @@ const SPOTLIGHT_EXAMPLES = [
   { label: 'Yoga studio · fitness Connector 10K+', task: 'Yoga studio looking for a fitness Connector with 10K+ followers' },
 ];
 
-// Status ticker lines — shown one-by-one after Send is tapped. Mode-aware
-// so the metaphor matches the user's intent. Each line lives for ~1.1s
-// before being replaced, then we route to /intake (find) or
-// /connectors/browse (spotlight).
-const FIND_STATUS = [
-  "Connecting with your friends' recommended providers",
-  'Notifying providers',
-  'Negotiating on your behalf',
-];
-const SPOTLIGHT_STATUS = [
-  'Finding Connectors who match your audience',
-  'Checking follower overlap',
-  'Sending your pitch',
-];
+// Engine plan — what the "backend" appears to be doing, in order. Each
+// stage has a label (status text), an optional dynamic detail (provider
+// count, etc.), and a duration. After the last stage we surface a result
+// CTA pointing the user at their inbox.
+function buildFindPlan() {
+  // Friend-recommended provider pool — picked from the same mock cohort
+  // the Activity tab uses. Real backend will replace this with the live
+  // friends-of-friends recommendation set.
+  const pool = [
+    { name: 'Jamie (cleaning)',  by: 'Sara' },
+    { name: 'John (handyman)',   by: 'Mike' },
+    { name: 'Steve (mover)',     by: 'Lily' },
+    { name: 'Ana (sitter)',      by: 'Priya' },
+  ];
+  return [
+    { label: "Selecting providers your friends recommend",   ms: 1100 },
+    { label: `Found ${pool.length} in your network`,         ms: 900,  detail: pool.map(p => p.name).join(' · ') },
+    { label: 'Notifying providers',                          ms: 1100 },
+    { label: 'Negotiating offers on your behalf',            ms: 1300 },
+    { label: 'Awaiting first offer',                         ms: 900 },
+  ];
+}
+function buildSpotlightPlan() {
+  return [
+    { label: 'Matching Connectors who fit your audience',    ms: 1100 },
+    { label: 'Found 6 Connectors in your area',              ms: 900,  detail: 'Pets · Fitness · Fashion · Food · Local · Lifestyle' },
+    { label: 'Checking follower overlap',                    ms: 1100 },
+    { label: 'Sending your pitch',                           ms: 1100 },
+    { label: 'Awaiting Connector responses',                 ms: 900 },
+  ];
+}
 
-// Single option inside the mode-picker popover.
 function ModeOption({ active, label, sub, onClick }) {
   return (
     <button
@@ -55,10 +81,6 @@ function ModeOption({ active, label, sub, onClick }) {
   );
 }
 
-// Leaf icon — used inside the green send button. When `working` is true,
-// the leaf "opens" — a tiny unfold + rotate that signals Cergio is on it.
-// The animation classes are inline so we don't have to touch the Tailwind
-// config: a custom keyframes block lives in index.css under .cg-leaf-open.
 function LeafIcon({ working }) {
   return (
     <svg
@@ -66,10 +88,7 @@ function LeafIcon({ working }) {
       className={working ? 'cg-leaf-open' : 'cg-leaf-rest'}
       style={{ transformOrigin: '50% 70%' }}
     >
-      {/* Stem */}
       <path d="M12 22V13" stroke="white" strokeWidth="2" strokeLinecap="round" />
-      {/* Leaf body — a teardrop. The opening animation tilts + scales
-          this shape, so it reads as a folded leaf unfurling. */}
       <path
         d="M12 13c-4 0-7-3-7-7 0-1.2.3-2.3.7-3.3C7.2 3.6 9.5 5 12 5s4.8-1.4 6.3-2.3c.4 1 .7 2.1.7 3.3 0 4-3 7-7 7z"
         fill="white"
@@ -78,68 +97,94 @@ function LeafIcon({ working }) {
   );
 }
 
+// localStorage key for signed-out users' "guest" address. Replaced by the
+// server-side default once they sign in (auth flip reloads from Supabase).
+const GUEST_ADDR_KEY = 'cergio.guestAddress';
+
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { showToast, startTask, freeServices, setFreeServices, auth } = useOutletContext();
+  const { showToast, freeServices, setFreeServices, auth } = useOutletContext();
   const [query, setQuery] = useState('');
-  const [images, setImages] = useState([]);          // [{ name, dataUrl }]
-  const [modeOpen, setModeOpen] = useState(false);   // Free vs Pay popover
+  const [images, setImages] = useState([]);
+  const [modeOpen, setModeOpen] = useState(false);
   const [showCcGate, setShowCcGate] = useState(false);
   const [ccVerified, setCcVerified] = useState(false);
-  // Search intent — 'find' (default; user is looking for a service) vs
-  // 'spotlight' (user is a Provider; they want a Connector to spotlight
-  // THEIR service in exchange for a free job). The toggle UNDER the search
-  // box flips the placeholder + submit destination without changing layout.
   const [intent, setIntent] = useState('find');
-  const [hasService, setHasService] = useState(null); // null=unknown, true/false once loaded
+  const [hasService, setHasService] = useState(null);
   const inputRef = useRef(null);
   const fileRef = useRef(null);
   const modeBtnRef = useRef(null);
 
-  // Status ticker — one-line "Claude is working" indicator that runs after
-  // a submit. `statusIdx` walks through FIND_STATUS / SPOTLIGHT_STATUS, then
-  // we route to the next screen. While `working` is true, send button + leaf
-  // are in their animated state and inputs are visually paused (not disabled
-  // — user can still cancel via tap-outside or just wait).
-  const [working, setWorking] = useState(false);
-  const [statusIdx, setStatusIdx] = useState(0);
+  // Engine state — once submitted we run the plan stage-by-stage. The
+  // user stays on Home throughout.
+  const [submitted, setSubmitted] = useState(false);
+  const [submittedAt, setSubmittedAt] = useState(null);   // ISO for timestamping the summary
+  const [submittedText, setSubmittedText] = useState(''); // their actual typed query
+  const [planIdx, setPlanIdx] = useState(0);
+  const [planDone, setPlanDone] = useState(false);
+  const timersRef = useRef([]);
 
-  // Pull CC verification status once on mount (and on auth flip).
+  // Mode-aware plan reference — rebuilt on each submit so the inline log
+  // reflects the latest intent and any seeded data.
+  const planRef = useRef(null);
+  const plan = planRef.current || [];
+
   useEffect(() => {
     if (!auth?.isSignedIn) { setCcVerified(false); return; }
     getMyCcStatus().then(({ data }) => setCcVerified(!!data?.cc_verified_at));
   }, [auth?.isSignedIn]);
 
-  // Detect if the signed-in user already has at least one listed service —
-  // determines where the spotlight-intent send-arrow routes.
   useEffect(() => {
     if (!auth?.isSignedIn) { setHasService(null); return; }
     listMyServices().then(({ data }) => setHasService((data || []).length > 0));
   }, [auth?.isSignedIn]);
 
-  // Location — prefilled from the user's saved default address. First-time
-  // users see no address chip at all (clean Home). Once they set one, the
-  // chip appears with "Change" next to it. Same pattern for find + spotlight.
+  // Location — saved-default-first, then guest localStorage, then blank.
   const [locationText, setLocationText] = useState('');
   const [locationCoords, setLocationCoords] = useState(null);
   const [locEditing, setLocEditing] = useState(false);
-
-  // Travel radius — spotlight (provider) mode only.
   const [travelRadius, setTravelRadius] = useState('10mi');
-  const [showMapDraw, setShowMapDraw] = useState(false);
+
   useEffect(() => {
-    if (!auth?.isSignedIn) return;
-    getDefaultAddress().then(({ data }) => {
-      if (data?.formatted_address) {
-        setLocationText(data.formatted_address);
-        if (data.lat != null && data.lng != null) {
-          setLocationCoords({ lat: data.lat, lng: data.lng });
+    // Signed-in: hydrate from Supabase default. If none, fall back to any
+    // localStorage guest value the user had set pre-signin (we'll then
+    // promote it to a real saved default on next pick).
+    if (auth?.isSignedIn) {
+      getDefaultAddress().then(({ data }) => {
+        if (data?.formatted_address) {
+          setLocationText(data.formatted_address);
+          if (data.lat != null && data.lng != null) {
+            setLocationCoords({ lat: data.lat, lng: data.lng });
+          }
+          return;
+        }
+        // No server default — try guest cache.
+        try {
+          const raw = localStorage.getItem(GUEST_ADDR_KEY);
+          if (raw) {
+            const g = JSON.parse(raw);
+            if (g?.address) {
+              setLocationText(g.address);
+              if (g.lat != null && g.lng != null) setLocationCoords({ lat: g.lat, lng: g.lng });
+            }
+          }
+        } catch { /* ignore */ }
+      });
+      return;
+    }
+    // Signed-out: just guest cache.
+    try {
+      const raw = localStorage.getItem(GUEST_ADDR_KEY);
+      if (raw) {
+        const g = JSON.parse(raw);
+        if (g?.address) {
+          setLocationText(g.address);
+          if (g.lat != null && g.lng != null) setLocationCoords({ lat: g.lat, lng: g.lng });
         }
       }
-    });
+    } catch { /* ignore */ }
   }, [auth?.isSignedIn]);
 
-  // Close mode popover on outside click.
   useEffect(() => {
     if (!modeOpen) return;
     const onDoc = (e) => {
@@ -151,78 +196,35 @@ export function HomeScreen() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [modeOpen]);
 
-  // Run the status ticker for the current intent, then call `after()` once
-  // the last line has been shown. Returns a cancel fn so we can clean up
-  // if the user navigates away mid-sequence.
-  const runStatusTicker = (after) => {
-    const lines = intent === 'spotlight' ? SPOTLIGHT_STATUS : FIND_STATUS;
-    const PER_LINE_MS = 1100;
-    setWorking(true);
-    setStatusIdx(0);
-    const timers = [];
-    lines.forEach((_, i) => {
-      if (i === 0) return; // first line already shown by setStatusIdx(0)
-      timers.push(setTimeout(() => setStatusIdx(i), i * PER_LINE_MS));
+  // Kick the engine ticker. Sets up timers that advance planIdx through
+  // the stages, then sets planDone when the last stage finishes.
+  const startEngine = (mode) => {
+    const built = mode === 'spotlight' ? buildSpotlightPlan() : buildFindPlan();
+    planRef.current = built;
+    setPlanIdx(0);
+    setPlanDone(false);
+
+    // Clear any prior run.
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+
+    let cum = 0;
+    built.forEach((stage, i) => {
+      cum += stage.ms;
+      if (i < built.length - 1) {
+        timersRef.current.push(setTimeout(() => setPlanIdx(i + 1), cum));
+      } else {
+        timersRef.current.push(setTimeout(() => setPlanDone(true), cum));
+      }
     });
-    timers.push(setTimeout(() => {
-      setWorking(false);
-      after();
-    }, lines.length * PER_LINE_MS));
-    return () => timers.forEach(clearTimeout);
   };
 
-  // The actual nav decision — extracted so the status ticker can fire it.
-  const doRoute = () => {
-    if (intent === 'spotlight') {
-      if (!auth?.isSignedIn) {
-        showToast('Sign in to send a spotlight request');
-        navigate('/auth');
-        return;
-      }
-      if (hasService === false) {
-        showToast("First list your service — we'll bring you right back.");
-        navigate('/list-service');
-        return;
-      }
-      navigate('/connectors/browse', {
-        state: {
-          pitch: query.trim(),
-          serviceLocation: locationText || null,
-          serviceCoords:   locationCoords || null,
-          travelRadius,
-        },
-      });
-      return;
-    }
-    // find mode
-    if (images.length > 0 && !ccVerified) {
-      if (!auth?.isSignedIn) {
-        showToast('Sign in to upload photos');
-        navigate('/auth');
-        return;
-      }
-      setShowCcGate(true);
-      return;
-    }
-    const text = query.trim();
-    if (!text && images.length === 0) {
-      navigate('/intake', { state: { initialLocation: locationText, initialCoords: locationCoords } });
-      return;
-    }
-    navigate('/intake', {
-      state: {
-        initialMessage:  text,
-        initialLocation: locationText,
-        initialCoords:   locationCoords,
-      },
-    });
-  };
+  // Clean up timers on unmount.
+  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   const submitQuery = () => {
-    if (working) return; // already in progress — ignore double-taps
-    // Gate before we even start the ticker, so we don't show "negotiating"
-    // and then bounce them to /auth. Re-uses the same checks doRoute() does
-    // but only for the blocking redirects.
+    // Spotlight-mode pre-checks — same as before, but if user passes
+    // them we run the engine here instead of routing.
     if (intent === 'spotlight') {
       if (!auth?.isSignedIn) {
         showToast('Sign in to send a spotlight request');
@@ -243,11 +245,29 @@ export function HomeScreen() {
       setShowCcGate(true);
       return;
     }
-    // Run the status ticker, THEN route.
-    runStatusTicker(() => doRoute());
+    const text = query.trim();
+    if (!text && images.length === 0) {
+      showToast('Tell me what you need — type or tap an example.');
+      return;
+    }
+    setSubmittedText(text || (images.length ? `${images.length} photo${images.length > 1 ? 's' : ''} attached` : ''));
+    setSubmittedAt(new Date().toISOString());
+    setSubmitted(true);
+    startEngine(intent);
   };
 
-  // Image attach handler.
+  // Reset to a fresh search state. Used by "Send another request".
+  const resetSubmit = () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setSubmitted(false);
+    setSubmittedText('');
+    setSubmittedAt(null);
+    setPlanIdx(0);
+    setPlanDone(false);
+    setQuery('');
+  };
+
   const onFilesPicked = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 4);
     files.forEach(file => {
@@ -262,7 +282,22 @@ export function HomeScreen() {
 
   const removeImage = (i) => setImages(prev => prev.filter((_, idx) => idx !== i));
 
-  const statusLines = intent === 'spotlight' ? SPOTLIGHT_STATUS : FIND_STATUS;
+  // Pill click — populates input and triggers submit so the engine
+  // ticker runs (same UX as typing + send).
+  const onPillClick = (task) => {
+    setQuery(task);
+    // Defer one frame so React has the new query before submitQuery reads it.
+    setTimeout(() => {
+      setSubmittedText(task);
+      setSubmittedAt(new Date().toISOString());
+      setSubmitted(true);
+      startEngine(intent);
+    }, 0);
+  };
+
+  // Working = engine is mid-run.
+  const working = submitted && !planDone;
+  const activeStage = plan[Math.min(planIdx, plan.length - 1)];
 
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cream">
@@ -291,11 +326,7 @@ export function HomeScreen() {
         </h1>
       </div>
 
-      {/* Location chip — ONLY appears once an address is set.
-          First-time users see no chip at all (clean Home). Once saved, the
-          row shows the address with a "Change" button next to it. While
-          editing, the autocomplete unfolds in-line. Identical in both modes;
-          the in-edit placeholder is mode-aware. */}
+      {/* Location chip — only after an address exists. */}
       {(locationText || locEditing) && (
         <div className="px-5 mt-1 mb-1 flex items-center gap-2 text-[11px] text-b3">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -308,17 +339,31 @@ export function HomeScreen() {
               <AddressAutocomplete
                 value={locationText}
                 onChange={setLocationText}
-                onSelect={async ({ lat, lng, address }) => {
+                onSelect={async ({ lat, lng, address, placeId }) => {
                   setLocationText(address);
                   setLocationCoords({ lat, lng });
                   setLocEditing(false);
+                  // Persist for non-logged-in users via localStorage so it
+                  // survives reloads. Once they sign in, it gets promoted
+                  // to a server-side default on the next pick.
+                  try {
+                    localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ address, lat, lng, placeId }));
+                  } catch { /* ignore */ }
                   if (auth?.isSignedIn) {
-                    await saveAddress({
+                    const { error } = await saveAddress({
                       label: 'Home',
                       formattedAddress: address,
                       lat, lng,
+                      placeId,
                       makeDefault: true,
-                    }).catch(() => {});
+                    });
+                    if (error) {
+                      showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                    } else {
+                      showToast('Saved as your default location ✓');
+                    }
+                  } else {
+                    showToast('Saved on this device. Sign in to sync it.');
                   }
                 }}
                 placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
@@ -339,9 +384,8 @@ export function HomeScreen() {
         </div>
       )}
 
-      {/* Travel-radius picker — spotlight mode only, AND only once a service
-          location exists (otherwise it's noise on a blank-state Home). */}
-      {intent === 'spotlight' && locationText && (
+      {/* Spotlight travel-radius — only after a location exists. */}
+      {intent === 'spotlight' && locationText && !submitted && (
         <div className="px-5 mt-0 mb-2 flex items-center gap-1.5 text-[11px] text-b3 flex-wrap">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -366,209 +410,250 @@ export function HomeScreen() {
               {opt.label}
             </button>
           ))}
-          <button
-            onClick={() => {
-              if (!locationCoords) {
-                showToast('Set your service location first.');
-                return;
-              }
-              setShowMapDraw(true);
-              showToast('Draw on map — coming soon. Pick a radius preset for now.');
-            }}
-            className="text-[10px] font-bold text-g underline underline-offset-2 ml-1"
-          >
-            Draw on map
-          </button>
         </div>
       )}
 
-      {/* Submit box — Claude-search proportions. */}
-      <div className="px-5 py-2">
-        <div
-          className="bg-white border border-bdr rounded-[24px] transition-all
-                     focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA]"
-        >
-          <textarea
-            ref={inputRef}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submitQuery();
-              }
-            }}
-            placeholder={intent === 'find'
-              ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
-              : 'Describe your service and what you need… e.g. boxing trainer, want a fitness influencer w/ 10K+'}
-            rows={2}
-            className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
-                       text-[14px] text-black placeholder-b3 font-medium leading-snug"
-          />
-          {images.length > 0 && (
-            <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
-              {images.map((img, i) => (
-                <div key={i} className="relative flex-shrink-0">
-                  <img
-                    src={img.dataUrl}
-                    alt={img.name}
-                    className="w-16 h-16 rounded-[10px] object-cover border border-bdr"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    aria-label="Remove image"
-                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-[12px] font-bold flex items-center justify-center"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* row 2: chip toolbar */}
-          <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              hidden
-              onChange={onFilesPicked}
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              aria-label="Attach photos"
-              className="w-8 h-8 rounded-full bg-bg5 border border-bdr text-b2 flex items-center justify-center
-                         hover:border-g/40 hover:text-g transition-colors flex-shrink-0"
+      {/* ─── Pre-submit: search box ──────────────────────────────────── */}
+      {!submitted && (
+        <>
+          <div className="px-5 py-2">
+            <div
+              className="bg-white border border-bdr rounded-[24px] transition-all
+                         focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA]"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M7 1.5v11M1.5 7h11" stroke="currentColor"
-                      strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </button>
-
-            <div ref={modeBtnRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setModeOpen(o => !o)}
-                aria-haspopup="listbox"
-                aria-expanded={modeOpen}
-                className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-extrabold
-                            transition-all
-                            ${freeServices
-                              ? 'bg-gl text-gd border border-g/30'
-                              : 'bg-bg5 text-b2 border border-bdr hover:border-g/40'}`}
-              >
-                {freeServices ? 'Free for Connectors' : 'Pay full price'}
-                <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5">
-                  <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              {modeOpen && (
-                <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[220px]">
-                  <ModeOption
-                    active={freeServices}
-                    label="Free for Connectors"
-                    sub={intent === 'find'
-                      ? 'Provider offers free in exchange for IG/TT post'
-                      : "Offer free in exchange for the Connector's post"}
-                    onClick={() => { setFreeServices(true); setModeOpen(false); }}
-                  />
-                  <ModeOption
-                    active={!freeServices}
-                    label="Pay full price"
-                    sub={intent === 'find'
-                      ? 'Normal paid booking'
-                      : "Pay the Connector's spotlight rate"}
-                    onClick={() => { setFreeServices(false); setModeOpen(false); }}
-                  />
+              <textarea
+                ref={inputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submitQuery();
+                  }
+                }}
+                placeholder={intent === 'find'
+                  ? 'Tell me what you need… e.g. deep clean Mon 2pm, max $200'
+                  : 'Describe your service and what you need… e.g. boxing trainer, want a fitness influencer w/ 10K+'}
+                rows={2}
+                className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
+                           text-[14px] text-black placeholder-b3 font-medium leading-snug"
+              />
+              {images.length > 0 && (
+                <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative flex-shrink-0">
+                      <img
+                        src={img.dataUrl}
+                        alt={img.name}
+                        className="w-16 h-16 rounded-[10px] object-cover border border-bdr"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        aria-label="Remove image"
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-[12px] font-bold flex items-center justify-center"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
+
+              <div className="flex items-center gap-2 px-3 pb-3 pt-1">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                  onChange={onFilesPicked}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  aria-label="Attach photos"
+                  className="w-8 h-8 rounded-full bg-bg5 border border-bdr text-b2 flex items-center justify-center
+                             hover:border-g/40 hover:text-g transition-colors flex-shrink-0"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 1.5v11M1.5 7h11" stroke="currentColor"
+                          strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                </button>
+
+                <div ref={modeBtnRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setModeOpen(o => !o)}
+                    aria-haspopup="listbox"
+                    aria-expanded={modeOpen}
+                    className={`flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[12px] font-extrabold
+                                transition-all
+                                ${freeServices
+                                  ? 'bg-gl text-gd border border-g/30'
+                                  : 'bg-bg5 text-b2 border border-bdr hover:border-g/40'}`}
+                  >
+                    {freeServices ? 'Free for Connectors' : 'Pay full price'}
+                    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5">
+                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {modeOpen && (
+                    <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[220px]">
+                      <ModeOption
+                        active={freeServices}
+                        label="Free for Connectors"
+                        sub={intent === 'find'
+                          ? 'Provider offers free in exchange for IG/TT post'
+                          : "Offer free in exchange for the Connector's post"}
+                        onClick={() => { setFreeServices(true); setModeOpen(false); }}
+                      />
+                      <ModeOption
+                        active={!freeServices}
+                        label="Pay full price"
+                        sub={intent === 'find'
+                          ? 'Normal paid booking'
+                          : "Pay the Connector's spotlight rate"}
+                        onClick={() => { setFreeServices(false); setModeOpen(false); }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={submitQuery}
+                  aria-label="Search"
+                  className="h-9 px-3 bg-g rounded-[10px] flex items-center justify-center flex-shrink-0
+                             hover:opacity-90 active:scale-95 transition-transform"
+                >
+                  <LeafIcon working={false} />
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1" />
-            {/* Send — animated leaf inside a green pill-box. Boxy with
-                rounded corners (not a circle) so it reads as a "send" button,
-                not a status indicator. Idle = folded leaf; active = leaf
-                unfolds + tilts to signal "Cergio is on it". */}
             <button
               type="button"
-              onClick={submitQuery}
-              disabled={working}
-              aria-label="Search"
-              className={`h-9 px-3 bg-g rounded-[10px] flex items-center justify-center flex-shrink-0
-                          transition-transform ${working ? 'cg-leaf-btn-working' : 'hover:opacity-90 active:scale-95'}`}
+              onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
+              className="w-full mt-2 px-2 py-2 flex items-center gap-2 text-left
+                         hover:opacity-90 transition-opacity"
+              aria-pressed={intent === 'spotlight'}
             >
-              <LeafIcon working={working} />
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
+                                ${intent === 'spotlight' ? 'bg-g' : 'bg-b3/40'}`} />
+              <p className={`flex-1 text-[11px] leading-snug font-medium
+                             ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
+                {intent === 'find'
+                  ? <>Offer a service to a Connector in exchange for an <span className="font-bold">Instagram or TikTok post</span></>
+                  : <>Need to <span className="font-bold">book a service</span> instead?</>}
+              </p>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+                   className={`flex-shrink-0 transition-transform ${intent === 'spotlight' ? 'text-g rotate-180' : 'text-b3'}`}>
+                <path d="M3 12h18M13 6l6 6-6 6" />
+              </svg>
             </button>
           </div>
-        </div>
 
-        {/* Status ticker — sits directly under the box, single line, swaps
-            text every ~1.1s. Cream background, no card. Tiny green dot to
-            the left to echo the "working" state. Mirrors Claude's bottom-bar
-            status line. */}
-        {working && (
-          <div className="mt-2 px-2 flex items-center gap-2" aria-live="polite">
-            <span className="w-1.5 h-1.5 rounded-full bg-g animate-pulse flex-shrink-0" />
-            <p className="text-[11px] text-gd font-bold leading-snug truncate">
-              {statusLines[Math.min(statusIdx, statusLines.length - 1)]}…
-            </p>
+          {/* Example chips */}
+          <div className="flex flex-wrap gap-1.5 px-5 mt-2 mb-4">
+            {(intent === 'find' ? FIND_EXAMPLES : SPOTLIGHT_EXAMPLES).map(e => (
+              <button
+                key={e.label}
+                onClick={() => onPillClick(e.task)}
+                className="bg-white border border-bdr rounded-pill px-2.5 py-1
+                           text-[11px] font-bold text-b2 cursor-pointer
+                           hover:border-g hover:text-gd transition-colors"
+              >
+                {e.label}
+              </button>
+            ))}
           </div>
-        )}
+        </>
+      )}
 
-        {/* Direction switch — flip between find / spotlight intents. Hidden
-            while the ticker is running so the user doesn't accidentally swap
-            mid-submit. */}
-        {!working && (
-          <button
-            type="button"
-            onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
-            className="w-full mt-2 px-2 py-2 flex items-center gap-2 text-left
-                       hover:opacity-90 transition-opacity"
-            aria-pressed={intent === 'spotlight'}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
-                              ${intent === 'spotlight' ? 'bg-g' : 'bg-b3/40'}`} />
-            <p className={`flex-1 text-[11px] leading-snug font-medium
-                           ${intent === 'spotlight' ? 'text-gd' : 'text-b3'}`}>
-              {intent === 'find'
-                ? <>Offer a service to a Connector in exchange for an <span className="font-bold">Instagram or TikTok post</span></>
-                : <>Need to <span className="font-bold">book a service</span> instead?</>}
-            </p>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-                 className={`flex-shrink-0 transition-transform ${intent === 'spotlight' ? 'text-g rotate-180' : 'text-b3'}`}>
-              <path d="M3 12h18M13 6l6 6-6 6" />
-            </svg>
-          </button>
-        )}
-      </div>
+      {/* ─── Post-submit: summary + engine + offers ──────────────────── */}
+      {submitted && (
+        <div className="px-5 py-2">
+          {/* Compact summary — profile-style typography (11px label /
+              13px value), side-aligned, no big takeover card. */}
+          <div className="bg-white border border-bdr rounded-[14px] px-3 py-2.5 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-[10px] bg-gl flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-b3">Your request</p>
+              <p className="text-[13px] font-extrabold text-black leading-snug mt-0.5 break-words">
+                {submittedText}
+              </p>
+              <p className="text-[11px] text-b3 mt-1 leading-snug truncate">
+                {locationText ? `${locationText} · ` : ''}
+                {freeServices ? 'Free for Connectors' : 'Pay full price'}
+              </p>
+            </div>
+            <button
+              onClick={resetSubmit}
+              className="text-[11px] font-extrabold text-g underline underline-offset-2 flex-shrink-0 mt-0.5"
+            >
+              Edit
+            </button>
+          </div>
 
-      {/* Example chips — conversational, one tap to seed /intake. */}
-      <div className="flex flex-wrap gap-1.5 px-5 mt-2 mb-4">
-        {(intent === 'find' ? FIND_EXAMPLES : SPOTLIGHT_EXAMPLES).map(e => (
-          <button
-            key={e.label}
-            onClick={() => startTask(e.task)}
-            className="bg-white border border-bdr rounded-pill px-2.5 py-1
-                       text-[11px] font-bold text-b2 cursor-pointer
-                       hover:border-g hover:text-gd transition-colors"
-          >
-            {e.label}
-          </button>
-        ))}
-      </div>
+          {/* Live engine ticker — single line, animated dot. Optional
+              detail row appears under stages that have one (e.g. friend
+              names). Mirrors Claude's status pattern. */}
+          <div className="mt-3 px-1" aria-live="polite">
+            <div className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${planDone ? 'bg-g' : 'bg-g animate-pulse'}`} />
+              <p className="text-[13px] text-gd font-bold leading-snug truncate">
+                {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
+              </p>
+            </div>
+            {!planDone && activeStage?.detail && (
+              <p className="ml-3.5 mt-1 text-[11px] text-b3 font-medium leading-snug truncate">
+                {activeStage.detail}
+              </p>
+            )}
+          </div>
 
-      {/* Invite & earn ad card — replaces the old "Friends recently booked"
-          strip. Big green hero number, single CTA. Network-effect engine:
-          gets more friends on Cergio so the friends-of-friends value prop
-          fills in. Only shown in find mode (in spotlight mode the user is
-          focused on Connector outreach, different headspace). */}
-      {intent === 'find' && (
+          {/* Inline result CTA — once the engine settles, surface a
+              tappable row pointing at Inbox where the actual offers
+              will land. Keeps the user on Home; the route is opt-in. */}
+          {planDone && (
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                onClick={() => navigate('/inbox')}
+                className="w-full bg-g text-white rounded-[14px] px-4 py-3 flex items-center justify-between text-left
+                           hover:opacity-95 active:scale-[.99] transition-all"
+              >
+                <div>
+                  <p className="text-[13px] font-extrabold leading-tight">Go to inbox</p>
+                  <p className="text-[11px] text-white/85 mt-0.5 font-medium">
+                    Offers land there. We'll text + email you when they come in.
+                  </p>
+                </div>
+                <span className="text-white text-lg flex-shrink-0">›</span>
+              </button>
+              <button
+                onClick={resetSubmit}
+                className="w-full bg-white border border-bdr rounded-[14px] px-4 py-2.5
+                           text-[12px] font-extrabold text-b2 hover:border-g/40 transition-colors"
+              >
+                Send another request
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Invite & earn ad — hidden once submitted, so the engine state
+          is the focus. */}
+      {intent === 'find' && !submitted && (
         <div className="px-5 mt-1 mb-6">
           <button
             onClick={() => navigate('/find-friends')}
@@ -603,9 +688,9 @@ export function HomeScreen() {
           onVerified={() => {
             setCcVerified(true);
             setShowCcGate(false);
-            showToast('Verified ✓ — opening chat with your photos');
-            const text = query.trim();
-            navigate('/intake', { state: { initialMessage: text } });
+            showToast('Verified ✓ — running your search');
+            // Re-fire submit after verification.
+            setTimeout(() => submitQuery(), 0);
           }}
         />
       )}
