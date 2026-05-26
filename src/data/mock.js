@@ -138,8 +138,8 @@ export const NETWORK_EARNINGS = [
   { id:'n1', who:'Ricky',   action:'completed a booking with',         what:'Jason, Housekeeper',         amount:'+$25.00', avatarBg:'from-[#4478aa] to-[#2a5070]' },
   { id:'n2', who:'Jamie',   action:'completed a booking with',         what:'Arthur, Hairstylist',         amount:'+$25.00', avatarBg:'from-[#b06090] to-[#703050]' },
   { id:'n3', who:'Jessica', action:'completed a',                       what:'Runner service request',      amount:'+$25.00', avatarBg:'from-[#c07050] to-[#903828]' },
-  { id:'n4', who:'Cergio',  action:'added Cergio Coin to your account', what:'',                            amount:'+$25.00', isSystem:true },
-  { id:'n5', who:'Tarik',   action:'gifted $25 in',                     what:'Cergio Coin',                 amount:'+$25.00', isSystem:true },
+  { id:'n4', who:'Cergio',  action:'added bonus credit to your account', what:'',                            amount:'+$25.00', isSystem:true },
+  { id:'n5', who:'Tarik',   action:'gifted you',                          what:'$25 credit',                  amount:'+$25.00', isSystem:true },
 ];
 
 // ─── BALANCE BREAKDOWN ────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ export const BREAKDOWN = {
     { label: "Services you've reco'd",  amount: '+ $150.00' },
     { label: "Friends you've invited",  amount: '+ $120.00' },
     { label: 'Your extended network',   amount: '+ $30.00'  },
-    { label: 'Cergio Coin spent',       amount: '- $99.58'  },
+    { label: 'Credit spent',            amount: '- $99.58'  },
   ],
   friendsInvited:  17,
   servicesRecoed:  22,
@@ -190,7 +190,7 @@ export const EARNINGS_SUMMARY = {
   recentPayouts: [
     { id: 'p1', label: 'Service · Apt clean',     amount: '+$120', date: 'Tue, May 5' },
     { id: 'p2', label: 'Connector referral · Sara', amount: '+$25',  date: 'Mon, May 4' },
-    { id: 'p3', label: 'Cergio Coin top-up',      amount: '+$50',  date: 'Sun, May 3' },
+    { id: 'p3', label: 'Credit top-up',           amount: '+$50',  date: 'Sun, May 3' },
   ],
 };
 
