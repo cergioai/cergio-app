@@ -75,6 +75,26 @@ touching one of these areas.
 - [ ] Chat parser doesn't re-ask "Where?" when `locationText` is set —
       `chat.init` seeds `state.where = defaultAddress`.
 
+- [ ] Google Maps failures are instrumented — `lib/google.js`
+      captures `gm_authFailure`, script `onerror`, and geocoder
+      `REQUEST_DENIED` / `OVER_QUERY_LIMIT` codes via `recordError()`.
+      `SetupCheckBanner` subscribes to `onGoogleMapsStatusChange` and
+      surfaces the actual remediation (referrer allowlist, billing,
+      Places + Geocoding APIs). NEVER swallow Google errors silently.
+      _Guard: lib/google.js + SetupCheckBanner.jsx_
+
+- [ ] `AddressAutocomplete` falls back to Nominatim **at runtime** when
+      Google's key is rejected — not just when the key is missing.
+      Previously the user got "no autocomplete + cryptic error" if the
+      GCP key had referrer / billing / API-enabled issues.
+      _Guard: AddressAutocomplete.jsx `googleReady` state._
+
+- [ ] `verifyAddress` falls through to Nominatim when Google fails so
+      the user is never locked out of adding an address. Result
+      payload carries `verified: 'google' | 'osm'` so callers can
+      label / warn.
+      _Guard: lib/google.js `verifyAddress`._
+
 ## 4. Brand mark
 
 - [ ] **LeafLogo** is the canonical brand mark wherever "Cergio is

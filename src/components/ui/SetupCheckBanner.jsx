@@ -6,7 +6,11 @@
 // guess what's missing.
 import { useEffect, useState } from 'react';
 import { supabase, supabaseReady } from '../../lib/supabase';
-import { getGoogleMapsKey } from '../../lib/google';
+import {
+  getGoogleMapsKey,
+  onGoogleMapsStatusChange,
+  describeGoogleError,
+} from '../../lib/google';
 
 async function probeTable(name) {
   if (!supabaseReady) return { ok: true }; // can't probe without supabase wired
@@ -23,9 +27,29 @@ const DISMISS_KEY = 'cergio.setupCheckDismissed';
 
 export function SetupCheckBanner() {
   const [problems, setProblems] = useState([]);
+  const [googleProblem, setGoogleProblem] = useState(null); // observed runtime error
   const [dismissed, setDismissed] = useState(() => {
     try { return !!sessionStorage.getItem(DISMISS_KEY); } catch { return false; }
   });
+
+  // Listen for live Google Maps load/auth/geocode errors. This is what
+  // surfaces "key rejected", "Places API not enabled", "billing
+  // disabled" etc. without the user having to crack open devtools.
+  useEffect(() => {
+    const off = onGoogleMapsStatusChange((s) => {
+      if (s.lastError) {
+        const d = describeGoogleError(s.lastError) || {};
+        setGoogleProblem({
+          key:   `google_runtime_${s.lastError.kind}`,
+          label: d.title || 'Google Maps error',
+          fix:   d.detail || s.lastError.message || '',
+        });
+      } else {
+        setGoogleProblem(null);
+      }
+    });
+    return off;
+  }, []);
 
   useEffect(() => {
     if (dismissed) return;
@@ -71,7 +95,12 @@ export function SetupCheckBanner() {
     return () => { cancelled = true; };
   }, [dismissed]);
 
-  if (dismissed || problems.length === 0) return null;
+  // Compose static config problems + live Google runtime error.
+  const allProblems = googleProblem
+    ? [...problems.filter(p => p.key !== 'google_maps_key' || googleProblem.key !== 'google_runtime_auth'), googleProblem]
+    : problems;
+
+  if (dismissed || allProblems.length === 0) return null;
 
   const dismiss = () => {
     try { sessionStorage.setItem(DISMISS_KEY, '1'); } catch { /* ignore */ }
@@ -85,10 +114,10 @@ export function SetupCheckBanner() {
           <span className="text-[14px] flex-shrink-0">⚠️</span>
           <div className="flex-1 min-w-0">
             <p className="text-[12px] font-extrabold text-warnText leading-snug">
-              {problems.length === 1 ? 'Setup needed' : `${problems.length} setup steps needed`}
+              {allProblems.length === 1 ? 'Setup needed' : `${allProblems.length} setup steps needed`}
             </p>
             <ul className="mt-1 space-y-1.5">
-              {problems.map(p => (
+              {allProblems.map(p => (
                 <li key={p.key} className="text-[11px] text-warnText leading-snug">
                   <span className="font-bold">{p.label}.</span>{' '}
                   <span className="font-normal opacity-90">{p.fix}</span>

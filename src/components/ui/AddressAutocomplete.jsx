@@ -13,7 +13,10 @@
 // payload, so callers can warn the user instead of silently saving a
 // hallucinated address.
 import { useEffect, useRef, useState } from 'react';
-import { loadGoogleMaps, getGoogleMapsKey, geocodeAddress } from '../../lib/google';
+import {
+  loadGoogleMaps, getGoogleMapsKey, geocodeAddress,
+  onGoogleMapsStatusChange,
+} from '../../lib/google';
 
 // Debounced fetch against Nominatim (https://nominatim.openstreetmap.org).
 // Free, public, no key required. Rate-limited to 1 req/sec per their
@@ -46,32 +49,58 @@ export function AddressAutocomplete({
 }) {
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
-  const [keyed]  = useState(!!getGoogleMapsKey());
-  const [fbResults, setFbResults]   = useState([]);   // fallback suggestions
-  const [fbOpen, setFbOpen]         = useState(false);
+
+  // CERGIO-GUARD: do NOT make `keyed` immutable. The previous version
+  // only used Nominatim when the key was MISSING. If Google rejected
+  // the key at runtime (gm_authFailure / REQUEST_DENIED / referrer
+  // block / billing disabled), the user got neither Google nor
+  // Nominatim and saw "no autocomplete + cryptic error". `googleReady`
+  // flips to false the moment lib/google.js records an auth/load
+  // error, which immediately swings the input over to Nominatim.
+  const [googleReady, setGoogleReady] = useState(!!getGoogleMapsKey());
+  const [fbResults, setFbResults]     = useState([]);   // fallback suggestions
+  const [fbOpen, setFbOpen]           = useState(false);
+
+  // Listen for Google status changes — auth failure or script load
+  // failure flips us to Nominatim immediately so the input keeps
+  // working even when the GCP key is broken.
+  useEffect(() => {
+    const off = onGoogleMapsStatusChange((s) => {
+      const broken = !!s.lastError && (s.lastError.kind === 'auth' || s.lastError.kind === 'load');
+      const ok     = !!s.keyPresent && !broken;
+      setGoogleReady(ok);
+    });
+    return off;
+  }, []);
 
   // Google Places path. Picks come pre-verified (geometry + place_id
   // are from Google), so we emit verified:true straight away.
   useEffect(() => {
-    if (!keyed) return;
+    if (!googleReady) return;
     let ac;
     let cancelled = false;
 
     loadGoogleMaps().then(google => {
       if (cancelled || !google || !inputRef.current) return;
-      ac = new google.maps.places.Autocomplete(inputRef.current, {
-        types: ['geocode'],
-        fields: ['formatted_address', 'geometry', 'place_id'],
-      });
-      ac.addListener('place_changed', () => {
-        const p = ac.getPlace();
-        if (!p?.geometry?.location) return;
-        const lat = p.geometry.location.lat();
-        const lng = p.geometry.location.lng();
-        const address = p.formatted_address || inputRef.current.value;
-        onChange?.(address);
-        onSelect?.({ lat, lng, address, placeId: p.place_id, verified: true });
-      });
+      try {
+        ac = new google.maps.places.Autocomplete(inputRef.current, {
+          types: ['geocode'],
+          fields: ['formatted_address', 'geometry', 'place_id'],
+        });
+        ac.addListener('place_changed', () => {
+          const p = ac.getPlace();
+          if (!p?.geometry?.location) return;
+          const lat = p.geometry.location.lat();
+          const lng = p.geometry.location.lng();
+          const address = p.formatted_address || inputRef.current.value;
+          onChange?.(address);
+          onSelect?.({ lat, lng, address, placeId: p.place_id, verified: true });
+        });
+      } catch (_e) {
+        // Places ctor can throw on auth-rejected keys even when the
+        // script loaded. Drop to Nominatim.
+        setGoogleReady(false);
+      }
     }).catch(() => { /* swallow load errors; the Nominatim fallback handles UX */ });
 
     return () => {
@@ -82,11 +111,11 @@ export function AddressAutocomplete({
       document.querySelectorAll('.pac-container').forEach(el => el.remove());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyed]);
+  }, [googleReady]);
 
   // Nominatim fallback path. Debounced query as the user types.
   useEffect(() => {
-    if (keyed) return; // Google is handling it
+    if (googleReady) return; // Google is handling it
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = (value || '').trim();
     if (q.length < 3) { setFbResults([]); return; }
@@ -95,7 +124,7 @@ export function AddressAutocomplete({
       setFbResults(rows);
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [value, keyed]);
+  }, [value, googleReady]);
 
   return (
     <div className="relative">
@@ -112,7 +141,7 @@ export function AddressAutocomplete({
       />
       {/* Fallback dropdown — only renders when Google key is missing
           and Nominatim returned results. */}
-      {!keyed && fbOpen && fbResults.length > 0 && (
+      {!googleReady && fbOpen && fbResults.length > 0 && (
         <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-bdr
                         rounded-[14px] shadow-card py-1 max-h-[260px] overflow-y-auto">
           {fbResults.map((r, i) => (
