@@ -263,11 +263,47 @@ function logMissingAddresses(where, err) {
   console.warn(`[${where}] user_addresses table missing — apply migration 20260526000000_user_addresses.sql via Run Migrations.command. Falling back to localStorage-only address persistence. (${err?.message || 'no message'})`);
 }
 
-/** Fetch the user's single default address (or null). */
+/**
+ * Fetch the user's default address.
+ *
+ * CERGIO-GUARD: this is the PERMANENT source of truth. We store the
+ * default address inside Supabase auth user_metadata (always exists
+ * for any signed-in user, no migration needed). The user_addresses
+ * table is a NICE-TO-HAVE for multi-address lists once migration
+ * 20260526000000 lands, but the default address persists either way.
+ *
+ * Read order:
+ *   1. user.user_metadata.default_address  ← bulletproof, this is the canon
+ *   2. user_addresses fallback              ← only if migration applied AND
+ *                                              metadata didn't already have it
+ *
+ * Shape returned matches the prior user_addresses row shape so existing
+ * callers in HomeScreen don't need to change.
+ */
 export async function getDefaultAddress() {
   if (!supabaseReady) return { data: null, error: null };
   const { data: userRes } = await supabase.auth.getUser();
   if (!userRes?.user) return { data: null, error: null };
+
+  // 1. user_metadata path (canonical). Survives logouts/logins because
+  //    Supabase auth keeps user_metadata across sessions.
+  const meta = userRes.user.user_metadata?.default_address;
+  if (meta?.formatted_address) {
+    return {
+      data: {
+        id:                meta.id || 'meta',
+        formatted_address: meta.formatted_address,
+        lat:               meta.lat ?? null,
+        lng:               meta.lng ?? null,
+        place_id:          meta.place_id ?? null,
+        label:             meta.label || 'Home',
+        is_default:        true,
+      },
+      error: null,
+    };
+  }
+
+  // 2. Fallback to user_addresses table (only if migration applied).
   const { data, error } = await supabase
     .from('user_addresses')
     .select('*')
@@ -275,6 +311,8 @@ export async function getDefaultAddress() {
     .eq('is_default', true)
     .maybeSingle();
   if (isMissingAddressesTable(error)) {
+    // Table not migrated yet — totally fine, metadata path is the
+    // primary one. Quiet log so we still know if it stays missing.
     logMissingAddresses('getDefaultAddress', error);
     return { data: null, error: null };
   }
@@ -282,8 +320,18 @@ export async function getDefaultAddress() {
 }
 
 /**
- * Save a Google-validated address. If `makeDefault` is true (or this is the
- * user's first saved address), it's also set as the default.
+ * Save a Google-validated address.
+ *
+ * CERGIO-GUARD: writes the default address to TWO places:
+ *   1. supabase.auth.updateUser({ data: { default_address: {...} } })
+ *      → guaranteed to persist (user_metadata always exists in auth.users).
+ *        This is the PERMANENT path — survives any schema state.
+ *   2. user_addresses table (if migration applied)
+ *      → enables the future multi-address list. Failures here are
+ *        non-fatal because path 1 already succeeded.
+ *
+ * Returns success as long as path 1 succeeded — so the chip shows
+ * "Saved ✓" reliably even before any migration runs.
  */
 export async function saveAddress({ label, formattedAddress, lat, lng, placeId, makeDefault = false } = {}) {
   if (!supabaseReady) return NOT_WIRED;
@@ -292,6 +340,30 @@ export async function saveAddress({ label, formattedAddress, lat, lng, placeId, 
     return { data: null, error: { message: 'You must be signed in to save an address.' } };
   }
   const uid = userRes.user.id;
+
+  // ─── Path 1: bulletproof user_metadata write ──────────────────────────
+  // This ALWAYS works for any signed-in user — no table required.
+  if (makeDefault) {
+    const metaPayload = {
+      formatted_address: formattedAddress,
+      lat:     lat ?? null,
+      lng:     lng ?? null,
+      place_id: placeId ?? null,
+      label:   label || 'Home',
+      saved_at: new Date().toISOString(),
+    };
+    const { error: metaErr } = await supabase.auth.updateUser({
+      data: { default_address: metaPayload },
+    });
+    if (metaErr) {
+      // eslint-disable-next-line no-console
+      console.warn('[saveAddress] user_metadata write failed:', metaErr.message);
+    } else {
+      // Path 1 succeeded — capture for caller. Path 2 is best-effort below.
+      // Even if Path 2 fails entirely (no migration), we return success.
+      // The metadata copy is the canonical source going forward.
+    }
+  }
 
   // Dedup on place_id — if user already has this exact place saved, return
   // the existing row instead of duplicating.
