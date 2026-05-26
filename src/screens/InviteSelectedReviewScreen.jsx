@@ -1,7 +1,15 @@
-// Per design-spec.md — review selected contacts, optionally attach service blurb, send.
-import { useState } from 'react';
+// Review-and-send screen for both invite + reco flows.
+//
+// For reco mode the user now adds: (1) WHO they're recommending (the
+// service type / provider, e.g. "Plumber") via autosuggest from
+// PROVIDER_TYPES, and (2) WHY they recommend them — the review blurb.
+// Service type is prefilled from chat.state.provider_type when the
+// user came from a search ("Recommend a {type}?"), so they don't
+// re-type. CERGIO-GUARD: provider_type-level only, no offering names.
+import { useState, useMemo } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { CONTACTS } from '../data/mock';
+import { PROVIDER_TYPES } from '../data/providerTypes';
 
 function getInitials(name) {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
@@ -10,17 +18,38 @@ function getInitials(name) {
 export function InviteSelectedReviewScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { showToast } = useOutletContext();
+  const { showToast, chat } = useOutletContext();
 
   const { mode = 'invite', selectedIds = [] } = location.state || {};
   const picked = CONTACTS.filter(c => selectedIds.includes(c.id));
-  const [note, setNote] = useState(
+
+  // Pull the service type the user was searching for (if any) so the
+  // reco form lands prefilled — e.g. "Plumber" — and they only need to
+  // write the review.
+  const seededType = chat?.state?.provider_type || '';
+  const [serviceType, setServiceType] = useState(seededType);
+  const [stFocused, setStFocused] = useState(false);
+
+  const stMatches = useMemo(() => {
+    const q = serviceType.trim().toLowerCase();
+    if (!q) return PROVIDER_TYPES.slice(0, 6);
+    return PROVIDER_TYPES.filter(t => t.toLowerCase().includes(q)).slice(0, 6);
+  }, [serviceType]);
+
+  const noun = serviceType.trim() || 'this service';
+  const [review, setReview] = useState(
     mode === 'reco'
-      ? 'I recommend this service because…'
-      : 'Hey — I think you\'d love Cergio. Use my link to join and we both earn.'
+      ? ''
+      : "Hey — I think you'd love Cergio. Use my link to join and we both earn."
   );
+  const remaining = mode === 'reco' ? Math.max(0, 240 - review.length) : null;
+
+  const valid = mode === 'reco'
+    ? (serviceType.trim().length > 0 && review.trim().length > 0)
+    : review.trim().length > 0;
 
   const handleSend = () => {
+    if (!valid) return;
     showToast(
       mode === 'reco'
         ? `Recommendation sent to ${picked.length} ${picked.length === 1 ? 'friend' : 'friends'}`
@@ -30,7 +59,7 @@ export function InviteSelectedReviewScreen() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-24 overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-white pb-32 overflow-y-auto">
       {/* nav */}
       <div className="px-5 pt-5">
         <button
@@ -41,20 +70,20 @@ export function InviteSelectedReviewScreen() {
         </button>
       </div>
 
-      <div className="px-5 pt-2 pb-5">
-        <h1 className="text-[24px] font-extrabold text-black">
-          {mode === 'reco' ? 'Tell us about this service' : 'Add a personal note'}
+      <div className="px-5 pt-2 pb-4">
+        <h1 className="text-[22px] font-extrabold text-black">
+          {mode === 'reco' ? `Recommend a ${noun}` : 'Add a personal note'}
         </h1>
-        <p className="text-[14px] text-b3 leading-relaxed mt-2">
+        <p className="text-[13px] text-b3 leading-relaxed mt-1.5">
           {mode === 'reco'
-            ? "Write a quick blurb about why you recommend this service. Users looking to book this service will see your recommendation."
+            ? 'Pick the service type, write a quick review. Friends see this when they tap your link.'
             : 'These friends will receive your invite with the note below.'}
         </p>
       </div>
 
       {/* selected avatars row */}
       {picked.length > 0 && (
-        <div className="px-5 pb-5">
+        <div className="px-5 pb-4">
           <div className="flex flex-wrap gap-2">
             {picked.map(c => (
               <div key={c.id} className="flex items-center gap-2 bg-soft rounded-pill pl-1 pr-3 py-1">
@@ -69,25 +98,82 @@ export function InviteSelectedReviewScreen() {
         </div>
       )}
 
-      {/* note */}
-      <div className="px-5">
-        <textarea
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          rows={6}
-          className="w-full border border-bdr rounded-[18px] p-4 text-[14px] text-black
-                     placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans"
-        />
-      </div>
+      {/* Reco mode: service-type autosuggest + review */}
+      {mode === 'reco' && (
+        <>
+          <div className="px-5 mb-4 relative">
+            <label className="block text-[11px] font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
+              Service type
+            </label>
+            <input
+              type="text"
+              value={serviceType}
+              onChange={e => setServiceType(e.target.value)}
+              onFocus={() => setStFocused(true)}
+              onBlur={() => setTimeout(() => setStFocused(false), 150)}
+              placeholder="e.g. Plumber, Cleaner, Personal Chef"
+              autoComplete="off"
+              className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3 text-[14px]
+                         text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+            />
+            {stFocused && stMatches.length > 0 && (
+              <div className="absolute left-5 right-5 top-full mt-1 z-20 bg-white border border-bdr
+                              rounded-[14px] shadow-card py-1 max-h-[240px] overflow-y-auto">
+                {stMatches.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { setServiceType(t); setStFocused(false); }}
+                    className="w-full text-left px-4 py-2 text-[14px] text-b2 hover:bg-bg5 transition-colors"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="px-5 flex-1">
+            <label className="block text-[11px] font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
+              Your review
+            </label>
+            <textarea
+              value={review}
+              onChange={e => setReview(e.target.value)}
+              maxLength={240}
+              rows={5}
+              placeholder={`Try: "${noun === 'this service' ? 'Maria' : 'Great ' + noun.toLowerCase()} — fast, friendly, fair price."`}
+              className="w-full border border-bdr rounded-[18px] p-4 text-[14px] text-black
+                         placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans leading-relaxed"
+            />
+            <p className="text-[11px] text-b3 mt-1.5 text-right">{remaining} characters left</p>
+          </div>
+        </>
+      )}
+
+      {/* Invite mode: single note */}
+      {mode !== 'reco' && (
+        <div className="px-5 flex-1">
+          <textarea
+            value={review}
+            onChange={e => setReview(e.target.value)}
+            rows={6}
+            className="w-full border border-bdr rounded-[18px] p-4 text-[14px] text-black
+                       placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans"
+          />
+        </div>
+      )}
 
       {/* footer */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-bdr px-5 pt-3 pb-5">
         <button
           onClick={handleSend}
-          className="w-full bg-g text-white rounded-[24px] py-3.5 text-[15px] font-extrabold
-                     hover:opacity-90 active:scale-[.97] transition-all"
+          disabled={!valid}
+          className={`w-full rounded-[24px] py-3.5 text-[15px] font-extrabold transition-all
+            ${valid ? 'bg-g text-white hover:opacity-90 active:scale-[.97]' : 'bg-bg5 text-b3 cursor-not-allowed'}`}
         >
-          {mode === 'reco' ? 'Send recommendation' : 'Send invites'}
+          {mode === 'reco' ? `Send ${noun} reco` : 'Send invites'}
         </button>
       </div>
     </div>

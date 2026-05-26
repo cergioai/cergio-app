@@ -9,30 +9,28 @@ import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 // and surface this listing in the right consumer searches).
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 
-// Broad provider-type suggestions. CERGIO-GUARD: these are
-// PROVIDER_TYPE level only (Driver / Plumber / Cleaner …), never
-// specific offerings like "Drain unclogging". Used in the live
-// type-ahead dropdown beneath the Service Type field. See CHECKLIST §2.
-const SERVICE_TYPE_OPTIONS = [
-  'Plumber', 'Electrician', 'Handyman', 'Cleaner', 'Housekeeper',
-  'Driver', 'Mover', 'Sitter', 'Babysitter', 'Nanny',
-  'Pet sitter', 'Dog walker', 'Tutor', 'Math tutor', 'Language tutor',
-  'Personal trainer', 'Yoga instructor', 'Pilates instructor',
-  'Chef', 'Caterer', 'Bartender', 'Photographer', 'Videographer',
-  'Hair stylist', 'Barber', 'Makeup artist', 'Nail artist',
-  'Massage therapist', 'Painter', 'Gardener', 'Landscaper',
-  'Plumber', 'HVAC technician', 'Carpenter', 'Mechanic',
-  'Personal assistant', 'Concierge', 'Event planner',
-];
+// Provider-type suggestions sourced from the LIVE backend taxonomy.
+// PROVIDER_TYPES is auto-generated from
+// supabase/functions/chat-parse/data/taxonomy.json (373 entries
+// including Personal Chef, Dog Sitter, Lactation Consultant, etc.) —
+// so the dropdown always matches what the backend can actually route.
+// CERGIO-GUARD: provider_type-level only, never offering names.
+// See CHECKLIST §2.
+import { PROVIDER_TYPES } from '../data/providerTypes';
 
-// Case-insensitive substring filter capped at 6 results so the list
-// stays compact in the dropdown.
+// Case-insensitive substring filter. When the field is empty, show the
+// most-commonly-used handful as starter suggestions; otherwise filter
+// the full 373-entry list and cap at 8 visible matches.
+const STARTER_TYPES = [
+  'Plumber', 'Cleaner', 'Driver', 'Babysitter', 'Tutor',
+  'Personal Chef', 'Dog Walker', 'Dog Trainer',
+];
 function filterServiceSuggestions(query) {
   const q = (query || '').toLowerCase().trim();
-  if (!q) return SERVICE_TYPE_OPTIONS.slice(0, 6);
-  return SERVICE_TYPE_OPTIONS
+  if (!q) return STARTER_TYPES;
+  return PROVIDER_TYPES
     .filter(opt => opt.toLowerCase().includes(q))
-    .slice(0, 6);
+    .slice(0, 8);
 }
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
 import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';

@@ -16,6 +16,7 @@ import { useSession } from './hooks/useSession';
 
 import { BottomNav }    from './components/ui/BottomNav';
 import { Toast }        from './components/ui/Toast';
+import { SetupCheckBanner } from './components/ui/SetupCheckBanner';
 import { PaymentSheet } from './components/ui/PaymentSheet';
 
 import { SplashScreen }     from './screens/SplashScreen';
@@ -224,6 +225,10 @@ function Layout() {
   return (
     <div className="min-h-screen bg-cr flex items-center justify-center">
       <div className="w-full max-w-[390px] min-h-screen bg-cr flex flex-col relative overflow-hidden">
+        {/* Setup-check banner — appears at the top when migrations or
+            env vars are missing, with the exact remediation. Dismissible
+            per session. CERGIO-GUARD: keep this mounted at root. */}
+        <SetupCheckBanner />
         <Outlet
           context={{
             chat,

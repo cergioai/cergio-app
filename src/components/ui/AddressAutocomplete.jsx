@@ -1,11 +1,19 @@
-// Address input with two-tier autocomplete:
-//   1. Google Places (when VITE_GOOGLE_MAPS_KEY is set) — best UX.
+// Address input with two-tier autocomplete + Google cross-check:
+//   1. Google Places (when VITE_GOOGLE_MAPS_KEY is set) — best UX,
+//      already canonical / real address.
 //   2. OpenStreetMap Nominatim debounced fetch as a FREE, no-key
 //      fallback — so the form always has some kind of type-ahead even
 //      when Google isn't configured.
-// Either path emits {lat, lng, address, placeId} via onSelect.
+//
+// CERGIO-GUARD: every picked address is verified via Google's geocoder
+// before commit. If Google has a key, we re-geocode the user's pick
+// (Google or Nominatim) to confirm it resolves to a real Google Maps
+// address and to canonicalize the formatted_address + place_id.
+// Failed verifications surface via the `verified` flag on the onSelect
+// payload, so callers can warn the user instead of silently saving a
+// hallucinated address.
 import { useEffect, useRef, useState } from 'react';
-import { loadGoogleMaps, getGoogleMapsKey } from '../../lib/google';
+import { loadGoogleMaps, getGoogleMapsKey, geocodeAddress } from '../../lib/google';
 
 // Debounced fetch against Nominatim (https://nominatim.openstreetmap.org).
 // Free, public, no key required. Rate-limited to 1 req/sec per their
@@ -42,7 +50,8 @@ export function AddressAutocomplete({
   const [fbResults, setFbResults]   = useState([]);   // fallback suggestions
   const [fbOpen, setFbOpen]         = useState(false);
 
-  // Google Places path.
+  // Google Places path. Picks come pre-verified (geometry + place_id
+  // are from Google), so we emit verified:true straight away.
   useEffect(() => {
     if (!keyed) return;
     let ac;
@@ -61,9 +70,9 @@ export function AddressAutocomplete({
         const lng = p.geometry.location.lng();
         const address = p.formatted_address || inputRef.current.value;
         onChange?.(address);
-        onSelect?.({ lat, lng, address, placeId: p.place_id });
+        onSelect?.({ lat, lng, address, placeId: p.place_id, verified: true });
       });
-    });
+    }).catch(() => { /* swallow load errors; the Nominatim fallback handles UX */ });
 
     return () => {
       cancelled = true;
@@ -111,9 +120,29 @@ export function AddressAutocomplete({
               key={`${r.placeId}-${i}`}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange?.(r.address);
-                onSelect?.({ lat: r.lat, lng: r.lng, address: r.address, placeId: r.placeId });
+              onClick={async () => {
+                // Cross-verify the Nominatim pick via Google before
+                // committing. If Google has a key, its result wins; we
+                // mark verified:true. If Google rejects or isn't
+                // loaded, fall back to the OSM payload but flag
+                // verified:false so callers can label / warn.
+                let payload = { lat: r.lat, lng: r.lng, address: r.address, placeId: r.placeId, verified: false };
+                if (getGoogleMapsKey()) {
+                  try {
+                    const g = await geocodeAddress(r.address);
+                    if (g?.lat && g?.lng) {
+                      payload = {
+                        lat:     g.lat,
+                        lng:     g.lng,
+                        address: g.formatted || r.address,
+                        placeId: g.placeId  || r.placeId,
+                        verified: true,
+                      };
+                    }
+                  } catch { /* keep Nominatim payload, unverified */ }
+                }
+                onChange?.(payload.address);
+                onSelect?.(payload);
                 setFbOpen(false);
               }}
               className="w-full text-left px-4 py-2 text-[13px] text-b2 hover:bg-bg5 transition-colors leading-snug"
