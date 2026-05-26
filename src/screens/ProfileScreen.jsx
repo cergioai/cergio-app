@@ -307,24 +307,25 @@ export function ProfileScreen() {
         onClick={() => navigate('/earnings')}
       />
       <Row
+        title="Become a Connector"
+        subtitle={`Earn $${REWARDS.perFriendConnector} cash (not credit) + free services + Growth Participation Income`}
+        pill={hasRateCard ? <MintPill>Connector ✓</MintPill> : null}
+        onClick={() => navigate('/rainmaker/apply')}
+      />
+      <Row
         title="Invite friends"
-        subtitle={`Earn $${REWARDS.perFriend} per friend who joins + books`}
+        subtitle={`$${REWARDS.perFriendUser} credit per friend who joins + books`}
         onClick={() => navigate('/invite/friends-popup')}
       />
       <Row
         title="Recommend a service"
-        subtitle={`Earn $${REWARDS.perFriend} when your reco's friend joins + books`}
+        subtitle={`$${REWARDS.perFriend} when your reco's friend joins + books`}
         onClick={() => navigate('/invite/recommend-popup')}
       />
       <Row
         title="Find friends on Cergio"
         subtitle="See who's already here · sync contacts in one tap"
         onClick={() => navigate('/find-friends')}
-      />
-      <Row
-        title="Invite Connectors"
-        subtitle="Send your link to influencers who fit your network"
-        onClick={() => navigate('/rainmakers')}
       />
 
       {/* ── About ──────────────────────────────────────────────────────────── */}

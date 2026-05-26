@@ -212,16 +212,34 @@ export function EarningsScreen() {
 
           {/* Mode-tailored one-liner — provider vs consumer is genuinely
               different audiences. CERGIO-GUARD: do NOT use 'invite
-              clients' copy in consumer mode and vice versa. */}
+              clients' copy in consumer mode and vice versa. Pull from
+              REWARD_COPY so this stays in sync with the Connector page. */}
           <p className="text-[12px] text-b3 leading-snug">
             {isProvider
-              ? <>Turn your client list into your referral network. Every client that joins + books earns you <span className="font-bold text-black">${REWARDS.perFriend}</span> + Growth Participation Income.{' '}
+              ? <>Turn your client list into your referral network. Every client who joins + books earns you <span className="font-bold text-black">${REWARDS.perFriendConnector} cash</span> + Growth Participation Income.{' '}
                   <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-bold">ⓘ</button>
                 </>
-              : <>Help friends find trusted services and earn <span className="font-bold text-black">${REWARDS.perFriend}</span> per friend who joins + books, plus free credits + Growth Participation Income.{' '}
+              : <>Help friends, earn <span className="font-bold text-black">${REWARDS.perFriendUser} credit</span> per friend who joins + books + free services + Growth Participation Income.{' '}
                   <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-bold">ⓘ</button>
                 </>}
           </p>
+
+          {/* Connector upsell — visible to users (not providers, who are
+              already on the cash track). One-liner that mirrors the
+              Connector page hero. */}
+          {!isProvider && (
+            <button
+              type="button"
+              onClick={() => navigate('/rainmaker/apply')}
+              className="mt-3 w-full bg-gl border border-g/25 rounded-[12px] px-3 py-2.5 flex items-center justify-between
+                         text-left hover:bg-gl/80 active:scale-[.99] transition-all"
+            >
+              <span className="text-[12px] font-extrabold text-gd leading-snug">
+                Become a Connector → earn ${REWARDS.perFriendConnector} <span className="font-bold">cash</span> instead of credit
+              </span>
+              <span className="text-gd text-base flex-shrink-0">›</span>
+            </button>
+          )}
         </div>
       )}
 

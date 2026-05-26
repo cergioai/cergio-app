@@ -17,7 +17,7 @@ import { LeafLogo } from '../components/ui/LeafLogo';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { LocationEditModal } from '../components/ui/LocationEditModal';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
-import { REWARDS } from '../lib/rewards';
+import { REWARDS, REWARD_COPY } from '../lib/rewards';
 
 // Rotating example overlays — shown one at a time inside the search box
 // when the input is empty. They cross-fade every ~4.5s like Claude's
@@ -1043,10 +1043,10 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Invite · reco · barter · earn
+                Invite friends — ${REWARDS.perFriendUser} credit each
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Cash + free services + growth income, while helping friends.
+                Free services + Growth Participation Income. Become a Connector to earn cash.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
@@ -1084,10 +1084,10 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-extrabold leading-tight">
-                Spotlight · invite · barter · earn
+                Become a Connector — ${REWARDS.perFriendConnector} cash per friend
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Cash + growth income. Turn clients + social into a referral network.
+                Free services + Growth Participation Income. Your network does the work.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
