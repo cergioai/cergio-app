@@ -5,12 +5,26 @@
 // When 0 services match, render the EmptyState block — never fake
 // providers. The leaf logo (shared brand mark) is the canonical visual;
 // do not swap it for the legacy spinner Logo or any other icon.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { LeafLogo } from '../components/ui/LeafLogo';
 import { ProviderCard } from '../components/ui/ProviderCard';
 import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
+
+// Persistent "Notify me" subscriptions live in localStorage so the
+// toggle survives reloads + auth flips. Keyed by a fingerprint of the
+// request (provider_type + when + where + budget) so a second search
+// for the same thing reuses the same arm state.
+const NOTIFY_STORAGE_KEY = 'cergio.notifySubscriptions';
+function loadNotifyMap() {
+  try { return JSON.parse(localStorage.getItem(NOTIFY_STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveNotifyMap(map) {
+  try { localStorage.setItem(NOTIFY_STORAGE_KEY, JSON.stringify(map)); }
+  catch { /* ignore */ }
+}
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -135,6 +149,36 @@ export function ResultsScreen() {
   // If the resolver didn't capture provider_type, we use a neutral
   // fallback so we never echo a wrong offering.
   const inferredType = (provider_type || '').trim();
+
+  // Stable key for this request — drives the persistent Notify-me state.
+  // Lowercased + trimmed so casing differences don't fragment the map.
+  const notifyKey = useMemo(() => {
+    const parts = [inferredType, when, where, budget].map(s => (s || '').toString().toLowerCase().trim());
+    return parts.join('|');
+  }, [inferredType, when, where, budget]);
+  const [notifyArmed, setNotifyArmed] = useState(() => !!loadNotifyMap()[notifyKey]);
+  // Re-read when the key changes (new request → different arm state).
+  useEffect(() => { setNotifyArmed(!!loadNotifyMap()[notifyKey]); }, [notifyKey]);
+
+  const toggleNotify = () => {
+    const map = loadNotifyMap();
+    const next = !notifyArmed;
+    if (next) {
+      map[notifyKey] = {
+        armedAt:      new Date().toISOString(),
+        providerType: inferredType || null,
+        when:         when  || null,
+        where:        where || null,
+        budget:       budget || null,
+      };
+      showToast("We'll ping you the moment offers land ✓");
+    } else {
+      delete map[notifyKey];
+      showToast('Notifications off for this request');
+    }
+    saveNotifyMap(map);
+    setNotifyArmed(next);
+  };
   const titleText = inferredType
     ? (n > 0
         ? `Showing ${n} ${inferredType.toLowerCase()}${n === 1 ? '' : 's'}`
@@ -186,8 +230,9 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* Loading status — single line, leaf rotates beside it. Mirrors
-          the Home engine ticker styling. */}
+      {/* Loading status — single line, leaf rotates beside it. The
+          Notify-me toggle is persistent (localStorage map keyed by
+          notifyKey) so the armed state survives reloads + auth flips. */}
       {services === null && (
         <div className="mx-5 mb-5" aria-live="polite">
           <div className="flex items-center gap-2">
@@ -200,10 +245,10 @@ export function ResultsScreen() {
             We'll keep going in the background.{' '}
             <button
               type="button"
-              onClick={() => showToast("Got it — we'll ping you when offers land.")}
-              className="text-g font-medium underline underline-offset-2"
+              onClick={toggleNotify}
+              className={`font-medium underline underline-offset-2 ${notifyArmed ? 'text-gd' : 'text-g'}`}
             >
-              Notify me when ready
+              {notifyArmed ? 'Notify me ✓ (tap to turn off)' : 'Notify me when ready'}
             </button>
           </p>
         </div>
@@ -225,12 +270,23 @@ export function ResultsScreen() {
               ? `Cergio is watching for ${inferredType.toLowerCase()}s near you. We'll notify you the moment one joins or sends an offer.`
               : "We're still growing in your area. Cergio will notify you the moment a matching provider joins or sends an offer."}
           </p>
-          <button
-            onClick={() => navigate('/find-friends')}
-            className="mt-4 inline-block bg-g text-white rounded-pill px-5 py-2 text-[13px] font-extrabold"
-          >
-            Invite friends to speed it up →
-          </button>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <button
+              onClick={() => navigate('/find-friends')}
+              className="bg-g text-white rounded-pill px-5 py-2 text-[13px] font-extrabold"
+            >
+              Invite friends to speed it up →
+            </button>
+            <button
+              type="button"
+              onClick={toggleNotify}
+              className={`text-[12px] font-medium underline underline-offset-2 ${notifyArmed ? 'text-gd' : 'text-g'}`}
+            >
+              {notifyArmed
+                ? 'Notify me ✓ (tap to turn off)'
+                : `Notify me when ${inferredType ? inferredType.toLowerCase() + 's' : 'providers'} join`}
+            </button>
+          </div>
         </div>
       )}
 
