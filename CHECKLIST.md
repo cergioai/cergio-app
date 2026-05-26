@@ -40,6 +40,25 @@ touching one of these areas.
       do **not** render `TaxonomyMatchBadge`. The provider's typed text
       is the source of truth. Taxonomy resolves silently for routing.
 
+- [ ] `chatState.originalQuery` is set on the user's first message and
+      is the SINGLE source of truth for any user-visible display of the
+      service (Results title, share message, "No X yet…" headline).
+      Never use parser-derived `what` for display. Cloud parser has been
+      observed flipping `"personal chef"` → `"Weekly meal prep service"`
+      and `"Spanish-speaking babysitter"` → `"Bundle coordinator"`.
+      _Guard: useChat.js INITIAL_STATE + ResultsScreen.jsx `userNoun`._
+
+- [ ] Generic / catch-all `provider_type` values from the parser
+      ("service provider", "professional", "expert", "worker", etc.)
+      are dropped before display so we never render
+      _"Looking for service providers"_ instead of the user's actual ask.
+      _Guard: useChat.js `GENERIC_PROVIDER_TYPES` + same set in ResultsScreen._
+
+- [ ] Parser drift: if cloud `parsed.what` shares no meaningful word
+      with the user's typed input, prefer the local `SERVICE_MAP` hit
+      or null `what` out so display falls back to `originalQuery`.
+      _Guard: useChat.js `sharesWordsWith` check._
+
 ## 3. Location persistence
 
 - [ ] Saved address (Supabase default OR localStorage) paints **at

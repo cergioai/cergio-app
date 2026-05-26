@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
-import { Logo } from '../components/ui/Logo';
+import { LeafLogo } from '../components/ui/LeafLogo';
 import { AddressLabelPrompt } from '../components/ui/AddressLabelPrompt';
 
 export function IntakeScreen() {
@@ -160,7 +160,7 @@ export function IntakeScreen() {
           ←
         </button>
         <div className="flex items-center gap-2">
-          <Logo size={22} />
+          <LeafLogo size={22} />
           <span className="text-[14px] font-bold text-black">Cergio AI</span>
         </div>
         <button

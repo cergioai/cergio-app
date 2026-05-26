@@ -1,49 +1,38 @@
-// Per design-spec.md — "What best describes you?" step 1 of Connector reg.
+// Become a Connector — the consolidated benefits + selector page.
+//
+// CERGIO-GUARD: one screen, three sections:
+//   1. Who is a Connector — clear definition (influencer OR super-user)
+//   2. User vs Connector benefits — side-by-side dual reward stack
+//   3. Compounding example — 50 friends → $12.5K, plus services-loop bonus
+//   4. "I am a…" type selector (Influencer / Local biz / Super user)
+//
+// Keep copy tight (one-liners) and consistent with EarnExplainerScreen
+// + Home invite house ads. Numbers come from rewards.js.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { REWARDS } from '../lib/rewards';
 
 const TYPES = [
   {
     id: 'influencer',
     title: 'Influencer',
-    desc:  'You must have a minimum of 5,000 followers on Instagram.',
-    icon: (
-      <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="24" cy="14" r="6" />
-        <path d="M24 20v8M16 28h16M12 36h8M28 36h8M16 28v8M32 28v8" />
-        <circle cx="12" cy="40" r="3" /><circle cx="20" cy="40" r="3" />
-        <circle cx="28" cy="40" r="3" /><circle cx="36" cy="40" r="3" />
-      </svg>
-    ),
+    desc:  '5,000+ followers on Instagram or TikTok. Your audience books services you spotlight.',
   },
   {
     id: 'local-business',
     title: 'Local business or service',
-    desc:  'You must run a business or provide services that engage with your local community (e.g. stores, gyms, pet shops, real-estate, and more).',
-    icon: (
-      <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="24" cy="22" r="8" />
-        <circle cx="24" cy="22" r="3" />
-        <circle cx="10" cy="14" r="3" /><circle cx="38" cy="14" r="3" />
-        <circle cx="6"  cy="28" r="3" /><circle cx="42" cy="28" r="3" />
-        <circle cx="14" cy="40" r="3" /><circle cx="34" cy="40" r="3" />
-      </svg>
-    ),
+    desc:  'Stores, gyms, salons, real-estate — your customer base IS a referral network.',
   },
   {
     id: 'super-user',
     title: 'Cergio Super User',
-    desc:  'You must have invited 5 new users, who have successfully joined and completed a service within the last 30 days.',
-    icon: (
-      <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="18" cy="20" r="6" />
-        <circle cx="30" cy="20" r="6" />
-        <path d="M24 30c-8 0-14 4-14 10h28c0-6-6-10-14-10z" />
-        <path d="M24 14l-2 2 2 2 2-2-2-2z" />
-      </svg>
-    ),
+    desc:  '5 friends invited and booking within 30 days. Your social graph compounds for you.',
   },
 ];
+
+const PER_FRIEND  = REWARDS.perFriend;            // 250
+const EXAMPLE_FRIENDS = 50;
+const EXAMPLE_TOTAL   = PER_FRIEND * EXAMPLE_FRIENDS; // 12,500
 
 export function RainmakerApplyScreen() {
   const navigate = useNavigate();
@@ -51,8 +40,8 @@ export function RainmakerApplyScreen() {
 
   return (
     <div className="flex-1 flex flex-col bg-cr">
-      {/* green gradient header */}
-      <div className="bg-gradient-to-b from-gm to-g px-7 pt-8 pb-12 relative">
+      {/* hero */}
+      <div className="bg-gradient-to-b from-gm to-g px-7 pt-8 pb-10 relative">
         <button
           onClick={() => navigate(-1)}
           className="w-10 h-10 rounded-full bg-white/95 border-none
@@ -60,37 +49,88 @@ export function RainmakerApplyScreen() {
         >
           ‹
         </button>
-        <h1 className="text-[28px] font-extrabold text-white leading-tight">
-          What best<br />describes you?
+        <h1 className="text-[26px] font-extrabold text-white leading-tight">
+          Become a Connector
         </h1>
+        <p className="text-[13px] text-white/90 leading-relaxed mt-2 font-medium">
+          Influencers and super-users with strong local networks.
+          Drive growth for your community — share in the upside.
+        </p>
       </div>
 
       {/* sheet */}
-      <div className="bg-cr rounded-t-[28px] -mt-7 px-5 pt-7 flex-1 pb-32">
-        <p className="text-[18px] font-extrabold text-black mb-5">I am a…</p>
+      <div className="bg-cr rounded-t-[28px] -mt-7 px-5 pt-7 flex-1 pb-32 overflow-y-auto">
+        {/* ── Benefits comparison: User vs Connector ─────────────────── */}
+        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">
+          What you earn
+        </p>
+        <div className="grid grid-cols-2 gap-2 mb-6">
+          {/* User column */}
+          <div className="bg-white border border-bdr rounded-[16px] p-4">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-b3 mb-1">User</p>
+            <p className="text-[14px] font-extrabold text-black leading-tight">${PER_FRIEND} credit</p>
+            <p className="text-[11px] text-b3 mt-0.5 leading-snug">per friend who joins + books</p>
+            <ul className="mt-3 space-y-1 text-[11px] text-b2 leading-snug">
+              <li>• Free services credit</li>
+              <li>• Growth Participation Income</li>
+            </ul>
+          </div>
+          {/* Connector column */}
+          <div className="bg-gl border border-g/30 rounded-[16px] p-4">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-gd mb-1">Connector</p>
+            <p className="text-[14px] font-extrabold text-black leading-tight">${PER_FRIEND} cash</p>
+            <p className="text-[11px] text-gd/80 mt-0.5 leading-snug">per friend who joins + books</p>
+            <ul className="mt-3 space-y-1 text-[11px] text-b2 leading-snug">
+              <li>• <span className="font-bold">Free services</span> (providers pay in spotlights)</li>
+              <li>• <span className="font-bold">Growth Participation Income</span> — higher score</li>
+              <li>• <span className="font-bold">Spotlight rate card</span> — paid posts</li>
+            </ul>
+          </div>
+        </div>
 
-        <div className="flex flex-col gap-3">
+        {/* ── Compounding example ───────────────────────────────────── */}
+        <div className="bg-white border border-bdr rounded-[18px] p-5 mb-6">
+          <p className="text-[12px] font-extrabold uppercase tracking-widest text-b3 mb-1">
+            The math
+          </p>
+          <p className="text-[20px] font-extrabold text-black leading-tight">
+            {EXAMPLE_FRIENDS} friends → ${EXAMPLE_TOTAL.toLocaleString()}
+          </p>
+          <p className="text-[12px] text-b3 mt-2 leading-snug">
+            Each friend who joins + books = ${PER_FRIEND} to you. Bring 50 and you're at
+            <span className="font-bold text-black"> ${EXAMPLE_TOTAL.toLocaleString()}</span>.
+          </p>
+          <p className="text-[12px] text-b3 mt-2 leading-snug">
+            It compounds: when your friends recommend services that get booked,
+            those bookings add to your pool too. Your network does the work — you
+            earn the upside.
+          </p>
+        </div>
+
+        {/* ── Type selector ─────────────────────────────────────────── */}
+        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">
+          I am a…
+        </p>
+        <div className="flex flex-col gap-2">
           {TYPES.map(t => {
             const active = selected === t.id;
             return (
               <button
                 key={t.id}
                 onClick={() => setSelected(t.id)}
-                className={`w-full text-left p-4 rounded-[18px] border-2 flex items-start gap-4 transition-colors
-                  ${active ? 'bg-gl border-g' : 'bg-white border-bdr hover:border-g/40'}`}
+                className={`w-full text-left p-4 rounded-[16px] border transition-colors
+                  ${active ? 'bg-gl border-g/60' : 'bg-white border-bdr hover:border-g/40'}`}
               >
-                <div className={`w-14 h-14 min-w-14 flex items-center justify-center
-                                 ${active ? 'text-gd' : 'text-black'}`}>
-                  {t.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="text-[15px] font-extrabold text-black mb-1">{t.title}</p>
-                  <p className="text-[13px] text-b3 leading-relaxed">{t.desc}</p>
-                </div>
+                <p className="text-[14px] font-extrabold text-black mb-0.5">{t.title}</p>
+                <p className="text-[12px] text-b3 leading-relaxed">{t.desc}</p>
               </button>
             );
           })}
         </div>
+
+        <p className="text-[11px] text-gd/80 font-normal mt-6 leading-snug text-center">
+          Cergio's mission: human-powered AI that enables shared prosperity.
+        </p>
       </div>
 
       {/* footer */}

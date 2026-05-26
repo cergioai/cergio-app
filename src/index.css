@@ -138,6 +138,25 @@ body {
   animation: cgLeafThink 3.5s ease-in-out infinite;
 }
 
+/* Splash variant — slow orbiting accent ring around the leaf.
+   Claude-style: calm, infinite, never spins so fast it looks loading. */
+@keyframes cgLeafOrbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.cg-leaf-orbit {
+  animation: cgLeafOrbit 9s linear infinite;
+}
+
+/* Soft glow that breathes behind the leaf on the splash variant. */
+@keyframes cgLeafPulseCore {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50%      { opacity: 1.00; transform: scale(1.06); }
+}
+.cg-leaf-pulse-core {
+  animation: cgLeafPulseCore 4s ease-in-out infinite;
+}
+
 /* Legacy leaf-in-button animations (still used on /roaming). */
 .cg-leaf-rest {
   transform: scale(.92) rotate(-8deg);

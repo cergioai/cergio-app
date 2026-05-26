@@ -5,8 +5,15 @@
 // When 0 services match, render the EmptyState block — never fake
 // providers. The leaf logo (shared brand mark) is the canonical visual;
 // do not swap it for the legacy spinner Logo or any other icon.
+//
+// CERGIO-GUARD: every user-visible reference to the service (title,
+// share message, "No X yet…") MUST use the user's own words — i.e.
+// chatState.originalQuery (or its SERVICE_MAP normalization). NEVER use
+// parser-derived chat.state.what for display: that field has been
+// observed flipping "personal chef" → "Weekly meal prep service". See
+// CHECKLIST.md §2.
 import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { LeafLogo } from '../components/ui/LeafLogo';
 import { ProviderCard } from '../components/ui/ProviderCard';
 import { listServices } from '../lib/api';
@@ -60,13 +67,60 @@ function parseBudgetCents(budgetStr) {
   return m ? parseInt(m[1], 10) * 100 : 0;
 }
 
+// CERGIO-GUARD: generic / catch-all provider_type values that must never
+// reach user-visible copy. If the parser hands us one of these, we fall
+// through to the user's original query for display. Keep this list in
+// sync with the same set in useChat.js.
+const GENERIC_PROVIDER_TYPES = new Set([
+  'service', 'services', 'service provider', 'service providers',
+  'provider', 'providers', 'professional', 'professionals',
+  'expert', 'experts', 'specialist', 'specialists',
+  'worker', 'workers', 'helper', 'helpers',
+  'contractor', 'contractors', 'vendor', 'vendors',
+  'business', 'businesses', 'company', 'companies',
+  'freelancer', 'freelancers',
+]);
+const isGenericProviderType = (v) =>
+  !v || GENERIC_PROVIDER_TYPES.has(String(v).trim().toLowerCase());
+
+// Extract a clean service noun from the user's own words. Strips leading
+// "need a / looking for / I want", trailing time/budget/location phrases,
+// and caps to a short headline. Output stays in the user's own words —
+// never mutated to a different service.
+function userServiceNoun(originalQuery) {
+  if (!originalQuery) return null;
+  let s = String(originalQuery).trim();
+  // Strip leading intent verbs.
+  s = s.replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '');
+  // Cut at the first time / budget / location signal so the noun stays clean.
+  const stopAt = s.search(/\b(today|tomorrow|tonight|this|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|on\s|at\s|for\s|in\s|under\s|max\s|max:|maximum|budget|\$|\d{2,5}\s*(?:dollars|usd|bucks))/i);
+  if (stopAt > 2) s = s.slice(0, stopAt).trim();
+  // Collapse whitespace, strip trailing punctuation.
+  s = s.replace(/\s+/g, ' ').replace(/[.,;:!?]+$/g, '').trim();
+  if (!s) return null;
+  // Hard cap so a verbose typed sentence doesn't blow out the title.
+  if (s.length > 48) s = s.slice(0, 46).trimEnd() + '…';
+  return s;
+}
+
 export function ResultsScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { chat, showToast, handleBook } = useOutletContext();
   const chatState = chat.state;
-  const { what, when, where, budget, category, provider_type, details } = chatState;
+  const { what, when, where, budget, category, provider_type, details, originalQuery } = chatState;
 
-  const statusSteps = buildStatusSteps(provider_type);
+  // Prefer originalQuery from chat state (always seeded from the user's
+  // first message). Fall back to the navigation `state.query` if chat
+  // state wasn't seeded (e.g. arriving from a deep link).
+  const userQuery = originalQuery || location.state?.query || null;
+  const userNoun  = userServiceNoun(userQuery);
+
+  // Use parser's provider_type ONLY if it's specific (not generic).
+  // Otherwise fall back to the user's own noun.
+  const safeProviderType = isGenericProviderType(provider_type) ? null : provider_type;
+
+  const statusSteps = buildStatusSteps(safeProviderType || userNoun);
 
   // services === null  → still searching (leaf rotates, status line ticks)
   // services === []    → search completed, zero matches (EmptyState)
@@ -129,16 +183,21 @@ export function ResultsScreen() {
     : [];
   const n = providers.length;
 
-  // Surface the inferred provider_type (broad category like "Driver" or
-  // "Plumber") in the title — never the specific offering name. This
-  // is the user's verification that Cergio understood their request.
-  // If the resolver didn't capture provider_type, we use a neutral
-  // fallback so we never echo a wrong offering.
-  const inferredType = (provider_type || '').trim();
-  const titleText = inferredType
+  // CERGIO-GUARD: title surface MUST reflect what the user asked for.
+  // Order of preference:
+  //   1. safe (non-generic) provider_type from the parser
+  //   2. user's own noun from originalQuery (their words, normalized)
+  //   3. neutral fallback ("matches")
+  // Never use parser-derived `what` here — it has been observed
+  // rewriting the user's ask (e.g. "personal chef" → "Weekly meal prep
+  // service"). See CHECKLIST.md §2.
+  const displayNoun = (safeProviderType || userNoun || '').trim();
+  const displayNounLc = displayNoun.toLowerCase();
+  const pluralize = (s) => s.endsWith('s') ? s : `${s}s`;
+  const titleText = displayNoun
     ? (n > 0
-        ? `Showing ${n} ${inferredType.toLowerCase()}${n === 1 ? '' : 's'}`
-        : `Looking for ${inferredType.toLowerCase()}s`)
+        ? (n === 1 ? `Showing 1 ${displayNounLc}` : `Showing ${n} ${pluralize(displayNounLc)}`)
+        : `Looking for ${pluralize(displayNounLc)}`)
     : (n > 0 ? `Showing ${n} match${n === 1 ? '' : 'es'}` : 'Here are your matches');
 
   // Pills — keep them short so a long when/where doesn't bleed across
@@ -233,21 +292,25 @@ export function ResultsScreen() {
             no matches  → "No {type}s yet — ask friends to help find one"
             has matches → "Want better picks? Ask friends" */}
       {services !== null && (() => {
-        const noun    = inferredType ? inferredType.toLowerCase() : (what || 'service');
+        // CERGIO-GUARD: headline + share message lead with the user's
+        // own words (userNoun, derived from originalQuery), not the
+        // parser's `what`. safeProviderType is used only when it's
+        // specific (not a generic catch-all like "Service provider").
+        const noun    = (userNoun || safeProviderType || 'service').toLowerCase();
         const noMatch = providers.length === 0;
 
-        // Build a contextual share message from the FULL chat state so
-        // the recipient sees what the user actually typed plus any
-        // structured fields. We lead with chat.state.what verbatim
-        // (the user's own words) when available, and append when /
-        // where / budget / details only if they're not already in it.
+        // Build a contextual share message. Lead with what the user typed,
+        // append structured when / where / budget / details only if not
+        // already present in the lead. Falls back to userNoun if for some
+        // reason originalQuery wasn't captured.
         const lc       = (s) => (s || '').toString().toLowerCase();
         const inText   = (s, base) => s && lc(base).includes(lc(String(s).replace('$', '')));
-        const cleanWhat = (what || '').trim();
-        // Lead with what they typed, fall back to "a {noun}" for empty.
-        const lead = cleanWhat
-          ? cleanWhat.replace(/^(a |an |the )/i, '')   // trim leading article
-          : noun;
+        const rawLead  = (userQuery || userNoun || noun).toString().trim()
+          .replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '')
+          .replace(/^(a |an |the )/i, '');
+        // Use the noun-only lead for the contextual append check so we
+        // don't double-up when the lead is a full sentence.
+        const lead = rawLead || noun;
         const base = lead;
         const tail = [];
         if (when   && !inText(when,   base)) tail.push(when);

@@ -13,6 +13,7 @@ import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, sav
 import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
+import { EditProfileModal } from '../components/ui/EditProfileModal';
 import { REWARDS } from '../lib/rewards';
 
 function fmtFollowers(n) {
@@ -103,6 +104,7 @@ export function ProfileScreen() {
   const [showIgModal, setShowIgModal] = useState(false);
   const [tt, setTt] = useState(null);
   const [showTtModal, setShowTtModal] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [spotlightPrices, setSpotlightPrices] = useState(null);
   useEffect(() => {
     if (!isSignedIn) { setIg(null); setTt(null); setSpotlightPrices(null); return; }
@@ -191,11 +193,31 @@ export function ProfileScreen() {
         </button>
       </div>
 
-      {/* ── Account ────────────────────────────────────────────────────────── */}
+      {/* ── Account ──────────────────────────────────────────────────────────
+          Edit profile NOW opens a real modal (name + phone — the only fields
+          stored in auth user_metadata). The "coming soon" stubs that
+          frustrated the user are gone. */}
       <SectionHeader title="Account" />
-      <Row title="View and edit profile" onClick={() => showToast('Profile editing — coming soon')} />
-      <Row title="Edit account info"   onClick={() => showToast('Account info — coming soon')} />
-      <Row title="Payment settings"    onClick={() => showToast('Payment methods — coming soon')} />
+      <Row
+        title="View and edit profile"
+        subtitle="Update your name and phone"
+        onClick={() => setShowEditProfile(true)}
+      />
+      <Row
+        title="Payment settings"
+        subtitle={provider.hasAccount ? 'Manage your Stripe payouts' : 'Set up payouts to receive bookings'}
+        onClick={() => {
+          if (provider.hasAccount) {
+            showToast('Opening Stripe…');
+            getStripeOnboardingUrl().then(({ data }) => {
+              if (data?.url) window.location.href = data.url;
+              else showToast('Stripe onboarding link unavailable');
+            });
+          } else {
+            navigate('/list-service');
+          }
+        }}
+      />
 
       {/* ── Social — Connector entry on top, then IG, then TikTok ─────────
           The first row flips between "Become a Connector" (new user, no
@@ -271,13 +293,28 @@ export function ProfileScreen() {
         </>
       )}
 
-      {/* ── Earn Cash! ─────────────────────────────────────────────────────── */}
-      <SectionHeader title="Earn Cash!" />
+      {/* ── Invite & Earn ────────────────────────────────────────────────────
+          ONE umbrella for everything reward-adjacent: earnings, invites,
+          recos, network management, Connector rates. CERGIO-GUARD: do
+          NOT split this back into "Earn Cash!" + "Additional Links" —
+          consolidating them sharpens the message and saves vertical
+          space. "Coming soon" stubs removed; only real links remain. */}
+      <SectionHeader title="Invite & Earn" />
       <Row
-        title="My credits"
-        subtitle="See and manage your earnings"
+        title="My earnings"
+        subtitle="Balance, breakdown, and how it works"
         pill={<MintPill>$0 USD</MintPill>}
         onClick={() => navigate('/earnings')}
+      />
+      <Row
+        title="Invite friends"
+        subtitle={`Earn $${REWARDS.perFriend} per friend who joins + books`}
+        onClick={() => navigate('/invite/friends-popup')}
+      />
+      <Row
+        title="Recommend a service"
+        subtitle={`Earn $${REWARDS.perFriend} when your reco's friend joins + books`}
+        onClick={() => navigate('/invite/recommend-popup')}
       />
       <Row
         title="Find friends on Cergio"
@@ -285,30 +322,23 @@ export function ProfileScreen() {
         onClick={() => navigate('/find-friends')}
       />
       <Row
-        title="Invite friends"
-        subtitle={`Earn $${REWARDS.perFriend} per friend who joins`}
-        onClick={() => navigate('/invite/friends-popup')}
-      />
-      <Row
-        title="Recommend services"
-        subtitle={`Earn $${REWARDS.perFriend} per friend you recommend to`}
-        onClick={() => navigate('/invite/recommend-popup')}
-      />
-      <Row
-        title="Manage network"
-        onClick={() => showToast('Network management — coming soon')}
-      />
-      <Row
-        title="Invite Connectors and influencers"
+        title="Invite Connectors"
+        subtitle="Send your link to influencers who fit your network"
         onClick={() => navigate('/rainmakers')}
       />
 
-      {/* ── Additional Links ───────────────────────────────────────────────── */}
-      <SectionHeader title="Additional Links" />
-      <Row title="Cergio FAQ"          onClick={() => showToast('FAQ — coming soon')} />
-      <Row title="About Cergio"        onClick={() => showToast('About — coming soon')} />
-      <Row title="Become a Connector"  onClick={() => navigate('/rainmaker/apply')} />
-      <Row title="Contact support"     onClick={() => showToast('Support — coming soon')} />
+      {/* ── About ──────────────────────────────────────────────────────────── */}
+      <SectionHeader title="About" />
+      <Row
+        title="Privacy"
+        subtitle="How we protect your data"
+        onClick={() => navigate('/privacy')}
+      />
+      <Row
+        title="Delete my data"
+        subtitle="Request deletion of your account + history"
+        onClick={() => navigate('/data-deletion')}
+      />
 
       {/* ── Bottom: outlined Log out + "later" link ────────────────────────── */}
       <div className="px-5 mt-10 mb-3">
@@ -352,6 +382,13 @@ export function ProfileScreen() {
           initialFollowers={tt?.tiktok_followers ?? ''}
           onSave={handleSaveTt}
           onClose={() => setShowTtModal(false)}
+        />
+      )}
+      {showEditProfile && (
+        <EditProfileModal
+          user={auth?.user}
+          onClose={() => setShowEditProfile(false)}
+          onSaved={() => showToast('Profile updated ✓')}
         />
       )}
     </div>

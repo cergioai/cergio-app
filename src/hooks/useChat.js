@@ -125,9 +125,14 @@ const MONTH_RE  = new RegExp(`\\b(${MONTHS.join('|')})\\b[a-z0-9 ,/.\\-:]*`, 'i'
 // Day names — accept plural ("tuesdays") and optional "every" prefix
 // ("every tuesday"). Previously the \b before the day name + \b after
 // rejected "tuesdays" entirely, causing the bot to ignore the user's reply.
+// CERGIO-GUARD: the trailing group stops on comma/period/digit/$ AND on
+// budget keywords ("under", "max", "maximum", "budget", "for $X"). This
+// prevents "sunday lunch under 450" from being swept into the `when`
+// field — the budget belongs in `budget`, not `when`.
 const DAY_NAMES   = '(monday|tuesday|wednesday|thursday|friday|saturday|sunday)';
-const DAY_RE      = new RegExp(`\\b(every\\s+)?${DAY_NAMES}s?\\b[^,.]*`, 'i');
-const QUICK_WHEN  = /\b(today|tomorrow|tonight|this\s+(?:weekend|week|month)|next\s+(?:weekend|week|month))\b[^,.]*/i;
+const STOP_TAIL   = `[^,.$\\d]*?(?=\\s+(?:under|max|maximum|budget|for\\s+\\$)|[,.\\n]|\\d|\\$|$)`;
+const DAY_RE      = new RegExp(`\\b(every\\s+)?${DAY_NAMES}s?\\b${STOP_TAIL}`, 'i');
+const QUICK_WHEN  = new RegExp(`\\b(today|tomorrow|tonight|this\\s+(?:weekend|week|month)|next\\s+(?:weekend|week|month))\\b${STOP_TAIL}`, 'i');
 
 // Time-of-day windows in plain English.
 const TIME_OF_DAY_RE = /\b(morning|afternoon|evening|night|midday|noon|midnight)\b/i;
@@ -260,7 +265,50 @@ const INITIAL_STATE = {
   offering_id:   null,   // taxonomy id, e.g. "HOME-PLUMB-001"
   urgency:       false,
   bundle:        null,   // { id, name, step_count } when chat resolves to a bundle
+  // CERGIO-GUARD: originalQuery is the user's first/raw message verbatim.
+  // It is the SINGLE source of truth for any user-visible display (title,
+  // share message, etc.). Parser output (`what`, `provider_type`, etc.)
+  // is used ONLY for internal filtering. Never echo parser output back to
+  // the user as the name of their service — it has been observed flipping
+  // "personal chef" → "Weekly meal prep service". See CHECKLIST.md §2.
+  originalQuery: null,
 };
+
+// CERGIO-GUARD: generic / catch-all values the cloud parser sometimes
+// returns when it doesn't have a clean taxonomy hit. We refuse to set
+// these as the user-visible provider_type — they read as parser garbage
+// (e.g. "Looking for service providers") instead of the user's actual ask.
+const GENERIC_PROVIDER_TYPES = new Set([
+  'service', 'services', 'service provider', 'service providers',
+  'provider', 'providers', 'professional', 'professionals',
+  'expert', 'experts', 'specialist', 'specialists',
+  'worker', 'workers', 'helper', 'helpers',
+  'contractor', 'contractors', 'vendor', 'vendors',
+  'business', 'businesses', 'company', 'companies',
+  'freelancer', 'freelancers',
+]);
+
+function isGenericProviderType(v) {
+  if (!v) return true;
+  return GENERIC_PROVIDER_TYPES.has(String(v).trim().toLowerCase());
+}
+
+// Word-overlap check: does the parser's `what` share a meaningful token
+// with the user's input? If not, the parser drifted (e.g. "personal chef"
+// → "Weekly meal prep service") and we should not trust it for display.
+function sharesWordsWith(parserWhat, userText) {
+  if (!parserWhat || !userText) return false;
+  const stop = new Set([
+    'a','an','the','of','for','to','in','on','and','or','my','i','need','want',
+    'service','services','please','some','someone','this','that','it','help',
+  ]);
+  const tokens = (s) =>
+    String(s).toLowerCase().match(/[a-z]+/g)?.filter(t => t.length > 2 && !stop.has(t)) ?? [];
+  const a = new Set(tokens(parserWhat));
+  const b = new Set(tokens(userText));
+  for (const t of a) if (b.has(t)) return true;
+  return false;
+}
 
 export function useChat() {
   const [messages, setMessages]     = useState([]);
@@ -293,10 +341,19 @@ export function useChat() {
     const fields = { ...(res.parsed ?? {}) };
     const resolver = { ...(res._resolver ?? {}) };
 
-    // Sanitize cloud output. If it mentions a bundle/coordinator/package
-    // and we have a real local hit, prefer local.
+    // ── Sanitize cloud output (CERGIO-GUARD) ─────────────────────────────────
+    // The cloud parser has been observed:
+    //   (a) returning bundle/coordinator/package phrases for single services
+    //   (b) generic provider_types like "Service provider" / "Professional"
+    //   (c) renaming the user's request to an unrelated offering name
+    //       (e.g. "personal chef" → "Weekly meal prep service")
+    // All three rewrite the user's words into something they didn't ask for.
+    // For display we always prefer the user's own text or the local
+    // SERVICE_MAP hit. Taxonomy still flows through for backend filtering.
     const isBundleish = (s) => !!s && /\b(bundle|coordinator|package)\b/i.test(s);
-    const local = naiveParse(userMessage || '', prevState);
+    const userInput = userMessage || prevState.originalQuery || '';
+    const local = naiveParse(userInput, prevState);
+
     if (local.what && isBundleish(fields.what)) {
       // eslint-disable-next-line no-console
       console.warn('[useChat] cloud parsed.what looked like a bundle ("%s") — overriding with local "%s"', fields.what, local.what);
@@ -306,11 +363,68 @@ export function useChat() {
       // eslint-disable-next-line no-console
       console.warn('[useChat] cloud provider_type looked like a bundle ("%s") — overriding with local "%s"', resolver.provider_type, local.what);
       resolver.provider_type = local.what;
-      // Drop a wrong offering_id too — it's almost certainly the bundle id.
       resolver.offering_id = null;
     }
     if (isBundleish(resolver.bundle?.name) || isBundleish(resolver.bundle)) {
       resolver.bundle = null;
+    }
+
+    // Drop overly-generic provider types — they produce "Looking for service
+    // providers" copy that erases the user's actual ask. Fall back to the
+    // local SERVICE_MAP hit when available, otherwise leave it null so
+    // ResultsScreen falls back to the user's originalQuery for display.
+    if (isGenericProviderType(resolver.provider_type)) {
+      // eslint-disable-next-line no-console
+      console.warn('[useChat] cloud provider_type was generic ("%s") — dropping', resolver.provider_type);
+      resolver.provider_type = local.what || null;
+      resolver.offering_id = null;
+    }
+
+    // Word-overlap drift check: if the parser's `what` shares NO meaningful
+    // word with the user's input, the parser has wandered off (e.g.
+    // "personal chef" → "Weekly meal prep service"). Prefer the local hit
+    // or, failing that, drop `what` entirely so the user's originalQuery
+    // becomes the display source. Skip this check on chat follow-ups where
+    // the user is only answering a sub-question (when / where / budget) —
+    // detected by prevState.what already being set.
+    // CERGIO-GUARD: strip budget noise that drifted into `when`. The cloud
+    // parser has been observed returning `when: "sunday lunch under 450"`
+    // when the user's text was "personal chef sunday lunch under 450 at
+    // 43 hamilton st max $450". Budget and address belong in their own
+    // fields — surgically excise them so the `when` pill is clean.
+    if (fields.when) {
+      const cleanedWhen = String(fields.when)
+        .replace(/\s+(under|max(?:imum)?|budget|for\s+\$?)\s*\$?\d{1,5}\b/gi, '')
+        .replace(/\s+\$\d{1,5}\b/g, '')
+        .replace(/\s+at\s+\d{1,6}\s+[A-Za-z][\w .'-]+/i, '')   // " at 43 hamilton st"
+        .replace(/\s+in\s+\d{1,6}\s+[A-Za-z][\w .'-]+/i, '')
+        .replace(/\s+,\s*/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/[,.;:]+$/, '')
+        .trim();
+      if (cleanedWhen !== fields.when) {
+        // eslint-disable-next-line no-console
+        console.warn('[useChat] sanitized when "%s" → "%s"', fields.when, cleanedWhen);
+        fields.when = cleanedWhen || null;
+      }
+    }
+
+    if (
+      fields.what &&
+      userInput &&
+      !prevState.what &&
+      !sharesWordsWith(fields.what, userInput)
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn('[useChat] cloud parsed.what drifted from user input — input="%s" parsed="%s"', userInput, fields.what);
+      if (local.what) {
+        fields.what = local.what;
+      } else {
+        // No safe replacement → null it out and let display use originalQuery.
+        fields.what = null;
+        resolver.provider_type = null;
+        resolver.offering_id = null;
+      }
     }
 
     const merged = {
@@ -325,6 +439,7 @@ export function useChat() {
       offering_id:    resolver.offering_id    ?? prevState.offering_id    ?? null,
       bundle:         resolver.bundle         ?? prevState.bundle         ?? null,
       urgency:        res.urgency === true || prevState.urgency === true,
+      originalQuery:  prevState.originalQuery ?? null,
     };
     setState(merged);
 
@@ -397,9 +512,13 @@ export function useChat() {
     // Seed state with the user's saved default address so the parser
     // never re-asks "Where?" when we already know it. The cloud
     // resolver also gets defaultAddress via runParse for redundancy.
+    // CERGIO-GUARD: seed originalQuery with the user's first message so
+    // every later screen (Results, share card, title) can fall back to
+    // the user's own words instead of parser output.
     const seededState = {
       ...INITIAL_STATE,
       where: defaultAddress || null,
+      originalQuery: initialMessage || seedTask || null,
     };
     setState(seededState);
     setMessages([]);
@@ -450,9 +569,16 @@ export function useChat() {
 
     // Use the freshest state captured in the closure of this callback.
     // setState is async; reading `state` here gives the value at render time.
+    // CERGIO-GUARD: if originalQuery hasn't been set yet (blank-open chat),
+    // seed it now from the user's first typed message. This is the source
+    // of truth for display so we never echo parser-mutated copy.
+    const baseState = state.originalQuery
+      ? state
+      : { ...state, originalQuery: trimmed };
+
     await runParse({
       user_message:    trimmed,
-      baseState:       state,
+      baseState,
       defaultAddress:  null,    // wire to profile when available
       isRepeatUser:    false,   // ditto
     });
