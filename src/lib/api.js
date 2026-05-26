@@ -205,7 +205,7 @@ export async function listServices({
         (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
       );
     }
-    filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly });
+    filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly, originalQuery });
     return { data: filtered, error: null };
   }
 
@@ -249,15 +249,21 @@ export async function listServices({
   // CERGIO-GUARD: apply budget + free filters client-side. The
   // offerings join is already loaded so the filter is cheap.
   if (res.data) {
-    res.data = applyMatchingFilters(res.data, { maxBudgetCents, freeOnly });
+    res.data = applyMatchingFilters(res.data, { maxBudgetCents, freeOnly, originalQuery });
   }
   return res;
 }
 
-// Shared post-query filter so both the proximity branch and the plain
-// branch behave identically. Budget = compare the SERVICE'S MINIMUM
-// offering price (cheapest entry). freeOnly = at least one $0 offering.
-function applyMatchingFilters(rows, { maxBudgetCents, freeOnly }) {
+// Shared post-query filter + relevance sort so both the proximity branch
+// and the plain branch behave identically.
+//   - freeOnly  → at least one $0 offering
+//   - maxBudgetCents → cheapest offering fits the budget
+//   - originalQuery → relevance score (count of distinct stem hits in
+//     title/description/category), descending. Resolves the "personal
+//     chef" returning both Marcus + Tasha issue — Marcus matches BOTH
+//     'personal' and 'chef' (score 2), Tasha matches only 'personal'
+//     (score 1), so Marcus ranks first.
+function applyMatchingFilters(rows, { maxBudgetCents, freeOnly, originalQuery }) {
   let out = rows;
   if (freeOnly) {
     out = out.filter(s => (s.offerings || []).some(o => (o.price_cents ?? 0) === 0));
@@ -269,6 +275,26 @@ function applyMatchingFilters(rows, { maxBudgetCents, freeOnly }) {
       const min = Math.min(...prices);
       return min <= maxBudgetCents;
     });
+  }
+  if (originalQuery) {
+    const tokens = String(originalQuery).toLowerCase().match(/[a-z]+/g) ?? [];
+    const meaningful = tokens.filter(t => t.length >= 4 && !MATCH_STOPWORDS.has(t));
+    const stems = [...new Set(meaningful.map(stemTerm))];
+    if (stems.length > 0) {
+      const scoreOne = (s) => {
+        const hay = [
+          s.title, s.description, s.category,
+          s.taxonomy_category, s.taxonomy_provider_type,
+        ].filter(Boolean).join(' ').toLowerCase();
+        let n = 0;
+        for (const st of stems) if (hay.includes(st)) n++;
+        return n;
+      };
+      out = out
+        .map(s => ({ s, score: scoreOne(s) }))
+        .sort((a, b) => b.score - a.score)
+        .map(o => o.s);
+    }
   }
   return out;
 }
