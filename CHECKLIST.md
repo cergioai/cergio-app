@@ -26,6 +26,26 @@ touching one of these areas.
 - [ ] Title is neutral (`Showing N matches` / `Here are your matches`).
       Never `"… providers providers"` or any taxonomy noun echo.
 
+- [ ] Matching pipeline filters by **all four signals** the user gives:
+      category/provider_type/offering_id (taxonomy), distance (proximity
+      RPC), **budget**, and **free-only toggle**. The budget pill and
+      Free toggle MUST influence what comes back from `listServices` —
+      not just the rendering. Previously both were cosmetic.
+      _Guard: api.js `applyMatchingFilters` + ResultsScreen passes
+      `maxBudgetCents` + `freeOnly` to listServices._
+
+- [ ] Provider cards owned by people the signed-in user follows
+      (network table) sort **above** strangers. The "Reco'd by …"
+      label MUST match the ordering — if no card has a friend, all
+      cards show "No mutual friends yet".
+      _Guard: ResultsScreen.jsx `friendOwnerIds` + post-sort `pick`
+      reassignment._
+
+- [ ] ProviderCard renders the real `cover_url` image when set;
+      falls back to the gradient palette only when no photo exists.
+      `listServices` must SELECT `cover_url`.
+      _Guard: ProviderCard.jsx + api.js select list._
+
 ## 2. Taxonomy is routing-only
 
 - [ ] Chat bot never echoes offering names like _"Drain unclogging ✓"_.
