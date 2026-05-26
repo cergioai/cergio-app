@@ -18,6 +18,7 @@ import { LeafLogo } from '../components/ui/LeafLogo';
 import { ProviderCard } from '../components/ui/ProviderCard';
 import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
+import { supabase, supabaseReady } from '../lib/supabase';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -36,7 +37,10 @@ function buildStatusSteps(providerType) {
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 
 // Map a Supabase service row → the shape ProviderCard expects.
-function serviceToProvider(svc, idx, budgetCents) {
+// friendDisplayName is the signed-in user's friend who "owns" this
+// provider (i.e. they follow them); pass null when there's no friend
+// link so the card renders "No mutual friends yet".
+function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null) {
   // pick the default offering (or first) for headline price
   const offering = svc.offerings?.find(o => o.is_default) || svc.offerings?.[0];
   const cents    = offering?.price_cents ?? 0;
@@ -54,10 +58,15 @@ function serviceToProvider(svc, idx, budgetCents) {
     price:       price || 0,
     recos:       svc.rating_count || 0,
     connectors:  0,
-    friends:     [],
+    // CERGIO-GUARD: friends array drives the "Reco'd by …" line on the
+    // card. Populated from the network table — if the signed-in user
+    // follows this provider, they're treated as the reco source. When
+    // we have richer friend-of-friend data we can extend this.
+    friends:     friendDisplayName ? [friendDisplayName] : [],
     savings:     savings,
     pick:        idx === 0,        // first real listing gets the Cergio Pick badge
     photoClass:  svc.photo_class || PHOTO_FALLBACKS[idx % 3],
+    coverUrl:    svc.cover_url || null,
   };
 }
 
@@ -106,7 +115,7 @@ function userServiceNoun(originalQuery) {
 export function ResultsScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { chat, showToast, handleBook } = useOutletContext();
+  const { chat, showToast, handleBook, freeServices } = useOutletContext();
   const chatState = chat.state;
   const { what, when, where, budget, category, provider_type, details, originalQuery } = chatState;
 
@@ -137,6 +146,34 @@ export function ResultsScreen() {
     return () => clearInterval(t);
   }, [services, statusSteps.length]);
 
+  // Friends graph — owner_ids the signed-in user follows. Loaded once,
+  // then used to tag each provider card with friend recos. Empty list
+  // is fine; the card just shows "No mutual friends yet".
+  const [friendOwnerIds, setFriendOwnerIds] = useState(new Set());
+  useEffect(() => {
+    if (!supabaseReady) return;
+    let cancelled = false;
+    (async () => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes?.user?.id;
+      if (!uid) return;
+      const { data } = await supabase
+        .from('network')
+        .select('followed_id')
+        .eq('follower_id', uid);
+      if (cancelled) return;
+      setFriendOwnerIds(new Set((data || []).map(r => r.followed_id)));
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Parse budget pill ("$200" / "$450") → cents for filtering.
+  const maxBudgetCentsForFilter = (() => {
+    if (!budget) return null;
+    const m = String(budget).match(/\$?\s*(\d{1,5})/);
+    return m ? parseInt(m[1], 10) * 100 : null;
+  })();
+
   useEffect(() => {
     let cancelled = false;
     const timeoutId = setTimeout(() => {
@@ -156,10 +193,16 @@ export function ResultsScreen() {
         const { offering_id: resolvedOfferingId } = chatState;
         const filterCategory = category || what || null;
         const { data, error } = await listServices({
-          offering_id:   resolvedOfferingId || null,
-          provider_type: provider_type      || null,
-          category:      filterCategory,
+          offering_id:    resolvedOfferingId || null,
+          provider_type:  provider_type      || null,
+          category:       filterCategory,
           lat, lng, radiusMiles: 25,
+          // CERGIO-GUARD: matching MUST respect budget + free toggle.
+          // Previously these were cosmetic-only (budget pill shown,
+          // free CTA flipped) but the actual SQL ignored them. Fixed
+          // 2026-05-26.
+          maxBudgetCents: maxBudgetCentsForFilter,
+          freeOnly:       !!freeServices,
         });
         if (cancelled) return;
         clearTimeout(timeoutId);
@@ -172,15 +215,33 @@ export function ResultsScreen() {
       }
     })();
     return () => { cancelled = true; clearTimeout(timeoutId); };
-  }, [what, category, where, provider_type, chatState.offering_id]);
+  }, [what, category, where, provider_type, chatState.offering_id, maxBudgetCentsForFilter, freeServices]);
 
   const budgetCents = parseBudgetCents(budget);
   // CERGIO-GUARD: providers list comes ONLY from real Supabase rows.
   // Do NOT add PROVIDERS mock fallback here — empty results render the
   // EmptyState block below instead of fake cards.
-  const providers = (services && services.length > 0)
-    ? services.map((s, i) => serviceToProvider(s, i, budgetCents))
+  //
+  // Friend-ranked sort: services owned by people the user follows surface
+  // above strangers. The "Reco'd by friends" label then matches the
+  // ordering so the social-proof story is consistent end-to-end.
+  const providersRaw = (services && services.length > 0)
+    ? services.map((s, i) => {
+        const isFriend = s.owner_id && friendOwnerIds.has(s.owner_id);
+        // We don't have the friend's display name yet (not joined in the
+        // query); use "a friend" as a placeholder until we add a profile
+        // join — better than empty.
+        return serviceToProvider(s, i, budgetCents, isFriend ? 'a friend' : null);
+      })
     : [];
+  const providers = [...providersRaw].sort((a, b) => {
+    const af = a.friends.length > 0 ? 1 : 0;
+    const bf = b.friends.length > 0 ? 1 : 0;
+    if (af !== bf) return bf - af; // friend-recommended first
+    return 0;
+  });
+  // After sort, fix the "pick" flag — only the actual first card.
+  providers.forEach((p, i) => { p.pick = i === 0; });
   const n = providers.length;
 
   // CERGIO-GUARD: title surface MUST reflect what the user asked for.

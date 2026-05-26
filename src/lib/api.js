@@ -159,6 +159,13 @@ export async function listServices({
   provider_type = null,
   lat = null, lng = null, radiusMiles = 25,
   limit = 50,
+  // CERGIO-GUARD: matching filters previously not applied — fixed
+  // 2026-05-26. Budget pill on Results was cosmetic only; free/paid
+  // toggle on Home didn't filter. Now: maxBudgetCents filters to
+  // services whose default (or cheapest) offering fits the budget;
+  // freeOnly filters to services with at least one $0 offering.
+  maxBudgetCents = null,
+  freeOnly = false,
 } = {}) {
   if (!supabaseReady) return NOT_WIRED;
 
@@ -190,6 +197,7 @@ export async function listServices({
         (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
       );
     }
+    filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly });
     return { data: filtered, error: null };
   }
 
@@ -199,7 +207,7 @@ export async function listServices({
   let q = supabase
     .from('services')
     .select(`
-      id, title, category, description, location_text, photo_class,
+      id, title, category, description, location_text, photo_class, cover_url,
       rating_avg, rating_count, bookings_count, owner_id, created_at,
       taxonomy_category, taxonomy_provider_type, taxonomy_offering_id,
       offerings ( id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id )
@@ -225,7 +233,31 @@ export async function listServices({
       (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
     );
   }
+  // CERGIO-GUARD: apply budget + free filters client-side. The
+  // offerings join is already loaded so the filter is cheap.
+  if (res.data) {
+    res.data = applyMatchingFilters(res.data, { maxBudgetCents, freeOnly });
+  }
   return res;
+}
+
+// Shared post-query filter so both the proximity branch and the plain
+// branch behave identically. Budget = compare the SERVICE'S MINIMUM
+// offering price (cheapest entry). freeOnly = at least one $0 offering.
+function applyMatchingFilters(rows, { maxBudgetCents, freeOnly }) {
+  let out = rows;
+  if (freeOnly) {
+    out = out.filter(s => (s.offerings || []).some(o => (o.price_cents ?? 0) === 0));
+  }
+  if (maxBudgetCents != null && maxBudgetCents > 0) {
+    out = out.filter(s => {
+      const prices = (s.offerings || []).map(o => o.price_cents ?? 0).filter(p => p >= 0);
+      if (prices.length === 0) return true; // unknown — don't exclude
+      const min = Math.min(...prices);
+      return min <= maxBudgetCents;
+    });
+  }
+  return out;
 }
 
 // ─── Saved addresses (Google-validated, labeled, with a default) ────────────

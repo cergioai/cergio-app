@@ -46,7 +46,7 @@ function FriendAvatars({ friends }) {
 }
 
 export function ProviderCard({ provider, onBook, onSave }) {
-  const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass } = provider;
+  const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl } = provider;
 
   const recoText = () => {
     if (!friends || friends.length === 0) return null;
@@ -57,14 +57,26 @@ export function ProviderCard({ provider, onBook, onSave }) {
 
   return (
     <div className="mb-5">
-      {/* ── PHOTO ── */}
+      {/* ── PHOTO ── CERGIO-GUARD: real cover_url wins over the legacy
+            CSS-gradient photoClass when set. Falls back to the gradient
+            when no real photo is available so existing seeded rows still
+            render. img tag uses object-cover + lazy loading. */}
       <div
         className={`relative mx-4 h-[210px] rounded-2xl overflow-hidden cursor-pointer
-                    ${PHOTO_BG[photoClass] || PHOTO_BG['fv-jamie']}`}
+                    ${coverUrl ? 'bg-bg5' : (PHOTO_BG[photoClass] || PHOTO_BG['fv-jamie'])}`}
         onClick={() => onBook(provider)}
       >
-        {/* light overlay for depth */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
+        {coverUrl && (
+          <img
+            src={coverUrl}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
+        {/* light overlay for depth — adds readability for badges/buttons */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/20" />
 
         {/* heart */}
         <button
