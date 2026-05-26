@@ -15,6 +15,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { CcGateModal } from '../components/ui/CcGateModal';
 import { LeafLogo } from '../components/ui/LeafLogo';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
+import { LocationEditModal } from '../components/ui/LocationEditModal';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 import { REWARDS } from '../lib/rewards';
 
@@ -621,131 +622,39 @@ export function HomeScreen() {
         );
       })()}
 
-      {/* Location chip — sits ABOVE the search box. Shows once an
-          address exists (or while editing). Address + Change render as
-          one phrase, both font-normal so neither competes with the
-          input below. */}
-      {(locationText || locEditing) && (
-        <div className="px-5 mt-1 mb-1 flex items-center gap-1.5 text-[11px] text-b3">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-            <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-            <circle cx="12" cy="9" r="2.5" />
-          </svg>
-          {locEditing ? (
-            <div className="flex-1 flex items-center gap-2">
-              <AddressAutocomplete
-                value={locationText}
-                onChange={setLocationText}
-                onSelect={async ({ lat, lng, address, placeId }) => {
-                  setLocationText(address);
-                  setLocationCoords({ lat, lng });
-                  setLocEditing(false);
-                  try {
-                    localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ address, lat, lng, placeId }));
-                  } catch { /* ignore */ }
-                  if (auth?.isSignedIn) {
-                    const { error } = await saveAddress({
-                      label: 'Home',
-                      formattedAddress: address,
-                      lat, lng, placeId,
-                      makeDefault: true,
-                    });
-                    if (error) {
-                      // Schema-cache miss = user_addresses migration not
-                      // yet applied. localStorage already has it; tell the
-                      // user it's saved locally rather than alarming them.
-                      if (/relation|does not exist|schema cache/i.test(error.message || '')) {
-                        showToast('Saved on this device. Server sync pending migration.');
-                      } else {
-                        showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                      }
-                    } else {
-                      showToast('Saved as your default location ✓');
-                    }
-                  } else {
-                    showToast('Saved on this device. Sign in to sync it.');
-                  }
-                }}
-                placeholder={intent === 'spotlight' ? 'Where do you offer the service?' : 'Add your address'}
-                className=""
-              />
-              <button
-                onClick={async () => {
-                  if (!locationText) { setLocEditing(false); return; }
-                  // CERGIO-GUARD: verify against Google before persisting.
-                  // Stops bogus addresses like "1 jane street ny" from
-                  // being saved as-is. Canonical formatted_address + real
-                  // lat/lng replace the typed text.
-                  const { verifyAddress } = await import('../lib/google');
-                  const v = await verifyAddress(locationText);
-                  if (v.ok) {
-                    setLocationText(v.address);
-                    setLocationCoords({ lat: v.lat, lng: v.lng });
-                    setLocEditing(false);
-                    // Persist verified address.
-                    try {
-                      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
-                        address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId,
-                      }));
-                    } catch { /* ignore */ }
-                    if (auth?.isSignedIn) {
-                      const { error } = await saveAddress({
-                        label: 'Home',
-                        formattedAddress: v.address,
-                        lat: v.lat, lng: v.lng,
-                        placeId: v.placeId,
-                        makeDefault: true,
-                      });
-                      if (error && !/relation|does not exist|schema cache/i.test(error.message || '')) {
-                        showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                      } else {
-                        showToast('Saved as your default location ✓');
-                      }
-                    } else {
-                      showToast('Saved on this device. Sign in to sync it.');
-                    }
-                    return;
-                  }
-                  // Verification failed — tell the user to pick a
-                  // suggestion. Don't save garbage.
-                  if (v.reason === 'no-key') {
-                    // No Google key configured — degrade to as-is save.
-                    setLocEditing(false);
-                    if (auth?.isSignedIn) {
-                      await saveAddress({
-                        label: 'Home',
-                        formattedAddress: locationText,
-                        lat: locationCoords?.lat ?? null,
-                        lng: locationCoords?.lng ?? null,
-                        makeDefault: true,
-                      });
-                    }
-                    showToast("Saved unverified — set VITE_GOOGLE_MAPS_KEY to validate.");
-                  } else {
-                    showToast(`Couldn't find "${locationText}" on Google. Pick a suggestion or refine.`);
-                    // keep editing open so user can fix it
-                  }
-                }}
-                className="text-[11px] font-normal text-g underline underline-offset-2"
-              >
-                Save
-              </button>
-            </div>
-          ) : (
-            <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug">
-              <span>{locationText}</span>
-              <button
-                type="button"
-                onClick={() => setLocEditing(true)}
-                className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
-              >
-                Change
-              </button>
-            </p>
-          )}
-        </div>
-      )}
+      {/* Location chip — sits ABOVE the search box. CERGIO-GUARD: the
+          chip is ALWAYS rendered (even when no address is saved yet) so
+          the user always has a way to add / edit their location. Clicking
+          it opens the LocationEditModal — a proper bottom-sheet editor
+          with persistent inline status (no transient toasts). */}
+      <div className="px-5 mt-1 mb-1 flex items-center gap-1.5 text-[11px] text-b3">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+          <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+          <circle cx="12" cy="9" r="2.5" />
+        </svg>
+        {locationText ? (
+          <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug">
+            <span>{locationText}</span>
+            <button
+              type="button"
+              onClick={() => setLocEditing(true)}
+              className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
+              aria-label="Edit saved location"
+            >
+              Change
+            </button>
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setLocEditing(true)}
+            className="flex-1 text-left text-[11px] font-normal text-g underline underline-offset-2"
+          >
+            Add your location
+          </button>
+        )}
+      </div>
 
       {/* Spotlight travel-radius — only after a location exists. */}
       {intent === 'spotlight' && locationText && !submitted && (
@@ -1207,6 +1116,24 @@ export function HomeScreen() {
             // Re-fire submit after verification.
             setTimeout(() => submitQuery(), 0);
           }}
+        />
+      )}
+
+      {/* Location editor — bottom-sheet modal. CERGIO-GUARD: this is
+          the ONLY way to edit location now. Inline edit-in-place was
+          replaced because errors vanished (2.6s toast) and the input
+          had focus / sizing issues. Modal status is persistent. */}
+      {locEditing && (
+        <LocationEditModal
+          initialAddress={locationText}
+          initialCoords={locationCoords}
+          isSignedIn={!!auth?.isSignedIn}
+          saveAddress={saveAddress}
+          onSaved={(saved) => {
+            if (saved?.address) setLocationText(saved.address);
+            if (saved?.lat && saved?.lng) setLocationCoords({ lat: saved.lat, lng: saved.lng });
+          }}
+          onClose={() => setLocEditing(false)}
         />
       )}
     </div>

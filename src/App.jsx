@@ -100,7 +100,7 @@ function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { toast, showToast } = useToast();
+  const { toast, showToast, dismissToast } = useToast();
   const chat                 = useChat();
   const auth                 = useSession();
   const [booking, setBooking]           = useState(null);
@@ -248,7 +248,7 @@ function Layout() {
         />
 
         {showNav && <BottomNav serviceMode={serviceMode} />}
-        <Toast msg={toast.msg} show={toast.show} />
+        <Toast msg={toast.msg} show={toast.show} sticky={toast.sticky} onDismiss={dismissToast} />
 
         {paymentSheet && (
           <PaymentSheet
