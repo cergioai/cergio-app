@@ -169,94 +169,75 @@ export function EarningsScreen() {
             </div>
           </div>
 
-          <p className="text-[13px] font-extrabold text-black leading-tight">
-            {isProvider ? 'Grow with Cergio' : 'Invite friends to see activity'}
-          </p>
-          <p className="text-[12px] text-b3 mt-1 leading-snug">
+          {/* Counter row with INLINE action buttons. Replaces the
+              old below-the-card bullet list. Provider + Consumer get
+              different button labels + counter labels. */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex-1">
+              <p className="text-[18px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[10px] text-b3 mt-0.5 leading-snug uppercase tracking-wide">
+                {isProvider ? 'Clients invited' : 'Friends invited'}
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/find-friends')}
+              className="bg-g text-white rounded-pill px-3 py-1.5 text-[11px] font-extrabold whitespace-nowrap"
+            >
+              Invite
+            </button>
+            <button
+              onClick={() => navigate('/invite/recommend-popup')}
+              className="bg-white border border-bdr rounded-pill px-3 py-1.5 text-[11px] font-extrabold text-b2 whitespace-nowrap"
+            >
+              Reco
+            </button>
+          </div>
+
+          <div className="flex items-center gap-4 mb-3 border-t border-bdr pt-3">
+            <div className="flex-1">
+              <p className="text-[16px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[10px] text-b3 mt-0.5 leading-snug">services reco'd</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-[16px] font-extrabold text-black leading-none">$0</p>
+              <p className="text-[10px] text-b3 mt-0.5 leading-snug">earned</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-[16px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[10px] text-b3 mt-0.5 leading-snug">
+                {isProvider ? 'spotlights' : 'free credits'}
+              </p>
+            </div>
+          </div>
+
+          {/* Mode-tailored one-liner — provider vs consumer is genuinely
+              different audiences. CERGIO-GUARD: do NOT use 'invite
+              clients' copy in consumer mode and vice versa. */}
+          <p className="text-[12px] text-b3 leading-snug">
             {isProvider
-              ? `Invite clients + spotlight your service. Each friend who books earns you $${REWARDS.perFriend} + Growth Participation Income.`
-              : `Each friend who joins + books earns you $${REWARDS.perFriend} + Growth Participation Income.`}
-          </p>
-          <ul className="mt-3 space-y-1.5 text-[12px] text-b2 leading-snug">
-            {isProvider ? (
-              <>
-                <li>• <span className="font-bold">Cash</span> — ${REWARDS.perFriend} per friend who books</li>
-                <li>• <span className="font-bold">Growth Participation Income</span> — your cash drives your score{' '}
-                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2">ⓘ</button>
-                </li>
-                <li>• <span className="font-bold">Spotlight</span> — free social posts when Connectors share you</li>
-              </>
-            ) : (
-              <>
-                <li>• <span className="font-bold">Cash</span> — ${REWARDS.perFriend} per friend who joins + books</li>
-                <li>• <span className="font-bold">Free services</span> — credit toward your next booking</li>
-                <li>• <span className="font-bold">Growth Participation Income</span> — your cash drives your score{' '}
-                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2">ⓘ</button>
-                </li>
-              </>
-            )}
-          </ul>
-          <p className="text-[11px] text-gd font-medium mt-3 leading-snug">
-            Cergio's mission: Human-powered AI that enables shared prosperity.
+              ? <>Turn your client list into your referral network. Every client that joins + books earns you <span className="font-bold text-black">${REWARDS.perFriend}</span> + Growth Participation Income.{' '}
+                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-bold">ⓘ</button>
+                </>
+              : <>Help friends find trusted services and earn <span className="font-bold text-black">${REWARDS.perFriend}</span> per friend who joins + books, plus free credits + Growth Participation Income.{' '}
+                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-bold">ⓘ</button>
+                </>}
           </p>
         </div>
       )}
 
-      {/* Earn cards — single $250 hero number across all of them. */}
-      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">
-        Refer & earn — ${REWARDS.perFriend} per friend
-      </p>
-      <div className="px-5 flex flex-col gap-2 mb-6">
-        <ActionCard
-          onClick={() => navigate('/find-friends')}
-          icon="people"
-          label="Invite friends"
-          right={<span className="text-[12px] text-g font-extrabold">${REWARDS.perFriend}/friend</span>}
-        />
-        <ActionCard
-          onClick={() => navigate('/invite/recommend-popup')}
-          icon="briefcase"
-          label="Recommend services"
-          right={<span className="text-[12px] text-g font-extrabold">${REWARDS.perFriend}/friend</span>}
-        />
-        <ActionCard
-          onClick={() => navigate('/find-friends')}
-          icon="track"
-          label="Share Cergio with your network"
-        />
-      </div>
-
-      {/* What can I do with my earnings? */}
-      <p className="px-5 text-[16px] font-extrabold text-black mb-3">What can I do with my earnings?</p>
-      <div className="mx-5 bg-soft rounded-[18px] p-4 flex flex-col gap-3 mb-2">
-        {[
-          { label: 'Use toward booking services' },
-          { label: 'Cash out to your bank' },
-        ].map((b, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-bdr flex-shrink-0" />
-            <p className="flex-1 text-[14px] text-b2 font-medium">{b.label}</p>
-          </div>
-        ))}
-        {/* Growth Participation Income — the legally-safe one-liner.
-            "Convert" / "equity" / "stock-like" language removed (those
-            imply a security). The popup explains the airmiles analogy,
-            the IPO contingency, and the mission statement.
-            CERGIO-GUARD: never reintroduce "convert" / "stock" /
-            "equity" / "shares" in user-visible copy here. */}
+      {/* "How earnings work" link — replaces the old action-card stack
+          + earnings benefit list. Action buttons (Invite / Reco) now
+          live inline next to the counters above. Growth Participation
+          Income is also there with its ⓘ; no need to repeat the long
+          block here. */}
+      <div className="px-5 mb-4">
         <button
-          type="button"
-          onClick={() => setShowGrowthInfo(true)}
-          className="flex items-center gap-3 text-left"
+          onClick={() => navigate('/earnings/how')}
+          className="w-full bg-soft rounded-[14px] py-3 px-4 flex items-center justify-between
+                     text-left hover:bg-bg5 transition-colors"
         >
-          <div className="w-7 h-7 rounded-full bg-gl border border-g/30 flex items-center justify-center flex-shrink-0">
-            <span className="text-gd text-[12px] font-extrabold">★</span>
-          </div>
-          <p className="flex-1 text-[14px] text-b2 font-medium leading-snug">
-            Build <span className="text-gd font-extrabold">Growth Participation Income</span>
-            <span className="text-b3 font-normal"> — like airmiles, but tied to Cergio's growth.</span>
-          </p>
-          <span className="text-gd text-[14px] font-extrabold">ⓘ</span>
+          <span className="text-[13px] font-extrabold text-black">How earnings work</span>
+          <span className="text-b3 text-base">›</span>
         </button>
       </div>
 
@@ -320,22 +301,6 @@ export function EarningsScreen() {
   );
 }
 
-function ActionCard({ icon, label, right, onClick }) {
-  const Icon = ICONS[icon];
-  return (
-    <button
-      onClick={onClick}
-      className="w-full bg-soft rounded-[14px] py-4 px-4 flex items-center gap-4 text-left hover:bg-bg5 transition-colors"
-    >
-      <Icon />
-      <p className="flex-1 text-[15px] font-extrabold text-black">{label}</p>
-      {right}
-    </button>
-  );
-}
-
-const ICONS = {
-  people:    () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="1.8" strokeLinecap="round"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 21c0-3 3-5 6-5s6 2 6 5"/><path d="M16 12c3 0 5 2 5 5"/></svg>,
-  briefcase: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="1.8"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M9 6V4h6v2"/></svg>,
-  track:     () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l5-5 4 4 8-8"/></svg>,
-};
+// ActionCard + ICONS helpers removed — replaced by the inline Invite
+// + Reco buttons next to the counter row + the "How earnings work"
+// link. Less surface, clearer signal.
