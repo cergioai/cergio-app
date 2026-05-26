@@ -2,13 +2,55 @@
 // Single canonical "$250 per friend" headline — the $25/$125 stacking
 // breakdown lives inside /earnings/how, NOT here. Don't surface the
 // internal numbers at the entry point.
+//
+// CERGIO-GUARD: every Share action MUST actually work. No 'coming soon'
+// toasts here — Web Share API first, clipboard fallback. The invite URL
+// is generated client-side from the current window.location.origin so
+// dev and prod just work without backend changes.
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
-import { REWARDS } from '../lib/rewards';
+import { REWARDS, REWARD_COPY } from '../lib/rewards';
+
+function buildInviteLink() {
+  if (typeof window === 'undefined') return 'https://cergio.ai';
+  // ?ref=invite is the attribution flag — when a friend lands with this
+  // param we store it in localStorage and the booking flow reads it
+  // back to credit the inviting user. See: cergio.ref pickup in App.jsx.
+  return `${window.location.origin}/?ref=invite`;
+}
+
+function buildInviteMessage(amount) {
+  return `Hey — I'm using Cergio for booking trusted services. Join + book and we both win: $${amount} credit each. ${buildInviteLink()}`;
+}
 
 export function InviteFriendPopupScreen() {
   const navigate = useNavigate();
   const { showToast } = useOutletContext();
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(buildInviteLink());
+      showToast('Invite link copied ✓');
+    } catch {
+      showToast('Copy unavailable on this device.');
+    }
+  };
+
+  const shareNative = async () => {
+    const msg = buildInviteMessage(REWARDS.perFriendUser);
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: msg, title: 'Join me on Cergio', url: buildInviteLink() });
+        return;
+      }
+    } catch { /* user cancelled */ return; }
+    try {
+      await navigator.clipboard.writeText(msg);
+      showToast('Copied — paste it anywhere ✓');
+    } catch {
+      showToast('Share unavailable on this device.');
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-black/60">
@@ -25,10 +67,17 @@ export function InviteFriendPopupScreen() {
         <div className="mt-10 mb-4 flex items-start gap-3">
           <div className="flex-1">
             <h1 className="text-[24px] font-extrabold text-black leading-tight tracking-tight">
-              Refer & earn — ${REWARDS.perFriend} per friend
+              Invite friends — ${REWARDS.perFriendUser} credit each
             </h1>
             <p className="text-[13px] text-b3 font-medium mt-2 leading-snug">
-              Friends-of-friends grow the network. You earn when they join + book.
+              Both of you get ${REWARDS.perFriendUser} credit when they join + book.{' '}
+              <button
+                type="button"
+                onClick={() => navigate('/rainmaker/apply')}
+                className="text-g underline underline-offset-2 font-bold"
+              >
+                Become a Connector → cash
+              </button>
             </p>
           </div>
           <div className="w-12 h-12 rounded-full bg-g flex items-center justify-center flex-shrink-0">
@@ -50,9 +99,9 @@ export function InviteFriendPopupScreen() {
           <ActionRow icon="message" label="Invite from contacts" sub="Tap and pick — we send the message"
             onClick={() => navigate('/invite/friends')} />
           <ActionRow icon="link" label="Copy my invite link" sub="Paste it in any chat or DM"
-            onClick={() => showToast('Your link has been copied!')} />
+            onClick={copyLink} />
           <ActionRow icon="dots" label="Share via…" sub="iMessage, WhatsApp, IG, more"
-            onClick={() => showToast('Share via system — coming soon')} />
+            onClick={shareNative} />
         </div>
       </div>
     </div>

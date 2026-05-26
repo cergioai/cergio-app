@@ -138,9 +138,46 @@ export async function listMyServices() {
 
   return await supabase
     .from('services')
-    .select('id, title, category, description, location_text, photo_class, status, rating_avg, rating_count, bookings_count, created_at')
+    .select('id, title, category, description, location_text, photo_class, cover_url, status, rating_avg, rating_count, bookings_count, created_at')
     .eq('owner_id', userRes.user.id)
     .order('created_at', { ascending: false });
+}
+
+/** Flip a service to draft (unlist) — owner can re-list anytime. RLS
+ *  enforces ownership; if the call returns an error, the caller should
+ *  surface it instead of pretending the action succeeded. */
+export async function unlistService(serviceId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!serviceId)    return { data: null, error: { message: 'serviceId required' } };
+  return await supabase
+    .from('services')
+    .update({ status: 'draft', updated_at: new Date().toISOString() })
+    .eq('id', serviceId)
+    .select()
+    .maybeSingle();
+}
+
+/** Re-list a previously-unlisted service. */
+export async function relistService(serviceId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!serviceId)    return { data: null, error: { message: 'serviceId required' } };
+  return await supabase
+    .from('services')
+    .update({ status: 'listed', updated_at: new Date().toISOString() })
+    .eq('id', serviceId)
+    .select()
+    .maybeSingle();
+}
+
+/** Hard-delete a service. RLS policy 'owner can delete service' enforces
+ *  ownership. Offerings + bookings cascade per schema definitions.
+ *  Returns { error } only — there's nothing meaningful to return on
+ *  success. */
+export async function deleteService(serviceId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!serviceId)    return { error: { message: 'serviceId required' } };
+  const { error } = await supabase.from('services').delete().eq('id', serviceId);
+  return { error };
 }
 
 /**

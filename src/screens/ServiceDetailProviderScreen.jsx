@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import { MANAGED_SERVICES } from '../data/mock';
-import { getService } from '../lib/api';
+import { getService, unlistService, relistService, deleteService } from '../lib/api';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -155,14 +155,38 @@ export function ServiceDetailProviderScreen() {
         Visibility
       </p>
       <div className="mx-5 flex flex-col gap-2 mb-5">
+        {/* Unlist / Relist — toggles services.status between listed and draft.
+            CERGIO-GUARD: must hit the real API, not just toast. Mock
+            services (non-UUID ids) get a polite no-op since there's
+            nothing to update on the backend. */}
         <button
-          onClick={() => showToast('Service unlisted — only you can see it now')}
+          onClick={async () => {
+            if (!svc.real) { showToast('Demo service — sign up to publish your own.'); return; }
+            const wasListed = svc.status === 'listed';
+            const fn = wasListed ? unlistService : relistService;
+            const { error } = await fn(svc.id);
+            if (error) { showToast(`Couldn't ${wasListed ? 'unlist' : 'relist'}: ${error.message}`); return; }
+            setSvc(s => ({ ...s, status: wasListed ? 'draft' : 'listed' }));
+            showToast(wasListed
+              ? 'Service unlisted — only you can see it now'
+              : 'Service relisted — visible in search again ✓');
+          }}
           className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-black"
         >
-          Unlist this service
+          {svc.status === 'listed' ? 'Unlist this service' : 'Relist this service'}
         </button>
         <button
-          onClick={() => showToast('Delete service — coming soon')}
+          onClick={async () => {
+            if (!svc.real) { showToast('Demo service — sign up to manage your own.'); return; }
+            const ok = typeof window !== 'undefined' && window.confirm(
+              `Delete "${svc.title}"?\n\nThis permanently removes the service, its offerings, and any pending bookings. This can't be undone.`
+            );
+            if (!ok) return;
+            const { error } = await deleteService(svc.id);
+            if (error) { showToast(`Couldn't delete: ${error.message}`); return; }
+            showToast('Service deleted ✓');
+            navigate('/account/services');
+          }}
           className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-danger"
         >
           Delete service

@@ -293,9 +293,35 @@ export function ResultsScreen() {
           <span className="text-[12px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
         </div>
         <button
-          onClick={() => showToast('Share coming soon!')}
+          onClick={async () => {
+            // CERGIO-GUARD: header share button — Web Share API first,
+            // clipboard fallback. Use the same shareMsg the empty/reco
+            // card builds so what gets shared matches what the user
+            // sees on screen. Never the cosmetic 'coming soon' toast.
+            const lead = (userQuery || userNoun || 'a service').toString().trim()
+              .replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '');
+            const tail = [
+              when   && when,
+              where  && `in ${where}`,
+              budget && `max ${budget}`,
+            ].filter(Boolean);
+            const ctx = tail.length ? ` — ${tail.join(', ')}` : '';
+            const msg = `Hey — anyone know a good ${lead}${ctx}? Looking for a reco on Cergio.`;
+            try {
+              if (navigator.share) {
+                await navigator.share({ text: msg, title: 'Cergio request' });
+                return;
+              }
+            } catch { /* user cancelled */ return; }
+            try {
+              await navigator.clipboard.writeText(msg);
+              showToast('Copied — paste it to a friend ✓');
+            } catch {
+              showToast('Share unavailable on this device.');
+            }
+          }}
           className="w-10 h-10 rounded-full bg-gl flex items-center justify-center border-none cursor-pointer text-lg"
-          aria-label="Share"
+          aria-label="Share this request"
         >
           🔗
         </button>
