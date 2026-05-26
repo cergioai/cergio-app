@@ -5,26 +5,12 @@
 // When 0 services match, render the EmptyState block — never fake
 // providers. The leaf logo (shared brand mark) is the canonical visual;
 // do not swap it for the legacy spinner Logo or any other icon.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { LeafLogo } from '../components/ui/LeafLogo';
 import { ProviderCard } from '../components/ui/ProviderCard';
 import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
-
-// Persistent "Notify me" subscriptions live in localStorage so the
-// toggle survives reloads + auth flips. Keyed by a fingerprint of the
-// request (provider_type + when + where + budget) so a second search
-// for the same thing reuses the same arm state.
-const NOTIFY_STORAGE_KEY = 'cergio.notifySubscriptions';
-function loadNotifyMap() {
-  try { return JSON.parse(localStorage.getItem(NOTIFY_STORAGE_KEY) || '{}'); }
-  catch { return {}; }
-}
-function saveNotifyMap(map) {
-  try { localStorage.setItem(NOTIFY_STORAGE_KEY, JSON.stringify(map)); }
-  catch { /* ignore */ }
-}
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -149,36 +135,6 @@ export function ResultsScreen() {
   // If the resolver didn't capture provider_type, we use a neutral
   // fallback so we never echo a wrong offering.
   const inferredType = (provider_type || '').trim();
-
-  // Stable key for this request — drives the persistent Notify-me state.
-  // Lowercased + trimmed so casing differences don't fragment the map.
-  const notifyKey = useMemo(() => {
-    const parts = [inferredType, when, where, budget].map(s => (s || '').toString().toLowerCase().trim());
-    return parts.join('|');
-  }, [inferredType, when, where, budget]);
-  const [notifyArmed, setNotifyArmed] = useState(() => !!loadNotifyMap()[notifyKey]);
-  // Re-read when the key changes (new request → different arm state).
-  useEffect(() => { setNotifyArmed(!!loadNotifyMap()[notifyKey]); }, [notifyKey]);
-
-  const toggleNotify = () => {
-    const map = loadNotifyMap();
-    const next = !notifyArmed;
-    if (next) {
-      map[notifyKey] = {
-        armedAt:      new Date().toISOString(),
-        providerType: inferredType || null,
-        when:         when  || null,
-        where:        where || null,
-        budget:       budget || null,
-      };
-      showToast("We'll ping you the moment offers land ✓");
-    } else {
-      delete map[notifyKey];
-      showToast('Notifications off for this request');
-    }
-    saveNotifyMap(map);
-    setNotifyArmed(next);
-  };
   const titleText = inferredType
     ? (n > 0
         ? `Showing ${n} ${inferredType.toLowerCase()}${n === 1 ? '' : 's'}`
@@ -230,9 +186,7 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* Loading status — single line, leaf rotates beside it. The
-          Notify-me toggle is persistent (localStorage map keyed by
-          notifyKey) so the armed state survives reloads + auth flips. */}
+      {/* Loading status — single line, leaf rotates beside it. */}
       {services === null && (
         <div className="mx-5 mb-5" aria-live="polite">
           <div className="flex items-center gap-2">
@@ -242,53 +196,13 @@ export function ResultsScreen() {
             </p>
           </div>
           <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug">
-            We'll keep going in the background.{' '}
-            <button
-              type="button"
-              onClick={toggleNotify}
-              className={`font-medium underline underline-offset-2 ${notifyArmed ? 'text-gd' : 'text-g'}`}
-            >
-              {notifyArmed ? 'Notify me ✓ (tap to turn off)' : 'Notify me when ready'}
-            </button>
+            We'll keep going in the background and notify you when offers land.
           </p>
         </div>
       )}
 
-      {/* No matches yet — real empty state, NOT mock providers. Headline
-          mentions the inferred provider_type so the user can see Cergio
-          did understand their request, even though we have no rows. */}
-      {services !== null && providers.length === 0 && (
-        <div className="mx-5 mb-5 bg-white border border-bdr rounded-[18px] p-5 text-center">
-          <div className="flex justify-center mb-3"><LeafLogo size={28} /></div>
-          <p className="text-[15px] font-extrabold text-black leading-tight">
-            {inferredType
-              ? `No ${inferredType.toLowerCase()}s in your area yet`
-              : 'No matches yet'}
-          </p>
-          <p className="text-[12px] text-b3 mt-1.5 leading-relaxed">
-            {inferredType
-              ? `Cergio is watching for ${inferredType.toLowerCase()}s near you. We'll notify you the moment one joins or sends an offer.`
-              : "We're still growing in your area. Cergio will notify you the moment a matching provider joins or sends an offer."}
-          </p>
-          <div className="mt-4 flex flex-col items-center gap-2">
-            <button
-              onClick={() => navigate('/find-friends')}
-              className="bg-g text-white rounded-pill px-5 py-2 text-[13px] font-extrabold"
-            >
-              Invite friends to speed it up →
-            </button>
-            <button
-              type="button"
-              onClick={toggleNotify}
-              className={`text-[12px] font-medium underline underline-offset-2 ${notifyArmed ? 'text-gd' : 'text-g'}`}
-            >
-              {notifyArmed
-                ? 'Notify me ✓ (tap to turn off)'
-                : `Notify me when ${inferredType ? inferredType.toLowerCase() + 's' : 'providers'} join`}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Empty state is rolled into the share card below — single
+          card instead of two, less busy. */}
 
       {/* cards — only when we have real Supabase rows. */}
       {services !== null && providers.length > 0 && providers.map(p => (
@@ -312,20 +226,20 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* Smart reco/share card — visually consistent with the Home
-          house ad (soft-green wash, sprout icon, clean CTAs). The share
-          message is BUILT from chat.state so it lands prefilled in any
-          channel: "Hey — looking for a barber under $80 tuesday in
-          NYC. Any recs?". CERGIO-GUARD: keep this aligned with the
-          Home invite-ad palette. */}
-      {(() => {
-        const noun = inferredType ? inferredType.toLowerCase() : (what || 'someone good');
-        const parts = [];
+      {/* One calm card — merges the empty state + the reco/share ask.
+          Soft-green wash matches the Home invite house ad. Only renders
+          once the search has resolved (services !== null). Different
+          headline copy depending on whether we have matches yet:
+            no matches  → "No {type}s yet — ask friends to help find one"
+            has matches → "Want better picks? Ask friends" */}
+      {services !== null && (() => {
+        const noun     = inferredType ? inferredType.toLowerCase() : (what || 'service');
+        const noMatch  = providers.length === 0;
+        const parts    = [];
         if (budget) parts.push(`under ${budget}`);
         if (when)   parts.push(when);
         if (where)  parts.push(`in ${where}`);
-        const tail = parts.join(' ');
-        const shareMsg = `Hey — I'm looking for a ${noun}${tail ? ' ' + tail : ''}. Any recs you'd trust?`;
+        const shareMsg = `Hey — I'm looking for a ${noun}${parts.length ? ' ' + parts.join(' ') : ''}. Any recs you'd trust?`;
 
         const doNativeShare = async () => {
           try {
@@ -338,49 +252,26 @@ export function ResultsScreen() {
             await navigator.clipboard.writeText(shareMsg);
             showToast('Copied — paste it to a friend ✓');
           } catch {
-            showToast('Share is unavailable — try Invite from contacts.');
+            showToast('Share unavailable — try Send to friends.');
           }
         };
         const goReco = () => navigate('/invite/friends?mode=reco', {
           state: { prefilledMessage: shareMsg, what: noun, when, where, budget },
         });
 
+        const headline = noMatch
+          ? `No ${noun}s yet — ask friends to find one`
+          : `Want better picks? Ask friends for a ${noun} reco`;
+
         return (
           <div className="mx-5 my-4 bg-gl border border-g/25 rounded-[20px] p-4">
-            <div className="flex items-start gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-g/20 mt-0.5">
-                {/* same sprout glyph as Home spotlight house ad */}
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M4 20 H20" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M12 20 V12" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M12 16 C 8 16, 6 13, 6 10 C 9 11, 12 13, 12 16 Z" fill="#3D8B00" />
-                  <path d="M12 13 C 16 13, 18 10, 18 7 C 15 8, 12 10, 12 13 Z" fill="#5BC404" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-extrabold text-gd leading-tight">
-                  Ask friends for a {noun} reco
-                </p>
-                <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                  We'll send them your request — they reco one back, you earn for any friend that joins.
-                </p>
-              </div>
-            </div>
-
-            {/* Prefilled share message — visible so the user sees
-                exactly what gets sent. Click to tweak in clipboard. */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={doNativeShare}
-              onKeyDown={(e) => { if (e.key === 'Enter') doNativeShare(); }}
-              className="bg-white border border-bdr rounded-[14px] px-3 py-2.5 text-[12px] text-b2 leading-snug
-                         font-medium cursor-pointer hover:border-g/40 transition-colors"
-            >
+            <p className="text-[14px] font-extrabold text-gd leading-tight">{headline}</p>
+            <p className="text-[11px] text-gd/80 mt-1 leading-snug font-normal">
+              We'll send them your request prefilled. You earn ${'250'} when any friend joins.
+            </p>
+            <div className="mt-3 bg-white border border-bdr rounded-[12px] px-3 py-2 text-[12px] text-b2 leading-snug font-medium">
               {shareMsg}
             </div>
-
-            {/* Two clean CTAs, same shape as Home house ad */}
             <div className="mt-3 flex gap-2">
               <button
                 onClick={goReco}
@@ -394,7 +285,7 @@ export function ResultsScreen() {
                 className="bg-white border border-bdr rounded-pill px-4 py-2.5 text-[12px] font-extrabold text-b2
                            hover:border-g hover:text-gd transition-colors"
               >
-                Copy / share
+                Copy
               </button>
             </div>
           </div>
