@@ -3,7 +3,7 @@
 // REWARDS canonical $250-per-friend across every CTA.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { getMyEarnings } from '../lib/api';
+import { getMyEarnings, listMyServices } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 import { REWARDS } from '../lib/rewards';
 
@@ -25,16 +25,22 @@ function getInitials(name) {
 
 export function EarningsScreen() {
   const navigate = useNavigate();
-  const { showToast, auth } = useOutletContext();
+  const { showToast, auth, serviceMode } = useOutletContext();
 
   // Real earnings from the ledger (bookings + spotlights). No filter pills
   // — single chronological list keeps things simple when there's nothing
   // to filter yet (and even when there is).
   const [earnings, setEarnings] = useState([]);
+  // Provider check — if signed in user has at least one listed service,
+  // OR they're toggled into service view, we show provider-flavored
+  // benefit copy. Consumers see the friend-referral angle instead.
+  const [hasService, setHasService] = useState(false);
   useEffect(() => {
-    if (!auth?.isSignedIn) { setEarnings([]); return; }
+    if (!auth?.isSignedIn) { setEarnings([]); setHasService(false); return; }
     getMyEarnings({ limit: 50 }).then(({ data }) => setEarnings(data || []));
+    listMyServices().then(({ data }) => setHasService((data || []).length > 0));
   }, [auth?.isSignedIn]);
+  const isProvider = serviceMode || hasService;
   const totals = earnings.reduce((acc, e) => {
     if (e.status !== 'cleared') return acc;
     acc.all       += e.amount_cents;
@@ -94,7 +100,7 @@ export function EarningsScreen() {
         )}
         {canCashOut && (
           <p className="text-center text-[12px] text-white font-medium mt-3 px-2">
-            You're eligible to cash out because your Cergio Cash balance exceeds $250
+            You're eligible to cash out — your balance is over ${REWARDS.perFriend}.
           </p>
         )}
       </div>
@@ -141,14 +147,52 @@ export function EarningsScreen() {
           </div>
         </>
       ) : (
-        // Empty-state conversion copy — replaces the network-feed mock data.
+        // Empty state — counters + benefit summary. Copy adapts to
+        // whether the user is on the consumer or provider side, mirroring
+        // the Home invite house ad. CERGIO-GUARD: don't reintroduce
+        // hardcoded mock totals here — counts come from earnings (real).
         <div className="mx-5 mb-6 bg-white border border-bdr rounded-[18px] p-4">
-          <p className="text-[14px] font-extrabold text-black leading-tight">
-            No earnings yet
+          {/* Real counters — both 0 until activity lands. */}
+          <div className="flex items-center gap-4 mb-3">
+            <div className="flex-1">
+              <p className="text-[18px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[11px] text-b3 mt-0.5 leading-snug">friends invited</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-[18px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[11px] text-b3 mt-0.5 leading-snug">services reco'd</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-[18px] font-extrabold text-black leading-none">$0</p>
+              <p className="text-[11px] text-b3 mt-0.5 leading-snug">earned</p>
+            </div>
+          </div>
+
+          <p className="text-[13px] font-extrabold text-black leading-tight">
+            {isProvider ? 'Grow with Cergio' : 'Invite friends to see activity'}
           </p>
           <p className="text-[12px] text-b3 mt-1 leading-snug">
-            Refer a friend and earn ${REWARDS.perFriend} per friend who joins + books.
-            Share your link below to get started.
+            {isProvider
+              ? `Invite clients + spotlight your service. Each friend who joins and books earns you $${REWARDS.perFriend} + a platform-growth bonus tied to how Cergio grows.`
+              : `Each friend who joins + books earns you $${REWARDS.perFriend}. Recommend a service and you'll get free credit toward your next booking too.`}
+          </p>
+          <ul className="mt-3 space-y-1.5 text-[12px] text-b2 leading-snug">
+            {isProvider ? (
+              <>
+                <li>• <span className="font-bold">Cash</span> — ${REWARDS.perFriend} per friend who books</li>
+                <li>• <span className="font-bold">Growth bonus</span> — platform-growth income as Cergio scales</li>
+                <li>• <span className="font-bold">Spotlight</span> — free social posts when Connectors share you</li>
+              </>
+            ) : (
+              <>
+                <li>• <span className="font-bold">Cash</span> — ${REWARDS.perFriend} per friend who joins + books</li>
+                <li>• <span className="font-bold">Free services</span> — credit toward your next booking</li>
+                <li>• <span className="font-bold">Growth bonus</span> — share in Cergio's upside, every week</li>
+              </>
+            )}
+          </ul>
+          <p className="text-[11px] text-gd font-medium mt-3 leading-snug">
+            Human-powered AI for shared prosperity.
           </p>
         </div>
       )}
@@ -177,13 +221,13 @@ export function EarningsScreen() {
         />
       </div>
 
-      {/* What can I do with Cergio Cash? */}
-      <p className="px-5 text-[16px] font-extrabold text-black mb-3">What can I do with Cergio Cash?</p>
+      {/* What can I do with my earnings? */}
+      <p className="px-5 text-[16px] font-extrabold text-black mb-3">What can I do with my earnings?</p>
       <div className="mx-5 bg-soft rounded-[18px] p-4 flex flex-col gap-3 mb-2">
         {[
           { label: 'Use toward booking services' },
           { label: 'Cash out to your bank' },
-          { label: 'Convert into stock-like instruments', soon: true },
+          { label: 'Convert into platform-growth equity', soon: true },
         ].map((b, i) => (
           <div key={i} className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-full bg-bdr flex-shrink-0" />
