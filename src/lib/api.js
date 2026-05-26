@@ -243,6 +243,26 @@ export async function listMyAddresses() {
     .order('created_at', { ascending: true });
 }
 
+// CERGIO-GUARD: the user_addresses table comes from
+// supabase/migrations/20260526000000_user_addresses.sql. On deployments
+// that haven't applied that migration, Supabase returns a schema-cache
+// "relation does not exist" error. We detect that signature in BOTH
+// getters and writers below and swallow it (data: null, error: null)
+// so the address chip falls back gracefully to localStorage instead of
+// throwing red toasts. The console.warn surfaces the diagnosis once.
+function isMissingAddressesTable(err) {
+  if (!err) return false;
+  const m = (err.message || '') + ' ' + (err.details || '') + ' ' + (err.hint || '');
+  return /user_addresses|relation .* does not exist|schema cache/i.test(m);
+}
+let warnedMissingAddresses = false;
+function logMissingAddresses(where, err) {
+  if (warnedMissingAddresses) return;
+  warnedMissingAddresses = true;
+  // eslint-disable-next-line no-console
+  console.warn(`[${where}] user_addresses table missing — apply migration 20260526000000_user_addresses.sql via Run Migrations.command. Falling back to localStorage-only address persistence. (${err?.message || 'no message'})`);
+}
+
 /** Fetch the user's single default address (or null). */
 export async function getDefaultAddress() {
   if (!supabaseReady) return { data: null, error: null };
@@ -254,6 +274,10 @@ export async function getDefaultAddress() {
     .eq('profile_id', userRes.user.id)
     .eq('is_default', true)
     .maybeSingle();
+  if (isMissingAddressesTable(error)) {
+    logMissingAddresses('getDefaultAddress', error);
+    return { data: null, error: null };
+  }
   return { data, error };
 }
 
@@ -308,6 +332,12 @@ export async function saveAddress({ label, formattedAddress, lat, lng, placeId, 
     .select()
     .single();
 
+  // Schema-cache miss (table not yet migrated): swallow + warn so the
+  // local chip + localStorage path still works without a red toast.
+  if (isMissingAddressesTable(error)) {
+    logMissingAddresses('saveAddress', error);
+    return { data: null, error: null };
+  }
   if (error) return { data: null, error };
 
   if (shouldBeDefault) {

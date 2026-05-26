@@ -639,8 +639,18 @@ export function HomeScreen() {
                       lat, lng, placeId,
                       makeDefault: true,
                     });
-                    if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                    else       showToast('Saved as your default location ✓');
+                    if (error) {
+                      // Schema-cache miss = user_addresses migration not
+                      // yet applied. localStorage already has it; tell the
+                      // user it's saved locally rather than alarming them.
+                      if (/relation|does not exist|schema cache/i.test(error.message || '')) {
+                        showToast('Saved on this device. Server sync pending migration.');
+                      } else {
+                        showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                      }
+                    } else {
+                      showToast('Saved as your default location ✓');
+                    }
                   } else {
                     showToast('Saved on this device. Sign in to sync it.');
                   }
@@ -659,8 +669,18 @@ export function HomeScreen() {
                       lng: locationCoords?.lng ?? null,
                       makeDefault: true,
                     });
-                    if (error) showToast(`Couldn't save: ${error.message || 'unknown error'}`);
-                    else       showToast('Saved as your default location ✓');
+                    if (error) {
+                      // Schema-cache miss = user_addresses migration not
+                      // yet applied. localStorage already has it; tell the
+                      // user it's saved locally rather than alarming them.
+                      if (/relation|does not exist|schema cache/i.test(error.message || '')) {
+                        showToast('Saved on this device. Server sync pending migration.');
+                      } else {
+                        showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                      }
+                    } else {
+                      showToast('Saved as your default location ✓');
+                    }
                   } else if (locationText) {
                     showToast('Saved on this device.');
                   }

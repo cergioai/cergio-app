@@ -64,7 +64,7 @@ export function ResultsScreen() {
   const navigate = useNavigate();
   const { chat, showToast, handleBook } = useOutletContext();
   const chatState = chat.state;
-  const { what, when, where, budget, category, provider_type } = chatState;
+  const { what, when, where, budget, category, provider_type, details } = chatState;
 
   const statusSteps = buildStatusSteps(provider_type);
 
@@ -233,13 +233,29 @@ export function ResultsScreen() {
             no matches  → "No {type}s yet — ask friends to help find one"
             has matches → "Want better picks? Ask friends" */}
       {services !== null && (() => {
-        const noun     = inferredType ? inferredType.toLowerCase() : (what || 'service');
-        const noMatch  = providers.length === 0;
-        const parts    = [];
-        if (budget) parts.push(`under ${budget}`);
-        if (when)   parts.push(when);
-        if (where)  parts.push(`in ${where}`);
-        const shareMsg = `Hey — I'm looking for a ${noun}${parts.length ? ' ' + parts.join(' ') : ''}. Any recs you'd trust?`;
+        const noun    = inferredType ? inferredType.toLowerCase() : (what || 'service');
+        const noMatch = providers.length === 0;
+
+        // Build a contextual share message from the FULL chat state so
+        // the recipient sees what the user actually typed plus any
+        // structured fields. We lead with chat.state.what verbatim
+        // (the user's own words) when available, and append when /
+        // where / budget / details only if they're not already in it.
+        const lc       = (s) => (s || '').toString().toLowerCase();
+        const inText   = (s, base) => s && lc(base).includes(lc(String(s).replace('$', '')));
+        const cleanWhat = (what || '').trim();
+        // Lead with what they typed, fall back to "a {noun}" for empty.
+        const lead = cleanWhat
+          ? cleanWhat.replace(/^(a |an |the )/i, '')   // trim leading article
+          : noun;
+        const base = lead;
+        const tail = [];
+        if (when   && !inText(when,   base)) tail.push(when);
+        if (where  && !inText(where,  base)) tail.push(`in ${where}`);
+        if (budget && !inText(budget, base)) tail.push(`max ${budget}`);
+        if (details && !inText(details, base)) tail.push(details);
+        const ctx     = tail.length ? ` — ${tail.join(', ')}` : '';
+        const shareMsg = `Hey — anyone know a good ${lead}${ctx}? Looking for a reco!`;
 
         const doNativeShare = async () => {
           try {
