@@ -33,6 +33,35 @@ export function loadGoogleMaps() {
   return googlePromise;
 }
 
+/**
+ * CERGIO-GUARD: every persisted address MUST go through this before
+ * saveAddress / chat capture / form submit. Returns:
+ *   { ok: true,  address, lat, lng, placeId }  — Google canonical
+ *   { ok: false, reason: 'no-key' | 'not-found' | 'error' }
+ *
+ * Callers should refuse to save when ok === false (or surface a clear
+ * toast asking the user to pick a suggestion). This is the single
+ * choke-point that prevents bogus addresses like "1 jane street ny"
+ * from being stored as-is.
+ */
+export async function verifyAddress(text) {
+  if (!text || !text.trim()) return { ok: false, reason: 'not-found' };
+  if (!getGoogleMapsKey()) return { ok: false, reason: 'no-key' };
+  try {
+    const g = await geocodeAddress(text.trim());
+    if (!g?.lat || !g?.lng) return { ok: false, reason: 'not-found' };
+    return {
+      ok:       true,
+      address:  g.formatted || text.trim(),
+      lat:      g.lat,
+      lng:      g.lng,
+      placeId:  g.placeId || null,
+    };
+  } catch {
+    return { ok: false, reason: 'error' };
+  }
+}
+
 /** Geocode an address string → { lat, lng, formatted } or null. */
 export async function geocodeAddress(text) {
   if (!text?.trim()) return null;

@@ -290,14 +290,22 @@ export function ServiceListAboutScreen() {
             resetListingDraft();
             let lat = coords?.lat ?? null;
             let lng = coords?.lng ?? null;
+            let canonicalLocation = location.trim();
             if (!lat && location.trim()) {
               try {
-                const { geocodeAddress } = await import('../lib/google');
-                const g = await Promise.race([
-                  geocodeAddress(location),
-                  new Promise(res => setTimeout(() => res(null), 2000)),
+                // CERGIO-GUARD: verify the provider's typed service
+                // location via Google so the listing carries a real
+                // address. Canonicalize text + capture coords.
+                const { verifyAddress } = await import('../lib/google');
+                const v = await Promise.race([
+                  verifyAddress(location),
+                  new Promise(res => setTimeout(() => res({ ok: false, reason: 'timeout' }), 2000)),
                 ]);
-                if (g) { lat = g.lat; lng = g.lng; }
+                if (v?.ok) {
+                  lat = v.lat; lng = v.lng;
+                  canonicalLocation = v.address;
+                  setLocation(v.address);
+                }
               } catch (e) {
                 // eslint-disable-next-line no-console
                 console.warn('[list-service] geocode failed; saving without coords', e);
@@ -319,7 +327,7 @@ export function ServiceListAboutScreen() {
 
             updateListingDraft({
               category:    serviceType.trim(),
-              location:    location.trim(),
+              location:    canonicalLocation,
               description: headline.trim(),
               lat, lng,
               taxonomy_category:      useTaxo ? (taxo.category || null) : null,

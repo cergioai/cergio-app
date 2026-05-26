@@ -195,31 +195,43 @@ export function HomeScreen() {
   const [locEditing, setLocEditing] = useState(false);
   const [travelRadius, setTravelRadius] = useState('10mi');
 
-  // Persist the address the chat parser captures into HomeScreen's
-  // locationText + localStorage + Supabase. Writes localStorage
-  // EAGERLY (not waiting for the async mirror useEffect) so the value
-  // is on disk before the user can navigate away.
+  // Persist the address the chat parser captures.
+  // CERGIO-GUARD: verify via Google before saving as the default. If
+  // verification succeeds we replace the chat's raw text with the
+  // canonical formatted_address + real lat/lng. If it fails we still
+  // keep the typed text in locationText (so the UI doesn't lose it)
+  // but skip the saveAddress call so we don't persist a bogus address.
   useEffect(() => {
     const where = chat?.state?.where;
     if (!where || where === locationText) return;
     setLocationText(where);
-    // Eager localStorage write — don't rely on the mirror effect
-    // because the user may log in/navigate before it runs.
+    // Mirror to localStorage as-is for immediate fallback.
     try {
       const existing = JSON.parse(localStorage.getItem(GUEST_ADDR_KEY) || '{}');
-      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
-        ...existing,
-        address: where,
-      }));
+      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ ...existing, address: where }));
     } catch { /* ignore */ }
-    if (auth?.isSignedIn) {
-      saveAddress({
-        label: 'Home',
-        formattedAddress: where,
-        lat: null, lng: null,
-        makeDefault: true,
-      }).catch(() => { /* silent — local + chip still works */ });
-    }
+    // Verify then persist.
+    (async () => {
+      const { verifyAddress } = await import('../lib/google');
+      const v = await verifyAddress(where);
+      if (!v.ok) return; // unverified — don't promote to canonical default
+      setLocationText(v.address);
+      setLocationCoords({ lat: v.lat, lng: v.lng });
+      try {
+        localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+          address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId,
+        }));
+      } catch { /* ignore */ }
+      if (auth?.isSignedIn) {
+        saveAddress({
+          label: 'Home',
+          formattedAddress: v.address,
+          lat: v.lat, lng: v.lng,
+          placeId: v.placeId,
+          makeDefault: true,
+        }).catch(() => { /* metadata write path 1 succeeds anyway */ });
+      }
+    })();
   }, [chat?.state?.where, auth?.isSignedIn, locationText]);
 
   // Mirror locationText → localStorage on every change. This is the
@@ -660,29 +672,59 @@ export function HomeScreen() {
               />
               <button
                 onClick={async () => {
-                  setLocEditing(false);
-                  if (auth?.isSignedIn && locationText) {
-                    const { error } = await saveAddress({
-                      label: 'Home',
-                      formattedAddress: locationText,
-                      lat: locationCoords?.lat ?? null,
-                      lng: locationCoords?.lng ?? null,
-                      makeDefault: true,
-                    });
-                    if (error) {
-                      // Schema-cache miss = user_addresses migration not
-                      // yet applied. localStorage already has it; tell the
-                      // user it's saved locally rather than alarming them.
-                      if (/relation|does not exist|schema cache/i.test(error.message || '')) {
-                        showToast('Saved on this device. Server sync pending migration.');
-                      } else {
+                  if (!locationText) { setLocEditing(false); return; }
+                  // CERGIO-GUARD: verify against Google before persisting.
+                  // Stops bogus addresses like "1 jane street ny" from
+                  // being saved as-is. Canonical formatted_address + real
+                  // lat/lng replace the typed text.
+                  const { verifyAddress } = await import('../lib/google');
+                  const v = await verifyAddress(locationText);
+                  if (v.ok) {
+                    setLocationText(v.address);
+                    setLocationCoords({ lat: v.lat, lng: v.lng });
+                    setLocEditing(false);
+                    // Persist verified address.
+                    try {
+                      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+                        address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId,
+                      }));
+                    } catch { /* ignore */ }
+                    if (auth?.isSignedIn) {
+                      const { error } = await saveAddress({
+                        label: 'Home',
+                        formattedAddress: v.address,
+                        lat: v.lat, lng: v.lng,
+                        placeId: v.placeId,
+                        makeDefault: true,
+                      });
+                      if (error && !/relation|does not exist|schema cache/i.test(error.message || '')) {
                         showToast(`Couldn't save: ${error.message || 'unknown error'}`);
+                      } else {
+                        showToast('Saved as your default location ✓');
                       }
                     } else {
-                      showToast('Saved as your default location ✓');
+                      showToast('Saved on this device. Sign in to sync it.');
                     }
-                  } else if (locationText) {
-                    showToast('Saved on this device.');
+                    return;
+                  }
+                  // Verification failed — tell the user to pick a
+                  // suggestion. Don't save garbage.
+                  if (v.reason === 'no-key') {
+                    // No Google key configured — degrade to as-is save.
+                    setLocEditing(false);
+                    if (auth?.isSignedIn) {
+                      await saveAddress({
+                        label: 'Home',
+                        formattedAddress: locationText,
+                        lat: locationCoords?.lat ?? null,
+                        lng: locationCoords?.lng ?? null,
+                        makeDefault: true,
+                      });
+                    }
+                    showToast("Saved unverified — set VITE_GOOGLE_MAPS_KEY to validate.");
+                  } else {
+                    showToast(`Couldn't find "${locationText}" on Google. Pick a suggestion or refine.`);
+                    // keep editing open so user can fix it
                   }
                 }}
                 className="text-[11px] font-normal text-g underline underline-offset-2"
