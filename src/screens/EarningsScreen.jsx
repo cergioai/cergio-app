@@ -26,6 +26,7 @@ function getInitials(name) {
 export function EarningsScreen() {
   const navigate = useNavigate();
   const { showToast, auth, serviceMode } = useOutletContext();
+  const [showGrowthInfo, setShowGrowthInfo] = useState(false);
 
   // Real earnings from the ledger (bookings + spotlights). No filter pills
   // — single chronological list keeps things simple when there's nothing
@@ -173,26 +174,30 @@ export function EarningsScreen() {
           </p>
           <p className="text-[12px] text-b3 mt-1 leading-snug">
             {isProvider
-              ? `Invite clients + spotlight your service. Each friend who joins and books earns you $${REWARDS.perFriend} + a platform-growth bonus tied to how Cergio grows.`
-              : `Each friend who joins + books earns you $${REWARDS.perFriend}. Recommend a service and you'll get free credit toward your next booking too.`}
+              ? `Invite clients + spotlight your service. Each friend who books earns you $${REWARDS.perFriend} + Growth Participation Income.`
+              : `Each friend who joins + books earns you $${REWARDS.perFriend} + Growth Participation Income.`}
           </p>
           <ul className="mt-3 space-y-1.5 text-[12px] text-b2 leading-snug">
             {isProvider ? (
               <>
                 <li>• <span className="font-bold">Cash</span> — ${REWARDS.perFriend} per friend who books</li>
-                <li>• <span className="font-bold">Growth bonus</span> — platform-growth income as Cergio scales</li>
+                <li>• <span className="font-bold">Growth Participation Income</span> — your cash drives your score{' '}
+                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2">ⓘ</button>
+                </li>
                 <li>• <span className="font-bold">Spotlight</span> — free social posts when Connectors share you</li>
               </>
             ) : (
               <>
                 <li>• <span className="font-bold">Cash</span> — ${REWARDS.perFriend} per friend who joins + books</li>
                 <li>• <span className="font-bold">Free services</span> — credit toward your next booking</li>
-                <li>• <span className="font-bold">Growth bonus</span> — share in Cergio's upside, every week</li>
+                <li>• <span className="font-bold">Growth Participation Income</span> — your cash drives your score{' '}
+                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2">ⓘ</button>
+                </li>
               </>
             )}
           </ul>
           <p className="text-[11px] text-gd font-medium mt-3 leading-snug">
-            Human-powered AI for shared prosperity.
+            Cergio's mission: Human-powered AI that enables shared prosperity.
           </p>
         </div>
       )}
@@ -227,18 +232,90 @@ export function EarningsScreen() {
         {[
           { label: 'Use toward booking services' },
           { label: 'Cash out to your bank' },
-          { label: 'Convert into platform-growth equity', soon: true },
         ].map((b, i) => (
           <div key={i} className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-full bg-bdr flex-shrink-0" />
             <p className="flex-1 text-[14px] text-b2 font-medium">{b.label}</p>
-            {b.soon && (
-              <span className="bg-g text-white text-[10px] font-extrabold tracking-wide
-                               rounded-pill px-2.5 py-1">COMING SOON</span>
-            )}
           </div>
         ))}
+        {/* Growth Participation Income — the legally-safe one-liner.
+            "Convert" / "equity" / "stock-like" language removed (those
+            imply a security). The popup explains the airmiles analogy,
+            the IPO contingency, and the mission statement.
+            CERGIO-GUARD: never reintroduce "convert" / "stock" /
+            "equity" / "shares" in user-visible copy here. */}
+        <button
+          type="button"
+          onClick={() => setShowGrowthInfo(true)}
+          className="flex items-center gap-3 text-left"
+        >
+          <div className="w-7 h-7 rounded-full bg-gl border border-g/30 flex items-center justify-center flex-shrink-0">
+            <span className="text-gd text-[12px] font-extrabold">★</span>
+          </div>
+          <p className="flex-1 text-[14px] text-b2 font-medium leading-snug">
+            Build <span className="text-gd font-extrabold">Growth Participation Income</span>
+            <span className="text-b3 font-normal"> — like airmiles, but tied to Cergio's growth.</span>
+          </p>
+          <span className="text-gd text-[14px] font-extrabold">ⓘ</span>
+        </button>
       </div>
+
+      {/* Popup explainer — airmiles analogy + IPO contingency + mission. */}
+      {showGrowthInfo && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/40 flex items-end justify-center"
+          onClick={() => setShowGrowthInfo(false)}
+        >
+          <div
+            className="w-full max-w-[390px] bg-cream rounded-t-[24px] p-6 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-3">
+              <h3 className="text-[18px] font-extrabold text-black leading-tight">
+                Growth Participation Income
+              </h3>
+              <button
+                onClick={() => setShowGrowthInfo(false)}
+                className="text-[20px] text-b3 font-bold px-2 -mt-1"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+              Like airmiles — but tied to Cergio's growth instead of flights.
+              The more you make on Cergio, the higher your participation score, the bigger your bonus.
+            </p>
+            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+              <span className="font-bold">How it works:</span> every dollar of cash income you earn
+              also accrues a Growth Participation Score. We track it from day one.
+            </p>
+            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+              <span className="font-bold">When it activates:</span> if Cergio goes public (IPO).
+              IPO isn't guaranteed — community participation in our growth helps accelerate it.
+            </p>
+            <div className="bg-gl border border-g/25 rounded-[14px] p-3 mt-4">
+              <p className="text-[12px] text-gd font-extrabold leading-snug">
+                Cergio's mission
+              </p>
+              <p className="text-[12px] text-gd/85 mt-1 leading-snug font-normal">
+                Build human-powered AI that enables shared prosperity. Your bonus is directly
+                tied to your participation in that growth.
+              </p>
+            </div>
+            <p className="text-[10px] text-b3 mt-4 leading-relaxed">
+              Growth Participation Income is a loyalty-style bonus, not a security.
+              No guaranteed payout. Final terms set at activation.
+            </p>
+            <button
+              onClick={() => setShowGrowthInfo(false)}
+              className="w-full mt-5 bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
