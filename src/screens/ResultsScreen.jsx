@@ -203,6 +203,12 @@ export function ResultsScreen() {
           // 2026-05-26.
           maxBudgetCents: maxBudgetCentsForFilter,
           freeOnly:       !!freeServices,
+          // CERGIO-GUARD: the user's RAW words are the matching safety
+          // net. When the parser returns taxonomy IDs/provider_types
+          // that don't match seeded services exactly (e.g. "Housekeeper"
+          // vs "House Cleaner"), the stem-text fallback in listServices
+          // still catches them via title/description ilike.
+          originalQuery: userQuery,
         });
         if (cancelled) return;
         clearTimeout(timeoutId);

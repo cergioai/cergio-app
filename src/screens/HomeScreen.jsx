@@ -1025,11 +1025,13 @@ export function HomeScreen() {
         </>
       )}
 
-      {/* Find-side house ad — shared economics frame. Soft green wash. */}
+      {/* Find-side house ad — shared economics frame. Soft green wash.
+          Routes to the Connector apply page (the hero hook on the new
+          copy is 'Become a Connector — $250 cash per friend'). */}
       {intent === 'find' && !submitted && (
         <div className="px-5 mt-1 mb-6">
           <button
-            onClick={() => navigate('/find-friends')}
+            onClick={() => navigate('/rainmaker/apply')}
             className="w-full bg-gl text-gd border border-g/25 rounded-[20px] p-4 flex items-center gap-3 text-left
                        hover:bg-gl/80 active:scale-[.99] transition-all"
           >
@@ -1042,11 +1044,17 @@ export function HomeScreen() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
+              {/* CERGIO-GUARD: USER-side house ad — leads with Become a
+                  Connector (cash track) as the hero hook, with the
+                  user-tier "$250 credit" as the secondary path so the
+                  reader sees both options in one glance. Routes to the
+                  Connector apply page; users who'd rather stay on the
+                  credit track land on the explainer and skip apply. */}
               <p className="text-[15px] font-extrabold leading-tight">
-                Invite friends — ${REWARDS.perFriendUser} credit each
+                Become a Connector — ${REWARDS.perFriendConnector} cash per friend
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Free services + Growth Participation Income. Become a Connector to earn cash.
+                Or stay a user → ${REWARDS.perFriendUser} credit + free services + Growth Participation Income.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
@@ -1062,7 +1070,7 @@ export function HomeScreen() {
       {intent === 'spotlight' && !submitted && (
         <div className="px-5 mt-1 mb-6">
           <button
-            onClick={() => navigate('/find-friends')}
+            onClick={() => navigate('/rainmaker/apply')}
             className="w-full bg-gl text-gd border border-g/25 rounded-[20px] p-4 flex items-center gap-3 text-left
                        hover:bg-gl/80 active:scale-[.99] transition-all"
           >
@@ -1083,11 +1091,16 @@ export function HomeScreen() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
+              {/* CERGIO-GUARD: PROVIDER-side house ad — speaks to
+                  someone who already has clients. Lead with "invite
+                  your clients", lock in the Connector reward ($250
+                  cash per client who books), close with the loop
+                  (spotlight rate card, free services, growth income). */}
               <p className="text-[15px] font-extrabold leading-tight">
-                Become a Connector — ${REWARDS.perFriendConnector} cash per friend
+                Invite your clients → become a Connector
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Free services + Growth Participation Income. Your network does the work.
+                ${REWARDS.perFriendConnector} cash per client who books + spotlight rate card + Growth Participation Income.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>

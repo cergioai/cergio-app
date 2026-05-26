@@ -166,6 +166,14 @@ export async function listServices({
   // freeOnly filters to services with at least one $0 offering.
   maxBudgetCents = null,
   freeOnly = false,
+  // CERGIO-GUARD: originalQuery is the user's RAW words from chat. It's
+  // the safety net — when the parser's offering_id/provider_type point
+  // at taxonomy values the seeded services don't carry (e.g. parser
+  // says "Housekeeper" but service has "House Cleaner"), we fall back
+  // to stem-substring matching across title/description/category using
+  // the user's own words. Without this, perfectly seeded data shows up
+  // empty just because the parser used a different synonym.
+  originalQuery = null,
 } = {}) {
   if (!supabaseReady) return NOT_WIRED;
 
@@ -216,33 +224,20 @@ export async function listServices({
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (offering_id) {
-    // Wide net: services whose primary taxonomy_offering_id matches OR who
-    // have at least one offering with this id. Post-filter offerings array
-    // on the client since we can't easily JSON-filter the embedded join.
-    q = q.or(`taxonomy_offering_id.eq.${offering_id},offerings.taxonomy_offering_id.eq.${offering_id}`);
-  } else if (provider_type) {
-    // CERGIO-GUARD: substring + multi-column match. Exact equality
-    // ('Cleaning' != 'House Cleaner') was producing zero rows for
-    // perfectly seeded data. Now we OR across taxonomy_provider_type,
-    // category, and title — any partial hit wins. Sanitize the input
-    // so PostgREST's or() syntax isn't broken by commas / parens.
-    const p = String(provider_type).replace(/[,()*]/g, ' ').trim();
-    q = q.or(
-      `taxonomy_provider_type.ilike.%${p}%,` +
-      `category.ilike.%${p}%,` +
-      `title.ilike.%${p}%,` +
-      `description.ilike.%${p}%`
-    );
-  } else if (category) {
-    const c = String(category).replace(/[,()*]/g, ' ').trim();
-    q = q.or(
-      `category.ilike.%${c}%,` +
-      `taxonomy_category.ilike.%${c}%,` +
-      `taxonomy_provider_type.ilike.%${c}%,` +
-      `title.ilike.%${c}%,` +
-      `description.ilike.%${c}%`
-    );
+  // CERGIO-GUARD: matching is INCLUSIVE — every signal we have (parser
+  // offering_id, provider_type, category, AND the user's raw words)
+  // contributes OR clauses. Previously the code used else-if so once
+  // offering_id was set, the other signals never ran — and since the
+  // parser returned offering_ids that the seeded services don't carry
+  // (e.g. parser says "HOME-CLEAN-002" but services have null), every
+  // search came back empty. The stem-text fallback from originalQuery
+  // is the safety net: "Housekeeper" → stem "House" matches "House
+  // Cleaner"; "plumber" → stem "plumb" matches "Plumbing"; etc.
+  const orClauses = collectMatchOrClauses({
+    offering_id, provider_type, category, originalQuery,
+  });
+  if (orClauses.length > 0) {
+    q = q.or(orClauses.join(','));
   }
   const res = await q;
   if (offering_id && res.data) {
@@ -276,6 +271,72 @@ function applyMatchingFilters(rows, { maxBudgetCents, freeOnly }) {
     });
   }
   return out;
+}
+
+// CERGIO-GUARD: build the PostgREST `.or()` clause list. Every signal
+// contributes — there is NO else-if. The stem function below trims to
+// 5 chars so "Housekeeper" matches "House Cleaner" and "plumber" matches
+// "Plumbing". Stopword + length filters keep the OR clause length sane.
+const MATCH_STOPWORDS = new Set([
+  'a','an','the','of','for','to','in','on','and','or','at','my','i','need','want',
+  'looking','find','book','hire','get','some','please','this','that','it','help',
+  'service','services','someone','people','can','will','do','near','around','from',
+  'with','my','your','our','their',
+  // Time-ish words that aren't service terms:
+  'today','tomorrow','tonight','sunday','monday','tuesday','wednesday','thursday',
+  'friday','saturday','this','next','week','month','weekend','morning','afternoon',
+  'evening','night','noon','midnight','am','pm','flexible','any','anytime',
+  // Budget-ish:
+  'under','over','max','maximum','minimum','min','budget','dollars','usd','bucks','cash',
+  'free','cheap','affordable','expensive','quote','quoted','about','around',
+  // Address-ish:
+  'home','house','apartment','apt','street','avenue','road','drive','blvd','suite',
+  'unit','floor','near','close','distance',
+]);
+function safeIlike(s) {
+  return String(s ?? '').replace(/[,()*&|!]/g, ' ').trim();
+}
+function stemTerm(t) {
+  const s = String(t).toLowerCase();
+  // 5-char stem matches both 'plumber'/'plumbing', 'cleaner'/'cleaning'.
+  return s.length > 5 ? s.slice(0, 5) : s;
+}
+function collectMatchOrClauses({ offering_id, provider_type, category, originalQuery }) {
+  const clauses = [];
+  const fields = [
+    'title', 'description', 'category',
+    'taxonomy_category', 'taxonomy_provider_type',
+  ];
+  const pushStemClauses = (term) => {
+    const stem = stemTerm(safeIlike(term));
+    if (!stem || stem.length < 3) return;
+    for (const f of fields) clauses.push(`${f}.ilike.%${stem}%`);
+  };
+
+  if (offering_id) {
+    // Exact match on services.taxonomy_offering_id. Embedded-table
+    // filtering through or() is brittle in PostgREST, so we also
+    // re-filter the offerings array client-side after the SELECT.
+    clauses.push(`taxonomy_offering_id.eq.${safeIlike(offering_id)}`);
+  }
+  if (provider_type) pushStemClauses(provider_type);
+  if (category)      pushStemClauses(category);
+
+  if (originalQuery) {
+    const tokens = String(originalQuery).toLowerCase().match(/[a-z]+/g) ?? [];
+    const meaningful = tokens.filter(t => t.length >= 4 && !MATCH_STOPWORDS.has(t));
+    const stems = new Set();
+    for (const t of meaningful) stems.add(stemTerm(t));
+    for (const s of stems) {
+      if (!s || s.length < 3) continue;
+      for (const f of fields) clauses.push(`${f}.ilike.%${s}%`);
+    }
+  }
+
+  // Cap to keep the URL under ~2KB — Supabase rejects very long or()
+  // strings. With 5 fields × ~5 stems we're already at ~25 clauses,
+  // which is fine. Hard cap for paranoia.
+  return clauses.slice(0, 60);
 }
 
 // ─── Saved addresses (Google-validated, labeled, with a default) ────────────
