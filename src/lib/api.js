@@ -222,9 +222,27 @@ export async function listServices({
     // on the client since we can't easily JSON-filter the embedded join.
     q = q.or(`taxonomy_offering_id.eq.${offering_id},offerings.taxonomy_offering_id.eq.${offering_id}`);
   } else if (provider_type) {
-    q = q.ilike('taxonomy_provider_type', provider_type);
+    // CERGIO-GUARD: substring + multi-column match. Exact equality
+    // ('Cleaning' != 'House Cleaner') was producing zero rows for
+    // perfectly seeded data. Now we OR across taxonomy_provider_type,
+    // category, and title — any partial hit wins. Sanitize the input
+    // so PostgREST's or() syntax isn't broken by commas / parens.
+    const p = String(provider_type).replace(/[,()*]/g, ' ').trim();
+    q = q.or(
+      `taxonomy_provider_type.ilike.%${p}%,` +
+      `category.ilike.%${p}%,` +
+      `title.ilike.%${p}%,` +
+      `description.ilike.%${p}%`
+    );
   } else if (category) {
-    q = q.ilike('category', `%${category}%`);
+    const c = String(category).replace(/[,()*]/g, ' ').trim();
+    q = q.or(
+      `category.ilike.%${c}%,` +
+      `taxonomy_category.ilike.%${c}%,` +
+      `taxonomy_provider_type.ilike.%${c}%,` +
+      `title.ilike.%${c}%,` +
+      `description.ilike.%${c}%`
+    );
   }
   const res = await q;
   if (offering_id && res.data) {

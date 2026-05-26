@@ -129,6 +129,8 @@ body {
    Legacy classes (.cg-leaf-rest, .cg-leaf-open, .cg-leaf-btn-working)
    are kept for the roaming screen + any other place that still uses
    the inside-the-button leaf animation. */
+/* Legacy spin-think — kept for any holdovers but the brand mark
+   should use .cg-leaf-alive (organic sway + breathe, not a rotation). */
 @keyframes cgLeafThink {
   0%   { transform: rotate(0deg)   scale(1); }
   50%  { transform: rotate(180deg) scale(1.06); }
@@ -138,23 +140,52 @@ body {
   animation: cgLeafThink 3.5s ease-in-out infinite;
 }
 
-/* Splash variant — slow orbiting accent ring around the leaf.
-   Claude-style: calm, infinite, never spins so fast it looks loading. */
-@keyframes cgLeafOrbit {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+/* CERGIO-GUARD: the brand leaf is ALIVE — never just a spinner. The
+   .cg-leaf-alive class combines an asymmetric sway with a soft scale
+   breath so the leaf reads like a real plant moving in a breeze.
+   The keyframe is intentionally NOT a clean sine — uneven dwell at
+   the apex (52% → rotate 5deg) gives it organic randomness instead
+   of the metronome feel a 0→180→360 rotation has. Anchored from the
+   stem (transform-origin set on the <g> wrapper in LeafLogo.jsx) so
+   the tip travels in an arc rather than rotating around the center. */
+@keyframes cgLeafAlive {
+  0%   { transform: rotate(-3deg) scale(1.00); }
+  28%  { transform: rotate( 2deg) scale(1.04); }
+  52%  { transform: rotate( 5deg) scale(1.06); }
+  76%  { transform: rotate(-1deg) scale(1.02); }
+  100% { transform: rotate(-3deg) scale(1.00); }
 }
-.cg-leaf-orbit {
-  animation: cgLeafOrbit 9s linear infinite;
+.cg-leaf-alive {
+  animation: cgLeafAlive 4.2s ease-in-out infinite;
 }
 
-/* Soft glow that breathes behind the leaf on the splash variant. */
-@keyframes cgLeafPulseCore {
-  0%, 100% { opacity: 0.55; transform: scale(0.94); }
-  50%      { opacity: 1.00; transform: scale(1.06); }
+/* Splash variant — same motion, slower + deeper arc for hero size.
+   No circles, halos, or orbits per design directive — the leaf itself
+   carries the whole composition. */
+@keyframes cgLeafAliveSplash {
+  0%   { transform: rotate(-6deg) scale(1.00); }
+  30%  { transform: rotate( 3deg) scale(1.05); }
+  55%  { transform: rotate( 8deg) scale(1.08); }
+  80%  { transform: rotate(-2deg) scale(1.03); }
+  100% { transform: rotate(-6deg) scale(1.00); }
 }
-.cg-leaf-pulse-core {
-  animation: cgLeafPulseCore 4s ease-in-out infinite;
+.cg-leaf-alive-splash {
+  animation: cgLeafAliveSplash 5.4s ease-in-out infinite;
+}
+
+/* Sap-flow shimmer along each vein — animates stroke-dashoffset so a
+   bright segment travels from the midrib out toward the tip/edges.
+   Each vein gets a small animation-delay (set inline per-vein in
+   LeafLogo.jsx) so the shimmer ripples outward rather than pulsing
+   in unison. */
+@keyframes cgLeafVeinFlow {
+  0%   { stroke-dashoffset: 32; opacity: 0.30; }
+  50%  { stroke-dashoffset:  0; opacity: 0.85; }
+  100% { stroke-dashoffset: -32; opacity: 0.30; }
+}
+.cg-leaf-vein {
+  stroke-dasharray: 6 28;
+  animation: cgLeafVeinFlow 3s linear infinite;
 }
 
 /* Legacy leaf-in-button animations (still used on /roaming). */

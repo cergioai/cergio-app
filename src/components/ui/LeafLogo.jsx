@@ -5,16 +5,19 @@
 //
 // Variants:
 //   <LeafLogo />                       — static brand mark
-//   <LeafLogo working />               — slow Claude-style rotate (for
-//                                         "Cergio is thinking" states)
-//   <LeafLogo variant="splash" />      — splash/auth hero with orbiting
-//                                         ring + pulsing core (Claude's
-//                                         star-thinking inspiration)
+//   <LeafLogo working />               — alive: sways + breathes,
+//                                         sap shimmers through the veins
+//                                         ("Cergio is thinking" state)
+//   <LeafLogo variant="splash" />      — bigger hero leaf, deeper sway
+//                                         (Splash + Auth screens).
+//                                         No circles, no halos — just a
+//                                         pure leaf moving like it would
+//                                         on a branch in the breeze.
 //
 // Animation classes live in src/index.css:
-//   .cg-leaf-think       — slow 3.5s rotate + scale breath
-//   .cg-leaf-orbit       — orbiting ring (splash variant)
-//   .cg-leaf-pulse-core  — soft glow pulse (splash variant)
+//   .cg-leaf-alive       — sway + breathe (works on the whole leaf group)
+//   .cg-leaf-vein        — sap-flow stroke-dashoffset animation on veins
+//   .cg-leaf-alive-splash — same as alive, bigger arc, slower
 
 export function LeafLogo({ working = false, size = 22, variant = 'inline' }) {
   if (variant === 'splash') {
@@ -22,62 +25,249 @@ export function LeafLogo({ working = false, size = 22, variant = 'inline' }) {
   }
   return (
     <span
-      className={`inline-flex items-center justify-center flex-shrink-0 ${working ? 'cg-leaf-think' : ''}`}
-      style={{ width: size, height: size, transformOrigin: '50% 60%' }}
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{ width: size, height: size }}
       aria-hidden="true"
     >
-      <Leaf size={size} />
+      <Leaf size={size} working={working} />
     </span>
   );
 }
 
-// Just the leaf SVG — shared between inline + splash variants so
-// kerning + proportions stay identical.
-function Leaf({ size = 22 }) {
+// ─── Organic leaf SVG ───────────────────────────────────────────────────────
+// Hand-drawn lanceolate (lance-shaped) leaf with a slight natural tilt.
+// Three layers from back to front:
+//   1. Soft inner gradient leaf body
+//   2. Front-light "highlight" wedge for depth
+//   3. Midrib + 4 pairs of lateral veins (the ones that animate)
+// The whole thing lives inside a <g> we transform so the sway + breathe
+// pivots from the stem (50, 95) — the way a real leaf moves on a branch.
+function Leaf({ size = 22, working = false }) {
+  // Gradient ids must be unique per render so multiple leaves on the
+  // same page don't collide (e.g. inline LeafLogo + splash variant).
+  const gid = `leafGrad-${size}-${working ? 'w' : 's'}`;
+  const hid = `leafHi-${size}-${working ? 'w' : 's'}`;
+
+  // Stagger the vein shimmer so it ripples outward instead of pulsing
+  // all-at-once (which would feel mechanical).
+  const VEIN_BASE = 'cg-leaf-vein';
+
   return (
-    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
-      <path d="M14 26 C14 22 14 18 14 14" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
-      <path d="M14 17 C 8 17, 4 14, 4 9 C 4 7, 5 5.5, 6 4.5 C 9 6, 12 8.5, 14 14 Z" fill="#4AA901" />
-      <path d="M14 14 C 16 9, 19 5.5, 22.5 4 C 23.5 5, 24.5 7, 24.5 9 C 24.5 14, 20 17, 14 17 Z" fill="#5BC404" />
-      <path d="M14 14 L 8 9" stroke="#2F6E00" strokeWidth="0.8" strokeLinecap="round" opacity=".55" />
-      <path d="M14 14 L 20 8" stroke="#2F6E00" strokeWidth="0.8" strokeLinecap="round" opacity=".55" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 110"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id={gid} x1="20%" y1="100%" x2="80%" y2="0%">
+          <stop offset="0%"  stopColor="#3D8B00" />
+          <stop offset="55%" stopColor="#4AA901" />
+          <stop offset="100%" stopColor="#7BD418" />
+        </linearGradient>
+        <linearGradient id={hid} x1="40%" y1="80%" x2="80%" y2="0%">
+          <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.22" />
+        </linearGradient>
+      </defs>
+
+      {/* Tiny stem — drawn first so the leaf body overlaps its top. */}
+      <path
+        d="M 50 96 Q 51 102 50 108"
+        stroke="#2F6E00"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+
+      {/* The whole leaf group — sways + breathes when working. The
+          transform-origin is the stem attachment so the motion looks
+          like a leaf moving on a branch, not a rotating sticker. */}
+      <g
+        className={working ? 'cg-leaf-alive' : ''}
+        style={{ transformOrigin: '50px 96px', transformBox: 'view-box' }}
+      >
+        {/* Leaf body — lanceolate with a soft natural curve. */}
+        <path
+          d="M 50 95
+             C 22 86, 8 62, 18 38
+             C 26 18, 44 8, 58 10
+             C 78 16, 88 36, 80 58
+             C 72 78, 62 90, 50 95 Z"
+          fill={`url(#${gid})`}
+        />
+        {/* Front-light highlight — adds depth without being shiny. */}
+        <path
+          d="M 50 95
+             C 22 86, 8 62, 18 38
+             C 26 18, 44 8, 58 10
+             C 78 16, 88 36, 80 58
+             C 72 78, 62 90, 50 95 Z"
+          fill={`url(#${hid})`}
+        />
+
+        {/* Midrib (main vein) — slightly off-center for organic feel. */}
+        <path
+          d="M 50 92 Q 52 60 54 16"
+          stroke="#2F6E00"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          fill="none"
+          opacity="0.7"
+        />
+
+        {/* Lateral veins. Each carries the shimmer class with a
+            slightly different delay so the sap ripples outward from
+            the base toward the tip instead of pulsing in unison. */}
+        <path
+          d="M 51 78 Q 38 72 24 70"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '0s' } : undefined}
+        />
+        <path
+          d="M 51 78 Q 64 70 78 64"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '.18s' } : undefined}
+        />
+        <path
+          d="M 52 62 Q 38 54 22 50"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '.36s' } : undefined}
+        />
+        <path
+          d="M 52 62 Q 66 52 80 46"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '.54s' } : undefined}
+        />
+        <path
+          d="M 53 46 Q 40 38 26 34"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '.72s' } : undefined}
+        />
+        <path
+          d="M 53 46 Q 64 36 78 30"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '.9s' } : undefined}
+        />
+        <path
+          d="M 54 30 Q 44 22 36 16"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '1.08s' } : undefined}
+        />
+        <path
+          d="M 54 30 Q 64 22 70 14"
+          stroke="#2F6E00" strokeWidth="0.9" strokeLinecap="round" fill="none"
+          className={working ? VEIN_BASE : ''}
+          style={working ? { animationDelay: '1.26s' } : undefined}
+        />
+      </g>
     </svg>
   );
 }
 
-// Hero variant — leaf at center, an orbiting accent ring, and a
-// soft glow pulse behind. Inspired by Claude's star animation: motion
-// is calm + cyclical (not jittery) so it reads as alive, not loading.
+// ─── Splash hero ────────────────────────────────────────────────────────────
+// Just a bigger leaf with a slower, more pronounced sway. Per design
+// note "no circles around just pure plant or tree" — no orbit ring,
+// no halo, no chrome. The leaf itself carries the whole composition.
 function SplashLeaf({ size = 96, working = true }) {
-  const ringSize = Math.round(size * 1.35);
   return (
     <span
-      className="relative inline-flex items-center justify-center"
-      style={{ width: ringSize, height: ringSize }}
+      className="inline-flex items-center justify-center"
+      style={{ width: size, height: Math.round(size * 1.1) }}
       aria-hidden="true"
     >
-      {/* Pulsing soft halo (always on for splash) */}
-      <span
-        className="absolute inset-0 rounded-full cg-leaf-pulse-core"
-        style={{
-          background:
-            'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(91,196,4,0.32) 0%, transparent 70%)',
-        }}
-      />
-      {/* Orbiting ring — a dashed circle rotating slowly */}
-      <svg
-        width={ringSize} height={ringSize} viewBox="0 0 100 100" fill="none"
-        className={`absolute inset-0 ${working ? 'cg-leaf-orbit' : ''}`}
-      >
-        <circle cx="50" cy="50" r="46" stroke="#4AA901" strokeWidth="1.5" strokeDasharray="2 6" opacity="0.55" />
-      </svg>
-      {/* The leaf, centered, with its own subtle think wobble. */}
-      <span
-        className={`relative z-10 inline-flex items-center justify-center ${working ? 'cg-leaf-think' : ''}`}
-        style={{ width: size, height: size, transformOrigin: '50% 60%' }}
-      >
-        <Leaf size={size} />
-      </span>
+      <SplashLeafSvg size={size} working={working} />
     </span>
+  );
+}
+
+// Same SVG geometry as Leaf, but uses the .cg-leaf-alive-splash class
+// for a deeper / slower sway suited to the larger hero size.
+function SplashLeafSvg({ size = 96, working = true }) {
+  const gid = `leafGrad-splash-${size}`;
+  const hid = `leafHi-splash-${size}`;
+  const VEIN_BASE = 'cg-leaf-vein';
+
+  return (
+    <svg
+      width={size}
+      height={Math.round(size * 1.1)}
+      viewBox="0 0 100 110"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id={gid} x1="20%" y1="100%" x2="80%" y2="0%">
+          <stop offset="0%"   stopColor="#3D8B00" />
+          <stop offset="55%"  stopColor="#4AA901" />
+          <stop offset="100%" stopColor="#7BD418" />
+        </linearGradient>
+        <linearGradient id={hid} x1="40%" y1="80%" x2="80%" y2="0%">
+          <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.22" />
+        </linearGradient>
+      </defs>
+
+      <path
+        d="M 50 96 Q 51 103 50 109"
+        stroke="#2F6E00" strokeWidth="1.8" strokeLinecap="round"
+      />
+
+      <g
+        className={working ? 'cg-leaf-alive-splash' : ''}
+        style={{ transformOrigin: '50px 96px', transformBox: 'view-box' }}
+      >
+        <path
+          d="M 50 95
+             C 22 86, 8 62, 18 38
+             C 26 18, 44 8, 58 10
+             C 78 16, 88 36, 80 58
+             C 72 78, 62 90, 50 95 Z"
+          fill={`url(#${gid})`}
+        />
+        <path
+          d="M 50 95
+             C 22 86, 8 62, 18 38
+             C 26 18, 44 8, 58 10
+             C 78 16, 88 36, 80 58
+             C 72 78, 62 90, 50 95 Z"
+          fill={`url(#${hid})`}
+        />
+
+        <path
+          d="M 50 92 Q 52 60 54 16"
+          stroke="#2F6E00" strokeWidth="1.4" strokeLinecap="round" fill="none" opacity="0.7"
+        />
+
+        {[
+          { d: 'M 51 78 Q 38 72 24 70', delay: '0s'    },
+          { d: 'M 51 78 Q 64 70 78 64', delay: '.18s'  },
+          { d: 'M 52 62 Q 38 54 22 50', delay: '.36s'  },
+          { d: 'M 52 62 Q 66 52 80 46', delay: '.54s'  },
+          { d: 'M 53 46 Q 40 38 26 34', delay: '.72s'  },
+          { d: 'M 53 46 Q 64 36 78 30', delay: '.9s'   },
+          { d: 'M 54 30 Q 44 22 36 16', delay: '1.08s' },
+          { d: 'M 54 30 Q 64 22 70 14', delay: '1.26s' },
+        ].map((v, i) => (
+          <path
+            key={i}
+            d={v.d}
+            stroke="#2F6E00"
+            strokeWidth="1.05"
+            strokeLinecap="round"
+            fill="none"
+            className={working ? VEIN_BASE : ''}
+            style={working ? { animationDelay: v.delay } : undefined}
+          />
+        ))}
+      </g>
+    </svg>
   );
 }
