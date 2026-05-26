@@ -280,18 +280,39 @@ export function useChat() {
 
   // Render the parsed result onto the chat surface.
   //
-  // CERGIO-GUARD: taxonomy stays internal. The chat-parse edge function
-  // can return a bot_reply like "Drain unclogging ✓ · Budget $500 ✓ …"
-  // because Claude may resolve the user's text to a taxonomy offering.
-  // We DO NOT show that to the user. Instead we build our own bot reply
-  // below that only asks the next missing question. The resolver fields
-  // (provider_type, offering_id, category, bundle) are kept in state
-  // for internal routing — /results uses them to filter the right
-  // providers and we notify the right provider_type — but they never
-  // surface in the chat copy. See CHECKLIST.md §2.
-  const applyParseResult = useCallback((res, prevState) => {
-    const fields = res.parsed ?? {};
-    const resolver = res._resolver ?? {};
+  // CERGIO-GUARD: taxonomy stays internal AND defensive. The chat-parse
+  // edge function has been observed mapping single-service requests
+  // ("Spanish-speaking babysitter") to nonsense bundle phrases like
+  // "Bundle coordinator". Before we accept ANY parsed.what or
+  // resolver.provider_type, we run the user's message through the local
+  // SERVICE_MAP. If the local parser identifies a concrete service AND
+  // the cloud's answer contains "bundle"/"coordinator"/"package", we
+  // override with the local match. resolver.bundle is also dropped
+  // unless explicitly handled later. See CHECKLIST.md §2.
+  const applyParseResult = useCallback((res, prevState, userMessage = '') => {
+    const fields = { ...(res.parsed ?? {}) };
+    const resolver = { ...(res._resolver ?? {}) };
+
+    // Sanitize cloud output. If it mentions a bundle/coordinator/package
+    // and we have a real local hit, prefer local.
+    const isBundleish = (s) => !!s && /\b(bundle|coordinator|package)\b/i.test(s);
+    const local = naiveParse(userMessage || '', prevState);
+    if (local.what && isBundleish(fields.what)) {
+      // eslint-disable-next-line no-console
+      console.warn('[useChat] cloud parsed.what looked like a bundle ("%s") — overriding with local "%s"', fields.what, local.what);
+      fields.what = local.what;
+    }
+    if (local.what && isBundleish(resolver.provider_type)) {
+      // eslint-disable-next-line no-console
+      console.warn('[useChat] cloud provider_type looked like a bundle ("%s") — overriding with local "%s"', resolver.provider_type, local.what);
+      resolver.provider_type = local.what;
+      // Drop a wrong offering_id too — it's almost certainly the bundle id.
+      resolver.offering_id = null;
+    }
+    if (isBundleish(resolver.bundle?.name) || isBundleish(resolver.bundle)) {
+      resolver.bundle = null;
+    }
+
     const merged = {
       what:           fields.what          ?? prevState.what          ?? null,
       when:           fields.when          ?? prevState.when          ?? null,
@@ -358,9 +379,11 @@ export function useChat() {
     setTyping(false);
     if (error || !data) {
       // Offline / Anthropic down — keep moving with the naive parser.
-      return applyParseResult(fallbackPlan(user_message, baseState), baseState);
+      return applyParseResult(fallbackPlan(user_message, baseState), baseState, user_message);
     }
-    return applyParseResult(data, baseState);
+    // Pass user_message so the bundle-sanitizer can compare against the
+    // local SERVICE_MAP hit.
+    return applyParseResult(data, baseState, user_message);
   }, [applyParseResult]);
 
   // init — open the chat, optionally with a free-text initialMessage from

@@ -1,6 +1,9 @@
-// Per design-spec.md — final step: choose how to get verified.
+// Final step of the list-service flow — choose how to get verified.
+// CERGIO-GUARD: copy uses Connector (not Expert), cash dollars (not
+// Cergio Coin), and the $250-per-friend canon defined in lib/rewards.js.
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RegHeader } from '../components/ui/RegHeader';
+import { REWARDS } from '../lib/rewards';
 
 export function ServiceListVerifyScreen() {
   const navigate = useNavigate();
@@ -10,17 +13,17 @@ export function ServiceListVerifyScreen() {
     <div className="flex-1 flex flex-col bg-cr">
       <RegHeader
         title="Get verified!"
-        sub="Verified services are visible to everyone on Cergio and gets booked more. Here's how to get verified."
+        sub="Verified services are visible to everyone on Cergio and get booked more. Here's how to get verified."
         minHeight={280}
       />
 
       <div className="bg-cr rounded-t-[28px] -mt-7 px-5 pt-7 flex-1 pb-8 overflow-y-auto">
-        {/* card 1 */}
+        {/* Card 1 — Invite & earn */}
         <div className="bg-white border border-bdr rounded-[18px] p-5 mb-4">
           <p className="text-[16px] font-extrabold text-black mb-2">Invite friends &amp; clients</p>
           <p className="text-[13px] text-b3 leading-relaxed mb-4">
-            Complete (10) bookings from friends and past clients to become verified.
-            Invite a friend and you'll both earn $25 Cergio Coin.
+            Complete 10 bookings from friends and past clients to become verified.
+            Invite a friend and earn ${REWARDS.perFriend} per friend when they book on Cergio.
           </p>
           <button
             onClick={() => showToast('Invite link copied!')}
@@ -30,12 +33,12 @@ export function ServiceListVerifyScreen() {
           </button>
         </div>
 
-        {/* card 2 */}
+        {/* Card 2 — Offer a free service to a Connector */}
         <div className="bg-white border border-bdr rounded-[18px] p-5 mb-4">
-          <p className="text-[16px] font-extrabold text-black mb-2">Offer free service to Expert</p>
+          <p className="text-[16px] font-extrabold text-black mb-2">Offer a free service to a Connector</p>
           <p className="text-[13px] text-b3 leading-relaxed mb-4">
-            Cergio Experts have huge networks on social media. Complete (1) free booking with
-            an Expert to become verified, earn Cergio coin, and get free marketing to thousands.
+            Connectors have large Instagram / TikTok audiences. Complete 1 free booking with a Connector
+            to become verified and get spotlighted to their followers.
           </p>
           <button
             onClick={() => navigate('/rainmaker-request')}
@@ -45,7 +48,6 @@ export function ServiceListVerifyScreen() {
           </button>
         </div>
 
-        {/* secondary CTA */}
         <button
           onClick={() => navigate('/home')}
           className="w-full bg-white border border-bdr rounded-[18px] py-4

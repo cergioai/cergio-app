@@ -9,15 +9,31 @@ import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 // and surface this listing in the right consumer searches).
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 
-// Broad provider-type quick-suggest chips. CERGIO-GUARD: these are
+// Broad provider-type suggestions. CERGIO-GUARD: these are
 // PROVIDER_TYPE level only (Driver / Plumber / Cleaner …), never
-// specific offerings like "Drain unclogging". Used as fast-fill chips
-// beneath the Service Type field. See CHECKLIST §2.
-const SERVICE_TYPE_CHIPS = [
-  'Plumber', 'Cleaner', 'Driver', 'Sitter',
-  'Tutor', 'Personal Trainer', 'Handyman', 'Mover',
-  'Chef', 'Dog walker', 'Photographer', 'Stylist',
+// specific offerings like "Drain unclogging". Used in the live
+// type-ahead dropdown beneath the Service Type field. See CHECKLIST §2.
+const SERVICE_TYPE_OPTIONS = [
+  'Plumber', 'Electrician', 'Handyman', 'Cleaner', 'Housekeeper',
+  'Driver', 'Mover', 'Sitter', 'Babysitter', 'Nanny',
+  'Pet sitter', 'Dog walker', 'Tutor', 'Math tutor', 'Language tutor',
+  'Personal trainer', 'Yoga instructor', 'Pilates instructor',
+  'Chef', 'Caterer', 'Bartender', 'Photographer', 'Videographer',
+  'Hair stylist', 'Barber', 'Makeup artist', 'Nail artist',
+  'Massage therapist', 'Painter', 'Gardener', 'Landscaper',
+  'Plumber', 'HVAC technician', 'Carpenter', 'Mechanic',
+  'Personal assistant', 'Concierge', 'Event planner',
 ];
+
+// Case-insensitive substring filter capped at 6 results so the list
+// stays compact in the dropdown.
+function filterServiceSuggestions(query) {
+  const q = (query || '').toLowerCase().trim();
+  if (!q) return SERVICE_TYPE_OPTIONS.slice(0, 6);
+  return SERVICE_TYPE_OPTIONS
+    .filter(opt => opt.toLowerCase().includes(q))
+    .slice(0, 6);
+}
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
 import { useTaxonomyResolve } from '../hooks/useTaxonomyResolve';
 import { getMyInstagram, saveInstagram, getMyTikTok, saveTikTok } from '../lib/api';
@@ -34,6 +50,7 @@ export function ServiceListAboutScreen() {
   const navigate = useNavigate();
   const { listingDraft, updateListingDraft, resetListingDraft, auth, showToast } = useOutletContext();
   const [serviceType, setServiceType] = useState(listingDraft.category || '');
+  const [serviceTypeFocused, setServiceTypeFocused] = useState(false);
   const [location, setLocation]       = useState(listingDraft.location || '');
   const [coords, setCoords]           = useState(null); // {lat,lng} when Google Place picked
   const [headline, setHeadline]       = useState(listingDraft.description || '');
@@ -79,27 +96,53 @@ export function ServiceListAboutScreen() {
       />
 
       <div className="bg-cr rounded-t-[28px] -mt-7 px-7 pt-7 flex-1 pb-32 overflow-y-auto">
-        <Field label="Service type" placeholder="e.g. Plumber, Cleaning, Dog walker"
-               value={serviceType} onChange={v => { setServiceType(v); setOverrideTaxonomy(false); }} />
-        {/* Broad provider-type chips — tap to fast-fill. These are
-            high-level categories only (CERGIO-GUARD: never offering
-            names). Hide once the field has typed content so they
-            don't compete with the input. */}
-        {!serviceType.trim() && (
-          <div className="mt-2 -mt-4 mb-2 flex flex-wrap gap-1.5">
-            {SERVICE_TYPE_CHIPS.map(chip => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => { setServiceType(chip); setOverrideTaxonomy(false); }}
-                className="bg-white border border-bdr rounded-pill px-2.5 py-1
-                           text-[11px] font-normal text-b2 hover:border-g hover:text-gd transition-colors"
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Service type with LIVE type-ahead dropdown. As the provider
+            types, we filter SERVICE_TYPE_OPTIONS by substring and show
+            up to 6 matches. CERGIO-GUARD: suggestions are provider-type
+            level only (Plumber / Babysitter / …), never offering names. */}
+        <div className="mb-6 relative">
+          <label className="block text-[18px] font-extrabold text-black mb-2.5">Service type</label>
+          <input
+            type="text"
+            value={serviceType}
+            onChange={e => { setServiceType(e.target.value); setOverrideTaxonomy(false); }}
+            onFocus={() => setServiceTypeFocused(true)}
+            onBlur={() => setTimeout(() => setServiceTypeFocused(false), 150)} /* delay so click lands */
+            placeholder="e.g. Plumber, Cleaner, Babysitter"
+            autoComplete="off"
+            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+                       placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+          />
+          {serviceTypeFocused && (() => {
+            const matches = filterServiceSuggestions(serviceType);
+            if (matches.length === 0) return null;
+            // Hide if the only match is exactly what's already typed.
+            if (matches.length === 1 && matches[0].toLowerCase() === serviceType.toLowerCase()) return null;
+            return (
+              <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-bdr
+                              rounded-[14px] shadow-card py-1 max-h-[240px] overflow-y-auto">
+                {matches.map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()} /* keep input focus so onBlur doesn't fire first */
+                    onClick={() => {
+                      setServiceType(opt);
+                      setOverrideTaxonomy(false);
+                      setServiceTypeFocused(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-[14px] text-b2 hover:bg-bg5 transition-colors"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+        {/* The original <Field> wrapper is replaced by the relative
+            container above; we keep this dummy spacing so the rest of
+            the form lays out the same. */}
         <div className="mb-6 mt-6">
           <label className="block text-[18px] font-extrabold text-black mb-2.5">Service location</label>
           <AddressAutocomplete

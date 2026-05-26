@@ -140,14 +140,14 @@ export function ProfileScreen() {
   };
 
   const listGated = isSignedIn && !provider.loading && !provider.ready;
+  // CERGIO-GUARD: list-service navigation is NEVER blocked by Stripe
+  // state. Publishing a listing is decoupled from payouts; Stripe
+  // verification completes asynchronously and the listing stays live.
   const onListService = () => {
     if (listGated) {
-      showToast(
-        provider.hasAccount
-          ? 'Stripe is still verifying your payout account'
-          : 'Tap Switch to Service view, then Set up payouts first'
-      );
-      return;
+      showToast(provider.hasAccount
+        ? 'Payouts pending Stripe verification — your listing will still publish.'
+        : 'Heads up: set up payouts later in Profile → Service view.');
     }
     navigate('/list-service');
   };

@@ -15,14 +15,15 @@ export function ManageServicesScreen() {
   // Gate the "List my service" CTAs on Stripe readiness, matching ProfileScreen.
   const provider = useProviderReady(auth);
   const gated = !!auth?.isSignedIn && !provider.loading && !provider.ready;
+  // CERGIO-GUARD: do NOT block the user from publishing a listing on
+  // Stripe verification. Stripe payouts activate asynchronously after
+  // they finish onboarding — but the listing itself should publish
+  // immediately. We only inform them; we always navigate.
   const handleListClick = () => {
     if (gated) {
-      showToast(
-        provider.hasAccount
-          ? 'Stripe is still verifying your payout account'
-          : 'Set up payouts in Profile → Service view first'
-      );
-      return;
+      showToast(provider.hasAccount
+        ? 'Payouts pending Stripe verification — listing will still publish.'
+        : 'Heads up: set up payouts in Profile → Service view to receive payments.');
     }
     navigate('/list-service');
   };
