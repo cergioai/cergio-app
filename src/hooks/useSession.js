@@ -86,6 +86,24 @@ export function useSession() {
     await supabase.auth.signOut();
   }, []);
 
+  /** Send a password-reset email via Supabase. The user clicks the link
+   *  in the email, lands back on /auth?reset=true, and can set a new
+   *  password. Best-effort — surfaces Supabase's error message to the
+   *  caller. */
+  const sendPasswordReset = useCallback(async (email) => {
+    if (!supabaseReady) return { error: { message: 'Supabase not configured' } };
+    const redirectTo = typeof window !== 'undefined'
+      ? `${window.location.origin}/auth?reset=true`
+      : undefined;
+    return await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  }, []);
+
+  /** Set a new password — used after a reset email click. */
+  const updatePassword = useCallback(async (newPassword) => {
+    if (!supabaseReady) return { error: { message: 'Supabase not configured' } };
+    return await supabase.auth.updateUser({ password: newPassword });
+  }, []);
+
   return {
     session,
     user: session?.user ?? null,
@@ -95,5 +113,7 @@ export function useSession() {
     signUp,
     signInWithOAuth,
     signOut,
+    sendPasswordReset,
+    updatePassword,
   };
 }

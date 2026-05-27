@@ -6,8 +6,10 @@
 // OAuth identities — for now they route to the existing connect modals
 // inside Profile after sign-in).
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useLocation } from 'react-router-dom';
 import { LeafLogo } from '../components/ui/LeafLogo';
+import { getActiveRef } from '../lib/referral';
+import { REWARDS } from '../lib/rewards';
 
 // TikTok OAuth sign-in config (separate from the link-only flow used in
 // modals). Public client_key + redirect URI from build env.
@@ -38,15 +40,57 @@ function phoneValid(s) {
 
 export function AuthScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth, showToast } = useOutletContext();
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  // CERGIO-GUARD: when the user lands here from an invite link, the
+  // referral capture in App.jsx has already stamped localStorage. We
+  // surface a small "invited by a friend" banner so they see WHY they're
+  // here and that the reward attribution will fire on first booking.
+  // Also drives signup-default — if they came via invite, default to
+  // signup mode.
+  const activeRef = getActiveRef();
+  // Reset-flow: when Supabase redirects back from a password-reset
+  // email, the URL has ?reset=true. We show a Set-new-password mini
+  // form instead of the usual sign-in.
+  const isReset = new URLSearchParams(location.search).get('reset') === 'true';
+
+  const [mode, setMode] = useState(activeRef ? 'signup' : 'signin'); // 'signin' | 'signup'
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail]       = useState('');
   const [phone, setPhone]       = useState('');
   const [password, setPassword] = useState('');
+  const [showPwd, setShowPwd]   = useState(false);
   const [busy, setBusy]         = useState(false);
   const [socialBusy, setSocialBusy] = useState(null); // 'google'|'instagram'|'tiktok'|null
+  // Forgot-password / new-password state.
+  const [forgotOpen, setForgotOpen]   = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotBusy, setForgotBusy]   = useState(false);
+  const [resetPwd, setResetPwd]       = useState('');
+  const [resetBusy, setResetBusy]     = useState(false);
   const ttPopupRef = useRef(null);
+
+  const sendReset = async () => {
+    const e = (forgotEmail || email).trim();
+    if (!e || !e.includes('@') || forgotBusy) return;
+    setForgotBusy(true);
+    const { error } = await auth.sendPasswordReset(e);
+    setForgotBusy(false);
+    if (error) { showToast(error.message || 'Could not send reset'); return; }
+    showToast('Reset link sent — check your email.');
+    setForgotOpen(false);
+    setForgotEmail('');
+  };
+
+  const completeReset = async () => {
+    if (resetPwd.length < 6 || resetBusy) return;
+    setResetBusy(true);
+    const { error } = await auth.updatePassword(resetPwd);
+    setResetBusy(false);
+    if (error) { showToast(error.message || 'Could not update password'); return; }
+    showToast('Password updated ✓');
+    navigate('/home');
+  };
 
   // Listen for postMessage from the TikTok signin popup.
   useEffect(() => {
@@ -161,6 +205,17 @@ export function AuthScreen() {
         <p className="text-[13px] text-b3 leading-snug mt-2 font-medium max-w-[280px]">
           Services your friends actually trust. Book, host, or earn — all in one place.
         </p>
+        {/* Invited-by-a-friend banner — pops only when an active ?ref was
+            captured on app boot. Makes the attribution visible + warmer
+            welcome than a cold sign-up screen. */}
+        {activeRef && (
+          <div className="mt-4 bg-gl border border-g/25 rounded-pill px-3.5 py-2 flex items-center gap-2">
+            <span className="text-[13px]">🌱</span>
+            <p className="text-[12px] text-gd font-bold leading-snug">
+              Invited by a friend — ${REWARDS.perFriendUser} credit each when you book.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="px-7">
@@ -291,19 +346,43 @@ export function AuthScreen() {
           </div>
         )}
 
-        <div className="mb-6">
+        <div className="mb-2">
           <label className="block text-[14px] font-extrabold text-black mb-2">Password</label>
-          <input
-            type="password"
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Min. 6 characters"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
-                       placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
-            onKeyDown={e => e.key === 'Enter' && submit()}
-          />
+          <div className="relative">
+            <input
+              type={showPwd ? 'text' : 'password'}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Min. 6 characters"
+              className="w-full bg-bg5 rounded-[14px] px-4 py-4 pr-14 text-[14px] text-black
+                         placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+              onKeyDown={e => e.key === 'Enter' && submit()}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPwd(v => !v)}
+              aria-label={showPwd ? 'Hide password' : 'Show password'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-extrabold text-b3
+                         px-2 py-1 rounded-[8px] hover:bg-bg5"
+            >
+              {showPwd ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
+        {/* Forgot-password link — only on sign-in (sign-up doesn't need it). */}
+        {!isSignup && (
+          <div className="flex justify-end mb-5">
+            <button
+              type="button"
+              onClick={() => { setForgotOpen(true); setForgotEmail(email); }}
+              className="text-[12px] font-extrabold text-g underline underline-offset-2"
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
+        {isSignup && <div className="mb-5" />}
 
         <button
           onClick={submit}
@@ -329,6 +408,85 @@ export function AuthScreen() {
           Continue as guest
         </button>
       </div>
+
+      {/* Forgot-password bottom sheet — send a Supabase reset link. */}
+      {forgotOpen && (
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-end justify-center"
+             onClick={() => setForgotOpen(false)}>
+          <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6"
+               onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-3">
+              <h3 className="text-[18px] font-extrabold text-black leading-tight">Reset your password</h3>
+              <button onClick={() => setForgotOpen(false)}
+                className="text-[20px] text-b3 font-bold px-2 -mt-1" aria-label="Close">×</button>
+            </div>
+            <p className="text-[12px] text-b3 leading-snug mb-3">
+              We'll email you a link to set a new password.
+            </p>
+            <input
+              type="email"
+              value={forgotEmail}
+              onChange={e => setForgotEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black
+                         placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 mb-4"
+              onKeyDown={e => e.key === 'Enter' && sendReset()}
+            />
+            <button
+              onClick={sendReset}
+              disabled={forgotBusy || !forgotEmail.includes('@')}
+              className={`w-full rounded-[14px] py-3.5 text-[15px] font-extrabold transition-all
+                ${!forgotBusy && forgotEmail.includes('@')
+                  ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
+                  : 'bg-bg5 text-b3 cursor-not-allowed'}`}
+            >
+              {forgotBusy ? 'Sending…' : 'Send reset link'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reset-completion sheet — opens when redirected back with ?reset=true.
+          The user landed here from the email link with an active session;
+          we just need to set the new password. */}
+      {isReset && (
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-end justify-center">
+          <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6">
+            <h3 className="text-[18px] font-extrabold text-black leading-tight mb-1">Set a new password</h3>
+            <p className="text-[12px] text-b3 leading-snug mb-3">
+              Choose a strong password (6+ characters). You'll stay signed in.
+            </p>
+            <input
+              type={showPwd ? 'text' : 'password'}
+              value={resetPwd}
+              onChange={e => setResetPwd(e.target.value)}
+              autoComplete="new-password"
+              placeholder="New password"
+              className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black
+                         placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 mb-2"
+              onKeyDown={e => e.key === 'Enter' && completeReset()}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPwd(v => !v)}
+              className="text-[12px] font-bold text-b3 mb-3"
+            >
+              {showPwd ? 'Hide password' : 'Show password'}
+            </button>
+            <button
+              onClick={completeReset}
+              disabled={resetBusy || resetPwd.length < 6}
+              className={`w-full rounded-[14px] py-3.5 text-[15px] font-extrabold transition-all
+                ${!resetBusy && resetPwd.length >= 6
+                  ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
+                  : 'bg-bg5 text-b3 cursor-not-allowed'}`}
+            >
+              {resetBusy ? 'Saving…' : 'Save and continue'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
