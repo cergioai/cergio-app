@@ -13,6 +13,7 @@ import {
 import { useToast }   from './hooks/useToast';
 import { useChat }    from './hooks/useChat';
 import { useSession } from './hooks/useSession';
+import { captureRefFromUrl, creditInviterOnFirstBooking } from './lib/referral';
 
 import { BottomNav }    from './components/ui/BottomNav';
 import { Toast }        from './components/ui/Toast';
@@ -103,6 +104,24 @@ function Layout() {
   const { toast, showToast, dismissToast } = useToast();
   const chat                 = useChat();
   const auth                 = useSession();
+
+  // CERGIO-GUARD: capture ?ref=<inviter_uuid> on first paint and stash it
+  // in localStorage with a 30-day TTL. Without this, every invite link
+  // shared via Web Share API or the Copy-link button silently fails to
+  // attribute. The ref is then read by useSession.signUp() to write
+  // the invites row + by the booking flow to credit the inviter on
+  // first booking. See src/lib/referral.js.
+  useEffect(() => {
+    const captured = captureRefFromUrl();
+    if (captured && typeof window !== 'undefined') {
+      // Strip ?ref= from the URL so it doesn't keep firing on every reload
+      // (the localStorage entry is the persistent state).
+      const u = new URL(window.location.href);
+      u.searchParams.delete('ref');
+      const clean = u.pathname + (u.searchParams.toString() ? `?${u.searchParams}` : '') + u.hash;
+      try { window.history.replaceState({}, '', clean); } catch { /* ignore */ }
+    }
+  }, []);
   const [booking, setBooking]           = useState(null);
   const [paymentSheet, setPaymentSheet] = useState(null); // {clientSecret, bookingId, totalCents, providerName} | null
   const [freeServices, setFreeServices] = useState(true); // Connector default
@@ -185,6 +204,10 @@ function Layout() {
         showToast(`Couldn't confirm booking: ${confirmErr.message}`);
         return;
       }
+      // CERGIO-GUARD: if this consumer was invited by someone, credit
+      // the inviter on their first booking. Best-effort; failure here
+      // doesn't change the booking outcome.
+      creditInviterOnFirstBooking(row.consumer_id, row.id).catch(() => {});
       showToast('Booked!');
       navigate('/booking');
       return;
@@ -199,16 +222,23 @@ function Layout() {
     setPaymentSheet({
       clientSecret: pi.client_secret,
       bookingId:    row.id,
+      consumerId:   row.consumer_id,
       totalCents:   row.total_cents,
       providerName: provider.name,
     });
   }, [navigate, showToast]);
 
   const handlePaymentSuccess = useCallback(() => {
+    // CERGIO-GUARD: credit the inviter on the invitee's first paid
+    // booking. Reads the booking + consumer from the closed-over sheet
+    // state. Best-effort — no UI impact on failure.
+    if (paymentSheet?.consumerId) {
+      creditInviterOnFirstBooking(paymentSheet.consumerId, paymentSheet.bookingId).catch(() => {});
+    }
     setPaymentSheet(null);
     showToast('Payment confirmed!');
     navigate('/booking');
-  }, [navigate, showToast]);
+  }, [navigate, showToast, paymentSheet]);
 
   const handlePaymentCancel = useCallback(() => {
     setPaymentSheet(null);

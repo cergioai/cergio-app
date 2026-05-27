@@ -2,6 +2,7 @@
 // Returns { session, user, loading, signIn, signUp, signOut }.
 import { useEffect, useState, useCallback } from 'react';
 import { supabase, supabaseReady } from '../lib/supabase';
+import { recordInviteFromActiveRef } from '../lib/referral';
 
 export function useSession() {
   const [session, setSession] = useState(null);
@@ -46,7 +47,7 @@ export function useSession() {
     // canonical copy whichever side reads it. profile_private gets a copy
     // when the profile row is first synced.
     const cleanPhone = (phone || '').replace(/[^\d+]/g, '').trim();
-    return await supabase.auth.signUp({
+    const result = await supabase.auth.signUp({
       email,
       password,
       phone: cleanPhone || undefined,
@@ -54,6 +55,15 @@ export function useSession() {
         data: { display_name: displayName, phone: cleanPhone || null },
       },
     });
+    // CERGIO-GUARD: after a successful signup, attribute the invite chain
+    // by writing an `invites` row linking inviter (from ?ref=… captured
+    // in App.jsx) to this new invitee. Best-effort — does not block
+    // signup success and silently no-ops when there's no active ref.
+    const newUserId = result?.data?.user?.id;
+    if (newUserId) {
+      recordInviteFromActiveRef(newUserId).catch(() => { /* swallow */ });
+    }
+    return result;
   }, []);
 
   // Generic OAuth sign-in (Google, Facebook, etc — anything Supabase Auth

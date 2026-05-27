@@ -9,38 +9,39 @@
 // dev and prod just work without backend changes.
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
-import { REWARDS, REWARD_COPY } from '../lib/rewards';
+import { REWARDS } from '../lib/rewards';
+import { buildInviteUrl } from '../lib/referral';
 
-function buildInviteLink() {
-  if (typeof window === 'undefined') return 'https://cergio.ai';
-  // ?ref=invite is the attribution flag — when a friend lands with this
-  // param we store it in localStorage and the booking flow reads it
-  // back to credit the inviting user. See: cergio.ref pickup in App.jsx.
-  return `${window.location.origin}/?ref=invite`;
-}
-
-function buildInviteMessage(amount) {
-  return `Hey — I'm using Cergio for booking trusted services. Join + book and we both win: $${amount} credit each. ${buildInviteLink()}`;
+function buildInviteMessage(amount, url) {
+  return `Hey — I'm using Cergio for booking trusted services. Join + book and we both win: $${amount} credit each. ${url}`;
 }
 
 export function InviteFriendPopupScreen() {
   const navigate = useNavigate();
-  const { showToast } = useOutletContext();
+  const { showToast, auth } = useOutletContext();
+  // CERGIO-GUARD: real attribution link — embeds the signed-in user's
+  // UUID as ?ref=… so when their invitee signs up + books, earnings
+  // credit comes back here. Signed-out users still see the modal but
+  // their share link has no ref (just the bare origin); they should
+  // sign in to earn.
+  const inviteUrl = buildInviteUrl(auth?.user?.id);
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(buildInviteLink());
-      showToast('Invite link copied ✓');
+      await navigator.clipboard.writeText(inviteUrl);
+      showToast(auth?.isSignedIn
+        ? 'Invite link copied ✓'
+        : 'Link copied — sign in to earn from invites.');
     } catch {
       showToast('Copy unavailable on this device.');
     }
   };
 
   const shareNative = async () => {
-    const msg = buildInviteMessage(REWARDS.perFriendUser);
+    const msg = buildInviteMessage(REWARDS.perFriendUser, inviteUrl);
     try {
       if (navigator.share) {
-        await navigator.share({ text: msg, title: 'Join me on Cergio', url: buildInviteLink() });
+        await navigator.share({ text: msg, title: 'Join me on Cergio', url: inviteUrl });
         return;
       }
     } catch { /* user cancelled */ return; }
