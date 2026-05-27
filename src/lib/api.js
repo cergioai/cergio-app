@@ -327,31 +327,102 @@ export async function listServices({
   // cleaner 1000mi away, so showing nationwide results would be a worse
   // UX than an honest empty state. (Confirmed by user 2026-05-27.)
   if (lat != null && lng != null) {
+    // CERGIO-GUARD: do NOT pass `category` as category_match — the RPC
+    // does an EXACT string match on services.category, and our parser
+    // sets `what` to phrases like "Deep Cleaning" while seeded rows
+    // carry the base category "Cleaning". Mismatch → zero results,
+    // even though the row is geographically right there. Confirmed
+    // 2026-05-27 via Diagnose Search.command: query 5 with
+    // category_match='Cleaning' returned Maria's row; the app was
+    // sending 'Deep Cleaning' and getting nothing.
+    //
+    // Strategy: pull everything in radius, then let applyMatchingFilters
+    // rank by originalQuery stems + preferOfferingId. Same OR-not-AND
+    // philosophy as the non-proximity path's collectMatchOrClauses.
     const { data, error } = await supabase.rpc('services_near', {
       near_lat: lat, near_lng: lng,
       radius_miles: radiusMiles,
-      category_match: category || null,
+      category_match: null,
     });
     if (error) return { data: null, error };
 
     let ids = (data || []).map(s => s.id);
     if (ids.length === 0) return { data: [], error: null };
 
-    const { data: offs } = await supabase
-      .from('offerings')
-      .select('id, service_id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id')
-      .in('service_id', ids);
+    // CERGIO-GUARD (2026-05-27): services_near RPC returns only the
+    // proximity columns (id/title/location_text/distance) — NOT the
+    // taxonomy_* columns the strict filter below needs. Without the
+    // re-fetch, `s.taxonomy_provider_type` is undefined for every row,
+    // and every strict filter excludes everything → zero results.
+    // Confirmed via Chrome JS probe: services_near returned 8 Miami
+    // rows but `filtered` was [] because taxonomy_provider_type
+    // wasn't in the response shape.
+    //
+    // Fix: take the IDs proximity gave us, hydrate full rows from
+    // services WITH taxonomy_provider_type + taxonomy_offering_id, then
+    // strict-filter. Costs one extra round-trip but lets the spec's
+    // strict-match guarantee actually hold.
+    const [{ data: full, error: fullErr }, { data: offs }] = await Promise.all([
+      supabase
+        .from('services')
+        .select(`
+          id, title, category, description, location_text, photo_class,
+          cover_url, rating_avg, rating_count, bookings_count, owner_id,
+          created_at, taxonomy_category, taxonomy_provider_type,
+          taxonomy_offering_id, status
+        `)
+        .in('id', ids)
+        .eq('status', 'listed'),
+      supabase
+        .from('offerings')
+        .select('id, service_id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id')
+        .in('service_id', ids),
+    ]);
+    if (fullErr) return { data: null, error: fullErr };
+
+    // Build a distance lookup so we preserve services_near's ordering.
+    const distById = Object.fromEntries((data || []).map(s => [s.id, s.distance_miles]));
     const offMap = {};
     (offs || []).forEach(o => { (offMap[o.service_id] ||= []).push(o); });
 
-    let filtered = data.map(s => ({ ...s, offerings: offMap[s.id] || [] }));
-    if (offering_id) {
+    let filtered = (full || [])
+      .map(s => ({
+        ...s,
+        distance_miles: distById[s.id],
+        offerings: offMap[s.id] || [],
+      }))
+      .sort((a, b) => (a.distance_miles ?? 9e9) - (b.distance_miles ?? 9e9));
+    // CERGIO-GUARD: matching is STRICT on provider_type — this is the
+    // trust model from the spec. Users asking for "unclog toilet"
+    // expect ONLY plumbers to surface (and be notified). Showing a
+    // House Cleaner because words share stems would break trust the
+    // moment we actually fan out notifications. So the search uses
+    // the same exact-match philosophy as getProvidersForNotify
+    // (invariant #4): taxonomy_provider_type == resolved provider_type.
+    //
+    // If provider_type is not set, we ALSO accept an exact match on
+    // taxonomy_offering_id (the parser sometimes resolves to a more
+    // specific offering than the provider type).
+    //
+    // If NEITHER resolved → return [] with no fuzzy fallback. The
+    // empty state UI tells the user we couldn't understand, with a
+    // suggestion to use simpler/more canonical terms.
+    if (provider_type) {
+      const want = String(provider_type).toLowerCase();
+      filtered = filtered.filter(s =>
+        String(s.taxonomy_provider_type || '').toLowerCase() === want
+      );
+    } else if (offering_id) {
       filtered = filtered.filter(s =>
         (s.taxonomy_offering_id === offering_id) ||
         (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
       );
+    } else {
+      // Parser produced neither — honest empty.
+      filtered = [];
     }
-    filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly, originalQuery });
+    // Budget + freeOnly still apply (real, user-controlled filters).
+    filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly });
     return { data: filtered, error: null };
   }
 
@@ -409,7 +480,7 @@ export async function listServices({
 //     chef" returning both Marcus + Tasha issue — Marcus matches BOTH
 //     'personal' and 'chef' (score 2), Tasha matches only 'personal'
 //     (score 1), so Marcus ranks first.
-function applyMatchingFilters(rows, { maxBudgetCents, freeOnly, originalQuery }) {
+function applyMatchingFilters(rows, { maxBudgetCents, freeOnly, originalQuery, preferOfferingId } = {}) {
   let out = rows;
   if (freeOnly) {
     out = out.filter(s => (s.offerings || []).some(o => (o.price_cents ?? 0) === 0));
@@ -422,25 +493,42 @@ function applyMatchingFilters(rows, { maxBudgetCents, freeOnly, originalQuery })
       return min <= maxBudgetCents;
     });
   }
-  if (originalQuery) {
+  // CERGIO-GUARD: scoring is INCLUSIVE — every signal we have boosts
+  // a row up the list. Nothing here filters rows out (filtering happens
+  // above via budget/free toggles). originalQuery + preferOfferingId
+  // are both BOOSTS only. This is the OR-not-AND philosophy that keeps
+  // a perfectly seeded row from disappearing because the parser used
+  // a synonym the row doesn't carry.
+  const stems = (() => {
+    if (!originalQuery) return [];
     const tokens = String(originalQuery).toLowerCase().match(/[a-z]+/g) ?? [];
     const meaningful = tokens.filter(t => t.length >= 4 && !MATCH_STOPWORDS.has(t));
-    const stems = [...new Set(meaningful.map(stemTerm))];
-    if (stems.length > 0) {
-      const scoreOne = (s) => {
+    return [...new Set(meaningful.map(stemTerm))];
+  })();
+  if (stems.length > 0 || preferOfferingId) {
+    const scoreOne = (s) => {
+      let n = 0;
+      // +10 per stem hit on title/description/category — drives the
+      // user's raw words straight to the top.
+      if (stems.length > 0) {
         const hay = [
           s.title, s.description, s.category,
           s.taxonomy_category, s.taxonomy_provider_type,
         ].filter(Boolean).join(' ').toLowerCase();
-        let n = 0;
-        for (const st of stems) if (hay.includes(st)) n++;
-        return n;
-      };
-      out = out
-        .map(s => ({ s, score: scoreOne(s) }))
-        .sort((a, b) => b.score - a.score)
-        .map(o => o.s);
-    }
+        for (const st of stems) if (hay.includes(st)) n += 10;
+      }
+      // +50 if the parser's offering_id matches this service OR any
+      // of its offerings — a strong but not exclusive signal.
+      if (preferOfferingId) {
+        if (s.taxonomy_offering_id === preferOfferingId) n += 50;
+        else if ((s.offerings || []).some(o => o.taxonomy_offering_id === preferOfferingId)) n += 50;
+      }
+      return n;
+    };
+    out = out
+      .map(s => ({ s, score: scoreOne(s) }))
+      .sort((a, b) => b.score - a.score)
+      .map(o => o.s);
   }
   return out;
 }

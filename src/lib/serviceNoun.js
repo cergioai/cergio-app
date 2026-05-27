@@ -35,7 +35,11 @@ export function userServiceNoun(rawQuery) {
   // Strip leading intent verbs.
   s = s.replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '');
   // Cut at the first time / budget / location signal so the noun stays clean.
-  const stopAt = s.search(/\b(today|tomorrow|tonight|this|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|on\s|at\s|for\s|in\s|under\s|max\s|max:|maximum|budget|\$|\d{2,5}\s*(?:dollars|usd|bucks))/i);
+  // CERGIO-GUARD: `near\s` added 2026-05-27 — user typed "deep cleaning
+  // near me" and the title rendered "Looking for deep cleaning near mes"
+  // because the noun retained "near me" and the pluralizer tacked an "s"
+  // on the tail "me". Now "near" terminates the noun, giving "deep cleaning".
+  const stopAt = s.search(/\b(today|tomorrow|tonight|this|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|on\s|at\s|for\s|in\s|near\s|under\s|max\s|max:|maximum|budget|\$|\d{2,5}\s*(?:dollars|usd|bucks))/i);
   if (stopAt > 2) s = s.slice(0, stopAt).trim();
   // Collapse whitespace, strip trailing punctuation.
   s = s.replace(/\s+/g, ' ').replace(/[.,;:!?]+$/g, '').trim();

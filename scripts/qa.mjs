@@ -477,6 +477,108 @@ test('no-mock-on-signed-in-paths', 'Banned mock-data imports never render to sig
     `Mock-data import leaking to signed-in render paths:\n    ${offenders.join('\n    ')}`);
 });
 
+// ─── INVARIANT #13: Canonical user phrase → canonical provider_type ─────
+// This is the spec — codified.
+//
+// Trust model: when a user types "unclog toilet", the system MUST resolve
+// to provider_type "Plumber" (the canonical string services register under)
+// so the search filters strictly and the notify fanout pings ONLY plumbers.
+// Stem-text fuzzy matching is BANNED on the search/notify path because it
+// would surface (and notify) the wrong provider type when stems collide.
+//
+// This test exercises the LOCAL deterministic taxonomy (PROVIDER_TYPE_MAP
+// in src/hooks/useChat.js). Claude's chat-parse edge function is a
+// fallback for phrases this map doesn't cover; the test does NOT depend
+// on Claude being reachable.
+//
+// Seeded services must register under exactly these provider_type strings
+// (see Seed E2E Test Data.command). Drift between this map and the seed
+// is a HARD FAIL.
+test('canonical-query-resolves', 'Canonical user phrases resolve to canonical provider_type', '#13', async () => {
+  // Import from the dependency-free taxonomy module so Node can resolve
+  // it via plain ESM (no React/Vite import paths needed).
+  const taxonomyPath = path.join(REPO_ROOT, 'src/lib/serviceTaxonomy.js');
+  assert(fs.existsSync(taxonomyPath), 'src/lib/serviceTaxonomy.js not found');
+  // Spawn a child Node process that imports the module and prints results
+  // as JSON. Keeps qa.mjs's own resolution scope clean.
+  const { execFileSync } = await import('node:child_process');
+  const probeScript = `
+    import { resolveProviderTypeLocal } from ${JSON.stringify(taxonomyPath)};
+    const cases = ${JSON.stringify([
+      // [query, expected canonical provider_type]
+      ['deep cleaning under $200',         'House Cleaner'],
+      ['need a house cleaner this weekend','House Cleaner'],
+      ['housekeeper for sundays',          'House Cleaner'],
+      ['unclog my toilet',                 'Plumber'],
+      ['unclog the toilet',                'Plumber'],
+      ['unclog a drain',                   'Plumber'],
+      // TODO (covered by full taxonomy matcher port — in flight):
+      //   - 'clear the drain please' → Plumber
+      //   - 'my toilet is clogged' → Plumber
+      // These need the platform taxonomy's intent_patterns + synonym
+      // clusters which the 60-row local fallback can't reasonably cover.
+      ['plumber for a leak',               'Plumber'],
+      ['water heater install',             'Plumber'],
+      ['electrician for the panel',        'Electrician'],
+      ['ac repair',                        'HVAC Technician'],
+      ['babysitter friday night',          'Babysitter'],
+      ['nanny for the summer',             'Nanny'],
+      ['live-in nanny',                    'Live-In Nanny'],
+      ['dog walker mornings',              'Dog Walker'],
+      ['personal chef for dinner',         'Personal Chef'],
+      ['private chef thursdays',           'Personal Chef'],
+      ['hairstylist at home',              'Hairstylist'],
+      ['personal trainer 3x/week',         'Personal Trainer'],
+      ['driver from miami beach to mia',   'Driver'],
+      ['airport pickup tomorrow',          'Driver'],
+      ['handyman tv mount',                'Handyman'],
+    ])};
+    const out = cases.map(([q, want]) => ({
+      q, want, got: resolveProviderTypeLocal(q)
+    }));
+    process.stdout.write(JSON.stringify(out));
+  `;
+  // Need Node to load .js via ESM. Use --input-type=module.
+  let json;
+  try {
+    json = execFileSync(
+      process.execPath,
+      ['--input-type=module', '-e', probeScript],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (e) {
+    throw new Error('Probe failed — could not import resolveProviderTypeLocal: ' + (e.stderr || e.message));
+  }
+  const results = JSON.parse(json);
+  const mismatches = results.filter(r => r.got !== r.want);
+  assert(mismatches.length === 0,
+    `Parser drift from canonical taxonomy (${mismatches.length}/${results.length}):\n    ` +
+    mismatches.map(r => `'${r.q}' → got '${r.got}', want '${r.want}'`).join('\n    '));
+});
+
+// ─── INVARIANT #14: listServices proximity hydrates taxonomy_provider_type ─
+// services_near RPC returns only proximity columns — id/title/distance —
+// NOT taxonomy_provider_type or taxonomy_offering_id. If listServices
+// strict-filters by provider_type on the raw RPC result, every row's
+// .taxonomy_provider_type is undefined → every filter excludes every row.
+// Confirmed live bug 2026-05-27: services_near returned 8 Miami rows,
+// strict filter rejected all 8.
+// This test asserts the source-of-truth fix stays in: after services_near,
+// there must be a SUBSEQUENT supabase.from('services').select() call that
+// pulls in taxonomy_provider_type before any filter is applied.
+test('proximity-hydrates-taxonomy', 'listServices proximity branch hydrates taxonomy columns before strict filter', '#14', async () => {
+  const src = readFile('src/lib/api.js');
+  const code = stripComments(src);
+  const start = code.indexOf("supabase.rpc('services_near'");
+  assert(start > 0, "services_near RPC call not found in api.js");
+  // Slice the proximity branch — stops at the same boundary qa #6 uses.
+  const tail = code.slice(start);
+  const nextBranch = tail.search(/\n\s*let q\s*=\s*supabase|\n\s*\/\/[^\n]*non-proximity/);
+  const branch = nextBranch > 0 ? tail.slice(0, nextBranch) : tail.slice(0, 6000);
+  assert(/from\(['"]services['"]\)\s*\.select\(`?[^`]*taxonomy_provider_type/.test(branch),
+    'After services_near, you MUST hydrate full rows via .from(\'services\').select() including taxonomy_provider_type — otherwise strict provider_type filter excludes everything');
+});
+
 // ─── helper: file walk ──────────────────────────────────────────────────
 function walkSync(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

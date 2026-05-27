@@ -121,6 +121,10 @@ const SERVICE_MAP = [
   ['guitar',               'Music Lessons'],
 ];
 
+// Pure-JS dependency-free taxonomy — keeps qa.mjs invariant #13
+// importable without React/Vite resolution.
+import { PROVIDER_TYPE_MAP, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
+
 const MONTHS = [
   'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
   'january', 'february', 'march', 'april', 'june', 'july', 'august',
@@ -162,6 +166,21 @@ function naiveParse(text, state = {}) {
       }
     }
     what = bestKey ? bestKey[1] : null;
+  }
+
+  // Provider type: deterministic local taxonomy (PROVIDER_TYPE_MAP) —
+  // the canonical string services register themselves under. Longest
+  // matching key wins so "deep clean" beats "clean" and "unclog toilet"
+  // beats "unclog". This is what listServices STRICTLY filters by.
+  let providerType = state.provider_type;
+  if (!providerType) {
+    let bestKey = null;
+    for (const [k, v] of PROVIDER_TYPE_MAP) {
+      if (l.includes(k) && (bestKey === null || k.length > bestKey[0].length)) {
+        bestKey = [k, v];
+      }
+    }
+    providerType = bestKey ? bestKey[1] : null;
   }
 
   // When: build it from any of the strongest signals we can find. We
@@ -211,10 +230,15 @@ function naiveParse(text, state = {}) {
 
   return {
     what, when, where, budget,
+    provider_type: providerType,
     details: state.details ?? null,
     flexible_time: flexible || state.flexible_time || null,
   };
 }
+
+// Re-export taxonomy helpers so call-sites can use a single import
+// path. The pure-JS source of truth lives in src/lib/serviceTaxonomy.js.
+export { PROVIDER_TYPE_MAP, resolveProviderTypeLocal };
 
 function fallbackPlan(text, state) {
   const parsed = naiveParse(text, state);
@@ -400,6 +424,24 @@ export function useChat() {
       console.warn('[useChat] cloud provider_type was generic ("%s") — dropping', resolver.provider_type);
       resolver.provider_type = local.what || null;
       resolver.offering_id = null;
+    }
+
+    // CERGIO-GUARD (2026-05-27): local taxonomy is PRIMARY.
+    // Resolve user's input through the deterministic local map
+    // (PROVIDER_TYPE_MAP in src/lib/serviceTaxonomy.js). If it returns
+    // a concrete provider_type, that wins over whatever the Claude
+    // resolver said — because the local map uses the EXACT strings
+    // services register under (taxonomy_provider_type column). When
+    // Claude returns a synonymic-but-wrong value like "Cleaning Service"
+    // for a "deep cleaning" query, the strict-match search filter
+    // would exclude every real provider. Local-primary fixes that.
+    // Claude is now strictly the long-tail fallback.
+    const localPT = resolveProviderTypeLocal(userInput);
+    if (localPT && resolver.provider_type !== localPT) {
+      // eslint-disable-next-line no-console
+      console.info('[useChat] local taxonomy override: "%s" → "%s" (was cloud="%s")',
+        userInput, localPT, resolver.provider_type);
+      resolver.provider_type = localPT;
     }
 
     // Word-overlap drift check: if the parser's `what` shares NO meaningful
