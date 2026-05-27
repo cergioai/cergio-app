@@ -1,67 +1,17 @@
-Search: strict provider_type match end-to-end + locked with two new invariants
+Search: in-page diag banner when listServices returns empty
 
-Real bug, fixed via observability-first (no more patches):
+Quick visible diagnostic so users can screenshot the actual values
+without opening DevTools. When ResultsScreen receives count: 0, a
+yellow CERGIO-DIAG banner appears above the empty-state card showing:
+  - provider_type
+  - offering_id
+  - category
+  - lat/lng
+  - originalQuery
+  - count + first matches if any
 
-1. Parser path: the local PROVIDER_TYPE_MAP (60 phrases, source-of-truth
-   for offline-fallback resolution) now overrides the Claude resolver when
-   it has a concrete answer. Claude was returning synonymic-but-wrong
-   strings ("Cleaning Service" instead of "House Cleaner"), which broke
-   strict matching on the seed's `taxonomy_provider_type` column.
+One tap dismisses. Same data also still goes to console for ops.
 
-2. listServices proximity branch: `services_near` RPC returns ONLY the
-   proximity-relevant columns (id, title, location_text, distance) —
-   NOT `taxonomy_provider_type` or `taxonomy_offering_id`. The previous
-   client-side strict filter compared `s.taxonomy_provider_type ===
-   'Plumber'` on the raw RPC result, but `taxonomy_provider_type` was
-   undefined for every row → every filter excluded every row.
-
-   Fix: after services_near returns the in-radius IDs, hydrate full rows
-   from `services` table including taxonomy_* columns + status='listed',
-   then run the strict provider_type filter. One extra round-trip; the
-   spec's "only the right provider type surfaces" guarantee actually
-   holds now.
-
-   Confirmed live via Chrome JS probe — same code path the UI uses:
-     unclog my toilet     → Plumber          → J. Chen Plumbing      (6.8mi)
-     deep cleaning        → House Cleaner    → Maria's Sparkling
-     personal chef        → Personal Chef    → Chef Marcus
-     hairstylist          → Hairstylist      → Jordan
-     personal trainer     → Personal Trainer → Tasha Fit
-     babysitter           → Babysitter       → Ana
-
-3. Display copy: "near me" no longer pluralizes to "near mes" (added
-   "near\s" to the stopAt regex in serviceNoun.js).
-
-4. New invariants in qa.mjs:
-   - #13 canonical-query-resolves: 23 canonical phrases must resolve to
-     the expected provider_type via the local map. Catches taxonomy drift.
-   - #14 proximity-hydrates-taxonomy: any code that filters by
-     `taxonomy_provider_type` MUST be preceded by a .from('services')
-     .select() that includes that column. Catches the exact bug above
-     from ever returning.
-
-5. Vite hardened: strictPort=true + Start Cergio.command kills stale
-   process on 5173 before launch, so the dev server can't drift to
-   5202 and trip the Google Maps referrer check.
-
-Files touched:
-  - src/hooks/useChat.js (local PROVIDER_TYPE_MAP primary; import from
-    new src/lib/serviceTaxonomy.js)
-  - src/lib/serviceTaxonomy.js (NEW, dependency-free; importable by
-    qa.mjs without React/Vite resolution)
-  - src/lib/api.js (proximity branch hydrates full rows before filter)
-  - src/lib/serviceNoun.js (stop noun at "near\s" — "near mes" bug)
-  - scripts/qa.mjs (+#13, +#14; existing tests reorganized to keep
-    proximity slice intact)
-  - vite.config.js (strictPort)
-  - (parent) Start Cergio.command (lsof -ti:5173 | xargs kill -9)
-  - (parent) Cergio Taxonomy Audit.xlsx (regenerated with 9 sheets,
-    full 3002-term platform taxonomy + seed coverage)
-  - (parent) Test Search.command (NEW; runs 19 canonical phrases
-    through parser + DB; prints PASS/FAIL per phrase)
-  - (parent) Fix Seed Service LatLng.command (NEW; backfills lat/lng
-    on the seeded providers — title patterns fixed to actually match)
-  - (parent) Diagnose Search.command (NEW; one-shot DB diagnostic)
-
-Verified: #4, #13, #14 (per CRITICAL_FLOWS.md)
-qa.mjs: pass (14/14)
+Once the search bug is resolved permanently for real users, this
+banner can be removed in one edit — it's gated on services.length===0
+so it never fires on happy-path.

@@ -144,6 +144,11 @@ export function ResultsScreen() {
   // services === []    → search completed, zero matches (EmptyState)
   // services has rows → render ProviderCards
   const [services, setServices]     = useState(null);
+  // [CERGIO-DIAG] surfaces the actual values being sent to listServices
+  // directly on the Results page so search bugs are diagnosable WITHOUT
+  // DevTools. Tap the banner to toggle visibility. Auto-shows when
+  // services is empty for >1s after geocode finished.
+  const [diag, setDiag] = useState(null);
   const [statusStep, setStatusStep] = useState(0);
 
   // Advance status line every STATUS_STEP_MS while loading, stop on last.
@@ -201,6 +206,15 @@ export function ResultsScreen() {
         }
         const { offering_id: resolvedOfferingId } = chatState;
         const filterCategory = category || what || null;
+        // [CERGIO-DIAG] surfaces the actual values via in-page banner.
+        const diagCall = {
+          provider_type, offering_id: resolvedOfferingId,
+          category: filterCategory,
+          lat, lng, originalQuery: userQuery,
+        };
+        // eslint-disable-next-line no-console
+        console.log('[CERGIO-DIAG] listServices call', diagCall);
+        setDiag(prev => ({ ...(prev || {}), call: diagCall }));
         const { data, error } = await listServices({
           offering_id:    resolvedOfferingId || null,
           provider_type:  provider_type      || null,
@@ -219,6 +233,19 @@ export function ResultsScreen() {
           // still catches them via title/description ilike.
           originalQuery: userQuery,
         });
+        // [CERGIO-DIAG] result → banner
+        const diagResult = {
+          count: (data || []).length,
+          error: error?.message || null,
+          first: (data || []).slice(0, 3).map(s => ({
+            title: s.title,
+            ptype: s.taxonomy_provider_type,
+            dist: s.distance_miles?.toFixed?.(2),
+          })),
+        };
+        // eslint-disable-next-line no-console
+        console.log('[CERGIO-DIAG] listServices result', diagResult);
+        setDiag(prev => ({ ...(prev || {}), result: diagResult }));
         if (cancelled) return;
         clearTimeout(timeoutId);
         if (error || !data) { setServices([]); return; }
@@ -342,6 +369,30 @@ export function ResultsScreen() {
       </div>
 
       <h2 className="px-5 text-[20px] font-extrabold text-black leading-tight mb-3">{titleText}</h2>
+
+      {/* [CERGIO-DIAG] in-page diagnostic banner — visible only when
+          services came back empty so we can see exactly which value is
+          wrong (provider_type / lat-lng / count) without opening DevTools.
+          Tap to dismiss. Removable once the search bug is fully closed. */}
+      {diag && services !== null && services.length === 0 && (
+        <div className="mx-5 mb-3 p-3 rounded-[10px] bg-warnBg border border-warn text-warnText text-[11px] font-mono leading-snug">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-bold">🐞 CERGIO-DIAG — search returned 0</span>
+            <button onClick={() => setDiag(null)} className="text-warnText/70 text-[14px]">✕</button>
+          </div>
+          <div>provider_type: <b>{String(diag.call?.provider_type)}</b></div>
+          <div>offering_id: {String(diag.call?.offering_id)}</div>
+          <div>category: {String(diag.call?.category)}</div>
+          <div>lat/lng: {diag.call?.lat?.toFixed?.(4)}, {diag.call?.lng?.toFixed?.(4)}</div>
+          <div>originalQuery: "{diag.call?.originalQuery}"</div>
+          <div className="mt-1 pt-1 border-t border-warn/40">
+            count: <b>{diag.result?.count ?? '…'}</b>{diag.result?.error ? ` · err: ${diag.result.error}` : ''}
+          </div>
+          {diag.result?.first?.length > 0 && (
+            <div>first: {diag.result.first.map(s => `${s.title} (${s.ptype})`).join(' | ')}</div>
+          )}
+        </div>
+      )}
 
       {pills.length > 0 && (
         <div className="flex flex-wrap gap-2 px-5 mb-4">
