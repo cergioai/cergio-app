@@ -1,30 +1,38 @@
-Search: force provider_type at the consumer (ResultsScreen render)
+Search: PERMANENT HMR-proof fix + strip diag scaffolding
 
-DEFINITIVE FIX for the React-HMR-doesn't-refresh-hooks pattern.
+ROOT CAUSE (proven via in-page A/B control banner):
 
-Previous attempts:
-  - Override in applyParseResult (useChat:440)  →  hook stays stale
-  - Force at merged-build site  (useChat:520)    →  hook stays stale
-Both produce correct code in the FILE but React keeps the OLD
-closure on the live mounted component until full page reload.
+  count (React-flow):           0   ← stale closure of listServices
+  count (fresh import control): 1   ← Maria's Sparkling Home Cleaning
+  fresh first: Maria's Sparkling Home Cleaning
 
-This fix runs the local-taxonomy lookup AT THE CONSUMER — every
-render of ResultsScreen. Pure derivation from userQuery; no
-dependency on useChat hook freshness. HMR of a screen file is
-reliable; HMR of a hook is not.
+ResultsScreen's `import { listServices } from '../lib/api'` binds at
+mount time. Vite HMR updates api.js but does NOT re-bind imports in
+already-mounted components. After any listServices edit, the running
+ResultsScreen keeps calling the OLD function. Caused a 2-day debug
+loop with fixes that worked in JS probes but not in the UI.
 
-  const localResolvedPT = resolveProviderTypeLocal(userQuery);
-  const provider_type = localResolvedPT || rawProviderType;
+FIX
 
-Everything downstream (listServices call, title text, safe filter,
-pills) now derives from the deterministic local value.
+Replace the static import with a dynamic import inside the search
+useEffect:
 
-Also fixed the new title format that was previously pluralizing
-the wrong base ("Toilet replacements"): since provider_type is
-now corrected at the source of the title computation, the plural
-helper sees "Plumber" and produces "Plumbers".
+  const { listServices } = await import('../lib/api');
+  const { data, error } = await listServices({ ... });
 
-Expected: "Looking for plumbers to unclog your toilet" → J. Chen.
+Every search re-resolves the module → latest api.js code → no stale
+closures. Production builds unaffected (modules stable, no HMR).
+
+Static import kept as a CERGIO-GUARD comment so a future refactor
+doesn't reintroduce it.
+
+ALSO
+
+Stripped all the diagnostic scaffolding now that we have the answer:
+  - [CERGIO-DIAG] banner code + state (`diag`, `setDiag`)
+  - Control listServices call
+  - console.log lines
+  - useState for diag
 
 Files: src/screens/ResultsScreen.jsx
 qa.mjs: pass (14/14)
