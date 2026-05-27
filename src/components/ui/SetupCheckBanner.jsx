@@ -81,6 +81,24 @@ export function SetupCheckBanner() {
         }
       } catch { /* ignore */ }
 
+      // 2b. service-covers Storage bucket — required for photo upload.
+      // The bucket lives at storage.buckets.id='service-covers'; if it
+      // doesn't exist, ANY image upload returns a 404. Surface the
+      // remediation BEFORE the user tries and gets a cryptic error.
+      try {
+        const { data: buckets, error: bErr } = await supabase.storage.listBuckets();
+        if (!bErr) {
+          const has = (buckets || []).some(b => b.id === 'service-covers' || b.name === 'service-covers');
+          if (!has) {
+            found.push({
+              key: 'service_covers_bucket',
+              label: 'Service-cover photo bucket not configured',
+              fix:  'Apply 20260527000000_storage_service_covers.sql (Run Migrations.command).',
+            });
+          }
+        }
+      } catch { /* anon listBuckets may be denied — silent */ }
+
       // 3. Google Maps key — required for address autocomplete + verification.
       if (!getGoogleMapsKey()) {
         found.push({

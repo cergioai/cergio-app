@@ -1,10 +1,11 @@
 // Per design-spec.md — Provider's view of a service they offer.
 // Pulls real data from Supabase when the id is a UUID; falls back to mock
 // for non-UUID ids (e.g. `svc-u1`, `svc-l1` from MANAGED_SERVICES mock).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import { MANAGED_SERVICES } from '../data/mock';
 import { getService, unlistService, relistService, deleteService } from '../lib/api';
+import { uploadAndPersistServiceCover } from '../lib/storage';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -24,6 +25,24 @@ export function ServiceDetailProviderScreen() {
   const { showToast } = useOutletContext();
   const [svc, setSvc] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Cover-photo upload state. fileInputRef is the hidden <input
+  // type="file"> the "Edit photos" button triggers via click(). busy
+  // gates concurrent uploads + shows the spinner.
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleCoverPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';                 // reset so the same file can re-fire
+    if (!file || !svc?.real) return;
+    setUploading(true);
+    const { url, error } = await uploadAndPersistServiceCover(file, svc.id);
+    setUploading(false);
+    if (error) { showToast(`Couldn't upload: ${error.message}`); return; }
+    // Optimistic local update + we'll re-render the hero with the new URL.
+    setSvc(s => ({ ...s, coverUrl: url }));
+    showToast('Cover updated ✓');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +62,7 @@ export function ServiceDetailProviderScreen() {
             sub:   data.category,
             description: data.description,
             photoClass: data.photo_class,
+            coverUrl: data.cover_url,
             location: data.location_text,
             hourly: firstOffering ? `${centsToPrice(firstOffering.price_cents)} ${firstOffering.kind === 'hourly' ? 'per hour' : 'per session'}` : '—',
             bookings: data.bookings_count || 0,
@@ -72,18 +92,45 @@ export function ServiceDetailProviderScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
       {/* photo hero */}
-      <div className={`relative h-[220px] ${svc.photoClass || 'fv-jamie'}`}>
+      <div className={`relative h-[220px] overflow-hidden ${svc.coverUrl ? 'bg-bg5' : (svc.photoClass || 'fv-jamie')}`}>
+        {/* Real cover photo when uploaded; else the gradient palette. */}
+        {svc.coverUrl && (
+          <img
+            src={svc.coverUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
+        {/* Top gradient strip for the button row legibility. */}
+        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/35 to-transparent pointer-events-none" />
         <button
           onClick={() => navigate(-1)}
           className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/95 flex items-center justify-center text-black text-base"
         >
           ‹
         </button>
+        {/* Hidden file input — the Edit photos button triggers click() on
+            this. accept restricted to images so the OS picker filters. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleCoverPick}
+        />
         <button
-          onClick={() => showToast('Edit photos — coming soon')}
-          className="absolute top-4 right-4 bg-white/95 rounded-pill px-3 py-1.5 text-[12px] font-extrabold text-black"
+          onClick={() => {
+            if (!svc.real) { showToast('Demo service — sign up to upload your own photo.'); return; }
+            if (uploading) return;
+            fileInputRef.current?.click();
+          }}
+          disabled={uploading}
+          className="absolute top-4 right-4 bg-white/95 rounded-pill px-3 py-1.5 text-[12px] font-extrabold text-black
+                     disabled:opacity-60 disabled:cursor-wait"
         >
-          Edit photos
+          {uploading ? 'Uploading…' : (svc.coverUrl ? 'Change photo' : 'Add photo')}
         </button>
         <span className="absolute bottom-3 left-4 bg-white/95 rounded-pill px-3 py-1 text-[11px] font-extrabold text-black">
           Cover media
@@ -131,14 +178,19 @@ export function ServiceDetailProviderScreen() {
             sub: svc.location || 'Not set' },
           { label: 'Description',          toast: 'Description — coming soon',
             sub: svc.description || 'No description yet' },
-          { label: 'Photos & videos',      toast: 'Photos — coming soon',
-            sub: 'Edit your cover & gallery' },
+          { label: 'Photos & videos',
+            sub: svc.coverUrl ? 'Cover uploaded · tap to change' : 'Add a cover photo',
+            run: () => { if (!svc.real) { showToast('Demo service — sign up to upload your own photo.'); return; } fileInputRef.current?.click(); } },
           { label: 'Availability defaults',to: '/calendar/availability',
             sub: 'Auto-accept bookings on weekdays' },
         ].map((row, i, arr) => (
           <button
             key={row.label}
-            onClick={() => row.to ? navigate(row.to) : showToast(row.toast)}
+            onClick={() => {
+              if (row.to) return navigate(row.to);
+              if (row.run) return row.run();
+              if (row.toast) return showToast(row.toast);
+            }}
             className={`w-full flex items-center justify-between px-4 py-4 text-left
                         ${i < arr.length - 1 ? 'border-b border-bdr' : ''}`}
           >
