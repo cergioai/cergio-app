@@ -59,10 +59,25 @@ export function deriveDisplayNoun(chatState) {
 }
 
 /** Given a free-text noun and a list of canonical PROVIDER_TYPES, find
- *  the best substring match. Returns the canonical type when one is a
- *  meaningful match, otherwise null so callers can fall back to the
- *  raw noun verbatim. Stems each token to 5 chars so "dog sitter"
- *  → "Pet Sitter" via the "sitt" stem match. */
+ *  the best match. Returns the canonical type when one is a meaningful
+ *  match, otherwise null so callers can fall back to the raw noun
+ *  verbatim.
+ *
+ *  CERGIO-GUARD: scoring must prefer EXACT and SHORTER matches over
+ *  longer compound variants — otherwise "nanny" → "Live-In Nanny"
+ *  because the alphabetical sort picks the first equally-scoring
+ *  candidate. The user asked for "nanny", not "live-in nanny"; the
+ *  former is a strict subset and is what we should land on.
+ *
+ *  Scoring tiers (highest wins):
+ *    1. Exact case-insensitive match of the whole noun     → 10000
+ *    2. Provider type EQUALS one of the user's tokens      →  5000
+ *    3. Provider type is contained in the user's noun      →  2000 + precision
+ *    4. Stem-substring overlap (recall over user stems)    →   100 * matches
+ *    Then subtract 1 per extra token in the provider type so
+ *    "Nanny" beats "Live-In Nanny" beats "Nanny Share Coordinator"
+ *    when the user typed just "nanny".
+ */
 export function matchProviderType(rawNoun, providerTypes) {
   if (!rawNoun || !providerTypes?.length) return null;
   const stop = new Set([
@@ -70,20 +85,42 @@ export function matchProviderType(rawNoun, providerTypes) {
     'service','services','please','looking','some','this','that','it','help',
     'speaking','english','spanish','french',
   ]);
-  const tokens = String(rawNoun).toLowerCase().match(/[a-z]+/g)?.filter(
+  const rawLc  = String(rawNoun).toLowerCase().trim();
+  const tokens = rawLc.match(/[a-z]+/g)?.filter(
     t => t.length >= 3 && !stop.has(t)
   ) ?? [];
   if (tokens.length === 0) return null;
   const stems = tokens.map(t => t.length > 5 ? t.slice(0, 5) : t);
 
-  // Score each provider type by # of stems it contains.
+  const scoreOf = (pt) => {
+    const lc = pt.toLowerCase();
+    let s = 0;
+    // Tier 1: exact equality with whole noun
+    if (lc === rawLc) s = 10000;
+    // Tier 2: equals a single user token (e.g. "nanny" === "Nanny")
+    else if (tokens.includes(lc)) s = 5000;
+    // Tier 3: provider type fully contained in the user's noun
+    //  ("Pet Sitter" contained in "Spanish-speaking pet sitter")
+    else if (rawLc.includes(lc)) s = 2000;
+    // Tier 4: stem overlap (recall)
+    else {
+      let hits = 0;
+      for (const st of stems) if (lc.includes(st)) hits++;
+      s = hits * 100;
+    }
+    if (s === 0) return 0;
+    // Tiebreaker: prefer shorter / more-precise types so "Nanny" beats
+    // "Live-In Nanny" when both have a Tier-2 hit. We subtract the
+    // number of word tokens in the provider type past 1 — exactly the
+    // signal that says "extra qualifiers we don't need".
+    const ptTokens = lc.match(/[a-z]+/g)?.length ?? 1;
+    return s - Math.max(0, ptTokens - 1);
+  };
+
   let bestType = null, bestScore = 0;
   for (const pt of providerTypes) {
-    const lc = pt.toLowerCase();
-    let score = 0;
-    for (const s of stems) if (lc.includes(s)) score++;
-    if (score > bestScore) { bestScore = score; bestType = pt; }
+    const s = scoreOf(pt);
+    if (s > bestScore) { bestScore = s; bestType = pt; }
   }
-  // Require at least one stem match to claim it.
   return bestScore > 0 ? bestType : null;
 }

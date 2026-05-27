@@ -46,11 +46,23 @@ export function InviteSelectedReviewScreen() {
   }, [serviceType]);
 
   const noun = serviceType.trim() || 'this service';
-  const [review, setReview] = useState(
-    mode === 'reco'
-      ? ''
-      : "Hey — I think you'd love Cergio. Use my link to join and we both earn."
-  );
+  // CERGIO-GUARD: seed the review with the user's original search
+  // context (their words + when/where/budget if captured). The friend
+  // gets useful context instead of an empty textarea, and "Spanish-
+  // speaking nanny under 55" is preserved verbatim instead of being
+  // collapsed to just the canonical "Nanny".
+  const seedReview = useMemo(() => {
+    if (mode !== 'reco') {
+      return "Hey — I think you'd love Cergio. Use my link to join and we both earn.";
+    }
+    const phrase = userNoun || serviceType || 'a great provider';
+    const parts = [`Looking for a ${phrase}`];
+    if (chat?.state?.when)   parts.push(chat.state.when);
+    if (chat?.state?.where)  parts.push(`in ${chat.state.where}`);
+    if (chat?.state?.budget) parts.push(`max ${chat.state.budget}`);
+    return `${parts.join(' — ')}. Anyone you know good?`;
+  }, [mode, userNoun, serviceType, chat?.state?.when, chat?.state?.where, chat?.state?.budget]);
+  const [review, setReview] = useState(seedReview);
   const remaining = mode === 'reco' ? Math.max(0, 240 - review.length) : null;
 
   const valid = mode === 'reco'
