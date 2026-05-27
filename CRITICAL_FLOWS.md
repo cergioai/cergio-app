@@ -186,6 +186,79 @@ delete/unlist/etc.
 
 ---
 
+## 8. "Invite link copied" toasts MUST actually copy
+
+**Why:** a toast that says "Copied!" without writing to the clipboard
+is the loudest possible lie. Users tap, walk to a chat, and paste
+nothing. Trust erodes instantly.
+
+**Test (qa.mjs `copy-is-real`):**
+- Scan every `showToast(...'copied'...)` call in `src/`.
+- The 400 chars BEFORE the toast must contain one of:
+  - `navigator.clipboard.writeText(...)`
+  - `navigator.share(...)`
+  - `navigate(...)` (routes to a screen that handles the copy itself)
+  - `copyInvite()` / `copyLink()` (a helper that wraps writeText)
+- Any toast without one of those backing actions is a HARD FAIL.
+
+**Failure mode to prevent:** `RainmakersScreen` and `ServiceListVerify`
+both said *"Invite link copied!"* with no clipboard write in the
+handler. Users tapped, got a green checkmark, pasted nothing.
+
+**Guard:** all copy actions funnel through `copyInvite()` /
+`copyLink()` helpers that ALWAYS call `clipboard.writeText` first.
+The toast fires AFTER the write resolves.
+
+---
+
+## 9. Every notifyUser() call MUST embed `data.deep_link`
+
+**Why:** notifications without a tracked URL break the referral
+economy silently. Friend gets an email, lands on Cergio with no
+`?ref`, signs up, books — and the inviter earns nothing. They lose
+trust in the $250 promise.
+
+**Test (qa.mjs `notify-has-deeplink`):**
+- Find every `notifyUser(` call site (excluding the function
+  definition in `lib/api.js`).
+- The 1000-char body following the open paren MUST contain the
+  string `deep_link`.
+- Any missing reference is a HARD FAIL.
+
+**Failure mode to prevent:** `RecommendServiceFormScreen` was sending
+notifications with `deep_link: window.location.origin` (no `?ref`),
+which silently dropped every invitee's attribution.
+
+**Guard:** `deep_link: buildInviteUrl(auth.user.id)` on every
+notifyUser call. The helper produces `${origin}/?ref=<uuid>`.
+
+---
+
+## 10. SERVICE_MAP values are concrete services, not bundles
+
+**Why:** the local parser fallback runs in the browser and feeds
+chat state. If it maps a single-service request to a
+"bundle"/"coordinator"/"package" phrase, the UI ends up echoing
+that phrase back to the user as their "what". That bug shipped
+once and was the genesis of the parser-drift guard work.
+
+**Test (qa.mjs `service-map-no-bundles`):**
+- Parse the `SERVICE_MAP` literal in `src/hooks/useChat.js`.
+- Each `['phrase', 'Display']` pair must have a `Display` value
+  that does NOT contain `bundle`, `coordinator`, or `package`
+  (case insensitive). Any violation is a HARD FAIL.
+
+**Failure mode to prevent:** prior bug — `['wedding', 'Wedding
+Bundle']` echoed back as "Looking for Wedding Bundles" on Results.
+Same family as the "Spanish-speaking babysitter → Bundle
+coordinator" cloud-parser bug.
+
+**Guard:** the test enforces clean display strings forever. Server
+taxonomy can still ROUTE to a wedding-bundle offering ID internally
+— the gate is on what the user SEES.
+
+---
+
 ## How to update this file
 
 1. **Adding a new invariant.** Append it to the bottom. Update

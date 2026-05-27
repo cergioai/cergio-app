@@ -99,7 +99,13 @@ const SERVICE_MAP = [
   ['chef',                 'Catering'],
   ['bartender',            'Bartending'],
   ['bartending',           'Bartending'],
-  ['wedding',              'Wedding Bundle'],
+  // CERGIO-GUARD: 'Wedding' (not 'Wedding Bundle') — the local parser
+  // must NEVER map a user request to a bundle/coordinator/package
+  // phrase (regression test #10 in scripts/qa.mjs). The taxonomy
+  // RESOLVER on the server can still route to a wedding-bundle
+  // offering id internally; that's fine. What matters is the
+  // user-facing 'what' value the chat exposes — that stays concrete.
+  ['wedding',              'Wedding'],
   ['party',                'Event Coordination'],
   ['event',                'Event Coordination'],
   ['photographer',         'Photography'],

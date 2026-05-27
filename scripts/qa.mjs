@@ -258,6 +258,99 @@ test('no-coming-soon', 'No "coming soon" placeholders on monetized / notificatio
     `'coming soon' still present on critical paths:\n    ${offenders.join('\n    ')}`);
 });
 
+// ─── INVARIANT #8: lying 'Invite link copied!' toasts must be real ─────
+// Every showToast that CLAIMS to have copied something must be
+// preceded (within the same handler) by either:
+//   - navigator.clipboard.writeText(...), OR
+//   - a navigate() to a screen that handles the copy itself
+// Otherwise the toast is a brand-killing lie.
+test('copy-is-real', "'Invite link copied' toasts must actually copy", '#8', async () => {
+  const allFiles = walkSync(path.join(REPO_ROOT, 'src'))
+    .filter(f => /\.(js|jsx|ts|tsx)$/.test(f));
+  const offenders = [];
+  for (const f of allFiles) {
+    const content = stripComments(fs.readFileSync(f, 'utf8'));
+    // Find every showToast(...'copied'...) and check the surrounding
+    // handler for a real copy or navigate.
+    const re = /showToast\(\s*['"`][^'"`]*copied[^'"`]*['"`]/gi;
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      // Look 400 chars back for a real-write signal. Accept any of:
+      // - clipboard.writeText (the direct call)
+      // - navigator.share (native share sheet)
+      // - navigate(...) (routes to a screen that handles copy itself)
+      // - copyInvite() / copyLink() etc. (helper that wraps writeText)
+      // - file.startsWith('src/hooks/') — useToast itself can fire this
+      const win = content.slice(Math.max(0, m.index - 400), m.index);
+      const hasReal =
+        /clipboard\.writeText|navigator\.share\(|navigate\(|copyInvite\(|copyLink\(/.test(win);
+      if (!hasReal) {
+        offenders.push(`${path.relative(REPO_ROOT, f)}: ${m[0].slice(0, 60)}…`);
+      }
+    }
+  }
+  assert(offenders.length === 0,
+    `'copied' toasts without real copy/share/navigate:\n    ${offenders.join('\n    ')}`);
+});
+
+// ─── INVARIANT #9: notifyUser must always carry inviter ref deep_link ───
+// Every notifyUser({ recipient, data }) call must include data.deep_link
+// pointing at buildInviteUrl OR a static branded URL. A notification
+// without a tracked URL means the recipient lands on Cergio with no
+// way to credit the inviter — the entire $250 economy breaks silently.
+test('notify-has-deeplink', 'notifyUser calls always include data.deep_link', '#9', async () => {
+  const allFiles = walkSync(path.join(REPO_ROOT, 'src'))
+    .filter(f => /\.(js|jsx|ts|tsx)$/.test(f))
+    // The helper DEFINITION lives in api.js — skip that file, only
+    // check CALL SITES across screens / hooks.
+    .filter(f => !f.endsWith('src/lib/api.js'));
+  const offenders = [];
+  for (const f of allFiles) {
+    const content = fs.readFileSync(f, 'utf8');
+    if (!/\bnotifyUser\(/.test(content)) continue;
+    const re = /\bnotifyUser\(/g;
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      const body = content.slice(m.index, m.index + 1000);
+      if (!/deep_link/.test(body)) {
+        const lineNo = content.slice(0, m.index).split('\n').length;
+        offenders.push(`${path.relative(REPO_ROOT, f)}:${lineNo} — missing data.deep_link`);
+      }
+    }
+  }
+  assert(offenders.length === 0,
+    `notifyUser calls without data.deep_link:\n    ${offenders.join('\n    ')}`);
+});
+
+// ─── INVARIANT #10: useChat SERVICE_MAP free of bundle/coordinator ──────
+// Local parser fallback must NOT map a single-service request to a
+// bundle / coordinator / package phrase. That bug shipped once
+// ("Spanish-speaking babysitter" → "Bundle coordinator") and we
+// keep the regression test in to prevent it shipping twice.
+test('service-map-no-bundles', 'useChat SERVICE_MAP values are concrete services, not bundles', '#10', async () => {
+  const src = readFile('src/hooks/useChat.js');
+  // Grab the SERVICE_MAP array body — anything between the const
+  // declaration and the matching `];`.
+  const m = src.match(/const SERVICE_MAP\s*=\s*\[([\s\S]+?)\n\];/);
+  assert(m, 'SERVICE_MAP literal not found in useChat.js');
+  const body = m[1];
+  // Each entry is a pair: ['phrase', 'Display Name']. We only care
+  // about the Display Name (second). Reject any "bundle|coordinator|
+  // package" appearing there.
+  const lines = body.split('\n');
+  const offenders = [];
+  for (const line of lines) {
+    const pair = line.match(/\['([^']+)',\s*'([^']+)'\]/);
+    if (!pair) continue;
+    const display = pair[2];
+    if (/\b(bundle|coordinator|package)\b/i.test(display)) {
+      offenders.push(`'${pair[1]}' → '${display}'`);
+    }
+  }
+  assert(offenders.length === 0,
+    `SERVICE_MAP contains bundle-ish display values (regression risk):\n    ${offenders.join('\n    ')}`);
+});
+
 // ─── helper: file walk ──────────────────────────────────────────────────
 function walkSync(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
