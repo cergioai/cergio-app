@@ -20,6 +20,7 @@ import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { buildInviteUrl } from '../lib/referral';
+import { pluralProviderTypeLocal } from '../lib/serviceTaxonomy';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -302,11 +303,65 @@ export function ResultsScreen() {
   const displayNoun = (userNoun || safeProviderType || '').trim();
   const displayNounLc = displayNoun.toLowerCase();
   const pluralize = (s) => s.endsWith('s') ? s : `${s}s`;
-  const titleText = displayNoun
-    ? (n > 0
-        ? (n === 1 ? `Showing 1 ${displayNounLc}` : `Showing ${n} ${pluralize(displayNounLc)}`)
-        : `Looking for ${pluralize(displayNounLc)}`)
-    : (n > 0 ? `Showing ${n} match${n === 1 ? '' : 'es'}` : 'Here are your matches');
+
+  // CERGIO-GUARD: title format per spec (2026-05-27) —
+  //   "Looking for plumbers to unclog your toilet"
+  // is clearer than the old "Looking for unclog my toilets" which
+  // pluralized the user's verb. New format:
+  //   - If provider_type resolved to a canonical type: use its
+  //     plural ("Plumbers", "House Cleaners") + optional action
+  //     phrase from the user's raw words (pronoun-flipped my→your).
+  //   - Else: fall back to the user's noun verbatim.
+  // The action phrase strips intent verbs (need/want/looking for)
+  // and pronouns are flipped so the title reads from Cergio's POV.
+  const safeProviderTypePlural = safeProviderType
+    ? pluralProviderTypeLocal(safeProviderType)
+    : null;
+  // Build "to <action>" from originalQuery if it has a verb other
+  // than just the provider noun. e.g. "unclog my toilet" → "unclog
+  // your toilet". "deep cleaning" alone → no action phrase.
+  const actionPhrase = (() => {
+    if (!userQuery) return null;
+    let s = String(userQuery).toLowerCase().trim();
+    // Strip leading intent verbs
+    s = s.replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '');
+    // Cut at time/budget signals
+    const stopAt = s.search(/\b(today|tomorrow|tonight|this|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|on\s|at\s|for\s|in\s|near\s|under\s|max\s|budget|\$|\d{2,})/i);
+    if (stopAt > 2) s = s.slice(0, stopAt).trim();
+    // Pronoun flip: my → your, me → you. Cergio talks to the user.
+    s = s.replace(/\bmy\b/gi, 'your').replace(/\bme\b/gi, 'you');
+    // If the remaining phrase is JUST the provider noun (e.g. "plumber"),
+    // skip the action — "Looking for plumbers to plumber" is silly.
+    if (safeProviderType) {
+      const pt = String(safeProviderType).toLowerCase();
+      if (s === pt || s === pt + 's') return null;
+    }
+    // Need at least one verb-y token (length >= 4) past the noun for
+    // an action to make sense — else just show the plural alone.
+    const tokens = s.match(/[a-z]+/g) || [];
+    const meaningful = tokens.filter(t => t.length >= 4);
+    return meaningful.length >= 2 ? s : null;
+  })();
+
+  const titleText = (() => {
+    if (n > 0) {
+      // Results returned — keep the existing count-style copy.
+      if (displayNoun) {
+        return n === 1
+          ? `Showing 1 ${displayNounLc}`
+          : `Showing ${n} ${pluralize(displayNounLc)}`;
+      }
+      return `Showing ${n} match${n === 1 ? '' : 'es'}`;
+    }
+    // Empty / loading state.
+    if (safeProviderTypePlural) {
+      return actionPhrase
+        ? `Looking for ${safeProviderTypePlural.toLowerCase()} to ${actionPhrase}`
+        : `Looking for ${safeProviderTypePlural.toLowerCase()}`;
+    }
+    if (displayNoun) return `Looking for ${pluralize(displayNounLc)}`;
+    return 'Here are your matches';
+  })();
 
   // Pills — keep them short so a long when/where doesn't bleed across
   // the row. Trim anything > 36 chars with an ellipsis.

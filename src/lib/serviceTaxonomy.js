@@ -107,3 +107,48 @@ export function resolveProviderTypeLocal(text) {
   }
   return bestKey ? bestKey[1] : null;
 }
+
+// Canonical plurals — used in user-facing copy. "Looking for [plural]…"
+// Most provider_types end in -er/-or/-ist/-ant so naïve +s would work,
+// but we keep an explicit map for words like "Personal Chef" → "Personal
+// Chefs" vs "Live-In Nanny" → "Live-In Nannies" etc. Anything not here
+// falls back to type + "s" via pluralProviderTypeLocal below.
+const PROVIDER_TYPE_PLURALS = {
+  'House Cleaner':         'House Cleaners',
+  'Plumber':               'Plumbers',
+  'Dog Walker':            'Dog Walkers',
+  'Pet Sitter':            'Pet Sitters',
+  'Live-In Nanny':         'Live-In Nannies',
+  'Nanny':                 'Nannies',
+  'Babysitter':            'Babysitters',
+  'Driver':                'Drivers',
+  'Handyman':              'Handymen',
+  'Electrician':           'Electricians',
+  'HVAC Technician':       'HVAC Technicians',
+  'Hairstylist':           'Hairstylists',
+  'Barber':                'Barbers',
+  'Nail Tech':             'Nail Techs',
+  'Makeup Artist':         'Makeup Artists',
+  'Massage Therapist':     'Massage Therapists',
+  'Personal Trainer':      'Personal Trainers',
+  'Yoga Instructor':       'Yoga Instructors',
+  'Pilates Instructor':    'Pilates Instructors',
+  'Personal Chef':         'Personal Chefs',
+  'Caterer':               'Caterers',
+  'Bartender':             'Bartenders',
+  'Photographer':          'Photographers',
+  'Videographer':          'Videographers',
+  'Tutor':                 'Tutors',
+  'Music Teacher':         'Music Teachers',
+};
+
+export function pluralProviderTypeLocal(provider_type) {
+  if (!provider_type) return null;
+  if (PROVIDER_TYPE_PLURALS[provider_type]) return PROVIDER_TYPE_PLURALS[provider_type];
+  // Generic fallback: ends in -y → -ies; ends in -s/-x/-ch/-sh → +es;
+  // else +s. Keeps decent grammar for novel types Claude returns until
+  // we add them to PROVIDER_TYPE_PLURALS above.
+  if (/y$/i.test(provider_type)) return provider_type.replace(/y$/i, 'ies');
+  if (/(s|x|ch|sh)$/i.test(provider_type)) return provider_type + 'es';
+  return provider_type + 's';
+}

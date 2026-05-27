@@ -1,17 +1,33 @@
-Search: in-page diag banner when listServices returns empty
+Search: force provider_type at merge site + new title format
 
-Quick visible diagnostic so users can screenshot the actual values
-without opening DevTools. When ResultsScreen receives count: 0, a
-yellow CERGIO-DIAG banner appears above the empty-state card showing:
-  - provider_type
-  - offering_id
-  - category
-  - lat/lng
-  - originalQuery
-  - count + first matches if any
+(1) FORCE merged.provider_type FROM LOCAL TAXONOMY AT THE MERGE SITE.
+    Evidence from the diag banner in user's tab showed merged
+    provider_type = "Toilet replacement" (offering NAME from Claude)
+    even though my earlier override at line ~440 should have overwritten
+    it. Either HMR didn't replace the relevant closure or later code
+    clobbered it. Moved the override to the merged build itself:
+       const mergedProviderType = resolveProviderTypeLocal(userInput)
+         ?? resolver.provider_type
+         ?? prevState.provider_type
+         ?? null;
+       merged.provider_type = mergedProviderType;
+    Local resolves deterministically; Claude is the long-tail fallback.
+    Console logs "[useChat] MERGED override: …" when local wins.
 
-One tap dismisses. Same data also still goes to console for ops.
+(2) NEW TITLE FORMAT per spec.
+    Old: "Looking for unclog my toilets" (pluralizes user's verb)
+    New: "Looking for plumbers to unclog your toilet"
+    - Uses canonical provider_type plural (Plumbers, House Cleaners…).
+    - Strips intent verbs from originalQuery.
+    - Flips pronouns my → your, me → you (Cergio talks to the user).
+    - Drops the action when it'd be redundant ("Looking for plumbers
+      to plumber" is silly).
+    - Falls back to user's noun when no provider_type resolved.
 
-Once the search bug is resolved permanently for real users, this
-banner can be removed in one edit — it's gated on services.length===0
-so it never fires on happy-path.
+(3) NEW EXPORT in src/lib/serviceTaxonomy.js: pluralProviderTypeLocal.
+    Explicit plurals for the curated 60-row map; generic +s/+es/-ies
+    fallback for anything Claude returns we don't have.
+
+Files: src/lib/serviceTaxonomy.js, src/hooks/useChat.js,
+       src/screens/ResultsScreen.jsx
+qa.mjs: pass (14/14)

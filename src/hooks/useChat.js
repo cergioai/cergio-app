@@ -509,6 +509,25 @@ export function useChat() {
       // parser `what`, they MUST share a meaningful token.
       (!finalWhat || !userInput || sharesWordsWith(finalWhat, userInput));
 
+    // CERGIO-GUARD (2026-05-27): FORCE local taxonomy at the merge
+    // site, AFTER all earlier sanitization. Evidence from the user's
+    // tab: even with the override at line ~440, merged.provider_type
+    // landed as "Toilet replacement" (Claude returned the offering's
+    // NAME, not its provider_type_singular). Re-resolving here ensures
+    // a deterministic local hit ALWAYS wins. If local returns null
+    // (long-tail), we keep resolver.provider_type (Claude's semantic
+    // fallback). Never lets the offering NAME leak into provider_type.
+    const finalLocalPT = resolveProviderTypeLocal(userInput);
+    const mergedProviderType = finalLocalPT
+      ?? resolver.provider_type
+      ?? prevState.provider_type
+      ?? null;
+    if (finalLocalPT && resolver.provider_type !== finalLocalPT) {
+      // eslint-disable-next-line no-console
+      console.info('[useChat] MERGED override: "%s" → "%s" (cloud was "%s")',
+        userInput, finalLocalPT, resolver.provider_type);
+    }
+
     const merged = {
       what:           fields.what          ?? prevState.what          ?? null,
       when:           fields.when          ?? prevState.when          ?? null,
@@ -517,7 +536,7 @@ export function useChat() {
       details:        fields.details       ?? prevState.details       ?? null,
       flexible_time:  res.is_flexible_time ?? prevState.flexible_time ?? null,
       category:       resolver.category       ?? prevState.category       ?? null,
-      provider_type:  resolver.provider_type  ?? prevState.provider_type  ?? null,
+      provider_type:  mergedProviderType,
       offering_id:    resolver.offering_id    ?? prevState.offering_id    ?? null,
       bundle:         resolver.bundle         ?? prevState.bundle         ?? null,
       urgency:        res.urgency === true || prevState.urgency === true,
