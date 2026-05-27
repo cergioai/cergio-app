@@ -346,6 +346,9 @@ export function FindFriendsScreen() {
                     data: {
                       inviter_name: auth?.user?.user_metadata?.display_name || 'A friend',
                       inviter_id:   auth?.user?.id || '',
+                      // CERGIO-GUARD: deep_link MUST include the inviter's
+                      // ?ref so signup → first booking credits this user.
+                      deep_link:    inviteUrl,
                     },
                   });
                   showToast(error ? `Send failed: ${error.message}` : `Invite sent to ${c.name} ✓`);

@@ -19,6 +19,7 @@ import { ProviderCard } from '../components/ui/ProviderCard';
 import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
 import { supabase, supabaseReady } from '../lib/supabase';
+import { buildInviteUrl } from '../lib/referral';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -115,7 +116,15 @@ function userServiceNoun(originalQuery) {
 export function ResultsScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { chat, showToast, handleBook, freeServices } = useOutletContext();
+  const { chat, showToast, handleBook, freeServices, auth } = useOutletContext();
+  // CERGIO-GUARD: every share / notify message MUST embed the inviter's
+  // tracked URL so when the friend lands on Cergio + signs up + books,
+  // the inviter gets credited. Single source of truth: buildInviteUrl()
+  // which produces `${origin}/?ref=<inviter_uuid>`. captureRefFromUrl
+  // reads ?ref on landing → recordInviteFromActiveRef writes the
+  // invites row on signup → creditInviterOnFirstBooking writes the
+  // earnings row on the first paid/free booking.
+  const inviterUrl = buildInviteUrl(auth?.user?.id);
   const chatState = chat.state;
   const { what, when, where, budget, category, provider_type, details, originalQuery } = chatState;
 
@@ -300,9 +309,9 @@ export function ResultsScreen() {
         <button
           onClick={async () => {
             // CERGIO-GUARD: header share button — Web Share API first,
-            // clipboard fallback. Use the same shareMsg the empty/reco
-            // card builds so what gets shared matches what the user
-            // sees on screen. Never the cosmetic 'coming soon' toast.
+            // clipboard fallback. Includes the inviter's tracked URL so
+            // the friend's signup + first booking credits this user
+            // (see buildInviteUrl).
             const lead = (userQuery || userNoun || 'a service').toString().trim()
               .replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '');
             const tail = [
@@ -311,10 +320,10 @@ export function ResultsScreen() {
               budget && `max ${budget}`,
             ].filter(Boolean);
             const ctx = tail.length ? ` — ${tail.join(', ')}` : '';
-            const msg = `Hey — anyone know a good ${lead}${ctx}? Looking for a reco on Cergio.`;
+            const msg = `Hey — anyone know a good ${lead}${ctx}? Booking on Cergio → ${inviterUrl}`;
             try {
               if (navigator.share) {
-                await navigator.share({ text: msg, title: 'Cergio request' });
+                await navigator.share({ text: msg, title: 'Cergio request', url: inviterUrl });
                 return;
               }
             } catch { /* user cancelled */ return; }
@@ -416,7 +425,10 @@ export function ResultsScreen() {
         if (budget && !inText(budget, base)) tail.push(`max ${budget}`);
         if (details && !inText(details, base)) tail.push(details);
         const ctx     = tail.length ? ` — ${tail.join(', ')}` : '';
-        const shareMsg = `Hey — anyone know a good ${lead}${ctx}? Looking for a reco!`;
+        // CERGIO-GUARD: every share message MUST end with the inviter's
+        // tracked URL so the recipient's signup → first booking credits
+        // the user. Without this the chain breaks and they earn nothing.
+        const shareMsg = `Hey — anyone know a good ${lead}${ctx}? Booking on Cergio → ${inviterUrl}`;
 
         const doNativeShare = async () => {
           try {

@@ -18,6 +18,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { CONTACTS } from '../data/mock';
 import { REWARDS } from '../lib/rewards';
 import { notifyUser } from '../lib/api';
+import { buildInviteUrl } from '../lib/referral';
 
 const supportsContactPicker = typeof navigator !== 'undefined' &&
   'contacts' in navigator && 'ContactsManager' in window;
@@ -122,7 +123,10 @@ export function RecommendServiceFormScreen() {
           recommender_name: auth?.user?.user_metadata?.display_name || 'A friend',
           recommender_id:   auth?.user?.id || '',
           service_title:    'a service on Cergio',
-          deep_link:        typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai',
+          // CERGIO-GUARD: deep_link MUST be the inviter's tracked URL so
+          // the recipient's signup → first booking credits this user.
+          // buildInviteUrl produces `${origin}/?ref=<inviter_uuid>`.
+          deep_link:        buildInviteUrl(auth?.user?.id),
           blurb:            blurb.trim(),
         },
       });
