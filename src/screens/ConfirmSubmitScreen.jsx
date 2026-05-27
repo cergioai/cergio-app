@@ -106,23 +106,29 @@ export function ConfirmSubmitScreen() {
           </button>
         </div>
 
-        {/* payment section — placeholder until real card-on-file is wired.
-            Doesn't show a fake "VISA *5329" anymore. */}
+        {/* Payment section.
+            CERGIO-GUARD: we use Stripe PaymentElement (inside
+            PaymentSheet on Results → handleBook) when the user actually
+            tries to BOOK. The "Add a payment method" affordance HERE on
+            the request-submit screen is informational only — the actual
+            card capture happens at booking time, gated by CcGateModal.
+            Removed the lying 'Card on file — coming soon' toast; the
+            sub-text now explains the real flow. */}
         <div className="bg-white mt-3 px-5 py-5">
           <p className="text-[14px] font-extrabold uppercase tracking-widest text-b3 mb-3">Payment</p>
-          <button
-            onClick={() => showToast('Card on file — coming soon')}
-            className="w-full flex items-center justify-between py-2 text-left"
-          >
+          <div className="w-full flex items-center justify-between py-2 text-left">
             <div className="flex items-center gap-3">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="1.8">
                 <rect x="2" y="5" width="20" height="14" rx="2" />
                 <path d="M2 10h20" />
               </svg>
-              <span className="text-[14px] font-bold text-danger">Add a payment method</span>
+              <span className="text-[14px] font-bold text-b2">Card collected at booking</span>
             </div>
-            <span className="text-b3 text-lg">›</span>
-          </button>
+          </div>
+          <p className="text-[11px] text-b3 mt-1 leading-snug">
+            You only pay when you confirm a provider's offer — we'll ask
+            for a card then. No charge for submitting the request.
+          </p>
           <div className="flex items-start gap-2 mt-3">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4AA901" strokeWidth="2" className="mt-0.5 flex-shrink-0">
               <circle cx="12" cy="12" r="10" />

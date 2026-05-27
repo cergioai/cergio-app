@@ -26,7 +26,7 @@ export function ServiceListVerifyScreen() {
             Invite a friend and earn ${REWARDS.perFriend} per friend when they book on Cergio.
           </p>
           <button
-            onClick={() => showToast('Invite link copied!')}
+            onClick={() => navigate('/invite/friends-popup')}
             className="bg-g text-white rounded-[24px] px-5 py-2.5 text-[14px] font-extrabold"
           >
             Learn more

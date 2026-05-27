@@ -1,4 +1,5 @@
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { buildInviteUrl } from '../lib/referral';
 
 const TABLE_ROWS = [
   {
@@ -59,7 +60,7 @@ function CashCell({ val }) {
 
 export function RainmakersScreen() {
   const navigate = useNavigate();
-  const { showToast } = useOutletContext();
+  const { showToast, auth } = useOutletContext();
 
   return (
     <div className="flex-1 overflow-y-auto bg-cr pb-20">
@@ -208,7 +209,20 @@ export function RainmakersScreen() {
           Once ten (10) of them join and complete a booking, apply for Connector status.
         </p>
         <button
-          onClick={() => showToast('Invite link copied!')}
+          onClick={async () => {
+            // CERGIO-GUARD: actually copy the inviter-tracked URL, not
+            // a lying toast. Falls back to navigate(/invite/friends-popup)
+            // when the clipboard API isn't available.
+            const url = buildInviteUrl(auth?.user?.id);
+            try {
+              await navigator.clipboard.writeText(url);
+              showToast(auth?.isSignedIn
+                ? 'Invite link copied ✓'
+                : 'Link copied — sign in to earn from invites.');
+            } catch {
+              navigate('/invite/friends-popup');
+            }
+          }}
           className="w-full bg-white text-gd rounded-pill py-3.5 text-[15px] font-extrabold
                      hover:opacity-92 transition-opacity"
         >
