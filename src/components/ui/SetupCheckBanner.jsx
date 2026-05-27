@@ -82,22 +82,27 @@ export function SetupCheckBanner() {
       } catch { /* ignore */ }
 
       // 2b. service-covers Storage bucket — required for photo upload.
-      // The bucket lives at storage.buckets.id='service-covers'; if it
-      // doesn't exist, ANY image upload returns a 404. Surface the
-      // remediation BEFORE the user tries and gets a cryptic error.
+      // CERGIO-GUARD: do NOT use listBuckets() to probe — it returns
+      // an empty array (with no error) for anonymous users even when
+      // the bucket exists, producing a false-positive "missing" banner.
+      // Probe the bucket DIRECTLY via .list('', limit:1). If the bucket
+      // exists we get { data: [...] }; if it doesn't we get an error
+      // whose message contains "Bucket not found".
       try {
-        const { data: buckets, error: bErr } = await supabase.storage.listBuckets();
-        if (!bErr) {
-          const has = (buckets || []).some(b => b.id === 'service-covers' || b.name === 'service-covers');
-          if (!has) {
-            found.push({
-              key: 'service_covers_bucket',
-              label: 'Service-cover photo bucket not configured',
-              fix:  'Apply 20260527000000_storage_service_covers.sql (Run Migrations.command).',
-            });
-          }
+        const { error: bErr } = await supabase.storage
+          .from('service-covers')
+          .list('', { limit: 1 });
+        if (bErr && /bucket not found|does not exist|404/i.test(`${bErr.message || ''} ${bErr.statusCode || ''}`)) {
+          found.push({
+            key: 'service_covers_bucket',
+            label: 'Service-cover photo bucket not configured',
+            fix:  'Apply 20260527000000_storage_service_covers.sql (Run Migrations.command).',
+          });
         }
-      } catch { /* anon listBuckets may be denied — silent */ }
+        // Any other error (e.g. anon RLS denial on list-objects) means
+        // the bucket exists but the anon role can't list. That's fine —
+        // upload writes go through authenticated users.
+      } catch { /* network blip — silent */ }
 
       // 3. Google Maps key — required for address autocomplete + verification.
       if (!getGoogleMapsKey()) {
