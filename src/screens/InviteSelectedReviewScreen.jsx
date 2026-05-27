@@ -10,6 +10,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { CONTACTS } from '../data/mock';
 import { PROVIDER_TYPES } from '../data/providerTypes';
+import { deriveDisplayNoun, matchProviderType } from '../lib/serviceNoun';
 
 function getInitials(name) {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
@@ -23,10 +24,18 @@ export function InviteSelectedReviewScreen() {
   const { mode = 'invite', selectedIds = [] } = location.state || {};
   const picked = CONTACTS.filter(c => selectedIds.includes(c.id));
 
-  // Pull the service type the user was searching for (if any) so the
-  // reco form lands prefilled — e.g. "Plumber" — and they only need to
-  // write the review.
-  const seededType = chat?.state?.provider_type || '';
+  // CERGIO-GUARD: seed the service type from the USER'S OWN WORDS, not
+  // the parser's mutated provider_type. The cloud parser has been
+  // observed mapping "Spanish-speaking dog sitter" → "Dog Walking"
+  // because of the dog-walking patterns. Pull the cleaned noun from
+  // originalQuery (via deriveDisplayNoun), then try to canonicalize
+  // against PROVIDER_TYPES via stem-match. If we get a canonical hit
+  // ("Pet Sitter") we use it; otherwise we use the user's words
+  // verbatim ("Spanish-speaking dog sitter"). Either way the user
+  // sees what THEY asked for, not the parser's drift.
+  const userNoun = deriveDisplayNoun(chat?.state);
+  const canonical = userNoun ? matchProviderType(userNoun, PROVIDER_TYPES) : null;
+  const seededType = canonical || userNoun || chat?.state?.provider_type || '';
   const [serviceType, setServiceType] = useState(seededType);
   const [stFocused, setStFocused] = useState(false);
 

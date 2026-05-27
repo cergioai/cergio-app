@@ -105,6 +105,118 @@ function SendArrowIcon() {
 // server-side default once they sign in (auth flip reloads from Supabase).
 const GUEST_ADDR_KEY = 'cergio.guestAddress';
 
+// ─── Inline location editor ─────────────────────────────────────────────────
+// Compact in-place editor for the address chip at the top of Home. Replaces
+// the old bottom-sheet modal so the input is visible IMMEDIATELY adjacent
+// to the chip — no page-jump, no overlay. Same two-tier verification
+// (Google → Nominatim fallback) and persistent inline status as the
+// modal version, just sized for inline use.
+function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, onSaved, onCancel }) {
+  const [text, setText] = useState(initialAddress || '');
+  const [coords, setCoords] = useState(initialCoords || null);
+  const [placeId, setPlaceId] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(null); // { kind: 'info'|'warn'|'ok', text }
+
+  const handleSelect = ({ lat, lng, address, placeId: pid }) => {
+    if (address) setText(address);
+    if (lat && lng) setCoords({ lat, lng });
+    if (pid) setPlaceId(pid);
+    setStatus(null);
+  };
+
+  const handleSave = async () => {
+    const typed = (text || '').trim();
+    if (!typed) { setStatus({ kind: 'warn', text: 'Type an address first.' }); return; }
+    if (busy) return;
+    setBusy(true);
+    setStatus({ kind: 'info', text: 'Saving…' });
+
+    // Always persist locally first — the user is never stuck.
+    try {
+      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+        address: typed,
+        lat:     coords?.lat ?? null,
+        lng:     coords?.lng ?? null,
+        placeId: placeId ?? null,
+      }));
+    } catch { /* ignore */ }
+
+    let final = { address: typed, lat: coords?.lat ?? null, lng: coords?.lng ?? null, placeId };
+    const { verifyAddress } = await import('../lib/google');
+    const v = await verifyAddress(typed);
+    if (v.ok) {
+      final = { address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId };
+      try {
+        localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+          address: final.address, lat: final.lat, lng: final.lng, placeId: final.placeId,
+        }));
+      } catch { /* ignore */ }
+    } else if (v.reason !== 'no-key') {
+      setStatus({ kind: 'warn', text: `Saved as typed — couldn't verify "${typed}".` });
+    }
+
+    if (isSignedIn) {
+      try {
+        const { saveAddress } = await import('../lib/api');
+        const { error } = await saveAddress({
+          label: 'Home',
+          formattedAddress: final.address,
+          lat: final.lat, lng: final.lng,
+          placeId: final.placeId,
+          makeDefault: true,
+        });
+        if (error && !/relation|does not exist|schema cache/i.test(error.message || '')) {
+          setStatus({ kind: 'warn', text: `Saved locally. Server sync failed: ${error.message}` });
+        }
+      } catch (e) {
+        setStatus({ kind: 'warn', text: `Saved locally. Sync error.` });
+      }
+    }
+
+    setBusy(false);
+    onSaved?.(final);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col gap-1 min-w-0">
+      <div className="flex items-center gap-1.5">
+        <div className="flex-1 min-w-0">
+          <AddressAutocomplete
+            value={text}
+            onChange={setText}
+            onSelect={handleSelect}
+            placeholder="Type your address…"
+            className="w-full bg-bg5 rounded-[10px] px-3 py-1.5 text-[12px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy || !text.trim()}
+          className={`text-[11px] font-extrabold underline underline-offset-2 px-1
+            ${busy || !text.trim() ? 'text-b3 cursor-not-allowed' : 'text-g'}`}
+        >
+          {busy ? '…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="text-[11px] font-normal text-b3 underline underline-offset-2 px-1"
+        >
+          Cancel
+        </button>
+      </div>
+      {status && (
+        <p className={`text-[10px] leading-snug pl-1 ${status.kind === 'warn' ? 'text-warnText' : status.kind === 'ok' ? 'text-gd' : 'text-b3'}`}>
+          {status.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // sessionStorage marker — once the Hi-I'm-Cergio toast has played in this
 // browser session, we skip it on subsequent Home mounts. Resets when the
 // tab/window closes (session storage scope).
@@ -622,38 +734,57 @@ export function HomeScreen() {
         );
       })()}
 
-      {/* Location chip — sits ABOVE the search box. CERGIO-GUARD: the
-          chip is ALWAYS rendered (even when no address is saved yet) so
-          the user always has a way to add / edit their location. Clicking
-          it opens the LocationEditModal — a proper bottom-sheet editor
-          with persistent inline status (no transient toasts). */}
-      <div className="px-5 mt-1 mb-1 flex items-center gap-1.5 text-[11px] text-b3">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-          <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-          <circle cx="12" cy="9" r="2.5" />
-        </svg>
-        {locationText ? (
-          <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug">
-            <span>{locationText}</span>
+      {/* Location chip + INLINE editor — sits ABOVE the search box.
+          CERGIO-GUARD: the chip is ALWAYS rendered so the user always
+          has a way to add / edit their location. When locEditing is
+          true, the chip's right side expands into an AddressAutocomplete
+          + Save / Cancel buttons IN PLACE — no bottom-sheet, no
+          page-jump. The compact size keeps the search box adjacent.
+          Inline status keeps the save feedback visible without a
+          transient toast. */}
+      <div className="px-5 mt-1 mb-1">
+        <div className="flex items-start gap-1.5 text-[11px] text-b3">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-1">
+            <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+            <circle cx="12" cy="9" r="2.5" />
+          </svg>
+          {!locEditing && locationText && (
+            <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug pt-1">
+              <span>{locationText}</span>
+              <button
+                type="button"
+                onClick={() => setLocEditing(true)}
+                className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
+                aria-label="Edit saved location"
+              >
+                Change
+              </button>
+            </p>
+          )}
+          {!locEditing && !locationText && (
             <button
               type="button"
               onClick={() => setLocEditing(true)}
-              className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
-              aria-label="Edit saved location"
+              className="flex-1 text-left text-[11px] font-normal text-g underline underline-offset-2 pt-1"
             >
-              Change
+              Add your location
             </button>
-          </p>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setLocEditing(true)}
-            className="flex-1 text-left text-[11px] font-normal text-g underline underline-offset-2"
-          >
-            Add your location
-          </button>
-        )}
+          )}
+          {locEditing && (
+            <InlineLocationEditor
+              initialAddress={locationText}
+              initialCoords={locationCoords}
+              isSignedIn={!!auth?.isSignedIn}
+              onCancel={() => setLocEditing(false)}
+              onSaved={(saved) => {
+                if (saved?.address) setLocationText(saved.address);
+                if (saved?.lat && saved?.lng) setLocationCoords({ lat: saved.lat, lng: saved.lng });
+                setLocEditing(false);
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Spotlight travel-radius — only after a location exists. */}
@@ -1134,23 +1265,12 @@ export function HomeScreen() {
         />
       )}
 
-      {/* Location editor — bottom-sheet modal. CERGIO-GUARD: this is
-          the ONLY way to edit location now. Inline edit-in-place was
-          replaced because errors vanished (2.6s toast) and the input
-          had focus / sizing issues. Modal status is persistent. */}
-      {locEditing && (
-        <LocationEditModal
-          initialAddress={locationText}
-          initialCoords={locationCoords}
-          isSignedIn={!!auth?.isSignedIn}
-          saveAddress={saveAddress}
-          onSaved={(saved) => {
-            if (saved?.address) setLocationText(saved.address);
-            if (saved?.lat && saved?.lng) setLocationCoords({ lat: saved.lat, lng: saved.lng });
-          }}
-          onClose={() => setLocEditing(false)}
-        />
-      )}
+      {/* CERGIO-GUARD: location editing is now INLINE under the address
+          chip at the top of this screen (see InlineLocationEditor above).
+          The LocationEditModal bottom-sheet was pulled because the user
+          wants the input right next to where the address sits, not
+          sliding up from the bottom. The modal still exists for any
+          surface that wants a full-sheet editor; Home no longer uses it. */}
     </div>
   );
 }
