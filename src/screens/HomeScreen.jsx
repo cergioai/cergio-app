@@ -258,6 +258,28 @@ export function HomeScreen() {
     return 'rolling';
   });
 
+  // CERGIO-GUARD: when the user got bounced to /auth from submit, we
+  // stashed their query in sessionStorage so they don't lose it. On
+  // the way back in (signed in now), restore + auto-submit. Survives
+  // the OAuth round-trip.
+  useEffect(() => {
+    if (!auth?.isSignedIn) return;
+    try {
+      const raw = sessionStorage.getItem('cergio.pendingQuery');
+      if (!raw) return;
+      const pending = JSON.parse(raw);
+      sessionStorage.removeItem('cergio.pendingQuery');
+      // Bail if the stash is stale (>15min) — assume user dropped intent.
+      if (Date.now() - (pending.ts || 0) > 15 * 60 * 1000) return;
+      if (pending.intent && pending.intent !== intent) setIntent(pending.intent);
+      if (pending.query)   setQuery(pending.query);
+      // Don't auto-submit — let the user re-confirm with one tap. Less
+      // surprising than firing a request the moment they sign in.
+      showToast('Welcome back — your request is queued. Tap send.', { sticky: false });
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth?.isSignedIn]);
+
   // Engine state — kicks off once chat.phase flips to 'ready' (all
   // mandatory fields captured). We stay on Home through the whole thing.
   const [submitted, setSubmitted] = useState(false);
@@ -513,25 +535,34 @@ export function HomeScreen() {
   useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   const submitQuery = () => {
+    // CERGIO-GUARD: every find-mode + spotlight submit MUST require a
+    // signed-in account. Cergio fires real notifications to providers
+    // and Connectors when a request is processed — we cannot allow
+    // anonymous spam / fake requests / scraped content to be blasted
+    // out under no identity. Sign-in is the absolute floor; identity
+    // verification (CC matching name) is the second gate enforced at
+    // booking + spotlight-payment time via CcGateModal / Stripe.
+    if (!auth?.isSignedIn) {
+      // Cache the query so the user lands back here with it filled in
+      // after signing in (sessionStorage survives the auth round-trip).
+      try {
+        sessionStorage.setItem('cergio.pendingQuery', JSON.stringify({
+          query, intent, locationText, ts: Date.now(),
+        }));
+      } catch { /* private mode */ }
+      showToast('Sign in to send your request — we ping real providers.', { sticky: true });
+      navigate('/auth');
+      return;
+    }
     // Spotlight-mode pre-checks — same as before, but if user passes
     // them we run the engine here instead of routing.
     if (intent === 'spotlight') {
-      if (!auth?.isSignedIn) {
-        showToast('Sign in to send a spotlight request');
-        navigate('/auth');
-        return;
-      }
       if (hasService === false) {
         showToast("First list your service — we'll bring you right back.");
         navigate('/list-service');
         return;
       }
     } else if (images.length > 0 && !ccVerified) {
-      if (!auth?.isSignedIn) {
-        showToast('Sign in to upload photos');
-        navigate('/auth');
-        return;
-      }
       setShowCcGate(true);
       return;
     }
