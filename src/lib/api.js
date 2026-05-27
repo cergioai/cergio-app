@@ -143,6 +143,113 @@ export async function listMyServices() {
     .order('created_at', { ascending: false });
 }
 
+// ─── PROVIDER FANOUT GUARD ──────────────────────────────────────────────────
+//
+// CERGIO-GUARD: any future "notify these providers" path (an edge function
+// fan-out, an SMS blast, an email blast — anything that touches a real
+// provider's inbox) MUST go through getProvidersForNotify() below. The
+// helper enforces three invariants that the free-text matching path is
+// deliberately too forgiving for:
+//
+//   1. EXACT provider_type match (no substring, no stem, no fuzzy).
+//      A "plumber" request goes to providers with
+//      taxonomy_provider_type = 'Plumber' (or 'Plumbing Technician' /
+//      'Master Plumber' from an allowlist), NEVER to a Driver or
+//      Dog Sitter because some token happened to overlap.
+//
+//   2. notify_safe flag from chat state must be TRUE. If the chat
+//      resolver wasn't confident (confidence < 0.7 or generic
+//      provider_type), we refuse to fan out and surface a
+//      disambiguation step to the user instead. This is the kill switch
+//      that prevents a 'I need help' request from being blasted to
+//      every provider on the platform.
+//
+//   3. Geo gate: provider must be within radius. No nationwide spam.
+//
+// If you find yourself bypassing this helper, STOP. Either route through
+// it or get explicit sign-off; sending a toilet-unclog request to a
+// driver because we 'thought it might be related' is exactly the kind of
+// trust-shattering failure mode the gate exists to prevent.
+//
+/**
+ * Get providers eligible for a notification fan-out for a given request.
+ * STRICT: requires verifiedProviderType (exact match) + notifySafe.
+ *
+ * @param {Object} args
+ * @param {string} args.verifiedProviderType  Exact taxonomy_provider_type — REQUIRED
+ * @param {boolean} args.notifySafe           From chat.state.notifySafe — REQUIRED true
+ * @param {number}  args.lat                  REQUIRED
+ * @param {number}  args.lng                  REQUIRED
+ * @param {number}  args.radiusMiles          Default 25
+ * @param {string[]} args.providerTypeAllowlist  Optional related types
+ *                                               (e.g. ['Plumber', 'Master Plumber'])
+ * @returns {Promise<{ data: Array, error: any, blocked?: string }>}
+ *   blocked is set when the call refuses to fan out for a safety reason
+ *   so the caller can surface the disambiguation UI.
+ */
+export async function getProvidersForNotify({
+  verifiedProviderType,
+  notifySafe,
+  lat,
+  lng,
+  radiusMiles = 25,
+  providerTypeAllowlist = null,
+} = {}) {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+
+  // SAFETY GATE — refuse the call unless every invariant is satisfied.
+  if (!notifySafe) {
+    return {
+      data: null, error: null,
+      blocked: 'notify_safe_false: chat resolver not confident — ask the user to pick a category before fanning out.',
+    };
+  }
+  if (!verifiedProviderType || typeof verifiedProviderType !== 'string') {
+    return {
+      data: null, error: null,
+      blocked: 'no_verified_provider_type: refusing to blast all providers.',
+    };
+  }
+  if (lat == null || lng == null) {
+    return {
+      data: null, error: null,
+      blocked: 'no_coords: refusing to fan out without geo.',
+    };
+  }
+
+  // Build the allowlist — exact match by default; opt-in for related
+  // canonical types via providerTypeAllowlist (no fuzzy / no stem).
+  const allow = [verifiedProviderType, ...(providerTypeAllowlist || [])]
+    .map(s => String(s).trim()).filter(Boolean);
+
+  // Proximity via services_near, then post-filter on exact provider_type.
+  const { data, error } = await supabase.rpc('services_near', {
+    near_lat: lat, near_lng: lng,
+    radius_miles: radiusMiles,
+    category_match: null,
+  });
+  if (error) return { data: null, error };
+
+  const filtered = (data || []).filter(s =>
+    allow.includes(s.taxonomy_provider_type || '')
+  );
+  return { data: filtered, error: null };
+}
+
+/** Partial update on a service row. RLS enforces ownership. Pass any
+ *  subset of { title, description, category, location_text, lat, lng,
+ *  photo_class, cover_url }. Returns { data, error }. */
+export async function updateService(serviceId, patch) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!serviceId)    return { data: null, error: { message: 'serviceId required' } };
+  return await supabase
+    .from('services')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', serviceId)
+    .select()
+    .maybeSingle();
+}
+
 /** Flip a service to draft (unlist) — owner can re-list anytime. RLS
  *  enforces ownership; if the call returns an error, the caller should
  *  surface it instead of pretending the action succeeded. */

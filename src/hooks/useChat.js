@@ -272,7 +272,23 @@ const INITIAL_STATE = {
   // the user as the name of their service — it has been observed flipping
   // "personal chef" → "Weekly meal prep service". See CHECKLIST.md §2.
   originalQuery: null,
+  // CERGIO-GUARD: notifySafe gates any code path that BLASTS notifications
+  // to real providers (booking-request fan-outs, SMS pings, etc.). True
+  // ONLY when:
+  //   - resolver confidence >= 0.7, AND
+  //   - provider_type is set and NOT generic, AND
+  //   - the parsed `what` shares meaningful tokens with the user input
+  //     (no drift / hallucinated offering names)
+  // If notifySafe is FALSE, we must NOT fan out a notification — instead
+  // surface a disambiguation step to the user ('Which kind of provider
+  // should we ping? plumber / cleaner / driver / …'). Sending a toilet-
+  // unclog request to a driver because the resolver was unsure is the
+  // exact failure mode this flag exists to prevent.
+  notifySafe: false,
+  resolverConfidence: 0,
 };
+
+const NOTIFY_SAFE_CONFIDENCE = 0.7;
 
 // CERGIO-GUARD: generic / catch-all values the cloud parser sometimes
 // returns when it doesn't have a clean taxonomy hit. We refuse to set
@@ -427,6 +443,24 @@ export function useChat() {
       }
     }
 
+    // CERGIO-GUARD: compute notifySafe BEFORE we set merged. It is the
+    // SINGLE truth used to gate any "blast notification to providers"
+    // path (today's Results screen still just READS services, but the
+    // fanout edge function landing later MUST consult this flag). False
+    // means "we are not confident enough to ping real providers — show
+    // the user a disambiguation step instead of silently routing to
+    // the wrong category". See PROVIDER_FANOUT_GUARD doc in api.js.
+    const conf = typeof resolver.confidence === 'number' ? resolver.confidence : 0;
+    const candidatePType = resolver.provider_type ?? prevState.provider_type ?? null;
+    const finalWhat = fields.what ?? prevState.what ?? null;
+    const safe =
+      conf >= NOTIFY_SAFE_CONFIDENCE &&
+      !!candidatePType &&
+      !isGenericProviderType(candidatePType) &&
+      // Word-overlap drift sanity: if we have raw user words and a
+      // parser `what`, they MUST share a meaningful token.
+      (!finalWhat || !userInput || sharesWordsWith(finalWhat, userInput));
+
     const merged = {
       what:           fields.what          ?? prevState.what          ?? null,
       when:           fields.when          ?? prevState.when          ?? null,
@@ -440,6 +474,8 @@ export function useChat() {
       bundle:         resolver.bundle         ?? prevState.bundle         ?? null,
       urgency:        res.urgency === true || prevState.urgency === true,
       originalQuery:  prevState.originalQuery ?? null,
+      notifySafe:     safe,
+      resolverConfidence: conf,
     };
     setState(merged);
 

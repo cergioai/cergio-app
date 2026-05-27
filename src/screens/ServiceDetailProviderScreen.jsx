@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import { MANAGED_SERVICES } from '../data/mock';
-import { getService, unlistService, relistService, deleteService } from '../lib/api';
+import { getService, unlistService, relistService, deleteService, updateService } from '../lib/api';
 import { uploadAndPersistServiceCover } from '../lib/storage';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,6 +42,23 @@ export function ServiceDetailProviderScreen() {
     // Optimistic local update + we'll re-render the hero with the new URL.
     setSvc(s => ({ ...s, coverUrl: url }));
     showToast('Cover updated ✓');
+  };
+
+  /** Inline single-field editor via window.prompt — no extra screens.
+   *  Persists via updateService(). The svc state updates optimistically
+   *  so the row's subtitle reflects the new value without a refresh.
+   *  CERGIO-GUARD: replaces three 'coming soon' toast dead-ends. */
+  const editServiceField = async (column, current, label) => {
+    if (!svc?.real) { showToast('Demo service — sign up to edit your own.'); return; }
+    const next = typeof window !== 'undefined' ? window.prompt(label, current || '') : null;
+    if (next == null) return;                 // user cancelled
+    const trimmed = next.trim();
+    if (trimmed === (current || '')) return;  // no change
+    const { error } = await updateService(svc.id, { [column]: trimmed || null });
+    if (error) { showToast(`Couldn't save: ${error.message}`); return; }
+    const localKey = column === 'location_text' ? 'location' : column;
+    setSvc(s => ({ ...s, [localKey]: trimmed || null }));
+    showToast('Saved ✓');
   };
 
   useEffect(() => {
@@ -174,10 +191,12 @@ export function ServiceDetailProviderScreen() {
         {[
           { label: 'Offerings & pricing',  to: '/list-service/more-offerings',
             sub: `${svc.offerings?.length ?? 1} item${(svc.offerings?.length ?? 1) === 1 ? '' : 's'} · tap to manage` },
-          { label: 'Service area',         toast: 'Service area — coming soon',
-            sub: svc.location || 'Not set' },
-          { label: 'Description',          toast: 'Description — coming soon',
-            sub: svc.description || 'No description yet' },
+          { label: 'Service area',
+            sub: svc.location || 'Tap to set the city / address you serve',
+            run: () => editServiceField('location_text', svc.location, 'Service area (city, address, or both)') },
+          { label: 'Description',
+            sub: svc.description || 'Tap to add a description',
+            run: () => editServiceField('description', svc.description, 'How would you describe this service?') },
           { label: 'Photos & videos',
             sub: svc.coverUrl ? 'Cover uploaded · tap to change' : 'Add a cover photo',
             run: () => { if (!svc.real) { showToast('Demo service — sign up to upload your own photo.'); return; } fileInputRef.current?.click(); } },

@@ -204,15 +204,12 @@ export function IntakeFormScreen() {
           />
         </Field>
 
-        <Field label="Photos / videos" hint="Optional — coming soon">
-          <button
-            type="button"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[13px] text-b3 font-bold"
-            disabled
-          >
-            📷 Add photos / videos
-          </button>
-        </Field>
+        {/* CERGIO-GUARD: removed the disabled 'Photos / videos — coming
+            soon' field per CRITICAL_FLOWS.md #7. A disabled button with
+            a future-tense hint is a worse signal than no field. Photo
+            attachment lands when ServiceListAddOfferingScreen-style
+            uploadServiceCover is wired into the request flow — until
+            then, the chat captures details well enough on its own. */}
       </div>
 
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px]

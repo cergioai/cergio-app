@@ -59,6 +59,17 @@ export function JobsInboxScreen() {
   const { showToast, auth } = useOutletContext();
   const [activeTab, setActiveTab] = useState('Requests');
   const [real, setReal] = useState(null);
+  // CERGIO-GUARD: real client-side filter, no 'coming soon' placeholder.
+  // Filters across sender + preview + date across all tabs.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const matchesSearch = (r) => {
+    if (!searchQ.trim()) return true;
+    const q = searchQ.toLowerCase();
+    return [r.sender, r.preview, r.date, r.appointmentTime]
+      .filter(Boolean)
+      .some(v => String(v).toLowerCase().includes(q));
+  };
 
   useEffect(() => {
     if (!auth?.isSignedIn) { setReal([]); return; }
@@ -93,18 +104,41 @@ export function JobsInboxScreen() {
         <h1 className="text-[28px] font-extrabold text-black tracking-tight leading-none flex-shrink-0">
           Jobs
         </h1>
-        <button
-          onClick={() => showToast('Search coming soon')}
-          className="flex-1 flex items-center gap-2 bg-white border border-bdr rounded-pill
-                     px-4 py-2.5 text-left hover:border-g transition-colors"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-               stroke="#6B6B6B" strokeWidth="2.5" strokeLinecap="round">
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4-4" />
-          </svg>
-          <span className="text-[13px] text-b3 font-medium">Search jobs and requests</span>
-        </button>
+        {searchOpen ? (
+          <div className="flex-1 flex items-center gap-2 bg-white border border-bdr rounded-pill px-4 py-1.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="#6B6B6B" strokeWidth="2.5" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4-4" />
+            </svg>
+            <input
+              autoFocus
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              placeholder="Search by name, service, date…"
+              className="flex-1 bg-transparent outline-none text-[13px] text-black placeholder-b3 py-1"
+            />
+            <button
+              type="button"
+              onClick={() => { setSearchOpen(false); setSearchQ(''); }}
+              aria-label="Close search"
+              className="text-[14px] text-b3 font-bold px-1"
+            >×</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex-1 flex items-center gap-2 bg-white border border-bdr rounded-pill
+                       px-4 py-2.5 text-left hover:border-g transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="#6B6B6B" strokeWidth="2.5" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4-4" />
+            </svg>
+            <span className="text-[13px] text-b3 font-medium">Search jobs and requests</span>
+          </button>
+        )}
       </div>
 
       {/* tabs */}
@@ -150,7 +184,7 @@ export function JobsInboxScreen() {
             </button>
           </div>
         )}
-        {activeTab === 'Requests' && requests.map((req, i) => (
+        {activeTab === 'Requests' && requests.filter(matchesSearch).map((req, i) => (
           <div
             key={req.id}
             onClick={() => req.real
@@ -220,7 +254,16 @@ export function JobsInboxScreen() {
             </button>
           </div>
         )}
-        {activeTab === 'Sent' && (sent || []).map(s => {
+        {activeTab === 'Sent' && (sent || [])
+          .filter(s => {
+            if (!searchQ.trim()) return true;
+            const q = searchQ.toLowerCase();
+            const platform = s.platform === 'tiktok' ? 'TikTok' : 'Instagram';
+            const status = s.status || '';
+            const created = s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+            return [platform, status, created].some(v => String(v).toLowerCase().includes(q));
+          })
+          .map(s => {
           const platform = s.platform === 'tiktok' ? 'TikTok' : 'Instagram';
           const price = s.accepted_price_cents || s.offered_price_cents || s.official_price_cents || 0;
           const created = s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
