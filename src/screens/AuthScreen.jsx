@@ -128,9 +128,21 @@ export function AuthScreen() {
     setBusy(true);
     try {
       if (isSignup) {
-        const { error } = await auth.signUp(email.trim(), password, displayName.trim(), phone.trim());
-        if (error) { showToast(error.message); return; }
-        showToast('Account created — check your email if confirmation is on');
+        // CERGIO-GUARD: signUp may return needsEmailConfirm=true when
+        // Supabase email-confirmation is enabled — in that case there's
+        // no session yet, so we MUST keep the user on the auth screen
+        // (or they'll bounce around trying to submit things while not
+        // signed in). Sticky toast explains the next step.
+        const res = await auth.signUp(email.trim(), password, displayName.trim(), phone.trim());
+        if (res?.error) { showToast(res.error.message); return; }
+        if (res?.needsEmailConfirm) {
+          showToast(res.confirmMessage || 'Check your email to confirm your account, then sign in.', { sticky: true });
+          setMode('signin');     // flip the tab so they're ready to sign in after confirming
+          setPassword('');       // clear so they have to re-enter on next attempt
+          return;
+        }
+        // Real session exists (or auto-signIn worked) → straight to home.
+        showToast('Welcome to Cergio ✓');
         navigate('/home');
       } else {
         const { error } = await auth.signIn(email.trim(), password);

@@ -314,9 +314,27 @@ export function HomeScreen() {
   // canonical formatted_address + real lat/lng. If it fails we still
   // keep the typed text in locationText (so the UI doesn't lose it)
   // but skip the saveAddress call so we don't persist a bogus address.
+  // CERGIO-GUARD: this effect MIRRORS new addresses captured INSIDE the
+  // chat (e.g. user types "the address is 123 Main St" mid-conversation)
+  // into the top-of-screen location chip. It must NOT fight a manual
+  // edit. Bug we hit: had `locationText` in the deps, so every time the
+  // user typed a new address via InlineLocationEditor and we updated
+  // locationText, this effect re-fired, saw chat.state.where was still
+  // the OLD value, and reverted locationText back. Result: manual saves
+  // appeared to revert to the old address.
+  //
+  // Fix: track the last chat-where value we synced via a ref. Only sync
+  // when chat.state.where CHANGES (not when locationText changes), and
+  // don't include locationText in deps. Each chat.state.where transition
+  // syncs exactly once.
+  const lastChatWhereSyncedRef = useRef(null);
   useEffect(() => {
     const where = chat?.state?.where;
-    if (!where || where === locationText) return;
+    if (!where) return;
+    if (lastChatWhereSyncedRef.current === where) return; // already synced this value
+    lastChatWhereSyncedRef.current = where;
+    if (where === locationText) return; // already in sync — nothing to do
+
     setLocationText(where);
     // Mirror to localStorage as-is for immediate fallback.
     try {
@@ -345,7 +363,8 @@ export function HomeScreen() {
         }).catch(() => { /* metadata write path 1 succeeds anyway */ });
       }
     })();
-  }, [chat?.state?.where, auth?.isSignedIn, locationText]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat?.state?.where, auth?.isSignedIn]);
 
   // Mirror locationText → localStorage on every change. This is the
   // safety net: even if the user types an address without picking a

@@ -55,6 +55,8 @@ export function useSession() {
         data: { display_name: displayName, phone: cleanPhone || null },
       },
     });
+    if (result.error) return result;
+
     // CERGIO-GUARD: after a successful signup, attribute the invite chain
     // by writing an `invites` row linking inviter (from ?ref=… captured
     // in App.jsx) to this new invitee. Best-effort — does not block
@@ -62,6 +64,37 @@ export function useSession() {
     const newUserId = result?.data?.user?.id;
     if (newUserId) {
       recordInviteFromActiveRef(newUserId).catch(() => { /* swallow */ });
+    }
+
+    // CERGIO-GUARD: when Supabase email-confirmation is DISABLED, signUp
+    // returns a session and the user is signed in immediately. When it's
+    // ENABLED, session is null and the user has to click an email link
+    // first. The user was reporting "I sign up then it keeps prompting
+    // me to sign in" — that's the no-session case. Defensive fix:
+    //   • If a session came back → we're done.
+    //   • Else try signInWithPassword immediately. If email confirmation
+    //     IS off, this succeeds and creates the session. If it's ON,
+    //     Supabase returns 'Email not confirmed'; we surface a clear
+    //     needsEmailConfirm flag so the UI shows the right next step.
+    if (!result?.data?.session) {
+      const signInRes = await supabase.auth.signInWithPassword({ email, password });
+      if (signInRes?.data?.session) {
+        return { data: signInRes.data, error: null };
+      }
+      const msg = signInRes?.error?.message || '';
+      const needsEmailConfirm = /confirm|verify/i.test(msg);
+      if (needsEmailConfirm) {
+        return {
+          data: result.data,
+          error: null,
+          needsEmailConfirm: true,
+          confirmMessage: 'Check your email to confirm your account, then sign in.',
+        };
+      }
+      // signIn failed for another reason — surface it so the user knows.
+      if (signInRes?.error) {
+        return { data: result.data, error: signInRes.error };
+      }
     }
     return result;
   }, []);

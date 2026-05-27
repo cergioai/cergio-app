@@ -215,6 +215,14 @@ export async function listServices({
   if (!supabaseReady) return NOT_WIRED;
 
   // Proximity branch — uses the RPC + then back-fills offerings in one extra query.
+  // CERGIO-GUARD: when proximity returns 0 hits, FALL THROUGH to the
+  // plain-text branch instead of returning empty. User searches for
+  // 'deep cleaning' with address '1 jane street ny' → Google geocodes
+  // NY-ish coords → services_near filters out Miami's seeded providers
+  // (>25mi) → empty. Without this fallback, every cross-city search
+  // looks broken. The fallback shows the user 'nationwide matches' which
+  // is way better than 'no matches' when there ARE matches, just not
+  // within radius.
   if (lat != null && lng != null) {
     const { data, error } = await supabase.rpc('services_near', {
       near_lat: lat, near_lng: lng,
@@ -224,26 +232,29 @@ export async function listServices({
     if (error) return { data: null, error };
 
     let ids = (data || []).map(s => s.id);
-    if (ids.length === 0) return { data: [], error: null };
+    if (ids.length > 0) {
+      // Pull offerings in one shot, then attach. Carry taxonomy fields so
+      // we can re-filter by offering_id when one was requested.
+      const { data: offs } = await supabase
+        .from('offerings')
+        .select('id, service_id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id')
+        .in('service_id', ids);
+      const offMap = {};
+      (offs || []).forEach(o => { (offMap[o.service_id] ||= []).push(o); });
 
-    // Pull offerings in one shot, then attach. Carry taxonomy fields so
-    // we can re-filter by offering_id when one was requested.
-    const { data: offs } = await supabase
-      .from('offerings')
-      .select('id, service_id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id')
-      .in('service_id', ids);
-    const offMap = {};
-    (offs || []).forEach(o => { (offMap[o.service_id] ||= []).push(o); });
-
-    let filtered = data.map(s => ({ ...s, offerings: offMap[s.id] || [] }));
-    if (offering_id) {
-      filtered = filtered.filter(s =>
-        (s.taxonomy_offering_id === offering_id) ||
-        (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
-      );
+      let filtered = data.map(s => ({ ...s, offerings: offMap[s.id] || [] }));
+      if (offering_id) {
+        filtered = filtered.filter(s =>
+          (s.taxonomy_offering_id === offering_id) ||
+          (s.offerings || []).some(o => o.taxonomy_offering_id === offering_id)
+        );
+      }
+      filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly, originalQuery });
+      if (filtered.length > 0) return { data: filtered, error: null };
     }
-    filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly, originalQuery });
-    return { data: filtered, error: null };
+    // 0 proximity hits OR all filtered out → fall through to plain branch.
+    // Flag the result so the UI can show 'no local matches — nationwide
+    // results' if it cares to differentiate.
   }
 
   // Plain branch. Prefer taxonomy_offering_id when given — exact targeted
