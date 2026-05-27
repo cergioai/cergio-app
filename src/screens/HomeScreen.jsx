@@ -1045,16 +1045,15 @@ export function HomeScreen() {
             </div>
             <div className="flex-1 min-w-0">
               {/* CERGIO-GUARD: USER-side house ad — leads with Become a
-                  Connector (cash track) as the hero hook, with the
-                  user-tier "$250 credit" as the secondary path so the
-                  reader sees both options in one glance. Routes to the
-                  Connector apply page; users who'd rather stay on the
-                  credit track land on the explainer and skip apply. */}
+                  Connector (cash track) and stacks the Connector
+                  benefits (cash + free services + Growth Participation
+                  Income) as the hero hook. Secondary line: users on
+                  the credit track still earn $250 each. */}
               <p className="text-[15px] font-extrabold leading-tight">
-                Become a Connector — ${REWARDS.perFriendConnector} cash per friend
+                Become a Connector — ${REWARDS.perFriendConnector} cash + free services + Growth Income
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                Or stay a user → ${REWARDS.perFriendUser} credit + free services + Growth Participation Income.
+                Or stay a user → ${REWARDS.perFriendUser} credit per friend who joins + books.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>
@@ -1095,12 +1094,15 @@ export function HomeScreen() {
                   someone who already has clients. Lead with "invite
                   your clients", lock in the Connector reward ($250
                   cash per client who books), close with the loop
-                  (spotlight rate card, free services, growth income). */}
+                  (free spotlights as a Connector, Growth Participation
+                  Income). "Free spotlight" reflects the barter side
+                  of the Connector status — they post for providers
+                  and get free service in return. */}
               <p className="text-[15px] font-extrabold leading-tight">
                 Invite your clients → become a Connector
               </p>
               <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
-                ${REWARDS.perFriendConnector} cash per client who books + spotlight rate card + Growth Participation Income.
+                ${REWARDS.perFriendConnector} cash per client who books + free spotlights (barter) + Growth Participation Income.
               </p>
             </div>
             <span className="text-gd text-lg flex-shrink-0">›</span>

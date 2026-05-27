@@ -55,8 +55,8 @@ export const REWARD_COPY = {
   connectorUnlockSub:    `Influencers + local super-users earn $${REWARDS.perFriendConnector} cash + free services + Growth Participation Income.`,
 
   // Dual-tier one-liner — use on any side-by-side comparison surface.
-  userTierOneLine:       `Users earn $${REWARDS.perFriendUser} credit + free services credit + Growth Participation Income.`,
-  connectorTierOneLine:  `Connectors earn $${REWARDS.perFriendConnector} cash + free services + Growth Participation Income + spotlight rate card.`,
+  userTierOneLine:       `Users earn $${REWARDS.perFriendUser} credit per friend who joins + books.`,
+  connectorTierOneLine:  `Connectors earn $${REWARDS.perFriendConnector} cash + free services + Growth Participation Income + free spotlights (barter).`,
 
   // Compounding example — use as a single line in marketing/explainer surfaces.
   compoundingExample:    `Bring ${REWARDS.exampleFriends} friends → $${REWARDS.exampleTotal.toLocaleString()}. Your network does the work; you earn the upside.`,

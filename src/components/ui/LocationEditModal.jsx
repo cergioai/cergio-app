@@ -178,16 +178,22 @@ export function LocationEditModal({
           />
         </div>
 
-        {/* Persistent Google-status notice. Stays visible until the user
-            takes another action — no auto-dismiss. */}
+        {/* Google-status notice — collapsed by default to a calm one-liner
+            so the user isn't alarmed when OSM is already handling things.
+            CERGIO-GUARD: never auto-dismiss; the user expands for the
+            full remediation when they're ready to fix GCP. */}
         {broken && googleHint && (
-          <div className="mt-3 bg-warnBg border border-warnText/30 rounded-[12px] p-3">
-            <p className="text-[12px] font-extrabold text-warnText leading-snug">{googleHint.title}</p>
-            <p className="text-[11px] text-warnText/90 mt-1 leading-snug font-normal">{googleHint.detail}</p>
-            <p className="text-[11px] text-warnText/90 mt-1 leading-snug font-normal">
-              We're using OpenStreetMap for autocomplete in the meantime — your address will save fine.
-            </p>
-          </div>
+          <details className="mt-3 bg-warnBg/60 border border-warnText/20 rounded-[12px] px-3 py-2 group">
+            <summary className="text-[11px] text-warnText leading-snug cursor-pointer flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
+              <span aria-hidden="true">ℹ️</span>
+              <span className="flex-1">Using OpenStreetMap — addresses save fine. Tap for Google fix.</span>
+              <span className="text-warnText/60 text-[10px] group-open:rotate-180 transition-transform">▾</span>
+            </summary>
+            <div className="mt-2 pt-2 border-t border-warnText/15">
+              <p className="text-[11px] font-extrabold text-warnText leading-snug">{googleHint.title}</p>
+              <p className="text-[11px] text-warnText/90 mt-1 leading-snug font-normal">{googleHint.detail}</p>
+            </div>
+          </details>
         )}
 
         {/* Status / save feedback — persistent. */}
