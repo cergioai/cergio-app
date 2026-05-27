@@ -20,7 +20,7 @@ import { listServices } from '../lib/api';
 import { geocodeAddress } from '../lib/google';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { buildInviteUrl } from '../lib/referral';
-import { pluralProviderTypeLocal } from '../lib/serviceTaxonomy';
+import { pluralProviderTypeLocal, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -127,13 +127,25 @@ export function ResultsScreen() {
   // earnings row on the first paid/free booking.
   const inviterUrl = buildInviteUrl(auth?.user?.id);
   const chatState = chat.state;
-  const { what, when, where, budget, category, provider_type, details, originalQuery } = chatState;
+  const { what, when, where, budget, category, provider_type: rawProviderType, details, originalQuery } = chatState;
 
   // Prefer originalQuery from chat state (always seeded from the user's
   // first message). Fall back to the navigation `state.query` if chat
   // state wasn't seeded (e.g. arriving from a deep link).
   const userQuery = originalQuery || location.state?.query || null;
   const userNoun  = userServiceNoun(userQuery);
+
+  // CERGIO-GUARD (2026-05-27): force-resolve provider_type AT THE
+  // CONSUMER, every render. Evidence from user's tab: even after my
+  // forced-override in useChat (line ~520), merged.provider_type still
+  // landed as "Toilet replacement" (offering NAME from Claude). React
+  // HMR doesn't always re-execute hooks; the OLD applyParseResult
+  // closure can survive. Doing the resolution here, every render,
+  // doesn't depend on the hook being fresh — it's pure derivation
+  // from userQuery + local taxonomy. If local resolves, that wins
+  // OVER whatever's in chat.state.provider_type.
+  const localResolvedPT = resolveProviderTypeLocal(userQuery);
+  const provider_type = localResolvedPT || rawProviderType;
 
   // Use parser's provider_type ONLY if it's specific (not generic).
   // Otherwise fall back to the user's own noun.

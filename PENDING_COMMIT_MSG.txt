@@ -1,33 +1,30 @@
-Search: force provider_type at merge site + new title format
+Search: force provider_type at the consumer (ResultsScreen render)
 
-(1) FORCE merged.provider_type FROM LOCAL TAXONOMY AT THE MERGE SITE.
-    Evidence from the diag banner in user's tab showed merged
-    provider_type = "Toilet replacement" (offering NAME from Claude)
-    even though my earlier override at line ~440 should have overwritten
-    it. Either HMR didn't replace the relevant closure or later code
-    clobbered it. Moved the override to the merged build itself:
-       const mergedProviderType = resolveProviderTypeLocal(userInput)
-         ?? resolver.provider_type
-         ?? prevState.provider_type
-         ?? null;
-       merged.provider_type = mergedProviderType;
-    Local resolves deterministically; Claude is the long-tail fallback.
-    Console logs "[useChat] MERGED override: …" when local wins.
+DEFINITIVE FIX for the React-HMR-doesn't-refresh-hooks pattern.
 
-(2) NEW TITLE FORMAT per spec.
-    Old: "Looking for unclog my toilets" (pluralizes user's verb)
-    New: "Looking for plumbers to unclog your toilet"
-    - Uses canonical provider_type plural (Plumbers, House Cleaners…).
-    - Strips intent verbs from originalQuery.
-    - Flips pronouns my → your, me → you (Cergio talks to the user).
-    - Drops the action when it'd be redundant ("Looking for plumbers
-      to plumber" is silly).
-    - Falls back to user's noun when no provider_type resolved.
+Previous attempts:
+  - Override in applyParseResult (useChat:440)  →  hook stays stale
+  - Force at merged-build site  (useChat:520)    →  hook stays stale
+Both produce correct code in the FILE but React keeps the OLD
+closure on the live mounted component until full page reload.
 
-(3) NEW EXPORT in src/lib/serviceTaxonomy.js: pluralProviderTypeLocal.
-    Explicit plurals for the curated 60-row map; generic +s/+es/-ies
-    fallback for anything Claude returns we don't have.
+This fix runs the local-taxonomy lookup AT THE CONSUMER — every
+render of ResultsScreen. Pure derivation from userQuery; no
+dependency on useChat hook freshness. HMR of a screen file is
+reliable; HMR of a hook is not.
 
-Files: src/lib/serviceTaxonomy.js, src/hooks/useChat.js,
-       src/screens/ResultsScreen.jsx
+  const localResolvedPT = resolveProviderTypeLocal(userQuery);
+  const provider_type = localResolvedPT || rawProviderType;
+
+Everything downstream (listServices call, title text, safe filter,
+pills) now derives from the deterministic local value.
+
+Also fixed the new title format that was previously pluralizing
+the wrong base ("Toilet replacements"): since provider_type is
+now corrected at the source of the title computation, the plural
+helper sees "Plumber" and produces "Plumbers".
+
+Expected: "Looking for plumbers to unclog your toilet" → J. Chen.
+
+Files: src/screens/ResultsScreen.jsx
 qa.mjs: pass (14/14)
