@@ -18,8 +18,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { notifyUser } from '../lib/api';
 import { REWARDS, REWARD_COPY } from '../lib/rewards';
-
-const INVITE_BASE = (typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai');
+import { buildInviteUrl } from '../lib/referral';
 
 export function FindFriendsScreen() {
   const navigate = useNavigate();
@@ -30,10 +29,12 @@ export function FindFriendsScreen() {
   const [searchQ, setSearchQ] = useState('');
   const [searchHits, setSearchHits] = useState([]);
 
-  // Build the personal invite link. Future: include a referral code so
-  // sign-ups credit the inviter (and trigger the +$25 reward).
-  const ref = auth?.user?.id ? `?ref=${auth.user.id}` : '';
-  const inviteUrl = `${INVITE_BASE}/?invite${ref}`;
+  // CERGIO-GUARD: ALL invite URLs in the app must come from
+  // buildInviteUrl() in lib/referral.js so the format is one
+  // consistent `${origin}/?ref=<uuid>`. The old hand-rolled
+  // `/?invite${ref}` produced a broken double-question-mark URL
+  // (`?invite?ref=...`) that the referral capture couldn't parse.
+  const inviteUrl = buildInviteUrl(auth?.user?.id);
 
   // ── 1. Phone contacts via Contact Picker API ─────────────────────────────
   const supportsContactPicker = typeof navigator !== 'undefined' &&
@@ -78,15 +79,40 @@ export function FindFriendsScreen() {
   };
 
   // ── 4. Manual search (handle / email / phone exact-match lookup) ─────────
+  // CERGIO-GUARD: search runs on Enter / Search-button click. We do NOT
+  // run per-keystroke because PostgREST .or() with three ilikes is
+  // expensive and the type-rate makes the UI flicker. searchState tracks
+  // 'idle' | 'searching' | 'empty' | 'hits' so the empty state vs the
+  // not-yet-searched state are visually different.
+  const [searchState, setSearchState] = useState('idle');
   const runSearch = async (q) => {
-    if (!supabaseReady || !q.trim()) { setSearchHits([]); return; }
-    const term = q.trim().replace(/^@/, '').toLowerCase();
-    const { data } = await supabase
+    const term = (q || '').trim().replace(/^@/, '').toLowerCase();
+    if (!supabaseReady || !term) { setSearchHits([]); setSearchState('idle'); return; }
+    setSearchState('searching');
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, display_name, instagram_handle, tiktok_handle')
       .or(`instagram_handle.ilike.%${term}%,tiktok_handle.ilike.%${term}%,display_name.ilike.%${term}%`)
       .limit(10);
+    if (error) { showToast(`Search failed: ${error.message}`); setSearchState('idle'); return; }
     setSearchHits(data || []);
+    setSearchState((data || []).length === 0 ? 'empty' : 'hits');
+  };
+
+  // Add to network: follower=current user, followed=target. Self-follow
+  // is blocked. Duplicates silently OK (composite primary key handles it).
+  const addToNetwork = async (targetId, targetName) => {
+    if (!isSignedIn) { showToast('Sign in to add friends.'); return; }
+    if (!targetId)   return;
+    if (targetId === auth.user?.id) { showToast("You can't add yourself."); return; }
+    const { error } = await supabase
+      .from('network')
+      .insert({ follower_id: auth.user.id, followed_id: targetId });
+    if (error && !/duplicate|unique/i.test(error.message)) {
+      showToast(`Couldn't add: ${error.message}`);
+      return;
+    }
+    showToast(error ? `${targetName} is already in your network ✓` : `Added ${targetName} to your network ✓`);
   };
 
   // ── 5. Share invite (native share + clipboard fallback) ──────────────────
@@ -190,15 +216,35 @@ export function FindFriendsScreen() {
       {/* ── Manual search ─────────────────────────────────────────────────── */}
       <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">Find by handle</h2>
       <div className="px-5">
-        <input
-          type="text"
-          value={searchQ}
-          onChange={e => { setSearchQ(e.target.value); runSearch(e.target.value); }}
-          placeholder="@handle, name, or email"
-          className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3 text-[14px]
-                     text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
-        />
-        {searchHits.length > 0 && (
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={searchQ}
+            onChange={e => { setSearchQ(e.target.value); if (searchState !== 'idle') setSearchState('idle'); }}
+            onKeyDown={e => { if (e.key === 'Enter') runSearch(searchQ); }}
+            placeholder="@handle, name, or email"
+            className="flex-1 bg-white border border-bdr rounded-[14px] px-4 py-3 text-[14px]
+                       text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+          />
+          <button
+            type="button"
+            onClick={() => runSearch(searchQ)}
+            disabled={!searchQ.trim() || searchState === 'searching'}
+            className={`rounded-[14px] px-5 py-3 text-[13px] font-extrabold transition-all
+              ${searchQ.trim() && searchState !== 'searching'
+                ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
+                : 'bg-bg5 text-b3 cursor-not-allowed'}`}
+          >
+            {searchState === 'searching' ? '…' : 'Search'}
+          </button>
+        </div>
+        {searchState === 'empty' && (
+          <p className="text-[12px] text-b3 mt-3 leading-snug">
+            No matches for "<span className="font-extrabold text-b2">{searchQ}</span>".
+            They might not be on Cergio yet — copy your invite link below to bring them in.
+          </p>
+        )}
+        {searchState === 'hits' && (
           <div className="mt-3 flex flex-col gap-2">
             {searchHits.map(p => (
               <div key={p.id} className="bg-white border border-bdr rounded-[14px] p-3 flex items-center gap-3">
@@ -213,7 +259,10 @@ export function FindFriendsScreen() {
                     {p.tiktok_handle && <>TT @{p.tiktok_handle}</>}
                   </p>
                 </div>
-                <button className="bg-g text-white rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold">
+                <button
+                  onClick={() => addToNetwork(p.id, p.display_name || `@${p.instagram_handle || p.tiktok_handle}` || 'them')}
+                  className="bg-g text-white rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold hover:opacity-90 active:scale-[.97]"
+                >
                   Add
                 </button>
               </div>
@@ -260,7 +309,12 @@ export function FindFriendsScreen() {
                 {(p.display_name || '?')[0].toUpperCase()}
               </div>
               <p className="flex-1 text-[14px] font-extrabold text-black truncate">{p.display_name}</p>
-              <button className="bg-g text-white rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold">Add</button>
+              <button
+                onClick={() => addToNetwork(p.id, p.display_name || 'them')}
+                className="bg-g text-white rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold hover:opacity-90 active:scale-[.97]"
+              >
+                Add
+              </button>
             </div>
           ))}
           {matches.invitable.length > 0 && (
