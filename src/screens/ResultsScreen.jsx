@@ -380,17 +380,12 @@ export function ResultsScreen() {
         />
       ))}
 
-      {services !== null && providers.length > 0 && (
-        <div className="text-center py-4">
-          <button
-            onClick={() => showToast('Loading more providers…')}
-            className="bg-transparent border-none text-[13px] font-bold text-g cursor-pointer
-                       underline underline-offset-2"
-          >
-            See more options ↗
-          </button>
-        </div>
-      )}
+      {/* CERGIO-GUARD: removed the 'See more options' dead-end button —
+          it called showToast('Loading more providers…') without
+          actually loading anything. listServices already returns up
+          to 50 results; pagination ships as a real feature when needed
+          (would require offset + accumulated state). Better to omit
+          the affordance than ship a lying button. */}
 
       {/* One calm card — merges the empty state + the reco/share ask.
           Soft-green wash matches the Home invite house ad. Only renders
