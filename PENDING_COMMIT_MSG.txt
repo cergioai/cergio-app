@@ -1,0 +1,173 @@
+Sweep wave 2+3: kill mock data on BookingScreen + 3 more "coming soon" dead-ends
+
+The Cash out button on EarningsScreen, the Sync Google contacts row
+on FindFriendsScreen, the fake "Gervon" banner + "filters coming
+soon" chips on RecoNotificationScreen — all replaced with real
+actions OR removed entirely. ALLOWED_LINES allowlist on invariant
+#7 is now empty.
+
+The biggest find: BookingScreen rendered hard-coded mock data
+("Deep Cleaning · Jamie Hall · Tuesday 2:00 PM · 123 Main St")
+whenever fields were missing from the booking context. A user
+paying real money for a different service saw a confirmation
+describing a fabricated booking — same brand-killing family as
+title/share-message divergence (#3). Worse, because money already
+moved. Now:
+  - App.handleBook sets the full {name, price, service, when, where}
+    from the live chat state.
+  - BookingScreen renders rows only when their real value is
+    present; missing fields collapse out instead of falling back
+    to mock strings.
+  - New invariant #11 (booking-no-mock-defaults) enforces this
+    permanently — bans the four legacy literals from the file
+    AND forbids string-literal defaults in the booking destructure.
+
+AvailabilityScreen — previously the Save button toasted
+"Availability saved" without persisting anything. Now writes the
+choice to auth.user.user_metadata.availability[YYYY-MM-DD] with
+localStorage fallback. Hydrates on mount. Save subline tells the
+user honestly that booking-time auto-blocking ships with full
+scheduling; they should manually decline blocked-date requests
+until then. ROADMAP.md #4 tracks the booking-time gate.
+
+ROADMAP.md (new) — documents the four real product gaps with
+ship-criteria so they don't keep masquerading as "coming soon"
+toasts:
+  1. Stripe Connect provider payouts (Cash out goes via mailto
+     until this lands).
+  2. Google People OAuth contacts import.
+  3. Inbox filters.
+  4. Booking-time availability gate.
+  5. Instagram OAuth sign-in.
+
+ManageServicesScreen + ServiceDetailProviderScreen — same family.
+Both fell back to MANAGED_SERVICES mock data on API error for
+signed-in users. A provider whose API call blipped saw
+Jamie/John/Steve's fake services as if they were their own.
+  - ManageServicesScreen: on signed-in error, set services=[] and
+    surface the error message via toast; do NOT show mock list.
+  - ServiceDetailProviderScreen: on UUID-id not-found / error,
+    render a clean "Service not found" state with a back button;
+    do NOT fall back to MANAGED_SERVICES.listed[0].
+
+Orphan legacy routes /share, /social-posts, /profile-shared now
+redirect to /home. The underlying screen files still contain
+hard-coded fake-user data (Gervon, Reyna, fabricated follower
+counts); nothing live navigates to them, but a direct URL hit
+would have rendered the fake data. Routes are redirected via
+<Navigate to="/home" replace /> until the screens are rewritten
+to read real data. /notification kept live — that screen is
+already rewritten to a clean empty state.
+
+Reviewer sub-agent run (wave 3) caught four residual sharp edges:
+
+1. RecoNotificationScreen still had three tabs (Requests / Upcoming
+   / Past) that all rendered the same empty state — soft lie that
+   tabs filter when they don't. Tabs removed entirely; screen is
+   now a single calm empty state.
+
+2. AvailabilityScreen wasn't auth-gated on save. A signed-out user
+   would hit supabase.auth.updateUser (fails), then the localStorage
+   catch would toast "Saved on this device (sync will retry)" with
+   no account to ever sync to. Now short-circuits with "Sign in to
+   save your availability" + navigate('/auth').
+
+3. qa.mjs invariant #11 destructure regex was hard-coded to `?? {}`
+   — a future `|| {}` would silently bypass. Made the regex match
+   both. Also added a contract assertion on App.jsx handleBook
+   that setBooking({...}) still includes service/when/where keys
+   so a partial-revert can't quietly under-render the confirmation.
+
+4. EarningsScreen Cash out only used mailto; users with no mailto
+   handler would see the toast but nothing happens. Now also copies
+   support@cergio.ai to the clipboard as a backup path, with a
+   try/catch so the click never errors. Updated invariant #8 regex
+   to accept optional-chaining `clipboard?.writeText` so the new
+   call doesn't false-positive against the copy-is-real check.
+
+After fixes: qa.mjs 11/11 GREEN, reviewer concerns addressed.
+
+Wave 4 — kill two more mock-data sub-screens:
+
+- /earnings/network (NetworkEarningsScreen) and /earnings/track
+  (TrackInvitesScreen) both rendered NETWORK_EARNINGS mock feed
+  + hardcoded BREAKDOWN counts. A real user with $0 earned saw
+  a feed of imaginary "+$141.52" rows under their own name. Both
+  routes redirected to /earnings (the real earnings ledger
+  already shows invite-kind earnings rows).
+- EarningsBreakdownScreen "Track my invites" link → relabeled
+  "See invite earnings ›" and navigates to /earnings to match
+  the redirect destination.
+- ROADMAP.md #5 documents the real per-invite tracker as a gap
+  with explicit ship criteria (listMyInvites helper, real-data
+  rewrite of TrackInvitesScreen, restore the route).
+
+Wave 5 — biggest catch yet: ActivityScreen regressed.
+
+The "Friends recently booked" mock feed (FEED) on ActivityScreen
+was removed once (task #9 in the project tracker) and silently
+re-grew. Real signed-in users were seeing "Stephanie K. booked
+Jamie Hall — Deep Cleaning" as if it were their actual friend.
+Removed for the second time + locked down with a new invariant:
+
+- **CRITICAL_FLOWS.md invariant #12 (no-mock-on-signed-in-paths)**
+  + qa.mjs test that scans src/screens/ for imports from
+  ../data/mock and rejects any FEED / NETWORK_EARNINGS /
+  TRANSACTIONS / BREAKDOWN symbol that isn't gated behind
+  !auth?.isSignedIn / usingMock / useMock. Catches zombie imports
+  too — anything pulled but never used is also a HARD FAIL
+  because it'll re-grow.
+
+NetworkEarningsScreen, TrackInvitesScreen, TransactionsScreen
+were already orphan (redirected by their routes), but their
+component files still imported NETWORK_EARNINGS / BREAKDOWN /
+TRANSACTIONS — which would have re-armed the regression next
+time someone added a route. All three files neutered to just
+`return <Navigate to="/earnings" replace />`. Mock imports gone.
+
+Saved a memory entry (feedback_no_fake_feeds.md) so future
+Cowork sessions don't reintroduce this pattern.
+
+Wave 6 — DataDeletionScreen lying-toast killed.
+
+DataDeletionScreen's in-app "Delete my account" button toasted
+"Account deletion request received. We'll email confirmation
+within 24 hours" — without firing ANY action. The handler was
+just `showToast` + a TODO comment. That's a brand-killing
+legal/privacy lie of the highest order: a user who wants their
+data gone hits a button, sees "request received", walks away
+thinking it's handled, and their data sits untouched.
+
+Now: clicking the button opens a real mailto:privacy@cergio.ai
+with the user's email + user ID pre-filled in the body. Privacy
+email also copied to the clipboard as a fallback for browsers
+with no mailto handler. We process the deletion manually within
+30 days until the delete-account edge function ships
+(ROADMAP.md #6 tracks ship-criteria).
+
+Final state after wave 6: qa.mjs 12/12 GREEN. 17 files in the
+working tree + 3 new (ROADMAP.md, PENDING_COMMIT_MSG.txt — and
+this commit also touches the new memory file but that lives
+outside the repo).
+
+Operational: Unlock and Push.command now reads commit message
+from PENDING_COMMIT_MSG.txt when present (so future sandbox-side
+work can stage a meaningful message even when .git/index.lock
+blocks an inline commit).
+
+Files touched:
+  - src/App.jsx (handleBook enriches booking context)
+  - src/screens/BookingScreen.jsx (rewrite — no mock defaults)
+  - src/screens/AvailabilityScreen.jsx (real persistence)
+  - src/screens/EarningsScreen.jsx (mailto cash-out)
+  - src/screens/FindFriendsScreen.jsx (Google contacts row removed)
+  - src/screens/RecoNotificationScreen.jsx (fake banner gutted)
+  - src/screens/ManageServicesScreen.jsx (no mock on API error)
+  - src/screens/ServiceDetailProviderScreen.jsx (real not-found state)
+  - scripts/qa.mjs (+ invariant #11, emptied #7 allowlist)
+  - CRITICAL_FLOWS.md (+ #11 section)
+  - ROADMAP.md (new — 5 real product gaps with ship-criteria)
+  - (parent) Unlock and Push.command (reads PENDING_COMMIT_MSG.txt)
+
+Verified: #3, #7, #11 (per CRITICAL_FLOWS.md)
+qa.mjs: pass (11/11)

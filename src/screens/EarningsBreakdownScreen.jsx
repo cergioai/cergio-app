@@ -112,11 +112,16 @@ export function EarningsBreakdownScreen() {
             Reco more
           </button>
         </div>
+        {/* CERGIO-GUARD: this used to navigate to /earnings/track,
+            a mock-data screen. Until the real per-invite tracker
+            ships (ROADMAP.md), funnel users to the earnings ledger
+            which already shows real invite earnings rows. Label
+            updated to match the destination. */}
         <button
-          onClick={() => navigate('/earnings/track')}
+          onClick={() => navigate('/earnings')}
           className="w-full text-center text-[13px] font-bold text-white mt-4 underline underline-offset-2"
         >
-          Track my invites
+          See invite earnings ›
         </button>
       </div>
     </div>

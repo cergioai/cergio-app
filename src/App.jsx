@@ -175,7 +175,20 @@ function Layout() {
   //      PaymentSheet modal. The sheet flips status to 'confirmed' on Stripe
   //      success, then navigates.
   const handleBook = useCallback(async (provider) => {
-    setBooking({ name: provider.name, price: `$${provider.price}` });
+    // CERGIO-GUARD: BookingScreen used to render hard-coded mock data
+    // ("Deep Cleaning / Jamie Hall / Tuesday 2:00 PM / 123 Main St")
+    // when fields were missing. A user paying real $$ would see a
+    // confirmation screen describing a completely different booking.
+    // Fix: pass everything BookingScreen needs from the live chat
+    // state + the provider record. Missing fields render as a dash
+    // (BookingScreen handles this) — never as fabricated mock data.
+    setBooking({
+      name:     provider.name,
+      price:    `$${provider.price}`,
+      service:  provider.title || provider.taxonomy_provider_type || chat?.state?.originalQuery || chat?.state?.what || '',
+      when:     chat?.state?.when || '',
+      where:    chat?.state?.where || '',
+    });
 
     // (a) Demo path — keep the existing UX where mock cards just navigate.
     if (!provider.ownerId) {
@@ -323,14 +336,24 @@ export default function App() {
           <Route path="/data-deletion"  element={<DataDeletionScreen />} />
           <Route path="/inbox"             element={<JobsInboxScreen />} />
           <Route path="/complete"          element={<ServiceCompleteScreen />} />
-          <Route path="/share"             element={<SharePromptScreen />} />
+          {/* CERGIO-GUARD: /share, /social-posts, /profile-shared,
+              /notification are legacy demo routes left over from the
+              v1 walkthrough. The screen files still contain hard-coded
+              fake-user data (Gervon, Reyna, fabricated follower
+              counts). Nothing in the live UI navigates to them, but a
+              direct URL hit would render that fake data. We redirect
+              to /home instead. Re-enable the routes only after the
+              screens are rewritten to read real data. */}
+          <Route path="/share"             element={<Navigate to="/home" replace />} />
           <Route path="/benefits"          element={<FreeBenefitsScreen />} />
           <Route path="/rainmaker-request" element={<RainmakerRequestScreen />} />
           <Route path="/request/:id?"      element={<RequestDetailScreen />} />
           <Route path="/job"               element={<JobDetailsScreen />} />
           <Route path="/rate"              element={<RateConfirmScreen />} />
-          <Route path="/social-posts"      element={<SocialPostsScreen />} />
-          <Route path="/profile-shared"    element={<ProfileSharedScreen />} />
+          <Route path="/social-posts"      element={<Navigate to="/home" replace />} />
+          <Route path="/profile-shared"    element={<Navigate to="/home" replace />} />
+          {/* /notification was rewritten to a clean empty state that
+              points users at /inbox; safe to keep the route live. */}
           <Route path="/notification"               element={<RecoNotificationScreen />} />
           <Route path="/rainmaker/apply"             element={<RainmakerApplyScreen />} />
           <Route path="/rainmaker/apply/details"     element={<RainmakerDetailsScreen />} />
@@ -356,10 +379,28 @@ export default function App() {
 
           <Route path="/earnings"              element={<EarningsScreen />} />
           <Route path="/earnings/breakdown"    element={<EarningsBreakdownScreen />} />
-          <Route path="/earnings/network"      element={<NetworkEarningsScreen />} />
-          <Route path="/earnings/transactions" element={<TransactionsScreen />} />
+          {/* CERGIO-GUARD: /earnings/network rendered a NETWORK_EARNINGS
+              mock feed with hardcoded names and amounts ($141.52
+              duplicates etc.). Nothing in live UI navigates here.
+              Redirect to the real /earnings ledger until the screen
+              is rewritten to read from getMyEarnings. */}
+          <Route path="/earnings/network"      element={<Navigate to="/earnings" replace />} />
+          {/* CERGIO-GUARD: /earnings/transactions rendered the mock
+              TRANSACTIONS feed with fake names + txn IDs. Only
+              reachable from /earnings/track (now redirected) so
+              effectively orphan. Redirect to /earnings until a
+              real Stripe-backed transactions list ships. */}
+          <Route path="/earnings/transactions" element={<Navigate to="/earnings" replace />} />
           <Route path="/earnings/how"          element={<EarnExplainerScreen />} />
-          <Route path="/earnings/track"        element={<TrackInvitesScreen />} />
+          {/* CERGIO-GUARD: /earnings/track rendered the NETWORK_EARNINGS
+              mock feed + BREAKDOWN.friendsInvited (hardcoded number).
+              A user with $0 real earnings would see imaginary "+$141.52"
+              rows under a "Track my invites" headline. Until the screen
+              is rewritten to read from the real earnings ledger
+              filtered by kind='invite', redirect to /earnings which
+              already shows real invite earnings. EarningsBreakdownScreen
+              link still works because it lands on a real page. */}
+          <Route path="/earnings/track"        element={<Navigate to="/earnings" replace />} />
           <Route path="/invite/friends-popup"  element={<InviteFriendPopupScreen />} />
           <Route path="/invite/recommend-popup" element={<RecommendServicePopupScreen />} />
           <Route path="/invite/friends"        element={<InviteFriendsScreen />} />

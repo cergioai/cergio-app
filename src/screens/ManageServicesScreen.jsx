@@ -36,7 +36,16 @@ export function ManageServicesScreen() {
     let cancelled = false;
     listMyServices().then(({ data, error }) => {
       if (cancelled) return;
-      if (error) { setServices('mock'); return; }
+      // CERGIO-GUARD: on API error for a signed-in user, show the
+      // real empty state — NOT the mock listing. A provider who
+      // thinks they own Jamie/John/Steve's services because of a
+      // network blip is the same family of lying surface as the
+      // BookingScreen mock defaults (#11).
+      if (error) {
+        showToast(`Couldn't load your services: ${error.message || 'try again'}`);
+        setServices([]);
+        return;
+      }
       setServices(data || []);
     });
     return () => { cancelled = true; };

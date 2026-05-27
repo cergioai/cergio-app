@@ -259,6 +259,69 @@ taxonomy can still ROUTE to a wedding-bundle offering ID internally
 
 ---
 
+## 11. BOOKING confirmation never fabricates mock data
+
+**Why:** a user paying real money for a Cleaning by provider X seeing a
+post-booking screen that says "Deep Cleaning · Jamie Hall · Tuesday
+2:00 PM · 123 Main St" is the same family of brand-killing lie as
+the title/share-message divergence (#3). Worse — money already
+moved, so trust is being destroyed at the exact moment Cergio's
+promise was supposed to be cashed in.
+
+**Test (qa.mjs `booking-no-mock-defaults`):**
+- Read `src/screens/BookingScreen.jsx` (with comments stripped).
+- Assert it contains NONE of the legacy mock literals: `Jamie Hall`,
+  `Deep Cleaning`, `Tuesday 2:00 PM`, `123 Main St`.
+- Assert the destructure from `booking` has NO string-literal
+  defaults — `name = 'Jamie Hall'` would re-introduce the bug.
+
+**Failure mode to prevent:** prior bug — `setBooking({ name, price })`
+in App.handleBook only set two fields; BookingScreen filled the
+rest with hard-coded mock strings. Any user without a chat-state
+`what`/`when`/`where` (e.g. arrived via My Requests rebooking) saw
+the mock data render as if it were their booking.
+
+**Guard:** `App.handleBook` enriches `setBooking({ name, price,
+service, when, where })` from the live chat state. BookingScreen
+renders rows ONLY when their real value is present (`.filter(Boolean)`
+drops empty rows). Empty card collapses entirely rather than
+showing placeholder text.
+
+---
+
+## 12. NO mock-data imports leaking into signed-in render paths
+
+**Why:** The "Friends recently booked" feed on ActivityScreen was
+removed once (project task #9) and silently regressed back into the
+file — real signed-in users saw "Stephanie K. booked Jamie Hall —
+Deep Cleaning" as if it were their actual friends. Same family as
+the BookingScreen mock-defaults bug (#11) and the title/share-message
+divergence (#3). The user has said multiple times: "we can't blast
+fake data or porno or non genuine content".
+
+**Test (qa.mjs `no-mock-on-signed-in-paths`):**
+- For each file in `src/screens/`, find imports of the form
+  `import { … } from '../data/mock'`.
+- For each imported symbol in `[FEED, NETWORK_EARNINGS, TRANSACTIONS,
+  BREAKDOWN]`, assert one of:
+  - The file is in `src/screens-legacy/` (allowed).
+  - The symbol is referenced AND the file gates it behind
+    `!auth?.isSignedIn`, `!isSignedIn`, `usingMock`, or `useMock`.
+- Zombie imports (imported but never used) are also a HARD FAIL —
+  they're re-grow risk.
+
+**Failure mode to prevent:** anyone editing a screen and pasting an
+import-of-convenience from `../data/mock` to flesh out a section,
+then forgetting to remove it. Within weeks the section grows back
+and real users see fake data.
+
+**Guard:** sign-out preview mocks must use the established gating
+variables (`usingMock` on CalendarScreen, `useMock` on
+ManageServicesScreen). Any signed-in render path that needs feed
+data fetches from the real API + ships a clean empty state.
+
+---
+
 ## How to update this file
 
 1. **Adding a new invariant.** Append it to the bottom. Update

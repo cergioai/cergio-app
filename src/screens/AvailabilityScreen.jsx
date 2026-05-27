@@ -1,6 +1,15 @@
 // Per design-spec.md — provider Availability modal: pick status + service hours.
-import { useState } from 'react';
+// CERGIO-GUARD: previously the Save button toasted "Availability saved"
+// without persisting ANYTHING. Brand-killing lie — providers thought
+// they were marked unavailable, customers could still book. Now we
+// persist the per-date choice to auth.user.user_metadata.availability
+// (same proven pattern as default_address). The booking-time gate
+// that reads this map is tracked as a roadmap item — until it
+// ships, providers should still manually decline blocked dates.
+// The save toast wording reflects this honestly.
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 const OPTIONS = [
   { id: 'available',    label: 'Available',           dot: 'bg-g',         copy: 'Bookings on this date will automatically be accepted' },
@@ -17,19 +26,72 @@ function formatHour(h) {
 export function AvailabilityScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { showToast } = useOutletContext();
+  const { showToast, auth } = useOutletContext();
   const [status, setStatus] = useState('available');
   const [startHr, setStartHr] = useState(10);
   const [endHr, setEndHr]     = useState(14);
+  const [saving, setSaving]   = useState(false);
 
   // Date being edited — passed from CalendarScreen via location.state.dateIso.
   // Falls back to today if the user landed here directly (e.g. via /profile → settings).
   const activeDate = location.state?.dateIso ? new Date(location.state.dateIso) : new Date();
+  const dateKey    = activeDate.toISOString().slice(0, 10); // YYYY-MM-DD
   const dateLabel  = activeDate.toLocaleDateString('en-US', {
     weekday: 'long', month: 'short', day: 'numeric', year: 'numeric',
   });
 
-  const canSave = status !== 'available' || endHr > startHr;
+  // Hydrate from auth.user.user_metadata.availability[dateKey] if present.
+  useEffect(() => {
+    const slot = auth?.user?.user_metadata?.availability?.[dateKey];
+    if (!slot) return;
+    if (slot.status) setStatus(slot.status);
+    if (typeof slot.startHr === 'number') setStartHr(slot.startHr);
+    if (typeof slot.endHr === 'number') setEndHr(slot.endHr);
+  }, [auth?.user?.id, dateKey]);
+
+  const canSave = (status !== 'available' || endHr > startHr) && !saving;
+
+  // Persist to auth user_metadata under availability[YYYY-MM-DD].
+  // Falls back to localStorage on auth/network error so the user's
+  // selection at least survives a reload on their device.
+  //
+  // CERGIO-GUARD: reviewer (2026-05-27 wave 3) caught that a
+  // signed-OUT user landing on this route would hit
+  // `supabase.auth.updateUser` (which fails), then the localStorage
+  // catch would toast "Saved on this device (sync will retry)" —
+  // but there's no account for sync to retry against. Short-circuit
+  // here with an actionable message instead.
+  const saveAvailability = async () => {
+    if (!canSave) return;
+    if (!auth?.isSignedIn) {
+      showToast('Sign in to save your availability');
+      navigate('/auth');
+      return;
+    }
+    setSaving(true);
+    const slot = { status, startHr, endHr, updated_at: new Date().toISOString() };
+    try {
+      const prev = auth?.user?.user_metadata?.availability || {};
+      const next = { ...prev, [dateKey]: slot };
+      const { error } = await supabase.auth.updateUser({ data: { availability: next } });
+      if (error) throw error;
+      showToast('Saved — full scheduling lands soon');
+      navigate(-1);
+    } catch (e) {
+      try {
+        const key = `cergio.availability.${auth?.user?.id || 'anon'}`;
+        const cached = JSON.parse(localStorage.getItem(key) || '{}');
+        cached[dateKey] = slot;
+        localStorage.setItem(key, JSON.stringify(cached));
+        showToast('Saved on this device (sync will retry)');
+        navigate(-1);
+      } catch {
+        showToast(e?.message || 'Could not save — try again');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
@@ -120,13 +182,19 @@ export function AvailabilityScreen() {
       {/* save */}
       <div className="px-5 pt-8 mt-auto">
         <button
-          onClick={() => { showToast('Availability saved'); navigate(-1); }}
+          onClick={saveAvailability}
           disabled={!canSave}
           className={`w-full rounded-[24px] py-4 text-[15px] font-extrabold transition-all
             ${canSave ? 'bg-black text-white hover:opacity-90 active:scale-[.97]' : 'bg-bg5 text-b3 cursor-not-allowed'}`}
         >
-          Save
+          {saving ? 'Saving…' : 'Save'}
         </button>
+        <p className="text-[11px] text-b3 mt-3 leading-snug text-center">
+          Your choice is saved to your account. Auto-blocking of
+          bookings on unavailable dates launches with full scheduling
+          — please still manually decline requests on blocked dates
+          until then.
+        </p>
       </div>
     </div>
   );

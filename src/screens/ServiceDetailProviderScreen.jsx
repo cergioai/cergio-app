@@ -69,7 +69,14 @@ export function ServiceDetailProviderScreen() {
         if (cancelled) return;
         setLoading(false);
         if (error || !data) {
-          setSvc(findMockService(id) || MANAGED_SERVICES.listed[0]);
+          // CERGIO-GUARD: previously fell back to MANAGED_SERVICES.listed[0]
+          // — a fake "Jamie's House Cleaning" — so a provider whose real
+          // service failed to load saw a Jamie listing they didn't own and
+          // could edit it (writes would no-op because svc.real=false).
+          // Brand-killing on its own; legally noisy because a real provider
+          // appears to be misrepresented as their own service. Show a
+          // proper not-found state instead.
+          setSvc({ id, real: false, notFound: true });
         } else {
           // Normalise to the same shape the screen renders from
           const firstOffering = data.offerings?.[0];
@@ -102,6 +109,27 @@ export function ServiceDetailProviderScreen() {
     return (
       <div className="flex-1 flex items-center justify-center bg-cr">
         <p className="text-[14px] text-b3">Loading service…</p>
+      </div>
+    );
+  }
+
+  // CERGIO-GUARD: real UUID id whose service failed to load. Don't
+  // pretend it's somebody else's service — render an honest
+  // not-found state.
+  if (svc.notFound) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-cr px-7">
+        <p className="text-[18px] font-extrabold text-black text-center mb-2">Service not found</p>
+        <p className="text-[14px] text-b3 text-center leading-relaxed mb-6">
+          We couldn't load this service. It may have been removed,
+          or you may not have permission to view it.
+        </p>
+        <button
+          onClick={() => navigate('/profile/services')}
+          className="bg-black text-white rounded-pill px-5 py-2.5 text-[14px] font-extrabold"
+        >
+          Back to my services
+        </button>
       </div>
     );
   }

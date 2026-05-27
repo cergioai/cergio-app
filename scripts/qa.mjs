@@ -203,10 +203,12 @@ test('geo-strict', 'listServices proximity branch returns empty when no local hi
 // monetized / notification screens. A literal in code = a button that
 // promises something and delivers a toast. A comment = documentation.
 //
-// Carve-outs (acknowledged shipping gaps, allowlisted by exact string):
-//   - EarningsScreen "Cashing out — coming soon"
-//     (Stripe Connect payout endpoint not wired yet; gated to provider-
-//      side balances only; explicit ROADMAP entry below)
+// Carve-outs: none right now. The previous Earnings allowlist for
+// "Cashing out — coming soon" was replaced with a real `mailto:`
+// action (see EarningsScreen line ~85) — the button now opens a
+// pre-filled cash-out request to support@cergio.ai instead of
+// toasting a lie. ROADMAP.md tracks the proper Stripe Connect
+// payout implementation.
 //
 test('no-coming-soon', 'No "coming soon" placeholders on monetized / notification paths', '#7', async () => {
   // CERGIO-GUARD: this test catches THREE shapes — string literals
@@ -219,11 +221,10 @@ test('no-coming-soon', 'No "coming soon" placeholders on monetized / notificatio
   //
   // Allowlist: exact full-line strings we've explicitly accepted as
   // shipping gaps. Each one needs a reason in the comment next to it.
-  const ALLOWED_LINES = new Set([
-    // Stripe payout endpoint not wired yet — provider-only surface,
-    // gated to balances > $250; explicit roadmap entry.
-    `onClick={() => showToast('Cashing out — coming soon')}`,
-  ]);
+  // Currently EMPTY — every prior carve-out has been replaced with a
+  // real action. Future additions need a written justification AND
+  // a ROADMAP.md entry.
+  const ALLOWED_LINES = new Set([]);
   const critical = [
     'src/screens/ResultsScreen.jsx',
     'src/screens/InviteFriendPopupScreen.jsx',
@@ -283,7 +284,10 @@ test('copy-is-real', "'Invite link copied' toasts must actually copy", '#8', asy
       // - file.startsWith('src/hooks/') — useToast itself can fire this
       const win = content.slice(Math.max(0, m.index - 400), m.index);
       const hasReal =
-        /clipboard\.writeText|navigator\.share\(|navigate\(|copyInvite\(|copyLink\(/.test(win);
+        // Match both plain and optional-chaining forms (`.` or `?.`).
+        // Permissive on purpose — the previous strict regex would have
+        // missed a `clipboard?.writeText?.(...)` call that DOES copy.
+        /clipboard\??\.\s*writeText|navigator\.share\(|navigate\(|copyInvite\(|copyLink\(/.test(win);
       if (!hasReal) {
         offenders.push(`${path.relative(REPO_ROOT, f)}: ${m[0].slice(0, 60)}…`);
       }
@@ -349,6 +353,128 @@ test('service-map-no-bundles', 'useChat SERVICE_MAP values are concrete services
   }
   assert(offenders.length === 0,
     `SERVICE_MAP contains bundle-ish display values (regression risk):\n    ${offenders.join('\n    ')}`);
+});
+
+// ─── INVARIANT #11: BookingScreen never fabricates mock data ────────────
+// The post-booking confirmation card MUST render real fields from the
+// `booking` context. Hard-coded "Deep Cleaning / Jamie Hall / Tuesday
+// 2:00 PM / 123 Main St" defaults shipped once and were the same family
+// of bug as the title/share-message divergence (#3) — a user paying real
+// money saw a confirmation describing a fabricated booking.
+test('booking-no-mock-defaults', 'BookingScreen renders real booking fields, never mock defaults', '#11', async () => {
+  const src = readFile('src/screens/BookingScreen.jsx');
+  const noComments = stripComments(src);
+  // Each of these strings used to live as a default in the screen.
+  // They have no business appearing as code-literals there ever again.
+  const BANNED = [
+    'Jamie Hall',
+    'Deep Cleaning',
+    'Tuesday 2:00 PM',
+    '123 Main St',
+  ];
+  const offenders = BANNED.filter(s => noComments.includes(s));
+  assert(offenders.length === 0,
+    `BookingScreen still contains mock-default literal(s): ${offenders.join(', ')}`);
+  // Also assert the destructure no longer has fallback values. If a
+  // future edit re-introduces `name = 'Jamie Hall'`, this catches it.
+  //
+  // CERGIO-GUARD (reviewer wave 3): permissively match `??` OR `||`
+  // forms of the destructure — `booking || {}` would have silently
+  // bypassed the original `?? {}`-only regex.
+  const destructure = noComments.match(
+    /const\s*\{[\s\S]+?\}\s*=\s*booking\s*(?:\?\?|\|\|)\s*\{\s*\}/
+  );
+  if (destructure) {
+    assert(!/=\s*'[^']+'/.test(destructure[0]),
+      'BookingScreen destructure has string-literal default — likely re-introduced mock data');
+  }
+
+  // CERGIO-GUARD: BookingScreen renders {service, when, where} —
+  // but those fields ONLY exist on the booking context if
+  // App.handleBook puts them there. If a future refactor reverts
+  // handleBook to `setBooking({ name, price })`, BookingScreen
+  // collapses to a 2-row card and the test against BookingScreen.jsx
+  // alone wouldn't catch it. Pin the contract on the App side too.
+  const appSrc = stripComments(readFile('src/App.jsx'));
+  const setBookingCall = appSrc.match(/setBooking\(\s*\{[\s\S]+?\}\s*\)/);
+  assert(setBookingCall, 'No setBooking({...}) call found in App.jsx');
+  const body = setBookingCall[0];
+  for (const field of ['service', 'when', 'where']) {
+    assert(new RegExp(`\\b${field}\\s*:`).test(body),
+      `App.handleBook setBooking({...}) is missing '${field}:' — BookingScreen will under-render`);
+  }
+});
+
+// ─── INVARIANT #12: No mock-data imports on signed-in user paths ────────
+// The "Friends recently booked" feed on ActivityScreen was removed once
+// (task #9 in the project tracker) and silently regressed. The user has
+// said multiple times: "we can't blast fake data or porno or non genuine
+// content". This invariant locks down the regression: a banned mock
+// export cannot be imported by a screen unless the file gates it behind
+// an explicit `!auth?.isSignedIn` preview check.
+//
+// Allowed:
+//   - data/mock.js itself (the source)
+//   - screens-legacy/ (the old walkthrough demo)
+//   - components/ helpers that only render under the preview gate
+//   - screens that import the symbol but use it strictly under
+//     `!auth?.isSignedIn` (verified by looking for both patterns)
+//
+test('no-mock-on-signed-in-paths', 'Banned mock-data imports never render to signed-in users', '#12', async () => {
+  // Mock symbols that, when rendered, produce fabricated user-visible
+  // data ("Stephanie K. booked Jamie Hall" / "+$141.52" / etc.).
+  const BANNED = ['FEED', 'NETWORK_EARNINGS', 'TRANSACTIONS', 'BREAKDOWN'];
+  const SCREENS_DIR = path.join(REPO_ROOT, 'src/screens');
+  const files = walkSync(SCREENS_DIR).filter(f => /\.(jsx?|tsx?)$/.test(f));
+  const offenders = [];
+
+  for (const f of files) {
+    const rel = path.relative(REPO_ROOT, f);
+    if (rel.includes('/screens-legacy/')) continue;
+    const src = fs.readFileSync(f, 'utf8');
+    const noComments = stripComments(src);
+
+    // Find an import statement from ../data/mock and which names it pulls.
+    const importMatch = noComments.match(
+      /import\s*\{([^}]+)\}\s*from\s*['"]\.\.\/data\/mock['"]/
+    );
+    if (!importMatch) continue;
+    const importedNames = importMatch[1].split(',').map(s => s.trim());
+    const bannedImported = importedNames.filter(n => BANNED.includes(n));
+    if (bannedImported.length === 0) continue;
+
+    // For each banned import, verify it's gated on !auth?.isSignedIn —
+    // either the file references it inside a sign-out preview branch,
+    // or it never references it (dead import — also a fail because
+    // it'll re-grow into a render).
+    for (const name of bannedImported) {
+      // Strip strings too — we don't want a literal mention in a
+      // comment-stripped string to fool the check.
+      const code = stripCommentsAndStrings(src);
+      // Find usages of the symbol — but NOT in the import statement.
+      const usages = [...code.matchAll(new RegExp(`\\b${name}\\b`, 'g'))]
+        .filter(m => {
+          // Skip the import line by checking the surrounding 80 chars.
+          const around = code.slice(Math.max(0, m.index - 40), m.index + 40);
+          return !/import\s*\{[^}]*$/.test(around) && !/from\s*['"]\.\.\/data\/mock['"]/.test(around);
+        });
+      if (usages.length === 0) {
+        offenders.push(`${rel}: imports '${name}' but never uses it (zombie import — re-grow risk)`);
+        continue;
+      }
+      // The file must mention `!auth?.isSignedIn` or `!isSignedIn`
+      // OR `usingMock` (the established gating variable). Otherwise
+      // the mock data renders for real users.
+      const gated =
+        /!\s*auth\??\.?\s*isSignedIn|!\s*isSignedIn|usingMock|useMock/.test(code);
+      if (!gated) {
+        offenders.push(`${rel}: uses '${name}' without a !isSignedIn / usingMock gate`);
+      }
+    }
+  }
+
+  assert(offenders.length === 0,
+    `Mock-data import leaking to signed-in render paths:\n    ${offenders.join('\n    ')}`);
 });
 
 // ─── helper: file walk ──────────────────────────────────────────────────

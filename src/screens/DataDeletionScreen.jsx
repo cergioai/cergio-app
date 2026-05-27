@@ -52,17 +52,31 @@ export function DataDeletionScreen() {
 
         <div>
           <h2 className="text-[18px] font-extrabold text-black mb-2">Option 1 — delete from the app</h2>
+          {/* CERGIO-GUARD: the in-app "Delete my account" button used to
+              toast "Account deletion request received…" without actually
+              firing anything (the delete-account edge function was a
+              TODO). That's a brand-killing legal/privacy lie. Until the
+              edge function ships, the button opens a pre-filled mailto
+              to privacy@cergio.ai with the user's account info so we
+              process the deletion manually within 30 days. Same proven
+              pattern we use for Earnings cash-out (ROADMAP.md #1). */}
           {auth?.isSignedIn ? (
-            <button
+            <a
+              href={`mailto:privacy@cergio.ai?subject=${encodeURIComponent('Delete my Cergio account')}&body=${encodeURIComponent(`Hi — please delete my Cergio account and all associated data.\n\nEmail on account: ${auth?.user?.email || '(email)'}\nUser ID: ${auth?.user?.id || ''}\n\nThanks!`)}`}
               onClick={() => {
-                showToast?.('Account deletion request received. We\'ll email confirmation within 24 hours.');
-                // TODO: wire to delete-account edge function that hard-deletes
-                // auth.users + cascades to profiles + signs out.
+                try {
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText('privacy@cergio.ai');
+                  }
+                  showToast?.('Opening deletion request — privacy email copied as a backup');
+                } catch {
+                  showToast?.('Opening deletion request — email: privacy@cergio.ai');
+                }
               }}
-              className="w-full bg-danger text-white rounded-[14px] py-4 text-[15px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all"
+              className="w-full bg-danger text-white rounded-[14px] py-4 text-[15px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all text-center block"
             >
               Delete my Cergio account
-            </button>
+            </a>
           ) : (
             <button
               onClick={() => navigate('/auth')}

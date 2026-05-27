@@ -1,12 +1,13 @@
 // Activity — the consumer's "what's happening" hub.
 //
-// Two sections stacked top-to-bottom:
-//   1) FRIENDS' activity feed — the network signal that anchors the
-//      friends-of-friends value prop (recently booked, recently shared,
-//      recently joined). Reuses the FEED data the Home screen also surfaces.
-//   2) MY OPEN REQUESTS — the user's own outgoing service-bookings + outbound
-//      spotlight requests. Active rows only, deep links to the detail
-//      screens. A footer link gives access to the full history if needed.
+// CERGIO-GUARD: previously this screen had TWO sections — a fake
+// "Friends recently booked" feed (FEED mock) and the user's own
+// open requests. The fake feed was removed once (task #9) and
+// silently regressed. It's now gone permanently and locked down
+// by qa.mjs invariant #12 (no-mock-on-signed-in-paths). When we
+// have real friend-activity data (consumer's `network` graph
+// joined to recent `bookings`), we re-add the section reading
+// from that — never from `../data/mock`.
 //
 // Provider-side outgoing requests live in /inbox 'Sent' tab — this screen
 // is the consumer's view only.
@@ -14,8 +15,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { listConsumerBookings, listMyOutboundSpotlightRequests } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
-import { FEED } from '../data/mock';
-import { REWARDS } from '../lib/rewards';
+// FEED + REWARDS imports removed along with the fake "Friends
+// recently booked" section — see CERGIO-GUARD in the JSX below.
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -130,36 +131,19 @@ export function ActivityScreen() {
       <div className="px-5 pt-8 pb-2">
         <h1 className="text-[24px] font-extrabold text-black leading-tight">Activity</h1>
         <p className="text-[13px] text-b3 font-medium mt-1.5 leading-snug">
-          What your friends are booking and your own open requests.
+          Your own open requests.
         </p>
       </div>
 
-      {/* ─── Friends' activity feed — the network signal. ─────────────── */}
-      <p className="px-5 mt-4 mb-2 text-[11px] font-extrabold uppercase tracking-widest text-b3">
-        Friends recently booked
-      </p>
-      <div className="px-5 flex flex-col gap-1.5 mb-3">
-        {FEED.map(item => (
-          <div key={item.id} className="bg-white border border-bdr rounded-[14px] p-3 flex gap-3 items-center">
-            <div className="w-8 h-8 rounded-full bg-gl flex items-center justify-center text-[14px] flex-shrink-0">😊</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] text-black leading-tight">
-                <span className="font-extrabold">{item.name}</span> booked{' '}
-                <span className="font-extrabold text-g">{item.service}</span>
-              </p>
-              <p className="text-[10px] text-b3 mt-0.5">
-                {item.time}{item.saved ? ` · saved ${item.saved}` : ''}
-              </p>
-            </div>
-          </div>
-        ))}
-        <button
-          onClick={() => navigate('/find-friends')}
-          className="text-[11px] font-extrabold text-g underline underline-offset-2 mt-1 self-start ml-1"
-        >
-          Bring more friends on Cergio → ${REWARDS.perFriend}/friend
-        </button>
-      </div>
+      {/* CERGIO-GUARD: the "Friends recently booked" section that
+          rendered FEED (Stephanie K. booked Jamie Hall — Deep
+          Cleaning, etc.) has been removed AGAIN. It was deleted
+          once before (task #9) and silently regressed. Until we
+          have a real friend-activity query that pulls from the
+          consumer's `network` graph + recent bookings, this
+          block stays gone. The "Bring more friends" CTA moves
+          into a small invite card below the open-requests block
+          so it doesn't sit under a fake-friends header. */}
 
       {/* ─── Open requests — the user's own outgoing pile. ────────────── */}
       <p className="px-5 mt-3 mb-2 text-[11px] font-extrabold uppercase tracking-widest text-b3 flex items-center justify-between">

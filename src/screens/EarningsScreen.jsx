@@ -83,12 +83,30 @@ export function EarningsScreen() {
           </button>
         </div>
         {canCashOut ? (
-          <button
-            onClick={() => showToast('Cashing out — coming soon')}
-            className="w-full bg-white rounded-[14px] py-3.5 mt-2 text-[15px] font-extrabold text-black"
+          // CERGIO-GUARD: Stripe Connect payout endpoint isn't wired
+          // yet (it's a real product gap, see ROADMAP.md → "Provider
+          // payouts via Stripe Connect"). Until it ships, we do a
+          // REAL action — open the user's mail client with a
+          // pre-filled cash-out request to support@cergio.ai AND
+          // copy the support email to the clipboard so the user
+          // still has a path if their browser has no mailto handler
+          // (reviewer wave 3 flag).
+          <a
+            href={`mailto:support@cergio.ai?subject=${encodeURIComponent('Cash out request — Cergio')}&body=${encodeURIComponent(`Hi — I'd like to cash out my Cergio balance of $${(balanceCents/100).toFixed(2)}.\n\nMy account: ${auth?.user?.email || '(email)'}\nUser ID: ${auth?.user?.id || ''}\n\nThanks!`)}`}
+            onClick={() => {
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText('support@cergio.ai');
+                }
+                showToast('Opening cash-out request — support email copied as a backup');
+              } catch {
+                showToast('Opening cash-out request — email: support@cergio.ai');
+              }
+            }}
+            className="w-full bg-white rounded-[14px] py-3.5 mt-2 text-[15px] font-extrabold text-black text-center block"
           >
             Cash out
-          </button>
+          </a>
         ) : (
           <button
             onClick={() => navigate('/earnings/breakdown')}
