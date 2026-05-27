@@ -134,7 +134,26 @@ export function AuthScreen() {
         // (or they'll bounce around trying to submit things while not
         // signed in). Sticky toast explains the next step.
         const res = await auth.signUp(email.trim(), password, displayName.trim(), phone.trim());
-        if (res?.error) { showToast(res.error.message); return; }
+        if (res?.error) {
+          const msg = res.error.message || '';
+          // Rate-limit messaging is cryptic by default — translate it
+          // into actionable copy. Free-tier limit is ~4 confirmation
+          // emails/hour; sign-in is unaffected (no email).
+          if (/rate limit|too many|too frequent/i.test(msg)) {
+            showToast(
+              'Supabase signup email rate limit hit. Sign in if you already have an account, or wait ~15 minutes. ' +
+              'To remove this for development, run Disable Email Confirmation.command.',
+              { sticky: true },
+            );
+            setMode('signin');
+          } else if (/already registered|already.*exist/i.test(msg)) {
+            showToast('That email is already registered. Try signing in instead.', { sticky: true });
+            setMode('signin');
+          } else {
+            showToast(msg);
+          }
+          return;
+        }
         if (res?.needsEmailConfirm) {
           showToast(res.confirmMessage || 'Check your email to confirm your account, then sign in.', { sticky: true });
           setMode('signin');     // flip the tab so they're ready to sign in after confirming
