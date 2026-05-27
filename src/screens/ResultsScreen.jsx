@@ -251,14 +251,19 @@ export function ResultsScreen() {
   const n = providers.length;
 
   // CERGIO-GUARD: title surface MUST reflect what the user asked for.
+  // We now prefer the USER'S OWN WORDS over the parser's provider_type
+  // so the title can NEVER disagree with the share message below (both
+  // pull from originalQuery). Bug we hit: user searched 'live-in nanny'
+  // after 'deep cleaning' and the title showed 'live-in nannys' (from a
+  // freshly-set parser provider_type) while the share section still
+  // showed 'deep cleaning' (from a stale originalQuery). Always
+  // pulling display from the same source eliminates this class of bug.
+  //
   // Order of preference:
-  //   1. safe (non-generic) provider_type from the parser
-  //   2. user's own noun from originalQuery (their words, normalized)
+  //   1. user's own noun from originalQuery (their words, normalized)
+  //   2. safe (non-generic) provider_type from the parser as fallback
   //   3. neutral fallback ("matches")
-  // Never use parser-derived `what` here — it has been observed
-  // rewriting the user's ask (e.g. "personal chef" → "Weekly meal prep
-  // service"). See CHECKLIST.md §2.
-  const displayNoun = (safeProviderType || userNoun || '').trim();
+  const displayNoun = (userNoun || safeProviderType || '').trim();
   const displayNounLc = displayNoun.toLowerCase();
   const pluralize = (s) => s.endsWith('s') ? s : `${s}s`;
   const titleText = displayNoun
