@@ -1,48 +1,30 @@
-UX: leaf intensity wired through CSS vars + AuthScreen trim
+UX: leaf intensity on Home (engine-progress) + Splash + copy audit pass
 
-LEAF INTENSITY — REAL ACTIVITY DRIVES THE PLANT
+LEAF INTENSITY EVERYWHERE THE LEAF MOVES
 
-LeafLogo now accepts an `intensity` prop (0..1). The keyframes in
-src/index.css consume two CSS variables, --cg-leaf-amp + --cg-leaf-
-speed, that scale sway amplitude and loop duration:
+HomeScreen engine ticker leaf now scales intensity with planIdx —
+the plant breathes faster as the scripted engine progresses through
+its stages. Starts at 0.35 (soft) → ramps to 1.0 at the final stage.
+Same shape as ResultsScreen's live-counts pulse, only the source is
+scripted progress instead of DB rows.
 
-  intensity 0   → still
-  intensity 0.4 → soft breathe (amp 0.72, slow speed)
-  intensity 1.0 → full sway + fast sap flow
+SplashScreen leaf set to intensity=0.7 — a deliberate hold-still-
+but-alive feel for the booting state. Loud enough to feel alive,
+not so loud it competes with the wordmark.
 
-LeafLogo computes amp + speed from intensity and injects them as
-inline CSS variables. cg-leaf-alive + cg-leaf-vein consume both via
-calc() so a single intensity value reshapes the whole motion.
+HOME COPY AUDIT — no regressions found
 
-Wired in ResultsScreen: the loading-state leaf reads
-`liveStatus.intensity` from useRequestActivity, so the plant
-literally reacts to real notification + bid counts on the open
-request. As replies land, the leaf sways harder and the sap flows
-faster — the user can SEE that the network is engaging.
+Swept HomeScreen.jsx for stale terms:
+  ✓ No "Cergio Cash" / "Cergio Coin"
+  ✓ No hardcoded "$250" near reward-context words (REWARDS only)
+  ✓ No "Expert" — "Connector" everywhere
+  ✓ Headlines + sub-copy consistent with REWARD_COPY
 
-The intensity formula (canonical, in activityToStatus):
-  min(1, (notified + replied * 3) / 10)
-Bids count 3× because a reply is real engagement, not just a ping.
-
-Backwards compatible: existing callers using `working={true|false}`
-work unchanged — `working` becomes a 0/1 intensity alias when no
-explicit intensity is passed.
-
-AUTHSCREEN TRIM
-
-Tightened density per the user's "more elegant" directive:
-  • Input padding   py-4   → py-3.5
-  • Field labels   text-[14px] font-extrabold → text-[11px] font-extrabold
-    uppercase tracking-wide text-b3 (Stripe/Linear style)
-  • Label margin   mb-2  → mb-1.5
-  • Social-row buttons text-[13px] py-3 → text-[12px] font-bold py-2.5
-
-Same flows, same fields — just less visual shouting.
+qa #22 + #24 + #25 are the static enforcement; this commit is the
+manual cross-check that came back clean.
 
 VERIFIED  qa.mjs: 26/26 pass
 
 Files:
-  src/index.css
-  src/components/ui/LeafLogo.jsx
-  src/screens/ResultsScreen.jsx
-  src/screens/AuthScreen.jsx
+  src/screens/HomeScreen.jsx
+  src/screens/SplashScreen.jsx

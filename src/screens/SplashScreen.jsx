@@ -10,7 +10,7 @@ export function SplashScreen() {
 
       <div className="relative z-10 flex flex-col items-center gap-5 animate-fade-up">
         {/* CERGIO-GUARD: splash variant — Claude-inspired orbit + halo. */}
-        <LeafLogo variant="splash" size={88} working />
+        <LeafLogo variant="splash" size={88} working intensity={0.7} />
         <h1 className="text-[34px] font-extrabold text-white tracking-widest uppercase">Cergio</h1>
         <p className="text-[14px] text-white/50 font-medium text-center max-w-[240px] leading-relaxed">
           Find trusted services, recommended by friends

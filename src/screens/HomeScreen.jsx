@@ -1109,7 +1109,17 @@ export function HomeScreen() {
             {engineStarted && (
               <div className="mt-2 px-1 self-start" aria-live="polite">
                 <div className="flex items-center gap-2">
-                  <LeafLogo working={engineSearching} size={16} />
+                  {/* CERGIO-GUARD (2026-05-28): leaf intensity grows as
+                      the engine ticks through stages, so the plant
+                      visibly accelerates during a search instead of
+                      pulsing at a constant rate. */}
+                  <LeafLogo
+                    working={engineSearching}
+                    size={16}
+                    intensity={engineSearching
+                      ? Math.min(1, 0.35 + (planIdx / Math.max(1, plan.length - 1)) * 0.65)
+                      : 0}
+                  />
                   <p className="text-[13px] text-gd font-medium leading-snug">
                     {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
                   </p>
