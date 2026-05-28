@@ -167,6 +167,12 @@ export function ResultsScreen() {
   // services === []    → search completed, zero matches (EmptyState)
   // services has rows → render ProviderCards
   const [services, setServices]     = useState(null);
+  // paidFallback === true → freeOnly returned zero AND a paid re-query
+  // succeeded. The render path then shows a soft "No free X nearby —
+  // here are paid options" banner above the cards instead of the
+  // misleading "No plumbers yet" empty state. This is the honest
+  // story: free filter is a preference, not the only inventory.
+  const [paidFallback, setPaidFallback] = useState(false);
   const [statusStep, setStatusStep] = useState(0);
 
   // Advance status line every STATUS_STEP_MS while loading, stop on last.
@@ -217,10 +223,13 @@ export function ResultsScreen() {
 
     (async () => {
       try {
-        let lat = null, lng = null;
+        let lat = null, lng = null, geoErr = null;
         if (where) {
-          const g = await geocodeAddress(where).catch(() => null);
-          if (g) { lat = g.lat; lng = g.lng; }
+          try {
+            const g = await geocodeAddress(where);
+            if (g) { lat = g.lat; lng = g.lng; }
+            else { geoErr = 'no-result'; }
+          } catch (e) { geoErr = String(e && e.message || e); }
         }
         const { offering_id: resolvedOfferingId } = chatState;
         const filterCategory = category || what || null;
@@ -228,31 +237,79 @@ export function ResultsScreen() {
         // api.js take effect without a full page reload. See the guard
         // comment at the top of this file.
         const { listServices } = await import('../lib/api');
-        const { data, error } = await listServices({
+        const callArgs = {
           offering_id:    resolvedOfferingId || null,
           provider_type:  provider_type      || null,
           category:       filterCategory,
           lat, lng, radiusMiles: 25,
-          // CERGIO-GUARD: matching MUST respect budget + free toggle.
-          // Previously these were cosmetic-only (budget pill shown,
-          // free CTA flipped) but the actual SQL ignored them. Fixed
-          // 2026-05-26.
           maxBudgetCents: maxBudgetCentsForFilter,
           freeOnly:       !!freeServices,
-          // CERGIO-GUARD: the user's RAW words are the matching safety
-          // net. When the parser returns taxonomy IDs/provider_types
-          // that don't match seeded services exactly (e.g. "Housekeeper"
-          // vs "House Cleaner"), the stem-text fallback in listServices
-          // still catches them via title/description ilike.
           originalQuery: userQuery,
-        });
+        };
+        // CERGIO-DIAG (gated): only logs when the search comes back empty.
+        // Doesn't render anything; just lets us see — from your DevTools
+        // Console (⌘⌥J / F12 → Console) — exactly what was sent and what
+        // came back. No UI scaffolding. Toggle off by setting
+        // window.__cergioDiag = false. Remove this block once the
+        // empty-result class of bug is closed for good.
+        const { data, error } = await listServices(callArgs);
         if (cancelled) return;
+        const ok = !error && Array.isArray(data) && data.length > 0;
+        if (typeof window !== 'undefined' && window.__cergioDiag !== false) {
+          // eslint-disable-next-line no-console
+          console.log('[CERGIO/search]', {
+            in: { ...callArgs, where, geoErr },
+            out: { error: error?.message || null, count: (data || []).length,
+                   sample: (data || []).slice(0, 3).map(s => ({
+                     title: s.title, ptype: s.taxonomy_provider_type,
+                     dist: s.distance_miles })) },
+            ok,
+          });
+        }
+        if (error) { clearTimeout(timeoutId); setServices([]); return; }
+
+        // CERGIO-GUARD (2026-05-27): if freeOnly returned zero AND the
+        // user landed here via the default "Free for Connectors" toggle,
+        // automatically re-query without freeOnly so we surface PAID
+        // options. Then a soft banner on render says "No free plumbers
+        // nearby — here are paid options." This is the honest story:
+        // most providers aren't free, so a hard zero against the free
+        // filter alone misleads the user into thinking there's no
+        // provider at all. listServices is called fresh (dynamic import)
+        // so this gets the latest module too.
+        if ((!data || data.length === 0) && callArgs.freeOnly) {
+          const paidArgs = { ...callArgs, freeOnly: false };
+          const paidRes = await listServices(paidArgs);
+          if (cancelled) return;
+          if (typeof window !== 'undefined' && window.__cergioDiag !== false) {
+            // eslint-disable-next-line no-console
+            console.log('[CERGIO/search:paid-fallback]', {
+              in: paidArgs,
+              out: { error: paidRes.error?.message || null,
+                     count: (paidRes.data || []).length },
+            });
+          }
+          clearTimeout(timeoutId);
+          if (paidRes.error || !paidRes.data || paidRes.data.length === 0) {
+            setPaidFallback(false);
+            setServices([]);
+            return;
+          }
+          setPaidFallback(true);
+          setServices(paidRes.data);
+          return;
+        }
         clearTimeout(timeoutId);
-        if (error || !data) { setServices([]); return; }
+        setPaidFallback(false);
+        if (!data) { setServices([]); return; }
         setServices(data);
       } catch (_e) {
         if (cancelled) return;
         clearTimeout(timeoutId);
+        if (typeof window !== 'undefined' && window.__cergioDiag !== false) {
+          // eslint-disable-next-line no-console
+          console.error('[CERGIO/search] threw:', _e && _e.message);
+        }
         setServices([]);
       }
     })();
@@ -343,20 +400,26 @@ export function ResultsScreen() {
   })();
 
   const titleText = (() => {
+    // Prefer canonical provider_type singular/plural over the user's
+    // raw verb-phrase. Title used to read "Showing 1 unclog my toilet"
+    // because displayNoun was userNoun. Use safeProviderType[Singular|
+    // Plural] when available so the title reads "Showing 1 plumber".
+    const canonSing = safeProviderType ? String(safeProviderType).toLowerCase() : null;
+    const canonPlur = safeProviderTypePlural ? safeProviderTypePlural.toLowerCase() : null;
     if (n > 0) {
-      // Results returned — keep the existing count-style copy.
-      if (displayNoun) {
-        return n === 1
-          ? `Showing 1 ${displayNounLc}`
-          : `Showing ${n} ${pluralize(displayNounLc)}`;
+      // Results returned — count-style copy.
+      const sing = canonSing || displayNounLc;
+      const plur = canonPlur || (sing ? pluralize(sing) : null);
+      if (sing && plur) {
+        return n === 1 ? `Showing 1 ${sing}` : `Showing ${n} ${plur}`;
       }
       return `Showing ${n} match${n === 1 ? '' : 'es'}`;
     }
     // Empty / loading state.
-    if (safeProviderTypePlural) {
+    if (canonPlur) {
       return actionPhrase
-        ? `Looking for ${safeProviderTypePlural.toLowerCase()} to ${actionPhrase}`
-        : `Looking for ${safeProviderTypePlural.toLowerCase()}`;
+        ? `Looking for ${canonPlur} to ${actionPhrase}`
+        : `Looking for ${canonPlur}`;
     }
     if (displayNoun) return `Looking for ${pluralize(displayNounLc)}`;
     return 'Here are your matches';
@@ -452,6 +515,31 @@ export function ResultsScreen() {
       {/* Empty state is rolled into the share card below — single
           card instead of two, less busy. */}
 
+      {/* CERGIO-GUARD (2026-05-27): paid-fallback banner. When the
+          search ran with freeOnly=ON and returned zero, the effect
+          re-queried without freeOnly and (paid) results came back.
+          We show those cards but lead with this honest, non-alarming
+          banner so the user understands why these aren't free yet.
+          Click "Pay full price" → flips freeServices off so future
+          searches go straight to paid mode. */}
+      {paidFallback && services && services.length > 0 && (() => {
+        const ptLabel = safeProviderTypePlural
+          ? safeProviderTypePlural.toLowerCase()
+          : (userNoun ? `${userNoun}s` : 'options');
+        return (
+          <div className="mx-5 mb-3 bg-cr2 border border-bdr rounded-[14px] px-4 py-3">
+            <p className="text-[13px] text-b2 leading-snug font-medium">
+              No free {ptLabel} nearby right now —
+              {' '}showing paid options.
+            </p>
+            <p className="text-[11px] text-b3 leading-snug mt-1">
+              Free offers come from Connectors. Ask a friend to join, or
+              pick a paid option below.
+            </p>
+          </div>
+        );
+      })()}
+
       {/* cards — only when we have real Supabase rows. */}
       {services !== null && providers.length > 0 && providers.map(p => (
         <ProviderCard
@@ -476,26 +564,54 @@ export function ResultsScreen() {
             no matches  → "No {type}s yet — ask friends to help find one"
             has matches → "Want better picks? Ask friends" */}
       {services !== null && (() => {
-        // CERGIO-GUARD: headline + share message lead with the user's
-        // own words (userNoun, derived from originalQuery), not the
-        // parser's `what`. safeProviderType is used only when it's
-        // specific (not a generic catch-all like "Service provider").
-        const noun    = (userNoun || safeProviderType || 'service').toLowerCase();
+        // CERGIO-GUARD (2026-05-27): headline + share message LEAD with the
+        // canonical provider_type (Plumber, House Cleaner, Nanny) — NOT
+        // the user's verb-phrase. Old copy "No unclog my toilets yet" was
+        // grammatically wrong AND made the share text read as gibberish
+        // ("anyone know a good unclog my toilet"). New shape uses the same
+        // canonical plural the title uses, plus the user's action phrase
+        // appended naturally:
+        //   headline (empty) : "No plumbers yet — ask friends to find one"
+        //   headline (matches): "Want better picks? Ask friends for a plumber reco"
+        //   share            : "Hey — anyone know a good plumber to unclog my toilet?"
+        // When no provider_type resolved (rare semantic fallback) we keep
+        // the userNoun path so we never render a dead "service".
+        const safeProviderTypeSingularLc = safeProviderType
+          ? String(safeProviderType).toLowerCase()
+          : null;
+        const safeProviderTypePluralLc = safeProviderTypePlural
+          ? safeProviderTypePlural.toLowerCase()
+          : null;
+        const fallbackNoun = (userNoun || 'service').toLowerCase();
+        const nounSingular = safeProviderTypeSingularLc || fallbackNoun;
+        const nounPlural   = safeProviderTypePluralLc   || pluralize(fallbackNoun);
         const noMatch = providers.length === 0;
 
-        // Build a contextual share message. Lead with what the user typed,
-        // append structured when / where / budget / details only if not
-        // already present in the lead. Falls back to userNoun if for some
-        // reason originalQuery wasn't captured.
+        // Build the contextual share message. Lead with the canonical
+        // provider type (singular — "a good plumber") then append the
+        // user's action phrase IF it adds info beyond the type itself.
+        // Action phrase reuses titleText's logic but keeps "my/me"
+        // (the user is talking to a friend, not Cergio).
         const lc       = (s) => (s || '').toString().toLowerCase();
         const inText   = (s, base) => s && lc(base).includes(lc(String(s).replace('$', '')));
-        const rawLead  = (userQuery || userNoun || noun).toString().trim()
-          .replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '')
-          .replace(/^(a |an |the )/i, '');
-        // Use the noun-only lead for the contextual append check so we
-        // don't double-up when the lead is a full sentence.
-        const lead = rawLead || noun;
-        const base = lead;
+        const shareAction = (() => {
+          if (!userQuery) return null;
+          let s = String(userQuery).toLowerCase().trim();
+          s = s.replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '');
+          const stopAt = s.search(/\b(today|tomorrow|tonight|this|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|on\s|at\s|for\s|in\s|near\s|under\s|max\s|budget|\$|\d{2,})/i);
+          if (stopAt > 2) s = s.slice(0, stopAt).trim();
+          if (safeProviderTypeSingularLc) {
+            const pt = safeProviderTypeSingularLc;
+            if (s === pt || s === pt + 's') return null;
+          }
+          const tokens = s.match(/[a-z]+/g) || [];
+          const meaningful = tokens.filter(t => t.length >= 4);
+          return meaningful.length >= 2 ? s : null;
+        })();
+        const lead = shareAction
+          ? `${nounSingular} to ${shareAction}`
+          : nounSingular;
+        const base = (userQuery || lead).toString();
         const tail = [];
         if (when   && !inText(when,   base)) tail.push(when);
         if (where  && !inText(where,  base)) tail.push(`in ${where}`);
@@ -522,12 +638,12 @@ export function ResultsScreen() {
           }
         };
         const goReco = () => navigate('/invite/friends?mode=reco', {
-          state: { prefilledMessage: shareMsg, what: noun, when, where, budget },
+          state: { prefilledMessage: shareMsg, what: nounSingular, when, where, budget },
         });
 
         const headline = noMatch
-          ? `No ${noun}s yet — ask friends to find one`
-          : `Want better picks? Ask friends for a ${noun} reco`;
+          ? `No ${nounPlural} yet — ask friends to find one`
+          : `Want better picks? Ask friends for a ${nounSingular} reco`;
 
         return (
           <div className="mx-5 my-4 bg-gl border border-g/25 rounded-[20px] p-4">

@@ -322,6 +322,190 @@ data fetches from the real API + ships a clean empty state.
 
 ---
 
+## 13. SEARCH must be honest about WHY results are empty
+
+The 2026-05-27 bug, plain text. `freeServices` defaults to `true` at
+App level (Connector premise — every search filters to $0 offerings).
+Seeded providers carry no $0 offerings, so `listServices({ freeOnly:
+true })` returns `[]` for almost every category. The empty state
+then lied: "No plumbers yet" while a Plumber sat 6 miles away.
+
+Two days were spent chasing the wrong layer. The root cause was the
+free-toggle default + a hard `freeOnly` filter, NOT the parser, NOT
+the proximity RPC, NOT the strict taxonomy match. Free was a
+preference being treated as inventory truth.
+
+**Rules**
+
+1. When `listServices` returns `[]` AND the call was made with
+   `freeOnly: true`, ResultsScreen MUST re-query with `freeOnly:
+   false` automatically. If THAT returns rows, render them with the
+   soft banner:
+
+   > "No free {plural} nearby right now — showing paid options.
+   > Free offers come from Connectors. Ask a friend to join, or
+   > pick a paid option below."
+
+   No exceptions. The user is owed a real answer, not a dead-end.
+
+2. Title MUST use the canonical provider_type (singular for
+   "Showing 1 plumber", plural for "Looking for plumbers"). Never
+   `${userNoun}s` when a provider_type resolved — that produces
+   gibberish like "Showing 1 unclog my toilet".
+
+3. ResultsScreen MUST `await import('../lib/api')` inside the search
+   effect. The static `import { listServices } from '../lib/api'`
+   binding survives Vite HMR; after any api.js edit, the running
+   ResultsScreen keeps calling the OLD closure. This is the bug that
+   makes a "fixed" api.js look broken in the UI for hours.
+
+**Guards**
+
+- qa.mjs #15 — re-query without freeOnly when first call returns 0
+- qa.mjs #16 — title uses canonical type, not user verb-phrase
+- qa.mjs #17 — dynamic-import api.js inside the search effect
+- `Test Search.command` — runtime free-vs-paid coverage report per
+  provider_type. Categories with `free=0 / total>0` rely on the
+  paid-fallback. If you ever remove rule 1 above, those categories
+  go silently empty.
+
+---
+
+## 14. ADDRESS persistence is bulletproof via `user_metadata` FIRST
+
+The 2026-05-26 PERMANENT FIX (task #103). saveAddress was writing to
+a `user_addresses` table that didn't always exist post-migration, and
+addresses silently reverted across sessions. The only path that can't
+fail is `supabase.auth.updateUser({ data: { default_address: ... }
+})` — `user_metadata` always exists on `auth.users`. The table write
+is best-effort thereafter.
+
+**Rule:** `saveAddress` MUST update `user_metadata.default_address`
+BEFORE attempting any table write. If the metadata write fails, log
+and continue — the chip/localStorage path keeps the UI sane. If it
+succeeds, the rest of the function is gravy.
+
+**Guard:** qa.mjs #19.
+
+---
+
+## 15. SIGNUP never strands the user without a session OR a clear next step
+
+The 2026-05-25 race (task #102). User filled the form, hit Sign Up,
+supabase returned `data.user` but `data.session === null`. App
+redirected. Next screen demanded sign-in. User was stuck.
+
+**Rule:** `useSession.signUp` MUST, after `supabase.auth.signUp`
+returns no session, immediately call `signInWithPassword` with the
+same credentials. If that returns a session, we're done. If it
+returns "Email not confirmed" (or similar), surface
+`needsEmailConfirm: true` so the UI shows the right next step.
+
+There is no third state. Either the user has a session, or they
+have a clear "check your email" message.
+
+**Guard:** qa.mjs #20.
+
+---
+
+## 16. ADDRESSES are Google-verified before save
+
+Task #85. Free-typed strings without lat/lng silently saved and
+produced zero-result searches because proximity needs coords. Every
+saved address MUST be canonicalized through Google
+(`verifyAddress(...)`) and carry `placeId` for cross-session dedup.
+
+**Rule:** HomeScreen MUST call `verifyAddress` on any manually-typed
+address before persisting it, and MUST pass `placeId` to
+`saveAddress`. Autocomplete-selected places already include
+`placeId` from the Google widget; manual typed strings must be
+verified explicitly.
+
+**Guard:** qa.mjs #21.
+
+---
+
+## 17. NO "Cergio Coin" / "Cergio Cash" in signed-in copy
+
+Task #78. These terms were retired in favor of plain "$250", "free
+services", and "Growth Income". They CAN still appear inside
+`src/data/mock.js` (sign-out preview data, gated by `usingMock`) and
+in `/* … */ // …` comments documenting the retirement. Anywhere
+else is a regression.
+
+**Rule:** No file under `src/` (except `src/data/mock.js`) may
+include the substrings "Cergio Coin" or "Cergio Cash" outside of
+code comments.
+
+**Guard:** qa.mjs #22.
+
+---
+
+## 18. BUILD VERSION pill is always visible
+
+Observability. Renders the current short git SHA in a low-contrast
+badge at the bottom-left of every screen. Was the single missing
+piece during the 2026-05-27 2-day debug — HMR mounted a stale
+ResultsScreen for hours and there was no way to tell from the UI.
+
+**Rule:** `App.jsx` MUST render `<BuildVersionPill />` everywhere,
+and `vite.config.js` MUST inject `__CERGIO_BUILD_SHA__` via
+`define{}` so the pill shows the real SHA.
+
+**Guard:** qa.mjs #18.
+
+---
+
+## 19. PROFILE has no dead links
+
+The Profile screen is the spine of the app — every signed-in user
+ends up here. Broken navigations look amateur and erode trust. Every
+`navigate('/...')` inside `ProfileScreen.jsx` must resolve to a path
+that `App.jsx` registers as a Route.
+
+**Rule:** before committing changes to either ProfileScreen.jsx or
+App.jsx routes, qa.mjs #23 must pass. Adding a new Profile row?
+Register the route first.
+
+**Guard:** qa.mjs #23.
+
+---
+
+## 20. REWARD amounts read from REWARDS constants only
+
+Bugs we've already hit: "$250" said one place, "$200" another;
+"credit" some screens, "cash" elsewhere. Single source of truth is
+`src/lib/rewards.js` → `REWARDS.perFriend` /
+`REWARDS.perFriendUser` / `REWARDS.perFriendConnector` /
+`REWARDS.milestoneBonus` / etc.
+
+**Rule:** No user-facing string under `src/` (except
+`src/lib/rewards.js` and `src/data/mock.js`) may hardcode "$200" or
+"$2NN" within 40 characters of a reward-context word
+(credit/cash/friend/connector/reward/earn/invite). Always import
+from `lib/rewards`.
+
+**Guard:** qa.mjs #24.
+
+---
+
+## 21. CONNECTOR apply page has the full conversion story
+
+`RainmakerApplyScreen` is the conversion-driver. Strip any of the
+three core sections and signups collapse:
+
+1. Side-by-side User vs Connector benefits (grid-cols-2)
+2. Compounding example ("50 friends → $12,500")
+3. "I am a…" type selector (Influencer / Local biz / Super user)
+
+Plus mention Growth Participation Income as part of the reward stack.
+
+**Rule:** all four must remain on the screen.
+
+**Guard:** qa.mjs #25.
+
+---
+
 ## How to update this file
 
 1. **Adding a new invariant.** Append it to the bottom. Update

@@ -33,6 +33,11 @@ export const REWARDS = {
   maxPerInvite:            250,   // alias for backwards-compat
   exampleFriends:          50,    // Jamie compounding example
   exampleTotal:            12500, // 50 × $250 = $12,500
+  // 200-friend Connector milestone bonus — independent of per-friend
+  // stack; paid as a top-up once you cross the threshold. If we ever
+  // change the threshold or the bonus, update both fields together.
+  milestoneFriends:        200,
+  milestoneBonus:          10000, // dollars on top of per-friend earnings
 };
 
 // ─── Hero one-liners (every CTA pulls from here) ───────────────────────────

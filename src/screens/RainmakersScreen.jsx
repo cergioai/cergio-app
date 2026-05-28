@@ -1,6 +1,10 @@
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { buildInviteUrl } from '../lib/referral';
+import { REWARDS } from '../lib/rewards';
 
+// CERGIO-GUARD: NEVER hardcode the reward amounts in user-facing copy.
+// They come from REWARDS in lib/rewards.js so a single bump there
+// updates every screen at once. qa.mjs #24 locks this in.
 const TABLE_ROWS = [
   {
     label: 'Free services',
@@ -11,8 +15,8 @@ const TABLE_ROWS = [
   {
     label: 'Cash per invite',
     desc:  'Earn when an invited friend completes a booking — up to 10% on each booking they make',
-    users: { amount: '$250', type: 'credit' },
-    connectors: { amount: '$250', type: 'cash' },
+    users:      { amount: `$${REWARDS.perFriendUser}`,      type: 'credit' },
+    connectors: { amount: `$${REWARDS.perFriendConnector}`, type: 'cash' },
   },
   {
     label: "Per friend's invite",
@@ -100,8 +104,8 @@ export function RainmakersScreen() {
       <div className="px-6 pb-6 flex flex-col gap-4">
         {[
           { icon: '💲', color: 'bg-gl', text: 'Get free services' },
-          { icon: '💲', color: 'bg-gl', text: 'Earn $250 cash or credit per friend you invite' },
-          { icon: '💲', color: 'bg-gl', text: 'Earn $10,000 when you invite 200 friends', tag: 'Milestone bonus 🏆' },
+          { icon: '💲', color: 'bg-gl', text: `Earn $${REWARDS.perFriendConnector} cash or $${REWARDS.perFriendUser} credit per friend you invite` },
+          { icon: '💲', color: 'bg-gl', text: `Earn $${REWARDS.milestoneBonus.toLocaleString()} when you invite ${REWARDS.milestoneFriends} friends`, tag: 'Milestone bonus 🏆' },
         ].map((b, i) => (
           <div key={i} className="flex items-center gap-3.5">
             <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-lg ${b.color}`}>

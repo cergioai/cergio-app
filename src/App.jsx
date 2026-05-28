@@ -19,6 +19,7 @@ import { BottomNav }    from './components/ui/BottomNav';
 import { Toast }        from './components/ui/Toast';
 import { SetupCheckBanner } from './components/ui/SetupCheckBanner';
 import { PaymentSheet } from './components/ui/PaymentSheet';
+import { BuildVersionPill } from './components/ui/BuildVersionPill';
 
 import { SplashScreen }     from './screens/SplashScreen';
 import { OnboardScreen }    from './screens/OnboardScreen';
@@ -292,6 +293,9 @@ function Layout() {
 
         {showNav && <BottomNav serviceMode={serviceMode} />}
         <Toast msg={toast.msg} show={toast.show} sticky={toast.sticky} onDismiss={dismissToast} />
+        {/* CERGIO-GUARD: build version pill — shows current short SHA
+            so HMR-stale-closure bugs are immediately observable. */}
+        <BuildVersionPill />
 
         {paymentSheet && (
           <PaymentSheet

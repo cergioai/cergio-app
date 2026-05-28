@@ -579,6 +579,252 @@ test('proximity-hydrates-taxonomy', 'listServices proximity branch hydrates taxo
     'After services_near, you MUST hydrate full rows via .from(\'services\').select() including taxonomy_provider_type — otherwise strict provider_type filter excludes everything');
 });
 
+// ─── INVARIANT #15: paid-fallback when freeOnly returns zero ────────────
+// The 2026-05-27 bug: freeServices defaults to true at App level, so
+// every search runs with freeOnly=true. Seeded providers carry no $0
+// offerings → listServices returns []. Without an auto-fallback the
+// empty state lies ("No plumbers yet"). ResultsScreen MUST re-query
+// without freeOnly when the first call comes back empty AND set a
+// paidFallback flag so the render banner explains why these are paid.
+test('paid-fallback', 'ResultsScreen re-queries without freeOnly when free search returns zero', '#15', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  const code = stripComments(src);
+  // 1) The effect must run a paid re-query when first call returns 0.
+  assert(/freeOnly\s*:\s*false/.test(code),
+    'ResultsScreen must call listServices a second time with freeOnly:false when the first (freeOnly:true) call returns empty.');
+  // 2) The paidFallback state must exist and be set when fallback fires.
+  assert(/setPaidFallback\s*\(\s*true\s*\)/.test(code),
+    'ResultsScreen must set paidFallback=true when the paid re-query succeeds.');
+  // 3) The render layer must surface the honest banner copy.
+  assert(/No free [^.]* nearby[^.]*paid options/i.test(code),
+    'ResultsScreen must render an honest "No free X nearby — showing paid options" banner when paidFallback is true.');
+});
+
+// ─── INVARIANT #16: title uses canonical type (not user verb-phrase) ────
+// Old bug: title read "Showing 1 unclog my toilet" because it
+// pluralized the user's raw words. New rule: when safeProviderType
+// resolves (e.g. "Plumber"), title MUST use its singular/plural form.
+// userNoun is only a fallback when no provider_type resolved.
+test('title-canonical-type', 'Results title prefers canonical provider_type over user verb-phrase', '#16', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  const code = stripComments(src);
+  // Title block must reference both canonical singular AND plural lookups
+  // (safeProviderType + safeProviderTypePlural or via pluralProviderTypeLocal).
+  assert(/pluralProviderTypeLocal\s*\(/.test(code),
+    'ResultsScreen must import + call pluralProviderTypeLocal to build the canonical plural for the title.');
+  // The legacy `pluralize(displayNounLc)` standalone path (no canon fallback)
+  // would re-create the "unclog my toilets" bug. Allow it ONLY when also
+  // wrapped under a canonPlur fallback test. Cheap proxy: the count-style
+  // title must derive `sing` and `plur` from safeProviderType first.
+  assert(/canonSing\s*=\s*safeProviderType/.test(code) ||
+         /canonSing\s*=\s*\(safeProviderType/.test(code),
+    'Count-style title ("Showing N <thing>") must compute its singular form from safeProviderType FIRST, falling back to displayNounLc only when no canonical type resolved.');
+});
+
+// ─── INVARIANT #19: saveAddress writes user_metadata FIRST ──────────────
+// The 2026-05-26 PERMANENT FIX (task #103). Before this, saveAddress
+// wrote to a user_addresses table that didn't always exist post-
+// migration, and addresses silently reverted. The bulletproof path is
+// supabase.auth.updateUser({ data: { default_address: ... } }) — that
+// CAN'T fail because user_metadata always exists. The table write is
+// best-effort thereafter.
+test('save-address-metadata-first', 'saveAddress writes user_metadata as the canonical persistence path', '#19', async () => {
+  const src = readFile('src/lib/api.js');
+  const code = stripComments(src);
+  const fnIdx = code.indexOf('export async function saveAddress');
+  assert(fnIdx > 0, 'saveAddress function not found in api.js');
+  const body = code.slice(fnIdx, fnIdx + 3500);
+  assert(/supabase\.auth\.updateUser\s*\(\s*\{\s*data\s*:\s*\{\s*default_address/.test(body),
+    "saveAddress MUST call supabase.auth.updateUser({ data: { default_address: ... } }) — that's the only persistence path that can't be wiped by a missing migration.");
+});
+
+// ─── INVARIANT #20: signUp returns a session OR a needsEmailConfirm flag
+// The 2026-05-25 signup race (task #102). User signed up, supabase
+// returned no session, app redirected to a screen that demanded
+// sign-in, user was stranded. Fix: if signUp returns no session,
+// immediately try signInWithPassword. On success → session in hand.
+// On "Email not confirmed" error → return needsEmailConfirm=true so
+// the UI shows the right next step. No silent stranding either way.
+test('signup-no-stranded-user', 'signUp never strands the user with no session AND no clear next step', '#20', async () => {
+  const src = readFile('src/hooks/useSession.js');
+  const code = stripComments(src);
+  // Must call signInWithPassword as a fallback inside signUp.
+  assert(/signInWithPassword\s*\(\s*\{\s*email\s*,\s*password\s*\}\s*\)/.test(code),
+    'useSession.signUp MUST fallback to signInWithPassword when supabase.signUp returns no session — otherwise the user is stranded.');
+  // Must surface a needsEmailConfirm flag explicitly when sign-in fails
+  // with a confirm/verify error message.
+  assert(/needsEmailConfirm\s*:\s*true/.test(code),
+    'useSession.signUp MUST surface needsEmailConfirm:true when sign-in fails with a confirm/verify error so the UI can show the right next step.');
+});
+
+// ─── INVARIANT #21: HomeScreen Google-verifies addresses before save ────
+// Task #85 — all saved addresses must be Google-canonicalized so the
+// proximity search has reliable lat/lng. Before this, free-typed
+// strings without lat/lng silently saved and produced zero-result
+// searches because lat/lng were null → plain branch with no geo gate.
+test('addresses-google-verified', 'HomeScreen calls verifyAddress before persisting a manually-typed address', '#21', async () => {
+  const src = readFile('src/screens/HomeScreen.jsx');
+  const code = stripComments(src);
+  // verifyAddress must be imported (dynamic OR static) and CALLED
+  // somewhere — not just imported and forgotten.
+  assert(/verifyAddress\s*\(/.test(code),
+    'HomeScreen MUST call verifyAddress(...) somewhere — manually-typed addresses without Google canonicalization break proximity search (null lat/lng).');
+  // saveAddress MUST be called with placeId (the Google-issued anchor).
+  // Without placeId we cannot dedupe and the cross-session canonical key
+  // is lost.
+  assert(/saveAddress\s*\(\s*\{[^}]*placeId/m.test(code) ||
+         /placeId\s*:\s*[^,]+[\s\S]{0,200}saveAddress/.test(code),
+    'HomeScreen MUST pass placeId when calling saveAddress — that\'s the Google-verification anchor required for cross-session dedup.');
+});
+
+// ─── INVARIANT #22: no "Cergio Coin" / "Cergio Cash" in signed-in copy
+// Task #78 — these terms were retired in favor of plain "$250" + "free
+// services" + "Growth Income". They CAN still appear inside mock.js
+// (sign-out preview data, gated by usingMock) and inside comments
+// documenting their retirement. Anywhere else is a regression.
+test('no-cergio-coin-cash', 'Retired "Cergio Coin" / "Cergio Cash" terms never leak into signed-in copy', '#22', async () => {
+  const dir = path.join(REPO_ROOT, 'src');
+  const offenders = [];
+  for (const f of walkSync(dir)) {
+    if (!/\.(js|jsx|ts|tsx)$/.test(f)) continue;
+    const rel = path.relative(REPO_ROOT, f);
+    // Allowed: the mock-data file (gated to sign-out previews) and
+    // anything that mentions the term inside a /* … */ or // comment.
+    if (rel === 'src/data/mock.js') continue;
+    const raw = fs.readFileSync(f, 'utf8');
+    const stripped = stripComments(raw);
+    if (/\bCergio\s+(Coin|Cash)\b/i.test(stripped)) {
+      offenders.push(rel);
+    }
+  }
+  assert(offenders.length === 0,
+    `These files still ship "Cergio Coin"/"Cergio Cash" outside mock.js + comments — scrub them:\n  ${offenders.join('\n  ')}`);
+});
+
+// ─── INVARIANT #23: ProfileScreen has no dead links ─────────────────────
+// Task #87 audit. Profile is the spine of the launch UX — broken
+// links here look amateur. Every `navigate('/...')` call inside
+// ProfileScreen MUST point to a path that App.jsx actually registers
+// as a Route. Catches typos, deleted routes, accidental drift.
+test('profile-links-resolve', 'Every Profile navigate path matches a real App route', '#23', async () => {
+  const profile = stripComments(readFile('src/screens/ProfileScreen.jsx'));
+  const app     = stripComments(readFile('src/App.jsx'));
+  // Collect Profile's navigate targets.
+  const navTargets = new Set();
+  for (const m of profile.matchAll(/navigate\(\s*[`'"]([^`'"]+)[`'"]/g)) {
+    let p = m[1];
+    if (p === '-1') continue;
+    p = p.split('?')[0].split('#')[0];
+    navTargets.add(p);
+  }
+  // Collect App routes (literal patterns only — parameterized ones too).
+  const routes = new Set();
+  for (const m of app.matchAll(/<Route\s+path\s*=\s*["']([^"']+)["']/g)) {
+    routes.add(m[1]);
+  }
+  // Normalize parameterized routes (/request/:id? matches /request).
+  const matches = (target) => {
+    if (routes.has(target)) return true;
+    for (const r of routes) {
+      const rNorm = r.replace(/:\w+\??/g, '__P__');
+      const tNorm = target.replace(/[^/]+$/, '__P__');
+      if (rNorm === tNorm) return true;
+      // /request/:id? matches both /request and /request/foo.
+      if (r.endsWith('?') && target.startsWith(r.replace(/\/:\w+\?$/, ''))) return true;
+    }
+    return false;
+  };
+  const dead = [...navTargets].filter(t => !matches(t));
+  assert(dead.length === 0,
+    `ProfileScreen navigates to paths that App.jsx doesn't register:\n  ${dead.join('\n  ')}`);
+});
+
+// ─── INVARIANT #24: rewards copy uses REWARDS constants, never hardcoded
+// Tasks #69, #88, #92. "$250" appeared inconsistent across screens —
+// some said $250, some said $200, some said "credit", some "cash".
+// All reward copy MUST read from src/lib/rewards.js (REWARDS.
+// perFriend / perFriendUser / perFriendConnector). Hardcoded dollar
+// values in user-facing strings are a regression.
+test('rewards-constants', 'Reward amounts read from REWARDS constants, never hardcoded', '#24', async () => {
+  const dir = path.join(REPO_ROOT, 'src');
+  const offenders = [];
+  for (const f of walkSync(dir)) {
+    if (!/\.(js|jsx|ts|tsx)$/.test(f)) continue;
+    const rel = path.relative(REPO_ROOT, f);
+    // The constants live here — skip.
+    if (rel === 'src/lib/rewards.js') continue;
+    if (rel === 'src/data/mock.js') continue;
+    const raw = fs.readFileSync(f, 'utf8');
+    const stripped = stripComments(raw);
+    // Look for "$250" / "$200" + a few rewards-context words within 40 chars.
+    const re = /\$2[0-9]{2}\b[\s\S]{0,40}(credit|cash|friend|connector|reward|earn|invite)/gi;
+    if (re.test(stripped)) {
+      offenders.push(rel);
+    }
+  }
+  assert(offenders.length === 0,
+    `These files hardcode "$250" / "$200" near reward-context words instead of using REWARDS.* — import from '../lib/rewards' instead:\n  ${offenders.join('\n  ')}`);
+});
+
+// ─── INVARIANT #25: Connector apply page has the full reward story ──────
+// Task #88. RainmakerApplyScreen is the conversion-driver — if anyone
+// strips the side-by-side compare or the compounding example, signups
+// collapse. Locks three things:
+//   • side-by-side comparison (2-column grid User vs Connector)
+//   • compounding math example (the 50-friend → $12.5K block)
+//   • type selector ("I am a…" Influencer / Local biz / Super user)
+test('connector-apply-complete', 'RainmakerApplyScreen has side-by-side + compounding + type selector', '#25', async () => {
+  const src = readFile('src/screens/RainmakerApplyScreen.jsx');
+  const code = stripComments(src);
+  assert(/grid\s+grid-cols-2/.test(code),
+    'RainmakerApplyScreen must render the User-vs-Connector side-by-side benefits comparison (grid-cols-2).');
+  assert(/EXAMPLE_FRIENDS|EXAMPLE_TOTAL|50\s+friends/.test(code),
+    'RainmakerApplyScreen must surface the compounding example (50 friends → $12.5K block).');
+  assert(/I am a/i.test(code) && /Influencer/.test(code) && /Super[\s-]User/i.test(code),
+    'RainmakerApplyScreen must include the "I am a…" type selector with Influencer / Super-User options.');
+  assert(/Growth Participation/.test(code),
+    'RainmakerApplyScreen must mention Growth Participation Income as part of the Connector reward stack.');
+});
+
+// ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
+// Observability. Renders the current short git SHA in a corner so
+// HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are
+// immediately visible to the user. If anyone strips the pill or the
+// vite define{}, this test fails.
+test('build-version-pill', 'Build version pill is wired + rendered (HMR-staleness observability)', '#18', async () => {
+  // 1) BuildVersionPill component must exist and read the define'd globals.
+  const pill = readFile('src/components/ui/BuildVersionPill.jsx');
+  assert(/__CERGIO_BUILD_SHA__/.test(pill),
+    'BuildVersionPill must reference __CERGIO_BUILD_SHA__ injected by vite define.');
+  // 2) App.jsx must render it.
+  const app = readFile('src/App.jsx');
+  assert(/<BuildVersionPill\s*\/>/.test(app),
+    'App.jsx must render <BuildVersionPill /> so the pill is always present.');
+  // 3) vite.config.js must define the globals.
+  const vite = readFile('vite.config.js');
+  assert(/__CERGIO_BUILD_SHA__/.test(vite) && /define\s*:/.test(vite),
+    'vite.config.js must inject __CERGIO_BUILD_SHA__ via define{} so the pill shows the real commit SHA.');
+});
+
+// ─── INVARIANT #17: dynamic import of api.js in ResultsScreen ──────────
+// The 2026-05-27 HMR bug: a static `import { listServices } from
+// '../lib/api'` binding survives Vite HMR. After any api.js edit, the
+// mounted ResultsScreen keeps calling the OLD listServices closure,
+// producing zero results no matter how the API itself changes. Fix:
+// `await import('../lib/api')` inside the search effect.
+test('hmr-proof-search', 'ResultsScreen dynamic-imports listServices inside the search effect', '#17', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  const code = stripComments(src);
+  // Must contain a dynamic await import of '../lib/api'.
+  assert(/await\s+import\(\s*['"]\.\.\/lib\/api['"]\s*\)/.test(code),
+    "ResultsScreen must use `await import('../lib/api')` inside the search effect so listServices re-resolves to the latest api.js after every HMR.");
+  // Must NOT have a top-level static `import { listServices } from '../lib/api'`.
+  // (A guard COMMENT preserving the symbol is fine — checked against
+  // non-comment code via stripComments above.)
+  assert(!/^import\s*\{\s*listServices\s*\}\s*from\s*['"]\.\.\/lib\/api['"]/m.test(code),
+    "ResultsScreen must NOT statically import listServices — that binding survives HMR and causes stale-closure zero-result bugs. Use the dynamic import inside the effect instead.");
+});
+
 // ─── helper: file walk ──────────────────────────────────────────────────
 function walkSync(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
