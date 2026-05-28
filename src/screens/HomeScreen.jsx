@@ -601,19 +601,58 @@ export function HomeScreen() {
   // CERGIO-GUARD: find-mode submit MUST route to /results — the SRP
   // is where the real Supabase search lives. Do not short-circuit this
   // into a mock CTA on Home. See CHECKLIST.md §1.
+  //
+  // CERGIO-GUARD (2026-05-28): BEFORE routing to /results, write a
+  // `requests` row + fan out notifications to matched providers. The
+  // returned request.id is forwarded as nav state so ResultsScreen
+  // seeds chat.state.request_id → useRequestActivity polls the real
+  // counts → SRP status ticker reflects real engagement. Locked by
+  // qa #28. Best-effort: a failed fan-out still routes to /results
+  // (with no request_id, the SRP just shows the scripted ticker as
+  // a graceful fallback).
   useEffect(() => {
     if (!submitted) return;
     if (intent !== 'find') return;
     if (chat?.phase !== 'ready') return;
-    // Small beat so the "All set! Ready to find your best matches"
-    // chat message has time to land before route swap.
-    const t = setTimeout(() => {
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      let requestId = null;
+      let notified  = 0;
+      try {
+        const { createRequestAndFanOut } = await import('../lib/api');
+        const s = chat?.state || {};
+        const budgetStr = String(s.budget || '');
+        const m = budgetStr.match(/\$?\s*(\d{1,5})/);
+        const budgetCents = m ? parseInt(m[1], 10) * 100 : null;
+        const res = await createRequestAndFanOut({
+          query:         submittedText,
+          provider_type: s.provider_type || null,
+          category:      s.category || null,
+          what:          s.what || null,
+          when_text:     s.when || null,
+          where_text:    s.where || locationText || null,
+          lat:           locationCoords?.lat ?? null,
+          lng:           locationCoords?.lng ?? null,
+          budget_cents:  budgetCents,
+          notifySafe:    !!s.notifySafe,
+        });
+        if (res?.request?.id) requestId = res.request.id;
+        if (typeof res?.notified === 'number') notified = res.notified;
+        // eslint-disable-next-line no-console
+        if (typeof window !== 'undefined' && window.__cergioDiag !== false) {
+          console.log('[CERGIO/request]', { requestId, notified, blocked: res?.blocked || null, err: res?.error?.message || null });
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[CERGIO/request] threw:', e?.message);
+      }
+      if (cancelled) return;
       navigate('/results', {
-        state: { fromHome: true, query: submittedText },
+        state: { fromHome: true, query: submittedText, requestId, notified },
       });
     }, 700);
-    return () => clearTimeout(t);
-  }, [chat?.phase, submitted, intent, navigate, submittedText]);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [chat?.phase, submitted, intent, navigate, submittedText, locationText, locationCoords, chat?.state]);
 
   // Spotlight mode: keep the Home engine ticker (skipped the chat,
   // started engine directly in submitQuery). When ticker completes

@@ -1356,6 +1356,109 @@ export async function notifyUser({ event, recipient, data = {} } = {}) {
   return { data: res, error };
 }
 
+/**
+ * createRequestAndFanOut — the WRITE SIDE of the search money flow.
+ * Called once when a consumer's chat parser hits phase='ready' (Home).
+ *
+ *   1. INSERT a `requests` row anchoring the open search (consumer_id +
+ *      provider_type + lat/lng + raw query + parser fields). This is the
+ *      id every notification + bid + first-booking credit hangs off.
+ *   2. Find matching providers via getProvidersForNotify() (RLS-safe).
+ *      Refuses to fan out without notifySafe + verifiedProviderType + coords.
+ *   3. For each matched service.owner_id, INSERT a notifications row with
+ *      kind='new_request' + data.deep_link (Cergio /results?req=<id>) +
+ *      data.request_id (so useRequestActivity polls the right rows on the
+ *      SRP).
+ *
+ * Returns { request, notified, error }. Best-effort fan-out — a failed
+ * notification insert for one provider doesn't block the others. The
+ * caller (HomeScreen) uses `request.id` to seed chat.state.request_id so
+ * the SRP status ticker reads live counts via useRequestActivity.
+ *
+ * CERGIO-GUARD: the only place in the app that may write to
+ * notifications with kind='new_request'. Locked by qa #28.
+ */
+export async function createRequestAndFanOut({
+  query,
+  provider_type,
+  category,
+  what,
+  when_text,
+  where_text,
+  lat, lng,
+  budget_cents,
+  notifySafe,
+  radiusMiles = 25,
+} = {}) {
+  if (!supabaseReady) return { request: null, notified: 0, error: NOT_WIRED.error };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user?.id) {
+    return { request: null, notified: 0, error: { message: 'sign-in required to create a request' } };
+  }
+  const uid = userRes.user.id;
+
+  // 1) Anchor the search as a real row so notifications + bids can
+  //    point at it. RLS check (`auth.uid()=consumer_id`) is satisfied
+  //    by the insert payload.
+  const { data: request, error: insErr } = await supabase
+    .from('requests')
+    .insert({
+      consumer_id:   uid,
+      query:         (query || '').slice(0, 500),
+      provider_type: provider_type || null,
+      category:      category || null,
+      what:          what || null,
+      when_text:     when_text || null,
+      where_text:    where_text || null,
+      lat:           (lat ?? null),
+      lng:           (lng ?? null),
+      budget_cents:  (typeof budget_cents === 'number') ? budget_cents : null,
+      status:        'open',
+    })
+    .select()
+    .single();
+  if (insErr || !request) return { request: null, notified: 0, error: insErr };
+
+  // 2) Resolve providers we're allowed to notify. The function refuses
+  //    if any of (notifySafe, verifiedProviderType, lat/lng) is missing
+  //    — the request row stays, the fan-out just skips.
+  const { data: provs, error: provErr, blocked } = await getProvidersForNotify({
+    verifiedProviderType: provider_type,
+    notifySafe:           !!notifySafe,
+    lat, lng,
+    radiusMiles,
+  });
+  if (provErr) return { request, notified: 0, error: provErr };
+  if (blocked) return { request, notified: 0, error: null, blocked };
+
+  // 3) Fan out the notifications. data.deep_link routes the provider
+  //    to /results?req=<id> when they tap. data.request_id is what
+  //    useRequestActivity polls on the SRP — same anchor on both sides.
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
+  const deep_link = `${origin}/results?req=${request.id}`;
+  const ownerIds = Array.from(new Set((provs || []).map(s => s.owner_id).filter(Boolean)));
+  if (ownerIds.length === 0) return { request, notified: 0, error: null };
+
+  // Build one row per recipient — the insert is bulk for atomicity.
+  const rows = ownerIds.map(owner_id => ({
+    profile_id: owner_id,
+    kind:       'new_request',
+    body:       `New ${provider_type || 'service'} request near you`,
+    data:       {
+      request_id:    request.id,
+      consumer_id:   uid,
+      provider_type: provider_type || null,
+      query:         (query || '').slice(0, 200),
+      where_text:    where_text || null,
+      deep_link,
+    },
+  }));
+  const { error: notifyErr } = await supabase.from('notifications').insert(rows);
+  if (notifyErr) return { request, notified: 0, error: notifyErr };
+
+  return { request, notified: ownerIds.length, error: null };
+}
+
 // ─── Booking notifications ──────────────────────────────────────────────────
 
 /**

@@ -837,6 +837,44 @@ test('reco-persisted', 'Recommend flow writes a recommendations row + Earnings r
     'EarningsScreen MUST render a recsCount state derived from the recommendations count.');
 });
 
+// ─── INVARIANT #28: search submit creates a request + fans out notifs ──
+// The 2026-05-28 write-side wire-up. Closes the loop the schema fix
+// opened: home submit must (a) INSERT into `requests` and (b) write
+// notifications rows to matched providers with kind='new_request' +
+// data.deep_link + data.request_id. ResultsScreen then reads the id
+// off nav state so useRequestActivity polls the right rows.
+test('request-fanout', 'Home submit creates a requests row + fans out notifications', '#28', async () => {
+  const api = readFile('src/lib/api.js');
+  const apiCode = stripComments(api);
+
+  // The fan-out function must exist + write to BOTH tables.
+  assert(/export async function createRequestAndFanOut/.test(apiCode),
+    'api.js MUST export createRequestAndFanOut so HomeScreen can write the request + notification rows.');
+  assert(/from\(['"]requests['"]\)\s*\.insert/.test(apiCode),
+    'createRequestAndFanOut MUST .from(\'requests\').insert(...) to anchor the search.');
+  assert(/from\(['"]notifications['"]\)\s*\.insert/.test(apiCode),
+    'createRequestAndFanOut MUST .from(\'notifications\').insert(...) to fan out new_request rows to providers.');
+  assert(/kind\s*:\s*['"]new_request['"]/.test(apiCode),
+    'Notification rows must carry kind=\'new_request\' so useRequestActivity matches them.');
+  // Provider resolution must go through the safety-gated helper.
+  assert(/getProvidersForNotify\s*\(/.test(apiCode),
+    'createRequestAndFanOut MUST resolve recipients via getProvidersForNotify (notifySafe + verified provider_type gate).');
+
+  // HomeScreen must actually call the helper before routing to /results.
+  const home = readFile('src/screens/HomeScreen.jsx');
+  const homeCode = stripComments(home);
+  assert(/createRequestAndFanOut\s*\(/.test(homeCode),
+    'HomeScreen MUST call createRequestAndFanOut on submit before navigating to /results — otherwise the SRP status ticker has nothing to poll.');
+  assert(/navigate\(\s*['"]\/results['"][\s\S]{0,400}requestId/.test(homeCode),
+    'HomeScreen MUST forward requestId in navigation state to /results so useRequestActivity binds to the right anchor.');
+
+  // ResultsScreen must consume it.
+  const srp = readFile('src/screens/ResultsScreen.jsx');
+  const srpCode = stripComments(srp);
+  assert(/location\.state\?\.\s*requestId|location\.state\?\s*\.\s*requestId/.test(srpCode),
+    'ResultsScreen MUST read requestId from location.state so useRequestActivity polls notifications for THIS request.');
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are

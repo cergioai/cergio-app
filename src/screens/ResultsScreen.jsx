@@ -181,7 +181,13 @@ export function ResultsScreen() {
   // opposed to hard wired...)". See src/hooks/useRequestActivity.js.
   // The scripted lines below are only the fallback for the brief
   // window between submit and the first DB write.
-  const requestId = chatState.request_id || null;
+  // CERGIO-GUARD (2026-05-28): requestId comes from EITHER chat.state
+  // (if useChat updated it on submit) OR navigation state (HomeScreen
+  // forwards it as location.state.requestId after createRequestAndFanOut).
+  // The location.state path is the canonical one today — it doesn't
+  // require any change to useChat, and it's preserved across React
+  // Router navigations.
+  const requestId = chatState.request_id || location.state?.requestId || null;
   const { notified: liveNotified, replied: liveReplied } = useRequestActivity(requestId);
 
   // Scripted line dwell timer — only used when there's no live request
