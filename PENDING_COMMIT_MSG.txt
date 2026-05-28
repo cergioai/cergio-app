@@ -1,0 +1,86 @@
+Search: bulletproof typo/variant/Spanish tolerance + softer SRP reco card
+
+BACKGROUND  User typed "deep clenaings" (typo of "deep cleanings") and
+the SRP rendered "No deep clenaings yet — ask friends" + a share
+message that read "anyone know a good deep clenaing to deep clenaing".
+Two bugs surfaced:
+
+  1. resolveProviderTypeLocal didn't tolerate typos at all — exact
+     substring match only.
+  2. When the parser failed to resolve a canonical type, the share
+     message fell back to the user's raw verb-phrase TWICE in the
+     same line, producing duplicate gibberish.
+
+User directive: "search match notification can't fail on silliness …
+build elegant tolerance and imagine all possible scenarios."
+
+FUZZY MATCHER (src/lib/serviceTaxonomy.js)
+
+  Added a 2-pass resolveProviderTypeLocal:
+
+    Pass 1 (canonical): exact substring match. Same as before.
+    Pass 2 (fuzzy):     Levenshtein edit-distance fallback.
+                        Tokens ≤3 chars  → exact match required
+                        Tokens 4–5 chars → ≤1 edit
+                        Tokens 6–7 chars → ≤2 edits
+                        Tokens ≥8 chars  → ≤3 edits
+
+  ALL meaningful tokens in a taxonomy key must fuzzy-match SOME user
+  token. Longest matching key wins (same precedence as Pass 1).
+  Conservative — never overrides an exact match, never matches
+  nonsense like "random nonsense" or "asdfghjkl".
+
+PROVIDER_TYPE_MAP EXPANSION
+
+  Grew from 60 → 134 entries. Added:
+   • Common synonyms: housekeeper / cleaning lady / maid, hairdresser,
+     babysitter / sitter / daycare / childcare, dog groomer,
+     manicure / pedicure / nails, blowout, gardener, pool cleaner,
+     movers, math tutor, music teacher, etc.
+   • Conversational phrasing: "clean my house", "toilet is clogged",
+     "walk my dog", "hang shelves"
+   • Spanish keywords (Miami launch): limpieza, mucama, plomero,
+     fontanero, niñera, electricista, jardinero
+   • Plural/verb-form variations
+
+SHARE-LEAD GRAMMAR GUARD (ResultsScreen)
+
+  Old bug: "anyone know a good plumber to toilet unclogged" — the
+  shareAction was a noun-led phrase that read poorly after "to".
+
+  Fix: only include the action when its FIRST token is in a known
+  ACTION_VERBS whitelist (unclog, clean, fix, walk, cook, train,
+  teach, mount, etc.). Noun-led queries fall back to just the
+  canonical noun: "anyone know a good plumber" — clean read.
+
+SRP RECO-CARD SOFTENED  (user feedback: "this add is too busy")
+
+  Was: bg-gl + border-g/25 + p-4 + text-[14px] extrabold gd headline
+       + text-[11px] gd/80 subcopy + rounded-[20px]
+  Now: bg-cr2 + border-bdr + px-4 py-3 + text-[13px] bold black
+       headline + text-[11px] b3 subcopy + rounded-[16px]
+       + button text-[12px] font-bold (was font-extrabold)
+
+  Same primary green CTA so the action remains clear; everything else
+  matches the Home house-ad palette so it stops competing with the
+  provider cards above it.
+
+INVARIANT #29 — search-tolerance battery
+
+  65 realistic cases across 13 categories:
+   - typos (clenaings, plumer, hairsylist, electricain, photgrapher…)
+   - synonyms (maid, hairdresser, sitter, manicure…)
+   - Spanish (limpieza, mucama, plomero, niñera…)
+   - conversational ("toilet is clogged", "walk my dog")
+   - nonsense (random text → null, no false positives)
+
+  qa.mjs grows 28 → 29 invariants, all green.
+
+VERIFIED
+  Node probe: 65/65 search variations resolve correctly.
+  qa.mjs: 29/29 pass.
+
+Files:
+  src/lib/serviceTaxonomy.js
+  src/screens/ResultsScreen.jsx
+  scripts/qa.mjs

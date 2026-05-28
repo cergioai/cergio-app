@@ -16,96 +16,284 @@
 // scripts (Seed E2E Test Data.command, future onboarding flows) write
 // MUST be IDENTICAL. Any drift is a HARD FAIL in qa.mjs #13.
 
+// CERGIO-GUARD (2026-05-28): expanded to cover synonyms, verb forms,
+// conversational phrasing ("my toilet is clogged"), Spanish keywords
+// (Miami launch context), and plurals. Combined with the fuzzy fallback
+// in resolveProviderTypeLocal, every realistic typo of these keys also
+// routes correctly. qa.mjs #29 locks 50+ test phrases.
 export const PROVIDER_TYPE_MAP = [
-  // home cleaning
-  ['deep clean',           'House Cleaner'],
+  // ── home cleaning ────────────────────────────────────────────────────
   ['deep cleaning',        'House Cleaner'],
+  ['deep clean',           'House Cleaner'],
+  ['move-out clean',       'House Cleaner'],
+  ['move out clean',       'House Cleaner'],
+  ['weekly cleaning',      'House Cleaner'],
   ['housekeeper',          'House Cleaner'],
+  ['housekeeping',         'House Cleaner'],
   ['house cleaner',        'House Cleaner'],
   ['cleaning service',     'House Cleaner'],
+  ['cleaning lady',        'House Cleaner'],
+  ['maid service',         'House Cleaner'],
+  ['maid',                 'House Cleaner'],
   ['cleaner',              'House Cleaner'],
   ['cleaning',             'House Cleaner'],
-  // plumbing
+  // Spanish (Miami launch — large Spanish-speaking market)
+  ['limpieza',             'House Cleaner'],
+  ['limpiadora',           'House Cleaner'],
+  ['mucama',               'House Cleaner'],
+  // Conversational verbs — token "clean" alone is too short for the
+  // fuzzy gate (≤5 chars → dist 1), so we anchor on phrases.
+  ['clean my house',       'House Cleaner'],
+  ['clean my place',       'House Cleaner'],
+  ['clean my apartment',   'House Cleaner'],
+  ['clean my home',        'House Cleaner'],
+
+  // ── plumbing ─────────────────────────────────────────────────────────
   ['unclog toilet',        'Plumber'],
   ['unclog drain',         'Plumber'],
+  ['unclog sink',          'Plumber'],
   ['unclog',               'Plumber'],
+  ['clogged toilet',       'Plumber'],
+  ['clogged drain',        'Plumber'],
+  ['clogged sink',         'Plumber'],
+  ['toilet clogged',       'Plumber'],
+  ['toilet is clogged',    'Plumber'],
   ['leaky faucet',         'Plumber'],
   ['leaking faucet',       'Plumber'],
+  ['leaky sink',           'Plumber'],
+  ['leaky pipe',           'Plumber'],
   ['leak',                 'Plumber'],
+  ['leaking',              'Plumber'],
   ['water heater',         'Plumber'],
+  ['pipe burst',           'Plumber'],
+  ['broken pipe',          'Plumber'],
   ['plumber',              'Plumber'],
   ['plumbing',             'Plumber'],
-  // pet / personal
+  ['plomero',              'Plumber'],   // Spanish
+  ['fontanero',            'Plumber'],   // Spanish
+
+  // ── pet / personal ───────────────────────────────────────────────────
   ['dog walker',           'Dog Walker'],
   ['dog walking',          'Dog Walker'],
+  ['walk my dog',          'Dog Walker'],
   ['pet sitter',           'Pet Sitter'],
   ['cat sitter',           'Pet Sitter'],
+  ['dog sitter',           'Pet Sitter'],
   ['pet sitting',          'Pet Sitter'],
-  // childcare — distinguish nanny vs babysitter (different commitment)
+  ['dog groomer',          'Pet Groomer'],
+  ['dog grooming',         'Pet Groomer'],
+  ['pet groomer',          'Pet Groomer'],
+  ['pet grooming',         'Pet Groomer'],
+  ['groomer',              'Pet Groomer'],
+
+  // ── childcare — distinguish nanny vs babysitter (different commitment)
   ['live-in nanny',        'Live-In Nanny'],
+  ['live in nanny',        'Live-In Nanny'],
   ['nanny',                'Nanny'],
   ['babysitter',           'Babysitter'],
+  ['baby sitter',          'Babysitter'],
   ['babysitting',          'Babysitter'],
-  // mobility
+  ['sitter',               'Babysitter'],
+  ['daycare',              'Babysitter'],
+  ['childcare',            'Babysitter'],
+  ['kids care',            'Babysitter'],
+  ['niñera',               'Nanny'],     // Spanish
+  ['ninera',               'Nanny'],     // unaccented variant
+
+  // ── mobility ─────────────────────────────────────────────────────────
+  ['airport pickup',       'Driver'],
+  ['airport drop',         'Driver'],
+  ['airport ride',         'Driver'],
   ['driver',               'Driver'],
   ['chauffeur',            'Driver'],
-  ['airport pickup',       'Driver'],
   ['ride',                 'Driver'],
-  // handyman / installation
+
+  // ── handyman / installation ──────────────────────────────────────────
   ['handyman',             'Handyman'],
+  ['handy man',            'Handyman'],
   ['repair',               'Handyman'],
+  ['fix-it',               'Handyman'],
   ['tv mount',             'Handyman'],
   ['furniture assembly',   'Handyman'],
+  ['assemble furniture',   'Handyman'],
   ['ikea',                 'Handyman'],
-  // electrical
+  ['mount tv',             'Handyman'],
+  ['hang shelves',         'Handyman'],
+
+  // ── electrical ──────────────────────────────────────────────────────
   ['electrician',          'Electrician'],
   ['electrical',           'Electrician'],
-  // hvac
+  ['rewire',               'Electrician'],
+  ['wiring',               'Electrician'],
+  ['electricista',         'Electrician'], // Spanish
+
+  // ── hvac ─────────────────────────────────────────────────────────────
   ['hvac',                 'HVAC Technician'],
   ['ac repair',            'HVAC Technician'],
+  ['ac broken',            'HVAC Technician'],
   ['air conditioning',     'HVAC Technician'],
-  // beauty
+  ['air conditioner',      'HVAC Technician'],
+  ['heating repair',       'HVAC Technician'],
+  ['furnace',              'HVAC Technician'],
+
+  // ── beauty ───────────────────────────────────────────────────────────
   ['hairstylist',          'Hairstylist'],
+  ['hair stylist',         'Hairstylist'],
+  ['hairdresser',          'Hairstylist'],
+  ['hair cut',             'Hairstylist'],
+  ['haircut',              'Hairstylist'],
+  ['blowout',              'Hairstylist'],
   ['hair',                 'Hairstylist'],
   ['barber',               'Barber'],
+  ['barbershop',           'Barber'],
+  ["men's haircut",        'Barber'],
+  ['manicure',             'Nail Tech'],
+  ['pedicure',             'Nail Tech'],
+  ['nails',                'Nail Tech'],
   ['nail',                 'Nail Tech'],
   ['makeup',               'Makeup Artist'],
+  ['make-up',              'Makeup Artist'],
+  ['glam',                 'Makeup Artist'],
   ['massage',              'Massage Therapist'],
-  // fitness / wellness
+  ['masseuse',             'Massage Therapist'],
+
+  // ── fitness / wellness ───────────────────────────────────────────────
   ['personal trainer',     'Personal Trainer'],
   ['trainer',              'Personal Trainer'],
+  ['fitness trainer',      'Personal Trainer'],
+  ['gym trainer',          'Personal Trainer'],
+  ['yoga teacher',         'Yoga Instructor'],
+  ['yoga instructor',      'Yoga Instructor'],
+  ['yoga class',           'Yoga Instructor'],
   ['yoga',                 'Yoga Instructor'],
+  ['pilates instructor',   'Pilates Instructor'],
   ['pilates',              'Pilates Instructor'],
-  // food / events — match seed: "Personal Chef" not "Chef" (the
-  // seeded provider registers as "Personal Chef" because they cook
-  // in clients' homes, not a restaurant).
+
+  // ── food / events — "Personal Chef" not "Chef" (matches seed) ────────
   ['personal chef',        'Personal Chef'],
   ['private chef',         'Personal Chef'],
+  ['in-home chef',         'Personal Chef'],
+  ['dinner party chef',    'Personal Chef'],
   ['chef',                 'Personal Chef'],
   ['catering',             'Caterer'],
+  ['caterer',              'Caterer'],
   ['cater',                'Caterer'],
   ['bartender',            'Bartender'],
+  ['bartending',           'Bartender'],
+
+  // ── photo / video ────────────────────────────────────────────────────
   ['photographer',         'Photographer'],
+  ['photo shoot',          'Photographer'],
   ['videographer',         'Videographer'],
-  // tutoring
+  ['video shoot',          'Videographer'],
+
+  // ── outdoor ──────────────────────────────────────────────────────────
+  ['gardener',             'Gardener'],
+  ['gardening',            'Gardener'],
+  ['landscaper',           'Landscaper'],
+  ['lawn care',            'Landscaper'],
+  ['lawn',                 'Landscaper'],
+  ['jardinero',            'Gardener'],   // Spanish
+  ['pool cleaner',         'Pool Cleaner'],
+  ['pool cleaning',        'Pool Cleaner'],
+  ['pool service',         'Pool Cleaner'],
+
+  // ── moving ───────────────────────────────────────────────────────────
+  ['movers',               'Mover'],
+  ['mover',                'Mover'],
+  ['moving help',          'Mover'],
+
+  // ── tutoring ─────────────────────────────────────────────────────────
+  ['math tutor',           'Tutor'],
   ['tutor',                'Tutor'],
+  ['tutoring',             'Tutor'],
   ['piano lesson',         'Music Teacher'],
+  ['piano teacher',        'Music Teacher'],
   ['guitar lesson',        'Music Teacher'],
+  ['guitar teacher',       'Music Teacher'],
+  ['music teacher',        'Music Teacher'],
+  ['music lesson',         'Music Teacher'],
 ];
 
 // Longest matching key wins so "deep cleaning" beats "cleaning" and
 // "unclog toilet" beats "unclog". Returns null when no key matches —
 // callers must then either fall back to Claude (semantic) OR show an
 // honest empty state. Never invent a match.
+//
+// CERGIO-GUARD (2026-05-28): we ALSO try a fuzzy fallback so common
+// typos like "clenaing" / "cleening" still route to House Cleaner.
+// Pattern: any meaningful token (≥4 chars) in the user's text within
+// edit distance 2 of a token in any taxonomy key counts as a hit. We
+// pick the longest key whose tokens ALL fuzzy-match at least one
+// user token. Conservative — never overrides an exact-substring hit.
 export function resolveProviderTypeLocal(text) {
   const l = String(text || '').toLowerCase();
+
+  // Pass 1: exact-substring match (canonical, fast path).
   let bestKey = null;
   for (const [k, v] of PROVIDER_TYPE_MAP) {
     if (l.includes(k) && (bestKey === null || k.length > bestKey[0].length)) {
       bestKey = [k, v];
     }
   }
-  return bestKey ? bestKey[1] : null;
+  if (bestKey) return bestKey[1];
+
+  // Pass 2: fuzzy fallback. Tokenize the user's text + each taxonomy
+  // key, then a key matches if ALL its meaningful tokens (≥4 chars)
+  // are within edit-distance 2 of SOME user token. ≤3-char tokens
+  // (e.g. "ac" in "ac repair") must match exactly to avoid false
+  // positives. Longest matching key wins, same as pass 1.
+  const userTokens = l.match(/[a-z]+/g) || [];
+  if (userTokens.length === 0) return null;
+
+  let bestFuzzy = null;
+  for (const [k, v] of PROVIDER_TYPE_MAP) {
+    const keyTokens = k.match(/[a-z]+/g) || [];
+    if (keyTokens.length === 0) continue;
+    const allMatch = keyTokens.every(kt => {
+      // Threshold scales with token length so longer words tolerate more
+      // typos. "clenaings" vs "cleaning" is dist 3, so we need ≥3 for the
+      // 8-char tier. ≤3-char tokens still require exact match (no false
+      // positives on "ac", "tv", etc.).
+      const minDist = kt.length <= 3 ? 0
+                    : kt.length <= 5 ? 1
+                    : kt.length <= 7 ? 2
+                    :                  3;
+      return userTokens.some(ut => editDistance(kt, ut) <= minDist);
+    });
+    if (allMatch && (bestFuzzy === null || k.length > bestFuzzy[0].length)) {
+      bestFuzzy = [k, v];
+    }
+  }
+  return bestFuzzy ? bestFuzzy[1] : null;
+}
+
+// Levenshtein distance — small enough that a full DP table is fine.
+// Used only in the fuzzy fallback; never on the hot path. Cap input
+// length at 24 so a pathological query string can't DOS the matcher.
+function editDistance(a, b) {
+  if (a === b) return 0;
+  a = String(a).slice(0, 24);
+  b = String(b).slice(0, 24);
+  const al = a.length, bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+  let prev = new Array(bl + 1);
+  let cur  = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) prev[j] = j;
+  for (let i = 1; i <= al; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= bl; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(
+        prev[j]     + 1,        // deletion
+        cur[j - 1]  + 1,        // insertion
+        prev[j - 1] + cost,     // substitution
+      );
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[bl];
 }
 
 // Canonical plurals — used in user-facing copy. "Looking for [plural]…"

@@ -31,6 +31,7 @@ import { geocodeAddress } from '../lib/google';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { buildInviteUrl } from '../lib/referral';
 import { pluralProviderTypeLocal, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
+import { REWARDS } from '../lib/rewards';
 import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivity';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
@@ -635,6 +636,30 @@ export function ResultsScreen() {
         // (the user is talking to a friend, not Cergio).
         const lc       = (s) => (s || '').toString().toLowerCase();
         const inText   = (s, base) => s && lc(base).includes(lc(String(s).replace('$', '')));
+        // CERGIO-GUARD (2026-05-28): share-action grammar guard. The
+        // lead reads "a good plumber TO <shareAction>" — that only
+        // grammars when shareAction starts with an imperative verb
+        // ("unclog my toilet", "fix my sink", "walk my dog"). If the
+        // user typed a noun-led phrase ("toilet unclogged", "deep
+        // cleaning"), we DROP the action — the canonical type alone
+        // ("a good plumber", "a good house cleaner") reads cleanly.
+        const ACTION_VERBS = new Set([
+          // home / repair
+          'unclog','clean','wash','fix','repair','install','mount','hang',
+          'assemble','paint','patch','replace','build','seal','tile',
+          // outdoor
+          'mow','trim','prune','plant','water','dig',
+          // pet / care
+          'walk','sit','watch','feed','groom','bathe','train',
+          // food / events
+          'cook','cater','bake','serve','bartend',
+          // beauty / wellness
+          'cut','color','style','blowdry','massage','teach','tutor',
+          // mobility
+          'drive','pickup','drop',
+          // misc
+          'help','setup','set','remove','haul','move',
+        ]);
         const shareAction = (() => {
           if (!userQuery) return null;
           let s = String(userQuery).toLowerCase().trim();
@@ -646,6 +671,10 @@ export function ResultsScreen() {
             if (s === pt || s === pt + 's') return null;
           }
           const tokens = s.match(/[a-z]+/g) || [];
+          if (tokens.length < 2) return null;
+          // Grammar gate: first token must be an imperative verb.
+          // "unclog my toilet" → keep; "toilet unclogged" → drop.
+          if (!ACTION_VERBS.has(tokens[0])) return null;
           const meaningful = tokens.filter(t => t.length >= 4);
           return meaningful.length >= 2 ? s : null;
         })();
@@ -686,27 +715,32 @@ export function ResultsScreen() {
           ? `No ${nounPlural} yet — ask friends to find one`
           : `Want better picks? Ask friends for a ${nounSingular} reco`;
 
+        // CERGIO-GUARD (2026-05-28): softened to match the Home house
+        // ads. Was loud-green (bg-gl + border-g/25 + text-gd headline)
+        // which felt sales-y at the bottom of every result page. Now
+        // bg-cr2 + border-bdr + black headline + b3 sub-copy, half the
+        // padding. Primary CTA stays green so the action remains clear.
         return (
-          <div className="mx-5 my-4 bg-gl border border-g/25 rounded-[20px] p-4">
-            <p className="text-[14px] font-extrabold text-gd leading-tight">{headline}</p>
-            <p className="text-[11px] text-gd/80 mt-1 leading-snug font-normal">
-              We'll send them your request prefilled. You earn ${'250'} when any friend joins.
+          <div className="mx-5 my-4 bg-cr2 border border-bdr rounded-[16px] px-4 py-3">
+            <p className="text-[13px] font-bold text-black leading-tight">{headline}</p>
+            <p className="text-[11px] text-b3 mt-0.5 leading-snug font-normal">
+              We'll send them your request prefilled. You earn ${REWARDS.perFriendUser} when any friend joins.
             </p>
-            <div className="mt-3 bg-white border border-bdr rounded-[12px] px-3 py-2 text-[12px] text-b2 leading-snug font-medium">
+            <div className="mt-2.5 bg-white border border-bdr rounded-[10px] px-2.5 py-1.5 text-[11px] text-b3 leading-snug">
               {shareMsg}
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-2.5 flex gap-2">
               <button
                 onClick={goReco}
-                className="flex-1 bg-g text-white rounded-pill py-2.5 text-[12px] font-extrabold
+                className="flex-1 bg-g text-white rounded-pill py-2 text-[12px] font-bold
                            hover:opacity-90 active:scale-[.98] transition-all"
               >
                 Send to friends →
               </button>
               <button
                 onClick={doNativeShare}
-                className="bg-white border border-bdr rounded-pill px-4 py-2.5 text-[12px] font-extrabold text-b2
-                           hover:border-g hover:text-gd transition-colors"
+                className="bg-white border border-bdr rounded-pill px-3.5 py-2 text-[12px] font-bold text-b3
+                           hover:text-b2 transition-colors"
               >
                 Copy
               </button>

@@ -875,6 +875,131 @@ test('request-fanout', 'Home submit creates a requests row + fans out notificati
     'ResultsScreen MUST read requestId from location.state so useRequestActivity polls notifications for THIS request.');
 });
 
+// ─── INVARIANT #29: search must tolerate typos, synonyms, Spanish, slang ─
+// User directive (2026-05-28): "search match notification can't fail on
+// silliness". 50+ realistic variations across categories — typos,
+// synonyms, verb forms, conversational phrasing, Spanish (Miami
+// launch context), and explicit nonsense. Each must route to the
+// expected canonical provider_type (or null for nonsense).
+test('search-tolerance', 'Local taxonomy + fuzzy matcher cover 50+ realistic search variations', '#29', async () => {
+  // We import the taxonomy module directly (it's plain ES module).
+  // dynamic import — qa.mjs runs as ESM.
+  const mod = await import('../src/lib/serviceTaxonomy.js');
+  const resolve = mod.resolveProviderTypeLocal;
+
+  // Each row: [user query, expected canonical type OR null for nonsense].
+  // Grouped by category so a regression is easy to localize.
+  const cases = [
+    // ── House Cleaner ─────────────────────────────────────────────────
+    ['deep cleaning under $200',           'House Cleaner'],
+    ['deep clenaings this weekend',        'House Cleaner'], // typo
+    ['cleeening lady tomorrow',            'House Cleaner'], // typo
+    ['need a housekeeper',                 'House Cleaner'],
+    ['housekeeping',                       'House Cleaner'],
+    ['cleaning lady saturdays',            'House Cleaner'],
+    ['maid for move-out',                  'House Cleaner'],
+    ['clean my house',                     'House Cleaner'],
+    ['clean my apartment',                 'House Cleaner'],
+    ['limpieza de casa',                   'House Cleaner'], // Spanish
+    ['mucama',                             'House Cleaner'], // Spanish
+
+    // ── Plumber ───────────────────────────────────────────────────────
+    ['unclog my toilet',                   'Plumber'],
+    ['toilet is clogged',                  'Plumber'],
+    ['clogged sink',                       'Plumber'],
+    ['plumer for a leak',                  'Plumber'],       // typo
+    ['leaky faucet under the sink',        'Plumber'],
+    ['water heater needs replacing',       'Plumber'],
+    ['pipe burst in the wall',             'Plumber'],
+    ['plomero por favor',                  'Plumber'],       // Spanish
+
+    // ── Childcare ────────────────────────────────────────────────────
+    ['babysitter friday night',            'Babysitter'],
+    ['babysiter tomorrow',                 'Babysitter'],    // typo
+    ['need a nanny',                       'Nanny'],
+    ['live-in nanny full time',            'Live-In Nanny'],
+    ['niñera para sabado',                 'Nanny'],         // Spanish
+    ['daycare drop off',                   'Babysitter'],
+
+    // ── Dog walker / Pets ─────────────────────────────────────────────
+    ['dog walker mornings',                'Dog Walker'],
+    ['walk my dog',                        'Dog Walker'],
+    ['pet sitter for the weekend',         'Pet Sitter'],
+    ['dog groomer',                        'Pet Groomer'],
+
+    // ── HVAC / Electrical ────────────────────────────────────────────
+    ['ac repair tomorrow',                 'HVAC Technician'],
+    ['ac repare tomorrow',                 'HVAC Technician'], // typo
+    ['air conditioning broken',            'HVAC Technician'],
+    ['electrician for the panel',          'Electrician'],
+    ['eletrician',                         'Electrician'],     // typo
+
+    // ── Beauty ────────────────────────────────────────────────────────
+    ['hairstylist at home',                'Hairstylist'],
+    ['hairsylist',                         'Hairstylist'],     // typo
+    ['hairdresser saturday',               'Hairstylist'],
+    ['blowout',                            'Hairstylist'],
+    ['barber',                             'Barber'],
+    ['manicure tonight',                   'Nail Tech'],
+    ['pedicure',                           'Nail Tech'],
+    ['makeup for a wedding',               'Makeup Artist'],
+    ['massage therapist',                  'Massage Therapist'],
+
+    // ── Fitness / Wellness ───────────────────────────────────────────
+    ['personal trainer 3x/week',           'Personal Trainer'],
+    ['personl trainer',                    'Personal Trainer'], // typo
+    ['yoga instructor for the family',     'Yoga Instructor'],
+    ['pilates class',                      'Pilates Instructor'],
+
+    // ── Food / Events ────────────────────────────────────────────────
+    ['personal chef for dinner',           'Personal Chef'],
+    ['private chef thursdays',             'Personal Chef'],
+    ['cater for my party',                 'Caterer'],
+    ['bartender for the wedding',          'Bartender'],
+
+    // ── Photo / Video ────────────────────────────────────────────────
+    ['photographer for the engagement',    'Photographer'],
+    ['photgrapher needed',                 'Photographer'],    // typo
+    ['videographer',                       'Videographer'],
+
+    // ── Outdoor / Moving ─────────────────────────────────────────────
+    ['gardener weekly',                    'Gardener'],
+    ['pool cleaner',                       'Pool Cleaner'],
+    ['movers for saturday',                'Mover'],
+
+    // ── Handyman ─────────────────────────────────────────────────────
+    ['handyman tv mount',                  'Handyman'],
+    ['assemble furniture ikea',            'Handyman'],
+    ['hang shelves',                       'Handyman'],
+
+    // ── Tutoring ─────────────────────────────────────────────────────
+    ['math tutor',                         'Tutor'],
+    ['piano lesson',                       'Music Teacher'],
+    ['guitar teacher',                     'Music Teacher'],
+
+    // ── Mobility / Drivers ───────────────────────────────────────────
+    ['driver from miami beach to mia',     'Driver'],
+    ['airport pickup tomorrow',            'Driver'],
+
+    // ── Nonsense — must NOT match (no false positives) ───────────────
+    ['random nonsense',                    null],
+    ['',                                   null],
+    ['I need help',                        null],
+    ['service',                            null],
+    ['asdfghjkl',                          null],
+  ];
+
+  const failures = [];
+  for (const [query, expected] of cases) {
+    const got = resolve(query);
+    if (got !== expected) {
+      failures.push(`'${query}' → got ${JSON.stringify(got)}, want ${JSON.stringify(expected)}`);
+    }
+  }
+  assert(failures.length === 0,
+    `Search-tolerance battery — ${failures.length} of ${cases.length} cases failed:\n  ${failures.join('\n  ')}`);
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are
