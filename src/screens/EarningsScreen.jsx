@@ -212,45 +212,30 @@ export function EarningsScreen() {
             </div>
           </div>
 
-          {/* Counter row with INLINE action buttons. Replaces the
-              old below-the-card bullet list. Provider + Consumer get
-              different button labels + counter labels. */}
+          {/* CERGIO-GUARD (2026-05-28): de-cluttered per user audit.
+              The two stat rows (top 3 + bottom 3) overlapped (both
+              had "earned" + "invited"). Collapsed to one row: invites
+              count + recs count + earned, with Invite + Reco buttons
+              inline on the right. The lower duplicate row was removed. */}
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex-1">
-              <p className="text-[18px] font-extrabold text-black leading-none">{invitesCount}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-[16px] font-extrabold text-black leading-none">{recsCount}</p>
               <p className="text-[10px] text-b3 mt-0.5 leading-snug uppercase tracking-wide">
-                {isProvider ? 'Clients invited' : 'Friends invited'}
+                Recs sent
               </p>
             </div>
             <button
               onClick={() => navigate('/find-friends')}
-              className="bg-g text-white rounded-pill px-3 py-1.5 text-[11px] font-extrabold whitespace-nowrap"
+              className="bg-g text-white rounded-pill px-3 py-1.5 text-[11px] font-bold whitespace-nowrap"
             >
               Invite
             </button>
             <button
               onClick={() => navigate('/invite/recommend-popup')}
-              className="bg-white border border-bdr rounded-pill px-3 py-1.5 text-[11px] font-extrabold text-b2 whitespace-nowrap"
+              className="bg-white border border-bdr rounded-pill px-3 py-1.5 text-[11px] font-bold text-b2 whitespace-nowrap"
             >
               Reco
             </button>
-          </div>
-
-          <div className="flex items-center gap-4 mb-3 border-t border-bdr pt-3">
-            <div className="flex-1">
-              <p className="text-[16px] font-extrabold text-black leading-none">0</p>
-              <p className="text-[10px] text-b3 mt-0.5 leading-snug">services reco'd</p>
-            </div>
-            <div className="flex-1">
-              <p className="text-[16px] font-extrabold text-black leading-none">$0</p>
-              <p className="text-[10px] text-b3 mt-0.5 leading-snug">earned</p>
-            </div>
-            <div className="flex-1">
-              <p className="text-[16px] font-extrabold text-black leading-none">0</p>
-              <p className="text-[10px] text-b3 mt-0.5 leading-snug">
-                {isProvider ? 'spotlights' : 'free credits'}
-              </p>
-            </div>
           </div>
 
           {/* Mode-tailored one-liner — provider vs consumer is genuinely

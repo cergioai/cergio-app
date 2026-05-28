@@ -9,12 +9,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PROFILE } from '../data/mock';
-import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok, getMySpotlightPrices } from '../lib/api';
+import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok, getMySpotlightPrices, listMyServices } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
 import { EditProfileModal } from '../components/ui/EditProfileModal';
-import { REWARDS } from '../lib/rewards';
+import { REWARDS, REWARD_COPY } from '../lib/rewards';
 
 function fmtFollowers(n) {
   if (!Number.isFinite(+n)) return '';
@@ -110,11 +110,22 @@ export function ProfileScreen() {
   const [showTtModal, setShowTtModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [spotlightPrices, setSpotlightPrices] = useState(null);
+  // CERGIO-GUARD (2026-05-28): "What's a Connector?" popup. The
+  // Connector concept is broader than "influencer" — it covers super
+  // users, service providers, small biz, anyone with a local network.
+  // We explain it before sending the user into the apply flow so they
+  // know whether it's for them.
+  const [showConnectorInfo, setShowConnectorInfo] = useState(false);
+  // hasService — true if the signed-in user has at least one listed
+  // service. Drives whether to render the "Services" section, which
+  // is noise for consumer-only users (most of the audience).
+  const [hasService, setHasService] = useState(false);
   useEffect(() => {
-    if (!isSignedIn) { setIg(null); setTt(null); setSpotlightPrices(null); return; }
+    if (!isSignedIn) { setIg(null); setTt(null); setSpotlightPrices(null); setHasService(false); return; }
     getMyInstagram().then(({ data }) => setIg(data || null));
     getMyTikTok().then(({ data }) => setTt(data || null));
     getMySpotlightPrices().then(({ data }) => setSpotlightPrices(data || null));
+    listMyServices().then(({ data }) => setHasService((data || []).length > 0));
   }, [isSignedIn]);
   const hasRateCard = !!(
     spotlightPrices?.spotlight_price_instagram_cents != null ||
@@ -276,18 +287,23 @@ export function ProfileScreen() {
         </>
       )}
 
-      {/* ── Services — the Switch button moved up to the top of the screen.
-          This section now just hosts the manage/list rows. ──────────── */}
-      <SectionHeader title="Services" />
-      <Row
-        title="List a new service"
-        subtitle={listGated
-          ? (provider.hasAccount ? 'Stripe verifying…' : 'Needs payouts setup first')
-          : 'Offer your service on Cergio'}
-        onClick={onListService}
-      />
-      {serviceMode && (
+      {/* ── Services — provider-only.
+          CERGIO-GUARD (2026-05-28): consumers don't need to see "List
+          a service" or "Manage services" — those are noise for the
+          80%+ user audience. Show ONLY when the user is in service
+          mode OR has at least one listed service. The "Switch to
+          provider mode" button at the top of the screen is the path
+          in if they ever want to flip. */}
+      {(serviceMode || hasService) && (
         <>
+          <SectionHeader title="Services" />
+          <Row
+            title="List a new service"
+            subtitle={listGated
+              ? (provider.hasAccount ? 'Stripe verifying…' : 'Needs payouts setup first')
+              : 'Offer your service on Cergio'}
+            onClick={onListService}
+          />
           <Row
             title="Manage services"
             subtitle="Edit listings, photos, and pricing"
@@ -297,39 +313,32 @@ export function ProfileScreen() {
         </>
       )}
 
-      {/* ── Invite & Earn ────────────────────────────────────────────────────
-          ONE umbrella for everything reward-adjacent: earnings, invites,
-          recos, network management, Connector rates. CERGIO-GUARD: do
-          NOT split this back into "Earn Cash!" + "Additional Links" —
-          consolidating them sharpens the message and saves vertical
-          space. "Coming soon" stubs removed; only real links remain. */}
-      <SectionHeader title="Invite & Earn" />
+      {/* ── Earn $250+ ───────────────────────────────────────────────────────
+          CERGIO-GUARD (2026-05-28): collapsed from 5 rows → 3. The
+          "Invite friends" + "Recommend a service" + "Find friends on
+          Cergio" all already converge to /invite/friends-popup (which
+          has Invite + Reco buttons inline), so one "Invite & earn"
+          row replaces all three. Earnings stays its own row because
+          it's high-frequency. Connector entry stays separate so the
+          cash-track upgrade is one tap away. */}
+      <SectionHeader title={`Earn $${REWARDS.perFriend}+`} />
       <Row
         title="My earnings"
         subtitle="Balance, breakdown, and how it works"
         pill={<MintPill>$0 USD</MintPill>}
         onClick={() => navigate('/earnings')}
       />
+      {!hasRateCard && (
+        <Row
+          title="Become a Connector"
+          subtitle={`$${REWARDS.perFriendConnector} cash + free services + Growth Participation Income`}
+          onClick={() => setShowConnectorInfo(true)}
+        />
+      )}
       <Row
-        title="Become a Connector"
-        subtitle={`Earn $${REWARDS.perFriendConnector} cash (not credit) + free services + Growth Participation Income`}
-        pill={hasRateCard ? <MintPill>Connector ✓</MintPill> : null}
-        onClick={() => navigate('/rainmaker/apply')}
-      />
-      <Row
-        title="Invite friends"
+        title="Invite & earn"
         subtitle={`$${REWARDS.perFriendUser} credit per friend who joins + books`}
         onClick={() => navigate('/invite/friends-popup')}
-      />
-      <Row
-        title="Recommend a service"
-        subtitle={`$${REWARDS.perFriend} when your reco's friend joins + books`}
-        onClick={() => navigate('/invite/recommend-popup')}
-      />
-      <Row
-        title="Find friends on Cergio"
-        subtitle="See who's already here · sync contacts in one tap"
-        onClick={() => navigate('/find-friends')}
       />
 
       {/* ── About ──────────────────────────────────────────────────────────── */}
@@ -395,6 +404,80 @@ export function ProfileScreen() {
           onClose={() => setShowEditProfile(false)}
           onSaved={() => showToast('Profile updated ✓')}
         />
+      )}
+
+      {/* "What's a Connector?" — bottom sheet explainer.
+          CERGIO-GUARD (2026-05-28): the Connector role is broader than
+          influencer — covers super users, service providers, small biz,
+          anyone with a strong local network. Explain that BEFORE the
+          apply flow so people self-select correctly. Mirrors the Growth
+          Participation Income popup pattern on EarningsScreen. */}
+      {showConnectorInfo && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/40 flex items-end justify-center"
+          onClick={() => setShowConnectorInfo(false)}
+        >
+          <div
+            className="w-full max-w-[390px] bg-cream rounded-t-[24px] p-6 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-3">
+              <h3 className="text-[18px] font-extrabold text-black leading-tight">
+                What's a Connector?
+              </h3>
+              <button
+                onClick={() => setShowConnectorInfo(false)}
+                className="text-[20px] text-b3 font-bold px-2 -mt-1"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+              A Connector is someone who can drive real users to great services in
+              their community. It's broader than "influencer" — these are the
+              kinds of people who become Connectors:
+            </p>
+            <ul className="text-[13px] text-b2 leading-relaxed mb-3 space-y-1.5 pl-1">
+              <li>• <span className="font-bold text-black">Local influencers</span> (5K+ on IG/TikTok)</li>
+              <li>• <span className="font-bold text-black">Super users</span> — people whose friends actually listen when they recommend something</li>
+              <li>• <span className="font-bold text-black">Service providers</span> with a base of existing clients</li>
+              <li>• <span className="font-bold text-black">Small businesses</span> — stores, salons, gyms, real-estate agents</li>
+            </ul>
+            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+              The thing in common: a network you can drive toward services worth
+              booking. You become a partner in the marketplace — you grow it, it
+              grows you.
+            </p>
+            <div className="bg-gl border border-g/25 rounded-[14px] p-3 mb-4">
+              <p className="text-[12px] font-bold text-gd leading-snug mb-1.5">As a Connector you earn:</p>
+              <ul className="text-[12px] text-gd/90 leading-snug space-y-1">
+                <li>• ${REWARDS.perFriendConnector} <span className="font-bold">cash</span> per friend who joins + books</li>
+                <li>• Free services from providers who pay you in spotlights</li>
+                <li>• Growth Participation Income — your earnings drive a bigger bonus as Cergio grows</li>
+              </ul>
+            </div>
+            <p className="text-[12px] text-b3 leading-snug mb-4 italic">
+              {REWARD_COPY.missionLine}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowConnectorInfo(false); navigate('/rainmaker/apply'); }}
+                className="flex-1 bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold
+                           hover:opacity-90 active:scale-[.98] transition-all"
+              >
+                I want in →
+              </button>
+              <button
+                onClick={() => setShowConnectorInfo(false)}
+                className="bg-white border border-bdr text-b3 rounded-[14px] px-4 py-3
+                           text-[13px] font-bold hover:text-b2 transition-colors"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,86 +1,68 @@
-Search: bulletproof typo/variant/Spanish tolerance + softer SRP reco card
+UX: Profile declutter + Connector explainer popup + Earnings counter dedupe + leaf options
 
-BACKGROUND  User typed "deep clenaings" (typo of "deep cleanings") and
-the SRP rendered "No deep clenaings yet — ask friends" + a share
-message that read "anyone know a good deep clenaing to deep clenaing".
-Two bugs surfaced:
+PROFILE — fewer rows, contextual visibility
 
-  1. resolveProviderTypeLocal didn't tolerate typos at all — exact
-     substring match only.
-  2. When the parser failed to resolve a canonical type, the share
-     message fell back to the user's raw verb-phrase TWICE in the
-     same line, producing duplicate gibberish.
+User feedback: "make profile links less busy ... hide what's not
+necessary, fold ... drive users to few captivating actions."
 
-User directive: "search match notification can't fail on silliness …
-build elegant tolerance and imagine all possible scenarios."
+Changes:
+  • Services section now ONLY renders for providers (serviceMode OR
+    hasService). Consumers no longer see "List a service" /
+    "Manage services" noise.
+  • Invite & Earn collapsed from 5 rows → 3:
+      My earnings  →  /earnings
+      Become a Connector  →  Connector explainer popup (new)
+      Invite & earn  →  /invite/friends-popup (already has Invite +
+                       Reco + Find friends branches inline)
+  • Section renamed "Invite & Earn" → "Earn $250+" — clearer hook.
+  • "Become a Connector" row only renders when user hasn't already
+    set up a rate card (avoids duplicate of the Social section's
+    "Add a spotlight rate" row).
 
-FUZZY MATCHER (src/lib/serviceTaxonomy.js)
+NEW — "What's a Connector?" popup
 
-  Added a 2-pass resolveProviderTypeLocal:
+User asked for a clear explainer. Pattern: bottom sheet from
+ProfileScreen (mirrors the Growth Participation Income popup
+pattern on EarningsScreen).
 
-    Pass 1 (canonical): exact substring match. Same as before.
-    Pass 2 (fuzzy):     Levenshtein edit-distance fallback.
-                        Tokens ≤3 chars  → exact match required
-                        Tokens 4–5 chars → ≤1 edit
-                        Tokens 6–7 chars → ≤2 edits
-                        Tokens ≥8 chars  → ≤3 edits
+Definition covers the FULL Connector audience:
+  • Local influencers (5K+ on IG/TikTok)
+  • Super users — people whose friends actually listen
+  • Service providers with an existing client base
+  • Small businesses — stores, salons, gyms, real-estate
 
-  ALL meaningful tokens in a taxonomy key must fuzzy-match SOME user
-  token. Longest matching key wins (same precedence as Pass 1).
-  Conservative — never overrides an exact match, never matches
-  nonsense like "random nonsense" or "asdfghjkl".
+Reward stack in-popup:
+  • $250 cash per friend who joins + books
+  • Free services from providers who pay in spotlights
+  • Growth Participation Income — bigger bonus as Cergio grows
 
-PROVIDER_TYPE_MAP EXPANSION
+Closes on the mission line: "human-powered AI that enables shared
+prosperity." CTA: "I want in →" routes to /rainmaker/apply.
+"Maybe later" closes silently.
 
-  Grew from 60 → 134 entries. Added:
-   • Common synonyms: housekeeper / cleaning lady / maid, hairdresser,
-     babysitter / sitter / daycare / childcare, dog groomer,
-     manicure / pedicure / nails, blowout, gardener, pool cleaner,
-     movers, math tutor, music teacher, etc.
-   • Conversational phrasing: "clean my house", "toilet is clogged",
-     "walk my dog", "hang shelves"
-   • Spanish keywords (Miami launch): limpieza, mucama, plomero,
-     fontanero, niñera, electricista, jardinero
-   • Plural/verb-form variations
+EARNINGS — duplicate counter row removed
 
-SHARE-LEAD GRAMMAR GUARD (ResultsScreen)
+Two stat rows (top 3 + lower 3) overlapped — both showed "earned"
+and "invited" counts. Collapsed to ONE compact row inside the empty
+state: Recs sent + Invite/Reco buttons inline. The top stat band
+above (Friends invited / Services reco'd / Earned) stays — that's
+the canonical metric trio.
 
-  Old bug: "anyone know a good plumber to toilet unclogged" — the
-  shareAction was a noun-led phrase that read poorly after "to".
+LEAF OPTIONS DOC
 
-  Fix: only include the action when its FIRST token is in a known
-  ACTION_VERBS whitelist (unclog, clean, fix, walk, cook, train,
-  teach, mount, etc.). Noun-led queries fall back to just the
-  canonical noun: "anyone know a good plumber" — clean read.
+LEAF_OPTIONS.md in Cergio Claude folder. Three organic
+alternatives sketched with motion notes:
+  A. Single leaf, refined  — safe iteration on today's mark
+  B. Sprout (two leaves + tall stem + ground line) — best
+     narrative fit for shared-prosperity story
+  C. Branch (3 leaves, fern-like with tip curl) — most premium
+     but busier at 16–22px
 
-SRP RECO-CARD SOFTENED  (user feedback: "this add is too busy")
+My pick: B. Decision is yours — reply A / B / C and I wire it up.
 
-  Was: bg-gl + border-g/25 + p-4 + text-[14px] extrabold gd headline
-       + text-[11px] gd/80 subcopy + rounded-[20px]
-  Now: bg-cr2 + border-bdr + px-4 py-3 + text-[13px] bold black
-       headline + text-[11px] b3 subcopy + rounded-[16px]
-       + button text-[12px] font-bold (was font-extrabold)
-
-  Same primary green CTA so the action remains clear; everything else
-  matches the Home house-ad palette so it stops competing with the
-  provider cards above it.
-
-INVARIANT #29 — search-tolerance battery
-
-  65 realistic cases across 13 categories:
-   - typos (clenaings, plumer, hairsylist, electricain, photgrapher…)
-   - synonyms (maid, hairdresser, sitter, manicure…)
-   - Spanish (limpieza, mucama, plomero, niñera…)
-   - conversational ("toilet is clogged", "walk my dog")
-   - nonsense (random text → null, no false positives)
-
-  qa.mjs grows 28 → 29 invariants, all green.
-
-VERIFIED
-  Node probe: 65/65 search variations resolve correctly.
-  qa.mjs: 29/29 pass.
+VERIFIED  qa.mjs: 29/29 pass
 
 Files:
-  src/lib/serviceTaxonomy.js
-  src/screens/ResultsScreen.jsx
-  scripts/qa.mjs
+  src/screens/ProfileScreen.jsx
+  src/screens/EarningsScreen.jsx
+  LEAF_OPTIONS.md           (parent folder)
