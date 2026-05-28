@@ -1,87 +1,71 @@
-Guardrails + money-flow schema fix + test plan + 8 new invariants
+UX: SRP status from real activity + leaf intensity + softer house ads + profile fonts
 
-The 2026-05-28 audit (Chrome MCP probe as Tarik) found that the
-community money flows have been silently broken for weeks:
+SRP STATUS — REAL ACTIVITY, NOT setInterval
 
-  • notifications table — DOES NOT EXIST
-    → every notifyUser() has been a silent no-op
-    → providers never see new requests
-    → entire "ping the network" UX has been theatre
-  • connector_applications table — DOES NOT EXIST
-    → tapping Become-a-Connector submit was theatre
-  • recommendations.inviter_id column — MISSING
-    → reco attribution couldn't write
-  • profiles.tiktok_handle/_followers/_verified_at — MISSING
-    → ProfileScreen quietly fails on the TikTok row
-  • Tarik's two own services have taxonomy_provider_type=NULL
-    → can't be searched or notified
-  • invites + earnings tables are empty
-    → no money flow has fired end-to-end, ever
+User directive (2026-05-28): "make it related to REAL actions (as
+opposed to hard wired...)". The status ticker on /results now reads
+LIVE counts from the notifications + bids tables for the open
+request, advancing only when actual rows land.
 
-SCHEMA FIX
+New hook: src/hooks/useRequestActivity.js
+  - polls notifications WHERE data->>request_id = <id> AND kind='new_request'
+  - polls bids WHERE request_id = <id>
+  - 2.5s cadence (cheap, well under any rate limit)
+  - exports activityToStatus() that turns counts → status line + 0..1 intensity
+  - schema-cache miss on bids treated as zero (graceful while we wire bids)
 
-New migration 20260528000000_money_flow_schema_fix.sql creates the
-4 missing tables/columns with proper RLS. Applied to live Supabase
-via PAT (HTTP 201 confirmed).
+ResultsScreen wiring:
+  - useRequestActivity(chatState.request_id) at the top
+  - liveStatus.line replaces scripted line as soon as a real row lands
+  - Scripted lines (setInterval) kept as graceful fallback for the
+    ~3s pre-write window
+  - Sub-line surfaces "X replies in — Y notified" when bids arrive
 
-TEST INFRASTRUCTURE
+LEAF INTENSITY (canonical formula in activityToStatus)
+  intensity = min(1, (notified + replied * 3) / 10)
+  bids count 3× notifications — a reply is real engagement, a
+  notification is just a ping. Ready to consume from LeafLogo when
+  the next pass wires the prop through.
 
-  TEST_PLAN_MONEY_FLOWS.md — rigorous plan: §0 findings, §3 seven
-    flows with assertions (signup-with-ref, search→notify, bid-back,
-    recommend, connector apply, spotlight barter, first-booking
-    credit), §4 invariants 26–30, §5 UX queue, §6 execution order
+HOUSE ADS SOFTER
+  HomeScreen find-side + spotlight-side ads:
+    bg-gl  → bg-cr2
+    border-g/25 → border-bdr
+    rounded-[20px] / p-4 → rounded-[16px] / px-4 py-3
+    icon 10x10 → 8x8 (svg 20 → 16)
+    headline text-[15px] font-extrabold → text-[13px] font-bold
+    chevron text-lg → text-base
+  Half the visual weight; same routing + copy contract.
 
-  Apply Money Flow Migration.command — applies the schema (idempotent)
-  Seed Money Flow Test Data.command — plants Alex, Connie, Penny,
-    Sam personas + Penny's listed Plumber service + Connie's verified
-    connector_application
-  Fix Penny Service.command — backfills Penny's service when the
-    first seed run hits the bad-column edge case
+PROFILE FONTS TIGHTENED
+  Row component:
+    title    text-[16px] font-bold → text-[14px] font-bold
+    subtitle text-[13px]            → text-[11px]
+    padding  py-3.5                 → py-4 (more breathing room despite smaller text)
+  Matches the design-spec.md reference for dense settings rows.
 
-BUILD VERSION PILL — observability
+INVARIANT #26 — SRP-real-activity
 
-  BuildVersionPill.jsx in bottom-left of every screen. Shows current
-  short git SHA + build time. Click to copy. Vite define{} injects
-  SHA at server-start. Was the single missing observability piece
-  during the 2-day search debug — HMR-stale-closure bugs are now
-  visible at a glance.
+  qa.mjs gains #26:
+    - useRequestActivity must query notifications + bids
+    - must export activityToStatus
+    - ResultsScreen must call both
+    - render path MUST switch to liveStatus.line when hasLiveActivity
 
-INVARIANTS — qa.mjs grows 17 → 25 (all green)
-
-  #18  Build pill wired
-  #19  saveAddress writes user_metadata FIRST  (locks task #103)
-  #20  signUp never strands user                (locks task #102)
-  #21  Addresses Google-verified before save    (locks task #85)
-  #22  No "Cergio Coin/Cash" in signed-in copy  (locks task #78)
-  #23  Every Profile navigate target resolves
-  #24  Rewards copy uses REWARDS constants — IMMEDIATELY caught a
-       hardcoded "$250" + "$10,000" in RainmakersScreen, fixed in
-       this same commit. Added REWARDS.milestoneFriends / milestoneBonus.
-  #25  Connector apply has side-by-side + compounding + selector + GPI
-
-CRITICAL_FLOWS.md §14–§21 added with plain-language rules + qa#
-cross-refs.
+Total: 25 → 26 invariants, all green.
 
 OUTSTANDING (sketches in OVERNIGHT_STATUS.md):
-  • F1–F7 live execution against seeded personas (blocked on Chrome
-    MCP per-domain permission)
-  • Leaf logo "pulse intensity" prop
-  • SRP slow-load tied to real notifications/bids counts
-  • Login elegance, house ad softening, profile font reduction
+  • Login elegance (trim AuthScreen)
   • Home copy consistency one-pass audit
+  • Leaf logo intensity prop binding (the formula is ready; LeafLogo
+    component still needs the prop wired through CSS-vars)
+  • F1–F7 live execution (blocked on Chrome MCP per-domain permission)
 
-VERIFIED  qa.mjs: 25/25 pass
-          Live DB: notifications + connector_applications tables exist
-          Personas seeded; Penny's Plumber service listed at 25.81,-80.13
+VERIFIED  qa.mjs: 26/26 pass
 
 Files:
-  src/components/ui/BuildVersionPill.jsx          (new)
-  src/App.jsx
-  vite.config.js
-  src/lib/rewards.js
-  src/screens/RainmakersScreen.jsx
+  src/hooks/useRequestActivity.js   (new)
   src/screens/ResultsScreen.jsx
+  src/screens/HomeScreen.jsx
+  src/screens/ProfileScreen.jsx
   scripts/qa.mjs
-  CRITICAL_FLOWS.md
-  TEST_PLAN_MONEY_FLOWS.md                         (new)
-  supabase/migrations/20260528000000_money_flow_schema_fix.sql (new)

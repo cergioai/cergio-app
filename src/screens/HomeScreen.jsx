@@ -1209,15 +1209,19 @@ export function HomeScreen() {
       {/* Find-side house ad — shared economics frame. Soft green wash.
           Routes to the Connector apply page (the hero hook on the new
           copy is 'Become a Connector — $250 cash per friend'). */}
+      {/* CERGIO-GUARD (2026-05-28): house ad softened per user audit.
+          Was bg-gl + p-4 + 10x10 icon — felt sales-y. Now bg-cr2 +
+          py-3 + 8x8 icon + text-[13px] headline. Same routing, half
+          the visual weight. */}
       {intent === 'find' && !submitted && (
         <div className="px-5 mt-1 mb-6">
           <button
             onClick={() => navigate('/rainmaker/apply')}
-            className="w-full bg-gl text-gd border border-g/25 rounded-[20px] p-4 flex items-center gap-3 text-left
-                       hover:bg-gl/80 active:scale-[.99] transition-all"
+            className="w-full bg-cr2 text-b2 border border-bdr rounded-[16px] px-4 py-3 flex items-center gap-3 text-left
+                       hover:bg-bg5/30 active:scale-[.99] transition-all"
           >
-            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-g/20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-bdr">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
                    strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
@@ -1225,19 +1229,14 @@ export function HomeScreen() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              {/* CERGIO-GUARD: USER-side house ad — leads with Become a
-                  Connector (cash track) and stacks the Connector
-                  benefits (cash + free services + Growth Participation
-                  Income) as the hero hook. Secondary line: users on
-                  the credit track still earn $250 each. */}
-              <p className="text-[15px] font-extrabold leading-tight">
-                Become a Connector — ${REWARDS.perFriendConnector} cash + free services + Growth Income
+              <p className="text-[13px] font-bold text-black leading-tight">
+                Become a Connector — ${REWARDS.perFriendConnector} cash + free services
               </p>
-              <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
+              <p className="text-[11px] text-b3 mt-0.5 leading-snug font-normal">
                 Or stay a user → ${REWARDS.perFriendUser} credit per friend who joins + books.
               </p>
             </div>
-            <span className="text-gd text-lg flex-shrink-0">›</span>
+            <span className="text-b3 text-base flex-shrink-0">›</span>
           </button>
         </div>
       )}
@@ -1251,42 +1250,27 @@ export function HomeScreen() {
         <div className="px-5 mt-1 mb-6">
           <button
             onClick={() => navigate('/rainmaker/apply')}
-            className="w-full bg-gl text-gd border border-g/25 rounded-[20px] p-4 flex items-center gap-3 text-left
-                       hover:bg-gl/80 active:scale-[.99] transition-all"
+            className="w-full bg-cr2 text-b2 border border-bdr rounded-[16px] px-4 py-3 flex items-center gap-3 text-left
+                       hover:bg-bg5/30 active:scale-[.99] transition-all"
           >
-            {/* Earthy sprout — coin-sized seedling rising from a ground
-                line. Reads as "growth + earth + prosperity" without
-                competing with the brand leaf logo (which has splayed
-                top leaves). Simple two-tone fill. */}
-            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-g/20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                {/* ground */}
+            {/* Earthy sprout — softened to match the user-side ad. */}
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-bdr">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M4 20 H20" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
-                {/* stem */}
                 <path d="M12 20 V12" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" />
-                {/* left leaf */}
                 <path d="M12 16 C 8 16, 6 13, 6 10 C 9 11, 12 13, 12 16 Z" fill="#3D8B00" />
-                {/* right leaf */}
                 <path d="M12 13 C 16 13, 18 10, 18 7 C 15 8, 12 10, 12 13 Z" fill="#5BC404" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              {/* CERGIO-GUARD: PROVIDER-side house ad — speaks to
-                  someone who already has clients. Lead with "invite
-                  your clients", lock in the Connector reward ($250
-                  cash per client who books), close with the loop
-                  (free spotlights as a Connector, Growth Participation
-                  Income). "Free spotlight" reflects the barter side
-                  of the Connector status — they post for providers
-                  and get free service in return. */}
-              <p className="text-[15px] font-extrabold leading-tight">
+              <p className="text-[13px] font-bold text-black leading-tight">
                 Invite your clients → become a Connector
               </p>
-              <p className="text-[11px] text-gd/85 mt-0.5 leading-snug font-normal">
+              <p className="text-[11px] text-b3 mt-0.5 leading-snug font-normal">
                 ${REWARDS.perFriendConnector} cash per client who books + free spotlights (barter) + Growth Participation Income.
               </p>
             </div>
-            <span className="text-gd text-lg flex-shrink-0">›</span>
+            <span className="text-b3 text-base flex-shrink-0">›</span>
           </button>
         </div>
       )}

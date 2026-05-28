@@ -786,6 +786,33 @@ test('connector-apply-complete', 'RainmakerApplyScreen has side-by-side + compou
     'RainmakerApplyScreen must mention Growth Participation Income as part of the Connector reward stack.');
 });
 
+// ─── INVARIANT #26: SRP status driven by REAL activity counts ──────────
+// User directive (2026-05-28): "make it related to REAL actions (as
+// opposed to hard wired...)". The status ticker on /results MUST be
+// driven by live notification + bid counts on the open request, not
+// purely by a setInterval. The scripted lines remain as a graceful
+// pre-write fallback. Lock both: the hook is imported AND its outputs
+// are actually consumed in the render path.
+test('srp-real-activity', 'ResultsScreen status ticker reads from useRequestActivity, not just setInterval', '#26', async () => {
+  const hook = readFile('src/hooks/useRequestActivity.js');
+  assert(/from\(['"]notifications['"]\)/.test(hook),
+    'useRequestActivity must query the notifications table for the open request.');
+  assert(/from\(['"]bids['"]\)/.test(hook),
+    'useRequestActivity must query the bids table for the open request.');
+  assert(/export function activityToStatus/.test(hook),
+    'useRequestActivity must export activityToStatus so ResultsScreen can derive a status line.');
+
+  const srp  = readFile('src/screens/ResultsScreen.jsx');
+  const code = stripComments(srp);
+  assert(/useRequestActivity\s*\(/.test(code),
+    'ResultsScreen MUST call useRequestActivity(requestId) so the status ticker advances on real DB activity.');
+  assert(/activityToStatus\s*\(/.test(code),
+    'ResultsScreen MUST call activityToStatus({...}) to derive the status line from live counts.');
+  assert(/hasLiveActivity\s*\?\s*liveStatus\.line/.test(code) ||
+         /liveStatus\.line\s*:\s*statusSteps/.test(code),
+    'The render path MUST switch to liveStatus.line when hasLiveActivity is true (so real counts replace the scripted lines).');
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are

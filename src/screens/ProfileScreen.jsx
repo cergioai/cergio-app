@@ -27,22 +27,26 @@ function fmtFollowers(n) {
 // Row pattern — sized down per Tarik's audit (title 18→16, subtitle 15→13).
 // Rows are dense + numerous on this screen; smaller type makes the section
 // hierarchy breathe.
+// CERGIO-GUARD (2026-05-28): row typography tightened per user audit.
+// Title 16 → 14, subtitle 13 → 11, slightly more vertical padding so the
+// row breathes despite smaller text. Goal: match the design-spec.md
+// reference of dense-but-readable settings rows.
 function Row({ title, subtitle, pill, onClick, disabled = false }) {
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`w-full px-5 py-3.5 flex items-center justify-between text-left
+      className={`w-full px-5 py-4 flex items-center justify-between text-left
                   ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-bg5/30 transition-colors'}`}
     >
       <div className="flex-1 pr-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[16px] font-bold text-black leading-tight">{title}</span>
+          <span className="text-[14px] font-bold text-black leading-tight">{title}</span>
           {pill && pill}
         </div>
         {subtitle && (
-          <p className="text-[13px] text-b3 mt-1 leading-snug font-medium">{subtitle}</p>
+          <p className="text-[11px] text-b3 mt-1 leading-snug font-medium">{subtitle}</p>
         )}
       </div>
       <Chevron />

@@ -31,6 +31,7 @@ import { geocodeAddress } from '../lib/google';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { buildInviteUrl } from '../lib/referral';
 import { pluralProviderTypeLocal, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
+import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivity';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -173,16 +174,28 @@ export function ResultsScreen() {
   // misleading "No plumbers yet" empty state. This is the honest
   // story: free filter is a preference, not the only inventory.
   const [paidFallback, setPaidFallback] = useState(false);
-  const [statusStep, setStatusStep] = useState(0);
 
-  // Advance status line every STATUS_STEP_MS while loading, stop on last.
+  // CERGIO-GUARD (2026-05-28): the status ticker is now driven by REAL
+  // notification + bid counts on the open request, not a setInterval
+  // timer. User directive: "make it related to REAL actions (as
+  // opposed to hard wired...)". See src/hooks/useRequestActivity.js.
+  // The scripted lines below are only the fallback for the brief
+  // window between submit and the first DB write.
+  const requestId = chatState.request_id || null;
+  const { notified: liveNotified, replied: liveReplied } = useRequestActivity(requestId);
+
+  // Scripted line dwell timer — only used when there's no live request
+  // yet (notifications haven't been written). Once `requestId` is set
+  // and the first row lands, the activity status replaces the script.
+  const [statusStep, setStatusStep] = useState(0);
   useEffect(() => {
     if (services !== null) return;
+    if (requestId && (liveNotified > 0 || liveReplied > 0)) return;
     const t = setInterval(() => {
       setStatusStep(s => Math.min(s + 1, statusSteps.length - 1));
     }, STATUS_STEP_MS);
     return () => clearInterval(t);
-  }, [services, statusSteps.length]);
+  }, [services, statusSteps.length, requestId, liveNotified, liveReplied]);
 
   // Friends graph — owner_ids the signed-in user follows. Loaded once,
   // then used to tag each provider card with friend recos. Empty list
@@ -373,6 +386,19 @@ export function ResultsScreen() {
   const safeProviderTypePlural = safeProviderType
     ? pluralProviderTypeLocal(safeProviderType)
     : null;
+
+  // CERGIO-GUARD (2026-05-28): derive the live status line + leaf
+  // intensity now that the canonical plural is known. activityToStatus
+  // turns the (notified, replied) counts into honest copy + a 0..1
+  // intensity number the leaf consumes.
+  const liveStatus = activityToStatus({
+    notified: liveNotified,
+    replied:  liveReplied,
+    plural:   (safeProviderTypePlural ? safeProviderTypePlural.toLowerCase()
+              : (userNoun ? `${userNoun}s` : 'providers')),
+  });
+  const hasLiveActivity = !!requestId && (liveNotified > 0 || liveReplied > 0);
+
   // Build "to <action>" from originalQuery if it has a verb other
   // than just the provider noun. e.g. "unclog my toilet" → "unclog
   // your toilet". "deep cleaning" alone → no action phrase.
@@ -497,17 +523,26 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* Loading status — single line, leaf rotates beside it. */}
+      {/* Loading status — single line, leaf rotates beside it.
+          CERGIO-GUARD (2026-05-28): when the request is live in DB and
+          at least one notification or bid row has landed, the line is
+          driven by REAL counts via useRequestActivity. Otherwise we
+          fall back to the canonical scripted lines so the first ~3
+          seconds aren't dead air. */}
       {services === null && (
         <div className="mx-5 mb-5" aria-live="polite">
           <div className="flex items-center gap-2">
             <LeafLogo working={true} size={16} />
             <p className="text-[13px] text-gd font-medium leading-snug truncate">
-              {statusSteps[Math.min(statusStep, statusSteps.length - 1)]}…
+              {hasLiveActivity
+                ? liveStatus.line
+                : statusSteps[Math.min(statusStep, statusSteps.length - 1)]}…
             </p>
           </div>
           <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug">
-            We'll keep going in the background and notify you when offers land.
+            {liveReplied > 0
+              ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
+              : "We'll keep going in the background and notify you when offers land."}
           </p>
         </div>
       )}
