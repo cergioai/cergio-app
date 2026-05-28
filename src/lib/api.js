@@ -1398,22 +1398,32 @@ export async function createRequestAndFanOut({
   const uid = userRes.user.id;
 
   // 1) Anchor the search as a real row so notifications + bids can
-  //    point at it. RLS check (`auth.uid()=consumer_id`) is satisfied
+  //    point at it. RLS check (`auth.uid()=requester_id`) is satisfied
   //    by the insert payload.
+  // CERGIO-GUARD (2026-05-28): the requests table already exists (per
+  // db/schema-v1.sql) with requester_id + location_text + service_type
+  // as the canonical columns. The 2026-05-28 migration ADDS query +
+  // provider_type + category + what + when_text + lat + lng +
+  // budget_cents. We write to ALL of them so the row carries both the
+  // legacy + the new attribution shapes. service_type is required by
+  // the existing schema — we set it to the resolved provider_type.
   const { data: request, error: insErr } = await supabase
     .from('requests')
     .insert({
-      consumer_id:   uid,
+      requester_id:  uid,
+      service_type:  provider_type || (what || 'service'),
+      description:   (query || '').slice(0, 500),
+      location_text: where_text || null,
+      status:        'pending',
+      // New columns (added by 2026-05-28 migration):
       query:         (query || '').slice(0, 500),
       provider_type: provider_type || null,
       category:      category || null,
       what:          what || null,
       when_text:     when_text || null,
-      where_text:    where_text || null,
       lat:           (lat ?? null),
       lng:           (lng ?? null),
       budget_cents:  (typeof budget_cents === 'number') ? budget_cents : null,
-      status:        'open',
     })
     .select()
     .single();
@@ -1446,7 +1456,7 @@ export async function createRequestAndFanOut({
     body:       `New ${provider_type || 'service'} request near you`,
     data:       {
       request_id:    request.id,
-      consumer_id:   uid,
+      requester_id:  uid,
       provider_type: provider_type || null,
       query:         (query || '').slice(0, 200),
       where_text:    where_text || null,
