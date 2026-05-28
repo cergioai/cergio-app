@@ -813,6 +813,30 @@ test('srp-real-activity', 'ResultsScreen status ticker reads from useRequestActi
     'The render path MUST switch to liveStatus.line when hasLiveActivity is true (so real counts replace the scripted lines).');
 });
 
+// ─── INVARIANT #27: recommendations are persisted + counted ─────────────
+// Option C from the 2026-05-28 reco-schema decision: keep the table,
+// wire writes + a Recs-sent counter on Earnings. This invariant locks
+// both ends — RecommendServiceFormScreen MUST insert into the table
+// after a successful notifyUser, AND EarningsScreen MUST read the
+// count back from the table (never hardcoded zero).
+test('reco-persisted', 'Recommend flow writes a recommendations row + Earnings reads the count', '#27', async () => {
+  const reco = readFile('src/screens/RecommendServiceFormScreen.jsx');
+  const recoCode = stripComments(reco);
+  // Writer side.
+  assert(/from\(['"]recommendations['"]\)\s*\.insert/.test(recoCode),
+    'RecommendServiceFormScreen MUST .from(\'recommendations\').insert(...) after notifyUser succeeds — otherwise the Recs-sent counter on Earnings stays at zero forever.');
+  // Anchor columns required for attribution + dedup.
+  assert(/recommender_id\s*:/.test(recoCode),
+    'The recommendations insert MUST set recommender_id (who recommended).');
+
+  const earn = readFile('src/screens/EarningsScreen.jsx');
+  const earnCode = stripComments(earn);
+  assert(/from\(['"]recommendations['"]\)\s*\.select/.test(earnCode),
+    'EarningsScreen MUST count recommendations via .from(\'recommendations\').select(...).');
+  assert(/recsCount/.test(earnCode),
+    'EarningsScreen MUST render a recsCount state derived from the recommendations count.');
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are

@@ -1,56 +1,50 @@
-Tests: F1–F7 money flows verified 9/9 at persistence layer
+Recommendations: write + count (Option C) — locked with qa #27
 
-Ran the rigorous test plan from TEST_PLAN_MONEY_FLOWS.md against the
-seeded personas (Alex, Connie, Penny, Sam, Tarik). All 9 hard
-assertions pass; one soft warning on the recommendations schema.
+OPTION C from the 2026-05-28 reco-schema decision: keep the
+recommendations table, wire writes on send, surface a real "Recs
+sent" counter on EarningsScreen.
 
-Run Money Flow Tests.command (new) exercises each flow as a SQL
-probe via the Supabase Management API (bypasses RLS for the
-diagnostic — we're verifying persistence, not UI). The .command:
+WHAT CHANGED
 
-  1. Cleans prior test rows
-  2. Inserts the expected row(s) per the flow contract
-  3. Re-reads to confirm
-  4. Prints PASS/FAIL per assertion
+  RecommendServiceFormScreen.submit:
+    On successful notifyUser, ALSO INSERT a row into recommendations:
+      recommender_id  = me
+      inviter_id      = me (attribution anchor)
+      recipient_phone = picked.phone
+      service_id      = null (free-form for now)
+      message         = blurb
+    Best-effort — failed insert warns to console; UI still toasts +
+    routes to /earnings. The notifyUser send is the source of truth
+    for delivery; the table row is the analytics anchor.
 
-RESULTS (9 pass / 0 fail):
+  EarningsScreen:
+    New state — invitesCount + recsCount.
+    Effect pulls both via head:true count queries on mount:
+      invites           WHERE inviter_id   = me
+      recommendations   WHERE recommender_id = me
+    The empty-state "friends invited" + "services reco'd" pills now
+    render the LIVE counts. No more hardcoded "0".
 
-  F1  ✅ invites row (Tarik → Alex)
-  F2  ✅ notification with deep_link to Penny ('new_request' kind)
-  F3  ✅ bid notification to Alex
-  F4  ✅ pending connector_application for Alex
-  F5  ✅ spotlight_request Penny → Connie (platform=instagram, $150)
-  F5b ✅ spotlight notification to Connie
-  F6  ✅ earnings row $250 → Tarik (kind=invite, status=pending)
-  F6b ✅ invite stamped first_booking_at + reward_cents=25000
-  F7  ✅ invites row (Alex → Sam) — reco chain second-level
-  F7b ⚠️  recommendations attribution — schema may differ (soft).
-       The recommendations table lacks recommender_id + kind columns
-       that I assumed in the test. Either add them in a follow-up
-       migration OR confirm the existing reco flow uses different
-       attribution.
+  qa.mjs #27 — Recommend writer + Earnings reader:
+    Statically asserts that RecommendServiceFormScreen calls
+    .from('recommendations').insert(...) with recommender_id, and
+    that EarningsScreen .select()'s from recommendations into a
+    recsCount state variable.
 
-ALSO FIXED IN THIS COMMIT
+  Run Money Flow Tests.command — F7b updated to use real schema
+    (recommender_id, recipient_phone, message). Was a soft warning
+    before; now a hard PASS.
 
-  Run Money Flow Tests.command — initial F5 insert was missing the
-  required NOT NULL columns (platform + official_price_cents).
-  Fixed to insert with platform='instagram' + 15000 cents.
+VERIFIED  qa.mjs: 27/27 pass
 
-NEXT (queued for next session):
-  • Decide on recommendations schema shape (add columns or confirm
-    existing) then re-run F7b
-  • Wire the actual write side: useChat.submit() should INSERT a
-    requests row + fan out notifications via the notify-user edge
-    function. Right now the persistence layer is GREEN; the UI
-    write paths still need to be plumbed to actually trigger them.
-  • Lock F1–F7 with a new qa invariant that requires
-    Run Money Flow Tests.command to exit 0
-
-VERIFIED
-  9/9 hard assertions pass
-  qa.mjs: 26/26
-  Schema: notifications + connector_applications + invites + earnings
-          + spotlight_requests + profiles.tiktok_* all confirmed live
+NEXT (task #172 — already on the board):
+  Write side wire-up: useChat.submit creates a `requests` row and
+  fans out notifications to matching providers. This closes the
+  loop so a real submit triggers F2's notify fan-out (we proved the
+  persistence layer works; now connect the UI write to it).
 
 Files:
-  Run Money Flow Tests.command  (parent folder, executable)
+  src/screens/RecommendServiceFormScreen.jsx
+  src/screens/EarningsScreen.jsx
+  scripts/qa.mjs
+  Run Money Flow Tests.command  (parent folder)

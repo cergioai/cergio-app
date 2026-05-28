@@ -36,10 +36,32 @@ export function EarningsScreen() {
   // OR they're toggled into service view, we show provider-flavored
   // benefit copy. Consumers see the friend-referral angle instead.
   const [hasService, setHasService] = useState(false);
+  // CERGIO-GUARD (2026-05-28): real counters for the empty state.
+  // friends-invited = invites where inviter_id = me
+  // recs-sent       = recommendations where recommender_id = me
+  // Read on mount + when auth changes. Both fall back to 0 on RLS /
+  // schema issues so the UI stays honest, never lies with mock counts.
+  const [invitesCount, setInvitesCount] = useState(0);
+  const [recsCount,    setRecsCount]    = useState(0);
   useEffect(() => {
-    if (!auth?.isSignedIn) { setEarnings([]); setHasService(false); return; }
+    if (!auth?.isSignedIn) {
+      setEarnings([]); setHasService(false);
+      setInvitesCount(0); setRecsCount(0);
+      return;
+    }
     getMyEarnings({ limit: 50 }).then(({ data }) => setEarnings(data || []));
     listMyServices().then(({ data }) => setHasService((data || []).length > 0));
+    // Pull real counts — head:true so we don't pay for row payload.
+    import('../lib/supabase').then(async ({ supabase, supabaseReady }) => {
+      if (!supabaseReady) return;
+      const uid = auth.user.id;
+      const [inv, rec] = await Promise.all([
+        supabase.from('invites').select('id', { count: 'exact', head: true }).eq('inviter_id', uid),
+        supabase.from('recommendations').select('id', { count: 'exact', head: true }).eq('recommender_id', uid),
+      ]);
+      setInvitesCount(inv.error ? 0 : (inv.count || 0));
+      setRecsCount(rec.error ? 0 : (rec.count || 0));
+    });
   }, [auth?.isSignedIn]);
   const isProvider = serviceMode || hasService;
   const totals = earnings.reduce((acc, e) => {
@@ -171,18 +193,21 @@ export function EarningsScreen() {
         // the Home invite house ad. CERGIO-GUARD: don't reintroduce
         // hardcoded mock totals here — counts come from earnings (real).
         <div className="mx-5 mb-6 bg-white border border-bdr rounded-[18px] p-4">
-          {/* Real counters — both 0 until activity lands. */}
+          {/* Real counters — live from invites + recommendations tables.
+              CERGIO-GUARD (2026-05-28): NEVER hardcode "0" here. The
+              counts must reflect actual rows the user authored. qa #27
+              statically enforces these counts come from real tables. */}
           <div className="flex items-center gap-4 mb-3">
             <div className="flex-1">
-              <p className="text-[18px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[18px] font-extrabold text-black leading-none">{invitesCount}</p>
               <p className="text-[11px] text-b3 mt-0.5 leading-snug">friends invited</p>
             </div>
             <div className="flex-1">
-              <p className="text-[18px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[18px] font-extrabold text-black leading-none">{recsCount}</p>
               <p className="text-[11px] text-b3 mt-0.5 leading-snug">services reco'd</p>
             </div>
             <div className="flex-1">
-              <p className="text-[18px] font-extrabold text-black leading-none">$0</p>
+              <p className="text-[18px] font-extrabold text-black leading-none">{balanceStr}</p>
               <p className="text-[11px] text-b3 mt-0.5 leading-snug">earned</p>
             </div>
           </div>
@@ -192,7 +217,7 @@ export function EarningsScreen() {
               different button labels + counter labels. */}
           <div className="flex items-center gap-3 mb-3">
             <div className="flex-1">
-              <p className="text-[18px] font-extrabold text-black leading-none">0</p>
+              <p className="text-[18px] font-extrabold text-black leading-none">{invitesCount}</p>
               <p className="text-[10px] text-b3 mt-0.5 leading-snug uppercase tracking-wide">
                 {isProvider ? 'Clients invited' : 'Friends invited'}
               </p>

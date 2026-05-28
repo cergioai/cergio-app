@@ -19,6 +19,7 @@ import { CONTACTS } from '../data/mock';
 import { REWARDS } from '../lib/rewards';
 import { notifyUser } from '../lib/api';
 import { buildInviteUrl } from '../lib/referral';
+import { supabase, supabaseReady } from '../lib/supabase';
 
 const supportsContactPicker = typeof navigator !== 'undefined' &&
   'contacts' in navigator && 'ContactsManager' in window;
@@ -133,6 +134,29 @@ export function RecommendServiceFormScreen() {
       if (error) {
         showToast(`Send failed: ${error.message}`);
       } else {
+        // CERGIO-GUARD (2026-05-28): also write a row to `recommendations`
+        // so the user has a personal record of who they recommended +
+        // when. The notifyUser call above sends the email/SMS; this
+        // insert powers the "Recs sent" counter on EarningsScreen and
+        // gives future analytics screens something real to render.
+        // Best-effort — if the insert fails (RLS / schema drift), the
+        // user still sees the toast + Earnings page; the email is sent.
+        // qa #27 statically enforces this insert exists.
+        if (supabaseReady && auth?.user?.id) {
+          const { error: recoErr } = await supabase
+            .from('recommendations')
+            .insert({
+              recommender_id:  auth.user.id,
+              inviter_id:      auth.user.id, // attribution anchor (same person here)
+              recipient_phone: picked.phone || null,
+              service_id:      null,         // free-form service for now
+              message:         blurb.trim(),
+            });
+          if (recoErr) {
+            // eslint-disable-next-line no-console
+            console.warn('[reco] could not write recommendations row:', recoErr.message);
+          }
+        }
         showToast(`Sent to ${picked.name} ✓`);
         navigate('/earnings');
       }
