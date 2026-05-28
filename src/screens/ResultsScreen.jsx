@@ -532,7 +532,7 @@ export function ResultsScreen() {
       {services === null && (
         <div className="mx-5 mb-5" aria-live="polite">
           <div className="flex items-center gap-2">
-            <LeafLogo working={true} size={16} />
+            <LeafLogo working={true} size={16} intensity={liveStatus.intensity} />
             <p className="text-[13px] text-gd font-medium leading-snug truncate">
               {hasLiveActivity
                 ? liveStatus.line

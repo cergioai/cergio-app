@@ -1,71 +1,48 @@
-UX: SRP status from real activity + leaf intensity + softer house ads + profile fonts
+UX: leaf intensity wired through CSS vars + AuthScreen trim
 
-SRP STATUS — REAL ACTIVITY, NOT setInterval
+LEAF INTENSITY — REAL ACTIVITY DRIVES THE PLANT
 
-User directive (2026-05-28): "make it related to REAL actions (as
-opposed to hard wired...)". The status ticker on /results now reads
-LIVE counts from the notifications + bids tables for the open
-request, advancing only when actual rows land.
+LeafLogo now accepts an `intensity` prop (0..1). The keyframes in
+src/index.css consume two CSS variables, --cg-leaf-amp + --cg-leaf-
+speed, that scale sway amplitude and loop duration:
 
-New hook: src/hooks/useRequestActivity.js
-  - polls notifications WHERE data->>request_id = <id> AND kind='new_request'
-  - polls bids WHERE request_id = <id>
-  - 2.5s cadence (cheap, well under any rate limit)
-  - exports activityToStatus() that turns counts → status line + 0..1 intensity
-  - schema-cache miss on bids treated as zero (graceful while we wire bids)
+  intensity 0   → still
+  intensity 0.4 → soft breathe (amp 0.72, slow speed)
+  intensity 1.0 → full sway + fast sap flow
 
-ResultsScreen wiring:
-  - useRequestActivity(chatState.request_id) at the top
-  - liveStatus.line replaces scripted line as soon as a real row lands
-  - Scripted lines (setInterval) kept as graceful fallback for the
-    ~3s pre-write window
-  - Sub-line surfaces "X replies in — Y notified" when bids arrive
+LeafLogo computes amp + speed from intensity and injects them as
+inline CSS variables. cg-leaf-alive + cg-leaf-vein consume both via
+calc() so a single intensity value reshapes the whole motion.
 
-LEAF INTENSITY (canonical formula in activityToStatus)
-  intensity = min(1, (notified + replied * 3) / 10)
-  bids count 3× notifications — a reply is real engagement, a
-  notification is just a ping. Ready to consume from LeafLogo when
-  the next pass wires the prop through.
+Wired in ResultsScreen: the loading-state leaf reads
+`liveStatus.intensity` from useRequestActivity, so the plant
+literally reacts to real notification + bid counts on the open
+request. As replies land, the leaf sways harder and the sap flows
+faster — the user can SEE that the network is engaging.
 
-HOUSE ADS SOFTER
-  HomeScreen find-side + spotlight-side ads:
-    bg-gl  → bg-cr2
-    border-g/25 → border-bdr
-    rounded-[20px] / p-4 → rounded-[16px] / px-4 py-3
-    icon 10x10 → 8x8 (svg 20 → 16)
-    headline text-[15px] font-extrabold → text-[13px] font-bold
-    chevron text-lg → text-base
-  Half the visual weight; same routing + copy contract.
+The intensity formula (canonical, in activityToStatus):
+  min(1, (notified + replied * 3) / 10)
+Bids count 3× because a reply is real engagement, not just a ping.
 
-PROFILE FONTS TIGHTENED
-  Row component:
-    title    text-[16px] font-bold → text-[14px] font-bold
-    subtitle text-[13px]            → text-[11px]
-    padding  py-3.5                 → py-4 (more breathing room despite smaller text)
-  Matches the design-spec.md reference for dense settings rows.
+Backwards compatible: existing callers using `working={true|false}`
+work unchanged — `working` becomes a 0/1 intensity alias when no
+explicit intensity is passed.
 
-INVARIANT #26 — SRP-real-activity
+AUTHSCREEN TRIM
 
-  qa.mjs gains #26:
-    - useRequestActivity must query notifications + bids
-    - must export activityToStatus
-    - ResultsScreen must call both
-    - render path MUST switch to liveStatus.line when hasLiveActivity
+Tightened density per the user's "more elegant" directive:
+  • Input padding   py-4   → py-3.5
+  • Field labels   text-[14px] font-extrabold → text-[11px] font-extrabold
+    uppercase tracking-wide text-b3 (Stripe/Linear style)
+  • Label margin   mb-2  → mb-1.5
+  • Social-row buttons text-[13px] py-3 → text-[12px] font-bold py-2.5
 
-Total: 25 → 26 invariants, all green.
-
-OUTSTANDING (sketches in OVERNIGHT_STATUS.md):
-  • Login elegance (trim AuthScreen)
-  • Home copy consistency one-pass audit
-  • Leaf logo intensity prop binding (the formula is ready; LeafLogo
-    component still needs the prop wired through CSS-vars)
-  • F1–F7 live execution (blocked on Chrome MCP per-domain permission)
+Same flows, same fields — just less visual shouting.
 
 VERIFIED  qa.mjs: 26/26 pass
 
 Files:
-  src/hooks/useRequestActivity.js   (new)
+  src/index.css
+  src/components/ui/LeafLogo.jsx
   src/screens/ResultsScreen.jsx
-  src/screens/HomeScreen.jsx
-  src/screens/ProfileScreen.jsx
-  scripts/qa.mjs
+  src/screens/AuthScreen.jsx

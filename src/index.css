@@ -148,15 +148,20 @@ body {
    of the metronome feel a 0→180→360 rotation has. Anchored from the
    stem (transform-origin set on the <g> wrapper in LeafLogo.jsx) so
    the tip travels in an arc rather than rotating around the center. */
+/* CERGIO-GUARD (2026-05-28): the leaf reacts to LIVE activity.
+   --cg-leaf-amp scales the sway amplitude (0..1.4 typical, default 1).
+   --cg-leaf-speed scales the loop duration (lower = faster).
+   Set these from the React layer to make the leaf pulse harder as
+   notifications + bids land. Pre-multiplication done with calc(). */
 @keyframes cgLeafAlive {
-  0%   { transform: rotate(-3deg) scale(1.00); }
-  28%  { transform: rotate( 2deg) scale(1.04); }
-  52%  { transform: rotate( 5deg) scale(1.06); }
-  76%  { transform: rotate(-1deg) scale(1.02); }
-  100% { transform: rotate(-3deg) scale(1.00); }
+  0%   { transform: rotate(calc(-3deg * var(--cg-leaf-amp, 1))) scale(calc(1.00 + 0.00 * var(--cg-leaf-amp, 1))); }
+  28%  { transform: rotate(calc( 2deg * var(--cg-leaf-amp, 1))) scale(calc(1.00 + 0.04 * var(--cg-leaf-amp, 1))); }
+  52%  { transform: rotate(calc( 5deg * var(--cg-leaf-amp, 1))) scale(calc(1.00 + 0.06 * var(--cg-leaf-amp, 1))); }
+  76%  { transform: rotate(calc(-1deg * var(--cg-leaf-amp, 1))) scale(calc(1.00 + 0.02 * var(--cg-leaf-amp, 1))); }
+  100% { transform: rotate(calc(-3deg * var(--cg-leaf-amp, 1))) scale(calc(1.00 + 0.00 * var(--cg-leaf-amp, 1))); }
 }
 .cg-leaf-alive {
-  animation: cgLeafAlive 4.2s ease-in-out infinite;
+  animation: cgLeafAlive calc(4.2s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
 }
 
 /* Splash variant — same motion, slower + deeper arc for hero size.
@@ -185,7 +190,9 @@ body {
 }
 .cg-leaf-vein {
   stroke-dasharray: 6 28;
-  animation: cgLeafVeinFlow 3s linear infinite;
+  /* Sap-flow loop also scales with intensity — faster shimmer at high
+     activity. Falls back to 3s when --cg-leaf-speed is unset. */
+  animation: cgLeafVeinFlow calc(3s * var(--cg-leaf-speed, 1)) linear infinite;
 }
 
 /* Legacy leaf-in-button animations (still used on /roaming). */

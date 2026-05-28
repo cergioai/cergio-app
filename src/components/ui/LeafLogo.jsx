@@ -24,17 +24,43 @@
 //   .cg-leaf-alive-splash — same motion, slower + wider arc
 //   .cg-leaf-tip-curl    — tip lifts subtly during the apex of sway
 
-export function LeafLogo({ working = false, size = 22, variant = 'inline' }) {
+// CERGIO-GUARD (2026-05-28): `intensity` is a 0..1 dial that scales the
+// leaf's sway amplitude and loop speed via CSS variables (see
+// src/index.css → @keyframes cgLeafAlive). 0 = still, 1 = full life.
+// The canonical formula (see hooks/useRequestActivity activityToStatus)
+// is min(1, (notified + replied*3) / 10) — bids count 3× notifications.
+// Callers can pass `intensity` instead of (or in addition to) `working`:
+//   working=true alone → default sway (intensity 1)
+//   intensity=0.3      → breathe only, no loud sway
+//   intensity=1        → full sway + fast sap flow
+// Internally we map intensity → CSS vars cg-leaf-amp + cg-leaf-speed.
+export function LeafLogo({
+  working = false,
+  size = 22,
+  variant = 'inline',
+  intensity,                // 0..1, optional; falls back to working ? 1 : 0
+}) {
+  // Resolve intensity. If caller didn't pass one, treat `working` as a
+  // 0/1 toggle so existing call sites keep their behavior.
+  const i = (typeof intensity === 'number')
+    ? Math.max(0, Math.min(1, intensity))
+    : (working ? 1 : 0);
+  // amp: 0.4 at rest-with-pulse → 1.2 at full intensity
+  // speed: 1.6× slow at low intensity → 0.5× (faster) at high intensity
+  const amp   = 0.4 + 0.8 * i;
+  const speed = 1.6 - 1.1 * i;
+  const cssVars = { '--cg-leaf-amp': amp, '--cg-leaf-speed': speed };
+
   if (variant === 'splash') {
-    return <SplashLeaf size={size} working={working} />;
+    return <SplashLeaf size={size} working={working || i > 0} cssVars={cssVars} />;
   }
   return (
     <span
       className="inline-flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: Math.round(size * 1.12) }}
+      style={{ width: size, height: Math.round(size * 1.12), ...cssVars }}
       aria-hidden="true"
     >
-      <Leaf size={size} working={working} swayClass="cg-leaf-alive" />
+      <Leaf size={size} working={working || i > 0} swayClass="cg-leaf-alive" />
     </span>
   );
 }
@@ -187,11 +213,11 @@ function Leaf({ size = 22, working = false, swayClass = 'cg-leaf-alive' }) {
 // Same SVG geometry, larger size and a slower / wider sway via the
 // .cg-leaf-alive-splash class. No circles, halos, or chrome — the
 // leaf carries the whole composition.
-function SplashLeaf({ size = 96, working = true }) {
+function SplashLeaf({ size = 96, working = true, cssVars = {} }) {
   return (
     <span
       className="inline-flex items-center justify-center"
-      style={{ width: size, height: Math.round(size * 1.12) }}
+      style={{ width: size, height: Math.round(size * 1.12), ...cssVars }}
       aria-hidden="true"
     >
       <Leaf size={size} working={working} swayClass="cg-leaf-alive-splash" />
