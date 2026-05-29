@@ -247,6 +247,39 @@ body {
   animation: cgSproutDew calc(5s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
 }
 
+/* ── Reward-flow animation (RewardFlowAnimation.jsx) ──────────────
+   The 6-step "how earnings work" explainer animation. Keyframes
+   here so the React component stays declarative — no inline style
+   keyframe injection. */
+@keyframes rfDrop {
+  0%   { transform: translateY(-10px); opacity: 0; }
+  20%  { opacity: 0.95; }
+  100% { transform: translateY(60px); opacity: 0; }
+}
+.rf-drop { animation: rfDrop 2.8s linear infinite; }
+
+@keyframes rfBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+.rf-fruit { animation: rfBob 2.4s ease-in-out infinite; transform-origin: center; }
+
+@keyframes rfPop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.rf-pop { animation: rfPop 0.6s ease-out forwards; transform-origin: center; }
+
+@keyframes rfSway { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(1.5deg); } }
+.rf-sway   { animation: rfSway 5.5s ease-in-out infinite; }
+.rf-sway-b { animation: rfSway 6.5s ease-in-out infinite; }
+.rf-sway-c { animation: rfSway 7s   ease-in-out infinite; }
+.rf-sway-d { animation: rfSway 5s   ease-in-out infinite; }
+
+@keyframes rfTick {
+  0%   { transform: translateY(8px); opacity: 0; }
+  100% { transform: translateY(0);   opacity: 1; }
+}
+.rf-tick { animation: rfTick 0.4s ease-out forwards; }
+
 /* Legacy leaf-in-button animations (still used on /roaming). */
 .cg-leaf-rest {
   transform: scale(.92) rotate(-8deg);

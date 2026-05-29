@@ -6,6 +6,7 @@
 // popup on Earnings.
 import { useNavigate } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
+import { RewardFlowAnimation } from '../components/ui/RewardFlowAnimation';
 
 export function EarnExplainerScreen() {
   const navigate = useNavigate();
@@ -25,12 +26,26 @@ export function EarnExplainerScreen() {
         </button>
       </div>
 
-      <div className="px-5 pt-3 pb-5">
+      <div className="px-5 pt-3 pb-3">
         <h1 className="text-[24px] font-extrabold text-black leading-tight">
           How earnings work
         </h1>
-        <p className="text-[14px] text-b3 leading-relaxed mt-2">
-          When a friend you invited books a service on Cergio, the platform earns a
+        <p className="text-[13px] text-b3 leading-relaxed mt-2">
+          The 6-step story of how rewards compound — from your first invite to a
+          full orchard. Tap Next or watch it play.
+        </p>
+      </div>
+
+      {/* CERGIO-GUARD (2026-05-28): live animation walks the whole
+          business model — invite → friend books → friend-of-friend
+          → become a Connector → orchard. Self-contained, self-paced. */}
+      <div className="px-3 mb-5">
+        <RewardFlowAnimation />
+      </div>
+
+      <div className="px-5 pb-5">
+        <p className="text-[13px] text-b3 leading-relaxed">
+          Mechanically: when a friend you invited books a service, Cergio earns a
           <span className="text-black font-extrabold"> 7% fee</span> — and we share that with you,
           up to <span className="text-black font-extrabold">${REWARDS.perFriend}</span> per friend.
         </p>

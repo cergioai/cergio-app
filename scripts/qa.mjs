@@ -1031,6 +1031,30 @@ test('sprout-logo', 'LeafLogo renders the sprout v2 (two leaves + stem + dew + m
     'index.css must define @keyframes cgSproutDew for the dew drop pulse.');
 });
 
+// ─── INVARIANT #31: reward-flow animation embedded on /earnings/how ─────
+// User explicitly asked the 6-step business-model animation be a real
+// screen ("embed the animation as an actual screen in the app — e.g.
+// /earnings/how"). Locks both ends — the component exists + the
+// explainer renders it.
+test('reward-flow-embedded', 'RewardFlowAnimation component exists + EarnExplainerScreen renders it', '#31', async () => {
+  const cmp = readFile('src/components/ui/RewardFlowAnimation.jsx');
+  assert(/export function RewardFlowAnimation/.test(cmp),
+    'src/components/ui/RewardFlowAnimation.jsx must export RewardFlowAnimation.');
+  // The 6-step business model — every step should appear.
+  assert(/Step 1 of 6/.test(cmp),
+    'The animation must run a 6-step sequence (Step 1..6).');
+  assert(/friend invites a friend/i.test(cmp),
+    'Step 4 (friend-of-friend) must be present so the bonus story is included.');
+  assert(/Connector/.test(cmp),
+    'Step 5 (become a Connector) must be present.');
+
+  const screen = readFile('src/screens/EarnExplainerScreen.jsx');
+  assert(/import\s*\{\s*RewardFlowAnimation\s*\}\s*from/.test(screen),
+    'EarnExplainerScreen must import RewardFlowAnimation.');
+  assert(/<RewardFlowAnimation\s*\/>/.test(screen),
+    'EarnExplainerScreen must render <RewardFlowAnimation />.');
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are

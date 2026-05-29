@@ -1,60 +1,49 @@
-Sprout v2 + dialed motion + $12.5K Home pill + friend-of-friend 5%
+Reward-flow animation embedded as /earnings/how + qa #31
 
-LEAFLOGO — SPROUT V2 (user picked option B → "infinitely more
-interesting … subtle, captivating")
+User wanted the 6-step business-model explainer rendered as a real
+screen, not just a widget preview in chat.
 
-Replaced single lobed-leaf with a botanical sprout: two asymmetric
-serrated leaves on a slightly S-curved stem rising from three soft
-brown soil-mark dashes, with a subtle dew drop on the top leaf.
+WHAT SHIPPED
 
-Multi-motion: four overlapping micro-cycles with different periods
-(8s stem / 7s top / 6s bot / 5s dew) — never resolves into a
-rhythm. Amplitudes DELIBERATELY tiny per user follow-up brief:
-"barely visible … elegant … so users don't get annoyed."
-Max sway 2° at full intensity (was 6° in the first pass). Strength
-+ community are inferred from shape and color, not from movement.
+  src/components/ui/RewardFlowAnimation.jsx (new)
+    React port of the chat widget. Self-contained:
+      • Counter at top — "Your network earnings" — ticks on step change
+      • SVG scene that grows: sprouts emerge, rain falls when revenue
+        lands, fruits appear, trees mature when Connector mode kicks in,
+        orchard at the end
+      • Caption (step num + title + body) under the scene
+      • Controls: Back / progress bar / Next / (auto-replay at end)
+      • Auto-advances 4.5s per step; manual control pauses auto-advance
+    Reads all numbers from REWARDS so per-friend ($250), friend-of-
+    friend ($12.50 = 5%), and Jamie example (50 friends → $12.5K)
+    stay canonical.
 
-The intensity-prop API is unchanged — Home / Splash / Results /
-Auth / Intake all auto-inherit the new look + dialed motion.
+  src/index.css
+    New keyframes for rf-drop (rain), rf-fruit (bobble), rf-pop
+    (coin entrance), rf-sway/-b/-c/-d (per-age sprout sway), rf-tick
+    (counter update flicker). All scoped under rf- so they can't
+    collide with the existing cg-* leaf animations.
 
-$12.5K HOME PILL — exposes the compounding math
+  src/screens/EarnExplainerScreen.jsx
+    Animation embedded at the top of the body. Existing copy
+    (7% fee, "the model", "example", Growth Participation Income
+    teaser, mission tagline) tightened so the animation does the
+    heavy lifting and the prose is the footnote.
 
-User feedback: "expose the earn 12.5K when you invite 50 users …
-without being tacky intrusive."
+  scripts/qa.mjs #31
+    Locks:
+      • RewardFlowAnimation export exists in the expected file
+      • All 6 steps are present (Step 1..6, friend-of-friend, Connector)
+      • EarnExplainerScreen imports + renders it
 
-Single compact line below the search box in find mode:
-  "50 friends → $12,500   see how"
-The "see how" is a small green underline link to /rainmaker/apply.
-Looks like a footnote, not a sales card.
+  qa.mjs: 31/31 pass.
 
-FRIEND-OF-FRIEND BONUS — 5% second-tier added everywhere
-
-User: "can we add a friend of friend incentive … they take 5% of
-the 250." Locked in REWARDS:
-  friendOfFriendPercent = 5
-  friendOfFriendBonus   = 12.5
-
-Surfaced everywhere it's relevant:
- • REWARD_COPY: friendOfFriendOneLine / friendOfFriendShort
- • Connector explainer popup (ProfileScreen): bullet in the reward stack
- • EarningsScreen: kicker line under mode-tailored copy
- • RainmakerApplyScreen: bullet in BOTH User + Connector columns
-
-PROFILE DECLUTTER
-
-Earlier commit re-grouped Profile into Account / Earn $250+ / About,
-with provider-only sections hidden for consumers. This commit
-extends that with the new Connector explainer popup that now also
-mentions friend-of-friend.
-
-VERIFIED  qa.mjs: 30/30 pass
+ANY CALL SITE CAN EMBED IT
+  Drop <RewardFlowAnimation /> anywhere — Home invite popup, onboarding
+  walkthrough, marketing landing — same component, same numbers.
 
 Files:
-  src/components/ui/LeafLogo.jsx
+  src/components/ui/RewardFlowAnimation.jsx   (new)
   src/index.css
-  src/lib/rewards.js
-  src/screens/HomeScreen.jsx
-  src/screens/ProfileScreen.jsx
-  src/screens/EarningsScreen.jsx
-  src/screens/RainmakerApplyScreen.jsx
+  src/screens/EarnExplainerScreen.jsx
   scripts/qa.mjs
