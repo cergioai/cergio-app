@@ -37,13 +37,31 @@ import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivit
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
 // data lands (or the 6s timeout falls through to the empty state).
-const STATUS_STEP_MS = 1100;
+//
+// CERGIO-GUARD (2026-05-29): slowed pace + named friends/providers so
+// the loading sequence narrates what Cergio is actually doing. Tarik:
+// "simulate pinging, finding, contacting Jessica's recommended Maria,
+// negotiating with Maria and Henry." Once we wire real recos and real
+// provider-negotiation pings, swap the SAMPLE_* arrays for real names
+// pulled from the recommendations + bids tables.
+const STATUS_STEP_MS = 1500;
+// Minimum total loading time — even if Supabase returns in 200ms, hold
+// the loading state so the narration plays through at least the first
+// few steps. Feels alive and matches the live experience we'll wire.
+const MIN_LOADING_MS = 4500;
+const SAMPLE_FRIEND_NAMES   = ['Jessica', 'Jamie', 'Maya', 'Alex'];
+const SAMPLE_PROVIDER_NAMES = ['Maria', 'Henry', 'Sofia', 'Diego'];
+
 function buildStatusSteps(providerType) {
+  const what = providerType ? providerType.toLowerCase() : 'provider';
   const plural = providerType ? `${providerType.toLowerCase()}s` : 'providers';
+  const friend = SAMPLE_FRIEND_NAMES[0];
+  const pA = SAMPLE_PROVIDER_NAMES[0];
+  const pB = SAMPLE_PROVIDER_NAMES[1];
   return [
-    `Connecting with your friends' ${plural} recos`,
-    `Looking up your local network`,
-    `Pinging matching ${plural}`,
+    `Pinging ${plural} near you`,
+    `Checking ${friend}'s recommended ${what} — ${pA}`,
+    `Contacting ${pA} and ${pB}`,
     `Negotiating offers on your behalf`,
   ];
 }
@@ -169,6 +187,17 @@ export function ResultsScreen() {
   // services === []    → search completed, zero matches (EmptyState)
   // services has rows → render ProviderCards
   const [services, setServices]     = useState(null);
+  // CERGIO-GUARD (2026-05-29): minimum-loading-time gate. Even when
+  // Supabase returns in <500ms, hold the loading state until at least
+  // MIN_LOADING_MS has elapsed so the narrated status sequence plays
+  // through (Pinging → Checking Jessica's reco → Contacting → Negotiating).
+  // `loadingMinElapsed` flips true after the timer. Renders gate on
+  // BOTH services !== null AND loadingMinElapsed.
+  const [loadingMinElapsed, setLoadingMinElapsed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setLoadingMinElapsed(true), MIN_LOADING_MS);
+    return () => clearTimeout(t);
+  }, []);
   // paidFallback === true → freeOnly returned zero AND a paid re-query
   // succeeded. The render path then shows a soft "No free X nearby —
   // here are paid options" banner above the cards instead of the
@@ -353,6 +382,12 @@ export function ResultsScreen() {
         return serviceToProvider(s, i, budgetCents, isFriend ? 'a friend' : null);
       })
     : [];
+
+  // CERGIO-GUARD (2026-05-29): isLoading combines real fetch state with
+  // the minimum-narration-time gate. While isLoading is true we show the
+  // narrated status line + animated leaf; results only render once BOTH
+  // the data has landed AND the minimum loading time has elapsed.
+  const isLoading = services === null || !loadingMinElapsed;
   const providers = [...providersRaw].sort((a, b) => {
     const af = a.friends.length > 0 ? 1 : 0;
     const bf = b.friends.length > 0 ? 1 : 0;
@@ -480,7 +515,7 @@ export function ResultsScreen() {
           ←
         </button>
         <div className="flex items-center gap-2">
-          <LeafLogo working={services === null} size={26} />
+          <LeafLogo working={isLoading} size={26} />
           <span className="text-[12px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
         </div>
         <button
@@ -536,7 +571,7 @@ export function ResultsScreen() {
           driven by REAL counts via useRequestActivity. Otherwise we
           fall back to the canonical scripted lines so the first ~3
           seconds aren't dead air. */}
-      {services === null && (
+      {isLoading && (
         <div className="mx-5 mb-5" aria-live="polite">
           <div className="flex items-center gap-2">
             <LeafLogo working={true} size={16} intensity={liveStatus.intensity} />
@@ -564,7 +599,7 @@ export function ResultsScreen() {
           banner so the user understands why these aren't free yet.
           Click "Pay full price" → flips freeServices off so future
           searches go straight to paid mode. */}
-      {paidFallback && services && services.length > 0 && (() => {
+      {!isLoading && paidFallback && services && services.length > 0 && (() => {
         const ptLabel = safeProviderTypePlural
           ? safeProviderTypePlural.toLowerCase()
           : (userNoun ? `${userNoun}s` : 'options');
@@ -582,8 +617,9 @@ export function ResultsScreen() {
         );
       })()}
 
-      {/* cards — only when we have real Supabase rows. */}
-      {services !== null && providers.length > 0 && providers.map(p => (
+      {/* cards — only when we have real Supabase rows AND the narrated
+          loading sequence has completed (so cards don't pop in too fast). */}
+      {!isLoading && providers.length > 0 && providers.map(p => (
         <ProviderCard
           key={p.id}
           provider={p}
@@ -605,7 +641,7 @@ export function ResultsScreen() {
           headline copy depending on whether we have matches yet:
             no matches  → "No {type}s yet — ask friends to help find one"
             has matches → "Want better picks? Ask friends" */}
-      {services !== null && (() => {
+      {!isLoading && (() => {
         // CERGIO-GUARD (2026-05-27): headline + share message LEAD with the
         // canonical provider_type (Plumber, House Cleaner, Nanny) — NOT
         // the user's verb-phrase. Old copy "No unclog my toilets yet" was

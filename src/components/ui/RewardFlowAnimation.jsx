@@ -1,19 +1,20 @@
-// CERGIO-GUARD (2026-05-28 v2): Reward-flow animation. Four-scene
-// visual explainer of the Cergio business model. Sprouts represent
-// PEOPLE. Vines represent the trust network. Coins are direct cash.
-// Gift boxes are barter (services). The orchard is community growth.
+// CERGIO-GUARD (2026-05-29 v3): Reward-flow animation, infinitely
+// clearer rewrite. Sprouts swapped for HUMAN AVATARS (circles with
+// initials + names) — the eye reads them as people in 100ms. Every
+// scene now has an inline MATH EQUATION CHIP at the top of the stage
+// so the dollar logic is impossible to miss. The barter scene is a
+// striking two-sided exchange instead of a subtle gift box.
 //
-// The four mechanisms, in order:
-//   1. DIRECT CASH    — you invite, friend books, you earn 7% → up to $250.
-//   2. TRUST NETWORK  — friend invites a friend → +5% ($12.50) on second tier.
-//                       50 friends → $12,500 example.
-//   3. BARTER         — Connectors trade IG/TikTok spotlights for free
-//                       services from providers ($1K–$10K/month).
-//   4. GROWTH PARTICIPATION INCOME — community-owned upside as Cergio scales.
-//                       Tagline: Human-Powered AI for Shared Prosperity.
+// Four scenes, one mechanism each:
+//   1. DIRECT CASH        — 1 friend = $250 (with $250 × 50 = $12,500 chip)
+//   2. CHAIN / NETWORK    — friend invites friend = +5% ($12.50) bonus
+//   3. BARTER             — Connector ⇄ Provider, $1K–$10K/mo in services
+//   4. GROWTH (GPI)       — community orchard, Human-Powered AI tagline
 //
-// All numbers come from REWARDS so we never hand-write dollar amounts.
-// Used by /earnings/how (EarnExplainerScreen). Drop-in elsewhere.
+// All numbers come from REWARDS so they never drift. The visual model
+// is consistent across scenes: avatars = people, vines = trust edges,
+// cash pills = direct dollars, gift boxes = barter, the orchard scene
+// keeps a few sprouts to echo the "grow" metaphor.
 
 import { useEffect, useRef, useState } from 'react';
 import { REWARDS } from '../../lib/rewards';
@@ -22,7 +23,7 @@ const PLATFORM_FEE_PCT = 7;
 
 const BENEFIT_CHIPS = {
   cash:   { label: 'Direct cash',           cls: 'bg-gl text-gd' },
-  trust:  { label: 'Trust + network',       cls: 'bg-gl text-gd' },
+  chain:  { label: 'Network compounds',     cls: 'bg-gl text-gd' },
   barter: { label: 'Barter — free services', cls: 'bg-warnBg text-warnText' },
   growth: { label: 'Growth participation',  cls: 'bg-gl text-gd2' },
 };
@@ -33,97 +34,127 @@ const STEPS = [
     benefit: 'cash',
     title: 'You invite. Friend books. You earn.',
     body: () =>
-      `Send a Cergio link. When your friend books a service, Cergio's ${PLATFORM_FEE_PCT}% platform fee on every booking flows back to you — up to $${REWARDS.perFriend} per friend.`,
-    counter: { value: `+$${REWARDS.perFriend}`, sub: 'cap per friend' },
+      `Cergio's ${PLATFORM_FEE_PCT}% platform fee on every booking flows back to you — up to $${REWARDS.perFriend} per friend who joins + books.`,
+    counter: { value: `$${REWARDS.perFriend}`, sub: 'cap per friend' },
+    math: `${PLATFORM_FEE_PCT}% fee × every booking, up to $${REWARDS.perFriend}`,
   },
   {
     num: 'Step 2 of 4',
-    benefit: 'trust',
-    title: 'The chain multiplies. Trust compounds.',
+    benefit: 'chain',
+    title: 'Friend invites a friend — bonus to you.',
     body: () =>
-      `Your friend invites a friend. When that new friend books, you earn ${REWARDS.friendOfFriendPercent}% = $${REWARDS.friendOfFriendBonus} every time the chain extends. ${REWARDS.exampleFriends} friends → $${REWARDS.exampleTotal.toLocaleString()}. Your network does the work.`,
-    counter: { value: `$${REWARDS.exampleTotal.toLocaleString()}`, sub: `${REWARDS.exampleFriends}-friend example` },
+      `When your friend's friend books, you earn ${REWARDS.friendOfFriendPercent}% — $${REWARDS.friendOfFriendBonus} — on top. The chain pays you every time it extends.`,
+    counter: { value: `+$${REWARDS.friendOfFriendBonus}`, sub: 'per 2nd-tier signup' },
+    math: `${REWARDS.friendOfFriendPercent}% × $${REWARDS.perFriend} = $${REWARDS.friendOfFriendBonus}`,
   },
   {
     num: 'Step 3 of 4',
     benefit: 'barter',
     title: 'Connectors trade spotlights for services.',
     body: () =>
-      `Influencers, super-users, and small businesses become Connectors. Providers send $${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/month in free services in exchange for Instagram + TikTok spotlights. Barter, not cash.`,
+      `Influencers, super-users, and small businesses become Connectors. Providers trade $${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/month in free services in exchange for Instagram + TikTok spotlights.`,
     counter: { value: `$${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K`, sub: '/mo in services' },
+    math: `Spotlight ⇄ $${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/mo services`,
   },
   {
     num: 'Step 4 of 4',
     benefit: 'growth',
     title: 'Growth Participation — own the orchard.',
     body: () =>
-      `Every dollar you earn builds your participation in Cergio's growth. As the platform scales, the community that grew the orchard shares the upside. Human-Powered AI for shared prosperity.`,
+      `Every dollar you earn builds your participation in Cergio's growth. As the platform scales, the community that grew it shares the upside. Human-Powered AI for shared prosperity.`,
     counter: { value: 'GPI', sub: 'community upside' },
+    math: 'Your earnings → your share of growth',
   },
 ];
 
 // ─── Visual primitives ─────────────────────────────────────────────────────
 
-// A person — drawn as a small organic sprout (stem + leaf cluster) so it
-// reads as "alive" / part of the orchard. `size` controls maturity, label
-// shows under the root. Optional `badge` overlays a small icon (camera for
-// Connector). Subtle sway via existing rf-sway keyframe.
-function Person({ x, size = 'mid', label, badge = null, faded = false }) {
-  const base = 210;
-  const h = size === 'tree' ? 90 : size === 'big' ? 72 : size === 'mid' ? 56 : 40;
-  const top = base - h;
-  const stemW = size === 'tree' ? 2.8 : 2;
-  const sway =
-    size === 'tree' ? 'rf-sway'
-    : size === 'big' ? 'rf-sway-b'
-    : size === 'mid' ? 'rf-sway-c'
-    : 'rf-sway-d';
-
-  let leaves;
-  if (size === 'small') {
-    leaves = (
-      <>
-        <ellipse cx={x - 5} cy={top + 3} rx="6" ry="4" fill="#9BE53A" transform={`rotate(-22 ${x - 5} ${top + 3})`} />
-        <ellipse cx={x + 5} cy={top - 2} rx="7" ry="4" fill="#7DD824" transform={`rotate(22 ${x + 5} ${top - 2})`} />
-      </>
-    );
-  } else if (size === 'mid') {
-    leaves = (
-      <>
-        <ellipse cx={x - 8}  cy={top + 6} rx="9"  ry="5" fill="#7DD824" transform={`rotate(-25 ${x - 8} ${top + 6})`} />
-        <ellipse cx={x + 9}  cy={top}     rx="10" ry="5" fill="#5BC404" transform={`rotate(25 ${x + 9} ${top})`} />
-        <ellipse cx={x + 1}  cy={top - 6} rx="8"  ry="5" fill="#9BE53A" />
-      </>
-    );
-  } else if (size === 'big') {
-    leaves = (
-      <>
-        <ellipse cx={x - 12} cy={top + 10} rx="12" ry="6" fill="#3D8B00" transform={`rotate(-26 ${x - 12} ${top + 10})`} />
-        <ellipse cx={x + 12} cy={top + 4}  rx="12" ry="6" fill="#5BC404" transform={`rotate(26 ${x + 12} ${top + 4})`} />
-        <ellipse cx={x - 1}  cy={top - 4}  rx="11" ry="8" fill="#7DD824" />
-        <ellipse cx={x + 6}  cy={top - 14} rx="8"  ry="5" fill="#9BE53A" />
-      </>
-    );
-  } else {
-    leaves = (
-      <>
-        <ellipse cx={x}      cy={top}     rx="22" ry="19" fill="#3D8B00" />
-        <ellipse cx={x - 12} cy={top - 3} rx="13" ry="10" fill="#5BC404" />
-        <ellipse cx={x + 12} cy={top - 6} rx="13" ry="10" fill="#7DD824" />
-        <ellipse cx={x + 2}  cy={top - 15} rx="11" ry="9" fill="#9BE53A" />
-      </>
-    );
-  }
-
+// HUMAN AVATAR — circle with initial inside + name below. Replaces the
+// abstract sprout from v2; people read as people in 100ms. The `you`
+// flag bolds the outline so the viewer instantly recognizes "this one
+// represents me". Gradient ids defined once in the <defs> block.
+function Avatar({ x, y, r = 22, gradientId = 'avYou', label = '', you = false, sub = '', dim = false }) {
+  const initial = (label || '?')[0]?.toUpperCase();
   return (
-    <g opacity={faded ? 0.45 : 1}>
-      <g className={sway} style={{ transformOrigin: `${x}px ${base}px`, transformBox: 'view-box' }}>
-        <line x1={x} y1={base} x2={x} y2={top} stroke="#3D8B00" strokeWidth={stemW} strokeLinecap="round" />
-        {leaves}
-      </g>
-      {badge && badge({ x, top })}
+    <g opacity={dim ? 0.55 : 1}>
+      <circle
+        cx={x} cy={y} r={r}
+        fill={`url(#${gradientId})`}
+        stroke={you ? '#1F4F00' : '#FFFFFF'}
+        strokeWidth={you ? 2.5 : 1.8}
+      />
+      <text
+        x={x} y={y + 5}
+        textAnchor="middle"
+        fontSize={r * 0.7}
+        fontWeight="800"
+        fill="#FFFFFF"
+        fontFamily="system-ui"
+      >
+        {initial}
+      </text>
       {label && (
-        <text x={x} y={base + 14} textAnchor="middle" fontSize="9.5" fontWeight="600" fill="#3D3D3D" fontFamily="system-ui">
+        <text
+          x={x} y={y + r + 12}
+          textAnchor="middle"
+          fontSize="10"
+          fontWeight="700"
+          fill="#1A1A1A"
+          fontFamily="system-ui"
+        >
+          {label}
+        </text>
+      )}
+      {sub && (
+        <text
+          x={x} y={y + r + 22}
+          textAnchor="middle"
+          fontSize="8.5"
+          fontWeight="500"
+          fill="#7A7A7A"
+          fontFamily="system-ui"
+        >
+          {sub}
+        </text>
+      )}
+    </g>
+  );
+}
+
+// Math equation chip — anchored at top of the SVG stage. Always visible
+// so the dollar logic of each scene is locked in the user's eye.
+function MathChip({ text }) {
+  return (
+    <g className="rf-pop">
+      <rect
+        x={106} y={10} width={188} height={22} rx={11}
+        fill="#FFFFFF"
+        stroke="#E5E5E3"
+        strokeWidth={1}
+      />
+      <text
+        x={200} y={25}
+        textAnchor="middle"
+        fontSize="11"
+        fontWeight="800"
+        fill="#3D8B00"
+        fontFamily="system-ui"
+      >
+        {text}
+      </text>
+    </g>
+  );
+}
+
+// Provider tile — small house with a star, instantly readable as "service".
+function ProviderTile({ x, y, label = 'Service' }) {
+  return (
+    <g className="rf-pop" style={{ animationDelay: '0.25s', transformOrigin: `${x}px ${y}px`, transformBox: 'view-box' }}>
+      <rect x={x - 18} y={y - 12} width={36} height={28} rx={4} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1.4} />
+      <polygon points={`${x - 20},${y - 12} ${x},${y - 22} ${x + 20},${y - 12}`} fill="#3D8B00" />
+      <circle cx={x} cy={y + 1} r={3} fill="#FAC775" />
+      {label && (
+        <text x={x} y={y + 30} textAnchor="middle" fontSize="9" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
           {label}
         </text>
       )}
@@ -131,103 +162,100 @@ function Person({ x, size = 'mid', label, badge = null, faded = false }) {
   );
 }
 
-// Curved organic vine from one person to another at root level.
-function Vine({ ax, bx, animated = true }) {
+// Green cash pill — sized to its text. Used wherever a dollar amount lands.
+function CashPill({ x, y, text, delay = 0, big = false }) {
+  const w = text.length * (big ? 8 : 6) + (big ? 22 : 18);
+  const h = big ? 22 : 18;
+  const r = h / 2;
+  return (
+    <g className="rf-pop" style={{ animationDelay: `${delay}s`, transformOrigin: `${x}px ${y}px`, transformBox: 'view-box' }}>
+      <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={r} fill="#2F6E00" />
+      <text x={x} y={y + (big ? 5 : 4)} textAnchor="middle" fontSize={big ? 13 : 11} fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">{text}</text>
+    </g>
+  );
+}
+
+// Vine between avatars — soft curve underneath at y = floor + 18.
+function Vine({ ax, bx, y = 188 }) {
   const mx = (ax + bx) / 2;
-  const d = `M ${ax} 210 Q ${mx} 226 ${bx} 210`;
   return (
     <path
-      d={d}
+      d={`M ${ax} ${y} Q ${mx} ${y + 14} ${bx} ${y}`}
       stroke="#3D8B00"
-      strokeWidth="1.6"
+      strokeWidth={1.6}
       strokeLinecap="round"
       fill="none"
-      opacity={animated ? 0.55 : 0.35}
-      strokeDasharray={animated ? '0' : '3 3'}
+      opacity={0.55}
     />
   );
 }
 
-// Provider tile — house+green roof, recognizable as a service.
-function ProviderTile({ x, y, delay = 0 }) {
+// Dashed arrow path — a directional hint between elements.
+function Arrow({ d, color = '#3D8B00', dash = '3 3', strokeWidth = 1.4, opacity = 0.6 }) {
   return (
-    <g className="rf-pop" style={{ animationDelay: `${delay}s`, transformOrigin: `${x}px ${y}px`, transformBox: 'view-box' }}>
-      <rect x={x - 16} y={y - 8} width="32" height="26" rx="3" fill="#FFFFFF" stroke="#E5E5E3" strokeWidth="1.2" />
-      <polygon points={`${x - 18},${y - 8} ${x},${y - 18} ${x + 18},${y - 8}`} fill="#3D8B00" />
-      <rect x={x - 4} y={y + 4} width="8" height="14" fill="#5BC404" opacity="0.4" />
-      <text x={x} y={y + 28} textAnchor="middle" fontSize="8" fontWeight="600" fill="#3D3D3D" fontFamily="system-ui">Provider</text>
-    </g>
+    <path d={d} stroke={color} strokeWidth={strokeWidth} fill="none" strokeDasharray={dash} opacity={opacity} />
   );
 }
 
-// Green cash pill.
-function CoinPill({ x, y, text, delay = 0 }) {
-  const w = text.length * 6 + 18;
-  return (
-    <g className="rf-pop" style={{ animationDelay: `${delay}s`, transformOrigin: `${x}px ${y}px`, transformBox: 'view-box' }}>
-      <rect x={x - w / 2} y={y - 9} width={w} height="18" rx="9" fill="#2F6E00" />
-      <text x={x} y={y + 4} textAnchor="middle" fontSize="10.5" fontWeight="700" fill="#FFFFFF" fontFamily="system-ui">{text}</text>
-    </g>
-  );
-}
-
-// Gift-box (barter): amber box with ribbon, optional caption underneath.
+// Gift box — amber with white ribbon. Represents free service from provider.
 function GiftBox({ x, y, caption, delay = 0 }) {
   return (
     <g className="rf-pop" style={{ animationDelay: `${delay}s`, transformOrigin: `${x}px ${y}px`, transformBox: 'view-box' }}>
-      <rect x={x - 12} y={y - 9} width="24" height="18" rx="2.5" fill="#F0A030" />
-      <rect x={x - 12} y={y - 1.5} width="24" height="3" fill="#FFFFFF" opacity="0.9" />
-      <rect x={x - 1.5} y={y - 9} width="3" height="18" fill="#FFFFFF" opacity="0.9" />
+      <rect x={x - 14} y={y - 10} width={28} height={20} rx={3} fill="#F0A030" />
+      <rect x={x - 14} y={y - 2} width={28} height={3} fill="#FFFFFF" opacity={0.9} />
+      <rect x={x - 1.5} y={y - 10} width={3} height={20} fill="#FFFFFF" opacity={0.9} />
       {caption && (
-        <text x={x} y={y + 22} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#8A5A10" fontFamily="system-ui">
-          {caption}
-        </text>
+        <text x={x} y={y + 24} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#8A5A10" fontFamily="system-ui">{caption}</text>
       )}
     </g>
   );
 }
 
-// Camera/spotlight badge — rides on top of a Connector sprout.
-function CameraBadge({ x, top }) {
-  const cy = top - 30;
+// IG + TikTok pill row — small, no platform logos (license-safe), letter chips.
+function SocialPills({ cx, cy, delay = 0 }) {
   return (
-    <g>
-      <circle cx={x} cy={cy} r="11" fill="#111114" />
-      <rect x={x - 7} y={cy - 4} width="14" height="9" rx="1.5" fill="#111114" />
-      <circle cx={x} cy={cy + 0.5} r="3.2" fill="#9BE53A" />
-      <circle cx={x + 4.5} cy={cy - 3.5} r="1.2" fill="#FAC775" />
+    <g className="rf-pop" style={{ animationDelay: `${delay}s` }}>
+      <rect x={cx - 32} y={cy - 8} width={24} height={16} rx={4} fill="url(#igGrad)" />
+      <text x={cx - 20} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">IG</text>
+      <rect x={cx + 8} y={cy - 8} width={24} height={16} rx={4} fill="#111114" />
+      <text x={cx + 20} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="800" fill="#9BE53A" fontFamily="system-ui">TT</text>
     </g>
   );
 }
 
-// Floating IG + TikTok pills (rendered as tiny rounded squares with letters).
-function SocialPills({ cx, cy }) {
+// Spotlight pill — black with green dot, "Spotlight" label.
+function SpotlightPill({ x, y, delay = 0 }) {
   return (
-    <g>
-      <g className="rf-pop" style={{ animationDelay: '0.4s' }}>
-        <rect x={cx - 32} y={cy - 8} width="22" height="16" rx="4" fill="url(#igGrad)" />
-        <text x={cx - 21} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">IG</text>
-      </g>
-      <g className="rf-pop" style={{ animationDelay: '0.7s' }}>
-        <rect x={cx + 10} y={cy - 8} width="22" height="16" rx="4" fill="#111114" />
-        <text x={cx + 21} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="800" fill="#9BE53A" fontFamily="system-ui">TT</text>
-      </g>
+    <g className="rf-pop" style={{ animationDelay: `${delay}s` }}>
+      <rect x={x - 36} y={y - 9} width={72} height={18} rx={9} fill="#111114" />
+      <circle cx={x - 24} cy={y} r={3} fill="#9BE53A" />
+      <text x={x + 6} y={y + 4} textAnchor="middle" fontSize="10" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">Spotlight</text>
     </g>
   );
 }
 
-// Ascending growth curve — used in Step 4.
+// Small sprout — used only in Scene 4 (orchard) to keep the "grow" metaphor.
+function MiniSprout({ x, age = 'mid' }) {
+  const base = 210;
+  const h = age === 'tree' ? 60 : age === 'big' ? 46 : 32;
+  const top = base - h;
+  const color = age === 'tree' ? '#3D8B00' : age === 'big' ? '#5BC404' : '#7DD824';
+  return (
+    <g>
+      <line x1={x} y1={base} x2={x} y2={top} stroke="#3D8B00" strokeWidth={2} strokeLinecap="round" />
+      <circle cx={x - 6} cy={top + 4} r={6} fill={color} />
+      <circle cx={x + 6} cy={top + 2} r={6} fill="#5BC404" />
+      <circle cx={x}     cy={top - 4} r={6} fill="#9BE53A" />
+    </g>
+  );
+}
+
+// Ascending growth curve — used in Scene 4 (GPI).
 function GrowthCurve() {
   return (
-    <g opacity="0.5">
-      <path
-        d="M 30 195 Q 120 180 200 140 T 380 50"
-        stroke="#3D8B00"
-        strokeWidth="2"
-        fill="none"
-        strokeDasharray="5 4"
-      />
-      <polygon points="372,46 388,52 374,62" fill="#3D8B00" />
+    <g opacity={0.5}>
+      <path d="M 30 200 Q 120 185 200 145 T 380 60" stroke="#3D8B00" strokeWidth={2} fill="none" strokeDasharray="5 4" />
+      <polygon points="372,56 388,62 374,72" fill="#3D8B00" />
     </g>
   );
 }
@@ -235,127 +263,150 @@ function GrowthCurve() {
 // ─── Scenes ────────────────────────────────────────────────────────────────
 
 function Scene1() {
-  // You + Friend + Provider. Cash flows from provider through 7% fee to You.
+  // 1-friend example. You + Jamie + Provider. Booking → 7% fee → You.
   return (
     <>
-      <Person x={110} size="mid" label="You" />
-      <Vine ax={110} bx={220} />
-      <Person x={220} size="mid" label="Friend" />
-      <ProviderTile x={320} y={188} delay={0.3} />
+      <MathChip text={STEPS[0].math} />
+      <Avatar x={85}  y={130} r={28} gradientId="avYou"   label="You"   you />
+      <Avatar x={205} y={130} r={28} gradientId="avFriend" label="Jamie" />
+      <ProviderTile x={320} y={155} label="$300 clean" />
 
-      {/* arrows: provider booking → 7% slice → you */}
-      <g opacity="0.55">
-        <path d="M 304 178 Q 260 150 230 150" stroke="#3D8B00" strokeWidth="1.4" fill="none" strokeDasharray="3 3" />
-        <path d="M 200 150 Q 160 150 122 130" stroke="#3D8B00" strokeWidth="1.4" fill="none" strokeDasharray="3 3" />
-      </g>
+      {/* booking arrow */}
+      <Arrow d="M 233 130 Q 270 130 305 145" />
+      <text x={270} y={120} textAnchor="middle" fontSize="9" fill="#5F5E5A" fontWeight="700" fontFamily="system-ui">books</text>
 
-      <CoinPill x={266} y={148} text={`${PLATFORM_FEE_PCT}% fee`} delay={0.55} />
-      <CoinPill x={108} y={108} text={`+$${REWARDS.perFriend}`} delay={1.1} />
+      {/* 7% fee chip mid-path */}
+      <CashPill x={270} y={88} text={`${PLATFORM_FEE_PCT}% fee`} delay={0.55} />
+
+      {/* arrow flows fee → You */}
+      <Arrow d="M 240 90 Q 180 80 110 100" />
+
+      {/* You earn pill */}
+      <CashPill x={85} y={82} text={`+$${REWARDS.perFriend}`} delay={1.0} big />
+
+      {/* footer line on cap */}
+      <text x={200} y={228} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
+        Cergio's {PLATFORM_FEE_PCT}% fee → you, up to ${REWARDS.perFriend} per friend
+      </text>
     </>
   );
 }
 
 function Scene2() {
-  // You + Friend + Friend-of-Friend. F-of-F books → bigger coin to Friend,
-  // smaller +$12.50 arcs back to You.
+  // Friend-of-friend chain — You ← Jamie ← Alex. Alex books → $250 to Jamie,
+  // $12.50 (5% bonus) to You. The classic 2-degree compounding visual.
   return (
     <>
-      <Person x={70}  size="big" label="You" />
-      <Vine ax={70}  bx={180} />
-      <Person x={180} size="big" label="Friend" />
-      <Vine ax={180} bx={290} />
-      <Person x={290} size="mid" label="F-of-F" />
-      <ProviderTile x={360} y={188} delay={0.2} />
+      <MathChip text={STEPS[1].math} />
+      <Avatar x={70}  y={140} r={26} gradientId="avYou"    label="You"   you />
+      <Avatar x={175} y={140} r={26} gradientId="avFriend" label="Jamie" />
+      <Avatar x={280} y={140} r={26} gradientId="avFof"    label="Alex"  />
+      <ProviderTile x={360} y={170} label="books" />
 
-      <g opacity="0.55">
-        <path d="M 344 178 Q 320 156 300 150" stroke="#3D8B00" strokeWidth="1.4" fill="none" strokeDasharray="3 3" />
-        <path d="M 270 144 Q 222 132 190 116" stroke="#3D8B00" strokeWidth="1.4" fill="none" strokeDasharray="3 3" />
-        <path d="M 168 110 Q 120 102 80 100" stroke="#3D8B00" strokeWidth="1.2" fill="none" strokeDasharray="2 3" opacity="0.85" />
-      </g>
+      <Vine ax={70}  bx={175} y={184} />
+      <Vine ax={175} bx={280} y={184} />
 
-      <CoinPill x={258} y={142} text={`+$${REWARDS.perFriend}`}        delay={0.55} />
-      <CoinPill x={184} y={114} text={`+$${REWARDS.friendOfFriendBonus} (${REWARDS.friendOfFriendPercent}%)`} delay={0.95} />
-      <CoinPill x={70}  y={100} text="you earn"                       delay={1.35} />
+      {/* booking arrow Alex → Provider */}
+      <Arrow d="M 304 144 Q 330 152 348 162" />
 
-      <text x={200} y={236} textAnchor="middle" fontSize="9.5" fill="#3D3D3D" fontWeight="600" fontFamily="system-ui">
-        {REWARDS.exampleFriends} friends → ${REWARDS.exampleTotal.toLocaleString()}
+      {/* big $250 to Jamie */}
+      <CashPill x={175} y={92} text={`+$${REWARDS.perFriend}`} delay={0.5} big />
+      <Arrow d="M 270 130 Q 220 110 188 100" strokeWidth={1.6} />
+
+      {/* smaller $12.50 (5%) to You */}
+      <CashPill x={70}  y={92} text={`+$${REWARDS.friendOfFriendBonus} (${REWARDS.friendOfFriendPercent}%)`} delay={1.0} />
+      <Arrow d="M 155 95 Q 115 90 90 92" />
+
+      <text x={200} y={228} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
+        Every chain extension = ${REWARDS.friendOfFriendBonus} bonus to you
       </text>
     </>
   );
 }
 
 function Scene3() {
-  // Connector + Provider barter loop. Spotlight goes out, services come back.
+  // Barter — Connector ⇄ Provider. The visual that lands "Cergio is not
+  // just cash". Two avatars, large; bidirectional arrows; spotlight pill
+  // going one way, gift box (services) coming back.
   return (
     <>
-      <SocialPills cx={140} cy={50} />
+      <MathChip text={STEPS[2].math} />
 
-      <Person x={140} size="big" label="Connector" badge={CameraBadge} />
+      {/* Connector left */}
+      <SocialPills cx={95} cy={62} delay={0.1} />
+      <Avatar x={95} y={140} r={34} gradientId="avConnector" label="Maya" sub="Connector" />
 
-      {/* curved loop between Connector and Provider */}
-      <g opacity="0.6">
-        <path d="M 170 130 Q 230 100 290 130" stroke="#F0A030" strokeWidth="1.6" fill="none" strokeDasharray="3 3" />
-        <path d="M 290 175 Q 230 200 170 175" stroke="#3D8B00" strokeWidth="1.6" fill="none" strokeDasharray="3 3" />
-      </g>
+      {/* Provider right */}
+      <ProviderTile x={305} y={140} label="Jennifer L." />
 
-      <ProviderTile x={310} y={155} delay={0.3} />
+      {/* TOP arrow Connector → Provider: spotlight */}
+      <Arrow d="M 132 115 Q 200 80 280 120" color="#F0A030" strokeWidth={1.8} opacity={0.7} />
+      <SpotlightPill x={206} y={84} delay={0.55} />
 
-      {/* outbound spotlight */}
-      <g className="rf-pop" style={{ animationDelay: '0.55s' }}>
-        <rect x={210} y={88} width="58" height="18" rx="9" fill="#111114" />
-        <text x={239} y={101} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#9BE53A" fontFamily="system-ui">spotlight</text>
-      </g>
+      {/* BOTTOM arrow Provider → Connector: services */}
+      <Arrow d="M 280 175 Q 200 210 132 170" color="#3D8B00" strokeWidth={1.8} opacity={0.7} />
+      <GiftBox x={205} y={196} caption={`$${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/mo services`} delay={1.0} />
 
-      {/* inbound barter — gift box */}
-      <GiftBox x={228} y={194} caption={`$${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/mo`} delay={1.0} />
+      {/* small "barter" badge in the gap */}
+      <text x={205} y={140} textAnchor="middle" fontSize="10" fontWeight="800" fill="#8A5A10" fontFamily="system-ui">⇄ barter</text>
     </>
   );
 }
 
 function Scene4() {
-  // Orchard scale — many connected people + ascending growth curve + GPI badge.
+  // Growth — community orchard. Mix of avatars (people) + sprouts (growth
+  // metaphor). Ascending curve in the back. Big GPI badge at top.
   const people = [
-    { x: 40,  size: 'mid'  },
-    { x: 78,  size: 'big'  },
-    { x: 120, size: 'tree' },
-    { x: 168, size: 'big'  },
-    { x: 210, size: 'tree' },
-    { x: 258, size: 'big'  },
-    { x: 300, size: 'mid'  },
-    { x: 348, size: 'big'  },
-    { x: 386, size: 'mid'  },
+    { x: 50,  label: 'You',   you: true,  grad: 'avYou'    },
+    { x: 110, label: 'Jamie', grad: 'avFriend' },
+    { x: 170, label: 'Alex',  grad: 'avFof'    },
+    { x: 230, label: 'Maya',  grad: 'avConnector' },
+    { x: 290, label: '+',     grad: 'avMisc'   },
+    { x: 350, label: '+',     grad: 'avMisc'   },
   ];
   return (
     <>
       <GrowthCurve />
-
-      {/* vine network connecting alternating roots */}
-      <g opacity="0.45">
-        {people.slice(0, -1).map((p, i) => (
-          <path
-            key={`v-${i}`}
-            d={`M ${p.x} 210 Q ${(p.x + people[i + 1].x) / 2} 224 ${people[i + 1].x} 210`}
-            stroke="#3D8B00"
-            strokeWidth="1.4"
-            fill="none"
-          />
-        ))}
-      </g>
-
-      {people.map((p, i) => (
-        <Person key={`p-${i}`} x={p.x} size={p.size} />
-      ))}
+      <MathChip text={STEPS[3].math} />
 
       {/* GPI badge */}
       <g className="rf-pop" style={{ animationDelay: '0.4s' }}>
-        <rect x={140} y={28} width="120" height="24" rx="12" fill="#3D8B00" />
-        <text x={200} y={44} textAnchor="middle" fontSize="11" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">
+        <rect x={138} y={42} width={124} height={24} rx={12} fill="#3D8B00" />
+        <text x={200} y={58} textAnchor="middle" fontSize="11" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">
           Growth Participation
         </text>
       </g>
 
-      {/* Mission tagline footer */}
-      <text x={200} y={236} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#2C5D21" fontFamily="system-ui">
+      {/* avatars + vines */}
+      <g>
+        {people.slice(0, -1).map((p, i) => (
+          <path
+            key={`v-${i}`}
+            d={`M ${p.x} 180 Q ${(p.x + people[i + 1].x) / 2} 196 ${people[i + 1].x} 180`}
+            stroke="#3D8B00"
+            strokeWidth={1.3}
+            fill="none"
+            opacity={0.5}
+          />
+        ))}
+      </g>
+      {people.map((p, i) => (
+        <Avatar
+          key={`p-${i}`}
+          x={p.x}
+          y={140}
+          r={18}
+          gradientId={p.grad}
+          label={p.label}
+          you={!!p.you}
+        />
+      ))}
+
+      {/* sprouts to echo "grow" */}
+      <MiniSprout x={20} age="big" />
+      <MiniSprout x={380} age="tree" />
+
+      <text x={200} y={232} textAnchor="middle" fontSize="10" fontWeight="800" fill="#2C5D21" fontFamily="system-ui">
         Human-Powered AI · Shared Prosperity
       </text>
     </>
@@ -371,12 +422,13 @@ export function RewardFlowAnimation() {
   const [auto, setAuto] = useState(true);
   const timerRef = useRef(null);
 
-  // Auto-advance — 5s per step, pause when the user takes manual control.
+  // Auto-advance — 5.5s per step. Slowed slightly vs v2 since the
+  // math chip + avatars give the eye more to read.
   useEffect(() => {
     if (!auto) return;
     timerRef.current = setTimeout(() => {
       setStep((s) => (s < STEPS.length - 1 ? s + 1 : s));
-    }, 5000);
+    }, 5500);
     return () => clearTimeout(timerRef.current);
   }, [step, auto]);
 
@@ -384,19 +436,21 @@ export function RewardFlowAnimation() {
   const Scene = SCENES[step];
   const chip = BENEFIT_CHIPS[s.benefit];
 
-  const next = () => { setAuto(false); setStep((v) => Math.min(STEPS.length - 1, v + 1)); };
-  const prev = () => { setAuto(false); setStep((v) => Math.max(0, v - 1)); };
+  const next   = () => { setAuto(false); setStep((v) => Math.min(STEPS.length - 1, v + 1)); };
+  const prev   = () => { setAuto(false); setStep((v) => Math.max(0, v - 1)); };
   const replay = () => { setStep(0); setAuto(true); };
 
   return (
     <div className="px-1">
-      {/* Top bar — benefit chip + step counter value */}
+      {/* Top bar — benefit chip + counter */}
       <div className="flex justify-between items-center px-3.5 py-2 mb-2 rounded-[10px] bg-bg5/60">
         <span className={`text-[10.5px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-pill ${chip.cls}`}>
           {chip.label}
         </span>
         <span className="flex items-baseline gap-1.5">
-          <span key={`v-${step}`} className="text-[15px] font-extrabold text-black rf-tick tabular-nums">{s.counter.value}</span>
+          <span key={`v-${step}`} className="text-[16px] font-extrabold text-black rf-tick tabular-nums">
+            {s.counter.value}
+          </span>
           <span className="text-[10px] text-b3 font-medium">{s.counter.sub}</span>
         </span>
       </div>
@@ -408,15 +462,37 @@ export function RewardFlowAnimation() {
       >
         <svg viewBox="0 0 400 250" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
+            {/* Avatar gradients — one per role, brand-consistent green for You. */}
+            <linearGradient id="avYou" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#5BC404" />
+              <stop offset="100%" stopColor="#2F6E00" />
+            </linearGradient>
+            <linearGradient id="avFriend" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#8A6FD6" />
+              <stop offset="100%" stopColor="#4F3DB0" />
+            </linearGradient>
+            <linearGradient id="avFof" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#F5A65E" />
+              <stop offset="100%" stopColor="#C76A18" />
+            </linearGradient>
+            <linearGradient id="avConnector" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#EE5586" />
+              <stop offset="100%" stopColor="#A52454" />
+            </linearGradient>
+            <linearGradient id="avMisc" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#A8A8A8" />
+              <stop offset="100%" stopColor="#666666" />
+            </linearGradient>
             <linearGradient id="igGrad" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%"   stopColor="#F58529" />
               <stop offset="50%"  stopColor="#DD2A7B" />
               <stop offset="100%" stopColor="#8134AF" />
             </linearGradient>
           </defs>
-          {/* soil line */}
-          <line x1="20" y1="210" x2="380" y2="210" stroke="#5C3A14" strokeWidth="0.8" opacity="0.28" />
-          {/* re-key on step to retrigger entrance animations */}
+
+          {/* soil line — subtle ground reference */}
+          <line x1={20} y1={210} x2={380} y2={210} stroke="#5C3A14" strokeWidth={0.8} opacity={0.25} />
+
           <g key={`scene-${step}`}>
             <Scene />
           </g>

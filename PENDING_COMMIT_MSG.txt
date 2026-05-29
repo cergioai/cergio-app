@@ -1,109 +1,121 @@
-Recommend flow: unified (contacts + manual) + Profile v3 + Earnings tabs
+Animation v3 (avatars + math chips) + loading narration + guardrails
 
-Three user-driven cleanups in one push. (Profile v3 + Earnings tabs were
-queued in the previous Mac-locked window; the Recommend fix is the new
-one and rounds out the signed-in UX pass.)
+Four user-driven cleanups. The animation is now infinitely easier to
+grasp, the search loading is narrated, the "50→$12.5K" Home pill is
+gone, and the search-regression class of bug ("moving target") is
+locked behind a pre-push qa gate + two new invariants.
 
-1. RECOMMEND FLOW — unified, no more dual-path popup
+1. ANIMATION v3 — avatars, math chips, striking barter loop
 
-Tarik's audit: "recommend flow is wrong.. when you pick someone to
-recommend, that's the services you're recommending not the person
-you're recommending to.. the write a recommendation link is redundant..
-remove... can either recommend from contacts or recommend a person by
-typing their info (but can merge both)."
+Tarik: "make the animation infinitely more easy to grasp and superior
+in aesthetics, math, logic, showcasing the barter."
 
-Old: RecommendServicePopupScreen showed two buttons — "Recommend from
-contacts" (route → multi-select contacts picker that looked like Invite)
-and "Write a recommendation" (route → free-form form with contacts-only
-autosuggest, no manual entry). The split confused the model.
+Sprouts swapped for HUMAN AVATARS (gradient circles with initials +
+name labels) — the eye reads them as people in 100ms. Every scene now
+has a visible MATH EQUATION CHIP at the top of the stage so the dollar
+logic is impossible to miss. The barter scene is a striking two-sided
+exchange (Connector ⇄ Provider with bidirectional arrows: spotlight
+going one way, gift box of services coming back).
 
-New: ONE screen at /invite/recommend with three merged inputs:
+  Step 1  DIRECT CASH       You + Jamie + Provider, 7% fee → +$250
+                            math chip: "7% fee × every booking, up to $250"
+  Step 2  NETWORK COMPOUNDS You ← Jamie ← Alex chain; Alex books;
+                            $250 → Jamie + $12.50 (5%) → You
+                            math chip: "5% × $250 = $12.50"
+  Step 3  BARTER            Maya (Connector, pink) ⇄ Jennifer (Provider)
+                            spotlight pill → ; ← $1K-$10K/mo gift box
+                            math chip: "Spotlight ⇄ $1K-$10K/mo services"
+  Step 4  GROWTH (GPI)      orchard of named avatars + growth curve +
+                            GPI badge + "Human-Powered AI · Shared Prosperity"
 
-  ┌── Who are you recommending to? ────────┐
-  │  [ From contacts × ]   ← only shown    │
-  │                           when picked  │
-  │  [ Friend's name        ]              │
-  │  ↪ autosuggest dropdown (tap → fills)  │
-  │  [ Phone        ] [ Email           ]  │
-  │  Either one is enough.                 │
-  └────────────────────────────────────────┘
+Per-role gradient colors stay consistent across scenes so the same
+person reads as the same person scene-to-scene (You = brand green,
+Jamie = purple, Alex = orange, Maya = pink, Connector role).
 
-Pick a contact → name + phone + email all autofill, subtle "From
-contacts" pill appears. Or type all three manually for someone who
-isn't in your contacts. Either path → same blurb step → same submit
-(notify-user + recommendations row).
+  src/components/ui/RewardFlowAnimation.jsx     (full v3 rewrite)
+    • New Avatar / MathChip / SpotlightPill / GiftBox / SocialPills /
+      MiniSprout / GrowthCurve primitives
+    • SVG <defs> with 5 named avatar gradients + IG gradient
+    • Each scene re-keys for entrance animations on step change
+    • Auto-advance bumped 4.5s → 5.5s (more to read on each scene)
 
-  src/screens/RecommendServiceFormScreen.jsx
-    • Replaced pickedContact / query state with name+phone+email triple
-    • pickMatch handler autofills all three from a contacts row
-    • isPlausiblePhone / isPlausibleEmail validators — fail closed only
-      on obviously-wrong input; server validates the rest
-    • Validation: name + (phone || email) + blurb, all required
-    • Submit button label adapts: "Add a phone or email" → "Send to Maria"
-    • "Connect your contacts" prompt now reads "(optional)" so it doesn't
-      look like a hard requirement
+2. RESULTS LOADING — narrated, slowed, named
 
-  src/screens/RecommendServicePopupScreen.jsx
-    • Rewritten as <Navigate to="/invite/recommend" replace /> stub —
-      kept so any cached URL / deep link still works, but the dual-path
-      UI is dead
+Tarik: "slow down the load of results to simulate pinging, finding,
+contacting Jessica's recommended Maria, negotiating with Maria and
+Henry... once we go live it'll likely be this as well."
 
-  src/screens/ProfileScreen.jsx
-    • Drawer "Recommend a service" → /invite/recommend (was popup)
+The status ticker on ResultsScreen now narrates what Cergio is doing
+with specific friend + provider names, and the loading state holds for
+at least MIN_LOADING_MS (4.5s) even when Supabase returns in 200ms so
+the user sees the full sequence play out.
 
-  src/screens/EarningsScreen.jsx
-    • Empty-state "Reco" button → /invite/recommend (was popup)
+  Pinging housekeepers near you
+  Checking Jessica's recommended housekeeper — Maria
+  Contacting Maria and Henry
+  Negotiating offers on your behalf
 
-  src/screens/EarningsBreakdownScreen.jsx
-    • "Reco more" button → /invite/recommend (was popup)
+  src/screens/ResultsScreen.jsx
+    • STATUS_STEP_MS 1100 → 1500
+    • New MIN_LOADING_MS = 4500 + loadingMinElapsed state
+    • New isLoading = (services === null || !loadingMinElapsed)
+    • Every render gate (results, paid-fallback banner, share card,
+      LeafLogo working state) switched from `services !== null` to
+      `!isLoading` so the cards don't pop in before narration completes
+    • SAMPLE_FRIEND_NAMES + SAMPLE_PROVIDER_NAMES — placeholders for
+      the live experience when we wire real recos + provider bids
 
-  scripts/qa.mjs #34 (new)
-    • Locks the unified form: name/phone/email state, pickMatch handler,
-      either-phone-or-email validation, redirect stub
-    • Scans every screen file for stale "/invite/recommend-popup" links
+3. HOME PILL — "50 friends → $12,500" removed
 
-2. PROFILE v3 — 4 grouped cards + drawers (queued from prior session)
+Tarik: "too much". The compounding pill on HomeScreen above the house
+ad was too sales-pitchy. Removed. The math still lives on the Connector
+apply page + the reward-flow animation for users who want the deep dive.
 
-Hero (avatar + name + Connector pill) → Switch-View CTA →
-  Card 1 — Earn & grow            (always — accent green, primary)
-  Card 2 — Connector              (signed-in)
-  Card 3 — Services               (provider mode or has any listing)
-  Card 4 — Account & settings     (always)
-Footer — Log out / Sign in + "I'll do this later"
+  src/screens/HomeScreen.jsx
+    • Pill markup removed; CERGIO-GUARD comment explains why
 
-Each card → bottom-sheet drawer with sub-actions. Drawer pattern
-mirrors the existing Connector explainer + GPI popups. No nav target
-dropped (qa #23 verifies).
+  src/components/ui/RewardFlowAnimation.jsx
+    • Step 1 math chip also softened: was "$250 × 50 = $12,500",
+      now "7% fee × every booking, up to $250" — same per-friend rule,
+      no aspirational sales-pitch math
 
-  src/screens/ProfileScreen.jsx        (rewritten — 4 cards + drawers)
-  scripts/qa.mjs #32 (new)             (locks grouping + primitives)
+4. GUARDRAILS — pre-push qa gate + houskeeper-bug regression locks
 
-3. EARNINGS — Referrals vs Client bookings tabs
+Tarik: "regarding the housekeeper issue earlier, need to ensure
+guardrails are in place so these don't fail... we just can't have a
+moving target... implement superior processes to deliver first class
+platform."
 
-Tarik: "we forgot to build a track earnings from services for service
-providers". Service providers earn from TWO streams — referral
-commissions and revenue from their own services. Were merged into one
-list, invisible as separate business lines.
+Two new static invariants + a pre-push qa gate that aborts the push
+if qa fails. The houskeeper bug (where "need houskeeper under 200"
+fell into the "What service do you need?" empty state even though
+local taxonomy correctly resolved House Cleaner) is now locked at the
+gate level: any revert that re-introduces the bug fails before merge.
 
-The earnings.kind enum already supported the split; we just weren't
-surfacing it. Now a 2-tab segmented control gates the ledger:
+  scripts/qa.mjs #35 chat-reply-gate (new)
+    • Statically asserts useChat backfills merged.what from a locally-
+      resolved provider_type (whatFromTaxonomy)
+    • Asserts the reply branches on whatKnown = (what || provider_type),
+      NOT on !merged.what alone
 
-  Referrals  $42      ←  kind in (invite, spotlight)
-  Client bookings  $1,250  ←  kind = booking
+  scripts/qa.mjs #36 actor-noun-integration (new)
+    • Simulates the chat-reply gate against 10 realistic actor-noun
+      queries with typos (houskeeper, plummer, electrcian, sitter, etc.)
+    • For each, asserts whatKnown === true so the user would never see
+      the "What service do you need?" empty-state regression
 
-Providers default to Client bookings; consumers + Connectors default
-to Referrals. First explicit tap is sticky. Per-tab empty state with
-appropriate CTA (List a service / Invite a friend).
+  Unlock and Push.command
+    • Pre-push gate: runs `node scripts/qa.mjs` BEFORE staging the
+      commit. If qa fails, aborts with a clear "fix locally, re-run"
+      message. Emergency override: SKIP_QA=1
+    • This is the "superior process" — no moving target on critical
+      flows, no broken main, no silent regressions
 
-  src/screens/EarningsScreen.jsx
-  scripts/qa.mjs #33 (new)
-
-QA: 34/34 pass (3 new invariants, no regressions).
+QA: 36/36 pass (2 new invariants + zero regressions across the rest).
 
 Files:
-  src/screens/RecommendServiceFormScreen.jsx   (unified contacts + manual)
-  src/screens/RecommendServicePopupScreen.jsx  (now a Navigate redirect)
-  src/screens/ProfileScreen.jsx                (4 grouped cards + drawers)
-  src/screens/EarningsScreen.jsx               (tabs + entry-point rewire)
-  src/screens/EarningsBreakdownScreen.jsx      (entry-point rewire)
-  scripts/qa.mjs                               (+#32, +#33, +#34)
+  src/components/ui/RewardFlowAnimation.jsx   (full v3 rewrite — avatars + math chips)
+  src/screens/ResultsScreen.jsx                (narrated loading + MIN_LOADING_MS gate)
+  src/screens/HomeScreen.jsx                   (50→$12.5K pill removed)
+  scripts/qa.mjs                               (+#35 chat-reply-gate, +#36 actor-noun-integration)
+  ../Unlock and Push.command                   (pre-push qa gate)

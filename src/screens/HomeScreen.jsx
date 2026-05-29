@@ -1255,26 +1255,12 @@ export function HomeScreen() {
         </>
       )}
 
-      {/* Compounding pill — surfaces "50 friends → $12.5K" without
-          turning into a card. User feedback (2026-05-28): the math
-          was buried 3 screens deep on the Connector apply page;
-          expose it on Home for find-mode but keep it subtle.
-          A single small underline link beside the house ad — feels
-          like a footnote, not a sales pitch. Routes to the Connector
-          page where the full compounding card lives. */}
-      {intent === 'find' && !submitted && (
-        <div className="px-5 mt-2 mb-1 flex items-center gap-1.5">
-          <span className="text-[11px] text-b3 font-medium">
-            {REWARDS.exampleFriends} friends → <span className="font-bold text-black">${REWARDS.exampleTotal.toLocaleString()}</span>
-          </span>
-          <button
-            onClick={() => navigate('/rainmaker/apply')}
-            className="text-[11px] text-gd font-bold underline underline-offset-2 hover:opacity-80"
-          >
-            see how
-          </button>
-        </div>
-      )}
+      {/* CERGIO-GUARD (2026-05-29): "50 friends → $12.5K" pill removed
+          per user feedback ("too much"). The compounding math still
+          lives on the Connector apply page + the reward-flow animation;
+          we don't need it as a Home footnote — it reads as aspirational
+          sales pitch instead of subtle context. House ad below still
+          routes to the Connector page for users who want the deep dive. */}
 
       {/* Find-side house ad — shared economics frame. Soft green wash.
           Routes to the Connector apply page (the hero hook on the new

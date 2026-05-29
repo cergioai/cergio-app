@@ -1198,6 +1198,82 @@ test('recommend-unified', 'Recommend flow is one screen — contacts + manual me
     `Stale "/invite/recommend-popup" navigate calls — point them at "/invite/recommend" instead:\n  ${stale.join('\n  ')}`);
 });
 
+// ─── INVARIANT #35: bot-reply gate accepts what OR provider_type ──────
+// The houskeeper-bug fix (2026-05-28). When the cloud parser fails to
+// extract `what` for a typo'd actor-noun ("houskeeper"), but the LOCAL
+// taxonomy correctly resolves `provider_type`, the chat reply MUST NOT
+// fall into the "What service do you need?" empty state. This invariant
+// statically locks the gate so a "just check merged.what" revert fails
+// before merge.
+test('chat-reply-gate', 'useChat bot-reply gate accepts what OR provider_type (houskeeper-bug regression guard)', '#35', async () => {
+  const src = readFile('src/hooks/useChat.js');
+  const code = stripComments(src);
+
+  // The backfill that copies provider_type → what when the cloud parser
+  // returns null must still exist.
+  assert(/whatFromTaxonomy/.test(code),
+    'useChat must backfill merged.what from a locally-resolved provider_type (whatFromTaxonomy).');
+
+  // The reply gate must use whatKnown = merged.what || merged.provider_type
+  // and branch on !whatKnown — not on !merged.what alone.
+  assert(/whatKnown\s*=\s*!!merged\.what\s*\|\|\s*!!merged\.provider_type/.test(code),
+    'Reply gate must compute whatKnown = !!merged.what || !!merged.provider_type.');
+  assert(/if\s*\(\s*!whatKnown\s*\)/.test(code),
+    'Reply gate must branch on !whatKnown (not !merged.what) so a resolved provider_type skips the empty-state prompt.');
+});
+
+// ─── INVARIANT #36: actor-noun integration test — no empty-state ─────
+// Realistic typed queries that include only an ACTOR NOUN (housekeeper,
+// plumber, electrician, sitter) — sometimes with a typo, sometimes with
+// a budget tail. For each, the local taxonomy must resolve a
+// provider_type. The cloud parser may or may not extract `what`, but
+// thanks to #35's gate, the user's reply must never fall into the
+// "What service do you need?" empty state. This is the integration-
+// flavored guardrail Tarik asked for — "superior processes, no moving
+// target".
+test('actor-noun-integration', 'Actor-noun queries always pass the chat-reply gate (no false empty state)', '#36', async () => {
+  const mod = await import('../src/lib/serviceTaxonomy.js');
+  const resolve = mod.resolveProviderTypeLocal;
+
+  // The simulated "merged" object the bot-reply gate sees after useChat
+  // runs. Cloud parser is treated as if it returned what=null (worst case
+  // — actor-noun typo, model didn't extract). Local taxonomy is the only
+  // line of defense. With the backfill in place, merged.what === provider_type
+  // and the gate must pass.
+  function simulateMerged(query) {
+    const cloudWhat = null; // worst case
+    const localPT   = resolve(query);
+    const whatFromTaxonomy = (!cloudWhat && localPT) ? localPT : null;
+    const what = cloudWhat ?? whatFromTaxonomy ?? null;
+    const provider_type = localPT;
+    const whatKnown = !!what || !!provider_type;
+    return { what, provider_type, whatKnown };
+  }
+
+  const cases = [
+    'houskeeper',
+    'need houskeeper under 200',
+    'housekeping under 200',
+    'i need a housekeeper',
+    'plummer',
+    'plumbr needed today',
+    'electrcian needed urgently',
+    'need a baby sitter tonight',
+    'nany needed',
+    'dog walker mornings',
+  ];
+
+  const fails = [];
+  for (const q of cases) {
+    const m = simulateMerged(q);
+    if (!m.whatKnown) {
+      fails.push(`'${q}' → whatKnown=false (local PT=${JSON.stringify(m.provider_type)}, what=${JSON.stringify(m.what)})`);
+    }
+  }
+  assert(fails.length === 0,
+    `Actor-noun queries that would fall into the "What service do you need?" empty state — ${fails.length} of ${cases.length} failed:\n  ${fails.join('\n  ')}`);
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are
