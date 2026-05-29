@@ -1046,20 +1046,24 @@ test('reward-flow-embedded', 'RewardFlowAnimation component exists + EarnExplain
   const cmp = readFile('src/components/ui/RewardFlowAnimation.jsx');
   assert(/export function RewardFlowAnimation/.test(cmp),
     'src/components/ui/RewardFlowAnimation.jsx must export RewardFlowAnimation.');
-  // v2: 4-step business model. Each step explains one mechanism — direct
-  // cash, trust+network, barter (free services), growth participation income.
-  assert(/Step 1 of 4/.test(cmp),
-    'The animation must run a 4-step sequence (Step 1..4).');
-  assert(/Step 4 of 4/.test(cmp),
-    'The animation must complete its 4-step arc (Step 4 of 4 present).');
-  assert(/friend.{0,15}invite/i.test(cmp) && /chain|2nd[-\s]?tier|friend-of-friend/i.test(cmp),
-    'Step 2 (friend-of-friend / network effect) must be present — should mention an invite chain.');
+  // v5 (2026-05-29): 3-scene model — 01 Invite, 02 Earn, 03 Earn More.
+  // Headline-first, with explicit 10%/7%/6-month math chip on Scene 2.
+  assert(/num:\s*['"]01['"]/.test(cmp) && /num:\s*['"]02['"]/.test(cmp) && /num:\s*['"]03['"]/.test(cmp),
+    'Animation must define exactly three phases: 01, 02, 03.');
+  // Scene 1 — Invite. Headline must mention invite + recommend.
+  assert(/Invite friends/i.test(cmp) && /Recommend services/i.test(cmp),
+    'Scene 1 (Invite) must mention "Invite friends" and "Recommend services".');
+  // Scene 2 — Earn. Math chip MUST reference both the platform fee and
+  // the referrer share — Tarik's "7% is confusing" fix lives or dies here.
+  assert(/platformFeePercent/.test(cmp) && /referrerSharePercent/.test(cmp),
+    'Scene 2 (Earn) must derive the fee + share from REWARDS — never hardcode the numbers.');
+  assert(/friendCapWindowMonths/.test(cmp),
+    'Scene 2 (Earn) must surface the 6-month cap window from REWARDS.');
+  // Scene 3 — Earn More. Both upside paths (barter + GPI) must appear.
   assert(/spotlights?/i.test(cmp) && /barter/i.test(cmp),
-    'Step 3 (Connector barter — spotlights for services) must be present.');
+    'Scene 3 (Earn more) must include the Connector barter story.');
   assert(/Growth Participation/.test(cmp),
-    'Step 4 (Growth Participation Income) must be present.');
-  assert(/Human-Powered AI/.test(cmp),
-    'Mission tagline "Human-Powered AI" must close out the story.');
+    'Scene 3 (Earn more) must include Growth Participation Income (GPI).');
 
   const screen = readFile('src/screens/EarnExplainerScreen.jsx');
   assert(/import\s*\{\s*RewardFlowAnimation\s*\}\s*from/.test(screen),

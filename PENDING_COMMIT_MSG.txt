@@ -1,80 +1,96 @@
-Fix: friends-on-search invisible to Tarik (RLS) + Earnings empty (no seed rows)
+Animation v5: 3 phases (01/02/03), headline-first, fee/share/cap clarified
 
-Tarik tested live: Penny's card showed "No mutual friends yet" even
-though recommendations were seeded, and Earnings was empty. Two
-distinct causes — both fixed by re-running Seed Money Flow Test Data.
+Tarik: "the 7% is confusing.. show that users get $250 per friend (up
+to 7% of each booking made within 6 months)... clean up the text.
+Cergio booking fee is 10%, we give 7% to referrers. Try numbering the
+slides 1-Invite 2-Earn 3-Barter Earn More. Slow it down. Bring out
+the headline to hit harder. There's too much text. It's just not clear."
 
-ROOT CAUSE A — recommendations RLS too restrictive
+Full restructure. Four scenes → three numbered phases. Less text per
+scene. Big "01 / 02 / 03" badges. Math chip explicitly distinguishes
+Cergio's 10% platform fee from the 7% referrer share, and calls out
+the 6-month cap window.
 
-The recommendations table's existing SELECT policy almost certainly
-gates on `auth.uid() = recommender_id` (standard "self-only" pattern).
-That means Tarik's authed session can only see HIS OWN recommendations,
-never the ones Alex / Sam / Connie wrote about Penny's service —
-even though the rows are in the DB.
+1. NEW PHASE STRUCTURE — 3 scenes, numbered
 
-Recommendations are essentially social-proof / marketing data — they're
-meant to be visible to potential consumers. Without a permissive read
-policy, the FriendAvatars stack + ConsumerPDP recommender panel
-always render empty for everyone except the recommender themselves.
+  01  INVITE     — invite friends · recommend services
+  02  EARN       — $250 per friend (10% Cergio fee → 7% to you, until
+                   $250 cap, accrues over 6 months)
+  03  EARN MORE  — Connector: barter spotlights ⇄ services + GPI
 
-Fix: the seed now appends a SQL block that creates a permissive
-`recommendations read all` policy via the Supabase Management API:
+Each scene now has a giant green "01/02/03" disc badge in the top-left
+of the SVG stage. The eye lands on the phase number first, then the
+headline, then the visual. Much less text per scene.
 
-  alter table recommendations enable row level security;
-  drop policy if exists "recommendations read all" on recommendations;
-  create policy "recommendations read all" on recommendations
-    for select using (true);
+  Scene 1 (Invite): You center, 4 friends radiating out via invite
+    arrows. No copy clutter — just the visual.
+  Scene 2 (Earn): You + Penny's Plumber tile ($300/job). Shows the
+    actual fee math inline: "7% of $300 = $21" pill, flowing into the
+    "+$250 cap per friend" landing pill. Footer line spells out the
+    6-month accrual explicitly.
+  Scene 3 (Earn more): Connector ⇄ Provider barter loop with spotlight
+    pill going one way + gift box ($1K-$10K/mo services) coming back.
+    GPI badge top-right. Combines the two upside paths into one scene.
 
-Safe because recommendations are public-by-design; write policies
-(insert/update) remain restrictive (auth.uid = recommender_id).
+2. ECONOMICS CONSTANTS — REWARDS, single source of truth
 
-ROOT CAUSE B — no seeded earnings rows
+Tarik flagged a conflation: "Cergio booking fee is 10%, we give 7% to
+referrers." Three new canonical fields:
 
-The Earnings tab was empty because the seed only created personas +
-services + recommendations, never earnings rows. No bookings have
-flowed money, so the ledger had nothing to render.
+  REWARDS.platformFeePercent      = 10   // Cergio's fee on every booking
+  REWARDS.referrerSharePercent    = 7    // share to the referrer
+  REWARDS.friendCapWindowMonths   = 6    // accrual window per friend
 
-Fix: seed now inserts 7 representative earnings rows so the Direct /
-Chain +5% tier pills render against real data:
+Every reference in the animation pulls from these — no hardcoded
+percentages or time windows. Locked by qa #31's new assertions
+(`platformFeePercent`, `referrerSharePercent`, `friendCapWindowMonths`
+must all appear in RewardFlowAnimation.jsx).
 
-  Tarik  $250   direct    "friend":"Alex"
-  Tarik  $250   direct    "friend":"Connie"
-  Tarik  $63    direct    "friend":"Sam"  (partial cap, mid-accumulation)
-  Tarik  $12.50 fof       "friend":"Sam->FriendA"
-  Tarik  $12.50 fof       "friend":"Sam->FriendB"
-  Connie $150   spotlight (instagram)
-  Penny  $279   booking   (Penny's Plumber, $300 booking minus 7% fee)
+3. TIMING — slowed for headline impact
 
-meta.tier carries 'direct' or 'fof' explicitly so the earningTier
-classifier uses the field directly (not the amount fallback). Re-running
-the seed is safe — `on conflict do nothing` covers the unique-by-id
-constraint and source_ids are generated per row via gen_random_uuid.
+Auto-advance bumped 5.5s → 7s per "slow down the animation". With
+less text per scene the eye has more room to land on the headline +
+badge; longer dwell lets that sink in.
 
-DIAGNOSTIC — fetchRecommendersByServiceId log
+4. CAPTION — headline-first
 
-Added a gated [CERGIO/recommenders] DevTools console log on the
-hydration helper. Surfaces: # services asked for, # rec rows received,
-error message, first 3 sample rows. Toggle off with
-`window.__cergioDiag = false`. Lets us catch RLS + seed-not-run
-issues immediately next time something looks empty.
+Old caption order: step number tag → title → body. New order: title
+(bigger, bolder, hits first) → math chip (green, the rule) → body
+(quiet gray context). The phase number is now in the SVG itself
+(big disc badge), so the caption doesn't repeat it.
 
-  src/lib/api.js
-    • Console diagnostic on fetchRecommendersByServiceId
+5. EarnExplainerScreen lede
 
-  Seed Money Flow Test Data.command
-    • New SQL block: recommendations RLS permissive read policy
-    • 7 sample earnings rows (direct + fof + spotlight + booking mix)
+Old: "The 4-step story of how the model works — direct cash, trust
+compounding, Connector barter, and Growth Participation."
+New: "Three phases: Invite, Earn, Earn More."
 
-TO VERIFY AFTER THIS PUSH:
-  1. Double-click "Seed Money Flow Test Data.command" (runs the new SQL)
-  2. Sign in as Tarik
-  3. Earnings tab → should show 5 referral rows with Direct / Chain +5% pills
-  4. Search "plumber Miami Beach" → Penny's card shows Alex/Sam/Connie avatars
-  5. Tap Penny's photo → PDP shows full avatar stack + blurb quotes
-  6. DevTools console will print [CERGIO/recommenders] with gotRows:3
+  src/lib/rewards.js
+    • +platformFeePercent (10) + referrerSharePercent (7) + friendCapWindowMonths (6)
+    • CERGIO-GUARD comment noting these MUST stay in sync with legal/
+      payments docs — never hardcode in copy
 
-QA: 39/39 pass (no new invariants — pure data-layer + seed fixes).
+  src/components/ui/RewardFlowAnimation.jsx (full v5 rewrite)
+    • 3 STEPS array with num: '01/02/03'
+    • New PhaseBadge / Avatar / CashPill / ProviderTile / GiftBox /
+      SpotlightPill / GpiBadge primitives
+    • Auto-advance 7s (was 5.5s)
+    • Caption order: title → math chip → body
+    • All numbers derived from REWARDS
+
+  src/screens/EarnExplainerScreen.jsx
+    • Lede updated to "Three phases" language
+
+  scripts/qa.mjs #31
+    • Locks the 3-phase structure (01/02/03 num literals)
+    • Locks REWARDS.platformFeePercent + referrerSharePercent +
+      friendCapWindowMonths must all be referenced from the animation —
+      catches a hardcoded-percentages regression at the gate
+
+QA: 39/39 pass.
 
 Files:
-  Seed Money Flow Test Data.command   (RLS fix + 7 earnings rows)
-  src/lib/api.js                       (diagnostic log on hydration)
+  src/lib/rewards.js                            (+3 canonical fields)
+  src/components/ui/RewardFlowAnimation.jsx     (v5 — 3 phases, headline-first)
+  src/screens/EarnExplainerScreen.jsx           (lede copy)
+  scripts/qa.mjs                                (#31 — 3-phase + fee/share/window guards)

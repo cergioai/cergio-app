@@ -56,6 +56,17 @@ export const REWARDS = {
   // 10 friends booking per month. This is the social-graph path to
   // Connector status (alongside influencer or local-biz paths).
   superUserFriendsPerMonth: 10,
+  // CERGIO-GUARD (2026-05-29): canonical economics — Cergio's platform
+  // fee is 10% of every booking. We share 7% with the referrer (the
+  // person who invited the booking customer), until they've earned
+  // $250 from that friend. Cap window: 6 months from the friend's
+  // signup. After that the friend is "settled" — no further per-
+  // booking accrual. These three numbers MUST stay in sync with the
+  // legal/payments documents — never hardcode them in copy or in the
+  // animation. Source of truth, full stop.
+  platformFeePercent:      10,
+  referrerSharePercent:    7,
+  friendCapWindowMonths:   6,
 };
 
 // ─── Hero one-liners (every CTA pulls from here) ───────────────────────────

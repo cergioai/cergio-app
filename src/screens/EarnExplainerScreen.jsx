@@ -31,9 +31,7 @@ export function EarnExplainerScreen() {
           How earnings work
         </h1>
         <p className="text-[13px] text-b3 leading-relaxed mt-2">
-          The 4-step story of how the model works — direct cash, trust
-          compounding, Connector barter, and Growth Participation. Tap
-          Next or watch it play.
+          Three phases: Invite, Earn, Earn More. Tap Next or watch it play.
         </p>
       </div>
 
