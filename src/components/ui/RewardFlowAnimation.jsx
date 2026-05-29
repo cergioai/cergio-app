@@ -1,246 +1,217 @@
-// CERGIO-GUARD (2026-05-29 v5): reward-flow animation, headline-first.
+// CERGIO-GUARD (2026-05-29 v6): reward-flow animation, simplified to two
+// scenes per Tarik's "clean it, present it simply" directive.
 //
-// Tarik's audit: "the 7% is confusing.. there's too much text.. it's
-// just not clear. Try numbering the phases 1-Invite 2-Earn 3-Barter
-// Earn More. Slow it down. Bring out the headline to hit harder."
+// Scene 1 — BENEFITS TABLE: side-by-side comparison of what a regular
+// User earns vs what a Connector earns. The table is the headline visual
+// because it answers the single biggest user question — "what do I
+// actually get?" — without any math at all. Connector is the LEAD
+// (left column) since that's the differentiator + upside path.
 //
-// Three scenes, each with a giant "01/02/03" badge + ONE headline +
-// minimal supporting visual. The math chip explicitly distinguishes
-// Cergio's 10% platform fee from the 7% share the referrer earns,
-// and calls out the 6-month cap window.
+// Scene 2 — THE MATH: how the $250 per friend actually accrues.
+// 7% of every booking is dim (it's the mechanism, not the headline);
+// $250 is the hero. Shows a concrete example: 3 friend-bookings of
+// $100/$200/$100 → $7+$14+$7 = $28 toward the $250 cap. Then the
+// scale punchline: 50 friends × $250 = $12,500.
 //
-//   01  INVITE      — invite friends, recommend services
-//   02  EARN        — $250 per friend (10% Cergio fee → 7% to you,
-//                     until cap, 6-month window)
-//   03  EARN MORE   — become a Connector: barter spotlights ↔ services,
-//                     plus Growth Participation Income
-//
-// Numbers come from REWARDS. No hardcoded $ values, percentages, or
-// time windows anywhere in this file.
+// All numbers from REWARDS. Auto-advance 8s per scene (slower than v5
+// per Tarik: "bring out the headline to hit harder"). Less text, bigger
+// visuals.
 
 import { useEffect, useRef, useState } from 'react';
-import { REWARDS } from '../../lib/rewards';
-
-const BENEFIT_CHIPS = {
-  invite: { label: 'Invite',     cls: 'bg-gl text-gd' },
-  earn:   { label: 'Earn',       cls: 'bg-gl text-gd' },
-  more:   { label: 'Earn more',  cls: 'bg-warnBg text-warnText' },
-};
+import { REWARDS, REWARD_COPY } from '../../lib/rewards';
 
 const STEPS = [
   {
     num: '01',
-    benefit: 'invite',
-    title: 'Invite friends. Recommend services.',
+    title: 'Two ways to earn.',
     body: () =>
-      `Share Cergio with friends you trust. Recommend a service — Plumber, Tutor, Cleaner, anything — by name or phone.`,
-    counter: { value: 'Step 1', sub: 'invite' },
-    math: 'Tap. Send. Done.',
+      `Anyone can invite friends. Connectors stack barter + Growth Participation on top.`,
   },
   {
     num: '02',
-    benefit: 'earn',
-    title: `Earn $${REWARDS.perFriend} per friend who books.`,
+    title: `$${REWARDS.perFriend} per friend — here's how.`,
     body: () =>
-      `Cergio charges a ${REWARDS.platformFeePercent}% booking fee. We share ${REWARDS.referrerSharePercent}% with you on every booking your friend makes, until you've earned $${REWARDS.perFriend} from that friend.`,
-    counter: { value: `$${REWARDS.perFriend}`, sub: 'per friend' },
-    math: `${REWARDS.referrerSharePercent}% of each booking → up to $${REWARDS.perFriend} (${REWARDS.friendCapWindowMonths}-month window)`,
-  },
-  {
-    num: '03',
-    benefit: 'more',
-    title: 'Earn more as a Connector.',
-    body: () =>
-      `Influencers, super-users, small businesses, and service providers trade Instagram + TikTok spotlights for $${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/month in free services. Plus Growth Participation Income as Cergio scales.`,
-    counter: { value: `$${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K`, sub: '/mo barter + GPI' },
-    math: 'Spotlight ⇄ free services + community-owned upside',
+      `${REWARDS.referrerSharePercent}% of every booking flows back to you, accruing until you've earned $${REWARDS.perFriend} from that friend (${REWARDS.friendCapWindowMonths}-month window). ${REWARDS.exampleFriends} friends × $${REWARDS.perFriend} = $${REWARDS.exampleTotal.toLocaleString()}.`,
   },
 ];
 
 // ─── Visual primitives ─────────────────────────────────────────────────────
 
-function PhaseBadge({ num }) {
+function PhaseBadge({ num, x = 32, y = 32 }) {
   return (
     <g className="rf-pop">
-      <circle cx={48} cy={48} r={32} fill="#2F6E00" />
-      <circle cx={48} cy={48} r={32} fill="none" stroke="#FFFFFF" strokeWidth={2} opacity={0.6} />
-      <text x={48} y={60} textAnchor="middle" fontSize="28" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">
+      <circle cx={x} cy={y} r={22} fill="#2F6E00" />
+      <text x={x} y={y + 7} textAnchor="middle" fontSize="18" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">
         {num}
       </text>
     </g>
   );
 }
 
-// Human avatar — gradient circle with initial inside + optional name label.
-function Avatar({ x, y, r = 22, gradientId = 'avYou', label = '', you = false, dim = false }) {
-  const initial = (label || '?')[0]?.toUpperCase();
+// Pill — small colored chip with text.
+function Pill({ x, y, text, tone = 'green', delay = 0 }) {
+  const palette = {
+    green:  { bg: '#2F6E00', fg: '#FFFFFF' },
+    amber:  { bg: '#F0A030', fg: '#FFFFFF' },
+    dark:   { bg: '#111114', fg: '#9BE53A' },
+    soft:   { bg: '#F3FFEA', fg: '#3D8B00' },
+  };
+  const c = palette[tone] || palette.green;
+  const w = text.length * 6.5 + 18;
   return (
-    <g opacity={dim ? 0.55 : 1}>
-      <circle
-        cx={x} cy={y} r={r}
-        fill={`url(#${gradientId})`}
-        stroke={you ? '#1F4F00' : '#FFFFFF'}
-        strokeWidth={you ? 2.5 : 1.8}
-      />
-      <text x={x} y={y + 5} textAnchor="middle" fontSize={r * 0.7} fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">
-        {initial}
+    <g className="rf-pop" style={{ animationDelay: `${delay}s` }}>
+      <rect x={x - w / 2} y={y - 9} width={w} height={18} rx={9} fill={c.bg} />
+      <text x={x} y={y + 4} textAnchor="middle" fontSize="10.5" fontWeight="800" fill={c.fg} fontFamily="system-ui">
+        {text}
       </text>
-      {label && (
-        <text x={x} y={y + r + 12} textAnchor="middle" fontSize="10" fontWeight="700" fill="#1A1A1A" fontFamily="system-ui">
-          {label}
-        </text>
-      )}
     </g>
   );
 }
 
-function Arrow({ d, color = '#3D8B00', dash = '3 3', strokeWidth = 1.4, opacity = 0.6 }) {
-  return <path d={d} stroke={color} strokeWidth={strokeWidth} fill="none" strokeDasharray={dash} opacity={opacity} />;
-}
-
-function CashPill({ x, y, text, delay = 0, big = false }) {
-  const w = text.length * (big ? 8 : 6) + (big ? 22 : 18);
-  const h = big ? 22 : 18;
-  const r = h / 2;
-  return (
-    <g className="rf-pop" style={{ animationDelay: `${delay}s`, transformOrigin: `${x}px ${y}px`, transformBox: 'view-box' }}>
-      <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={r} fill="#2F6E00" />
-      <text x={x} y={y + (big ? 5 : 4)} textAnchor="middle" fontSize={big ? 13 : 11} fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">{text}</text>
-    </g>
-  );
-}
-
-function ProviderTile({ x, y, title = 'Service', price = '' }) {
-  return (
-    <g className="rf-pop" style={{ animationDelay: '0.25s' }}>
-      <rect x={x - 50} y={y - 22} width={100} height={50} rx={6} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1.4} />
-      <polygon points={`${x - 52},${y - 22} ${x},${y - 32} ${x + 52},${y - 22}`} fill="#3D8B00" />
-      <text x={x} y={y - 4} textAnchor="middle" fontSize="11" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">{title}</text>
-      {price && (
-        <text x={x} y={y + 12} textAnchor="middle" fontSize="10" fontWeight="700" fill="#3D8B00" fontFamily="system-ui">{price}</text>
-      )}
-    </g>
-  );
-}
-
-function GiftBox({ x, y, caption, delay = 0 }) {
-  return (
-    <g className="rf-pop" style={{ animationDelay: `${delay}s` }}>
-      <rect x={x - 14} y={y - 10} width={28} height={20} rx={3} fill="#F0A030" />
-      <rect x={x - 14} y={y - 2} width={28} height={3} fill="#FFFFFF" opacity={0.9} />
-      <rect x={x - 1.5} y={y - 10} width={3} height={20} fill="#FFFFFF" opacity={0.9} />
-      {caption && (
-        <text x={x} y={y + 24} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#8A5A10" fontFamily="system-ui">{caption}</text>
-      )}
-    </g>
-  );
-}
-
-function SpotlightPill({ x, y, delay = 0 }) {
-  return (
-    <g className="rf-pop" style={{ animationDelay: `${delay}s` }}>
-      <rect x={x - 36} y={y - 9} width={72} height={18} rx={9} fill="#111114" />
-      <circle cx={x - 24} cy={y} r={3} fill="#9BE53A" />
-      <text x={x + 6} y={y + 4} textAnchor="middle" fontSize="10" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">Spotlight</text>
-    </g>
-  );
-}
-
-function GpiBadge({ x, y }) {
-  return (
-    <g className="rf-pop" style={{ animationDelay: '0.4s' }}>
-      <rect x={x - 36} y={y - 11} width={72} height={22} rx={11} fill="#2C5D21" />
-      <text x={x} y={y + 4} textAnchor="middle" fontSize="10" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">+ GPI</text>
-    </g>
-  );
-}
-
-// ─── Scenes ────────────────────────────────────────────────────────────────
+// ─── Scene 1: BENEFITS TABLE ───────────────────────────────────────────────
 
 function Scene1() {
-  // INVITE — You center, 4 friends radiating out via "Invite" arrows.
-  // Clean and visual; minimal labels.
-  const youX = 100, youY = 130;
-  const friends = [
-    { x: 240, y: 60,  grad: 'avFriend',    label: 'Jamie' },
-    { x: 280, y: 130, grad: 'avFof',       label: 'Alex' },
-    { x: 240, y: 200, grad: 'avConnector', label: 'Maya' },
-    { x: 170, y: 175, grad: 'avFriend',    label: '' },
+  // Two-column comparison table. Connector left (lead, accent green),
+  // User right (muted card). Four rows of benefits with concrete chips.
+  // Per Tarik: lead with Connectors since barter is the differentiator,
+  // and they get $250 CASH (not credit) + barter + GPI.
+  const colWidth = 168;
+  const rowHeight = 36;
+  const startY = 80;
+  const conX = 110;
+  const usrX = 290;
+
+  const rows = [
+    { label: 'per friend who books', con: `$${REWARDS.perFriendConnector} cash`, usr: `$${REWARDS.perFriendUser} credit` },
+    { label: 'free services from providers', con: REWARD_COPY.barterSoft, usr: '—' },
+    { label: 'spotlight income (IG / TikTok)', con: 'yes', usr: '—' },
+    { label: 'Growth Participation Income', con: 'higher score', usr: 'yes' },
   ];
+
   return (
     <>
       <PhaseBadge num="01" />
-      <Avatar x={youX} y={youY} r={32} gradientId="avYou" label="You" you />
-      {friends.map((fd, i) => (
-        <g key={`f-${i}`}>
-          <Arrow d={`M ${youX + 28} ${youY} Q ${(youX + fd.x) / 2} ${(youY + fd.y) / 2 - 20} ${fd.x - 18} ${fd.y}`} color="#3D8B00" opacity={0.5} />
-          <Avatar x={fd.x} y={fd.y} r={18} gradientId={fd.grad} label={fd.label} />
-        </g>
-      ))}
-      <text x={210} y={232} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3D8B00" fontFamily="system-ui">
-        invite → recommend
+
+      {/* column headers */}
+      <g className="rf-pop">
+        <rect x={conX - colWidth / 2} y={48} width={colWidth} height={24} rx={6} fill="#2F6E00" />
+        <text x={conX} y={64} textAnchor="middle" fontSize="13" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">
+          Connector
+        </text>
+      </g>
+      <g className="rf-pop" style={{ animationDelay: '0.15s' }}>
+        <rect x={usrX - colWidth / 2} y={48} width={colWidth} height={24} rx={6} fill="#F4F4F2" stroke="#E5E5E3" strokeWidth={1} />
+        <text x={usrX} y={64} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">
+          User
+        </text>
+      </g>
+
+      {/* rows */}
+      {rows.map((r, i) => {
+        const y = startY + i * rowHeight;
+        return (
+          <g key={`row-${i}`} className="rf-pop" style={{ animationDelay: `${0.3 + i * 0.15}s` }}>
+            {/* row background */}
+            <rect x={conX - colWidth / 2} y={y} width={colWidth} height={rowHeight - 4} rx={5} fill="#F3FFEA" stroke="#3D8B00" strokeWidth={0.8} opacity={0.95} />
+            <rect x={usrX - colWidth / 2} y={y} width={colWidth} height={rowHeight - 4} rx={5} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={0.8} />
+
+            {/* row label between columns — small italic */}
+            <text x={(conX + usrX) / 2} y={y + 13} textAnchor="middle" fontSize="8" fontWeight="700" fill="#7A7A7A" fontFamily="system-ui">
+              {r.label}
+            </text>
+
+            {/* Connector value — bold, green */}
+            <text x={conX} y={y + 25} textAnchor="middle" fontSize="11" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">
+              {r.con}
+            </text>
+
+            {/* User value — bold, dark */}
+            <text x={usrX} y={y + 25} textAnchor="middle" fontSize="11" fontWeight={r.usr === '—' ? '500' : '800'} fill={r.usr === '—' ? '#A0A0A2' : '#1A1A1A'} fontFamily="system-ui">
+              {r.usr}
+            </text>
+          </g>
+        );
+      })}
+
+      <text x={200} y={232} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
+        Both tiers earn — Connectors stack the most upside
       </text>
     </>
   );
 }
 
+// ─── Scene 2: THE MATH (7% accumulator + scale) ────────────────────────────
+
 function Scene2() {
-  // EARN — concrete service tile + cash flowing to You. Headline-driven.
-  // Math chip below the stage carries the 10%/7%/cap detail; visual stays
-  // simple so the eye lands on "$250".
+  // Show how $250 per friend ACCRUES via 7% of each booking. Three
+  // bookings shown ($100, $200, $100), each one's 7% slice flowing
+  // into an accumulator counter on the right. Bottom punchline:
+  // 50 friends × $250 = $12,500.
+  //
+  // 7% is intentionally rendered SMALLER + GRAY (the mechanism); $250
+  // is BIG + GREEN (the hero) — per Tarik "dim the 7%."
+
   return (
     <>
       <PhaseBadge num="02" />
-      <Avatar x={100} y={140} r={34} gradientId="avYou" label="You" you />
-      <ProviderTile x={290} y={140} title="Penny's Plumber" price={`$300 / job`} />
 
-      <Arrow d="M 138 140 Q 195 130 240 140" strokeWidth={1.6} />
-      <text x={195} y={120} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui">friend books</text>
+      {/* header strip — what the scene is showing */}
+      <text x={200} y={32} textAnchor="middle" fontSize="11" fontWeight="700" fill="#7A7A7A" fontFamily="system-ui">
+        Friend books a service · you earn {REWARDS.referrerSharePercent}% per booking
+      </text>
 
-      <CashPill x={195} y={82} text={`${REWARDS.referrerSharePercent}% of $300 = $21`} delay={0.55} />
+      {/* Three booking rows — each: provider tile + 7% slice → accumulator */}
+      {(() => {
+        const bookings = [
+          { amt: 100, slice: 7  },
+          { amt: 200, slice: 14 },
+          { amt: 100, slice: 7  },
+        ];
+        const startY = 64;
+        const rowH   = 40;
+        return bookings.map((b, i) => {
+          const y = startY + i * rowH;
+          return (
+            <g key={`b-${i}`} className="rf-pop" style={{ animationDelay: `${0.3 + i * 0.55}s` }}>
+              {/* booking tile (left) */}
+              <rect x={36} y={y - 12} width={92} height={26} rx={5} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1} />
+              <text x={82} y={y + 5} textAnchor="middle" fontSize="11.5" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">
+                Booking ${b.amt}
+              </text>
 
-      <Arrow d="M 165 90 Q 130 90 105 100" />
+              {/* arrow */}
+              <path d={`M 132 ${y} L 168 ${y}`} stroke="#3D8B00" strokeWidth={1.4} fill="none" strokeDasharray="3 3" opacity={0.55} />
+              <polygon points={`168,${y - 3} 172,${y} 168,${y + 3}`} fill="#3D8B00" opacity={0.6} />
 
-      <CashPill x={100} y={82} text={`+$${REWARDS.perFriend}`} delay={1.0} big />
-      <text x={100} y={108} textAnchor="middle" fontSize="9" fontWeight="700" fill="#3D8B00" fontFamily="system-ui">cap per friend</text>
+              {/* 7% slice pill — DIM (per Tarik) */}
+              <Pill x={208} y={y} text={`+$${b.slice}`} tone="soft" delay={0.3 + i * 0.55} />
 
-      <text x={210} y={232} textAnchor="middle" fontSize="10" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
-        accrues over {REWARDS.friendCapWindowMonths} months until $${REWARDS.perFriend} cap is reached
+              {/* arrow */}
+              <path d={`M 230 ${y} L 268 ${y}`} stroke="#3D8B00" strokeWidth={1.4} fill="none" strokeDasharray="3 3" opacity={0.55} />
+              <polygon points={`268,${y - 3} 272,${y} 268,${y + 3}`} fill="#3D8B00" opacity={0.6} />
+
+              {/* running total this row contributes to */}
+              <text x={310} y={y - 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="#7A7A7A" fontFamily="system-ui">
+                accumulator
+              </text>
+              <text x={310} y={y + 9} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">
+                ${[7, 21, 28][i]} / ${REWARDS.perFriend}
+              </text>
+            </g>
+          );
+        });
+      })()}
+
+      {/* footer punchline — the $12,500 takeaway */}
+      <rect x={32} y={200} width={336} height={26} rx={6} fill="#F3FFEA" stroke="#3D8B00" strokeWidth={1} />
+      <text x={200} y={218} textAnchor="middle" fontSize="13" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">
+        {REWARDS.exampleFriends} friends × ${REWARDS.perFriend} = ${REWARDS.exampleTotal.toLocaleString()}
       </text>
     </>
   );
 }
 
-function Scene3() {
-  // EARN MORE — barter loop (Connector ⇄ Provider) + GPI badge. Combines
-  // the two upside paths into one "you can earn more as a Connector" scene.
-  return (
-    <>
-      <PhaseBadge num="03" />
-
-      {/* Connector left */}
-      <Avatar x={130} y={150} r={32} gradientId="avConnector" label="Connector" />
-
-      {/* Provider right */}
-      <ProviderTile x={310} y={150} title="Service provider" price="" />
-
-      {/* TOP arrow Connector → Provider: spotlight */}
-      <Arrow d="M 162 125 Q 220 95 280 122" color="#F0A030" strokeWidth={1.8} opacity={0.7} />
-      <SpotlightPill x={220} y={92} delay={0.55} />
-
-      {/* BOTTOM arrow Provider → Connector: services */}
-      <Arrow d="M 280 178 Q 220 210 162 178" color="#3D8B00" strokeWidth={1.8} opacity={0.7} />
-      <GiftBox x={220} y={196} caption={`$${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/mo services`} delay={1.0} />
-
-      {/* GPI badge — community upside */}
-      <GpiBadge x={310} y={55} />
-
-      <text x={220} y={150} textAnchor="middle" fontSize="11" fontWeight="800" fill="#8A5A10" fontFamily="system-ui">⇄ barter</text>
-    </>
-  );
-}
-
-const SCENES = [Scene1, Scene2, Scene3];
+const SCENES = [Scene1, Scene2];
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -249,21 +220,19 @@ export function RewardFlowAnimation() {
   const [auto, setAuto] = useState(true);
   const timerRef = useRef(null);
 
-  // CERGIO-GUARD (2026-05-29): auto-advance bumped 5.5s → 7s per Tarik:
-  // "slow down the animation and bring out the headline to hit harder."
-  // With less text per scene the eye has more room to land on the
-  // headline + badge; longer dwell lets that sink in.
+  // CERGIO-GUARD (2026-05-29): auto-advance 8s — slow enough that the
+  // table + math each get a full read. v5 was 7s, v6 needs more for the
+  // table (more text to scan).
   useEffect(() => {
     if (!auto) return;
     timerRef.current = setTimeout(() => {
       setStep((s) => (s < STEPS.length - 1 ? s + 1 : s));
-    }, 7000);
+    }, 8000);
     return () => clearTimeout(timerRef.current);
   }, [step, auto]);
 
   const s = STEPS[step];
   const Scene = SCENES[step];
-  const chip = BENEFIT_CHIPS[s.benefit];
 
   const next   = () => { setAuto(false); setStep((v) => Math.min(STEPS.length - 1, v + 1)); };
   const prev   = () => { setAuto(false); setStep((v) => Math.max(0, v - 1)); };
@@ -271,46 +240,12 @@ export function RewardFlowAnimation() {
 
   return (
     <div className="px-1">
-      {/* Top bar — benefit chip + counter */}
-      <div className="flex justify-between items-center px-3.5 py-2 mb-2 rounded-[10px] bg-bg5/60">
-        <span className={`text-[10.5px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-pill ${chip.cls}`}>
-          {chip.label}
-        </span>
-        <span className="flex items-baseline gap-1.5">
-          <span key={`v-${step}`} className="text-[16px] font-extrabold text-black rf-tick tabular-nums">
-            {s.counter.value}
-          </span>
-          <span className="text-[10px] text-b3 font-medium">{s.counter.sub}</span>
-        </span>
-      </div>
-
-      {/* Stage */}
+      {/* Stage — no chrome above (the badge inside the SVG is the chrome) */}
       <div
         className="w-full rounded-[14px] overflow-hidden"
-        style={{ height: 240, background: 'linear-gradient(180deg, #F3F8FF 0%, #FFF9EA 65%, #F1EFE8 100%)' }}
+        style={{ height: 250, background: 'linear-gradient(180deg, #F3F8FF 0%, #FFF9EA 65%, #F1EFE8 100%)' }}
       >
         <svg viewBox="0 0 400 250" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="avYou" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%"   stopColor="#5BC404" />
-              <stop offset="100%" stopColor="#2F6E00" />
-            </linearGradient>
-            <linearGradient id="avFriend" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%"   stopColor="#8A6FD6" />
-              <stop offset="100%" stopColor="#4F3DB0" />
-            </linearGradient>
-            <linearGradient id="avFof" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%"   stopColor="#F5A65E" />
-              <stop offset="100%" stopColor="#C76A18" />
-            </linearGradient>
-            <linearGradient id="avConnector" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%"   stopColor="#EE5586" />
-              <stop offset="100%" stopColor="#A52454" />
-            </linearGradient>
-          </defs>
-
-          <line x1={20} y1={210} x2={380} y2={210} stroke="#5C3A14" strokeWidth={0.8} opacity={0.25} />
-
           <g key={`scene-${step}`}>
             <Scene />
           </g>
@@ -319,9 +254,8 @@ export function RewardFlowAnimation() {
 
       {/* Caption — headline-first, minimal body */}
       <div className="py-3 px-1">
-        <p className="text-[15px] font-extrabold text-black mt-1 leading-tight">{s.title}</p>
-        <p className="text-[11.5px] text-gd font-bold mt-1 leading-snug">{s.math}</p>
-        <p className="text-[11.5px] text-b3 mt-1.5 leading-snug">{s.body()}</p>
+        <p className="text-[16px] font-extrabold text-black leading-tight">{s.title}</p>
+        <p className="text-[12px] text-b3 mt-1.5 leading-snug">{s.body()}</p>
       </div>
 
       {/* Controls */}

@@ -31,7 +31,7 @@ export function EarnExplainerScreen() {
           How earnings work
         </h1>
         <p className="text-[13px] text-b3 leading-relaxed mt-2">
-          Three phases: Invite, Earn, Earn More. Tap Next or watch it play.
+          What you earn as a User vs a Connector — and how the math adds up.
         </p>
       </div>
 

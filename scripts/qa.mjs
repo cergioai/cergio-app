@@ -1046,24 +1046,31 @@ test('reward-flow-embedded', 'RewardFlowAnimation component exists + EarnExplain
   const cmp = readFile('src/components/ui/RewardFlowAnimation.jsx');
   assert(/export function RewardFlowAnimation/.test(cmp),
     'src/components/ui/RewardFlowAnimation.jsx must export RewardFlowAnimation.');
-  // v5 (2026-05-29): 3-scene model — 01 Invite, 02 Earn, 03 Earn More.
-  // Headline-first, with explicit 10%/7%/6-month math chip on Scene 2.
-  assert(/num:\s*['"]01['"]/.test(cmp) && /num:\s*['"]02['"]/.test(cmp) && /num:\s*['"]03['"]/.test(cmp),
-    'Animation must define exactly three phases: 01, 02, 03.');
-  // Scene 1 — Invite. Headline must mention invite + recommend.
-  assert(/Invite friends/i.test(cmp) && /Recommend services/i.test(cmp),
-    'Scene 1 (Invite) must mention "Invite friends" and "Recommend services".');
-  // Scene 2 — Earn. Math chip MUST reference both the platform fee and
-  // the referrer share — Tarik's "7% is confusing" fix lives or dies here.
-  assert(/platformFeePercent/.test(cmp) && /referrerSharePercent/.test(cmp),
-    'Scene 2 (Earn) must derive the fee + share from REWARDS — never hardcode the numbers.');
+  // v6 (2026-05-29): 2-scene model — 01 Benefits Table, 02 The Math.
+  // Connector LEADS in the table (left column), User RIGHT. Both tiers'
+  // earnings shown explicitly so users see the credit-vs-cash distinction.
+  assert(/num:\s*['"]01['"]/.test(cmp) && /num:\s*['"]02['"]/.test(cmp),
+    'Animation must define exactly two phases: 01, 02.');
+  // Scene 1 — Benefits table. Connector column must lead with cash payout
+  // and User column must show credit-not-cash. Tarik's: "show normal users
+  // get 250 but credit not cash".
+  assert(/perFriendConnector/.test(cmp) && /perFriendUser/.test(cmp),
+    'Scene 1 must reference BOTH perFriendConnector and perFriendUser from REWARDS.');
+  assert(/cash/.test(cmp) && /credit/.test(cmp),
+    'Scene 1 must surface the "cash" vs "credit" distinction.');
+  // Scene 2 — Math. Must reference the platform fee + referrer share + 6m
+  // window (the canonical economics — keeps the 7% / 10% distinction live).
+  assert(/referrerSharePercent/.test(cmp),
+    'Scene 2 must derive the referrer share % from REWARDS — never hardcode.');
   assert(/friendCapWindowMonths/.test(cmp),
-    'Scene 2 (Earn) must surface the 6-month cap window from REWARDS.');
-  // Scene 3 — Earn More. Both upside paths (barter + GPI) must appear.
-  assert(/spotlights?/i.test(cmp) && /barter/i.test(cmp),
-    'Scene 3 (Earn more) must include the Connector barter story.');
-  assert(/Growth Participation/.test(cmp),
-    'Scene 3 (Earn more) must include Growth Participation Income (GPI).');
+    'Scene 2 must surface the 6-month cap window from REWARDS.');
+  // The compounding $12,500 example is the punchline footer of Scene 2.
+  assert(/exampleFriends/.test(cmp) && /exampleTotal/.test(cmp),
+    'Scene 2 footer must reference REWARDS.exampleFriends + exampleTotal (the 50 → $12,500 punchline).');
+  // Soft barter language (Tarik: "the estimated 1-10K is an estimate, say
+  // thousands of $$ worth, tens of free services").
+  assert(/barterSoft/.test(cmp),
+    'Animation must use REWARD_COPY.barterSoft (not the precise 1K-10K range) on the benefits table.');
 
   const screen = readFile('src/screens/EarnExplainerScreen.jsx');
   assert(/import\s*\{\s*RewardFlowAnimation\s*\}\s*from/.test(screen),

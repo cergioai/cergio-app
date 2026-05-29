@@ -777,7 +777,7 @@ export function ResultsScreen() {
           <div className="mx-5 my-4 bg-cr2 border border-bdr rounded-[16px] px-4 py-3">
             <p className="text-[13px] font-bold text-black leading-tight">{headline}</p>
             <p className="text-[11px] text-b3 mt-0.5 leading-snug font-normal">
-              We'll send them your request prefilled. You earn ${REWARDS.perFriendUser} when any friend joins.
+              We'll send them your request prefilled. You earn up to ${REWARDS.perFriendUser} when a friend joins + books.
             </p>
             <div className="mt-2.5 bg-white border border-bdr rounded-[10px] px-2.5 py-1.5 text-[11px] text-b3 leading-snug">
               {shareMsg}

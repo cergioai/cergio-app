@@ -102,7 +102,14 @@ export const REWARD_COPY = {
   friendOfFriendShort:   `+${REWARDS.friendOfFriendPercent}% ($${REWARDS.friendOfFriendBonus}) when your friends bring in friends`,
 
   // Connector barter — providers trade free services for IG/TikTok
-  // spotlights. Always quoted as a range so users see the upside.
+  // spotlights. The numeric range ($1K-$10K/mo) is an estimate, not a
+  // guarantee. Per Tarik (2026-05-29): soften the precision in user-
+  // facing copy ("thousands of $$ worth, tens of free services/mo")
+  // while keeping the precise range available for surfaces that need it
+  // (Connector apply page, marketing). barterSoft is the new default
+  // for everyday surfaces; connectorBarterShort/OneLine keep the
+  // precise range for high-intent ones.
+  barterSoft:             `thousands of $$ in free services (tens per month)`,
   connectorBarterShort:  `$${(REWARDS.connectorBarterMin/1000)}K–$${(REWARDS.connectorBarterMax/1000)}K/mo in free services`,
   connectorBarterOneLine: `Providers trade $${(REWARDS.connectorBarterMin/1000)}K–$${(REWARDS.connectorBarterMax/1000)}K/month in free services for Instagram + TikTok spotlights — barter, not cash.`,
 
