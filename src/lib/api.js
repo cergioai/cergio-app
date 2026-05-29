@@ -313,6 +313,19 @@ async function fetchRecommendersByServiceId(serviceIds) {
     .select('id, service_id, recommender_id, message, created_at')
     .in('service_id', serviceIds)
     .order('created_at', { ascending: false });
+  // CERGIO-DIAG (gated): surfaces in DevTools when something's off —
+  // e.g. RLS blocking reads, or seed not yet run. Toggle off with
+  // window.__cergioDiag = false. Logs to help debug "No mutual friends"
+  // on cards even when the seed claims to have written rows.
+  if (typeof window !== 'undefined' && window.__cergioDiag !== false) {
+    // eslint-disable-next-line no-console
+    console.log('[CERGIO/recommenders]', {
+      askedFor: serviceIds.length,
+      gotRows:  recs?.length || 0,
+      error:    error?.message || null,
+      sample:   (recs || []).slice(0, 3),
+    });
+  }
   if (error || !recs?.length) return {};
   const profileIds = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
   let profMap = {};

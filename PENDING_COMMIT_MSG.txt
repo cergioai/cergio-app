@@ -1,106 +1,80 @@
-Recommend service-type field + Consumer PDP + Earnings degree-of-separation
+Fix: friends-on-search invisible to Tarik (RLS) + Earnings empty (no seed rows)
 
-Three audit slices in one push. The Recommend gap (no service-type
-field), the missing Consumer PDP screen (the "Jennifer Leighton" view
-in the Figma reference), and the missing degree-of-separation on the
-earnings ledger.
+Tarik tested live: Penny's card showed "No mutual friends yet" even
+though recommendations were seeded, and Earnings was empty. Two
+distinct causes — both fixed by re-running Seed Money Flow Test Data.
 
-1. RECOMMEND — service-type field
+ROOT CAUSE A — recommendations RLS too restrictive
 
-Tarik: "this is missing the service type (plumber etc) field."
+The recommendations table's existing SELECT policy almost certainly
+gates on `auth.uid() = recommender_id` (standard "self-only" pattern).
+That means Tarik's authed session can only see HIS OWN recommendations,
+never the ones Alex / Sam / Connie wrote about Penny's service —
+even though the rows are in the DB.
 
-The unified Recommend form had Name / Phone / Email / Blurb but no
-field for WHAT was being recommended — sent the recipient a generic
-"a service on Cergio" blurb with no category.
+Recommendations are essentially social-proof / marketing data — they're
+meant to be visible to potential consumers. Without a permissive read
+policy, the FriendAvatars stack + ConsumerPDP recommender panel
+always render empty for everyone except the recommender themselves.
 
-Fix: new "What service are you recommending?" input above the recipient
-section, with a 16-entry datalist (Plumber, Tutor, Cleaner, Photographer,
-Hairstylist, Pet Sitter, Mover, etc). Required to submit.
+Fix: the seed now appends a SQL block that creates a permissive
+`recommendations read all` policy via the Supabase Management API:
 
-  • Passes through to notify-user data.service_title so the email/SMS
-    reads naturally: "Maya recommends Plumber: …" instead of
-    "Maya recommends a service on Cergio: …"
-  • Prepended to the saved recommendations.message: "[Plumber] blurb…"
-  • Submit button label adapts: "Pick a service type first" before the
-    type is filled in
+  alter table recommendations enable row level security;
+  drop policy if exists "recommendations read all" on recommendations;
+  create policy "recommendations read all" on recommendations
+    for select using (true);
 
-  src/screens/RecommendServiceFormScreen.jsx
-    • New serviceType state + validation
-    • Inline datalist for autocomplete suggestions
+Safe because recommendations are public-by-design; write policies
+(insert/update) remain restrictive (auth.uid = recommender_id).
 
-2. CONSUMER PDP — ServiceDetailScreen (audit slice 2)
+ROOT CAUSE B — no seeded earnings rows
 
-Audit (2026-05-29) found there was no consumer service-detail screen.
-ResultsScreen jumped straight to /booking — skipping the trust step
-entirely. New screen at /service/:serviceId.
+The Earnings tab was empty because the seed only created personas +
+services + recommendations, never earnings rows. No bookings have
+flowed money, so the ledger had nothing to render.
 
-Layout (matches the Figma reference):
-  • Header: back + share
-  • Cover image (or gradient fallback) — same cover_url path as cards
-  • Title row: provider name + category + price
-  • Recommended-by panel: avatar stack ("Recommended by Alex, Sam and 1 more")
-    + 3 italic blurb rows with the recommender's display name
-  • About this service
-  • Fixed-bottom Book CTA — reuses the existing handleBook flow
+Fix: seed now inserts 7 representative earnings rows so the Direct /
+Chain +5% tier pills render against real data:
 
-Fast-path: ResultsScreen passes the full provider object +
-recommenders via location.state so the PDP renders instantly without
-a re-fetch. Cold-deep-link fallback queries services + recommendations
-+ profiles by id.
+  Tarik  $250   direct    "friend":"Alex"
+  Tarik  $250   direct    "friend":"Connie"
+  Tarik  $63    direct    "friend":"Sam"  (partial cap, mid-accumulation)
+  Tarik  $12.50 fof       "friend":"Sam->FriendA"
+  Tarik  $12.50 fof       "friend":"Sam->FriendB"
+  Connie $150   spotlight (instagram)
+  Penny  $279   booking   (Penny's Plumber, $300 booking minus 7% fee)
 
-  src/screens/ServiceDetailScreen.jsx       (new — 220 lines)
-    • AvatarStack primitive (overflow chip for >4 recommenders)
-    • Cold-fallback Supabase fetch joining services → recommendations → profiles
-    • Same brand gradient pool as the rest of the app
+meta.tier carries 'direct' or 'fof' explicitly so the earningTier
+classifier uses the field directly (not the amount fallback). Re-running
+the seed is safe — `on conflict do nothing` covers the unique-by-id
+constraint and source_ids are generated per row via gen_random_uuid.
 
-  src/components/ui/ProviderCard.jsx
-    • New onOpen prop. Photo tap → onOpen (PDP); Book button → onBook
-      (fast-path to /booking — unchanged for users who already know
-      they want to book)
+DIAGNOSTIC — fetchRecommendersByServiceId log
 
-  src/screens/ResultsScreen.jsx
-    • serviceToProvider also passes recommendersRaw through so the PDP
-      can render the avatar stack from the same data
-    • ProviderCard wired with onOpen={p => navigate(`/service/${p.id}`, {state})}
+Added a gated [CERGIO/recommenders] DevTools console log on the
+hydration helper. Surfaces: # services asked for, # rec rows received,
+error message, first 3 sample rows. Toggle off with
+`window.__cergioDiag = false`. Lets us catch RLS + seed-not-run
+issues immediately next time something looks empty.
 
-  src/App.jsx
-    • New /service/:serviceId route → <ServiceDetailScreen />
+  src/lib/api.js
+    • Console diagnostic on fetchRecommendersByServiceId
 
-3. EARNINGS — degree-of-separation pill per row (audit slice 3)
+  Seed Money Flow Test Data.command
+    • New SQL block: recommendations RLS permissive read policy
+    • 7 sample earnings rows (direct + fof + spotlight + booking mix)
 
-Audit found the earnings ledger merged direct $250-track payouts and
-friend-of-friend $12.50 chain bonuses into identical-looking rows.
-Now each referral row carries a small tier pill:
+TO VERIFY AFTER THIS PUSH:
+  1. Double-click "Seed Money Flow Test Data.command" (runs the new SQL)
+  2. Sign in as Tarik
+  3. Earnings tab → should show 5 referral rows with Direct / Chain +5% pills
+  4. Search "plumber Miami Beach" → Penny's card shows Alex/Sam/Connie avatars
+  5. Tap Penny's photo → PDP shows full avatar stack + blurb quotes
+  6. DevTools console will print [CERGIO/recommenders] with gotRows:3
 
-  Direct       — green pill (bg-gl / text-gd) — full $250-track payout
-  Chain +5%   — amber pill (bg-warnBg / text-warnText) — FoF bonus
-
-Classifier (earningTier(e)) prefers meta.tier if the stripe-webhook
-writes it; falls back to an amount heuristic (≤$50 → chain). Spotlights
-+ bookings render no tier pill (not applicable to those kinds).
-
-  src/screens/EarningsScreen.jsx
-    • earningTier helper
-    • Per-row pill rendered next to the title
-
-4. GUARDRAILS
-
-  scripts/qa.mjs #38 pdp-wired
-    • Locks the ServiceDetailScreen export, AvatarStack render,
-      Supabase cold-fallback to recommendations table, handleBook
-      reuse, App.jsx route, and ResultsScreen onOpen wiring
-
-  scripts/qa.mjs #39 earnings-tier
-    • Locks the earningTier classifier + render path + user-visible
-      "Direct" / "Chain +5%" labels
-
-QA: 39/39 pass (+2 new invariants, zero regressions).
+QA: 39/39 pass (no new invariants — pure data-layer + seed fixes).
 
 Files:
-  src/screens/RecommendServiceFormScreen.jsx   (service-type field)
-  src/screens/ServiceDetailScreen.jsx          (new — Consumer PDP)
-  src/components/ui/ProviderCard.jsx           (onOpen prop)
-  src/screens/ResultsScreen.jsx                (recommendersRaw + onOpen wiring)
-  src/screens/EarningsScreen.jsx               (earningTier + per-row pill)
-  src/App.jsx                                  (/service/:serviceId route)
-  scripts/qa.mjs                               (+#38 pdp-wired, +#39 earnings-tier)
+  Seed Money Flow Test Data.command   (RLS fix + 7 earnings rows)
+  src/lib/api.js                       (diagnostic log on hydration)
