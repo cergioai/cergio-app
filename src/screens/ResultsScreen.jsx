@@ -69,15 +69,28 @@ function buildStatusSteps(providerType) {
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 
 // Map a Supabase service row → the shape ProviderCard expects.
-// friendDisplayName is the signed-in user's friend who "owns" this
-// provider (i.e. they follow them); pass null when there's no friend
-// link so the card renders "No mutual friends yet".
+// `friendDisplayName` is the legacy "owner is your friend" hint (kept
+// as a fallback). `recommenders` is the real data — list of profiles
+// who actually recommended this service, hydrated by listServices.
+// Both feed the `friends` array that FriendAvatars renders.
 function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null) {
   // pick the default offering (or first) for headline price
   const offering = svc.offerings?.find(o => o.is_default) || svc.offerings?.[0];
   const cents    = offering?.price_cents ?? 0;
   const price    = Math.round(cents / 100);
   const savings  = budgetCents && budgetCents > 0 ? Math.round((budgetCents - cents) / 100) : 0;
+
+  // CERGIO-GUARD (2026-05-29): friends array now comes from the
+  // recommendations table via listServices' new hydration step. Each
+  // entry is a real profile.display_name. If the service has no recs,
+  // fall back to the legacy "you follow this owner" hint (still useful
+  // for surfacing services owned by people in your network).
+  const recoNames = Array.isArray(svc.recommenders)
+    ? svc.recommenders.map(r => r.name).filter(Boolean)
+    : [];
+  const friends = recoNames.length > 0
+    ? recoNames
+    : (friendDisplayName ? [friendDisplayName] : []);
 
   return {
     id:          svc.id,
@@ -88,13 +101,9 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null) {
     category:    svc.category || 'Service',
     bio:         svc.description || '',
     price:       price || 0,
-    recos:       svc.rating_count || 0,
+    recos:       (svc.recommenders?.length) || svc.rating_count || 0,
     connectors:  0,
-    // CERGIO-GUARD: friends array drives the "Reco'd by …" line on the
-    // card. Populated from the network table — if the signed-in user
-    // follows this provider, they're treated as the reco source. When
-    // we have richer friend-of-friend data we can extend this.
-    friends:     friendDisplayName ? [friendDisplayName] : [],
+    friends,
     savings:     savings,
     pick:        idx === 0,        // first real listing gets the Cergio Pick badge
     photoClass:  svc.photo_class || PHOTO_FALLBACKS[idx % 3],

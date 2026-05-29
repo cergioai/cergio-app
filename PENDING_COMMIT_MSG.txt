@@ -1,0 +1,72 @@
+Friends-on-search: real recommender avatars on results cards
+
+Audit (2026-05-29) flagged that ResultsScreen has a FriendAvatars
+component but the `friends` array was never populated from real data —
+it was either empty or held a single hardcoded "a friend" placeholder.
+First slice of the audit follow-up: wire the full path so search
+results actually show stacked avatars of friends + Connectors who
+recommended the service.
+
+End-to-end shape now:
+
+  seed     →  recommendations rows linking friends → services
+  query    →  listServices joins recommendations + profiles
+  render   →  ResultsScreen.serviceToProvider maps to friends[]
+  avatars  →  FriendAvatars stacks up to 3 initials per card
+
+1. SEED — Seed Money Flow Test Data.command
+
+Extended the existing persona seed to give Tarik (root) a real
+network and to write 3 recommendations on Penny's plumber service:
+
+  Tarik  ←→  Alex    (direct friend, 1st degree)
+  Alex   ←→  Sam      (Sam = Tarik's friend-of-friend, 2nd degree)
+  Tarik  ←→  Connie   (Connector in Tarik's circle)
+
+  Penny's plumber service is now recommended by Alex, Sam, AND Connie —
+  three real recommendations rows with realistic blurbs. After re-running
+  the seed, "plumber" search returns Penny's card with all three avatars.
+
+2. QUERY — src/lib/api.js fetchRecommendersByServiceId helper
+
+  Two-query path: pull recommendations rows by service_id, then pull
+  display_names from profiles. Avoids relying on a PostgREST foreign-key
+  join that recommendations.recommender_id (→ auth.users) doesn't expose.
+  Result is a { [service_id]: [{id, name, message, created_at}] } map.
+
+  listServices now stitches `recommenders: [...]` onto each service row
+  in BOTH branches (proximity + plain). Empty array (no rows for that
+  service) still renders the calm "No mutual friends yet" empty state.
+
+3. RENDER — src/screens/ResultsScreen.jsx serviceToProvider
+
+  Maps svc.recommenders → friends array. Falls back to the legacy
+  single-friend hint (friendDisplayName) only when no recommendations
+  exist for that service.
+
+  recos count now reads from recommenders length too — so the card
+  badge "Reco'd by 3 friends" reflects real attribution, not just
+  rating_count.
+
+4. GUARDRAIL — scripts/qa.mjs #37 recommenders-hydration
+
+  Locks the full contract:
+    • api.js MUST define fetchRecommendersByServiceId
+    • listServices MUST call it in BOTH branches (regex counts ≥2)
+    • ResultsScreen.serviceToProvider MUST read svc.recommenders
+    • The Array.isArray(svc.recommenders) guard must be present
+
+To VERIFY locally:
+  1. Run Seed Money Flow Test Data.command (re-runnable; idempotent)
+  2. Sign in as Tarik
+  3. Search "plumber Miami Beach"
+  4. Penny's card should show 3 stacked initials (A, S, C) +
+     "Reco'd by Alex, Sam, Connie"
+
+QA: 37/37 pass (+#37 recommenders-hydration, zero regressions).
+
+Files:
+  Seed Money Flow Test Data.command        (friendships + 3 recommendations)
+  src/lib/api.js                            (fetchRecommendersByServiceId + 2 hydration calls)
+  src/screens/ResultsScreen.jsx             (serviceToProvider reads svc.recommenders)
+  scripts/qa.mjs                            (+#37 recommenders-hydration)

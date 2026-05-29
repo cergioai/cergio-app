@@ -297,6 +297,46 @@ export async function deleteService(serviceId) {
  *     lat?: number, lng?: number, radiusMiles?: number,
  *     limit?: number }
  */
+// CERGIO-GUARD (2026-05-29): hydrate recommenders for a list of service
+// IDs. Two-query path: pull recommendations rows, then pull display_names
+// from profiles. Avoids relying on a PostgREST foreign-key join that
+// recommendations.recommender_id (→ auth.users) doesn't expose. The
+// result is a { [service_id]: [{id, name, message, created_at}] } map
+// that listServices stitches onto each service row as `recommenders`.
+//
+// ResultsScreen → ProviderCard renders the avatar stack from these.
+// Empty array (no rows for that service) renders "No mutual friends yet".
+async function fetchRecommendersByServiceId(serviceIds) {
+  if (!supabaseReady || !serviceIds?.length) return {};
+  const { data: recs, error } = await supabase
+    .from('recommendations')
+    .select('id, service_id, recommender_id, message, created_at')
+    .in('service_id', serviceIds)
+    .order('created_at', { ascending: false });
+  if (error || !recs?.length) return {};
+  const profileIds = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
+  let profMap = {};
+  if (profileIds.length) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', profileIds);
+    profMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+  }
+  const map = {};
+  for (const r of recs) {
+    if (!r.service_id) continue;
+    const p = profMap[r.recommender_id];
+    (map[r.service_id] ||= []).push({
+      id:         r.recommender_id,
+      name:       p?.display_name || 'A friend',
+      message:    r.message,
+      created_at: r.created_at,
+    });
+  }
+  return map;
+}
+
 export async function listServices({
   category = null,
   offering_id = null,
@@ -423,6 +463,11 @@ export async function listServices({
     }
     // Budget + freeOnly still apply (real, user-controlled filters).
     filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly });
+    // Hydrate recommenders so ResultsScreen + PDP can render avatars.
+    if (filtered.length) {
+      const recoMap = await fetchRecommendersByServiceId(filtered.map(s => s.id));
+      filtered = filtered.map(s => ({ ...s, recommenders: recoMap[s.id] || [] }));
+    }
     return { data: filtered, error: null };
   }
 
@@ -467,6 +512,11 @@ export async function listServices({
   // offerings join is already loaded so the filter is cheap.
   if (res.data) {
     res.data = applyMatchingFilters(res.data, { maxBudgetCents, freeOnly, originalQuery });
+  }
+  // Hydrate recommenders so ResultsScreen + PDP can render avatars.
+  if (res.data && res.data.length > 0) {
+    const recoMap = await fetchRecommendersByServiceId(res.data.map(s => s.id));
+    res.data = res.data.map(s => ({ ...s, recommenders: recoMap[s.id] || [] }));
   }
   return res;
 }

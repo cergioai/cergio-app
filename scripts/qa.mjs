@@ -1274,6 +1274,34 @@ test('actor-noun-integration', 'Actor-noun queries always pass the chat-reply ga
     `Actor-noun queries that would fall into the "What service do you need?" empty state — ${fails.length} of ${cases.length} failed:\n  ${fails.join('\n  ')}`);
 });
 
+// ─── INVARIANT #37: listServices hydrates recommenders, Results renders ─
+// Audit (2026-05-29) found the FriendAvatars stack on ResultsScreen
+// existed but the `friends` array was never populated from real data.
+// listServices now hydrates each service with a `recommenders` array
+// pulled from the recommendations table joined to profile.display_name.
+// ResultsScreen maps recommenders → friends so the avatar stack renders.
+// This invariant locks the contract on both sides.
+test('recommenders-hydration', 'listServices hydrates recommenders + ResultsScreen renders them as friend avatars', '#37', async () => {
+  const api = readFile('src/lib/api.js');
+  const apiCode = stripComments(api);
+  assert(/async function fetchRecommendersByServiceId/.test(apiCode),
+    'api.js must define fetchRecommendersByServiceId helper.');
+  // Both listServices branches (proximity + plain) must hydrate.
+  const hydrationCalls = apiCode.match(/await fetchRecommendersByServiceId\(/g) || [];
+  assert(hydrationCalls.length >= 2,
+    `listServices must call fetchRecommendersByServiceId in BOTH branches (proximity + plain). Found ${hydrationCalls.length} call sites.`);
+
+  const screen = readFile('src/screens/ResultsScreen.jsx');
+  const screenCode = stripComments(screen);
+  // serviceToProvider must derive friends from svc.recommenders, not just
+  // the legacy single-friend hint. The mapping below is the canonical
+  // shape — recoNames built from svc.recommenders.
+  assert(/svc\.recommenders/.test(screenCode),
+    'ResultsScreen.serviceToProvider must read svc.recommenders to populate friends.');
+  assert(/recoNames\s*=\s*Array\.isArray\(svc\.recommenders\)/.test(screenCode),
+    'ResultsScreen must derive recoNames from Array.isArray(svc.recommenders).');
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are
