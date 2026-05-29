@@ -36,6 +36,21 @@ const BOOKING_KINDS   = new Set(['booking']);
 function isReferralKind(k) { return REFERRAL_KINDS.has(k); }
 function isBookingKind(k)  { return BOOKING_KINDS.has(k); }
 
+// CERGIO-GUARD (2026-05-29): tier classification for referral earnings.
+// 'direct'  — you invited the friend who booked (full $250-track payout)
+// 'chain'   — friend-of-friend bonus (+5%, $12.50 per chain extension)
+// Prefer the meta.tier field if the stripe-webhook writes it; fall back
+// to amount-based heuristic (FoF bonuses are always $50 or less). This
+// is what powers the per-row tier pill on the Referrals tab. Returns
+// null for non-referral rows (spotlight payouts + bookings render plain).
+function earningTier(e) {
+  if (e.kind !== 'invite') return null;
+  if (e.meta?.tier === 'fof' || e.meta?.tier === 'friend_of_friend') return 'chain';
+  if (e.meta?.tier === 'direct') return 'direct';
+  const cents = e.amount_cents || 0;
+  return cents <= 5000 ? 'chain' : 'direct';
+}
+
 export function EarningsScreen() {
   const navigate = useNavigate();
   const { showToast, auth, serviceMode } = useOutletContext();
@@ -251,13 +266,28 @@ export function EarningsScreen() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-extrabold text-black leading-tight">
-                        {e.kind === 'spotlight'
-                          ? `${(e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram')} spotlight`
-                          : e.kind === 'booking'
-                          ? 'Service booking'
-                          : 'Friend referral'}
-                      </p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-[14px] font-extrabold text-black leading-tight">
+                          {e.kind === 'spotlight'
+                            ? `${(e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram')} spotlight`
+                            : e.kind === 'booking'
+                            ? 'Service booking'
+                            : 'Friend referral'}
+                        </p>
+                        {/* CERGIO-GUARD: degree-of-separation pill so users
+                            see which payouts are direct ($250-track) vs
+                            friend-of-friend chain bonus ($12.50). */}
+                        {(() => {
+                          const tier = earningTier(e);
+                          if (!tier) return null;
+                          return (
+                            <span className={`text-[9.5px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-pill
+                              ${tier === 'direct' ? 'bg-gl text-gd' : 'bg-warnBg text-warnText'}`}>
+                              {tier === 'direct' ? 'Direct' : 'Chain +5%'}
+                            </span>
+                          );
+                        })()}
+                      </div>
                       <p className="text-[11px] text-b3 mt-0.5">
                         {timeAgo(e.created_at)} · {e.status === 'cleared' ? 'cleared' : e.status}
                       </p>

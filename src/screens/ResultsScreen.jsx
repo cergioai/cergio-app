@@ -104,6 +104,10 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null) {
     recos:       (svc.recommenders?.length) || svc.rating_count || 0,
     connectors:  0,
     friends,
+    // Full recommenders (id+name+message+created_at) for the PDP screen.
+    // ResultsScreen card uses `friends` (just names); PDP uses this richer
+    // shape to render the avatar stack + blurb quotes.
+    recommendersRaw: Array.isArray(svc.recommenders) ? svc.recommenders : [],
     savings:     savings,
     pick:        idx === 0,        // first real listing gets the Cergio Pick badge
     photoClass:  svc.photo_class || PHOTO_FALLBACKS[idx % 3],
@@ -627,12 +631,16 @@ export function ResultsScreen() {
       })()}
 
       {/* cards — only when we have real Supabase rows AND the narrated
-          loading sequence has completed (so cards don't pop in too fast). */}
+          loading sequence has completed (so cards don't pop in too fast).
+          onOpen → consumer PDP (/service/:id) with full provider + recommenders
+          passed via location.state for instant render. Book CTA still goes
+          straight to handleBook. */}
       {!isLoading && providers.length > 0 && providers.map(p => (
         <ProviderCard
           key={p.id}
           provider={p}
           onBook={handleBook}
+          onOpen={(prov) => navigate(`/service/${prov.id}`, { state: { provider: prov } })}
           onSave={() => showToast('Saved ♥')}
         />
       ))}

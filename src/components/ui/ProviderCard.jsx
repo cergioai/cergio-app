@@ -45,7 +45,7 @@ function FriendAvatars({ friends }) {
   );
 }
 
-export function ProviderCard({ provider, onBook, onSave }) {
+export function ProviderCard({ provider, onBook, onSave, onOpen }) {
   const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl } = provider;
 
   const recoText = () => {
@@ -54,6 +54,13 @@ export function ProviderCard({ provider, onBook, onSave }) {
     const rmStr = connectors > 0 ? ` and ${connectors} Connectors` : '';
     return `Reco'd by ${fStr}${rmStr}`;
   };
+
+  // CERGIO-GUARD (2026-05-29): photo tap now opens the PDP (provider
+  // detail) screen instead of jumping straight to booking. The Book
+  // button below remains the fast-path for users who already know they
+  // want to book. Falls back to onBook if onOpen isn't wired (legacy
+  // mock-data demo flow).
+  const handleOpen = () => (onOpen ? onOpen(provider) : onBook(provider));
 
   return (
     <div className="mb-5">
@@ -64,7 +71,7 @@ export function ProviderCard({ provider, onBook, onSave }) {
       <div
         className={`relative mx-4 h-[210px] rounded-2xl overflow-hidden cursor-pointer
                     ${coverUrl ? 'bg-bg5' : (PHOTO_BG[photoClass] || PHOTO_BG['fv-jamie'])}`}
-        onClick={() => onBook(provider)}
+        onClick={handleOpen}
       >
         {coverUrl && (
           <img

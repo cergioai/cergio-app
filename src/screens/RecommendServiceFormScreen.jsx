@@ -85,11 +85,20 @@ export function RecommendServiceFormScreen() {
     nameRef.current?.focus();
   };
 
+  // CERGIO-GUARD (2026-05-29): service type the user is recommending
+  // (Plumber, Tutor, Cleaner, ...). User caught this gap — the form
+  // sent the recipient a generic "a service on Cergio" blurb without
+  // saying WHAT was being recommended. Free text; passed through to
+  // notify-user data.service_title so the email/SMS reads naturally,
+  // and prepended to the saved message so the recommendations row
+  // carries the context.
+  const [serviceType, setServiceType] = useState('');
+
   // Blurb state.
   const [blurb, setBlurb] = useState('');
   const [busy, setBusy]   = useState(false);
   const hasContact  = isPlausiblePhone(phone) || isPlausibleEmail(email);
-  const valid       = name.trim().length > 0 && hasContact && blurb.trim().length > 0;
+  const valid       = name.trim().length > 0 && hasContact && blurb.trim().length > 0 && serviceType.trim().length > 0;
   const remaining   = Math.max(0, 280 - blurb.length);
 
   // ── Contact Picker API — Chrome Android + iOS PWA only. Pulls real
@@ -131,13 +140,14 @@ export function RecommendServiceFormScreen() {
         email: isPlausibleEmail(email) ? email.trim() : undefined,
         phone: isPlausiblePhone(phone) ? phone.trim() : undefined,
       };
+      const svcType = serviceType.trim();
       const { error } = await notifyUser({
         event: 'service_recommended',
         recipient,
         data: {
           recommender_name: auth?.user?.user_metadata?.display_name || 'A friend',
           recommender_id:   auth?.user?.id || '',
-          service_title:    'a service on Cergio',
+          service_title:    svcType || 'a service on Cergio',
           // CERGIO-GUARD: deep_link MUST be the inviter's tracked URL so
           // the recipient's signup → first booking credits this user.
           deep_link:        buildInviteUrl(auth?.user?.id),
@@ -153,6 +163,11 @@ export function RecommendServiceFormScreen() {
       // effort — if it fails (RLS/schema drift), the email was still
       // sent. qa #27 statically enforces this insert exists.
       if (supabaseReady && auth?.user?.id) {
+        // Prepend the service type to the saved message so the
+        // recommendations row carries the context. Format: "[Plumber] blurb…"
+        const messagePersist = svcType
+          ? `[${svcType}] ${blurb.trim()}`
+          : blurb.trim();
         const { error: recoErr } = await supabase
           .from('recommendations')
           .insert({
@@ -160,7 +175,7 @@ export function RecommendServiceFormScreen() {
             inviter_id:      auth.user.id,
             recipient_phone: recipient.phone || null,
             service_id:      null,
-            message:         blurb.trim(),
+            message:         messagePersist,
           });
         if (recoErr) {
           // eslint-disable-next-line no-console
@@ -233,6 +248,40 @@ export function RecommendServiceFormScreen() {
           </button>
         </div>
       )}
+
+      {/* ── Step 1.5: what kind of service are you recommending? ─────────── */}
+      <div className="px-5 mb-3">
+        <label className="block text-[12px] font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
+          What service are you recommending?
+        </label>
+        <input
+          type="text"
+          value={serviceType}
+          onChange={e => setServiceType(e.target.value)}
+          list="reco-service-types"
+          placeholder="Plumber, Tutor, Cleaner, Photographer…"
+          className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3 text-[14px]
+                     text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+        />
+        <datalist id="reco-service-types">
+          <option value="House Cleaner" />
+          <option value="Plumber" />
+          <option value="Electrician" />
+          <option value="Handyman" />
+          <option value="Babysitter" />
+          <option value="Nanny" />
+          <option value="Tutor" />
+          <option value="Personal Trainer" />
+          <option value="Hairstylist" />
+          <option value="Massage Therapist" />
+          <option value="Photographer" />
+          <option value="Personal Chef" />
+          <option value="Dog Walker" />
+          <option value="Pet Sitter" />
+          <option value="Gardener" />
+          <option value="Mover" />
+        </datalist>
+      </div>
 
       {/* ── Step 2: recipient — unified pick-or-type ───────────────────────── */}
       <div className="px-5 mb-3">
@@ -351,9 +400,11 @@ export function RecommendServiceFormScreen() {
             ? 'Sending…'
             : valid
               ? `Send to ${name.trim().split(' ')[0]}`
-              : (name.trim() && !hasContact)
-                ? 'Add a phone or email'
-                : 'Fill in the form to send'}
+              : !serviceType.trim()
+                ? 'Pick a service type first'
+                : (name.trim() && !hasContact)
+                  ? 'Add a phone or email'
+                  : 'Fill in the form to send'}
         </button>
       </div>
     </div>

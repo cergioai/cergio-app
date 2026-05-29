@@ -1302,6 +1302,77 @@ test('recommenders-hydration', 'listServices hydrates recommenders + ResultsScre
     'ResultsScreen must derive recoNames from Array.isArray(svc.recommenders).');
 });
 
+// ─── INVARIANT #38: ServiceDetailScreen (PDP) wired + renders recommenders ─
+// Audit slice 2 (2026-05-29). The consumer PDP — the "Jennifer Leighton"
+// view in the Figma reference — was missing. ResultsScreen jumped
+// straight to /booking, skipping the trust step. New ServiceDetailScreen
+// at /service/:serviceId renders provider + avatar stack of recommenders
+// + Book CTA. ProviderCard photo tap → /service/:id; Book button stays
+// fast-path to /booking. This invariant locks the full wiring.
+test('pdp-wired', 'ServiceDetailScreen renders recommender stack + ResultsScreen onOpen routes to it', '#38', async () => {
+  const pdp = readFile('src/screens/ServiceDetailScreen.jsx');
+  const pdpCode = stripComments(pdp);
+  assert(/export function ServiceDetailScreen/.test(pdpCode),
+    'src/screens/ServiceDetailScreen.jsx must export ServiceDetailScreen.');
+  // Must read recommenders from location.state.provider.recommendersRaw
+  // (fast path) AND have a Supabase fallback for cold deep links.
+  assert(/recommendersRaw/.test(pdpCode),
+    'PDP must consume provider.recommendersRaw from location.state for instant render.');
+  assert(/AvatarStack/.test(pdpCode),
+    'PDP must define + render an AvatarStack primitive for the recommenders.');
+  // Cold-deep-link fallback — must fetch recommendations + profiles when
+  // there is no seeded state. Locks against someone "simplifying" by
+  // removing the fallback (which would 404 every /service/:id deep link).
+  assert(/from\(['"]recommendations['"]\)[\s\S]{0,200}service_id/.test(pdpCode),
+    'PDP cold-fallback must query the recommendations table by service_id.');
+  // The Book CTA must reuse the existing handleBook flow.
+  assert(/handleBook\(provider\)/.test(pdpCode),
+    'PDP Book CTA must call handleBook(provider) so the existing booking flow is reused.');
+
+  const app = readFile('src/App.jsx');
+  assert(/path="\/service\/:serviceId"/.test(app),
+    'App.jsx must register the /service/:serviceId route.');
+  assert(/<ServiceDetailScreen\s*\/>/.test(app),
+    'App.jsx must render <ServiceDetailScreen />.');
+
+  const results = readFile('src/screens/ResultsScreen.jsx');
+  const resultsCode = stripComments(results);
+  // stripComments replaces backticked template literals with "" — so we
+  // check the raw source for the /service/ URL substring, and the
+  // comment-stripped source for the onOpen + recommendersRaw wiring.
+  assert(/onOpen=/.test(resultsCode),
+    'ResultsScreen ProviderCard must wire an onOpen prop.');
+  assert(/\/service\//.test(results),
+    'ResultsScreen must navigate to /service/ (the PDP route).');
+  assert(/recommendersRaw/.test(resultsCode),
+    'ResultsScreen serviceToProvider must pass recommendersRaw through to the PDP.');
+});
+
+// ─── INVARIANT #39: Earnings shows degree-of-separation per row ─────────
+// Audit slice 3 (2026-05-29). The earnings ledger merged direct $250
+// payouts and friend-of-friend $12.50 bonuses into identical-looking
+// rows. Now each referral row carries a small tier pill (Direct / Chain
+// +5%) so users see which degree each dollar came from. Prefers
+// meta.tier when the stripe-webhook writes it; falls back to an
+// amount-based heuristic (≤$50 → chain). Spotlights + bookings render
+// no tier pill (not applicable).
+test('earnings-tier', 'EarningsScreen surfaces direct vs friend-of-friend tier per row', '#39', async () => {
+  const src = readFile('src/screens/EarningsScreen.jsx');
+  const code = stripComments(src);
+
+  assert(/function\s+earningTier\s*\(/.test(code),
+    'EarningsScreen must define earningTier(e) classifying invite rows as direct vs chain.');
+  // Both tier values must be reachable from the classifier.
+  assert(/return\s+['"]chain['"]/.test(code) && /return\s+['"]direct['"]/.test(code),
+    'earningTier must return both "direct" and "chain" tiers.');
+  // The render path must call earningTier and pill it.
+  assert(/earningTier\(e\)/.test(code),
+    'EarningsScreen render must call earningTier(e) per row.');
+  // User-visible labels.
+  assert(/Direct/.test(code) && /Chain \+5%/.test(code),
+    'Tier pill labels "Direct" and "Chain +5%" must be present.');
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are

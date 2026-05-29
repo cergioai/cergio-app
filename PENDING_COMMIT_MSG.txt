@@ -1,76 +1,106 @@
-Animation v4: $250 hero + concrete service + influencer fan-out + SP→Connector
+Recommend service-type field + Consumer PDP + Earnings degree-of-separation
 
-Tarik: "the 7% is confusing.. make sure users know it's 250 per friend
-(but up to 7% each booking... they keep earning til they get 250 per
-friend as friends book or are booked). Also show that 2nd degree can be
-many many people (especially for influencers). Add a service being
-recommended (tutor, plumber). And add to connectors that service
-providers can too become connectors."
+Three audit slices in one push. The Recommend gap (no service-type
+field), the missing Consumer PDP screen (the "Jennifer Leighton" view
+in the Figma reference), and the missing degree-of-separation on the
+earnings ledger.
 
-Three rebalances in this push:
+1. RECOMMEND — service-type field
 
-1. SCENE 1 — $250 leads, 7% is the mechanism
+Tarik: "this is missing the service type (plumber etc) field."
 
-Old chip read "7% fee × every booking, up to $250" — putting the
-mechanism BEFORE the headline number. New chip reads "$250 per friend
-(7% per booking, until cap)" — $250 leads, 7% explains how.
+The unified Recommend form had Name / Phone / Email / Blurb but no
+field for WHAT was being recommended — sent the recipient a generic
+"a service on Cergio" blurb with no category.
 
-Visual changes:
-  • Concrete service tile: "Penny's Plumber · $300/job" (instead of
-    abstract "$300 clean") so users see what's actually being recommended
-  • 7% slice pill renamed "7% per booking" so the accumulation story is
-    legible at a glance
-  • Big "+$250" landing pill on You + small "cap per friend" label
-  • Footer pulled the compounding aspiration back IN (it was only
-    removed from Home as too sales-pitchy; on an educational screen,
-    "50 friends × $250 = $12,500" is exactly the takeaway we want)
+Fix: new "What service are you recommending?" input above the recipient
+section, with a 16-entry datalist (Plumber, Tutor, Cleaner, Photographer,
+Hairstylist, Pet Sitter, Mover, etc). Required to submit.
 
-  Title: "Earn $250 per friend who books."
-  Body: now mentions both directions — "when your friend books OR
-    someone books them" — matches the provider-tier income story too
+  • Passes through to notify-user data.service_title so the email/SMS
+    reads naturally: "Maya recommends Plumber: …" instead of
+    "Maya recommends a service on Cergio: …"
+  • Prepended to the saved recommendations.message: "[Plumber] blurb…"
+  • Submit button label adapts: "Pick a service type first" before the
+    type is filled in
 
-2. SCENE 2 — fan-out replaces the 3-person chain
+  src/screens/RecommendServiceFormScreen.jsx
+    • New serviceType state + validation
+    • Inline datalist for autocomplete suggestions
 
-Old: simple You → Jamie → Alex chain with two coin arrows. Read as
-"one friend-of-friend, +$12.50, done." Underweighted the actual
-viral upside.
+2. CONSUMER PDP — ServiceDetailScreen (audit slice 2)
 
-New: radial fan-out — You at center, 4 named 1st-degree friends
-radiating out, each with a cluster of 5 small 2nd-degree dots
-streaming out from THEM. 24 visible 2nd-tier people on screen with
-"1 → 10 → 100+" side-callout. Communicates "this compounds fast for
-influencers" instantly.
+Audit (2026-05-29) found there was no consumer service-detail screen.
+ResultsScreen jumped straight to /booking — skipping the trust step
+entirely. New screen at /service/:serviceId.
 
-  Coin pill: "+$12.50 × many"
-  Title: "Friends invite friends — chain grows fast."
-  Side-callout (top-right): "Influencer chain: 1 → 10 → 100+"
+Layout (matches the Figma reference):
+  • Header: back + share
+  • Cover image (or gradient fallback) — same cover_url path as cards
+  • Title row: provider name + category + price
+  • Recommended-by panel: avatar stack ("Recommended by Alex, Sam and 1 more")
+    + 3 italic blurb rows with the recommender's display name
+  • About this service
+  • Fixed-bottom Book CTA — reuses the existing handleBook flow
 
-3. SCENE 3 — service providers added to the Connector list
+Fast-path: ResultsScreen passes the full provider object +
+recommenders via location.state so the PDP renders instantly without
+a re-fetch. Cold-deep-link fallback queries services + recommendations
++ profiles by id.
 
-Per Tarik's add: "service providers can too become connectors."
-Updated Scene 3 body:
+  src/screens/ServiceDetailScreen.jsx       (new — 220 lines)
+    • AvatarStack primitive (overflow chip for >4 recommenders)
+    • Cold-fallback Supabase fetch joining services → recommendations → profiles
+    • Same brand gradient pool as the rest of the app
 
-  Old: "Influencers, super-users, and small businesses become Connectors."
-  New: "Influencers, super-users, small businesses — and service
-       providers themselves — become Connectors."
+  src/components/ui/ProviderCard.jsx
+    • New onOpen prop. Photo tap → onOpen (PDP); Book button → onBook
+      (fast-path to /booking — unchanged for users who already know
+      they want to book)
 
-  src/components/ui/RewardFlowAnimation.jsx (v4 rebalance)
-    • STEPS[0] title/body/math rewrite — $250-led
-    • STEPS[1] title/body/math rewrite — many-2nd-tier framing
-    • STEPS[2] body adds "service providers" to the Connector list
-    • Scene1: concrete Penny's Plumber tile + "7% per booking" pill +
-      big +$250 hero + 50-friend example footer
-    • Scene2: replaced static 3-person chain with radial fan-out
-      primitive (5 1st-degree + 5×5 = 25 2nd-degree dots)
-    • Math chip text updated to lead with $250 (not 7%)
+  src/screens/ResultsScreen.jsx
+    • serviceToProvider also passes recommendersRaw through so the PDP
+      can render the avatar stack from the same data
+    • ProviderCard wired with onOpen={p => navigate(`/service/${p.id}`, {state})}
 
-  scripts/qa.mjs #31
-    • Title regex loosened — now accepts both "friend invites a friend"
-      and "friends invite friends" plus chain/2nd-tier/friend-of-friend
-      keywords. Locks the intent without locking exact wording.
+  src/App.jsx
+    • New /service/:serviceId route → <ServiceDetailScreen />
 
-QA: 37/37 pass.
+3. EARNINGS — degree-of-separation pill per row (audit slice 3)
+
+Audit found the earnings ledger merged direct $250-track payouts and
+friend-of-friend $12.50 chain bonuses into identical-looking rows.
+Now each referral row carries a small tier pill:
+
+  Direct       — green pill (bg-gl / text-gd) — full $250-track payout
+  Chain +5%   — amber pill (bg-warnBg / text-warnText) — FoF bonus
+
+Classifier (earningTier(e)) prefers meta.tier if the stripe-webhook
+writes it; falls back to an amount heuristic (≤$50 → chain). Spotlights
++ bookings render no tier pill (not applicable to those kinds).
+
+  src/screens/EarningsScreen.jsx
+    • earningTier helper
+    • Per-row pill rendered next to the title
+
+4. GUARDRAILS
+
+  scripts/qa.mjs #38 pdp-wired
+    • Locks the ServiceDetailScreen export, AvatarStack render,
+      Supabase cold-fallback to recommendations table, handleBook
+      reuse, App.jsx route, and ResultsScreen onOpen wiring
+
+  scripts/qa.mjs #39 earnings-tier
+    • Locks the earningTier classifier + render path + user-visible
+      "Direct" / "Chain +5%" labels
+
+QA: 39/39 pass (+2 new invariants, zero regressions).
 
 Files:
-  src/components/ui/RewardFlowAnimation.jsx   (v4 — Scene 1+2 rewrites, Scene 3 SP add)
-  scripts/qa.mjs                              (#31 pattern loosened)
+  src/screens/RecommendServiceFormScreen.jsx   (service-type field)
+  src/screens/ServiceDetailScreen.jsx          (new — Consumer PDP)
+  src/components/ui/ProviderCard.jsx           (onOpen prop)
+  src/screens/ResultsScreen.jsx                (recommendersRaw + onOpen wiring)
+  src/screens/EarningsScreen.jsx               (earningTier + per-row pill)
+  src/App.jsx                                  (/service/:serviceId route)
+  scripts/qa.mjs                               (+#38 pdp-wired, +#39 earnings-tier)
