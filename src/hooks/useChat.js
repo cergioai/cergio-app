@@ -528,8 +528,17 @@ export function useChat() {
         userInput, finalLocalPT, resolver.provider_type);
     }
 
+    // CERGIO-GUARD (2026-05-28): when the cloud parser fails to extract
+    // `what` (typos, actor-nouns like "houskeeper", short prompts) but
+    // the local taxonomy DID resolve a provider_type, backfill `what`
+    // from the provider_type so the bot-reply logic below doesn't fall
+    // into the "What service do you need?" empty state. Real bug from
+    // user tab: "need houskeeper under 200" resolved to "House Cleaner"
+    // locally but Claude returned what=null → empty-state loop.
+    const whatFromTaxonomy = (!fields.what && !prevState.what && mergedProviderType) ? mergedProviderType : null;
+
     const merged = {
-      what:           fields.what          ?? prevState.what          ?? null,
+      what:           fields.what          ?? prevState.what          ?? whatFromTaxonomy ?? null,
       when:           fields.when          ?? prevState.when          ?? null,
       where:          fields.where         ?? prevState.where         ?? null,
       budget:         fields.budget        ?? prevState.budget        ?? null,
@@ -548,9 +557,14 @@ export function useChat() {
 
     // Build a clean bot reply locally — no offering names, no field
     // dumps. Just the next thing we need from the user, or "all set".
+    // CERGIO-GUARD: a resolved provider_type is enough to know what
+    // service the user wants, even if `what` (free-text) is empty.
+    // Don't ask "What service do you need?" when local taxonomy already
+    // pinned the provider type.
     const whenSatisfied = !!merged.when || !!merged.flexible_time;
+    const whatKnown     = !!merged.what || !!merged.provider_type;
     let reply;
-    if (!merged.what) {
+    if (!whatKnown) {
       reply = "What service do you need? (e.g. plumber, sitter, cleaner, tutor…)";
     } else if (!whenSatisfied) {
       reply = "When do you need this? A date, time window, or just \"flexible\" works.";

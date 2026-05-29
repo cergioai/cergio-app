@@ -1,49 +1,102 @@
-Reward-flow animation embedded as /earnings/how + qa #31
+Animation v2 (cash/trust/barter/GPI) + Super User 10/mo + houskeeper fix
 
-User wanted the 6-step business-model explainer rendered as a real
-screen, not just a widget preview in chat.
+Three fixes in one push driven by Tarik's UX review of the freshly-shipped
+/earnings/how screen, the Connector copy, and a real search-tab regression.
 
-WHAT SHIPPED
+1. REWARD-FLOW ANIMATION v2 — explains the business model, not the garden
 
-  src/components/ui/RewardFlowAnimation.jsx (new)
-    React port of the chat widget. Self-contained:
-      • Counter at top — "Your network earnings" — ticks on step change
-      • SVG scene that grows: sprouts emerge, rain falls when revenue
-        lands, fruits appear, trees mature when Connector mode kicks in,
-        orchard at the end
-      • Caption (step num + title + body) under the scene
-      • Controls: Back / progress bar / Next / (auto-replay at end)
-      • Auto-advances 4.5s per step; manual control pauses auto-advance
-    Reads all numbers from REWARDS so per-friend ($250), friend-of-
-    friend ($12.50 = 5%), and Jamie example (50 friends → $12.5K)
-    stay canonical.
+The 6-step "garden grows" was pretty but didn't TEACH the model. Rewrote
+as 4 mechanism-named steps. Sprouts now represent PEOPLE; vines are the
+trust network; coins are direct cash; gift boxes are barter; the orchard
+is community growth. Each step shows ONE benefit, with a colored chip and
+a top-right counter that locks the dollar amount in the eye:
 
-  src/index.css
-    New keyframes for rf-drop (rain), rf-fruit (bobble), rf-pop
-    (coin entrance), rf-sway/-b/-c/-d (per-age sprout sway), rf-tick
-    (counter update flicker). All scoped under rf- so they can't
-    collide with the existing cg-* leaf animations.
+  Step 1 — DIRECT CASH        — You invite, friend books, you earn 7% up to $250
+  Step 2 — TRUST + NETWORK    — Friend invites friend → +5% ($12.50) compounds
+                                 50 friends → $12,500
+  Step 3 — BARTER             — Connectors trade IG/TikTok spotlights for
+                                 $1K–$10K/month in free services from providers
+  Step 4 — GROWTH PARTICIPATION — Community-owned upside as Cergio scales
+                                 Tagline: Human-Powered AI · Shared Prosperity
+
+  src/components/ui/RewardFlowAnimation.jsx  (rewritten)
+    • 4 inline scene functions (Scene1..Scene4)
+    • Sprout-as-person Sprout primitive + Vine connector + GiftBox +
+      CameraBadge + SocialPills + GrowthCurve
+    • Counter shows $-amount + sub-label per step (e.g. "+$250 / cap per friend")
+    • Benefit chip swaps color per step (green / green / amber / dark-green)
+    • Each step re-keys the SVG <g> so rf-pop entrances retrigger cleanly
+    • All numbers read from REWARDS — no hardcoded $ values
 
   src/screens/EarnExplainerScreen.jsx
-    Animation embedded at the top of the body. Existing copy
-    (7% fee, "the model", "example", Growth Participation Income
-    teaser, mission tagline) tightened so the animation does the
-    heavy lifting and the prose is the footnote.
+    • Lede now says "4-step story", lists the four mechanism names
 
   scripts/qa.mjs #31
-    Locks:
-      • RewardFlowAnimation export exists in the expected file
-      • All 6 steps are present (Step 1..6, friend-of-friend, Connector)
-      • EarnExplainerScreen imports + renders it
+    • Updated to lock the 4-step arc + barter + GPI + Human-Powered AI tagline
 
-  qa.mjs: 31/31 pass.
+2. SUPER USER THRESHOLD — 10 friends/month, not 5 in 30 days
 
-ANY CALL SITE CAN EMBED IT
-  Drop <RewardFlowAnimation /> anywhere — Home invite popup, onboarding
-  walkthrough, marketing landing — same component, same numbers.
+Tarik corrected the Connector definition: a Cergio Super User is someone
+with 10 friends BOOKING per month — not 5 invited+booking in 30 days.
+Made it canonical in REWARDS so it can never drift again.
+
+  src/lib/rewards.js
+    • REWARDS.superUserFriendsPerMonth = 10
+    • Header comment updated
+
+  src/screens/RainmakerApplyScreen.jsx
+    • Super User card desc pulled from REWARDS.superUserFriendsPerMonth
+
+  src/screens/ProfileScreen.jsx
+    • Connector popup "Super users" bullet now reads the canonical number
+
+3. BARTER RANGE — $1K–$10K/mo also canonical
+
+While we were in rewards.js, added REWARDS.connectorBarterMin/Max and a
+matching REWARD_COPY.connectorBarterShort / connectorBarterOneLine so the
+animation, RainmakerApply, and any future barter-themed surface all pull
+from one place.
+
+  src/lib/rewards.js
+    • connectorBarterMin: 1000, connectorBarterMax: 10000
+    • connectorBarterShort: "$1K–$10K/mo in free services"
+    • connectorBarterOneLine: full explainer
+
+4. SEARCH BUG — "need houskeeper under 200" returned empty state
+
+Tarik's tab: "need houskeeper under 200" produced "What service do you
+need? (e.g. plumber, sitter, cleaner, tutor…)" — even though local
+taxonomy DOES resolve "houskeeper" → "House Cleaner" via the fuzzy
+fallback (distance 1, well within threshold).
+
+Root cause: useChat's bot-reply branch keyed on `merged.what` alone.
+Claude's cloud parser returned what=null (typo + actor-noun confused it);
+the LOCAL override at line ~520 correctly set provider_type, but the
+reply logic ignored it and fell into the empty-state path.
+
+  src/hooks/useChat.js
+    • Backfill merged.what from mergedProviderType when cloud parser
+      returns null but local taxonomy resolved
+    • Bot-reply gate now checks `merged.what || merged.provider_type`
+      so a resolved provider type is enough to skip the empty-state prompt
+
+  scripts/qa.mjs #29 (search-tolerance)
+    • +5 cases locking actor-noun typos:
+        'houskeeper'                  → House Cleaner
+        'need houskeeper under 200'   → House Cleaner   (user's exact phrase)
+        'housekeping under 200'       → House Cleaner
+        'plummer'                     → Plumber
+        'plumbr needed today'         → Plumber
+        'electrcian needed urgently'  → Electrician
+    • Brings the search tolerance battery to 70+ cases
+
+QA: 31/31 pass.
 
 Files:
-  src/components/ui/RewardFlowAnimation.jsx   (new)
-  src/index.css
-  src/screens/EarnExplainerScreen.jsx
-  scripts/qa.mjs
+  src/components/ui/RewardFlowAnimation.jsx   (rewritten — 4-scene model)
+  src/screens/EarnExplainerScreen.jsx          (lede copy + comment)
+  src/screens/RainmakerApplyScreen.jsx         (Super User threshold)
+  src/screens/ProfileScreen.jsx                (Super User threshold in popup)
+  src/lib/rewards.js                           (3 new canonical fields)
+  src/hooks/useChat.js                         (what backfill + reply gate)
+  scripts/qa.mjs                               (#29 expanded, #31 rewritten)

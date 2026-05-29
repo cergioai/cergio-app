@@ -26,7 +26,7 @@ const TYPES = [
   {
     id: 'super-user',
     title: 'Cergio Super User',
-    desc:  '5 friends invited and booking within 30 days. Your social graph compounds for you.',
+    desc:  `${REWARDS.superUserFriendsPerMonth} friends booking per month. Your social graph compounds for you.`,
   },
 ];
 

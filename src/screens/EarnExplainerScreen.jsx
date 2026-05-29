@@ -31,14 +31,15 @@ export function EarnExplainerScreen() {
           How earnings work
         </h1>
         <p className="text-[13px] text-b3 leading-relaxed mt-2">
-          The 6-step story of how rewards compound — from your first invite to a
-          full orchard. Tap Next or watch it play.
+          The 4-step story of how the model works — direct cash, trust
+          compounding, Connector barter, and Growth Participation. Tap
+          Next or watch it play.
         </p>
       </div>
 
-      {/* CERGIO-GUARD (2026-05-28): live animation walks the whole
-          business model — invite → friend books → friend-of-friend
-          → become a Connector → orchard. Self-contained, self-paced. */}
+      {/* CERGIO-GUARD (2026-05-28 v2): live animation walks the four
+          mechanisms — direct cash → trust/network → Connector barter →
+          Growth Participation. Sprouts represent people. Self-paced. */}
       <div className="px-3 mb-5">
         <RewardFlowAnimation />
       </div>

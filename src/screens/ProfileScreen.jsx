@@ -440,7 +440,7 @@ export function ProfileScreen() {
             </p>
             <ul className="text-[13px] text-b2 leading-relaxed mb-3 space-y-1.5 pl-1">
               <li>• <span className="font-bold text-black">Local influencers</span> (5K+ on IG/TikTok)</li>
-              <li>• <span className="font-bold text-black">Super users</span> — people whose friends actually listen when they recommend something</li>
+              <li>• <span className="font-bold text-black">Super users</span> — {REWARDS.superUserFriendsPerMonth}+ friends booking per month, social graph compounding</li>
               <li>• <span className="font-bold text-black">Service providers</span> with a base of existing clients</li>
               <li>• <span className="font-bold text-black">Small businesses</span> — stores, salons, gyms, real-estate agents</li>
             </ul>

@@ -17,7 +17,7 @@
 //                          · Growth Participation Income — higher score · spotlight rate card
 //
 // Connector = Influencer (5K+ on IG/TikTok) OR Local business OR Cergio Super User
-// (5+ friends invited and booking in 30 days). Strong local network that drives growth.
+// (10+ friends booking per month). Strong local network that drives growth.
 //
 // Jamie example: 50 friends × $250 = $12,500. Compounds when those friends
 // recommend services that get booked — those bookings add to your pool too.
@@ -45,6 +45,17 @@ export const REWARDS = {
   // perFriend so the math stays clean if perFriend ever moves.
   friendOfFriendPercent:   5,
   friendOfFriendBonus:     12.5,  // dollars = perFriend × percent / 100
+  // CERGIO-GUARD (2026-05-28): Connector barter — providers offer
+  // Connectors free services worth this much per month in exchange
+  // for IG/TikTok spotlights. The range is canonical: the animation,
+  // RainmakerApply, and any barter-themed surface pulls from here so
+  // we never hand-write the numbers. Adjust both ends together.
+  connectorBarterMin:      1000,
+  connectorBarterMax:      10000,
+  // CERGIO-GUARD (2026-05-28): Cergio Super User threshold —
+  // 10 friends booking per month. This is the social-graph path to
+  // Connector status (alongside influencer or local-biz paths).
+  superUserFriendsPerMonth: 10,
 };
 
 // ─── Hero one-liners (every CTA pulls from here) ───────────────────────────
@@ -78,6 +89,11 @@ export const REWARD_COPY = {
   // see one consistent number.
   friendOfFriendOneLine: `Plus ${REWARDS.friendOfFriendPercent}% when your friend invites a friend who joins + books — $${REWARDS.friendOfFriendBonus} per second-tier signup. The chain pays you.`,
   friendOfFriendShort:   `+${REWARDS.friendOfFriendPercent}% ($${REWARDS.friendOfFriendBonus}) when your friends bring in friends`,
+
+  // Connector barter — providers trade free services for IG/TikTok
+  // spotlights. Always quoted as a range so users see the upside.
+  connectorBarterShort:  `$${(REWARDS.connectorBarterMin/1000)}K–$${(REWARDS.connectorBarterMax/1000)}K/mo in free services`,
+  connectorBarterOneLine: `Providers trade $${(REWARDS.connectorBarterMin/1000)}K–$${(REWARDS.connectorBarterMax/1000)}K/month in free services for Instagram + TikTok spotlights — barter, not cash.`,
 
   // Who is a Connector — one line definition.
   connectorWhoOneLine:   `Influencers (5K+ on IG/TikTok) or super-users with strong local networks.`,

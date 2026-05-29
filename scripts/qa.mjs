@@ -895,6 +895,9 @@ test('search-tolerance', 'Local taxonomy + fuzzy matcher cover 50+ realistic sea
     ['deep clenaings this weekend',        'House Cleaner'], // typo
     ['cleeening lady tomorrow',            'House Cleaner'], // typo
     ['need a housekeeper',                 'House Cleaner'],
+    ['houskeeper',                         'House Cleaner'], // actor-noun typo
+    ['need houskeeper under 200',          'House Cleaner'], // user's exact phrase
+    ['housekeping under 200',              'House Cleaner'], // actor-noun typo + budget
     ['housekeeping',                       'House Cleaner'],
     ['cleaning lady saturdays',            'House Cleaner'],
     ['maid for move-out',                  'House Cleaner'],
@@ -908,6 +911,8 @@ test('search-tolerance', 'Local taxonomy + fuzzy matcher cover 50+ realistic sea
     ['toilet is clogged',                  'Plumber'],
     ['clogged sink',                       'Plumber'],
     ['plumer for a leak',                  'Plumber'],       // typo
+    ['plummer',                            'Plumber'],       // actor-noun typo
+    ['plumbr needed today',                'Plumber'],       // actor-noun typo
     ['leaky faucet under the sink',        'Plumber'],
     ['water heater needs replacing',       'Plumber'],
     ['pipe burst in the wall',             'Plumber'],
@@ -933,6 +938,7 @@ test('search-tolerance', 'Local taxonomy + fuzzy matcher cover 50+ realistic sea
     ['air conditioning broken',            'HVAC Technician'],
     ['electrician for the panel',          'Electrician'],
     ['eletrician',                         'Electrician'],     // typo
+    ['electrcian needed urgently',         'Electrician'],     // typo + urgency
 
     // ── Beauty ────────────────────────────────────────────────────────
     ['hairstylist at home',                'Hairstylist'],
@@ -1040,13 +1046,20 @@ test('reward-flow-embedded', 'RewardFlowAnimation component exists + EarnExplain
   const cmp = readFile('src/components/ui/RewardFlowAnimation.jsx');
   assert(/export function RewardFlowAnimation/.test(cmp),
     'src/components/ui/RewardFlowAnimation.jsx must export RewardFlowAnimation.');
-  // The 6-step business model — every step should appear.
-  assert(/Step 1 of 6/.test(cmp),
-    'The animation must run a 6-step sequence (Step 1..6).');
+  // v2: 4-step business model. Each step explains one mechanism — direct
+  // cash, trust+network, barter (free services), growth participation income.
+  assert(/Step 1 of 4/.test(cmp),
+    'The animation must run a 4-step sequence (Step 1..4).');
+  assert(/Step 4 of 4/.test(cmp),
+    'The animation must complete its 4-step arc (Step 4 of 4 present).');
   assert(/friend invites a friend/i.test(cmp),
-    'Step 4 (friend-of-friend) must be present so the bonus story is included.');
-  assert(/Connector/.test(cmp),
-    'Step 5 (become a Connector) must be present.');
+    'Step 2 (friend-of-friend / network effect) must be present so the chain story is included.');
+  assert(/spotlights?/i.test(cmp) && /barter/i.test(cmp),
+    'Step 3 (Connector barter — spotlights for services) must be present.');
+  assert(/Growth Participation/.test(cmp),
+    'Step 4 (Growth Participation Income) must be present.');
+  assert(/Human-Powered AI/.test(cmp),
+    'Mission tagline "Human-Powered AI" must close out the story.');
 
   const screen = readFile('src/screens/EarnExplainerScreen.jsx');
   assert(/import\s*\{\s*RewardFlowAnimation\s*\}\s*from/.test(screen),
