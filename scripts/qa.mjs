@@ -1052,8 +1052,8 @@ test('reward-flow-embedded', 'RewardFlowAnimation component exists + EarnExplain
     'The animation must run a 4-step sequence (Step 1..4).');
   assert(/Step 4 of 4/.test(cmp),
     'The animation must complete its 4-step arc (Step 4 of 4 present).');
-  assert(/friend invites a friend/i.test(cmp),
-    'Step 2 (friend-of-friend / network effect) must be present so the chain story is included.');
+  assert(/friend.{0,15}invite/i.test(cmp) && /chain|2nd[-\s]?tier|friend-of-friend/i.test(cmp),
+    'Step 2 (friend-of-friend / network effect) must be present — should mention an invite chain.');
   assert(/spotlights?/i.test(cmp) && /barter/i.test(cmp),
     'Step 3 (Connector barter — spotlights for services) must be present.');
   assert(/Growth Participation/.test(cmp),

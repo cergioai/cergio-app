@@ -32,27 +32,27 @@ const STEPS = [
   {
     num: 'Step 1 of 4',
     benefit: 'cash',
-    title: 'You invite. Friend books. You earn.',
+    title: `Earn $${REWARDS.perFriend} per friend who books.`,
     body: () =>
-      `Cergio's ${PLATFORM_FEE_PCT}% platform fee on every booking flows back to you — up to $${REWARDS.perFriend} per friend who joins + books.`,
-    counter: { value: `$${REWARDS.perFriend}`, sub: 'cap per friend' },
-    math: `${PLATFORM_FEE_PCT}% fee × every booking, up to $${REWARDS.perFriend}`,
+      `Recommend a service (Plumber, Tutor, anything). When your friend books — or someone books them — Cergio's ${PLATFORM_FEE_PCT}% fee on every booking flows back to you, until you've earned $${REWARDS.perFriend} from that friend. ${REWARDS.exampleFriends} friends → $${REWARDS.exampleTotal.toLocaleString()}.`,
+    counter: { value: `$${REWARDS.perFriend}`, sub: 'per friend' },
+    math: `$${REWARDS.perFriend} per friend (7% per booking, until cap)`,
   },
   {
     num: 'Step 2 of 4',
     benefit: 'chain',
-    title: 'Friend invites a friend — bonus to you.',
+    title: 'Friends invite friends — chain grows fast.',
     body: () =>
-      `When your friend's friend books, you earn ${REWARDS.friendOfFriendPercent}% — $${REWARDS.friendOfFriendBonus} — on top. The chain pays you every time it extends.`,
-    counter: { value: `+$${REWARDS.friendOfFriendBonus}`, sub: 'per 2nd-tier signup' },
-    math: `${REWARDS.friendOfFriendPercent}% × $${REWARDS.perFriend} = $${REWARDS.friendOfFriendBonus}`,
+      `When your friend's friend books, you earn ${REWARDS.friendOfFriendPercent}% — $${REWARDS.friendOfFriendBonus} — on top. Influencers who invite influencers compound this fastest: 1 → 10 → 100+ in two degrees.`,
+    counter: { value: `+$${REWARDS.friendOfFriendBonus}`, sub: 'per 2nd-tier booking' },
+    math: `${REWARDS.friendOfFriendPercent}% × $${REWARDS.perFriend} = $${REWARDS.friendOfFriendBonus} per chain extension`,
   },
   {
     num: 'Step 3 of 4',
     benefit: 'barter',
     title: 'Connectors trade spotlights for services.',
     body: () =>
-      `Influencers, super-users, and small businesses become Connectors. Providers trade $${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/month in free services in exchange for Instagram + TikTok spotlights.`,
+      `Influencers, super-users, small businesses — and service providers themselves — become Connectors. Providers trade $${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/month in free services in exchange for Instagram + TikTok spotlights.`,
     counter: { value: `$${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K`, sub: '/mo in services' },
     math: `Spotlight ⇄ $${REWARDS.connectorBarterMin / 1000}K–$${REWARDS.connectorBarterMax / 1000}K/mo services`,
   },
@@ -263,62 +263,116 @@ function GrowthCurve() {
 // ─── Scenes ────────────────────────────────────────────────────────────────
 
 function Scene1() {
-  // 1-friend example. You + Jamie + Provider. Booking → 7% fee → You.
+  // 1-friend example with CONCRETE service tile (Plumber) so users see
+  // "what's actually being recommended". Shows accumulation: Jamie books
+  // Penny multiple times → 7% per booking → fills up to $250 cap.
   return (
     <>
       <MathChip text={STEPS[0].math} />
-      <Avatar x={85}  y={130} r={28} gradientId="avYou"   label="You"   you />
-      <Avatar x={205} y={130} r={28} gradientId="avFriend" label="Jamie" />
-      <ProviderTile x={320} y={155} label="$300 clean" />
+      <Avatar x={75}  y={130} r={28} gradientId="avYou"   label="You"   you />
+      <Avatar x={185} y={130} r={28} gradientId="avFriend" label="Jamie" />
 
-      {/* booking arrow */}
-      <Arrow d="M 233 130 Q 270 130 305 145" />
-      <text x={270} y={120} textAnchor="middle" fontSize="9" fill="#5F5E5A" fontWeight="700" fontFamily="system-ui">books</text>
+      {/* Concrete service tile — Penny's Plumber with price */}
+      <g className="rf-pop" style={{ animationDelay: '0.25s' }}>
+        <rect x={278} y={108} width={94} height={56} rx={6} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1.4} />
+        <polygon points="276,108 325,90 374,108" fill="#3D8B00" />
+        <text x={325} y={130} textAnchor="middle" fontSize="11" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">Penny's Plumber</text>
+        <text x={325} y={146} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#3D8B00" fontFamily="system-ui">$300 / job</text>
+        <text x={325} y={174} textAnchor="middle" fontSize="9" fontWeight="600" fill="#5F5E5A" fontFamily="system-ui">Service</text>
+      </g>
 
-      {/* 7% fee chip mid-path */}
-      <CashPill x={270} y={88} text={`${PLATFORM_FEE_PCT}% fee`} delay={0.55} />
+      {/* booking arrow Jamie → service */}
+      <Arrow d="M 213 130 Q 248 130 278 130" />
+      <text x={245} y={120} textAnchor="middle" fontSize="9" fill="#5F5E5A" fontWeight="700" fontFamily="system-ui">books</text>
 
-      {/* arrow flows fee → You */}
-      <Arrow d="M 240 90 Q 180 80 110 100" />
+      {/* 7% slice chip mid-path — the MECHANISM */}
+      <CashPill x={245} y={82} text={`${PLATFORM_FEE_PCT}% per booking`} delay={0.55} />
 
-      {/* You earn pill */}
-      <CashPill x={85} y={82} text={`+$${REWARDS.perFriend}`} delay={1.0} big />
+      {/* arrow: fee flows back to You */}
+      <Arrow d="M 215 84 Q 160 80 100 100" />
 
-      {/* footer line on cap */}
+      {/* You earn — HERO number, big */}
+      <CashPill x={75} y={82} text={`+$${REWARDS.perFriend}`} delay={1.0} big />
+      <text x={75} y={108} textAnchor="middle" fontSize="9" fontWeight="700" fill="#3D8B00" fontFamily="system-ui">cap per friend</text>
+
+      {/* footer — the aspirational compounding example */}
       <text x={200} y={228} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
-        Cergio's {PLATFORM_FEE_PCT}% fee → you, up to ${REWARDS.perFriend} per friend
+        {REWARDS.exampleFriends} friends × ${REWARDS.perFriend} = ${REWARDS.exampleTotal.toLocaleString()}
       </text>
     </>
   );
 }
 
 function Scene2() {
-  // Friend-of-friend chain — You ← Jamie ← Alex. Alex books → $250 to Jamie,
-  // $12.50 (5% bonus) to You. The classic 2-degree compounding visual.
+  // Fan-out visual — You at center → 5 direct friends → each of those has
+  // 3-5 friends-of-friends. Shows visually that 2nd-degree CAN BE MANY
+  // (especially for influencers). Each 2nd-degree booking = $12.50 to You.
+  // First-degree friends pull from existing avatar gradients; F-of-F dots
+  // are small neutral circles so the eye reads "lots of people, not just one."
+  const youX = 70, youY = 130;
+  const firstDegree = [
+    { x: 160, y: 60,  grad: 'avFriend' },
+    { x: 175, y: 110, grad: 'avFof'    },
+    { x: 175, y: 170, grad: 'avConnector' },
+    { x: 160, y: 215, grad: 'avFriend' },
+  ];
+  // Each 1st-degree has a small cluster of 2nd-degree dots radiating out.
+  const fofPositions = [];
+  firstDegree.forEach((fd, i) => {
+    const baseAngle = Math.atan2(fd.y - youY, fd.x - youX);
+    for (let j = 0; j < 5; j++) {
+      const angle = baseAngle + (j - 2) * 0.28;
+      fofPositions.push({
+        x: fd.x + Math.cos(angle) * 88,
+        y: fd.y + Math.sin(angle) * 50,
+        delay: 0.4 + i * 0.15 + j * 0.06,
+      });
+    }
+  });
+
   return (
     <>
       <MathChip text={STEPS[1].math} />
-      <Avatar x={70}  y={140} r={26} gradientId="avYou"    label="You"   you />
-      <Avatar x={175} y={140} r={26} gradientId="avFriend" label="Jamie" />
-      <Avatar x={280} y={140} r={26} gradientId="avFof"    label="Alex"  />
-      <ProviderTile x={360} y={170} label="books" />
 
-      <Vine ax={70}  bx={175} y={184} />
-      <Vine ax={175} bx={280} y={184} />
+      {/* You — center-left */}
+      <Avatar x={youX} y={youY} r={26} gradientId="avYou" label="You" you />
 
-      {/* booking arrow Alex → Provider */}
-      <Arrow d="M 304 144 Q 330 152 348 162" />
+      {/* connection lines: You → each 1st-degree */}
+      <g opacity={0.5}>
+        {firstDegree.map((fd, i) => (
+          <line key={`l1-${i}`} x1={youX + 22} y1={youY} x2={fd.x} y2={fd.y} stroke="#3D8B00" strokeWidth={1.2} strokeDasharray="3 3" />
+        ))}
+      </g>
+      {/* connection lines: each 1st-degree → its 2nd-degree cluster */}
+      <g opacity={0.35}>
+        {firstDegree.map((fd, i) => (
+          fofPositions.slice(i * 5, i * 5 + 5).map((fof, j) => (
+            <line key={`l2-${i}-${j}`} x1={fd.x} y1={fd.y} x2={fof.x} y2={fof.y} stroke="#3D8B00" strokeWidth={0.9} />
+          ))
+        ))}
+      </g>
 
-      {/* big $250 to Jamie */}
-      <CashPill x={175} y={92} text={`+$${REWARDS.perFriend}`} delay={0.5} big />
-      <Arrow d="M 270 130 Q 220 110 188 100" strokeWidth={1.6} />
+      {/* 1st-degree friends */}
+      {firstDegree.map((fd, i) => (
+        <Avatar key={`fd-${i}`} x={fd.x} y={fd.y} r={14} gradientId={fd.grad} />
+      ))}
 
-      {/* smaller $12.50 (5%) to You */}
-      <CashPill x={70}  y={92} text={`+$${REWARDS.friendOfFriendBonus} (${REWARDS.friendOfFriendPercent}%)`} delay={1.0} />
-      <Arrow d="M 155 95 Q 115 90 90 92" />
+      {/* 2nd-degree people — small neutral dots, MANY of them */}
+      {fofPositions.map((fof, i) => (
+        <g key={`fof-${i}`} className="rf-pop" style={{ animationDelay: `${fof.delay}s` }}>
+          <circle cx={fof.x} cy={fof.y} r={6} fill="#A8A8A8" stroke="#FFFFFF" strokeWidth={1.2} />
+        </g>
+      ))}
+
+      {/* One representative coin showing the $12.50 bonus flowing in */}
+      <CashPill x={youX} y={82} text={`+$${REWARDS.friendOfFriendBonus} × many`} delay={1.4} big />
+
+      {/* Side caption — influencer compounding callout */}
+      <text x={325} y={32} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#1A1A1A" fontFamily="system-ui">Influencer chain:</text>
+      <text x={325} y={45} textAnchor="middle" fontSize="9" fontWeight="600" fill="#5F5E5A" fontFamily="system-ui">1 → 10 → 100+</text>
 
       <text x={200} y={228} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
-        Every chain extension = ${REWARDS.friendOfFriendBonus} bonus to you
+        Each 2nd-tier booking = ${REWARDS.friendOfFriendBonus} bonus to you, every time
       </text>
     </>
   );
