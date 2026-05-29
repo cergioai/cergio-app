@@ -251,6 +251,10 @@ export function EarningsScreen() {
                   <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-bold">ⓘ</button>
                 </>}
           </p>
+          {/* Friend-of-friend kicker — a calm extra line, not a card. */}
+          <p className="text-[11px] text-b3 mt-1.5 leading-snug">
+            <span className="font-bold text-black">+{REWARDS.friendOfFriendPercent}%</span> when your friends invite their friends — <span className="font-bold text-black">${REWARDS.friendOfFriendBonus}</span> per second-tier signup.
+          </p>
 
           {/* Connector upsell — visible to users (not providers, who are
               already on the cash track). One-liner that mirrors the

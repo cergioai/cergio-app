@@ -1,68 +1,60 @@
-UX: Profile declutter + Connector explainer popup + Earnings counter dedupe + leaf options
+Sprout v2 + dialed motion + $12.5K Home pill + friend-of-friend 5%
 
-PROFILE — fewer rows, contextual visibility
+LEAFLOGO — SPROUT V2 (user picked option B → "infinitely more
+interesting … subtle, captivating")
 
-User feedback: "make profile links less busy ... hide what's not
-necessary, fold ... drive users to few captivating actions."
+Replaced single lobed-leaf with a botanical sprout: two asymmetric
+serrated leaves on a slightly S-curved stem rising from three soft
+brown soil-mark dashes, with a subtle dew drop on the top leaf.
 
-Changes:
-  • Services section now ONLY renders for providers (serviceMode OR
-    hasService). Consumers no longer see "List a service" /
-    "Manage services" noise.
-  • Invite & Earn collapsed from 5 rows → 3:
-      My earnings  →  /earnings
-      Become a Connector  →  Connector explainer popup (new)
-      Invite & earn  →  /invite/friends-popup (already has Invite +
-                       Reco + Find friends branches inline)
-  • Section renamed "Invite & Earn" → "Earn $250+" — clearer hook.
-  • "Become a Connector" row only renders when user hasn't already
-    set up a rate card (avoids duplicate of the Social section's
-    "Add a spotlight rate" row).
+Multi-motion: four overlapping micro-cycles with different periods
+(8s stem / 7s top / 6s bot / 5s dew) — never resolves into a
+rhythm. Amplitudes DELIBERATELY tiny per user follow-up brief:
+"barely visible … elegant … so users don't get annoyed."
+Max sway 2° at full intensity (was 6° in the first pass). Strength
++ community are inferred from shape and color, not from movement.
 
-NEW — "What's a Connector?" popup
+The intensity-prop API is unchanged — Home / Splash / Results /
+Auth / Intake all auto-inherit the new look + dialed motion.
 
-User asked for a clear explainer. Pattern: bottom sheet from
-ProfileScreen (mirrors the Growth Participation Income popup
-pattern on EarningsScreen).
+$12.5K HOME PILL — exposes the compounding math
 
-Definition covers the FULL Connector audience:
-  • Local influencers (5K+ on IG/TikTok)
-  • Super users — people whose friends actually listen
-  • Service providers with an existing client base
-  • Small businesses — stores, salons, gyms, real-estate
+User feedback: "expose the earn 12.5K when you invite 50 users …
+without being tacky intrusive."
 
-Reward stack in-popup:
-  • $250 cash per friend who joins + books
-  • Free services from providers who pay in spotlights
-  • Growth Participation Income — bigger bonus as Cergio grows
+Single compact line below the search box in find mode:
+  "50 friends → $12,500   see how"
+The "see how" is a small green underline link to /rainmaker/apply.
+Looks like a footnote, not a sales card.
 
-Closes on the mission line: "human-powered AI that enables shared
-prosperity." CTA: "I want in →" routes to /rainmaker/apply.
-"Maybe later" closes silently.
+FRIEND-OF-FRIEND BONUS — 5% second-tier added everywhere
 
-EARNINGS — duplicate counter row removed
+User: "can we add a friend of friend incentive … they take 5% of
+the 250." Locked in REWARDS:
+  friendOfFriendPercent = 5
+  friendOfFriendBonus   = 12.5
 
-Two stat rows (top 3 + lower 3) overlapped — both showed "earned"
-and "invited" counts. Collapsed to ONE compact row inside the empty
-state: Recs sent + Invite/Reco buttons inline. The top stat band
-above (Friends invited / Services reco'd / Earned) stays — that's
-the canonical metric trio.
+Surfaced everywhere it's relevant:
+ • REWARD_COPY: friendOfFriendOneLine / friendOfFriendShort
+ • Connector explainer popup (ProfileScreen): bullet in the reward stack
+ • EarningsScreen: kicker line under mode-tailored copy
+ • RainmakerApplyScreen: bullet in BOTH User + Connector columns
 
-LEAF OPTIONS DOC
+PROFILE DECLUTTER
 
-LEAF_OPTIONS.md in Cergio Claude folder. Three organic
-alternatives sketched with motion notes:
-  A. Single leaf, refined  — safe iteration on today's mark
-  B. Sprout (two leaves + tall stem + ground line) — best
-     narrative fit for shared-prosperity story
-  C. Branch (3 leaves, fern-like with tip curl) — most premium
-     but busier at 16–22px
+Earlier commit re-grouped Profile into Account / Earn $250+ / About,
+with provider-only sections hidden for consumers. This commit
+extends that with the new Connector explainer popup that now also
+mentions friend-of-friend.
 
-My pick: B. Decision is yours — reply A / B / C and I wire it up.
-
-VERIFIED  qa.mjs: 29/29 pass
+VERIFIED  qa.mjs: 30/30 pass
 
 Files:
+  src/components/ui/LeafLogo.jsx
+  src/index.css
+  src/lib/rewards.js
+  src/screens/HomeScreen.jsx
   src/screens/ProfileScreen.jsx
   src/screens/EarningsScreen.jsx
-  LEAF_OPTIONS.md           (parent folder)
+  src/screens/RainmakerApplyScreen.jsx
+  scripts/qa.mjs

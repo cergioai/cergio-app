@@ -195,6 +195,58 @@ body {
   animation: cgLeafVeinFlow calc(3s * var(--cg-leaf-speed, 1)) linear infinite;
 }
 
+/* ── Sprout v2 (2026-05-28) ────────────────────────────────────────
+   CERGIO-GUARD: motion is DELIBERATELY SUBTLE — the user's brief was
+   "barely visible … elegant … so users don't get annoyed." At rest
+   the sprout reads as still. Only at full intensity (live activity)
+   does the motion become noticeable. The cycles are slow (6-8s) and
+   the amplitudes are tiny (≤2deg base) so the brand mark never
+   competes with content. Strength + community are inferred from the
+   shape and color, not from movement. */
+@keyframes cgSproutStem {
+  0%   { transform: rotate(calc(-0.6deg * var(--cg-leaf-amp, 1))); }
+  50%  { transform: rotate(calc( 0.8deg * var(--cg-leaf-amp, 1))); }
+  100% { transform: rotate(calc(-0.6deg * var(--cg-leaf-amp, 1))); }
+}
+.cg-sprout-stem {
+  animation: cgSproutStem calc(8s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
+
+/* Top leaf — slightly larger arc, slightly slower than the bottom
+   leaf so the two never sync. Includes a tiny translateY so the leaf
+   "lifts" at the apex of the cycle — the perk-up effect. */
+@keyframes cgSproutTop {
+  0%   { transform: rotate(calc(-1deg * var(--cg-leaf-amp, 1))) translateY(0px); }
+  35%  { transform: rotate(calc( 1.2deg * var(--cg-leaf-amp, 1))) translateY(-0.3px); }
+  60%  { transform: rotate(calc( 2deg * var(--cg-leaf-amp, 1))) translateY(-0.5px); }
+  100% { transform: rotate(calc(-1deg * var(--cg-leaf-amp, 1))) translateY(0px); }
+}
+.cg-sprout-top {
+  animation: cgSproutTop calc(7s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
+
+/* Bottom leaf — counterphase to the top. When the top lifts, this
+   one settles. Smaller arc because it's anchored lower on the stem. */
+@keyframes cgSproutBot {
+  0%   { transform: rotate(calc( 0.8deg * var(--cg-leaf-amp, 1))); }
+  40%  { transform: rotate(calc(-1deg   * var(--cg-leaf-amp, 1))); }
+  100% { transform: rotate(calc( 0.8deg * var(--cg-leaf-amp, 1))); }
+}
+.cg-sprout-bot {
+  animation: cgSproutBot calc(6s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
+
+/* Dew drop — faint glint, not a pulse. Opacity wave only, no scale
+   change. Reads as light catching the surface, never as motion. */
+@keyframes cgSproutDew {
+  0%, 100% { opacity: 0.65; }
+  50%      { opacity: 0.95; }
+}
+.cg-sprout-dew {
+  transform-origin: 82px 6px;
+  animation: cgSproutDew calc(5s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
+
 /* Legacy leaf-in-button animations (still used on /roaming). */
 .cg-leaf-rest {
   transform: scale(.92) rotate(-8deg);

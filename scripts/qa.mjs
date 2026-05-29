@@ -1000,6 +1000,37 @@ test('search-tolerance', 'Local taxonomy + fuzzy matcher cover 50+ realistic sea
     `Search-tolerance battery — ${failures.length} of ${cases.length} cases failed:\n  ${failures.join('\n  ')}`);
 });
 
+// ─── INVARIANT #30: LeafLogo is the sprout v2 (two-leaf, stem, dew) ─────
+// User chose option B (sprout) on 2026-05-28. The geometry MUST be
+// the two-leaf sprout — single-lobed-leaf-only is a regression.
+// Multi-motion CSS classes must also be wired so the plant breathes.
+test('sprout-logo', 'LeafLogo renders the sprout v2 (two leaves + stem + dew + multi-motion)', '#30', async () => {
+  const src = readFile('src/components/ui/LeafLogo.jsx');
+  const code = stripComments(src);
+  assert(/function Sprout\s*\(/.test(code) || /Sprout\s*size=/.test(code),
+    'LeafLogo must use the Sprout component (two-leaf composition).');
+  // Both leaves + the stem must exist as separate animated groups.
+  assert(/cg-sprout-stem/.test(code),
+    'Sprout must apply .cg-sprout-stem to the stem group (flex motion).');
+  assert(/cg-sprout-top/.test(code),
+    'Sprout must apply .cg-sprout-top to the top leaf group.');
+  assert(/cg-sprout-bot/.test(code),
+    'Sprout must apply .cg-sprout-bot to the bottom leaf group.');
+  // Dew drop renders when working — captivating detail.
+  assert(/cg-sprout-dew/.test(code),
+    'Sprout must include the cg-sprout-dew dew-drop element (renders when working).');
+
+  const css = readFile('src/index.css');
+  assert(/@keyframes\s+cgSproutStem/.test(css),
+    'index.css must define @keyframes cgSproutStem for the stem flex.');
+  assert(/@keyframes\s+cgSproutTop/.test(css),
+    'index.css must define @keyframes cgSproutTop for top leaf rotation.');
+  assert(/@keyframes\s+cgSproutBot/.test(css),
+    'index.css must define @keyframes cgSproutBot for bottom leaf rotation.');
+  assert(/@keyframes\s+cgSproutDew/.test(css),
+    'index.css must define @keyframes cgSproutDew for the dew drop pulse.');
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are

@@ -38,6 +38,13 @@ export const REWARDS = {
   // change the threshold or the bonus, update both fields together.
   milestoneFriends:        200,
   milestoneBonus:          10000, // dollars on top of per-friend earnings
+  // CERGIO-GUARD (2026-05-28): Friend-of-friend bonus — 5% of the
+  // per-friend reward. When YOUR invited friend invites ANOTHER
+  // friend who joins + books, you get $12.50. Compounds across
+  // the network, locks viral momentum. Keep the % in sync with
+  // perFriend so the math stays clean if perFriend ever moves.
+  friendOfFriendPercent:   5,
+  friendOfFriendBonus:     12.5,  // dollars = perFriend × percent / 100
 };
 
 // ─── Hero one-liners (every CTA pulls from here) ───────────────────────────
@@ -65,6 +72,12 @@ export const REWARD_COPY = {
 
   // Compounding example — use as a single line in marketing/explainer surfaces.
   compoundingExample:    `Bring ${REWARDS.exampleFriends} friends → $${REWARDS.exampleTotal.toLocaleString()}. Your network does the work; you earn the upside.`,
+
+  // Friend-of-friend bonus — second-tier kicker that makes the network
+  // compound on its own. Same phrasing everywhere it appears so users
+  // see one consistent number.
+  friendOfFriendOneLine: `Plus ${REWARDS.friendOfFriendPercent}% when your friend invites a friend who joins + books — $${REWARDS.friendOfFriendBonus} per second-tier signup. The chain pays you.`,
+  friendOfFriendShort:   `+${REWARDS.friendOfFriendPercent}% ($${REWARDS.friendOfFriendBonus}) when your friends bring in friends`,
 
   // Who is a Connector — one line definition.
   connectorWhoOneLine:   `Influencers (5K+ on IG/TikTok) or super-users with strong local networks.`,

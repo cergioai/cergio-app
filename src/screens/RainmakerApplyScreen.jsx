@@ -72,6 +72,7 @@ export function RainmakerApplyScreen() {
             <p className="text-[11px] text-b3 mt-0.5 leading-snug">per friend who joins + books</p>
             <ul className="mt-3 space-y-1 text-[11px] text-b2 leading-snug">
               <li>• Free services credit</li>
+              <li>• <span className="font-bold">+{REWARDS.friendOfFriendPercent}% (${REWARDS.friendOfFriendBonus})</span> when friends bring friends</li>
               <li>• Growth Participation Income</li>
             </ul>
           </div>
@@ -82,6 +83,7 @@ export function RainmakerApplyScreen() {
             <p className="text-[11px] text-gd/80 mt-0.5 leading-snug">per friend who joins + books</p>
             <ul className="mt-3 space-y-1 text-[11px] text-b2 leading-snug">
               <li>• <span className="font-bold">Free services</span> (providers pay in spotlights)</li>
+              <li>• <span className="font-bold">+{REWARDS.friendOfFriendPercent}% (${REWARDS.friendOfFriendBonus})</span> on second-tier signups</li>
               <li>• <span className="font-bold">Growth Participation Income</span> — higher score</li>
               <li>• <span className="font-bold">Spotlight rate card</span> — paid posts</li>
             </ul>

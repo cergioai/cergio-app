@@ -453,6 +453,7 @@ export function ProfileScreen() {
               <p className="text-[12px] font-bold text-gd leading-snug mb-1.5">As a Connector you earn:</p>
               <ul className="text-[12px] text-gd/90 leading-snug space-y-1">
                 <li>• ${REWARDS.perFriendConnector} <span className="font-bold">cash</span> per friend who joins + books</li>
+                <li>• <span className="font-bold">{REWARDS.friendOfFriendPercent}% = ${REWARDS.friendOfFriendBonus}</span> when your friends bring in friends</li>
                 <li>• Free services from providers who pay you in spotlights</li>
                 <li>• Growth Participation Income — your earnings drive a bigger bonus as Cergio grows</li>
               </ul>
