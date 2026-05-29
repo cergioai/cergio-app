@@ -1,18 +1,22 @@
-// Per design-spec.md — manual recommendation form, NOW with contacts
-// autosuggest so the user doesn't hand-type a friend's name / email / phone.
+// CERGIO-GUARD (2026-05-29): unified Recommend flow.
 //
-// Flow:
-//   1. If contacts haven't been synced yet → show "Connect contacts" prompt.
-//      Tap → Contact Picker API on supported devices (Chrome Android, iOS
-//      Safari PWA). Picked contacts get held in component state for this
-//      session — they're not persisted.
-//   2. Name field auto-suggests against the synced contacts (and the mock
-//      CONTACTS list as a fallback when nothing is synced). Tap a result
-//      → contact is locked in, phone/email auto-populate, name field shows
-//      a green pill with an × to clear.
-//   3. Once a contact is locked, the blurb textarea unlocks.
-//   4. Send fires notify-user with the `service_recommended` event so the
-//      friend gets the actual email / SMS with the user's blurb embedded.
+// REPLACES the old dual-path popup (Recommend from contacts vs Write
+// a recommendation) which Tarik flagged as confusing — the contacts
+// picker looked like it was asking the user to pick a SERVICE, not
+// a recipient, and the second path was redundant.
+//
+// New model: ONE screen. Recipient can be provided two ways, merged
+// into the same form:
+//   1. Pick from contacts — autosuggests as you type; tap to autofill
+//      name + phone + email from the picked contact.
+//   2. Type manually — if the person isn't in your contacts, just type
+//      their name + (phone OR email). No second screen, no redirects.
+//
+// Submit fires notify-user with the `service_recommended` event so the
+// recipient gets the actual email/SMS, plus writes a row to the
+// recommendations table so the user has a personal record + EarningsScreen
+// can count it (qa #27).
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { CONTACTS } from '../data/mock';
@@ -23,6 +27,16 @@ import { supabase, supabaseReady } from '../lib/supabase';
 
 const supportsContactPicker = typeof navigator !== 'undefined' &&
   'contacts' in navigator && 'ContactsManager' in window;
+
+// Very loose validators — we want to fail closed only on obviously-wrong
+// input. Real validation happens server-side when notify-user fires.
+function isPlausiblePhone(s) {
+  const digits = String(s || '').replace(/\D+/g, '');
+  return digits.length >= 7;
+}
+function isPlausibleEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+}
 
 export function RecommendServiceFormScreen() {
   const navigate = useNavigate();
@@ -38,27 +52,48 @@ export function RecommendServiceFormScreen() {
     [hasSynced, synced],
   );
 
-  // Selected contact + name input state.
-  const [picked, setPicked]   = useState(null);   // { name, phone, email }
-  const [query, setQuery]     = useState('');
+  // Unified recipient state — name + phone + email + an optional pickedId
+  // that flags "this came from contacts" so we can show a subtle indicator.
+  // Editing the name after a pick clears pickedId (back to manual mode).
+  const [name,  setName]  = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [pickedId, setPickedId] = useState(null);
   const [focused, setFocused] = useState(false);
   const nameRef = useRef(null);
 
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
+    const q = name.trim().toLowerCase();
+    if (!q || pickedId) return [];
     return pool
       .filter(c => (c.name || '').toLowerCase().includes(q))
       .slice(0, 6);
-  }, [query, pool]);
+  }, [name, pool, pickedId]);
+
+  // Pick a contact from the autosuggest list — autofills the three fields.
+  const pickMatch = (c) => {
+    setName(c.name || '');
+    setPhone(c.phone || '');
+    setEmail(c.email || '');
+    setPickedId(c.id || `pick-${Date.now()}`);
+    setFocused(false);
+  };
+  // Reset to fully-manual mode (clears the picked indicator only; lets the
+  // user edit any field freely).
+  const clearPick = () => {
+    setPickedId(null);
+    nameRef.current?.focus();
+  };
 
   // Blurb state.
   const [blurb, setBlurb] = useState('');
   const [busy, setBusy]   = useState(false);
-  const valid = !!picked && blurb.trim().length > 0;
-  const remaining = Math.max(0, 280 - blurb.length);
+  const hasContact  = isPlausiblePhone(phone) || isPlausibleEmail(email);
+  const valid       = name.trim().length > 0 && hasContact && blurb.trim().length > 0;
+  const remaining   = Math.max(0, 280 - blurb.length);
 
-  // ── Contact Picker API — only available on Chrome Android + iOS PWA.
+  // ── Contact Picker API — Chrome Android + iOS PWA only. Pulls real
+  // contacts into the autosuggest pool for the rest of the session.
   const connectContacts = async () => {
     if (!supportsContactPicker) {
       showToast("Contact picker isn't supported on this browser. Type a name to use Cergio's sample contacts.");
@@ -72,14 +107,11 @@ export function RecommendServiceFormScreen() {
       );
       const mapped = (result || []).map((c, i) => ({
         id:    `synced-${i}`,
-        name:  (c.name || [])[0] || '',
-        phone: (c.tel || [])[0] || '',
+        name:  (c.name  || [])[0] || '',
+        phone: (c.tel   || [])[0] || '',
         email: (c.email || [])[0] || '',
       })).filter(c => c.name);
-      if (!mapped.length) {
-        showToast('No contacts picked.');
-        return;
-      }
+      if (!mapped.length) { showToast('No contacts picked.'); return; }
       setSynced(mapped);
       showToast(`${mapped.length} contacts ready — start typing a name.`);
       nameRef.current?.focus();
@@ -90,33 +122,15 @@ export function RecommendServiceFormScreen() {
     }
   };
 
-  const pickMatch = (c) => {
-    setPicked(c);
-    setQuery(c.name);
-    setFocused(false);
-  };
-  const clearPick = () => {
-    setPicked(null);
-    setQuery('');
-    nameRef.current?.focus();
-  };
-
   const submit = async () => {
     if (!valid || busy) return;
     setBusy(true);
     try {
-      // If we have email or phone, fire the real notify-user event so the
-      // friend gets the email/SMS. If neither, fall back to a toast so the
-      // user can copy/paste the blurb themselves.
       const recipient = {
-        name:  picked.name,
-        email: picked.email || undefined,
-        phone: picked.phone || undefined,
+        name:  name.trim(),
+        email: isPlausibleEmail(email) ? email.trim() : undefined,
+        phone: isPlausiblePhone(phone) ? phone.trim() : undefined,
       };
-      if (!recipient.email && !recipient.phone) {
-        showToast(`No email / phone on ${picked.name}. Share the link instead.`);
-        return;
-      }
       const { error } = await notifyUser({
         event: 'service_recommended',
         recipient,
@@ -126,44 +140,46 @@ export function RecommendServiceFormScreen() {
           service_title:    'a service on Cergio',
           // CERGIO-GUARD: deep_link MUST be the inviter's tracked URL so
           // the recipient's signup → first booking credits this user.
-          // buildInviteUrl produces `${origin}/?ref=<inviter_uuid>`.
           deep_link:        buildInviteUrl(auth?.user?.id),
           blurb:            blurb.trim(),
         },
       });
       if (error) {
         showToast(`Send failed: ${error.message}`);
-      } else {
-        // CERGIO-GUARD (2026-05-28): also write a row to `recommendations`
-        // so the user has a personal record of who they recommended +
-        // when. The notifyUser call above sends the email/SMS; this
-        // insert powers the "Recs sent" counter on EarningsScreen and
-        // gives future analytics screens something real to render.
-        // Best-effort — if the insert fails (RLS / schema drift), the
-        // user still sees the toast + Earnings page; the email is sent.
-        // qa #27 statically enforces this insert exists.
-        if (supabaseReady && auth?.user?.id) {
-          const { error: recoErr } = await supabase
-            .from('recommendations')
-            .insert({
-              recommender_id:  auth.user.id,
-              inviter_id:      auth.user.id, // attribution anchor (same person here)
-              recipient_phone: picked.phone || null,
-              service_id:      null,         // free-form service for now
-              message:         blurb.trim(),
-            });
-          if (recoErr) {
-            // eslint-disable-next-line no-console
-            console.warn('[reco] could not write recommendations row:', recoErr.message);
-          }
-        }
-        showToast(`Sent to ${picked.name} ✓`);
-        navigate('/earnings');
+        return;
       }
+      // CERGIO-GUARD (2026-05-28): write a recommendations row so the
+      // user has a personal record + EarningsScreen counts it. Best-
+      // effort — if it fails (RLS/schema drift), the email was still
+      // sent. qa #27 statically enforces this insert exists.
+      if (supabaseReady && auth?.user?.id) {
+        const { error: recoErr } = await supabase
+          .from('recommendations')
+          .insert({
+            recommender_id:  auth.user.id,
+            inviter_id:      auth.user.id,
+            recipient_phone: recipient.phone || null,
+            service_id:      null,
+            message:         blurb.trim(),
+          });
+        if (recoErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[reco] could not write recommendations row:', recoErr.message);
+        }
+      }
+      showToast(`Sent to ${recipient.name} ✓`);
+      navigate('/earnings');
     } finally {
       setBusy(false);
     }
   };
+
+  const initials = name
+    .split(' ')
+    .map(s => s[0] || '')
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '?';
 
   return (
     <div className="flex-1 flex flex-col bg-cream pb-24">
@@ -181,15 +197,15 @@ export function RecommendServiceFormScreen() {
           Recommend a service
         </h1>
         <p className="text-[13px] text-b3 font-medium leading-snug mt-2">
-          Pick a friend from your contacts — we send them your blurb and a
-          one-tap link to book.
+          Pick a friend from your contacts <span className="text-b2 font-bold">or</span> type
+          their info — we send them your blurb and a one-tap link to book.
         </p>
         <p className="text-[12px] text-gd font-extrabold mt-2.5">
           Earn up to ${REWARDS.perFriend} per friend who books from your recommendation.
         </p>
       </div>
 
-      {/* ── Step 1: connect contacts ─────────────────────────────────────── */}
+      {/* ── Step 1 (optional): connect contacts for autosuggest ───────────── */}
       {!hasSynced && (
         <div className="mx-5 mb-3 bg-white border border-bdr rounded-[14px] p-3.5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-[10px] bg-gl flex items-center justify-center flex-shrink-0">
@@ -201,10 +217,10 @@ export function RecommendServiceFormScreen() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[14px] font-extrabold text-black leading-tight">
-              Connect your contacts
+              Connect your contacts <span className="text-b3 font-medium">(optional)</span>
             </p>
             <p className="text-[12px] text-b3 mt-0.5 leading-snug">
-              Type a name and we auto-fill the rest — no manual entry.
+              Type a name and we auto-fill the rest. Skip to type manually.
             </p>
           </div>
           <button
@@ -218,44 +234,49 @@ export function RecommendServiceFormScreen() {
         </div>
       )}
 
-      {/* ── Step 2: name input with autosuggest ──────────────────────────── */}
+      {/* ── Step 2: recipient — unified pick-or-type ───────────────────────── */}
       <div className="px-5 mb-3">
         <label className="block text-[12px] font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
           Who are you recommending to?
         </label>
-        {picked ? (
-          <div className="flex items-center gap-2 bg-gl border border-g/30 rounded-[14px] px-4 py-3">
-            <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gd text-[13px] font-extrabold flex-shrink-0">
-              {picked.name.split(' ').map(s => s[0] || '').slice(0, 2).join('').toUpperCase()}
+
+        <div className="bg-white border border-bdr rounded-[18px] p-3.5 flex flex-col gap-2.5">
+          {/* Picked indicator (only when picked from contacts). Subtle pill
+              that confirms autofill source. Tap × to keep the values but
+              switch back to manual-edit mode. */}
+          {pickedId && (
+            <div className="flex items-center gap-2 bg-gl border border-g/30 rounded-pill px-3 py-1 self-start">
+              <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-gd text-[10px] font-extrabold">
+                {initials}
+              </div>
+              <span className="text-[11px] font-extrabold text-gd">From contacts</span>
+              <button
+                onClick={clearPick}
+                aria-label="Edit manually"
+                className="text-gd text-[11px] font-bold ml-0.5"
+              >
+                ×
+              </button>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-extrabold text-black truncate">{picked.name}</p>
-              <p className="text-[11px] text-b3 truncate">{picked.email || picked.phone || '—'}</p>
-            </div>
-            <button
-              onClick={clearPick}
-              aria-label="Clear"
-              className="w-7 h-7 rounded-full bg-white border border-bdr flex items-center justify-center text-b2 text-[12px]"
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
+          )}
+
+          {/* Name with autosuggest. Always editable; selecting a suggestion
+              autofills phone/email below. */}
           <div className="relative">
             <input
               ref={nameRef}
               type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
+              value={name}
+              onChange={e => { setName(e.target.value); if (pickedId) setPickedId(null); }}
               onFocus={() => setFocused(true)}
               onBlur={() => setTimeout(() => setFocused(false), 150)}
-              placeholder={hasSynced ? 'Start typing a name…' : 'Type a name (Cergio samples shown)'}
-              className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3 text-[14px]
-                         text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+              placeholder="Friend's name"
+              className="w-full bg-bg5/40 rounded-[10px] px-3 py-2.5 text-[14px] font-bold
+                         text-black placeholder-b3 outline-none focus:bg-white focus:ring-2 focus:ring-g/30"
             />
             {focused && matches.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-bdr
-                              rounded-[14px] shadow-card overflow-hidden z-10 max-h-[280px] overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-bdr
+                              rounded-[14px] shadow-card overflow-hidden z-10 max-h-[260px] overflow-y-auto">
                 {matches.map(c => (
                   <button
                     key={c.id}
@@ -276,25 +297,43 @@ export function RecommendServiceFormScreen() {
               </div>
             )}
           </div>
-        )}
+
+          <div className="flex gap-2">
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="Phone"
+              className="flex-1 bg-bg5/40 rounded-[10px] px-3 py-2.5 text-[13px] font-bold
+                         text-black placeholder-b3 outline-none focus:bg-white focus:ring-2 focus:ring-g/30"
+            />
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Email"
+              className="flex-1 bg-bg5/40 rounded-[10px] px-3 py-2.5 text-[13px] font-bold
+                         text-black placeholder-b3 outline-none focus:bg-white focus:ring-2 focus:ring-g/30"
+            />
+          </div>
+          <p className="text-[11px] text-b3 leading-snug">
+            Either phone or email is enough — that's how we send the recommendation.
+          </p>
+        </div>
       </div>
 
-      {/* ── Step 3: blurb (locked until a contact is picked) ─────────────── */}
+      {/* ── Step 3: blurb ─────────────────────────────────────────────────── */}
       <div className="px-5 flex-1">
         <label className="block text-[12px] font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
-          Why you'd send a friend here
+          Why you'd send them here
         </label>
         <textarea
           value={blurb}
           onChange={e => setBlurb(e.target.value)}
           maxLength={280}
-          disabled={!picked}
-          placeholder={picked
-            ? `Try: "Maria did our deep clean before move-out — fast, friendly, fair price."`
-            : 'Pick a friend above to start writing.'}
-          className={`w-full h-[200px] bg-white border border-bdr rounded-[18px] p-4 text-[15px] text-black
-                     placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans leading-relaxed
-                     ${!picked ? 'opacity-50 cursor-not-allowed' : ''}`}
+          placeholder={`Try: "Maria did our deep clean before move-out — fast, friendly, fair price."`}
+          className="w-full h-[170px] bg-white border border-bdr rounded-[18px] p-4 text-[15px] text-black
+                     placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans leading-relaxed"
         />
         <p className="text-[11px] text-b3 mt-2 text-right">{remaining} characters left</p>
       </div>
@@ -308,7 +347,13 @@ export function RecommendServiceFormScreen() {
               ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}
         >
-          {busy ? 'Sending…' : (picked ? `Send to ${picked.name.split(' ')[0]}` : 'Pick a friend first')}
+          {busy
+            ? 'Sending…'
+            : valid
+              ? `Send to ${name.trim().split(' ')[0]}`
+              : (name.trim() && !hasContact)
+                ? 'Add a phone or email'
+                : 'Fill in the form to send'}
         </button>
       </div>
     </div>

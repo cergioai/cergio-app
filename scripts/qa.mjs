@@ -1068,6 +1068,136 @@ test('reward-flow-embedded', 'RewardFlowAnimation component exists + EarnExplain
     'EarnExplainerScreen must render <RewardFlowAnimation />.');
 });
 
+// ─── INVARIANT #32: Profile screen v3 — 4 grouped cards with drawers ────
+// User audit (2026-05-29): collapse the dense row-based Profile into 4-5
+// grouped cards, each tappable to reveal a bottom-sheet with sub-actions.
+// This invariant locks the new architecture so a future "just add a row"
+// PR doesn't silently regress to the old wall-of-rows layout.
+test('profile-grouped-cards', 'ProfileScreen renders 4 grouped GroupCards + ActionDrawers, no legacy SectionHeader rows', '#32', async () => {
+  const src = readFile('src/screens/ProfileScreen.jsx');
+  const code = stripComments(src);
+
+  // The new architecture is GroupCard + ActionDrawer. Both must exist.
+  assert(/function\s+GroupCard\s*\(/.test(code),
+    'ProfileScreen must define a <GroupCard /> primitive (the tappable group card).');
+  assert(/function\s+ActionDrawer\s*\(/.test(code),
+    'ProfileScreen must define an <ActionDrawer /> primitive (bottom-sheet for sub-actions).');
+  assert(/function\s+DrawerAction\s*\(/.test(code),
+    'ProfileScreen must define a <DrawerAction /> row used inside drawers.');
+
+  // The four canonical group cards must be rendered. Match the literal
+  // title strings to lock the grouping (4-5 cards, no more, no less).
+  const requiredTitles = [
+    'Earn & grow',
+    'Connector',
+    'Services',
+    'Account & settings',
+  ];
+  for (const t of requiredTitles) {
+    assert(code.includes(`title="${t}"`),
+      `ProfileScreen must render a GroupCard with title="${t}".`);
+  }
+
+  // The drawer state must be a single enum (one drawer open at a time).
+  assert(/openDrawer/.test(code) && /setOpenDrawer/.test(code),
+    'ProfileScreen must use a single openDrawer state (one drawer at a time).');
+
+  // Each drawer key must appear at least once as a setOpenDrawer arg.
+  for (const key of ['earn', 'connector', 'services', 'account']) {
+    assert(new RegExp(`setOpenDrawer\\(['"]${key}['"]\\)`).test(code),
+      `Drawer key "${key}" must be wired via setOpenDrawer('${key}').`);
+  }
+
+  // Legacy guards — the v2 SectionHeader/Row dense-list pattern must be
+  // gone. If someone re-adds <SectionHeader title="Account"> we want it
+  // to fail loudly so the grouping doesn't drift back.
+  assert(!/function\s+SectionHeader\s*\(/.test(code),
+    'ProfileScreen v3 must NOT redefine SectionHeader (replaced by GroupCard).');
+});
+
+// ─── INVARIANT #33: EarningsScreen — Referrals vs Client bookings tabs ──
+// Service providers need to track earnings from their own services
+// separately from referral/spotlight income. Lock the 2-tab structure +
+// the kind-classification that drives it. If someone collapses the tabs
+// or routes 'booking' rows into the wrong bucket, this fails.
+test('earnings-tabs', 'EarningsScreen has Referrals + Client bookings tabs driven by earnings.kind', '#33', async () => {
+  const src = readFile('src/screens/EarningsScreen.jsx');
+  const code = stripComments(src);
+
+  // The activeTab state must exist and accept the two canonical values.
+  assert(/activeTab/.test(code) && /setActiveTab/.test(code),
+    'EarningsScreen must use activeTab state to gate the two tabs.');
+  assert(/setActiveTab\(['"]referrals['"]\)/.test(code),
+    'EarningsScreen must have a button that sets activeTab to "referrals".');
+  assert(/setActiveTab\(['"]bookings['"]\)/.test(code),
+    'EarningsScreen must have a button that sets activeTab to "bookings".');
+
+  // The tab labels users see must match the user-spec.
+  assert(/>\s*Referrals\b/.test(code),
+    'EarningsScreen must render a tab labelled "Referrals".');
+  assert(/Client bookings/.test(code),
+    'EarningsScreen must render a tab labelled "Client bookings".');
+
+  // The kind-classification helpers must exist and bucket correctly.
+  assert(/REFERRAL_KINDS\s*=\s*new Set\(\[\s*['"]invite['"]\s*,\s*['"]spotlight['"]\s*\]\)/.test(code),
+    'REFERRAL_KINDS must be the set { invite, spotlight }.');
+  assert(/BOOKING_KINDS\s*=\s*new Set\(\[\s*['"]booking['"]\s*\]\)/.test(code),
+    'BOOKING_KINDS must be the set { booking }.');
+
+  // Providers should default to the bookings tab so their primary income
+  // line is what they see first.
+  assert(/if\s*\(\s*!tabSetByUser\s*&&\s*isProvider\s*\)\s*setActiveTab\(['"]bookings['"]\)/.test(code),
+    'Providers must default to the Client bookings tab unless the user explicitly taps Referrals.');
+});
+
+// ─── INVARIANT #34: Recommend flow is unified — no dual-path popup ──────
+// Tarik flagged the old 2-path Recommend popup as confusing — "Recommend
+// from contacts" routed to a contacts picker that looked like it was
+// asking the user to pick a SERVICE, not a recipient. The "Write a
+// recommendation" path was redundant. This invariant locks the unified
+// model: ONE form at /invite/recommend that supports both contact-pick
+// (autosuggest auto-fills phone+email) and manual typing.
+test('recommend-unified', 'Recommend flow is one screen — contacts + manual merged, no in-app links to the old popup', '#34', async () => {
+  const form = readFile('src/screens/RecommendServiceFormScreen.jsx');
+  const code = stripComments(form);
+
+  // The unified form must expose all three recipient fields so manual
+  // entry works (not just contacts autosuggest).
+  for (const field of ['name', 'phone', 'email']) {
+    const re = new RegExp(`\\b${field}\\b[\\s\\S]*?setState|set${field[0].toUpperCase()}${field.slice(1)}\\(`);
+    assert(re.test(code),
+      `RecommendServiceFormScreen must manage a "${field}" state field (manual entry path).`);
+  }
+
+  // Autosuggest still has to populate state from a picked contact.
+  assert(/function\s+pickMatch|const\s+pickMatch\s*=/.test(code),
+    'RecommendServiceFormScreen must have a pickMatch handler (autosuggest path).');
+
+  // Validation must accept EITHER phone OR email — not require both.
+  assert(/hasContact\s*=\s*isPlausiblePhone\(phone\)\s*\|\|\s*isPlausibleEmail\(email\)/.test(code),
+    'RecommendServiceFormScreen must accept either phone OR email (not require both).');
+
+  // The old popup file must now be a redirect, not the dual-path UI.
+  const popup = readFile('src/screens/RecommendServicePopupScreen.jsx');
+  assert(/<Navigate\s+to=["']\/invite\/recommend["']/.test(popup),
+    'RecommendServicePopupScreen must redirect to /invite/recommend (dual-path popup is retired).');
+
+  // No live screen should still navigate to /invite/recommend-popup —
+  // App.jsx keeps the route as a redirect, but no in-app link should
+  // route THROUGH it. Scan every screen except App.jsx and the popup
+  // file itself for stale links.
+  const screensDir = path.join(REPO_ROOT, 'src/screens');
+  const screenFiles = fs.readdirSync(screensDir).filter(f => f.endsWith('.jsx'));
+  const stale = [];
+  for (const f of screenFiles) {
+    if (f === 'RecommendServicePopupScreen.jsx') continue;
+    const src = fs.readFileSync(path.join(screensDir, f), 'utf8');
+    if (src.includes('/invite/recommend-popup')) stale.push(`src/screens/${f}`);
+  }
+  assert(stale.length === 0,
+    `Stale "/invite/recommend-popup" navigate calls — point them at "/invite/recommend" instead:\n  ${stale.join('\n  ')}`);
+});
+
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─
 // Observability. Renders the current short git SHA in a corner so
 // HMR-stale-closure bugs (like the 2026-05-27 2-day debug) are

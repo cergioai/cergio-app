@@ -23,6 +23,19 @@ function getInitials(name) {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
 }
 
+// CERGIO-GUARD (2026-05-29): earnings.kind classification — used for
+// the Referrals vs Client bookings tab split. Service providers earn
+// from BOTH streams; consumers + Connectors only ever see referrals.
+//   - 'invite'    → referral bonus when invited friend completes first booking
+//   - 'spotlight' → Connector paid spotlight on IG/TikTok
+//   - 'booking'   → revenue from the user's OWN service being booked
+// Referrals tab = invite + spotlight (anything earned by promoting).
+// Client bookings tab = booking (anything earned by providing service).
+const REFERRAL_KINDS  = new Set(['invite', 'spotlight']);
+const BOOKING_KINDS   = new Set(['booking']);
+function isReferralKind(k) { return REFERRAL_KINDS.has(k); }
+function isBookingKind(k)  { return BOOKING_KINDS.has(k); }
+
 export function EarningsScreen() {
   const navigate = useNavigate();
   const { showToast, auth, serviceMode } = useOutletContext();
@@ -32,6 +45,12 @@ export function EarningsScreen() {
   // — single chronological list keeps things simple when there's nothing
   // to filter yet (and even when there is).
   const [earnings, setEarnings] = useState([]);
+  // CERGIO-GUARD (2026-05-29): tab state for Referrals vs Client bookings.
+  // Default tab is 'bookings' for providers (their main revenue line),
+  // 'referrals' otherwise. We compute the default once after the provider
+  // probe lands, so the screen doesn't flip tabs mid-render.
+  const [activeTab, setActiveTab] = useState('referrals');
+  const [tabSetByUser, setTabSetByUser] = useState(false);
   // Provider check — if signed in user has at least one listed service,
   // OR they're toggled into service view, we show provider-flavored
   // benefit copy. Consumers see the friend-referral angle instead.
@@ -64,15 +83,29 @@ export function EarningsScreen() {
     });
   }, [auth?.isSignedIn]);
   const isProvider = serviceMode || hasService;
+  // CERGIO-GUARD: once we know they're a provider, default the tab to
+  // 'bookings' (their primary income source) unless the user has already
+  // explicitly tapped a tab. This avoids fighting their selection.
+  useEffect(() => {
+    if (!tabSetByUser && isProvider) setActiveTab('bookings');
+  }, [isProvider, tabSetByUser]);
   const totals = earnings.reduce((acc, e) => {
     if (e.status !== 'cleared') return acc;
     acc.all       += e.amount_cents;
     acc[e.kind]   = (acc[e.kind] || 0) + e.amount_cents;
+    if (isReferralKind(e.kind)) acc.referrals += e.amount_cents;
+    if (isBookingKind(e.kind))  acc.bookings  += e.amount_cents;
     return acc;
-  }, { all: 0 });
+  }, { all: 0, referrals: 0, bookings: 0 });
   const balanceCents = totals.all;
   const balanceStr   = fmtDollars(balanceCents);
   const canCashOut   = balanceCents >= CASH_OUT_THRESHOLD_CENTS;
+
+  // Filtered ledger per active tab.
+  const referralRows = earnings.filter(e => isReferralKind(e.kind));
+  const bookingRows  = earnings.filter(e => isBookingKind(e.kind));
+  const visibleRows  = activeTab === 'bookings' ? bookingRows : referralRows;
+  const visibleTotal = activeTab === 'bookings' ? totals.bookings : totals.referrals;
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
@@ -146,46 +179,106 @@ export function EarningsScreen() {
         )}
       </div>
 
-      {/* ── Real earnings ledger (bookings + spotlights) ──────────────────
-          Surfaces the rows the stripe-webhook writes on payment_intent.succeeded.
-          Connectors see spotlight payouts; service providers see booking payouts. */}
+      {/* ── Real earnings ledger ─────────────────────────────────────────
+          CERGIO-GUARD (2026-05-29): split into two tabs.
+            Referrals      = kind in (invite, spotlight) — promoted income
+            Client bookings = kind = booking            — own-service income
+          Service providers default to "Client bookings" (their primary
+          income line); consumers and Connectors default to "Referrals".
+          The tab user explicitly tapped wins after the first tap.
+          For providers with both streams, the totals in the tab header
+          let them see at a glance which line is performing. */}
       {earnings.length > 0 ? (
         <>
-          <div className="flex items-center justify-between px-5 mb-2">
-            <p className="text-[14px] font-extrabold uppercase tracking-widest text-b3">Your earnings</p>
-            <p className="text-[14px] font-extrabold text-g">{fmtDollars(totals.all)}</p>
+          {/* Tabs */}
+          <div className="mx-5 mb-3 flex bg-bg5 rounded-pill p-1">
+            <button
+              data-tab="referrals"
+              onClick={() => { setActiveTab('referrals'); setTabSetByUser(true); }}
+              className={`flex-1 rounded-pill py-2 text-[13px] font-extrabold transition-colors
+                          ${activeTab === 'referrals' ? 'bg-white text-black shadow-sm' : 'text-b3'}`}
+            >
+              Referrals
+              <span className="ml-1.5 text-[11px] font-bold opacity-70">
+                {fmtDollars(totals.referrals)}
+              </span>
+            </button>
+            <button
+              data-tab="bookings"
+              onClick={() => { setActiveTab('bookings'); setTabSetByUser(true); }}
+              className={`flex-1 rounded-pill py-2 text-[13px] font-extrabold transition-colors
+                          ${activeTab === 'bookings' ? 'bg-white text-black shadow-sm' : 'text-b3'}`}
+            >
+              Client bookings
+              <span className="ml-1.5 text-[11px] font-bold opacity-70">
+                {fmtDollars(totals.bookings)}
+              </span>
+            </button>
           </div>
-          <div className="px-5 flex flex-col gap-2 mb-6">
-            {earnings.map(e => (
-              <div key={e.id} className="bg-white border border-bdr rounded-[14px] p-3.5 flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
-                                  ${e.kind === 'spotlight' ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}>
-                  {e.kind === 'spotlight' ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                    </svg>
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <rect x="3" y="6" width="18" height="14" rx="2"/><path d="M9 6V4h6v2"/>
-                    </svg>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-extrabold text-black leading-tight">
-                    {e.kind === 'spotlight'
-                      ? `${(e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram')} spotlight`
-                      : 'Service booking'}
-                  </p>
-                  <p className="text-[11px] text-b3 mt-0.5">
-                    {timeAgo(e.created_at)} · {e.status === 'cleared' ? 'cleared' : e.status}
-                  </p>
-                </div>
-                <span className="text-[15px] font-extrabold text-black">
-                  +{fmtDollars(e.amount_cents)}
-                </span>
+
+          {visibleRows.length > 0 ? (
+            <>
+              <div className="flex items-center justify-between px-5 mb-2">
+                <p className="text-[14px] font-extrabold uppercase tracking-widest text-b3">
+                  {activeTab === 'bookings' ? 'Service bookings' : 'Referrals & spotlights'}
+                </p>
+                <p className="text-[14px] font-extrabold text-g">{fmtDollars(visibleTotal)}</p>
               </div>
-            ))}
-          </div>
+              <div className="px-5 flex flex-col gap-2 mb-6">
+                {visibleRows.map(e => (
+                  <div key={e.id} className="bg-white border border-bdr rounded-[14px] p-3.5 flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
+                                      ${e.kind === 'spotlight' ? 'bg-gl text-gd'
+                                       : e.kind === 'booking'  ? 'bg-card text-gd border border-g/30'
+                                       : 'bg-bg5 text-b2'}`}>
+                      {e.kind === 'spotlight' ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                      ) : e.kind === 'booking' ? (
+                        // House icon — own-service booking
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d="M3 11l9-7 9 7v9a2 2 0 0 1-2 2h-4v-6h-6v6H5a2 2 0 0 1-2-2z" />
+                        </svg>
+                      ) : (
+                        // Invite icon — friend payout
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                          <circle cx="9" cy="7" r="4" />
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-extrabold text-black leading-tight">
+                        {e.kind === 'spotlight'
+                          ? `${(e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram')} spotlight`
+                          : e.kind === 'booking'
+                          ? 'Service booking'
+                          : 'Friend referral'}
+                      </p>
+                      <p className="text-[11px] text-b3 mt-0.5">
+                        {timeAgo(e.created_at)} · {e.status === 'cleared' ? 'cleared' : e.status}
+                      </p>
+                    </div>
+                    <span className="text-[15px] font-extrabold text-black">
+                      +{fmtDollars(e.amount_cents)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            // Tab has no rows yet — show a tiny tab-aware empty state.
+            <div className="mx-5 mb-6 bg-white border border-bdr rounded-[14px] p-4 text-center">
+              <p className="text-[13px] text-b3 leading-snug">
+                {activeTab === 'bookings'
+                  ? <>No service bookings yet. <button onClick={() => navigate('/list-service')} className="text-gd font-bold underline">List a service</button> to start earning from your own work.</>
+                  : <>No referral earnings yet. <button onClick={() => navigate('/invite/friends-popup')} className="text-gd font-bold underline">Invite a friend</button> to start earning ${REWARDS.perFriend}/friend.</>}
+              </p>
+            </div>
+          )}
         </>
       ) : (
         // Empty state — counters + benefit summary. Copy adapts to
@@ -231,7 +324,7 @@ export function EarningsScreen() {
               Invite
             </button>
             <button
-              onClick={() => navigate('/invite/recommend-popup')}
+              onClick={() => navigate('/invite/recommend')}
               className="bg-white border border-bdr rounded-pill px-3 py-1.5 text-[11px] font-bold text-b2 whitespace-nowrap"
             >
               Reco

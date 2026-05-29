@@ -1,15 +1,32 @@
-// Per Figma "Hi Jacob!" Profile view — pure white bg, large greeting +
-// avatar top-right, large bold section headers, NO dividers between rows,
-// generous vertical rhythm. Switch to Service View is full-width GREEN
-// inside the Services section.
+// CERGIO-GUARD (2026-05-29): Profile screen v3 — collapsed from ~10 rows
+// across 5 sections into 4 grouped CARDS, each tappable to reveal a
+// bottom-sheet drawer with sub-actions. Top-of-screen priority is the
+// most-relevant earnings/Connector/services actions; account + settings
+// live in a calm bottom card.
 //
-// Brand language: Rainmaker → Connector (rename applied across UI 2026-05-24;
-// route paths + DB columns kept on `rainmaker_*` until a follow-up migration
-// renames them too — the user-visible copy is what matters most right now).
+// Top-down architecture:
+//   Hero       — avatar + "Hi {firstName}!" + Connector status pill
+//   Switch CTA — Switch to Service View (kept prominent, user requested)
+//   Card 1     — Earn & grow      (always shown — primary income hub)
+//   Card 2     — Connector        (signed-in)
+//   Card 3     — Services         (provider mode OR has any service)
+//   Card 4     — Account & settings (always shown)
+//   Footer     — Log out / Sign in + "I'll do this later"
+//
+// Sub-actions reveal via <ActionDrawer/>. The drawer pattern mirrors the
+// existing Connector explainer + GPI popup so it feels native to the app.
+// Reusing rather than reinventing keeps the UX coherent.
+//
+// IMPORTANT: every legacy nav target still routes from the new drawers
+// (qa #23 verifies). The reorg is purely cosmetic — no link is dropped.
+
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PROFILE } from '../data/mock';
-import { getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok, getMySpotlightPrices, listMyServices } from '../lib/api';
+import {
+  getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok,
+  getMySpotlightPrices, listMyServices,
+} from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
@@ -24,73 +41,124 @@ function fmtFollowers(n) {
   return String(x);
 }
 
-// Row pattern — sized down per Tarik's audit (title 18→16, subtitle 15→13).
-// Rows are dense + numerous on this screen; smaller type makes the section
-// hierarchy breathe.
-// CERGIO-GUARD (2026-05-28): row typography tightened per user audit.
-// Title 16 → 14, subtitle 13 → 11, slightly more vertical padding so the
-// row breathes despite smaller text. Goal: match the design-spec.md
-// reference of dense-but-readable settings rows.
-function Row({ title, subtitle, pill, onClick, disabled = false }) {
-  return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      className={`w-full px-5 py-4 flex items-center justify-between text-left
-                  ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-bg5/30 transition-colors'}`}
-    >
-      <div className="flex-1 pr-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[14px] font-bold text-black leading-tight">{title}</span>
-          {pill && pill}
-        </div>
-        {subtitle && (
-          <p className="text-[11px] text-b3 mt-1 leading-snug font-medium">{subtitle}</p>
-        )}
-      </div>
-      <Chevron />
-    </button>
-  );
-}
+// ─── Small primitives ──────────────────────────────────────────────────────
 
-// Small, cute chevron — thin stroke + compact size per Tarik's "small cute
-// etc" direction. Softer visual weight than the row titles.
-function Chevron() {
+function Chevron({ className = 'text-b3' }) {
   return (
-    <svg width="8" height="13" viewBox="0 0 11 18" fill="none" className="flex-shrink-0 text-b3">
+    <svg width="8" height="13" viewBox="0 0 11 18" fill="none" className={`flex-shrink-0 ${className}`}>
       <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor"
             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// Section header — sized down per Tarik's audit (was 26, now 20). Still
-// reads as a major divider thanks to the generous mt-8 vertical rhythm.
-function SectionHeader({ title }) {
+function MintPill({ children, tone = 'mint' }) {
+  const cls = tone === 'mint' ? 'bg-gl text-gd'
+            : tone === 'amber' ? 'bg-warnBg text-warnText'
+            : 'bg-bg5 text-b2';
   return (
-    <h2 className="px-5 text-[20px] font-extrabold text-black mt-8 mb-1 leading-tight">{title}</h2>
+    <span className={`${cls} rounded-pill px-2.5 py-0.5 text-[11px] font-extrabold whitespace-nowrap`}>
+      {children}
+    </span>
   );
 }
 
-function SetupPayoutsRow({ showToast }) {
-  const [busy, setBusy] = useState(false);
-  const handle = async () => {
-    setBusy(true);
-    const { data, error } = await getStripeOnboardingUrl();
-    setBusy(false);
-    if (error) { showToast(error.message); return; }
-    if (data?.url) window.location.href = data.url;
-  };
+// Top-level group card. Big tappable surface with title, summary, and an
+// optional value indicator on the right (earnings $ / count / status).
+function GroupCard({ title, summary, value, valueLabel, pill, onClick, accent = false }) {
   return (
-    <Row
-      title={busy ? 'Opening Stripe…' : 'Set up payouts'}
-      subtitle="Connect a bank account so we can pay you"
-      onClick={handle}
-      disabled={busy}
-    />
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-[20px] p-5 mb-3 flex items-start justify-between text-left
+                  transition-colors border
+                  ${accent
+                    ? 'bg-gl border-g/30 hover:bg-gl/85'
+                    : 'bg-card border-bdr/60 hover:bg-bg5/30'}`}
+    >
+      <div className="flex-1 pr-3">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className="text-[17px] font-extrabold text-black leading-tight">{title}</span>
+          {pill}
+        </div>
+        <p className="text-[12.5px] text-b3 leading-snug">{summary}</p>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {value && (
+          <div className="text-right">
+            <div className="text-[15px] font-extrabold text-gd leading-tight">{value}</div>
+            {valueLabel && <div className="text-[10px] text-b3 leading-tight mt-0.5">{valueLabel}</div>}
+          </div>
+        )}
+        <Chevron />
+      </div>
+    </button>
   );
 }
+
+// Bottom-sheet drawer — mirrors the existing Connector explainer pattern.
+// Closes on backdrop click or × button. Content is whatever children the
+// caller passes (typically a stack of <DrawerAction/> rows).
+function ActionDrawer({ open, title, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[80] bg-black/40 flex items-end justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[390px] bg-cream rounded-t-[24px] p-5 pb-7 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-start mb-3">
+          <h3 className="text-[20px] font-extrabold text-black leading-tight">{title}</h3>
+          <button
+            onClick={onClose}
+            className="text-[22px] text-b3 font-bold px-2 -mt-1"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// Action row inside a drawer. Optional icon, title, subtitle, pill.
+function DrawerAction({ title, subtitle, pill, onClick, disabled = false, icon = null }) {
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`w-full bg-white rounded-[14px] px-4 py-3.5 flex items-center justify-between text-left
+                  border border-bdr/40 transition-colors
+                  ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-bg5/30'}`}
+    >
+      <div className="flex items-center gap-3 flex-1 pr-2">
+        {icon && (
+          <div className="w-9 h-9 rounded-full bg-gl flex items-center justify-center flex-shrink-0">
+            {icon}
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[14px] font-bold text-black leading-tight">{title}</span>
+            {pill}
+          </div>
+          {subtitle && (
+            <p className="text-[11.5px] text-b3 mt-0.5 leading-snug">{subtitle}</p>
+          )}
+        </div>
+      </div>
+      <Chevron />
+    </button>
+  );
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
 
 export function ProfileScreen() {
   const navigate = useNavigate();
@@ -101,36 +169,46 @@ export function ProfileScreen() {
   const u           = auth?.user;
   const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || PROFILE.name;
   const initials    = (displayName[0] || 'T').toUpperCase();
+  const firstName   = displayName.split(/[\s@.]/)[0];
 
-  // Social connections + spotlight rate card (drives "Become a Connector"
-  // vs "Add spotlight rate" label on the Social section entry row).
-  const [ig, setIg] = useState(null);
+  // Drawers + modals
+  const [openDrawer,  setOpenDrawer]  = useState(null); // 'earn' | 'connector' | 'services' | 'account' | null
   const [showIgModal, setShowIgModal] = useState(false);
-  const [tt, setTt] = useState(null);
   const [showTtModal, setShowTtModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [spotlightPrices, setSpotlightPrices] = useState(null);
-  // CERGIO-GUARD (2026-05-28): "What's a Connector?" popup. The
-  // Connector concept is broader than "influencer" — it covers super
-  // users, service providers, small biz, anyone with a local network.
-  // We explain it before sending the user into the apply flow so they
-  // know whether it's for them.
   const [showConnectorInfo, setShowConnectorInfo] = useState(false);
-  // hasService — true if the signed-in user has at least one listed
-  // service. Drives whether to render the "Services" section, which
-  // is noise for consumer-only users (most of the audience).
+
+  // Live data
+  const [ig, setIg] = useState(null);
+  const [tt, setTt] = useState(null);
+  const [spotlightPrices, setSpotlightPrices] = useState(null);
   const [hasService, setHasService] = useState(false);
+  const [serviceCount, setServiceCount] = useState(0);
+
   useEffect(() => {
-    if (!isSignedIn) { setIg(null); setTt(null); setSpotlightPrices(null); setHasService(false); return; }
+    if (!isSignedIn) {
+      setIg(null); setTt(null); setSpotlightPrices(null);
+      setHasService(false); setServiceCount(0);
+      return;
+    }
     getMyInstagram().then(({ data }) => setIg(data || null));
     getMyTikTok().then(({ data }) => setTt(data || null));
     getMySpotlightPrices().then(({ data }) => setSpotlightPrices(data || null));
-    listMyServices().then(({ data }) => setHasService((data || []).length > 0));
+    listMyServices().then(({ data }) => {
+      const n = (data || []).length;
+      setHasService(n > 0);
+      setServiceCount(n);
+    });
   }, [isSignedIn]);
+
   const hasRateCard = !!(
     spotlightPrices?.spotlight_price_instagram_cents != null ||
     spotlightPrices?.spotlight_price_tiktok_cents    != null
   );
+
+  const closeDrawer = () => setOpenDrawer(null);
+  const nav = (path) => { closeDrawer(); navigate(path); };
+
   const handleSaveIg = async ({ handle: h, followers: f, verified }) => {
     const { data, error } = await saveInstagram({ handle: h, followers: f, verified });
     if (error) throw new Error(error.message);
@@ -156,50 +234,61 @@ export function ProfileScreen() {
     setShowTtModal(false);
   };
 
+  const openStripe = () => {
+    showToast('Opening Stripe…');
+    getStripeOnboardingUrl().then(({ data }) => {
+      if (data?.url) window.location.href = data.url;
+      else showToast('Stripe onboarding link unavailable');
+    });
+  };
+
   const listGated = isSignedIn && !provider.loading && !provider.ready;
-  // CERGIO-GUARD: list-service navigation is NEVER blocked by Stripe
-  // state. Publishing a listing is decoupled from payouts; Stripe
-  // verification completes asynchronously and the listing stays live.
   const onListService = () => {
+    closeDrawer();
     if (listGated) {
       showToast(provider.hasAccount
         ? 'Payouts pending Stripe verification — your listing will still publish.'
-        : 'Heads up: set up payouts later in Profile → Service view.');
+        : 'Heads up: set up payouts later in Profile → Services.');
     }
     navigate('/list-service');
   };
 
-  // Inline pills used inside row titles. Spec puts badges at 11-12px so they
-  // sit next to the 18px row title without competing for visual weight.
-  const MintPill = ({ children }) => (
-    <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold whitespace-nowrap">
-      {children}
-    </span>
-  );
+  // ── Status pills for the hero ────────────────────────────────────────────
+  const connectorStatusPill = hasRateCard
+    ? <MintPill>Connector ✓</MintPill>
+    : null;
 
-  // Greeting first name only.
-  const firstName = displayName.split(/[\s@.]/)[0];
+  const showServicesCard = serviceMode || hasService;
 
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
-      {/* ── Top: greeting + avatar (greeting 30→24 per audit) ──────────────── */}
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
       <div className="px-5 pt-8 pb-2 flex items-start justify-between gap-4">
-        <h1 className="text-[24px] font-extrabold text-black leading-tight">
-          Hi {firstName}!
-        </h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[24px] font-extrabold text-black leading-tight">
+            Hi {firstName}!
+          </h1>
+          <div className="flex items-center gap-2 mt-1.5">
+            {isSignedIn ? (
+              hasRateCard
+                ? <MintPill>Connector ✓</MintPill>
+                : <span className="text-[11.5px] text-b3 font-bold uppercase tracking-wide">Member</span>
+            ) : (
+              <span className="text-[11.5px] text-b3 font-bold uppercase tracking-wide">Not signed in</span>
+            )}
+          </div>
+        </div>
         <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-[16px] font-extrabold flex-shrink-0 overflow-hidden">
           {initials}
         </div>
       </div>
 
-      {/* ── Switch view CTA — MOVED to the top per audit, right under the
-          greeting and above Account. The primary action on this screen
-          should be the most visible. ─────────────────────────────────── */}
-      <div className="px-5 mt-3 mb-2">
+      {/* ── Switch view CTA — primary action, kept at top ──────────────── */}
+      <div className="px-5 mt-3 mb-5">
         <button
           onClick={() => {
             setServiceMode(!serviceMode);
-            showToast(serviceMode ? 'Back to user view' : 'You\'re now in Service view');
+            showToast(serviceMode ? 'Back to user view' : "You're now in Service view");
           }}
           className="w-full bg-g text-white rounded-[24px] py-3.5 text-[16px] font-extrabold
                      hover:opacity-90 active:scale-[.98] transition-all"
@@ -208,154 +297,55 @@ export function ProfileScreen() {
         </button>
       </div>
 
-      {/* ── Account ──────────────────────────────────────────────────────────
-          Edit profile NOW opens a real modal (name + phone — the only fields
-          stored in auth user_metadata). The "coming soon" stubs that
-          frustrated the user are gone. */}
-      <SectionHeader title="Account" />
-      <Row
-        title="View and edit profile"
-        subtitle="Update your name and phone"
-        onClick={() => setShowEditProfile(true)}
-      />
-      <Row
-        title="Payment settings"
-        subtitle={provider.hasAccount ? 'Manage your Stripe payouts' : 'Set up payouts to receive bookings'}
-        onClick={() => {
-          if (provider.hasAccount) {
-            showToast('Opening Stripe…');
-            getStripeOnboardingUrl().then(({ data }) => {
-              if (data?.url) window.location.href = data.url;
-              else showToast('Stripe onboarding link unavailable');
-            });
-          } else {
-            navigate('/list-service');
-          }
-        }}
-      />
-
-      {/* ── Social — Connector entry on top, then IG, then TikTok ─────────
-          The first row flips between "Become a Connector" (new user, no
-          rate card yet) and "Add spotlight rate" (already a Connector).
-          Both route to the apply flow where IG/TT and rate-card are set. */}
-      {isSignedIn && (
-        <>
-          <SectionHeader title="Social" />
-          <Row
-            title={hasRateCard ? 'Add a spotlight rate' : 'Become a Connector'}
-            subtitle={hasRateCard
-              ? 'Edit your IG / TikTok rate card or audience'
-              : 'Set your rate card — services book you for spotlights'}
-            pill={hasRateCard ? <MintPill>Connector ✓</MintPill> : null}
-            onClick={() => navigate('/rainmaker/apply/instagram')}
-          />
-          {/* Spotlight requests — second Social row. Shows for everyone since
-              providers also see their outbound requests here. */}
-          <Row
-            title="Spotlight requests"
-            subtitle="Manage inbound + sent spotlight asks"
-            onClick={() => navigate('/connectors/requests')}
-          />
-          {ig?.instagram_handle ? (
-            <Row
-              title={`Instagram · @${ig.instagram_handle}`}
-              subtitle={
-                ig.instagram_followers != null
-                  ? `${fmtFollowers(ig.instagram_followers)} followers · helps Connectors tag you`
-                  : 'Connected — add follower count for better matches'
-              }
-              pill={ig.instagram_verified_at ? <MintPill>✓ Verified</MintPill> : null}
-              onClick={() => setShowIgModal(true)}
-            />
-          ) : (
-            <Row title="Connect Instagram" subtitle="Required for Connectors · boosts trust for providers" onClick={() => setShowIgModal(true)} />
-          )}
-          {tt?.tiktok_handle ? (
-            <Row
-              title={`TikTok · @${tt.tiktok_handle}`}
-              subtitle={
-                tt.tiktok_followers != null
-                  ? `${fmtFollowers(tt.tiktok_followers)} audience · boosts your spotlight reach`
-                  : 'Connected — add audience size for better matches'
-              }
-              pill={tt.tiktok_verified_at ? <MintPill>✓ Verified</MintPill> : null}
-              onClick={() => setShowTtModal(true)}
-            />
-          ) : (
-            <Row title="Connect TikTok" subtitle="Add your TikTok handle + audience size" onClick={() => setShowTtModal(true)} />
-          )}
-        </>
-      )}
-
-      {/* ── Services — provider-only.
-          CERGIO-GUARD (2026-05-28): consumers don't need to see "List
-          a service" or "Manage services" — those are noise for the
-          80%+ user audience. Show ONLY when the user is in service
-          mode OR has at least one listed service. The "Switch to
-          provider mode" button at the top of the screen is the path
-          in if they ever want to flip. */}
-      {(serviceMode || hasService) && (
-        <>
-          <SectionHeader title="Services" />
-          <Row
-            title="List a new service"
-            subtitle={listGated
-              ? (provider.hasAccount ? 'Stripe verifying…' : 'Needs payouts setup first')
-              : 'Offer your service on Cergio'}
-            onClick={onListService}
-          />
-          <Row
-            title="Manage services"
-            subtitle="Edit listings, photos, and pricing"
-            onClick={() => navigate('/services/manage')}
-          />
-          {!provider.ready && <SetupPayoutsRow showToast={showToast} />}
-        </>
-      )}
-
-      {/* ── Earn $250+ ───────────────────────────────────────────────────────
-          CERGIO-GUARD (2026-05-28): collapsed from 5 rows → 3. The
-          "Invite friends" + "Recommend a service" + "Find friends on
-          Cergio" all already converge to /invite/friends-popup (which
-          has Invite + Reco buttons inline), so one "Invite & earn"
-          row replaces all three. Earnings stays its own row because
-          it's high-frequency. Connector entry stays separate so the
-          cash-track upgrade is one tap away. */}
-      <SectionHeader title={`Earn $${REWARDS.perFriend}+`} />
-      <Row
-        title="My earnings"
-        subtitle="Balance, breakdown, and how it works"
-        pill={<MintPill>$0 USD</MintPill>}
-        onClick={() => navigate('/earnings')}
-      />
-      {!hasRateCard && (
-        <Row
-          title="Become a Connector"
-          subtitle={`$${REWARDS.perFriendConnector} cash + free services + Growth Participation Income`}
-          onClick={() => setShowConnectorInfo(true)}
+      {/* ── Grouped cards ──────────────────────────────────────────────── */}
+      <div className="px-5">
+        {/* Card 1 — Earn & grow */}
+        <GroupCard
+          title="Earn & grow"
+          summary={`Invite, recommend, see earnings — $${REWARDS.perFriend} per friend who joins + books`}
+          value="$0"
+          valueLabel="USD"
+          accent
+          onClick={() => setOpenDrawer('earn')}
         />
-      )}
-      <Row
-        title="Invite & earn"
-        subtitle={`$${REWARDS.perFriendUser} credit per friend who joins + books`}
-        onClick={() => navigate('/invite/friends-popup')}
-      />
 
-      {/* ── About ──────────────────────────────────────────────────────────── */}
-      <SectionHeader title="About" />
-      <Row
-        title="Privacy"
-        subtitle="How we protect your data"
-        onClick={() => navigate('/privacy')}
-      />
-      <Row
-        title="Delete my data"
-        subtitle="Request deletion of your account + history"
-        onClick={() => navigate('/data-deletion')}
-      />
+        {/* Card 2 — Connector (signed-in) */}
+        {isSignedIn && (
+          <GroupCard
+            title="Connector"
+            summary={hasRateCard
+              ? 'Spotlight rate card · IG · TikTok · requests'
+              : `$${REWARDS.perFriendConnector} cash + free services + Growth Participation Income`}
+            pill={connectorStatusPill}
+            value={hasRateCard ? '✓' : 'Apply'}
+            valueLabel={hasRateCard ? 'Active' : ''}
+            onClick={() => setOpenDrawer('connector')}
+          />
+        )}
 
-      {/* ── Bottom: outlined Log out + "later" link ────────────────────────── */}
-      <div className="px-5 mt-10 mb-3">
+        {/* Card 3 — Services (provider-mode or has any service) */}
+        {showServicesCard && (
+          <GroupCard
+            title="Services"
+            summary={hasService
+              ? 'List, manage, payouts — your service listings'
+              : 'List a new service and start receiving bookings'}
+            value={hasService ? String(serviceCount) : 'New'}
+            valueLabel={hasService ? (serviceCount === 1 ? 'listed' : 'listed') : ''}
+            onClick={() => setOpenDrawer('services')}
+          />
+        )}
+
+        {/* Card 4 — Account & settings */}
+        <GroupCard
+          title="Account & settings"
+          summary="Profile · payments · privacy · about"
+          onClick={() => setOpenDrawer('account')}
+        />
+      </div>
+
+      {/* ── Bottom: Log out / Sign in + "later" ─────────────────────────── */}
+      <div className="px-5 mt-8 mb-3">
         {isSignedIn ? (
           <button
             onClick={async () => { await auth.signOut(); showToast('Signed out'); navigate('/'); }}
@@ -381,7 +371,168 @@ export function ProfileScreen() {
         I'll do this later
       </button>
 
-      {/* Modals */}
+      {/* ── Drawer: Earn & grow ─────────────────────────────────────────── */}
+      <ActionDrawer
+        open={openDrawer === 'earn'}
+        title="Earn & grow"
+        onClose={closeDrawer}
+      >
+        <DrawerAction
+          title="My earnings"
+          subtitle="Balance, breakdown, history"
+          pill={<MintPill>$0 USD</MintPill>}
+          onClick={() => nav('/earnings')}
+        />
+        <DrawerAction
+          title="Invite friends"
+          subtitle={`$${REWARDS.perFriendUser} credit per friend who joins + books`}
+          onClick={() => nav('/invite/friends-popup')}
+        />
+        <DrawerAction
+          title="Recommend a service"
+          subtitle="Earn when a friend books from your recommendation"
+          onClick={() => nav('/invite/recommend')}
+        />
+        {!hasRateCard && (
+          <DrawerAction
+            title="Become a Connector"
+            subtitle={`$${REWARDS.perFriendConnector} cash + free services + GPI`}
+            onClick={() => { closeDrawer(); setShowConnectorInfo(true); }}
+          />
+        )}
+        <DrawerAction
+          title="How earnings work"
+          subtitle="The 4-step story — cash, trust, barter, growth"
+          onClick={() => nav('/earnings/how')}
+        />
+      </ActionDrawer>
+
+      {/* ── Drawer: Connector ───────────────────────────────────────────── */}
+      <ActionDrawer
+        open={openDrawer === 'connector'}
+        title="Connector"
+        onClose={closeDrawer}
+      >
+        <DrawerAction
+          title="What's a Connector?"
+          subtitle="Influencers · super-users · providers · small biz"
+          onClick={() => { closeDrawer(); setShowConnectorInfo(true); }}
+        />
+        <DrawerAction
+          title={hasRateCard ? 'Edit spotlight rate card' : 'Set spotlight rate card'}
+          subtitle={hasRateCard
+            ? 'Update what you charge per IG / TikTok spotlight'
+            : 'Services book you for spotlights — set your rate'}
+          pill={hasRateCard ? <MintPill>Set</MintPill> : null}
+          onClick={() => nav('/rainmaker/apply/instagram')}
+        />
+        <DrawerAction
+          title="Spotlight requests"
+          subtitle="Inbound + sent spotlight asks"
+          onClick={() => nav('/connectors/requests')}
+        />
+        {ig?.instagram_handle ? (
+          <DrawerAction
+            title={`Instagram · @${ig.instagram_handle}`}
+            subtitle={
+              ig.instagram_followers != null
+                ? `${fmtFollowers(ig.instagram_followers)} followers · helps Connectors tag you`
+                : 'Add follower count for better matches'
+            }
+            pill={ig.instagram_verified_at ? <MintPill>✓ Verified</MintPill> : null}
+            onClick={() => { closeDrawer(); setShowIgModal(true); }}
+          />
+        ) : (
+          <DrawerAction
+            title="Connect Instagram"
+            subtitle="Required for Connectors · boosts trust for providers"
+            onClick={() => { closeDrawer(); setShowIgModal(true); }}
+          />
+        )}
+        {tt?.tiktok_handle ? (
+          <DrawerAction
+            title={`TikTok · @${tt.tiktok_handle}`}
+            subtitle={
+              tt.tiktok_followers != null
+                ? `${fmtFollowers(tt.tiktok_followers)} audience · boosts your spotlight reach`
+                : 'Add audience size for better matches'
+            }
+            pill={tt.tiktok_verified_at ? <MintPill>✓ Verified</MintPill> : null}
+            onClick={() => { closeDrawer(); setShowTtModal(true); }}
+          />
+        ) : (
+          <DrawerAction
+            title="Connect TikTok"
+            subtitle="Add your handle + audience size"
+            onClick={() => { closeDrawer(); setShowTtModal(true); }}
+          />
+        )}
+      </ActionDrawer>
+
+      {/* ── Drawer: Services (provider) ─────────────────────────────────── */}
+      <ActionDrawer
+        open={openDrawer === 'services'}
+        title="Services"
+        onClose={closeDrawer}
+      >
+        <DrawerAction
+          title="List a new service"
+          subtitle={listGated
+            ? (provider.hasAccount ? 'Stripe verifying…' : 'Offer your service on Cergio')
+            : 'Offer your service on Cergio'}
+          onClick={onListService}
+        />
+        <DrawerAction
+          title="Manage services"
+          subtitle="Edit listings, photos, and pricing"
+          pill={serviceCount > 0 ? <MintPill tone="neutral">{serviceCount} live</MintPill> : null}
+          onClick={() => nav('/services/manage')}
+        />
+        {!provider.ready && (
+          <DrawerAction
+            title="Set up payouts"
+            subtitle="Connect a bank account via Stripe so we can pay you"
+            pill={<MintPill tone="amber">Needed</MintPill>}
+            onClick={() => { closeDrawer(); openStripe(); }}
+          />
+        )}
+      </ActionDrawer>
+
+      {/* ── Drawer: Account & settings ──────────────────────────────────── */}
+      <ActionDrawer
+        open={openDrawer === 'account'}
+        title="Account & settings"
+        onClose={closeDrawer}
+      >
+        <DrawerAction
+          title="Edit profile"
+          subtitle="Update your name and phone"
+          onClick={() => { closeDrawer(); setShowEditProfile(true); }}
+        />
+        <DrawerAction
+          title="Payment settings"
+          subtitle={provider.hasAccount
+            ? 'Manage your Stripe payouts'
+            : 'Set up payouts to receive bookings'}
+          onClick={() => {
+            closeDrawer();
+            if (provider.hasAccount) openStripe();
+            else navigate('/list-service');
+          }}
+        />
+        <DrawerAction
+          title="Privacy"
+          subtitle="How we protect your data"
+          onClick={() => nav('/privacy')}
+        />
+        <DrawerAction
+          title="Delete my data"
+          subtitle="Request deletion of your account + history"
+          onClick={() => nav('/data-deletion')}
+        />
+      </ActionDrawer>
+
+      {/* ── Modals (preserved from v2) ──────────────────────────────────── */}
       {showIgModal && (
         <InstagramConnectModal
           initialHandle={ig?.instagram_handle ?? ''}
@@ -406,12 +557,7 @@ export function ProfileScreen() {
         />
       )}
 
-      {/* "What's a Connector?" — bottom sheet explainer.
-          CERGIO-GUARD (2026-05-28): the Connector role is broader than
-          influencer — covers super users, service providers, small biz,
-          anyone with a strong local network. Explain that BEFORE the
-          apply flow so people self-select correctly. Mirrors the Growth
-          Participation Income popup pattern on EarningsScreen. */}
+      {/* "What's a Connector?" — full explainer, preserved from v2 */}
       {showConnectorInfo && (
         <div
           className="fixed inset-0 z-[80] bg-black/40 flex items-end justify-center"

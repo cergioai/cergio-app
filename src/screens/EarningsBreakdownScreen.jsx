@@ -106,7 +106,7 @@ export function EarningsBreakdownScreen() {
             </div>
           </div>
           <button
-            onClick={() => navigate('/invite/recommend-popup')}
+            onClick={() => navigate('/invite/recommend')}
             className="bg-transparent border border-white/80 rounded-[24px] px-4 py-2.5 text-[13px] font-extrabold text-white"
           >
             Reco more

@@ -1,102 +1,109 @@
-Animation v2 (cash/trust/barter/GPI) + Super User 10/mo + houskeeper fix
+Recommend flow: unified (contacts + manual) + Profile v3 + Earnings tabs
 
-Three fixes in one push driven by Tarik's UX review of the freshly-shipped
-/earnings/how screen, the Connector copy, and a real search-tab regression.
+Three user-driven cleanups in one push. (Profile v3 + Earnings tabs were
+queued in the previous Mac-locked window; the Recommend fix is the new
+one and rounds out the signed-in UX pass.)
 
-1. REWARD-FLOW ANIMATION v2 — explains the business model, not the garden
+1. RECOMMEND FLOW — unified, no more dual-path popup
 
-The 6-step "garden grows" was pretty but didn't TEACH the model. Rewrote
-as 4 mechanism-named steps. Sprouts now represent PEOPLE; vines are the
-trust network; coins are direct cash; gift boxes are barter; the orchard
-is community growth. Each step shows ONE benefit, with a colored chip and
-a top-right counter that locks the dollar amount in the eye:
+Tarik's audit: "recommend flow is wrong.. when you pick someone to
+recommend, that's the services you're recommending not the person
+you're recommending to.. the write a recommendation link is redundant..
+remove... can either recommend from contacts or recommend a person by
+typing their info (but can merge both)."
 
-  Step 1 — DIRECT CASH        — You invite, friend books, you earn 7% up to $250
-  Step 2 — TRUST + NETWORK    — Friend invites friend → +5% ($12.50) compounds
-                                 50 friends → $12,500
-  Step 3 — BARTER             — Connectors trade IG/TikTok spotlights for
-                                 $1K–$10K/month in free services from providers
-  Step 4 — GROWTH PARTICIPATION — Community-owned upside as Cergio scales
-                                 Tagline: Human-Powered AI · Shared Prosperity
+Old: RecommendServicePopupScreen showed two buttons — "Recommend from
+contacts" (route → multi-select contacts picker that looked like Invite)
+and "Write a recommendation" (route → free-form form with contacts-only
+autosuggest, no manual entry). The split confused the model.
 
-  src/components/ui/RewardFlowAnimation.jsx  (rewritten)
-    • 4 inline scene functions (Scene1..Scene4)
-    • Sprout-as-person Sprout primitive + Vine connector + GiftBox +
-      CameraBadge + SocialPills + GrowthCurve
-    • Counter shows $-amount + sub-label per step (e.g. "+$250 / cap per friend")
-    • Benefit chip swaps color per step (green / green / amber / dark-green)
-    • Each step re-keys the SVG <g> so rf-pop entrances retrigger cleanly
-    • All numbers read from REWARDS — no hardcoded $ values
+New: ONE screen at /invite/recommend with three merged inputs:
 
-  src/screens/EarnExplainerScreen.jsx
-    • Lede now says "4-step story", lists the four mechanism names
+  ┌── Who are you recommending to? ────────┐
+  │  [ From contacts × ]   ← only shown    │
+  │                           when picked  │
+  │  [ Friend's name        ]              │
+  │  ↪ autosuggest dropdown (tap → fills)  │
+  │  [ Phone        ] [ Email           ]  │
+  │  Either one is enough.                 │
+  └────────────────────────────────────────┘
 
-  scripts/qa.mjs #31
-    • Updated to lock the 4-step arc + barter + GPI + Human-Powered AI tagline
+Pick a contact → name + phone + email all autofill, subtle "From
+contacts" pill appears. Or type all three manually for someone who
+isn't in your contacts. Either path → same blurb step → same submit
+(notify-user + recommendations row).
 
-2. SUPER USER THRESHOLD — 10 friends/month, not 5 in 30 days
+  src/screens/RecommendServiceFormScreen.jsx
+    • Replaced pickedContact / query state with name+phone+email triple
+    • pickMatch handler autofills all three from a contacts row
+    • isPlausiblePhone / isPlausibleEmail validators — fail closed only
+      on obviously-wrong input; server validates the rest
+    • Validation: name + (phone || email) + blurb, all required
+    • Submit button label adapts: "Add a phone or email" → "Send to Maria"
+    • "Connect your contacts" prompt now reads "(optional)" so it doesn't
+      look like a hard requirement
 
-Tarik corrected the Connector definition: a Cergio Super User is someone
-with 10 friends BOOKING per month — not 5 invited+booking in 30 days.
-Made it canonical in REWARDS so it can never drift again.
-
-  src/lib/rewards.js
-    • REWARDS.superUserFriendsPerMonth = 10
-    • Header comment updated
-
-  src/screens/RainmakerApplyScreen.jsx
-    • Super User card desc pulled from REWARDS.superUserFriendsPerMonth
+  src/screens/RecommendServicePopupScreen.jsx
+    • Rewritten as <Navigate to="/invite/recommend" replace /> stub —
+      kept so any cached URL / deep link still works, but the dual-path
+      UI is dead
 
   src/screens/ProfileScreen.jsx
-    • Connector popup "Super users" bullet now reads the canonical number
+    • Drawer "Recommend a service" → /invite/recommend (was popup)
 
-3. BARTER RANGE — $1K–$10K/mo also canonical
+  src/screens/EarningsScreen.jsx
+    • Empty-state "Reco" button → /invite/recommend (was popup)
 
-While we were in rewards.js, added REWARDS.connectorBarterMin/Max and a
-matching REWARD_COPY.connectorBarterShort / connectorBarterOneLine so the
-animation, RainmakerApply, and any future barter-themed surface all pull
-from one place.
+  src/screens/EarningsBreakdownScreen.jsx
+    • "Reco more" button → /invite/recommend (was popup)
 
-  src/lib/rewards.js
-    • connectorBarterMin: 1000, connectorBarterMax: 10000
-    • connectorBarterShort: "$1K–$10K/mo in free services"
-    • connectorBarterOneLine: full explainer
+  scripts/qa.mjs #34 (new)
+    • Locks the unified form: name/phone/email state, pickMatch handler,
+      either-phone-or-email validation, redirect stub
+    • Scans every screen file for stale "/invite/recommend-popup" links
 
-4. SEARCH BUG — "need houskeeper under 200" returned empty state
+2. PROFILE v3 — 4 grouped cards + drawers (queued from prior session)
 
-Tarik's tab: "need houskeeper under 200" produced "What service do you
-need? (e.g. plumber, sitter, cleaner, tutor…)" — even though local
-taxonomy DOES resolve "houskeeper" → "House Cleaner" via the fuzzy
-fallback (distance 1, well within threshold).
+Hero (avatar + name + Connector pill) → Switch-View CTA →
+  Card 1 — Earn & grow            (always — accent green, primary)
+  Card 2 — Connector              (signed-in)
+  Card 3 — Services               (provider mode or has any listing)
+  Card 4 — Account & settings     (always)
+Footer — Log out / Sign in + "I'll do this later"
 
-Root cause: useChat's bot-reply branch keyed on `merged.what` alone.
-Claude's cloud parser returned what=null (typo + actor-noun confused it);
-the LOCAL override at line ~520 correctly set provider_type, but the
-reply logic ignored it and fell into the empty-state path.
+Each card → bottom-sheet drawer with sub-actions. Drawer pattern
+mirrors the existing Connector explainer + GPI popups. No nav target
+dropped (qa #23 verifies).
 
-  src/hooks/useChat.js
-    • Backfill merged.what from mergedProviderType when cloud parser
-      returns null but local taxonomy resolved
-    • Bot-reply gate now checks `merged.what || merged.provider_type`
-      so a resolved provider type is enough to skip the empty-state prompt
+  src/screens/ProfileScreen.jsx        (rewritten — 4 cards + drawers)
+  scripts/qa.mjs #32 (new)             (locks grouping + primitives)
 
-  scripts/qa.mjs #29 (search-tolerance)
-    • +5 cases locking actor-noun typos:
-        'houskeeper'                  → House Cleaner
-        'need houskeeper under 200'   → House Cleaner   (user's exact phrase)
-        'housekeping under 200'       → House Cleaner
-        'plummer'                     → Plumber
-        'plumbr needed today'         → Plumber
-        'electrcian needed urgently'  → Electrician
-    • Brings the search tolerance battery to 70+ cases
+3. EARNINGS — Referrals vs Client bookings tabs
 
-QA: 31/31 pass.
+Tarik: "we forgot to build a track earnings from services for service
+providers". Service providers earn from TWO streams — referral
+commissions and revenue from their own services. Were merged into one
+list, invisible as separate business lines.
+
+The earnings.kind enum already supported the split; we just weren't
+surfacing it. Now a 2-tab segmented control gates the ledger:
+
+  Referrals  $42      ←  kind in (invite, spotlight)
+  Client bookings  $1,250  ←  kind = booking
+
+Providers default to Client bookings; consumers + Connectors default
+to Referrals. First explicit tap is sticky. Per-tab empty state with
+appropriate CTA (List a service / Invite a friend).
+
+  src/screens/EarningsScreen.jsx
+  scripts/qa.mjs #33 (new)
+
+QA: 34/34 pass (3 new invariants, no regressions).
 
 Files:
-  src/components/ui/RewardFlowAnimation.jsx   (rewritten — 4-scene model)
-  src/screens/EarnExplainerScreen.jsx          (lede copy + comment)
-  src/screens/RainmakerApplyScreen.jsx         (Super User threshold)
-  src/screens/ProfileScreen.jsx                (Super User threshold in popup)
-  src/lib/rewards.js                           (3 new canonical fields)
-  src/hooks/useChat.js                         (what backfill + reply gate)
-  scripts/qa.mjs                               (#29 expanded, #31 rewritten)
+  src/screens/RecommendServiceFormScreen.jsx   (unified contacts + manual)
+  src/screens/RecommendServicePopupScreen.jsx  (now a Navigate redirect)
+  src/screens/ProfileScreen.jsx                (4 grouped cards + drawers)
+  src/screens/EarningsScreen.jsx               (tabs + entry-point rewire)
+  src/screens/EarningsBreakdownScreen.jsx      (entry-point rewire)
+  scripts/qa.mjs                               (+#32, +#33, +#34)
