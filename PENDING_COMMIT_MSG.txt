@@ -1,77 +1,48 @@
-Fix: recommendations.sent_at (not created_at) — the friends-on-search root cause
+Animation: move "50 friends → $12,500" punchline to Scene 2 (Invite/Math)
 
-THE actual root cause of "No mutual friends yet" on every search card,
-even when the seed claims to have written 3 recommendations on Penny.
+Tarik: "the 50 friends 12,500 belongs in the invite screen not the GPI."
 
-Caught by Diagnose Money Flow.command. The Diagnose output revealed:
+The compounding example is an INVITE story — it answers "how big can my
+referral earnings get?" not "what's Growth Participation Income?"
+Conflating them muddled both messages. v7 had the $12,500 hero card on
+Scene 3 (GPI) with a small "+ GPI" strip below it; v8 splits them
+properly.
 
-  ─── 1a. recommendations columns ───
-  [
-    {"column_name":"id"},               {"column_name":"recommender_id"},
-    {"column_name":"recipient_id"},     {"column_name":"recipient_phone"},
-    {"column_name":"service_id"},       {"column_name":"message"},
-    {"column_name":"sent_at"},          {"column_name":"inviter_id"}
-  ]
+  Scene 2 (Invite/Math) — gains the punchline
+    Title:   "$250 per friend → $12,500 with 50."
+    Body:    Cergio 10% on every booking, we share 7% with you, $250 cap,
+             6-month-of-invite window. "Bring 50 friends and that's $12,500."
+    Visual:  Existing 3-row 7%-accumulator stays. New 50 × $250 = $12,500
+             pill footer (mint green, full-width) replaces the old text
+             footer. Small subline below: "within 6 months of each invite."
 
-  ─── 3c. recommendations on Penny services ───
-  {"message":"Failed to run sql query: ERROR: 42703: column r.created_at
-   does not exist...HINT: Perhaps you meant 's.created_at'."}
+  Scene 3 (GPI) — now pure GPI explainer
+    Title:   "Growth Participation Income."
+    Body:    "Every dollar you earn on Cergio also builds your
+             participation score — like airmiles, but tied to Cergio's
+             growth instead of flights. If Cergio goes public, the
+             orchard you helped grow rewards you back."
+    Visual:  Big "+ GPI" badge on top. Three labeled cards:
+               WHAT  — Loyalty-style bonus tied to Cergio's growth
+               HOW   — Every $ you earn = +1 to your participation score
+               WHEN  — Activates if Cergio goes public (IPO)
+             Footer: "Human-Powered AI · Shared Prosperity"
+             Disclaimer: "Loyalty-style bonus, not a security. No
+                          guaranteed payout."
 
-The recommendations table uses `sent_at`, NOT `created_at`. My
-fetchRecommendersByServiceId helper (and the PDP cold-fallback) both
-queried `created_at` → PostgREST returned an error → Supabase client
-wrapped it as { data: null, error } → my helper returned {} → every
-ProviderCard's `friends` array was empty → "No mutual friends yet".
+This separation lets the eye learn ONE thing per scene — the $-number
+math sits with the Invite scene where it belongs; GPI is its own
+concept and gets its own room to breathe.
 
-Diagnose section 4 confirmed: both SERVICE_KEY and ANON_KEY CAN read
-the recommendations (RLS is fine — 3 PERMISSIVE SELECT policies OR'd
-together, with `qual: true` winning). The only blocker was the wrong
-column name in the client-side query.
+  src/components/ui/RewardFlowAnimation.jsx
+    • Scene 2 title + body rewritten — includes the 50 × $250 → $12,500
+      math directly. Visual gets the mint-green punchline pill.
+    • Scene 3 visual fully rewritten — three WHAT/HOW/WHEN cards
+      stacked vertically, GPI badge centered up top, mission tagline
+      + legal disclaimer at the bottom.
 
-THE FIX
-
-  src/lib/api.js (fetchRecommendersByServiceId)
-    • SELECT sent_at (not created_at)
-    • ORDER BY sent_at (not created_at)
-    • Alias `sent_at` → `created_at` in the returned object so the
-      downstream consumers (ResultsScreen, PDP) keep their existing
-      field name without churn
-
-  src/screens/ServiceDetailScreen.jsx (cold-deep-link fallback)
-    • Same fix: SELECT + ORDER on sent_at, alias on the way out
-
-  scripts/qa.mjs #37
-    • New static lock: api.js + PDP MUST NOT reference
-      recommendations.created_at. Regex-checks both files for any
-      .select() with created_at OR .order('created_at' near a
-      from('recommendations'). Catches a reversion at the gate.
-
-WHY THIS HID FOR SO LONG
-
-  • Supabase JS client swallows PostgREST errors silently when the
-    caller doesn't check `error` — my helper returned {} on error
-    which looked identical to "no rows" in the UI
-  • The Diagnose script DID call this out earlier (section 3c errored
-    the same way) but I missed it — I was focused on the RLS theory
-  • Building a [CERGIO/recommenders] DevTools log earlier helped, but
-    the user's browser cache hid the change. Hard refresh was needed
-    to see the error.
-
-The diagnostic infrastructure paid off: without Diagnose Money Flow's
-schema dump (section 1a), I'd still be guessing.
-
-QA: 39/39 pass.
-
-NEXT — TARIK:
-  1. Hard refresh the running app (Cmd+Shift+R) — the new api.js needs
-     to load over the cached version
-  2. Search "plumber Miami Beach" → Penny's card should NOW show the
-     stacked avatars: Alex / Sam / Connie + "Reco'd by Alex, Sam, Connie"
-  3. Tap Penny's photo → PDP shows the full Recommended-by panel
-  4. DevTools console should print [CERGIO/recommenders] with gotRows:3
-     (not 0)
+QA: 39/39 pass (existing #31 references — exampleFriends + exampleTotal —
+still satisfied by Scene 2's body).
 
 Files:
-  src/lib/api.js                            (sent_at, not created_at)
-  src/screens/ServiceDetailScreen.jsx        (sent_at, not created_at)
-  scripts/qa.mjs                             (#37 — column-name lock)
+  src/components/ui/RewardFlowAnimation.jsx

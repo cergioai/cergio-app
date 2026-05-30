@@ -47,15 +47,15 @@ const STEPS = [
   },
   {
     num: '02',
-    title: `$${REWARDS.perFriend} per friend — here's how.`,
+    title: `$${REWARDS.perFriend} per friend → $${REWARDS.exampleTotal.toLocaleString()} with ${REWARDS.exampleFriends}.`,
     body: () =>
-      `Cergio charges ${REWARDS.platformFeePercent}% on every booking. We share ${REWARDS.referrerSharePercent}% of every booking the friend you invited makes, until you've earned $${REWARDS.perFriend} from them. Only bookings within ${REWARDS.friendCapWindowMonths} months of their invite count.`,
+      `Cergio charges ${REWARDS.platformFeePercent}% on every booking. We share ${REWARDS.referrerSharePercent}% of every booking the friend you invited makes, until you've earned $${REWARDS.perFriend} from them. Only bookings within ${REWARDS.friendCapWindowMonths} months of their invite count. Bring ${REWARDS.exampleFriends} friends and that's $${REWARDS.exampleTotal.toLocaleString()}.`,
   },
   {
     num: '03',
-    title: `50 friends → $${REWARDS.exampleTotal.toLocaleString()} (plus GPI).`,
+    title: 'Growth Participation Income.',
     body: () =>
-      `Your network does the work. Every dollar you earn also builds your Growth Participation Income score — a share of Cergio's upside as the platform scales.`,
+      `Every dollar you earn on Cergio also builds your participation score — like airmiles, but tied to Cergio's growth instead of flights. If Cergio goes public, the orchard you helped grow rewards you back.`,
   },
 ];
 
@@ -209,8 +209,17 @@ function Scene2() {
         );
       })}
 
-      <text x={200} y={232} textAnchor="middle" fontSize="10" fontWeight="700" fill="#3D3D3D" fontFamily="system-ui">
-        Only bookings within {REWARDS.friendCapWindowMonths} months of the invite count
+      {/* Scale punchline footer — pinned to Scene 2 (the invite/math
+          scene) per Tarik: "the 50 friends 12,500 belongs in the invite
+          screen not the GPI." */}
+      <g className="rf-pop" style={{ animationDelay: '2.2s' }}>
+        <rect x={32} y={208} width={336} height={26} rx={6} fill="#F3FFEA" stroke="#3D8B00" strokeWidth={1} />
+        <text x={200} y={224} textAnchor="middle" fontSize="13" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">
+          {REWARDS.exampleFriends} friends × ${REWARDS.perFriend} = ${REWARDS.exampleTotal.toLocaleString()}
+        </text>
+      </g>
+      <text x={200} y={246} textAnchor="middle" fontSize="9" fontWeight="600" fill="#7A7A7A" fontFamily="system-ui">
+        within {REWARDS.friendCapWindowMonths} months of each invite
       </text>
     </>
   );
@@ -219,35 +228,45 @@ function Scene2() {
 // ─── Scene 3: SCALE — 50 friends → $12,500 + GPI on top ───────────────────
 
 function Scene3() {
-  // Big punchline: 50 × $250 = $12,500. Plus a small GPI badge on the
-  // right so users see "this stacks with the long-term upside."
+  // GPI explainer. No $-amount math here — the dollar math lives on
+  // Scene 2 (the invite/math scene). This scene answers the three
+  // questions about Growth Participation Income: WHAT it is, HOW it
+  // accrues, and WHEN it activates.
   return (
     <>
       <PhaseBadge num="03" />
 
-      {/* Hero card */}
+      {/* GPI hero badge */}
       <g className="rf-pop" style={{ animationDelay: '0.3s' }}>
-        <rect x={60} y={56} width={280} height={70} rx={10} fill="#F3FFEA" stroke="#3D8B00" strokeWidth={1.5} />
-        <text x={200} y={82} textAnchor="middle" fontSize="14" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui">
-          {REWARDS.exampleFriends} friends × ${REWARDS.perFriend}
-        </text>
-        <text x={200} y={114} textAnchor="middle" fontSize="28" fontWeight="900" fill="#2F6E00" fontFamily="system-ui">
-          ${REWARDS.exampleTotal.toLocaleString()}
+        <rect x={130} y={48} width={140} height={36} rx={18} fill="#2C5D21" />
+        <text x={200} y={72} textAnchor="middle" fontSize="14" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">
+          + GPI
         </text>
       </g>
 
-      {/* Plus GPI strip */}
-      <g className="rf-pop" style={{ animationDelay: '0.7s' }}>
-        <rect x={40} y={146} width={320} height={42} rx={8} fill="#FFFFFF" stroke="#3D8B00" strokeWidth={1} />
-        <rect x={40} y={146} width={70}  height={42} rx={8} fill="#3D8B00" />
-        <text x={75}  y={171} textAnchor="middle" fontSize="11" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">+ GPI</text>
-        <text x={120} y={163} fontSize="10.5" fontWeight="700" fill="#1A1A1A" fontFamily="system-ui">Growth Participation Income</text>
-        <text x={120} y={178} fontSize="9.5" fontWeight="500" fill="#5F5E5A" fontFamily="system-ui">on every dollar — your share of Cergio's growth</text>
-      </g>
+      {/* Three-stat row — WHAT / HOW / WHEN */}
+      {(() => {
+        const cards = [
+          { tag: 'WHAT',  body: 'Loyalty-style bonus tied to Cergio\'s growth',     y: 98 },
+          { tag: 'HOW',   body: 'Every $ you earn = +1 to your participation score', y: 138 },
+          { tag: 'WHEN',  body: 'Activates if Cergio goes public (IPO)',             y: 178 },
+        ];
+        return cards.map((c, i) => (
+          <g key={`gpi-${i}`} className="rf-pop" style={{ animationDelay: `${0.55 + i * 0.35}s` }}>
+            <rect x={36} y={c.y - 12} width={328} height={30} rx={6} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1} />
+            <rect x={36} y={c.y - 12} width={58} height={30} rx={6} fill="#2C5D21" />
+            <text x={65} y={c.y + 6} textAnchor="middle" fontSize="10" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">{c.tag}</text>
+            <text x={104} y={c.y + 6} fontSize="11" fontWeight="700" fill="#1A1A1A" fontFamily="system-ui">{c.body}</text>
+          </g>
+        ));
+      })()}
 
-      {/* Footer tagline */}
-      <text x={200} y={222} textAnchor="middle" fontSize="10" fontWeight="800" fill="#2C5D21" fontFamily="system-ui">
+      {/* Mission tagline */}
+      <text x={200} y={225} textAnchor="middle" fontSize="10" fontWeight="800" fill="#2C5D21" fontFamily="system-ui">
         Human-Powered AI · Shared Prosperity
+      </text>
+      <text x={200} y={242} textAnchor="middle" fontSize="8.5" fontWeight="500" fill="#7A7A7A" fontFamily="system-ui">
+        Loyalty-style bonus, not a security. No guaranteed payout.
       </text>
     </>
   );
