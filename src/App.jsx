@@ -152,11 +152,15 @@ function Layout() {
     taxonomy_category:      null,
     taxonomy_provider_type: null,
     taxonomy_offering_id:   null,
+    // CERGIO-GUARD (2026-05-30): provider-drawn coverage polygon
+    // (GeoJSON Polygon). Optional — null means "use the radius default".
+    serviceAreaGeoJson:     null,
   });
   const resetListingDraft = useCallback(() => setListingDraft({
     category: '', location: '', description: '',
     pricingMode: null, offerings: [], photoClass: 'fv-jamie',
     taxonomy_category: null, taxonomy_provider_type: null, taxonomy_offering_id: null,
+    serviceAreaGeoJson: null,
   }), []);
   const updateListingDraft = useCallback((patch) => setListingDraft(d => ({ ...d, ...patch })), []);
   const addOffering = useCallback((offering) => setListingDraft(d => ({ ...d, offerings: [...d.offerings, offering] })), []);

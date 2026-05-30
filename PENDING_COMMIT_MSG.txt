@@ -1,39 +1,81 @@
-Add profiles.follower_count + render on GOAT activity cards
+Polygon DB persistence + consumer-side filter + Vite crash fix
 
-Tarik approved the follow-up: real follower counts on the Activity
-feed GOAT-share cards, instead of the count-free fallback we shipped.
+Two things bundled — the polygon end-to-end slice and a hot-reload
+crash that was masking it.
 
-DB
-  ALTER TABLE profiles
-    ADD COLUMN IF NOT EXISTS follower_count integer NOT NULL DEFAULT 0;
+(1) VITE CRASH FIX — DYNAMIC MAPS LOADER IMPORT
+After the package.json bumped @googlemaps/js-api-loader, any dev
+server that hadn't run `npm install` choked on the static import in
+ServiceAreaMapPicker.jsx — Vite's import-analysis crashes the WHOLE
+app on the first load when the package is missing, including
+/logo-lab. Tarik reported the lab was blank with this error.
 
-Migration is in "Apply Follower Count Migration.command" (Mac-side
-script, follows the same pattern as Apply Requests Migration.command:
-runs the ALTER via Supabase Management API, verifies column exists,
-prints current Connector counts so Tarik can see who's set vs default).
-Idempotent — safe to re-run.
+Fix: convert the import to a lazy dynamic import inside
+ensureGoogleMaps(). If the package is missing, only the picker
+itself fails (with a friendly "run npm install" message); the rest
+of the app loads normally.
 
-API
-  src/lib/api.js → listGoatShares() now selects follower_count on
-  the recommender profile and surfaces it on the returned row at
-  row.recommender.follower_count.
+(2) POLYGON DB PERSISTENCE
+ALTER TABLE services
+  ADD COLUMN IF NOT EXISTS service_area_geojson jsonb;
+Migration in "Apply Service Area Migration.command" (mgmt API via
+the same pattern as Apply Follower Count Migration). Idempotent.
 
-UI
-  src/screens/ActivityScreen.jsx → GoatShareCard headline switches
-  based on the count:
-    followers > 0  →  "{Owner} was shared to {N,locale} followers"
-    followers === 0 →  "{Owner} was shared on Cergio" (unchanged)
-  Numbers are toLocaleString'd so they render as "45,414" not 45414.
-  Never fake — if the column is 0 we don't show "0 followers".
+  src/lib/api.js
+    createService now persists draft.serviceAreaGeoJson on the
+    services row. Same defensive retry pattern as taxonomy_* — if
+    PostgREST schema cache rejects the column (legacy deployment
+    that hasn't run the migration yet), retries without it so the
+    listing still publishes.
 
-How to populate (Tarik, in Supabase SQL editor):
-  UPDATE profiles SET follower_count = 45414 WHERE display_name = 'Sabir';
-  UPDATE profiles SET follower_count = 135572 WHERE display_name = 'Jackie';
-  -- etc.
+  src/App.jsx
+    listingDraft default + reset both add serviceAreaGeoJson: null.
+
+  src/screens/ServiceListAboutScreen.jsx
+    + serviceAreaGeoJson state, areaPickerOpen state
+    + "Draw your service area (optional)" button below the Service
+      location field. Disabled until coords/location are set
+      (the map needs an anchor).
+    + Mounts ServiceAreaMapPicker as a bottom-sheet when open.
+    + onNext forwards the polygon into updateListingDraft so
+      createService picks it up downstream.
+
+(3) CONSUMER-SIDE FILTER
+  src/lib/geo.js  (new) — pointInRing / pointInPolygon helpers.
+    Ray-casting (Franklin algorithm) on GeoJSON Polygon coordinates.
+    Sufficient for city-scale polygons; not great for nationwide or
+    antimeridian-crossing shapes (note in the file). No PostGIS,
+    no RLS surface, no extension to enable.
+
+  src/lib/api.js listServices proximity branch
+    + selects service_area_geojson in the hydrate query
+    + After budget/freeOnly filter, drops any service whose polygon
+      is set AND whose polygon does NOT contain the consumer's
+      (lat, lng). Services without a polygon are unaffected — the
+      existing services_near radius logic continues to govern them.
+
+When to swap for PostGIS: once we cross a few thousand providers
+returned per query, or once we need server-side filtering (so the
+DB scoring/ordering knows about the polygon). For now the client-side
+JS ray-cast is fine and adds zero infra.
+
+TARIK NEEDS TO DO (sequentially):
+  1. In Terminal, cd to cergio-app, run `npm install`
+     (picks up @googlemaps/js-api-loader from package.json)
+  2. Restart Vite (Ctrl+C, then `npm run dev` — or just double-click
+     Start Cergio.command)
+  3. Refresh localhost:5173/logo-lab — the lab should render now
+  4. Double-click "Apply Service Area Migration.command" to add the
+     services.service_area_geojson column
+  5. Add VITE_GOOGLE_MAPS_API_KEY to .env.local + Vercel env (if not
+     already done — it's needed for the picker to load any map)
 
 QA: 41/41 pass.
 
 Files:
-  Apply Follower Count Migration.command (new, repo root)
-  src/lib/api.js
-  src/screens/ActivityScreen.jsx
+  Apply Service Area Migration.command  (new, repo root)
+  src/lib/geo.js                        (new)
+  src/components/ui/ServiceAreaMapPicker.jsx  (dynamic import fix)
+  src/lib/api.js                        (persist + read + filter)
+  src/App.jsx                           (listingDraft default + reset)
+  src/screens/ServiceListAboutScreen.jsx (picker wiring)

@@ -2,6 +2,7 @@
 // touching `supabase` directly. Each function returns { data, error } so
 // callers can branch on either.
 import { supabase, supabaseReady } from './supabase';
+import { pointInPolygon } from './geo';
 
 const NOT_WIRED = { data: null, error: { message: 'Supabase not configured' } };
 
@@ -55,6 +56,12 @@ export async function createService(draft) {
     lng:          draft.lng ?? null,
     photo_class:  draft.photoClass || 'fv-jamie',
     status:       'listed',
+    // CERGIO-GUARD (2026-05-30): provider-drawn coverage polygon
+    // (GeoJSON Polygon). Nullable — when null, consumer search falls
+    // back to the radius logic. Schema-cache miss path below retries
+    // without this field so the listing still publishes on legacy
+    // deployments that haven't run "Apply Service Area Migration".
+    service_area_geojson: draft.serviceAreaGeoJson || null,
   };
   const taxonomyRow = {
     taxonomy_category:      draft.taxonomy_category      || null,
@@ -77,6 +84,21 @@ export async function createService(draft) {
     const r = await supabase
       .from('services')
       .insert(baseRow)
+      .select()
+      .single();
+    svc = r.data; svcErr = r.error;
+  }
+  // Same defensive pattern for service_area_geojson — old deployments
+  // that haven't run "Apply Service Area Migration" reject the column.
+  // Drop it and retry so the listing still publishes (just without the
+  // polygon — provider can re-add it once the migration's applied).
+  if (svcErr && /service_area_geojson/.test(svcErr.message || '')) {
+    // eslint-disable-next-line no-console
+    console.warn('[createService] service_area_geojson missing in schema; retrying without. Apply the migration.', svcErr.message);
+    const { service_area_geojson: _drop, ...rowSansArea } = baseRow;
+    const r = await supabase
+      .from('services')
+      .insert({ ...rowSansArea, ...taxonomyRow })
       .select()
       .single();
     svc = r.data; svcErr = r.error;
@@ -439,7 +461,7 @@ export async function listServices({
           id, title, category, description, location_text, photo_class,
           cover_url, rating_avg, rating_count, bookings_count, owner_id,
           created_at, taxonomy_category, taxonomy_provider_type,
-          taxonomy_offering_id, status
+          taxonomy_offering_id, status, service_area_geojson
         `)
         .in('id', ids)
         .eq('status', 'listed'),
@@ -493,6 +515,24 @@ export async function listServices({
     }
     // Budget + freeOnly still apply (real, user-controlled filters).
     filtered = applyMatchingFilters(filtered, { maxBudgetCents, freeOnly });
+
+    // CERGIO-GUARD (2026-05-30): provider-drawn service-area filter.
+    // When a service has service_area_geojson set, the consumer's
+    // search point (lat/lng) MUST fall inside the polygon — that
+    // provider explicitly drew their coverage. Services WITHOUT a
+    // polygon are unaffected (radius-based proximity is still in
+    // play via services_near). Implemented client-side because:
+    //   1. PostGIS isn't enabled on this Supabase project yet
+    //   2. Volume is small enough that a JS ray-cast is fine
+    //   3. Adds zero RLS surface
+    // If we ever scale past low thousands of providers per query,
+    // swap for a PostGIS ST_Contains in the RPC.
+    filtered = filtered.filter(s => {
+      const geo = s.service_area_geojson;
+      if (!geo) return true; // no polygon → keep
+      return pointInPolygon(lng, lat, geo);
+    });
+
     // Hydrate recommenders so ResultsScreen + PDP can render avatars.
     if (filtered.length) {
       const recoMap = await fetchRecommendersByServiceId(filtered.map(s => s.id));

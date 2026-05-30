@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { RegHeader, RegFooter } from '../components/ui/RegHeader';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
+import { ServiceAreaMapPicker } from '../components/ui/ServiceAreaMapPicker';
 // TaxonomyMatchBadge removed from the visible UI — taxonomy is only
 // used internally (provider_type / offering_id are still resolved and
 // saved on submit so we can route notifications to matching providers
@@ -51,6 +52,13 @@ export function ServiceListAboutScreen() {
   const [serviceTypeFocused, setServiceTypeFocused] = useState(false);
   const [location, setLocation]       = useState(listingDraft.location || '');
   const [coords, setCoords]           = useState(null); // {lat,lng} when Google Place picked
+  // CERGIO-GUARD (2026-05-30): provider-drawn service-area polygon.
+  // Persisted on Next as draft.serviceAreaGeoJson and saved on the
+  // services row by createService.
+  const [serviceAreaGeoJson, setServiceAreaGeoJson] = useState(
+    listingDraft.serviceAreaGeoJson || null
+  );
+  const [areaPickerOpen, setAreaPickerOpen] = useState(false);
   const [headline, setHeadline]       = useState(listingDraft.description || '');
   const [overrideTaxonomy, setOverrideTaxonomy] = useState(false);
 
@@ -149,6 +157,42 @@ export function ServiceListAboutScreen() {
             onSelect={({ lat, lng, address }) => { setCoords({ lat, lng }); setLocation(address); }}
             placeholder="Where do you offer this service?"
           />
+          {/* CERGIO-GUARD (2026-05-30): optional service-area polygon.
+              Provider can draw their coverage on a map. When set, the
+              consumer search filters out anyone whose search point is
+              outside the polygon (point-in-polygon, client-side). */}
+          <button
+            type="button"
+            onClick={() => setAreaPickerOpen(true)}
+            disabled={!coords && !location.trim()}
+            className={`mt-2 w-full flex items-center gap-2 px-3 py-2.5 rounded-[12px] border text-left
+                        ${serviceAreaGeoJson
+                          ? 'bg-gl border-g/40 text-gd'
+                          : 'bg-white border-bdr text-b2 hover:border-g/40 disabled:opacity-50'}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+              <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"/><path d="M9 4v13"/><path d="M15 7v13"/>
+            </svg>
+            <span className="text-[12.5px] font-extrabold">
+              {serviceAreaGeoJson
+                ? 'Service area drawn — tap to edit'
+                : 'Draw your service area (optional)'}
+            </span>
+            {serviceAreaGeoJson && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setServiceAreaGeoJson(null); }}
+                className="ml-auto text-[11px] font-medium underline cursor-pointer"
+              >
+                Clear
+              </span>
+            )}
+          </button>
+          {!coords && !location.trim() && (
+            <p className="text-[11px] text-b3 mt-1">Pick a service location first to anchor the map.</p>
+          )}
         </div>
         <Field label="Service headline" placeholder="Add a quick bio about your service, your experience and what sets you apart."
                value={headline} onChange={setHeadline} type="textarea" />
@@ -333,6 +377,9 @@ export function ServiceListAboutScreen() {
               taxonomy_category:      useTaxo ? (taxo.category || null) : null,
               taxonomy_provider_type: useTaxo ? (taxo.provider_type || null) : null,
               taxonomy_offering_id:   useTaxo ? (taxo.offering_id || null) : null,
+              // CERGIO-GUARD (2026-05-30): forward the drawn polygon
+              // (if any) into the draft so createService persists it.
+              serviceAreaGeoJson: serviceAreaGeoJson,
             });
           } catch (e) {
             // eslint-disable-next-line no-console
@@ -342,6 +389,19 @@ export function ServiceListAboutScreen() {
         }}
         nextEnabled={valid}
       />
+
+      {/* Service-area polygon picker — bottom sheet, opens centered on
+          the typed/picked location. Defaults to Times Square if no
+          coords resolved yet (the inner picker handles that). */}
+      {areaPickerOpen && (
+        <ServiceAreaMapPicker
+          center={coords || null}
+          apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
+          value={serviceAreaGeoJson}
+          onChange={setServiceAreaGeoJson}
+          onClose={() => setAreaPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

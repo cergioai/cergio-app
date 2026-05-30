@@ -22,19 +22,32 @@
 //   { type: 'Polygon', coordinates: [[[lng,lat], [lng,lat], ...]] }
 // First & last coordinate are equal (closed ring) per GeoJSON spec.
 import { useEffect, useRef, useState } from 'react';
-import { Loader } from '@googlemaps/js-api-loader';
 
-// Module-level loader cache so the script is only fetched once
-// across the SPA's lifetime, even if the picker mounts/unmounts.
+// CERGIO-GUARD (2026-05-30): dynamic import of @googlemaps/js-api-loader
+// so the rest of the app keeps running if the dep isn't installed yet
+// (Vite's static-import-analysis would otherwise crash the whole SPA
+// on first load when node_modules is stale). The map picker just
+// shows a friendly error in that case; nothing else breaks.
 let _loaderPromise = null;
-function ensureGoogleMaps(apiKey) {
+async function ensureGoogleMaps(apiKey) {
   if (_loaderPromise) return _loaderPromise;
-  const loader = new Loader({
-    apiKey,
-    version: 'weekly',
-    libraries: ['geometry'], // for area calculations later
-  });
-  _loaderPromise = loader.importLibrary('maps').then(() => window.google);
+  _loaderPromise = (async () => {
+    let Loader;
+    try {
+      ({ Loader } = await import('@googlemaps/js-api-loader'));
+    } catch (e) {
+      throw new Error(
+        '@googlemaps/js-api-loader is not installed. Run `npm install` in cergio-app.'
+      );
+    }
+    const loader = new Loader({
+      apiKey,
+      version: 'weekly',
+      libraries: ['geometry'], // for area calculations later
+    });
+    await loader.importLibrary('maps');
+    return window.google;
+  })();
   return _loaderPromise;
 }
 
