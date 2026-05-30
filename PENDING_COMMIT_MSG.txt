@@ -1,71 +1,35 @@
-Fix: chat quick-reply pills sync + richer search-status narration
+Add /logo-lab — 6 mascot-palette logo candidates for picking
 
-Two fixes bundled:
+Tarik uploaded the Jennifer Leighton PDP mockup. The mascot is an orange
+goat icon sitting on a bright Romio-green disc with a cream backdrop.
+He wants the animated brand mark re-skinned with that palette, in MIXED
+color dominances, so he can pick one final winner. Fixed + pulsating
+shown side-by-side so it's clear how the mark feels at rest AND alive.
 
-(1) QUICK-REPLY PILLS NOW MATCH THE CURRENT QUESTION
-Tarik tested: chat asked "What's your budget?" but the visible pills
-were still "Today / Tomorrow / Flexible" from the previous turn.
-Tapping "Today" auto-submitted the search with NO budget captured —
-the user couldn't enter $50 before the search fired.
+Built as a self-contained /logo-lab screen — does NOT touch LeafLogo
+yet. Once Tarik picks a winner, we port that single candidate back
+into LeafLogo.jsx and flip LOGO_VARIANT.
 
-Root cause: chat code blindly forwarded `res.quick_replies` from the
-Claude parser. The parser sometimes returned stale time-related pills
-while we were locally asking about budget. Tap → submit → search
-fires with the wrong field filled.
+Six candidates × 2 states each:
 
-Fix: each reply branch now carries its OWN step-specific QR pills.
-The visible pills ALWAYS match the active question:
+  C1 · Rings    Green-dominant · peach final ring
+  C2 · Rings    Peach core · green expanding rings
+  C3 · Bud      Green petals · peach heart
+  C4 · Bud      Peach petals (alternating) · green heart
+  C5 · Pollen   Green core · mixed peach/green/cream seeds
+  C6 · Pollen   Peach core · green seeds · cream halo
 
-  Step                            Quick-reply pills
-  ──────────────────────────────  ───────────────────────────────────
-  "What service do you need?"     Plumber / House cleaner /
-                                  Babysitter / Tutor
-  "When do you need this?"        ASAP / Today / Tomorrow /
-                                  This week / Flexible
-  "Where should …?"               (none — needs typed address)
-  "What's your budget?"           $50 / $100 / $200 / $500 / Flexible
-  "Got it — finding matches"      (none)
+Mascot palette sampled from the mockup:
+  greenDeep  #2C5D21    greenCore  #3FA821    greenSoft  #9BD96B
+  peach      #F4A06A    peachDeep  #E67A3C    peachSoft  #FBCBA6
+  cream      #FFF6E0
 
-Fallback: when stepQR is empty AND the cloud returned its own pills,
-we still use res.quick_replies (e.g. "Where" step can show region
-suggestions if the parser provides them).
-
-  src/hooks/useChat.js
-    • Each reply gate branch carries a `stepQR` array
-    • setQR(stepQR.length > 0 ? stepQR : res.quick_replies || [])
-
-(2) SEARCH-STATUS STREAM NOW NARRATES DIFFERENT ACTIONS
-Old narration only had 4 lines and felt like four flavors of
-"still searching". Tarik: "add different animated actions in this
-stream (pinging Jessica's friend... Pinging your network…)".
-
-New script plays as a sequence of DISTINCT events — ping → ask →
-suggest → schedule → reco → ping again → negotiate → offer → confirm:
-
-  Pinging your network
-  Asking Jessica if she knows a plumber
-  Jessica suggested Maria — pinging Maria
-  Maria checking her schedule
-  Sam recommended Henry — pinging Henry
-  Henry reviewing your request
-  Negotiating with Maria and Henry
-  Maria sent an offer
-  Confirming offers
-
-Per-step dwell shortened 2200ms → 1400ms so more events play in the
-~9s loading window. MIN_LOADING_MS bumped 8000 → 9000 to cover.
-
-SAMPLE_FRIEND_NAMES expanded (Jessica + Sam lead the script) and
-SAMPLE_PROVIDER_NAMES re-ordered (Maria + Henry lead) to match the
-canonical "Jessica suggested Maria / Sam recommended Henry" narrative.
-
-  src/screens/ResultsScreen.jsx
-    • buildStatusSteps → 9 distinct action lines
-    • STATUS_STEP_MS 2200 → 1400
-    • MIN_LOADING_MS 8000 → 9000
+Reuses existing index.css keyframes (cg-rings-core, cg-bud-bloom,
+cg-pollen-core, cg-pollen-s1..s6) so the pulsating animations match
+exactly what ships sitewide.
 
 QA: 41/41 pass.
 
 Files:
-  src/hooks/useChat.js
-  src/screens/ResultsScreen.jsx
+  src/screens/LogoLabScreen.jsx (new)
+  src/App.jsx (route)

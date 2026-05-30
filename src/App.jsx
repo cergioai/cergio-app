@@ -68,6 +68,7 @@ import { RoamingForOffersScreen }           from './screens/RoamingForOffersScre
 import { EarningsScreen }                   from './screens/EarningsScreen';
 import { ActivityScreen }                   from './screens/ActivityScreen';
 import { ProfileScreen }                    from './screens/ProfileScreen';
+import { LogoLabScreen }                    from './screens/LogoLabScreen';
 import { EarningsBreakdownScreen }          from './screens/EarningsBreakdownScreen';
 import { NetworkEarningsScreen }            from './screens/NetworkEarningsScreen';
 import { TransactionsScreen }               from './screens/TransactionsScreen';
@@ -420,6 +421,8 @@ export default function App() {
           <Route path="/services/manage"       element={<ManageServicesScreen />} />
           <Route path="/services/:id"          element={<ServiceDetailProviderScreen />} />
           <Route path="/messages/:id"          element={<MessagesScreen />} />
+
+          <Route path="/logo-lab"              element={<LogoLabScreen />} />
 
           <Route path="*"                            element={<Navigate to="/" replace />} />
         </Route>
