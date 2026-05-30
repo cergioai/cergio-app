@@ -1841,10 +1841,14 @@ export async function listGoatShares({ limit = 24 } = {}) {
   if (recErr || !recs?.length) return { data: [], error: recErr || null };
 
   // Step 2: resolve recommender profiles, keep only Connectors.
+  // CERGIO-GUARD (2026-05-30): pull follower_count so the activity-feed
+  // card can render "Sabir was shared to 45,414 followers". Column is
+  // NOT NULL DEFAULT 0 — when unset on a row, we render the
+  // count-free fallback in the UI rather than "0 followers".
   const rIds = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
   const { data: rProfs } = await supabase
     .from('profiles')
-    .select('id, display_name, cc_verified_at')
+    .select('id, display_name, cc_verified_at, follower_count')
     .in('id', rIds);
   const goatMap = Object.fromEntries(
     (rProfs || [])
@@ -1891,9 +1895,10 @@ export async function listGoatShares({ limit = 24 } = {}) {
           owner_display_name:  owner?.display_name || null,
         },
         recommender: {
-          id:           goat.id,
-          display_name: goat.display_name,
-          is_connector: true,
+          id:             goat.id,
+          display_name:   goat.display_name,
+          is_connector:   true,
+          follower_count: goat.follower_count ?? 0,
         },
       };
     })

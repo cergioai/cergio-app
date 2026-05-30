@@ -1,71 +1,39 @@
-Service-area polygon — Zillow-style freehand draw on Google Maps
+Add profiles.follower_count + render on GOAT activity cards
 
-Tarik: "enable services to draw on a map to choose their service area
-(perhaps borrow from how users choose property search areas on
-Zillow…). apply this on the services IG homepage instead of the
-radius… use Google and have quality Zillow-like experience."
+Tarik approved the follow-up: real follower counts on the Activity
+feed GOAT-share cards, instead of the count-free fallback we shipped.
 
-Built: a bottom-sheet map picker that opens from the spotlight intent
-on HomeScreen. Provider drags their finger across the map and a green
-polygon fills under their gesture in real time. Release → polygon
-commits. Tap Clear to redraw. The 5/10/25mi pills remain as a
-"quick-pick" fallback for providers who don't want to draw, but they
-dim out once an explicit polygon is set (the polygon takes precedence).
+DB
+  ALTER TABLE profiles
+    ADD COLUMN IF NOT EXISTS follower_count integer NOT NULL DEFAULT 0;
 
-WHY CUSTOM FREEHAND
-google.maps.drawing.DrawingManager only ships click-to-vertex polygons
-— the user clicks individual corners and double-clicks to close.
-That's not the Zillow experience. Zillow draws as you drag. So:
-  • mousedown/touchstart → freeze map drag + zoom, start collecting
-    LatLng points via the OverlayView's projection
-  • mousemove/touchmove → push points (throttled by min-distance so
-    we don't drown the polygon in noise), redraw an in-progress
-    Polyline so the user sees their line forming
-  • mouseup/touchend → close the polygon, drop a fill, restore map
-    drag + zoom, fire onChange with the GeoJSON shape
+Migration is in "Apply Follower Count Migration.command" (Mac-side
+script, follows the same pattern as Apply Requests Migration.command:
+runs the ALTER via Supabase Management API, verifies column exists,
+prints current Connector counts so Tarik can see who's set vs default).
+Idempotent — safe to re-run.
 
-OUTPUT SHAPE
-GeoJSON Polygon:
-  { type: 'Polygon', coordinates: [[[lng,lat], [lng,lat], ..., [lng,lat]]] }
-First and last coordinates are equal (closed ring per spec). Plays
-nicely with PostGIS for future server-side filtering.
+API
+  src/lib/api.js → listGoatShares() now selects follower_count on
+  the recommender profile and surfaces it on the returned row at
+  row.recommender.follower_count.
 
-FILES ADDED
-  src/components/ui/ServiceAreaMapPicker.jsx (new) — the picker
-  package.json: + "@googlemaps/js-api-loader": "^1.16.8"
+UI
+  src/screens/ActivityScreen.jsx → GoatShareCard headline switches
+  based on the count:
+    followers > 0  →  "{Owner} was shared to {N,locale} followers"
+    followers === 0 →  "{Owner} was shared on Cergio" (unchanged)
+  Numbers are toLocaleString'd so they render as "45,414" not 45414.
+  Never fake — if the column is 0 we don't show "0 followers".
 
-FILES EDITED
-  src/screens/HomeScreen.jsx
-    + serviceAreaGeoJson state
-    + areaPickerOpen state
-    + import ServiceAreaMapPicker
-    + replaces spotlight pill row with:
-        "Draw your service area" button (taps open the sheet)
-        Quick-pick pills below (dimmed when polygon present)
-    + mounts the picker at screen root, gated on areaPickerOpen
-
-WHAT TARIK NEEDS TO DO ONCE
-1. Get a Google Maps JavaScript API key from
-   https://console.cloud.google.com → APIs & Services → Credentials.
-   Enable: Maps JavaScript API + (Places API if you want autocomplete
-   reuse later).
-2. Add VITE_GOOGLE_MAPS_API_KEY=AIza... to .env.local AND to Vercel
-   env vars (production + preview).
-3. The map shows a clear error message if the key is missing/invalid
-   — no silent failure.
-
-WHAT'S DELIBERATELY NOT IN THIS SLICE
-  • DB column. The polygon lives in client state for this commit.
-    Next slice: ALTER TABLE services ADD COLUMN service_area
-    geography(Polygon, 4326), persist on save, filter listings server
-    side via ST_Contains.
-  • Consumer-side filtering. Today the polygon is captured but not
-    used to filter who sees the listing. Wired together in the
-    DB-persistence slice.
+How to populate (Tarik, in Supabase SQL editor):
+  UPDATE profiles SET follower_count = 45414 WHERE display_name = 'Sabir';
+  UPDATE profiles SET follower_count = 135572 WHERE display_name = 'Jackie';
+  -- etc.
 
 QA: 41/41 pass.
 
 Files:
-  src/components/ui/ServiceAreaMapPicker.jsx (new)
-  src/screens/HomeScreen.jsx
-  package.json
+  Apply Follower Count Migration.command (new, repo root)
+  src/lib/api.js
+  src/screens/ActivityScreen.jsx

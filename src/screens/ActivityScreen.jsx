@@ -129,9 +129,16 @@ function initials(name) {
 function GoatShareCard({ row, onClick }) {
   const svc        = row.service;
   const goatName   = row.recommender.display_name || 'A Connector';
+  const followers  = row.recommender.follower_count || 0;
   const ownerName  = svc.owner_display_name || svc.title;
   const cover      = svc.cover_url;
   const gradient   = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+  // CERGIO-GUARD (2026-05-30): real follower count > 0 → show the
+  // "Sabir was shared to 45,414 followers" headline. Otherwise fall
+  // back to the count-free copy. NEVER faked.
+  const headline = followers > 0
+    ? `was shared to ${followers.toLocaleString()} followers`
+    : 'was shared on Cergio';
   return (
     <button
       onClick={onClick}
@@ -145,7 +152,7 @@ function GoatShareCard({ row, onClick }) {
         <div className="flex-1 min-w-0">
           <p className="text-[14px] leading-snug text-black">
             <span className="font-extrabold">{ownerName}</span>
-            <span className="font-medium text-b2"> was shared on Cergio</span>
+            <span className="font-medium text-b2"> {headline}</span>
           </p>
           <p className="text-[11.5px] text-gd font-extrabold mt-0.5">
             <span className="inline-flex items-center gap-1">
