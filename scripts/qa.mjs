@@ -1315,6 +1315,22 @@ test('recommenders-hydration', 'listServices hydrates recommenders + ResultsScre
     'ResultsScreen.serviceToProvider must read svc.recommenders to populate friends.');
   assert(/recoNames\s*=\s*Array\.isArray\(svc\.recommenders\)/.test(screenCode),
     'ResultsScreen must derive recoNames from Array.isArray(svc.recommenders).');
+
+  // CERGIO-GUARD (2026-05-29): the recommendations table column is
+  // `sent_at`, NOT `created_at`. Querying the wrong column silently
+  // returns 0 rows (PostgREST error wrapped in empty data) → every
+  // ProviderCard renders "No mutual friends yet" even when recs exist.
+  // Lock both the api.js helper AND the PDP cold-fallback against any
+  // future "created_at" reintroduction.
+  assert(!/\.select\('[^']*\bcreated_at\b[^']*'\)[\s\S]{0,80}from\('recommendations'\)/.test(apiCode)
+      && !/from\('recommendations'\)[\s\S]{0,200}\.select\('[^']*\bcreated_at\b[^']*'\)/.test(apiCode)
+      && !/from\('recommendations'\)[\s\S]{0,200}\.order\('created_at'/.test(apiCode),
+    'api.js MUST NOT query recommendations.created_at — that column does not exist (use sent_at).');
+
+  const pdp = readFile('src/screens/ServiceDetailScreen.jsx');
+  assert(!/from\('recommendations'\)[\s\S]{0,200}\.order\('created_at'/.test(pdp)
+      && !/from\('recommendations'\)[\s\S]{0,300}\.select\('[^']*\bcreated_at\b[^']*'\)/.test(pdp),
+    'ServiceDetailScreen MUST NOT query recommendations.created_at — that column does not exist (use sent_at).');
 });
 
 // ─── INVARIANT #38: ServiceDetailScreen (PDP) wired + renders recommenders ─

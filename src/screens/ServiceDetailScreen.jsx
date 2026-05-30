@@ -110,11 +110,14 @@ export function ServiceDetailScreen() {
         photoClass: svc.photo_class || 'fv-jamie',
       });
       // Hydrate recommenders the same way listServices does.
+      // CERGIO-GUARD (2026-05-29): recommendations uses `sent_at`, not
+      // `created_at` — see api.js fetchRecommendersByServiceId for the
+      // diagnose that surfaced this column-name mismatch.
       const { data: recs } = await supabase
         .from('recommendations')
-        .select('id, recommender_id, message, created_at')
+        .select('id, recommender_id, message, sent_at')
         .eq('service_id', serviceId)
-        .order('created_at', { ascending: false });
+        .order('sent_at', { ascending: false });
       if (cancelled) return;
       if (recs?.length) {
         const ids = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
@@ -127,7 +130,7 @@ export function ServiceDetailScreen() {
           id:         r.recommender_id,
           name:       map[r.recommender_id] || 'A friend',
           message:    r.message,
-          created_at: r.created_at,
+          created_at: r.sent_at,
         })));
       } else {
         setRecommenders([]);

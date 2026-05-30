@@ -1,92 +1,77 @@
-7%/10% truthfulness + Animation v7 (readable list, 5 ways to earn)
+Fix: recommendations.sent_at (not created_at) — the friends-on-search root cause
 
-Two fixes tracking Tarik's "doesn't work... animation is poorly formatted,
-can't see writing on the table... more than 2 ways to earn... copy says
-Cergio's fee is 7% which is incorrect — it's 10%, but misleading; should
-explain 7% in the context of inviting or recommending. Add that the 7%
-is from bookings made within 6 months of invite."
+THE actual root cause of "No mutual friends yet" on every search card,
+even when the seed claims to have written 3 recommendations on Penny.
 
-1. 7%/10% TRUTHFULNESS — copy now matches the real economics
+Caught by Diagnose Money Flow.command. The Diagnose output revealed:
 
-EarnExplainerScreen had three places saying "Cergio earns a 7% fee" or
-"Cergio's 7% fee on that booking is $21". Wrong. Cergio's actual fee
-is 10%; of that, 7% flows to the inviter/recommender. Old copy
-conflated the two — misleading.
+  ─── 1a. recommendations columns ───
+  [
+    {"column_name":"id"},               {"column_name":"recommender_id"},
+    {"column_name":"recipient_id"},     {"column_name":"recipient_phone"},
+    {"column_name":"service_id"},       {"column_name":"message"},
+    {"column_name":"sent_at"},          {"column_name":"inviter_id"}
+  ]
 
-Fixed shape (uses REWARDS.platformFeePercent + referrerSharePercent
-+ friendCapWindowMonths — no hardcoded percentages anywhere):
+  ─── 3c. recommendations on Penny services ───
+  {"message":"Failed to run sql query: ERROR: 42703: column r.created_at
+   does not exist...HINT: Perhaps you meant 's.created_at'."}
 
-  Old:   "Cergio earns a 7% fee — and we share that with you, up to $250"
-  New:   "Cergio's platform fee is 10% on every booking. When you invite
-          or recommend, we share 7% of each booking with you — up to $250
-          per friend."
+The recommendations table uses `sent_at`, NOT `created_at`. My
+fetchRecommendersByServiceId helper (and the PDP cold-fallback) both
+queried `created_at` → PostgREST returned an error → Supabase client
+wrapped it as { data: null, error } → my helper returned {} → every
+ProviderCard's `friends` array was empty → "No mutual friends yet".
 
-  Old:   "Your friend Jamie books a $300 deep clean. Cergio's 7% fee on
-          that booking is $21 — and you earn that."
-  New:   "Jamie books a $300 deep clean. Cergio's 10% fee on that booking
-          is $30. You earn 7% = $21 as Jamie's inviter. Keep going across
-          Jamie's future bookings until you've earned the full $250."
+Diagnose section 4 confirmed: both SERVICE_KEY and ANON_KEY CAN read
+the recommendations (RLS is fine — 3 PERMISSIVE SELECT policies OR'd
+together, with `qual: true` winning). The only blocker was the wrong
+column name in the client-side query.
 
-The example computes both numbers from REWARDS so they can never drift.
+THE FIX
 
-  src/screens/EarnExplainerScreen.jsx
-    • Header comment rewritten to spell out the 10%-platform-fee /
-      7%-referrer-share split
-    • Three copy blocks updated (intro paragraph, "The model" step 3,
-      example block) — all now distinguish Cergio's 10% fee from the
-      7% shared with the inviter
-    • Both example dollar amounts computed from REWARDS (no hardcoded $)
-    • 6-month-of-invite window made explicit in step 3
+  src/lib/api.js (fetchRecommendersByServiceId)
+    • SELECT sent_at (not created_at)
+    • ORDER BY sent_at (not created_at)
+    • Alias `sent_at` → `created_at` in the returned object so the
+      downstream consumers (ResultsScreen, PDP) keep their existing
+      field name without churn
 
-2. ANIMATION v7 — readable 3-scene list, all 5 ways to earn
+  src/screens/ServiceDetailScreen.jsx (cold-deep-link fallback)
+    • Same fix: SELECT + ORDER on sent_at, alias on the way out
 
-v6's User-vs-Connector table had 8px font that Tarik flat-out couldn't
-read on mobile. Plus he flagged: "it's more than 2 ways to earn"
-(inviting, recommending, spotlights, free services, GPI). v7 throws
-the cramped table out and uses a bullet LIST with proper 13px headlines
-+ 10px subtitles per row.
+  scripts/qa.mjs #37
+    • New static lock: api.js + PDP MUST NOT reference
+      recommendations.created_at. Regex-checks both files for any
+      .select() with created_at OR .order('created_at' near a
+      from('recommendations'). Catches a reversion at the gate.
 
-  Scene 01 — WAYS TO EARN  Five rows, each with bullet + amount + tier tag:
-    • Invite friends            $250/friend                  [Both]
-    • Recommend services        same $250 stream             [Both]
-    • Friend-of-friend bonus    +$12.50 each                 [Both]
-    • Free services (barter)    thousands of $$ (tens/mo)    [Connector only]
-    • Spotlight income          IG / TikTok payouts          [Connector only]
-    + Header strip: "Growth Participation Income on every dollar earned"
+WHY THIS HID FOR SO LONG
 
-  Scene 02 — $250 MATH      Top strip explains: "Cergio's fee on every
-                            booking: 10% · → 7% goes to YOU (the
-                            inviter / recommender)". Then 3 example
-                            bookings ($100/$200/$100) → 7% slices
-                            ($7/$14/$7) into the running $28/$250
-                            accumulator. Footer: "Only bookings within
-                            6 months of the invite count."
+  • Supabase JS client swallows PostgREST errors silently when the
+    caller doesn't check `error` — my helper returned {} on error
+    which looked identical to "no rows" in the UI
+  • The Diagnose script DID call this out earlier (section 3c errored
+    the same way) but I missed it — I was focused on the RLS theory
+  • Building a [CERGIO/recommenders] DevTools log earlier helped, but
+    the user's browser cache hid the change. Hard refresh was needed
+    to see the error.
 
-  Scene 03 — SCALE + GPI    Big hero card: "50 friends × $250 = $12,500".
-                            Plus a GPI strip explaining "on every dollar —
-                            your share of Cergio's growth." Tagline:
-                            "Human-Powered AI · Shared Prosperity".
-
-Auto-advance 8s/scene. Stage bumped 240 → 260 so the 5-row list breathes.
-
-  src/components/ui/RewardFlowAnimation.jsx (v7 full rewrite)
-    • 3 scenes (was 2), each properly sized for readability
-    • Pill primitive with palette (green/soft/amber/gray/dark)
-    • Scene 1 list pattern: colored dot + 13px headline + 10.5px
-      sub-amount + tier pill aligned right
-    • Scene 2 top strip cleanly distinguishes 10% vs 7%
-    • Scene 3 hero is the $12,500 punchline + dedicated GPI strip
-
-  scripts/qa.mjs #31
-    • Updated for 3-phase model
-    • Asserts both platformFeePercent + referrerSharePercent referenced
-      (catches a hardcoded-7% regression at the gate)
-    • Asserts "Connector only" tag present + Spotlight + barter + GPI
-      copy all rendered
+The diagnostic infrastructure paid off: without Diagnose Money Flow's
+schema dump (section 1a), I'd still be guessing.
 
 QA: 39/39 pass.
 
+NEXT — TARIK:
+  1. Hard refresh the running app (Cmd+Shift+R) — the new api.js needs
+     to load over the cached version
+  2. Search "plumber Miami Beach" → Penny's card should NOW show the
+     stacked avatars: Alex / Sam / Connie + "Reco'd by Alex, Sam, Connie"
+  3. Tap Penny's photo → PDP shows the full Recommended-by panel
+  4. DevTools console should print [CERGIO/recommenders] with gotRows:3
+     (not 0)
+
 Files:
-  src/screens/EarnExplainerScreen.jsx          (10% / 7% split spelled out)
-  src/components/ui/RewardFlowAnimation.jsx     (v7 — readable list + 3 scenes)
-  scripts/qa.mjs                                (#31 — 3 scenes + fee/share split locks)
+  src/lib/api.js                            (sent_at, not created_at)
+  src/screens/ServiceDetailScreen.jsx        (sent_at, not created_at)
+  scripts/qa.mjs                             (#37 — column-name lock)

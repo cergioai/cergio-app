@@ -308,11 +308,18 @@ export async function deleteService(serviceId) {
 // Empty array (no rows for that service) renders "No mutual friends yet".
 async function fetchRecommendersByServiceId(serviceIds) {
   if (!supabaseReady || !serviceIds?.length) return {};
+  // CERGIO-GUARD (2026-05-29): the recommendations table uses `sent_at`,
+  // NOT `created_at`. Diagnose Money Flow.command surfaced this — every
+  // hydration query was erroring with "column created_at does not exist"
+  // and silently returning {} → all cards showed "No mutual friends yet"
+  // even when recs existed. Use sent_at + alias it back to created_at on
+  // the returned object so the consumers (PDP, ResultsScreen) keep the
+  // same field name they already expect.
   const { data: recs, error } = await supabase
     .from('recommendations')
-    .select('id, service_id, recommender_id, message, created_at')
+    .select('id, service_id, recommender_id, message, sent_at')
     .in('service_id', serviceIds)
-    .order('created_at', { ascending: false });
+    .order('sent_at', { ascending: false });
   // CERGIO-DIAG (gated): surfaces in DevTools when something's off —
   // e.g. RLS blocking reads, or seed not yet run. Toggle off with
   // window.__cergioDiag = false. Logs to help debug "No mutual friends"
@@ -344,7 +351,8 @@ async function fetchRecommendersByServiceId(serviceIds) {
       id:         r.recommender_id,
       name:       p?.display_name || 'A friend',
       message:    r.message,
-      created_at: r.created_at,
+      // Alias DB `sent_at` → `created_at` for the consumers' shape stability.
+      created_at: r.sent_at,
     });
   }
   return map;
