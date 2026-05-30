@@ -13,10 +13,15 @@
 // is the consumer's view only.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { listConsumerBookings, listMyOutboundSpotlightRequests } from '../lib/api';
+import { listConsumerBookings, listMyOutboundSpotlightRequests, listGoatShares } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 // FEED + REWARDS imports removed along with the fake "Friends
 // recently booked" section — see CERGIO-GUARD in the JSX below.
+// CERGIO-GUARD (2026-05-30): GoatSharesFeed below renders the new
+// "GOATs have shared their go-to services" cards (per Tarik's mockup),
+// but ONLY from real `recommendations` rows authored by Connectors.
+// If there are zero Connector recommendations in the DB the whole
+// section hides — never a fake feed, see feedback_no_fake_feeds.
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -105,6 +110,79 @@ function SpotlightRow({ req, onClick }) {
   );
 }
 
+// CERGIO-GUARD (2026-05-30): photo_class → cover-image gradient fallback.
+// Same pool ResultsScreen uses so the look is consistent across screens.
+const PHOTO_GRADIENTS = {
+  'fv-jamie':  'from-[#e8dcc8] via-[#b89870] to-[#604030]',
+  'fv-john':   'from-[#cad8e8] via-[#7088b0] to-[#2e4060]',
+  'fv-steve':  'from-[#d8e8ca] via-[#88b070] to-[#406030]',
+};
+
+function initials(name) {
+  if (!name) return '?';
+  return name.split(' ').map(s => s[0] || '').slice(0, 2).join('').toUpperCase();
+}
+
+// One share row matching the mockup: owner-name headline, category
+// badge + city, single cover image (when present), and the "Shared by
+// {Connector}, GOAT" pill at the bottom. Tap → routes to the service PDP.
+function GoatShareCard({ row, onClick }) {
+  const svc        = row.service;
+  const goatName   = row.recommender.display_name || 'A Connector';
+  const ownerName  = svc.owner_display_name || svc.title;
+  const cover      = svc.cover_url;
+  const gradient   = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left bg-transparent"
+    >
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+                        text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0">
+          {initials(ownerName)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] leading-snug text-black">
+            <span className="font-extrabold">{ownerName}</span>
+            <span className="font-medium text-b2"> was shared on Cergio</span>
+          </p>
+          <p className="text-[11.5px] text-gd font-extrabold mt-0.5">
+            <span className="inline-flex items-center gap-1">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
+                <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
+                <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              </svg>
+              {svc.category || 'Service'}
+            </span>
+            {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
+          </p>
+        </div>
+      </div>
+      <div className={`h-[140px] rounded-[14px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
+        {cover && (
+          <img
+            src={cover}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
+      </div>
+      <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+                        text-white text-[9px] font-extrabold flex items-center justify-center">
+          {initials(goatName)}
+        </div>
+        <p className="text-[12px] text-gd font-extrabold">
+          Shared by {goatName}, GOAT
+        </p>
+      </div>
+    </button>
+  );
+}
+
 export function ActivityScreen() {
   const navigate = useNavigate();
   const { auth } = useOutletContext() || {};
@@ -113,10 +191,17 @@ export function ActivityScreen() {
   // Real data — loaded lazily on auth flip.
   const [bookings, setBookings]     = useState(null); // null = loading
   const [spotlights, setSpotlights] = useState(null);
+  // CERGIO-GUARD: GOAT shares feed. Always loaded (public-ish data —
+  // recommendations RLS is `select using (true)` so signed-out users
+  // see the same feed). Hides the section when zero rows.
+  const [goatShares, setGoatShares] = useState(null);
   useEffect(() => {
-    if (!isSignedIn) { setBookings([]); setSpotlights([]); return; }
-    listConsumerBookings().then(({ data }) => setBookings(data || []));
-    listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => setSpotlights(data || []));
+    if (!isSignedIn) { setBookings([]); setSpotlights([]); }
+    else {
+      listConsumerBookings().then(({ data }) => setBookings(data || []));
+      listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => setSpotlights(data || []));
+    }
+    listGoatShares({ limit: 24 }).then(({ data }) => setGoatShares(data || []));
   }, [isSignedIn]);
 
   // Active = anything that isn't in a terminal state — those are what
@@ -131,9 +216,33 @@ export function ActivityScreen() {
       <div className="px-5 pt-8 pb-2">
         <h1 className="text-[24px] font-extrabold text-black leading-tight">Activity</h1>
         <p className="text-[13px] text-b3 font-medium mt-1.5 leading-snug">
-          Your own open requests.
+          What's happening on Cergio + your open requests.
         </p>
       </div>
+
+      {/* ─── GOAT shares — real data only. Hidden when zero. ─────────────
+          CERGIO-GUARD (2026-05-30): the cards here are REAL recommendations
+          authored by Connectors (cc_verified_at NOT NULL). No fake feed,
+          no fake numbers — see feedback_no_fake_feeds. */}
+      {goatShares && goatShares.length > 0 && (
+        <div className="mt-2 pb-4 border-b border-bdr">
+          <div className="px-5 mb-3">
+            <h2 className="text-[17px] font-extrabold text-black leading-tight">
+              GOATs have shared their go-to services on Cergio
+            </h2>
+            <p className="text-[12px] text-gd font-extrabold mt-1">#cergiogoats</p>
+          </div>
+          <div className="px-5 flex flex-col gap-5">
+            {goatShares.map(row => (
+              <GoatShareCard
+                key={row.id}
+                row={row}
+                onClick={() => navigate(`/service/${row.service.id}`)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* CERGIO-GUARD: the "Friends recently booked" section that
           rendered FEED (Stephanie K. booked Jamie Hall — Deep

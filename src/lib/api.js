@@ -1813,6 +1813,96 @@ export async function listConsumerBookings() {
     .order('scheduled_at', { ascending: false });
 }
 
+// CERGIO-GUARD (2026-05-30): GOAT shares feed for the Activity screen.
+// Real data, never mocked. Returns recommendations made BY Connectors
+// (cc_verified_at NOT NULL) — these are the "GOATs sharing their
+// go-to services" cards on the mockup. Empty array if no Connector
+// recommendations exist yet — the UI then hides the section
+// (never shows a fake feed; see feedback_no_fake_feeds in memory).
+//
+// Each card row contains:
+//   id              recommendation id (stable key)
+//   service:        { id, title, category, location_text, photo_class, cover_url, owner_display_name }
+//   recommender:    { id, display_name, is_connector: true }
+//   sent_at         when the recommendation was sent
+//   message         the recommender's note (optional)
+//
+// NOT returned: follower counts. We don't track those today and won't
+// stand in with fake numbers. The UI shows just "Shared by X, GOAT".
+export async function listGoatShares({ limit = 24 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+
+  // Step 1: recent recommendations.
+  const { data: recs, error: recErr } = await supabase
+    .from('recommendations')
+    .select('id, recommender_id, service_id, message, sent_at')
+    .order('sent_at', { ascending: false })
+    .limit(limit * 3); // overfetch — we filter to Connector-only next
+  if (recErr || !recs?.length) return { data: [], error: recErr || null };
+
+  // Step 2: resolve recommender profiles, keep only Connectors.
+  const rIds = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
+  const { data: rProfs } = await supabase
+    .from('profiles')
+    .select('id, display_name, cc_verified_at')
+    .in('id', rIds);
+  const goatMap = Object.fromEntries(
+    (rProfs || [])
+      .filter(p => !!p.cc_verified_at)
+      .map(p => [p.id, p])
+  );
+  const goatRecs = recs.filter(r => goatMap[r.recommender_id]);
+  if (!goatRecs.length) return { data: [], error: null };
+
+  // Step 3: services for the kept recommendations.
+  const sIds = [...new Set(goatRecs.map(r => r.service_id).filter(Boolean))];
+  const { data: svcs } = await supabase
+    .from('services')
+    .select('id, title, category, location_text, photo_class, cover_url, owner_id')
+    .in('id', sIds);
+  const svcMap = Object.fromEntries((svcs || []).map(s => [s.id, s]));
+
+  // Step 4: service-owner display names ("Sabir was shared…").
+  const oIds = [...new Set((svcs || []).map(s => s.owner_id).filter(Boolean))];
+  const { data: oProfs } = await supabase
+    .from('profiles')
+    .select('id, display_name')
+    .in('id', oIds);
+  const oMap = Object.fromEntries((oProfs || []).map(p => [p.id, p]));
+
+  // Step 5: shape + slice to `limit`.
+  const rows = goatRecs
+    .map(r => {
+      const svc  = svcMap[r.service_id];
+      const goat = goatMap[r.recommender_id];
+      if (!svc || !goat) return null;
+      const owner = oMap[svc.owner_id] || null;
+      return {
+        id:        r.id,
+        sent_at:   r.sent_at,
+        message:   r.message || null,
+        service: {
+          id:                  svc.id,
+          title:               svc.title,
+          category:            svc.category,
+          location_text:       svc.location_text,
+          photo_class:         svc.photo_class,
+          cover_url:           svc.cover_url,
+          owner_display_name:  owner?.display_name || null,
+        },
+        recommender: {
+          id:           goat.id,
+          display_name: goat.display_name,
+          is_connector: true,
+        },
+      };
+    })
+    .filter(Boolean)
+    .slice(0, limit);
+
+  return { data: rows, error: null };
+}
+
 /** Fetch a single service + its offerings. */
 export async function getService(id) {
   if (!supabaseReady) return NOT_WIRED;
