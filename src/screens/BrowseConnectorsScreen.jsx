@@ -138,6 +138,19 @@ function ConnectorRow({ connector: c, onClick }) {
           {totalReach > 0 && <> · {fmtFollowers(totalReach)} total reach</>}
         </p>
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
+          {/* CERGIO-GUARD (2026-05-30): Tarik flagged that paid Connectors
+              should be visually clear — easy to assume "Connector = free"
+              when actually plenty post a price. Lead with an amber
+              "Paid Connector" pill whenever any rate is set so the user
+              sees the cost commitment BEFORE the individual rate pills. */}
+          {(igPrice || ttPrice) && (
+            <span className="bg-warnBg text-warnText border border-warn/40 rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold inline-flex items-center gap-1">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/>
+              </svg>
+              Paid Connector
+            </span>
+          )}
           {igPrice && (
             <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold">
               IG · {igPrice}/post
@@ -149,8 +162,11 @@ function ConnectorRow({ connector: c, onClick }) {
             </span>
           )}
           {!igPrice && !ttPrice && (
-            <span className="bg-bg5 text-b2 rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold">
-              Free swap only
+            <span className="bg-gl text-gd border border-g/40 rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold inline-flex items-center gap-1">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
+              </svg>
+              Free / swap only
             </span>
           )}
         </div>

@@ -1,47 +1,42 @@
-Chunk A: tiny share msg, organic logo, IG link distinct from location
+Chunk B + Connector paid flag
 
-(1) SHARE MESSAGE → ONE-LINE
-Tarik: "abbreviate or just keep initial few lines. no address (the
-recipient will see all but user forwarding doesn't)". Trimmed to:
+(1) HOME: STATIC LOGO NEXT TO GREETING
+Tarik: "make logo static (unless it's executing action). move up to
+align next to Hi (user, tell me...)".
+The pre-submit brand mark is now sized 44 + STATIC (no working prop),
+anchored tight beside the "Hi Tarik, tell me what you need." line.
+Pulsating bloom only fires when the search actually executes (on the
+streaming-status block, which has its own larger LeafLogo with
+working={true}). Hidden post-submit because the streaming-status
+block owns the brand presence then.
 
-  "Hey — anyone know a good house cleaner?
-   → http://localhost:5173/?ref=…"
+(2) SPLASH + AUTH: HERO SIZE BUMP
+SplashScreen: 88 → 120 with intensity 0.9 — first impression
+unmistakably shows the new organic bud bloom.
+AuthScreen: 64 → 96 with intensity 0.85 — login opens on a
+confident hero-sized mark.
 
-Was previously a 3-line block w/ when + address + budget. The
-forwarded text was too intrusive in iMessage / WhatsApp threads. The
-recipient still sees full context on the linked page — no info lost.
+(3) "CERGIO IS HUMAN-POWERED AI" FOOTER: BREATHING ROOM
+Tarik: "give more room (like distance above and below Claude is AI
+spaces)... Cergio is AI note above the bottom nav bar".
+Was bottom-[72px] (only 8px above BottomNav — cramped).
+Now bottom-[92px] (28px clear) + py-2 on text itself so content
+above doesn't crowd it. Matches Claude's "Claude can make mistakes"
+rhythm.
 
-buildShareMessage keeps the {when,where,budget,details} args in its
-signature so all call sites work unchanged; the args are now no-ops
-(void'd). Easy to re-include later if we want a flag.
-
-(2) ORGANIC LOGO — "looks plastic, make it organic even if imperfect"
-8 identical petals scaling in unison felt geometric. Rewrote BudBloom
-with hand-tuned asymmetry:
-  • Each petal: own rx (9–13), own ry (28–34), own opacity (0.78–0.95),
-    own slight rotation nudge off the 45° grid (1–4° wobble)
-  • Each petal animates INDEPENDENTLY with its own delay (0.00s–0.30s)
-    so the bloom opens petal-by-petal instead of as one sprite
-  • New keyframe cgBudPetal: scale 0.08 → 0.98 → 1.03 with a small
-    rotate(-2deg → 1.5deg) wobble each cycle so the silhouette never
-    lands in the exact same spot
-  • Heart pulses on its OWN slower 5s rhythm (cgBudHeart, 0.96–1.12),
-    offset from the 4s petal cycle — two breathing layers, not one
-  • Added pale-orange smear ellipse inside the heart for hand-painted
-    feel; replaces the flat #FFFFFF dot with FBCBA6/FFF combo
-
-(3) IG SPOTLIGHT LINK — DISTINCT VISUAL LANE
-Was: same container as the location strip, slim grey text, easy to
-miss as "another bit of address metadata".
-Now: lifted OUTSIDE the location container, centered, with a subtle
-border-top divider above, and an Instagram glyph leading the text.
-Still slim — single line, no card, no big chrome — but it now sits in
-its OWN region so the eye can find it without it shouting.
-
-Files:
-  src/screens/ResultsScreen.jsx       (share builder)
-  src/components/ui/LeafLogo.jsx      (organic petals + heart)
-  src/index.css                       (cgBudPetal + cgBudHeart)
-  src/screens/HomeScreen.jsx          (IG link lifted out)
+(4) CONNECTOR BROWSE — FLAG PAID CONNECTORS
+Tarik: "for connectors search, flag when the connectors aren't free".
+Was: paid Connectors silently showed an "IG · $25/post" green pill,
+easy to mistake for a "Connector means free" implication.
+Now: leads each paid row with an amber "Paid Connector" pill (with a
+dollar-sign glyph) BEFORE the IG/TT rate pills. Free-only Connectors
+get a green "Free / swap only" pill with a shield glyph for visual
+parity. User immediately sees commitment level on each row.
 
 QA: 41/41 pass.
+
+Files:
+  src/screens/HomeScreen.jsx
+  src/screens/SplashScreen.jsx
+  src/screens/AuthScreen.jsx
+  src/screens/BrowseConnectorsScreen.jsx

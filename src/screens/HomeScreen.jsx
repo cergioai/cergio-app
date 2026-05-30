@@ -804,11 +804,19 @@ export function HomeScreen() {
           : `${greetingName}, tell me the Connector you need.`;
 
         return (
-          <div className="px-5 pt-5 pb-0.5 flex items-start gap-2.5">
-            {/* CERGIO-GUARD (2026-05-30): pre-submit leaf removed per
-                Tarik's UX pass — the brand mark now anchors the
-                streaming status block during search instead. Header
-                stays clean: just the greeting + the search box. */}
+          <div className="px-5 pt-5 pb-0.5 flex items-start gap-3">
+            {/* CERGIO-GUARD (2026-05-30 v3): brand mark at top — STATIC
+                until search fires (Tarik: "make logo static unless it's
+                executing action"). The bloom only plays on the
+                streaming-status block during search. Sized 44 so it
+                tucks tight next to the greeting line ("Hi Tarik, tell
+                me what you need."). Hidden post-submit because the
+                streaming status owns the brand presence then. */}
+            {!submitted && (
+              <div className="flex-shrink-0 pt-0.5">
+                <LeafLogo size={44} />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               {headlinePhase === 'rolling' && !submitted ? (
                 <h1
@@ -1424,8 +1432,13 @@ export function HomeScreen() {
           the BottomNav (nav is ~62px tall + has shadow-up). z-[60] so
           it sits over the nav, pointer-events-none so it can't block
           taps on the nav tabs underneath. */}
-      <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 z-[60] pointer-events-none">
-        <p className="text-center text-[11px] text-b3 font-normal leading-snug">
+      {/* CERGIO-GUARD (2026-05-30 v2): give the footer line symmetric
+          breathing room above and below — like Claude's "Claude can
+          make mistakes" footer. Was bottom-[72px] (8px above the nav,
+          felt cramped). Now bottom-[92px] (28px clear above the nav)
+          + py-3 inside so content above doesn't crowd it. */}
+      <div className="fixed bottom-[92px] left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 z-[60] pointer-events-none">
+        <p className="text-center text-[11px] text-b3 font-normal leading-snug py-2">
           Cergio is human-powered AI for shared prosperity
         </p>
       </div>

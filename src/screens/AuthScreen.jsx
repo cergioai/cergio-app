@@ -231,7 +231,7 @@ export function AuthScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cr pb-8 overflow-y-auto">
       <div className="flex flex-col items-center pt-14 pb-6 px-7 text-center">
-        <LeafLogo variant="splash" size={64} working />
+        <LeafLogo variant="splash" size={96} working intensity={0.85} />
         <h1 className="text-[30px] font-extrabold text-black tracking-wide mt-4 leading-tight">Cergio</h1>
         <p className="text-[13px] text-b3 leading-snug mt-2 font-medium max-w-[280px]">
           Services your friends actually trust. Book, host, or earn — all in one place.
