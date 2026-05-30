@@ -1,53 +1,71 @@
-Activity feed — GOAT shares (real data, hides when empty)
+Service-area polygon — Zillow-style freehand draw on Google Maps
 
-Tarik: "tweak activity feed to show something like this (friends and
-connectors booking, reco'ing etc.)" with the GOAT social-feed mockup.
+Tarik: "enable services to draw on a map to choose their service area
+(perhaps borrow from how users choose property search areas on
+Zillow…). apply this on the services IG homepage instead of the
+radius… use Google and have quality Zillow-like experience."
 
-Approach:
-A clean section ABOVE "Your open requests" titled
-  "GOATs have shared their go-to services on Cergio"
-  #cergiogoats
-that renders cards from REAL `recommendations` rows authored by users
-with cc_verified_at NOT NULL (Connectors / GOATs). Empty section just
-hides — zero fake data, zero shame state. Consistent with the
-established "no mock data on signed-in screens" rule
-(feedback_no_fake_feeds in memory; the prior fake "Friends recently
-booked" FEED was removed twice already and would have silently
-regressed without this discipline).
+Built: a bottom-sheet map picker that opens from the spotlight intent
+on HomeScreen. Provider drags their finger across the map and a green
+polygon fills under their gesture in real time. Release → polygon
+commits. Tap Clear to redraw. The 5/10/25mi pills remain as a
+"quick-pick" fallback for providers who don't want to draw, but they
+dim out once an explicit polygon is set (the polygon takes precedence).
 
-Each card matches the mockup:
-  • Big provider name + "was shared on Cergio"
-  • Category pill (green check) · city (location_text)
-  • 140px cover image (real cover_url) with photo_class gradient
-    fallback when none
-  • Bottom pill: "Shared by {Connector Name}, GOAT" with small avatar
-Tap → routes to the provider's PDP (/service/:id).
+WHY CUSTOM FREEHAND
+google.maps.drawing.DrawingManager only ships click-to-vertex polygons
+— the user clicks individual corners and double-clicks to close.
+That's not the Zillow experience. Zillow draws as you drag. So:
+  • mousedown/touchstart → freeze map drag + zoom, start collecting
+    LatLng points via the OverlayView's projection
+  • mousemove/touchmove → push points (throttled by min-distance so
+    we don't drown the polygon in noise), redraw an in-progress
+    Polyline so the user sees their line forming
+  • mouseup/touchend → close the polygon, drop a fill, restore map
+    drag + zoom, fire onChange with the GeoJSON shape
 
-What we deliberately do NOT show:
-  • "Shared to N followers" — we don't track follower counts on
-    profiles; would have had to fake the number. Omitted entirely.
-  • Multiple media thumbnails per card — we don't yet have a
-    multi-image gallery on services. Single cover is the honest
-    representation of what we actually have.
+OUTPUT SHAPE
+GeoJSON Polygon:
+  { type: 'Polygon', coordinates: [[[lng,lat], [lng,lat], ..., [lng,lat]]] }
+First and last coordinates are equal (closed ring per spec). Plays
+nicely with PostGIS for future server-side filtering.
 
-Plumbing:
-  src/lib/api.js
-    + listGoatShares({ limit }) — multi-step fetch:
-      1. recent recommendations (limit×3 to overfetch)
-      2. recommender profiles → keep cc_verified_at NOT NULL
-      3. services for kept recs
-      4. service-owner display names ("Sabir was shared…")
-      5. shape + slice to limit, return [] on empty
+FILES ADDED
+  src/components/ui/ServiceAreaMapPicker.jsx (new) — the picker
+  package.json: + "@googlemaps/js-api-loader": "^1.16.8"
 
-  src/screens/ActivityScreen.jsx
-    + GoatShareCard component
-    + new top section, gated on goatShares.length > 0
-    + loads listGoatShares on mount, signed-in OR signed-out (the
-      recommendations RLS policy is `select using (true)` so the
-      feed is public-ish; matches the mockup's discovery intent)
+FILES EDITED
+  src/screens/HomeScreen.jsx
+    + serviceAreaGeoJson state
+    + areaPickerOpen state
+    + import ServiceAreaMapPicker
+    + replaces spotlight pill row with:
+        "Draw your service area" button (taps open the sheet)
+        Quick-pick pills below (dimmed when polygon present)
+    + mounts the picker at screen root, gated on areaPickerOpen
+
+WHAT TARIK NEEDS TO DO ONCE
+1. Get a Google Maps JavaScript API key from
+   https://console.cloud.google.com → APIs & Services → Credentials.
+   Enable: Maps JavaScript API + (Places API if you want autocomplete
+   reuse later).
+2. Add VITE_GOOGLE_MAPS_API_KEY=AIza... to .env.local AND to Vercel
+   env vars (production + preview).
+3. The map shows a clear error message if the key is missing/invalid
+   — no silent failure.
+
+WHAT'S DELIBERATELY NOT IN THIS SLICE
+  • DB column. The polygon lives in client state for this commit.
+    Next slice: ALTER TABLE services ADD COLUMN service_area
+    geography(Polygon, 4326), persist on save, filter listings server
+    side via ST_Contains.
+  • Consumer-side filtering. Today the polygon is captured but not
+    used to filter who sees the listing. Wired together in the
+    DB-persistence slice.
 
 QA: 41/41 pass.
 
 Files:
-  src/lib/api.js
-  src/screens/ActivityScreen.jsx
+  src/components/ui/ServiceAreaMapPicker.jsx (new)
+  src/screens/HomeScreen.jsx
+  package.json

@@ -16,6 +16,7 @@ import { CcGateModal } from '../components/ui/CcGateModal';
 import { LeafLogo } from '../components/ui/LeafLogo';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { LocationEditModal } from '../components/ui/LocationEditModal';
+import { ServiceAreaMapPicker } from '../components/ui/ServiceAreaMapPicker';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
 import { REWARDS, REWARD_COPY } from '../lib/rewards';
 
@@ -333,6 +334,12 @@ export function HomeScreen() {
   });
   const [locEditing, setLocEditing] = useState(false);
   const [travelRadius, setTravelRadius] = useState('10mi');
+  // CERGIO-GUARD (2026-05-30): polygon service-area (Zillow-style).
+  // When set, supersedes travelRadius for spotlight intent — the
+  // provider has drawn an explicit area instead of picking a radius.
+  // Persisted later (separate slice); session state for now.
+  const [serviceAreaGeoJson, setServiceAreaGeoJson] = useState(null);
+  const [areaPickerOpen, setAreaPickerOpen]         = useState(false);
 
   // Persist the address the chat parser captures.
   // CERGIO-GUARD: verify via Google before saving as the default. If
@@ -1059,35 +1066,65 @@ export function HomeScreen() {
                 </div>
               )}
 
-              {/* CERGIO-GUARD (2026-05-30): spotlight intent — travel
-                  radius pills sit RIGHT BELOW the location strip, in
-                  the same "anchored to the current search" zone. Only
-                  renders when there's a location to travel from. */}
+              {/* CERGIO-GUARD (2026-05-30): spotlight intent — Zillow-style
+                  service-area polygon, replacing the old 5/10/25mi pills.
+                  Provider taps "Draw your service area" → bottom-sheet
+                  map opens centered on their address → freehand drag to
+                  outline coverage. The pills row stays as a quick-pick
+                  fallback so a provider who just wants "10 mi" doesn't
+                  have to touch the map. */}
               {intent === 'spotlight' && locationText && (
-                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-b3 flex-wrap">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                    <path d="M5 12a7 7 0 0 1 14 0"/><path d="M12 19v-7"/>
-                  </svg>
-                  <span className="font-medium mr-0.5">Willing to travel:</span>
-                  {[
-                    { id: 'onsite',   label: 'On-site only' },
-                    { id: '5mi',      label: '5 mi' },
-                    { id: '10mi',     label: '10 mi' },
-                    { id: '25mi',     label: '25 mi' },
-                    { id: 'anywhere', label: 'Anywhere' },
-                  ].map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => setTravelRadius(opt.id)}
-                      className={`rounded-pill px-2 py-0.5 text-[10px] font-extrabold transition-colors
-                                  ${travelRadius === opt.id
-                                    ? 'bg-gl text-gd border border-g/40'
-                                    : 'bg-white text-b2 border border-bdr hover:border-g/40'}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                <div className="mt-1.5 flex flex-col gap-1.5">
+                  <button
+                    onClick={() => setAreaPickerOpen(true)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-[12px] border text-left
+                                ${serviceAreaGeoJson
+                                  ? 'bg-gl border-g/40 text-gd'
+                                  : 'bg-white border-bdr text-b2 hover:border-g/40'}`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                      <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"/><path d="M9 4v13"/><path d="M15 7v13"/>
+                    </svg>
+                    <span className="text-[12px] font-extrabold">
+                      {serviceAreaGeoJson ? 'Service area drawn — tap to edit' : 'Draw your service area'}
+                    </span>
+                    {serviceAreaGeoJson && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); setServiceAreaGeoJson(null); }}
+                        className="ml-auto text-[11px] font-medium underline cursor-pointer"
+                      >
+                        Clear
+                      </span>
+                    )}
+                  </button>
+                  {/* Quick-pick radius pills — fallback when the provider
+                      doesn't want to draw. Dimmed when an explicit
+                      polygon is set (the polygon takes precedence). */}
+                  <div className={`flex items-center gap-1.5 text-[11px] text-b3 flex-wrap
+                                   ${serviceAreaGeoJson ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <span className="font-medium mr-0.5">Or quick-pick:</span>
+                    {[
+                      { id: 'onsite',   label: 'On-site only' },
+                      { id: '5mi',      label: '5 mi' },
+                      { id: '10mi',     label: '10 mi' },
+                      { id: '25mi',     label: '25 mi' },
+                      { id: 'anywhere', label: 'Anywhere' },
+                    ].map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setTravelRadius(opt.id)}
+                        className={`rounded-pill px-2 py-0.5 text-[10px] font-extrabold transition-colors
+                                    ${travelRadius === opt.id
+                                      ? 'bg-gl text-gd border border-g/40'
+                                      : 'bg-white text-b2 border border-bdr hover:border-g/40'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1401,6 +1438,17 @@ export function HomeScreen() {
           wants the input right next to where the address sits, not
           sliding up from the bottom. The modal still exists for any
           surface that wants a full-sheet editor; Home no longer uses it. */}
+
+      {/* Service-area polygon picker — bottom sheet, Zillow-style. */}
+      {areaPickerOpen && (
+        <ServiceAreaMapPicker
+          center={locationCoords}
+          apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
+          value={serviceAreaGeoJson}
+          onChange={setServiceAreaGeoJson}
+          onClose={() => setAreaPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }
