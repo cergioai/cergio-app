@@ -1,59 +1,34 @@
-PDP rebuild — Jennifer Leighton mockup match
+Connector-aware paid-fallback copy on Results
 
-Brings the consumer service-profile screen up to the Figma reference
-Tarik uploaded. Old PDP had the right bones (selectable offerings,
-avatar stack, About section, sticky CTA) but the wrong RHYTHM — the
-mockup leads with name + badges + reco-line + "Book {Name}", not with
-a cover image and a small owner-avatar row.
+Tarik: "when user is a Connector and asks for free services, we should
+show them a msg (if there are no free services on offer...) that says
+something like 'no free services... but here are best options...' (paid)"
 
-Changes:
+The paidFallback plumbing already existed — when freeOnly=ON returns
+zero, we re-query without it and show paid options under a banner.
+The banner copy, though, addressed CONSUMERS only ("Free offers come
+from Connectors. Ask a friend to join…") — Tarik's a Connector and
+that line is nonsensical to him.
 
-(1) STORY-PROGRESS BANNER
-Top now shows a dim cover image (or gradient fallback) at 120px with:
-  • 7 uniform progress dots across the top (decorative shell — no
-    story engine yet)
-  • Close × top-left (acts as back)
-  • Mute 🔇 top-right (decorative)
-  • Tagline bottom-left: "Running all the errands you need"
+Fix: load the signed-in user's `cc_verified_at` flag alongside the
+friends graph (same effect, no extra round-trip — `Promise.all` of
+network + profile). Stash as `isConnector`. Render two copy variants:
 
-(2) BIG NAME + BADGES ROW
-  • h1 at 28px / extrabold — provider's display_name
-  • Row of two pills: ✓ {Category} (green check) and 🛡️ Free for GOATs
-    (green shield) — the GOAT badge surfaces when any offering has
-    price_cents=0
-  • Connector ✓ chip moved off (the GOAT pill carries the same intent
-    for end-users; provider Connector status is implicit in eligibility)
+  Consumer (existing):
+    "No free {plumbers} nearby right now — showing paid options."
+    "Free offers come from Connectors. Ask a friend to join, or
+     pick a paid option below."
 
-(3) RECO LINE — "Go-to service for N users, F friends and E experts,
-    including {LeadName}"
-Replaces the bulky avatar-stack headline. New format:
-  "Go-to service for 15 users, 4 friends and 30 experts, including
-   Jennifer Connery"  + lead-recommender avatar pinned right
-Counts are underlined green (look tappable — future "who recommended"
-sheet TODO). Connectors → "experts" in this copy per mockup.
+  Connector (NEW):
+    "No free {plumbers} on offer right now — here are the best
+     paid matches."
+    "Free offers from other Connectors will show up here when they
+     list one nearby."
 
-(4) HORIZONTAL-SCROLL OFFERING CARDS
-Was vertical stack. Now horizontal swipe — first card visible, next
-peeks. Snap-mandatory so each card locks in view. Cards now show
-"Free for GOATs" pill when price_cents=0 (instead of "$0").
+No DB schema changes. No new RLS surface — `cc_verified_at` was
+already readable on own profile.
 
-(5) CREAM "CUSTOM QUOTE" CALLOUT
-New strip under the offering cards:
-  "Don't see what you need? Submit a request for a custom quote."
-Routes to /home (the chat) so the user can describe a custom job.
-
-(6) STICKY CTA REWORDED
-Was: "Book {firstName} · $X ↗"
-Now: "Request {OfferingName} ($X)"   +   "You won't be charged yet"
-Matches the mockup's commitment-light copy — request, not book yet.
-
-(7) WHAT PEOPLE SAY moved BELOW About
-Recommender quote blurbs are still there but no longer compete with
-the headline reco line. Sit under About the provider as social proof.
-
-Touched: src/screens/ServiceDetailScreen.jsx only.
-
-QA: 41/41 pass. #38 (recommender stack + onOpen routing) still green.
+QA: 41/41 pass.
 
 Files:
-  src/screens/ServiceDetailScreen.jsx
+  src/screens/ResultsScreen.jsx

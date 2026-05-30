@@ -293,7 +293,12 @@ export function ResultsScreen() {
   // Friends graph — owner_ids the signed-in user follows. Loaded once,
   // then used to tag each provider card with friend recos. Empty list
   // is fine; the card just shows "No mutual friends yet".
+  // CERGIO-GUARD (2026-05-30): also stashes the signed-in user's own
+  // Connector status (`isConnector`) so the paid-fallback banner can
+  // address Connectors directly with a warmer "no free services for
+  // you right now — best paid matches" instead of the generic copy.
   const [friendOwnerIds, setFriendOwnerIds] = useState(new Set());
+  const [isConnector, setIsConnector]       = useState(false);
   useEffect(() => {
     if (!supabaseReady) return;
     let cancelled = false;
@@ -301,12 +306,13 @@ export function ResultsScreen() {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes?.user?.id;
       if (!uid) return;
-      const { data } = await supabase
-        .from('network')
-        .select('followed_id')
-        .eq('follower_id', uid);
+      const [{ data: net }, { data: prof }] = await Promise.all([
+        supabase.from('network').select('followed_id').eq('follower_id', uid),
+        supabase.from('profiles').select('cc_verified_at').eq('id', uid).maybeSingle(),
+      ]);
       if (cancelled) return;
-      setFriendOwnerIds(new Set((data || []).map(r => r.followed_id)));
+      setFriendOwnerIds(new Set((net || []).map(r => r.followed_id)));
+      setIsConnector(!!prof?.cc_verified_at);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -717,16 +723,36 @@ export function ResultsScreen() {
         const ptLabel = safeProviderTypePlural
           ? safeProviderTypePlural.toLowerCase()
           : (userNoun ? `${userNoun}s` : 'options');
+        // CERGIO-GUARD (2026-05-30): Connector-aware copy. When the
+        // signed-in user IS a Connector, address them directly and
+        // skip the "ask a friend to join" line (they ARE the Connector
+        // who'd be inviting). Tarik: "no free services... but here are
+        // best options... (paid)".
         return (
           <div className="mx-5 mb-3 bg-cr2 border border-bdr rounded-[14px] px-4 py-3">
-            <p className="text-[13px] text-b2 leading-snug font-medium">
-              No free {ptLabel} nearby right now —
-              {' '}showing paid options.
-            </p>
-            <p className="text-[11px] text-b3 leading-snug mt-1">
-              Free offers come from Connectors. Ask a friend to join, or
-              pick a paid option below.
-            </p>
+            {isConnector ? (
+              <>
+                <p className="text-[13px] text-b2 leading-snug font-medium">
+                  No free {ptLabel} on offer right now —
+                  {' '}here are the best paid matches.
+                </p>
+                <p className="text-[11px] text-b3 leading-snug mt-1">
+                  Free offers from other Connectors will show up here when
+                  they list one nearby.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-b2 leading-snug font-medium">
+                  No free {ptLabel} nearby right now —
+                  {' '}showing paid options.
+                </p>
+                <p className="text-[11px] text-b3 leading-snug mt-1">
+                  Free offers come from Connectors. Ask a friend to join, or
+                  pick a paid option below.
+                </p>
+              </>
+            )}
           </div>
         );
       })()}
