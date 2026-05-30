@@ -1,48 +1,91 @@
-Animation: move "50 friends → $12,500" punchline to Scene 2 (Invite/Math)
+ProviderCard recoText buckets + Home Budget pill ("flexible" by default)
 
-Tarik: "the 50 friends 12,500 belongs in the invite screen not the GPI."
+Per Tarik: "can we have these elements on the options cards.. optimize.
+Also add a budget price (optional like the date 'I'm flexible') so we
+can show users savings (or above budget)."
 
-The compounding example is an INVITE story — it answers "how big can my
-referral earnings get?" not "what's Growth Participation Income?"
-Conflating them muddled both messages. v7 had the $12,500 hero card on
-Scene 3 (GPI) with a small "+ GPI" strip below it; v8 splits them
-properly.
+  Jamie Hall.                                              111 Recos
+  Housekeeper.                                                $170
+  Post Party Cleaning Specialist ex 4 Seasons          Saves $65
+        Reco'd by Jennifer Hu, 3 other friends and 21 Connectors
 
-  Scene 2 (Invite/Math) — gains the punchline
-    Title:   "$250 per friend → $12,500 with 50."
-    Body:    Cergio 10% on every booking, we share 7% with you, $250 cap,
-             6-month-of-invite window. "Bring 50 friends and that's $12,500."
-    Visual:  Existing 3-row 7%-accumulator stays. New 50 × $250 = $12,500
-             pill footer (mint green, full-width) replaces the old text
-             footer. Small subline below: "within 6 months of each invite."
+Two parts: (a) the reco line bucketing, (b) the budget input that lets
+the Saves $X / Over budget $X labels actually render.
 
-  Scene 3 (GPI) — now pure GPI explainer
-    Title:   "Growth Participation Income."
-    Body:    "Every dollar you earn on Cergio also builds your
-             participation score — like airmiles, but tied to Cergio's
-             growth instead of flights. If Cergio goes public, the
-             orchard you helped grow rewards you back."
-    Visual:  Big "+ GPI" badge on top. Three labeled cards:
-               WHAT  — Loyalty-style bonus tied to Cergio's growth
-               HOW   — Every $ you earn = +1 to your participation score
-               WHEN  — Activates if Cergio goes public (IPO)
-             Footer: "Human-Powered AI · Shared Prosperity"
-             Disclaimer: "Loyalty-style bonus, not a security. No
-                          guaranteed payout."
+1. RECO LINE — bucketed format
 
-This separation lets the eye learn ONE thing per scene — the $-number
-math sits with the Invite scene where it belongs; GPI is its own
-concept and gets its own room to breathe.
+Old format: "Reco'd by Alex, Sam, Connie" (flat list of all names).
+New format: "Reco'd by {leadFriend}, {N} other friends and {M} Connectors"
+where the named anchor is the first NON-Connector friend (if any) and
+Connectors are surfaced separately so the social-proof reads cleanly.
 
-  src/components/ui/RewardFlowAnimation.jsx
-    • Scene 2 title + body rewritten — includes the 50 × $250 → $12,500
-      math directly. Visual gets the mint-green punchline pill.
-    • Scene 3 visual fully rewritten — three WHAT/HOW/WHEN cards
-      stacked vertically, GPI badge centered up top, mission tagline
-      + legal disclaimer at the bottom.
+Data layer:
+  src/lib/api.js — fetchRecommendersByServiceId
+    • SELECT now includes profiles.cc_verified_at
+    • Each recommender carries is_connector: !!p?.cc_verified_at
 
-QA: 39/39 pass (existing #31 references — exampleFriends + exampleTotal —
-still satisfied by Scene 2's body).
+Shape layer:
+  src/screens/ResultsScreen.jsx — serviceToProvider
+    • Buckets svc.recommenders into friendsRaw (non-Connector) and
+      connectorsRaw (cc_verified)
+    • Exposes friendCount, connectorCount, leadFriendName on the
+      provider object
+    • Accepts friendOwnerIds for future "in your network" filtering
+
+Render layer:
+  src/components/ui/ProviderCard.jsx — recoText()
+    • Builds the natural-language string:
+      "Reco'd by Jennifer Hu, 3 other friends and 21 Connectors"
+      "Reco'd by Jennifer Hu and 21 Connectors"      (1 friend + Cs)
+      "Reco'd by 21 Connectors"                       (no friends)
+      "Reco'd by Jennifer Hu"                         (1 friend, no Cs)
+    • Legacy fallback preserved for old codepaths that still set the
+      flat `friends` array without buckets
+
+  scripts/qa.mjs #40 (new)
+    • Locks the is_connector derivation in api.js
+    • Locks the friendCount + connectorCount + leadFriendName fields
+    • Locks the "other friend" + "Connector" wording in ProviderCard
+
+2. HOME BUDGET PILL — "flexible" by default
+
+Mirrors the date "I'm flexible" pattern. New optional Budget input
+sits inline in the search controls row, between the attach button
+and the Free/Pay mode toggle:
+
+  $ [____]   (placeholder reads "flexible" when empty)
+  $ [200]  ×  (clear button appears once a value is typed)
+
+Empty input = no budget filter (flexible). Typing a number flows
+into the existing submit pipeline as budget_cents, which the
+ResultsScreen savings calculator already uses to render
+"Saves $X" or "Over budget $X" labels per card.
+
+The manual budget wins over whatever the chat parser inferred
+from free text. (Old behaviour stays — "under $200" in chat text
+still works as a fallback when the explicit input is empty.)
+
+  src/screens/HomeScreen.jsx
+    • New `budget` state (string)
+    • Inline budget input pill in the search controls row
+    • submitQuery prefers manualBudget over s.budget for budget_cents
+
+QA: 40/40 pass.
+
+NEXT — TARIK:
+  Refresh the running app (Cmd+Shift+R).
+  Search "plumber Miami Beach" with budget left blank → existing flow.
+  Type "200" in the budget pill, then search → cards show Saves $X /
+    Over budget $X labels based on the per-card price.
+  Penny's card should also show the bucketed reco line:
+    "Reco'd by [first friend name] and N Connectors"
+    (or similar based on whose recs landed on Penny — seed has 3 recs:
+    Alex + Sam (friends) + Connie (Connector, cc_verified) → expect
+    "Reco'd by Alex, 1 other friend and 1 Connector")
 
 Files:
-  src/components/ui/RewardFlowAnimation.jsx
+  src/lib/api.js                            (is_connector + cc_verified_at select)
+  src/screens/ResultsScreen.jsx             (recommender bucketing)
+  src/components/ui/ProviderCard.jsx        (new recoText buckets)
+  src/screens/HomeScreen.jsx                (Budget pill)
+  scripts/qa.mjs                            (+#40 reco-buckets)

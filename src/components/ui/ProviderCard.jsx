@@ -46,13 +46,43 @@ function FriendAvatars({ friends }) {
 }
 
 export function ProviderCard({ provider, onBook, onSave, onOpen }) {
-  const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl } = provider;
+  const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl,
+          friendCount = 0, connectorCount = 0, leadFriendName = null } = provider;
 
+  // CERGIO-GUARD (2026-05-30): reco line format:
+  //   "Reco'd by Jennifer Hu, 3 other friends and 21 Connectors"
+  // Anchored on a NAMED lead friend (when one exists in your network),
+  // then count of remaining friends ("X other friends"), then count of
+  // Connectors. Connector-only services (no friends) still read cleanly:
+  // "Reco'd by 21 Connectors". Falls back to the legacy `friends`-only
+  // shape for cards seeded via the old single-friend hint.
   const recoText = () => {
-    if (!friends || friends.length === 0) return null;
-    const fStr = friends.join(', ');
-    const rmStr = connectors > 0 ? ` and ${connectors} Connectors` : '';
-    return `Reco'd by ${fStr}${rmStr}`;
+    const parts = [];
+    if (leadFriendName) {
+      parts.push(leadFriendName);
+      const otherFriends = Math.max(0, friendCount - 1);
+      if (otherFriends > 0) {
+        parts.push(`${otherFriends} other ${otherFriends === 1 ? 'friend' : 'friends'}`);
+      }
+    } else if (friendCount > 0) {
+      parts.push(`${friendCount} ${friendCount === 1 ? 'friend' : 'friends'}`);
+    }
+    if (connectorCount > 0) {
+      parts.push(`${connectorCount} ${connectorCount === 1 ? 'Connector' : 'Connectors'}`);
+    }
+    if (parts.length === 0) {
+      // Legacy fallback — old codepath populated `friends` without
+      // friendCount/connectorCount; preserve the previous behaviour.
+      if (!friends || friends.length === 0) return null;
+      const fStr = friends.join(', ');
+      const rmStr = connectors > 0 ? ` and ${connectors} Connectors` : '';
+      return `Reco'd by ${fStr}${rmStr}`;
+    }
+    // Natural-language join with "and" before the last clause.
+    const last = parts.pop();
+    return parts.length > 0
+      ? `Reco'd by ${parts.join(', ')} and ${last}`
+      : `Reco'd by ${last}`;
   };
 
   // CERGIO-GUARD (2026-05-29): photo tap now opens the PDP (provider

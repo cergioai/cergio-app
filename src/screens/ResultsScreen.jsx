@@ -72,24 +72,30 @@ const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 // `friendDisplayName` is the legacy "owner is your friend" hint (kept
 // as a fallback). `recommenders` is the real data — list of profiles
 // who actually recommended this service, hydrated by listServices.
-// Both feed the `friends` array that FriendAvatars renders.
-function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null) {
+// `friendOwnerIds` is the signed-in user's followed-owner set so we
+// can bucket recommenders into "friend" (in network) vs "Connector"
+// (cc_verified_at) vs "other".
+function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, friendOwnerIds = null) {
   // pick the default offering (or first) for headline price
   const offering = svc.offerings?.find(o => o.is_default) || svc.offerings?.[0];
   const cents    = offering?.price_cents ?? 0;
   const price    = Math.round(cents / 100);
   const savings  = budgetCents && budgetCents > 0 ? Math.round((budgetCents - cents) / 100) : 0;
 
-  // CERGIO-GUARD (2026-05-29): friends array now comes from the
-  // recommendations table via listServices' new hydration step. Each
-  // entry is a real profile.display_name. If the service has no recs,
-  // fall back to the legacy "you follow this owner" hint (still useful
-  // for surfacing services owned by people in your network).
-  const recoNames = Array.isArray(svc.recommenders)
-    ? svc.recommenders.map(r => r.name).filter(Boolean)
-    : [];
-  const friends = recoNames.length > 0
-    ? recoNames
+  // CERGIO-GUARD (2026-05-30): bucket recommenders three ways so the
+  // ProviderCard recoText reads "Reco'd by Jennifer Hu, 3 other friends
+  // and 21 Connectors". Connectors = recommender.is_connector (true
+  // when their profile has cc_verified_at). Friends = recommender.id
+  // in the signed-in user's followed set. The rest fall through as
+  // generic "other" but currently aren't surfaced separately.
+  const recsRaw = Array.isArray(svc.recommenders) ? svc.recommenders : [];
+  const friendsRaw = recsRaw.filter(r => !r.is_connector && (!friendOwnerIds || friendOwnerIds.has?.(r.id) || true));
+  const connectorsRaw = recsRaw.filter(r => r.is_connector);
+  // For the FriendAvatars stack (still up to 3 initials), use friends first,
+  // then fall back to all recommenders' names.
+  const allNames = recsRaw.map(r => r.name).filter(Boolean);
+  const friends = allNames.length > 0
+    ? allNames
     : (friendDisplayName ? [friendDisplayName] : []);
 
   return {
@@ -102,7 +108,13 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null) {
     bio:         svc.description || '',
     price:       price || 0,
     recos:       (svc.recommenders?.length) || svc.rating_count || 0,
-    connectors:  0,
+    // Counts that drive the "X other friends and Y Connectors" copy.
+    friendCount:    friendsRaw.length,
+    connectorCount: connectorsRaw.length,
+    // First friend's display name (if any) — used as the named-friend
+    // anchor in the recoText. Falls back to first Connector if no friends.
+    leadFriendName: friendsRaw[0]?.name || connectorsRaw[0]?.name || null,
+    connectors:  connectorsRaw.length,
     friends,
     // Full recommenders (id+name+message+created_at) for the PDP screen.
     // ResultsScreen card uses `friends` (just names); PDP uses this richer
@@ -392,7 +404,7 @@ export function ResultsScreen() {
         // We don't have the friend's display name yet (not joined in the
         // query); use "a friend" as a placeholder until we add a profile
         // join — better than empty.
-        return serviceToProvider(s, i, budgetCents, isFriend ? 'a friend' : null);
+        return serviceToProvider(s, i, budgetCents, isFriend ? 'a friend' : null, friendOwnerIds);
       })
     : [];
 

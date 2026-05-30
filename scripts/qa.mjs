@@ -1313,8 +1313,8 @@ test('recommenders-hydration', 'listServices hydrates recommenders + ResultsScre
   // shape — recoNames built from svc.recommenders.
   assert(/svc\.recommenders/.test(screenCode),
     'ResultsScreen.serviceToProvider must read svc.recommenders to populate friends.');
-  assert(/recoNames\s*=\s*Array\.isArray\(svc\.recommenders\)/.test(screenCode),
-    'ResultsScreen must derive recoNames from Array.isArray(svc.recommenders).');
+  assert(/recsRaw\s*=\s*Array\.isArray\(svc\.recommenders\)/.test(screenCode),
+    'ResultsScreen must derive recsRaw from Array.isArray(svc.recommenders).');
 
   // CERGIO-GUARD (2026-05-29): the recommendations table column is
   // `sent_at`, NOT `created_at`. Querying the wrong column silently
@@ -1331,6 +1331,43 @@ test('recommenders-hydration', 'listServices hydrates recommenders + ResultsScre
   assert(!/from\('recommendations'\)[\s\S]{0,200}\.order\('created_at'/.test(pdp)
       && !/from\('recommendations'\)[\s\S]{0,300}\.select\('[^']*\bcreated_at\b[^']*'\)/.test(pdp),
     'ServiceDetailScreen MUST NOT query recommendations.created_at — that column does not exist (use sent_at).');
+});
+
+// ─── INVARIANT #40: ProviderCard recoText buckets recommenders ──────────
+// Tarik 2026-05-30: "Reco'd by Jennifer Hu, 3 other friends and 21
+// Connectors." Format requires the data layer to expose:
+//   • friendCount    (recs from people in user's network, non-Connectors)
+//   • connectorCount (recs from cc_verified profiles)
+//   • leadFriendName (top friend's display_name)
+// AND ProviderCard must render the joined "X friends and Y Connectors"
+// natural-language string. Locks both ends so the friendly bucket can't
+// silently regress to the old "Reco'd by Alex, Sam, Connie" flat list.
+test('reco-buckets', 'ProviderCard reco copy splits friends + Connectors per recommender bucket', '#40', async () => {
+  const api = readFile('src/lib/api.js');
+  const apiCode = stripComments(api);
+  assert(/is_connector:\s*!!p\?\.cc_verified_at/.test(apiCode),
+    'fetchRecommendersByServiceId must derive is_connector from profiles.cc_verified_at.');
+
+  const results = readFile('src/screens/ResultsScreen.jsx');
+  const rCode = stripComments(results);
+  assert(/friendCount:\s*friendsRaw\.length/.test(rCode),
+    'serviceToProvider must compute friendCount from non-Connector recommenders.');
+  assert(/connectorCount:\s*connectorsRaw\.length/.test(rCode),
+    'serviceToProvider must compute connectorCount from Connector recommenders.');
+  assert(/leadFriendName:/.test(rCode),
+    'serviceToProvider must expose leadFriendName (the named anchor in the recoText).');
+
+  const card = readFile('src/components/ui/ProviderCard.jsx');
+  const cCode = stripComments(card);
+  // stripComments wipes backticked template literals, so check the
+  // 'other friend' wording on the RAW source (it sits inside a
+  // template-string ternary).
+  assert(/friendCount/.test(cCode) && /connectorCount/.test(cCode) && /leadFriendName/.test(cCode),
+    'ProviderCard must destructure friendCount + connectorCount + leadFriendName from provider.');
+  assert(/other friend/.test(card),
+    'ProviderCard recoText must surface the "X other friends" wording.');
+  assert(/Connector/.test(card),
+    'ProviderCard recoText must surface the "Connector(s)" wording.');
 });
 
 // ─── INVARIANT #38: ServiceDetailScreen (PDP) wired + renders recommenders ─

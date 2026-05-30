@@ -315,6 +315,11 @@ async function fetchRecommendersByServiceId(serviceIds) {
   // even when recs existed. Use sent_at + alias it back to created_at on
   // the returned object so the consumers (PDP, ResultsScreen) keep the
   // same field name they already expect.
+  //
+  // ALSO (2026-05-30): includes is_connector per recommender, derived
+  // from profiles.cc_verified_at. ProviderCard renders bucketed copy
+  // "Reco'd by Jennifer Hu, 3 other friends and 21 Connectors" — needs
+  // to distinguish a Connector rec from a regular friend rec.
   const { data: recs, error } = await supabase
     .from('recommendations')
     .select('id, service_id, recommender_id, message, sent_at')
@@ -339,7 +344,7 @@ async function fetchRecommendersByServiceId(serviceIds) {
   if (profileIds.length) {
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, display_name')
+      .select('id, display_name, cc_verified_at')
       .in('id', profileIds);
     profMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
   }
@@ -348,11 +353,15 @@ async function fetchRecommendersByServiceId(serviceIds) {
     if (!r.service_id) continue;
     const p = profMap[r.recommender_id];
     (map[r.service_id] ||= []).push({
-      id:         r.recommender_id,
-      name:       p?.display_name || 'A friend',
-      message:    r.message,
+      id:           r.recommender_id,
+      name:         p?.display_name || 'A friend',
+      message:      r.message,
       // Alias DB `sent_at` → `created_at` for the consumers' shape stability.
-      created_at: r.sent_at,
+      created_at:   r.sent_at,
+      // True when this recommender has been verified as a Connector
+      // (cc_verified_at set on their profile). ProviderCard reads this
+      // to bucket the recoText into friends + Connectors.
+      is_connector: !!p?.cc_verified_at,
     });
   }
   return map;

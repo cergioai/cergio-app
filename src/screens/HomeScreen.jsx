@@ -234,6 +234,13 @@ export function HomeScreen() {
   const [query, setQuery] = useState('');
   const [images, setImages] = useState([]);
   const [modeOpen, setModeOpen] = useState(false);
+  // CERGIO-GUARD (2026-05-30): explicit Budget input on Home so the
+  // ResultsScreen Saves $X / Over budget $X labels actually have
+  // a value to compare against. Empty string = "I'm flexible" (no
+  // budget filter). Mirrors the date "I'm flexible" pattern in the
+  // chat parser (which accepts free-form dates OR omitted = flexible).
+  // The value is a plain number string; submitQuery converts to cents.
+  const [budget, setBudget] = useState('');
   const [showCcGate, setShowCcGate] = useState(false);
   const [ccVerified, setCcVerified] = useState(false);
   const [intent, setIntent] = useState('find');
@@ -621,8 +628,13 @@ export function HomeScreen() {
       try {
         const { createRequestAndFanOut } = await import('../lib/api');
         const s = chat?.state || {};
-        const budgetStr = String(s.budget || '');
-        const m = budgetStr.match(/\$?\s*(\d{1,5})/);
+        // CERGIO-GUARD (2026-05-30): explicit Budget input wins over
+        // whatever the chat parser inferred. If the user typed a number
+        // in the Budget pill, that's their truth. Otherwise fall back
+        // to the parser's `s.budget` (e.g. "under $200" in chat text).
+        const manualBudget = budget.trim();
+        const budgetSource = manualBudget || String(s.budget || '');
+        const m = budgetSource.match(/\$?\s*(\d{1,5})/);
         const budgetCents = m ? parseInt(m[1], 10) * 100 : null;
         const res = await createRequestAndFanOut({
           query:         submittedText,
@@ -1041,6 +1053,37 @@ export function HomeScreen() {
                         onClick={() => { setFreeServices(false); setModeOpen(false); }}
                       />
                     </div>
+                  )}
+                </div>
+
+                {/* CERGIO-GUARD (2026-05-30): explicit Budget pill —
+                    optional, mirrors the date "I'm flexible" pattern.
+                    Empty input = no budget filter (flexible). Typing a
+                    number filters search to providers within budget and
+                    powers the Saves $X / Over budget $X labels on each
+                    result card. Compact inline field — no popup needed. */}
+                <div className="flex items-center gap-1 text-[12px] text-b3 ml-2">
+                  <span className="font-normal">$</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={budget}
+                    onChange={(e) => setBudget(e.target.value.replace(/[^\d]/g, '').slice(0, 5))}
+                    placeholder="flexible"
+                    aria-label="Budget — leave blank for flexible"
+                    className="w-[68px] bg-transparent border-0 outline-none text-[12px] font-normal
+                               placeholder-b3 focus:text-gd"
+                  />
+                  {budget && (
+                    <button
+                      type="button"
+                      onClick={() => setBudget('')}
+                      aria-label="Clear budget"
+                      className="text-b3 hover:text-b2 px-0.5 text-[14px] leading-none"
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
 
