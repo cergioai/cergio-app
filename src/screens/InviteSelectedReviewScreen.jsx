@@ -21,7 +21,7 @@ export function InviteSelectedReviewScreen() {
   const location = useLocation();
   const { showToast, chat } = useOutletContext();
 
-  const { mode = 'invite', selectedIds = [] } = location.state || {};
+  const { mode = 'invite', selectedIds = [], prefilledMessage = null } = location.state || {};
   const picked = CONTACTS.filter(c => selectedIds.includes(c.id));
 
   // CERGIO-GUARD: seed the service type from the USER'S OWN WORDS
@@ -51,6 +51,11 @@ export function InviteSelectedReviewScreen() {
   // collapsed to just the canonical "Nanny".
   const seedReview = useMemo(() => {
     if (mode !== 'reco') {
+      // CERGIO-GUARD (2026-05-30): when ResultsScreen forwards a search
+      // request (prefilledMessage = "Hey — anyone know a good plumber…"),
+      // use THAT as the note body, not the generic invite copy. The
+      // friend gets actual context about what the inviter is looking for.
+      if (prefilledMessage) return prefilledMessage;
       return "Hey — I think you'd love Cergio. Use my link to join and we both earn.";
     }
     const phrase = userNoun || serviceType || 'a great provider';

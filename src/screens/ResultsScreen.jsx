@@ -44,25 +44,32 @@ import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivit
 // negotiating with Maria and Henry." Once we wire real recos and real
 // provider-negotiation pings, swap the SAMPLE_* arrays for real names
 // pulled from the recommendations + bids tables.
-const STATUS_STEP_MS = 1500;
+const STATUS_STEP_MS = 2200;
 // Minimum total loading time — even if Supabase returns in 200ms, hold
-// the loading state so the narration plays through at least the first
-// few steps. Feels alive and matches the live experience we'll wire.
-const MIN_LOADING_MS = 4500;
-const SAMPLE_FRIEND_NAMES   = ['Jessica', 'Jamie', 'Maya', 'Alex'];
-const SAMPLE_PROVIDER_NAMES = ['Maria', 'Henry', 'Sofia', 'Diego'];
+// the loading state so the narration plays through ALL four steps AND
+// the leaf logo has time to breathe through a full ring-pulse cycle
+// (2.4s per ring × 5 rings = ~12s, but we don't need to see them all —
+// 8s lets the user feel the rhythm without being annoying).
+const MIN_LOADING_MS = 8000;
 
-function buildStatusSteps(providerType) {
-  const what = providerType ? providerType.toLowerCase() : 'provider';
+// Sample names for the narration when no recommenders are seeded for
+// the searched provider type. Once the seed has real friend + provider
+// names on Penny, the narration uses those instead (Alex's reco Penny).
+const SAMPLE_FRIEND_NAMES   = ['Alex', 'Sam', 'Connie', 'Jamie'];
+const SAMPLE_PROVIDER_NAMES = ['Penny', 'Maria', 'Henry', 'Sofia'];
+
+function buildStatusSteps(providerType, opts = {}) {
+  // opts.friend = display_name of a real recommender if we have one
+  // opts.provider = display_name of the recommended service title
   const plural = providerType ? `${providerType.toLowerCase()}s` : 'providers';
-  const friend = SAMPLE_FRIEND_NAMES[0];
-  const pA = SAMPLE_PROVIDER_NAMES[0];
-  const pB = SAMPLE_PROVIDER_NAMES[1];
+  const friend = opts.friend || SAMPLE_FRIEND_NAMES[0];
+  const pA     = opts.provider || SAMPLE_PROVIDER_NAMES[0];
+  const pB     = SAMPLE_PROVIDER_NAMES[1];
   return [
-    `Pinging ${plural} near you`,
-    `Checking ${friend}'s recommended ${what} — ${pA}`,
-    `Contacting ${pA} and ${pB}`,
-    `Negotiating offers on your behalf`,
+    `Pinging your network`,
+    `Found ${friend}'s reco — ${pA}`,
+    `Negotiating with ${pA} and ${pB}`,
+    `Confirming offers`,
   ];
 }
 
@@ -593,10 +600,13 @@ export function ResultsScreen() {
         >
           ←
         </button>
-        <div className="flex items-center gap-2">
-          <LeafLogo working={isLoading} size={26} />
-          <span className="text-[12px] font-extrabold tracking-widest uppercase text-g">Cergio AI</span>
-        </div>
+        {/* CERGIO-GUARD (2026-05-30): header wordmark dropped per Tarik's
+            UX pass. The brand mark stays on the splash/opening screen;
+            here the leaf instead anchors the loading status block below
+            so the user's eye lands on the animation while Cergio is
+            actively scanning. Header keeps a placeholder gap so the
+            back + share buttons stay symmetric. */}
+        <div className="flex-1" />
         <button
           onClick={async () => {
             // CERGIO-GUARD: header share button — Web Share API first,
@@ -650,21 +660,28 @@ export function ResultsScreen() {
           driven by REAL counts via useRequestActivity. Otherwise we
           fall back to the canonical scripted lines so the first ~3
           seconds aren't dead air. */}
+      {/* Loading status — leaf logo NOW sits beside the status copy as
+          a large 56px mark so the animation is unmistakable. The eye
+          lands on the breathing leaf, then reads the narrated step.
+          Header above is intentionally bare so this block owns the
+          brand presence during search. */}
       {isLoading && (
         <div className="mx-5 mb-5" aria-live="polite">
-          <div className="flex items-center gap-2">
-            <LeafLogo working={true} size={16} intensity={liveStatus.intensity} />
-            <p className="text-[13px] text-gd font-medium leading-snug truncate">
-              {hasLiveActivity
-                ? liveStatus.line
-                : statusSteps[Math.min(statusStep, statusSteps.length - 1)]}…
-            </p>
+          <div className="flex items-center gap-3">
+            <LeafLogo working={true} size={56} intensity={liveStatus.intensity} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] text-gd font-bold leading-snug">
+                {hasLiveActivity
+                  ? liveStatus.line
+                  : statusSteps[Math.min(statusStep, statusSteps.length - 1)]}…
+              </p>
+              <p className="text-[11px] text-b3 font-normal leading-snug mt-1">
+                {liveReplied > 0
+                  ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
+                  : "We'll keep scanning and notify you when offers land."}
+              </p>
+            </div>
           </div>
-          <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug">
-            {liveReplied > 0
-              ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
-              : "We'll keep going in the background and notify you when offers land."}
-          </p>
         </div>
       )}
 
@@ -851,7 +868,13 @@ export function ResultsScreen() {
             showToast('Share unavailable — try Send to friends.');
           }
         };
-        const goReco = () => navigate('/invite/friends?mode=reco', {
+        // CERGIO-GUARD (2026-05-30): the empty-state "Send to friends"
+        // CTA is meant to FORWARD the user's already-prefilled request
+        // ("Hey — anyone know a good plumber…") to friends — NOT to
+        // pivot into a recommend-a-service form. Route to the plain
+        // invite flow (mode=invite) with prefilledMessage so the review
+        // screen renders the request as the note body.
+        const goForwardRequest = () => navigate('/invite/friends', {
           state: { prefilledMessage: shareMsg, what: nounSingular, when, where, budget },
         });
 
@@ -875,7 +898,7 @@ export function ResultsScreen() {
             </div>
             <div className="mt-2.5 flex gap-2">
               <button
-                onClick={goReco}
+                onClick={goForwardRequest}
                 className="flex-1 bg-g text-white rounded-pill py-2 text-[12px] font-bold
                            hover:opacity-90 active:scale-[.98] transition-all"
               >

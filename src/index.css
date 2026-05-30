@@ -303,8 +303,15 @@ body {
 .cg-pollen-s5 { animation: cgPollenS5 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
 .cg-pollen-s6 { animation: cgPollenS6 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
 
-/* (B · Growth rings uses raw SVG <animate> elements that respect the
-    `working` prop directly in the component — no CSS needed.) */
+/* B · Growth rings — core breathes during search so the whole mark
+    feels alive, not just the rings expanding outward. */
+@keyframes cgRingsCore {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.cg-rings-core {
+  animation: cgRingsCore calc(2.4s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
 
 /* ── Reward-flow animation (RewardFlowAnimation.jsx) ──────────────
    The 6-step "how earnings work" explainer animation. Keyframes

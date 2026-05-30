@@ -20,6 +20,23 @@
 //   <LeafLogo variant="splash" /> legacy size hint, no longer required
 const LOGO_VARIANT = 'rings'; // 'sprout' | 'rings' | 'bud' | 'pollen'
 
+// CERGIO-GUARD (2026-05-30): URL override for A/B testing the variants.
+// ?logo=rings  → Growth rings
+// ?logo=bud    → Bud bloom
+// ?logo=pollen → Pollen pulse
+// ?logo=sprout → original Sprout v2
+// Anything else falls back to LOGO_VARIANT above. No reload required
+// between variant changes (just edit the URL query and the next render
+// picks it up).
+function getActiveVariant() {
+  if (typeof window !== 'undefined' && window.location?.search) {
+    const override = new URLSearchParams(window.location.search).get('logo');
+    if (override && MARKS_KEYS.has(override)) return override;
+  }
+  return LOGO_VARIANT;
+}
+const MARKS_KEYS = new Set(['sprout', 'rings', 'bud', 'pollen']);
+
 export function LeafLogo({
   working = false,
   size = 22,
@@ -36,8 +53,9 @@ export function LeafLogo({
   const cssVars = { '--cg-leaf-amp': amp, '--cg-leaf-speed': speed };
   const isWorking = working || i > 0;
   // Sprout is taller than wide (stem); other variants are square.
-  const h = LOGO_VARIANT === 'sprout' ? Math.round(size * 1.30) : size;
-  const Mark = MARKS[LOGO_VARIANT] || MARKS.sprout;
+  const activeVariant = getActiveVariant();
+  const h = activeVariant === 'sprout' ? Math.round(size * 1.30) : size;
+  const Mark = MARKS[activeVariant] || MARKS.sprout;
   return (
     <span
       className="inline-flex items-center justify-center flex-shrink-0"
@@ -51,32 +69,38 @@ export function LeafLogo({
 
 // ─── B · Growth rings ─────────────────────────────────────────────────────
 // Solid core + concentric rings expanding outward. Internal proportions
-// tuned for app rendering: the LeafLogo is drawn at 16-26px display
-// most of the time, so the core must FILL the viewBox to be visible.
-// Core r=32 of 120 = 27% radius → reads as a confident green disc at
-// any size. Rings expand from the core's outer edge outward.
+// tuned for app rendering. Now BOLDER (stroke 3-4px), MORE rings (5),
+// slower fade so multiple rings are always visible mid-pulse. Core
+// also breathes during search via cgRingsCore keyframe so the whole
+// mark feels alive, not static.
 function GrowthRings({ size, working }) {
-  const dur = '3s';
+  const dur = '2.4s';
   const beg = (delay) => working ? `${delay}s` : 'indefinite';
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Inner shadow ring for depth — always visible */}
-      <circle cx="60" cy="60" r="34" fill="#2C5D21" opacity="0.4" />
-      {/* Solid core — the resting mark */}
-      <circle cx="60" cy="60" r="32" fill="#3B6D11" />
-      {/* Highlight wedge for life — always visible, very subtle */}
-      <ellipse cx="52" cy="50" rx="9" ry="6" fill="#97C459" opacity="0.45" />
+      {/* Outer subtle ring for depth — always visible, defines the mark's edge */}
+      <circle cx="60" cy="60" r="36" fill="#2C5D21" opacity="0.5" />
+      {/* Solid core — the resting mark. Breathes during search. */}
+      <circle
+        cx="60" cy="60" r="32" fill="#3B6D11"
+        className={working ? 'cg-rings-core' : ''}
+        style={{ transformOrigin: '60px 60px', transformBox: 'view-box' }}
+      />
+      {/* Inner highlight for organic life */}
+      <ellipse cx="50" cy="48" rx="11" ry="7" fill="#97C459" opacity="0.55" />
       {working && (
         <>
           {[
-            { stroke: '#3B6D11', delay: 0,    rMax: 50 },
-            { stroke: '#639922', delay: 0.75, rMax: 54 },
-            { stroke: '#97C459', delay: 1.5,  rMax: 56 },
-            { stroke: '#C0DD97', delay: 2.25, rMax: 58 },
+            { stroke: '#2F6E00', delay: 0,    rMax: 56, w: 4   },
+            { stroke: '#3B6D11', delay: 0.48, rMax: 56, w: 3.5 },
+            { stroke: '#639922', delay: 0.96, rMax: 56, w: 3   },
+            { stroke: '#97C459', delay: 1.44, rMax: 56, w: 2.5 },
+            { stroke: '#C0DD97', delay: 1.92, rMax: 56, w: 2   },
           ].map((r, idx) => (
-            <circle key={idx} cx="60" cy="60" r="34" fill="none" stroke={r.stroke} strokeWidth="2">
+            <circle key={idx} cx="60" cy="60" r="34" fill="none" stroke={r.stroke} strokeWidth={r.w}>
               <animate attributeName="r"       values={`34;${r.rMax}`} dur={dur} begin={beg(r.delay)} repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.75;0"         dur={dur} begin={beg(r.delay)} repeatCount="indefinite" />
+              {/* Stay bright most of the cycle, then fade fast at the end */}
+              <animate attributeName="opacity" values="0.9;0.6;0"      keyTimes="0;0.7;1" dur={dur} begin={beg(r.delay)} repeatCount="indefinite" />
             </circle>
           ))}
         </>

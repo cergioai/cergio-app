@@ -798,7 +798,10 @@ export function HomeScreen() {
 
         return (
           <div className="px-5 pt-5 pb-0.5 flex items-start gap-2.5">
-            {!submitted && <LeafLogo working={false} size={22} />}
+            {/* CERGIO-GUARD (2026-05-30): pre-submit leaf removed per
+                Tarik's UX pass — the brand mark now anchors the
+                streaming status block during search instead. Header
+                stays clean: just the greeting + the search box. */}
             <div className="flex-1 min-w-0">
               {headlinePhase === 'rolling' && !submitted ? (
                 <h1
@@ -837,34 +840,10 @@ export function HomeScreen() {
           same scan path. Easier on the eye, and the "Searching near"
           phrasing ties location explicitly to the active search. */}
 
-      {/* Spotlight travel-radius — only after a location exists. */}
-      {intent === 'spotlight' && locationText && !submitted && (
-        <div className="px-5 mt-0 mb-2 flex items-center gap-1.5 text-[11px] text-b3 flex-wrap">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-            <path d="M5 12a7 7 0 0 1 14 0"/><path d="M12 19v-7"/>
-          </svg>
-          <span className="font-medium mr-0.5">Willing to travel:</span>
-          {[
-            { id: 'onsite',   label: 'On-site only' },
-            { id: '5mi',      label: '5 mi' },
-            { id: '10mi',     label: '10 mi' },
-            { id: '25mi',     label: '25 mi' },
-            { id: 'anywhere', label: 'Anywhere' },
-          ].map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => setTravelRadius(opt.id)}
-              className={`rounded-pill px-2 py-0.5 text-[10px] font-extrabold transition-colors
-                          ${travelRadius === opt.id
-                            ? 'bg-gl text-gd border border-g/40'
-                            : 'bg-white text-b2 border border-bdr hover:border-g/40'}`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* CERGIO-GUARD (2026-05-30): the spotlight travel-radius pills
+          used to sit ABOVE the search box. Per Tarik's UX pass they
+          now render BELOW the search box (alongside the find-side
+          location strip) — see the matching block further down. */}
 
       {/* ─── Pre-submit: search box ──────────────────────────────────── */}
       {!submitted && (
@@ -1079,6 +1058,38 @@ export function HomeScreen() {
                   />
                 </div>
               )}
+
+              {/* CERGIO-GUARD (2026-05-30): spotlight intent — travel
+                  radius pills sit RIGHT BELOW the location strip, in
+                  the same "anchored to the current search" zone. Only
+                  renders when there's a location to travel from. */}
+              {intent === 'spotlight' && locationText && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-b3 flex-wrap">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                    <path d="M5 12a7 7 0 0 1 14 0"/><path d="M12 19v-7"/>
+                  </svg>
+                  <span className="font-medium mr-0.5">Willing to travel:</span>
+                  {[
+                    { id: 'onsite',   label: 'On-site only' },
+                    { id: '5mi',      label: '5 mi' },
+                    { id: '10mi',     label: '10 mi' },
+                    { id: '25mi',     label: '25 mi' },
+                    { id: 'anywhere', label: 'Anywhere' },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setTravelRadius(opt.id)}
+                      className={`rounded-pill px-2 py-0.5 text-[10px] font-extrabold transition-colors
+                                  ${travelRadius === opt.id
+                                    ? 'bg-gl text-gd border border-g/40'
+                                    : 'bg-white text-b2 border border-bdr hover:border-g/40'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Direction switch — slim text link, right-aligned. Sits
@@ -1172,27 +1183,31 @@ export function HomeScreen() {
                 because we bypassed chat in spotlight mode). */}
             {engineStarted && (
               <div className="mt-2 px-1 self-start" aria-live="polite">
-                <div className="flex items-center gap-2">
-                  {/* CERGIO-GUARD (2026-05-28): leaf intensity grows as
-                      the engine ticks through stages, so the plant
-                      visibly accelerates during a search instead of
-                      pulsing at a constant rate. */}
+                <div className="flex items-center gap-3">
+                  {/* CERGIO-GUARD (2026-05-28 / -30): leaf intensity grows
+                      as the engine ticks through stages — the plant
+                      visibly accelerates during search. Size bumped to
+                      56px (was 16) so the brand mark + animation are
+                      the anchor of the loading state instead of a
+                      tiny inline glyph. */}
                   <LeafLogo
                     working={engineSearching}
-                    size={16}
+                    size={56}
                     intensity={engineSearching
                       ? Math.min(1, 0.35 + (planIdx / Math.max(1, plan.length - 1)) * 0.65)
                       : 0}
                   />
-                  <p className="text-[13px] text-gd font-medium leading-snug">
-                    {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] text-gd font-bold leading-snug">
+                      {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
+                    </p>
+                    {!planDone && activeStage?.detail && (
+                      <p className="text-[11px] text-b3 font-normal leading-snug mt-1">
+                        {activeStage.detail}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                {!planDone && activeStage?.detail && (
-                  <p className="ml-5 mt-1 text-[11px] text-b3 font-normal leading-snug">
-                    {activeStage.detail}
-                  </p>
-                )}
               </div>
             )}
 

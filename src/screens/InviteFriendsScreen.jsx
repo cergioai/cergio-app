@@ -1,6 +1,6 @@
 // Per design-spec.md — Contacts picker for invite/reco flow.
 import { useState, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { CONTACTS } from '../data/mock';
 
 function getInitials(name) {
@@ -9,8 +9,11 @@ function getInitials(name) {
 
 export function InviteFriendsScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [params]  = useSearchParams();
   const mode      = params.get('mode') === 'reco' ? 'reco' : 'invite';
+  // Forward the prefilled request message from ResultsScreen → review.
+  const prefilledMessage = location.state?.prefilledMessage || null;
   const [selected, setSelected] = useState(new Set(['c2', 'c5'])); // pre-selected like the mockup
   const [query, setQuery] = useState('');
 
@@ -135,7 +138,7 @@ export function InviteFriendsScreen() {
             <p className="text-[12px] text-b3 mb-2 truncate">{summary}</p>
           )}
           <button
-            onClick={() => navigate('/invite/review', { state: { mode, selectedIds: Array.from(selected) } })}
+            onClick={() => navigate('/invite/review', { state: { mode, selectedIds: Array.from(selected), prefilledMessage } })}
             className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
                        hover:opacity-90 active:scale-[.97] transition-all"
           >
