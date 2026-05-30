@@ -1,81 +1,36 @@
-Polygon DB persistence + consumer-side filter + Vite crash fix
+Pick C3 bud — 8-petal full-circle, full shrink + bloom, peach heart
 
-Two things bundled — the polygon end-to-end slice and a hot-reload
-crash that was masking it.
+Tarik picked C3 from /logo-lab + asked for two tweaks: (1) shrink the
+ENTIRE petal stack down then open back up, (2) full circle of petals.
 
-(1) VITE CRASH FIX — DYNAMIC MAPS LOADER IMPORT
-After the package.json bumped @googlemaps/js-api-loader, any dev
-server that hadn't run `npm install` choked on the static import in
-ServiceAreaMapPicker.jsx — Vite's import-analysis crashes the WHOLE
-app on the first load when the package is missing, including
-/logo-lab. Tarik reported the lab was blank with this error.
+Changes:
 
-Fix: convert the import to a lazy dynamic import inside
-ensureGoogleMaps(). If the package is missing, only the picker
-itself fails (with a friendly "run npm install" message); the rest
-of the app loads normally.
+LeafLogo.jsx — BudBloom component
+  • Default flipped: LOGO_VARIANT 'rings' → 'bud'
+  • Petals: 4 (cross pattern) → 8 (full 360° at 45° spacing)
+  • Petal width: rx=14 → rx=11 so 8 fit cleanly without overlap mush
+  • Colors: deepGreen #2C5D21 + coreGreen #3FA821 alternating —
+    tracks the mascot palette exactly
+  • Center: amber #EF9F27 (10px) → peach #F4A06A (11px) with a small
+    white dot (4px) inside, matching the goat-on-green mascot
 
-(2) POLYGON DB PERSISTENCE
-ALTER TABLE services
-  ADD COLUMN IF NOT EXISTS service_area_geojson jsonb;
-Migration in "Apply Service Area Migration.command" (mgmt API via
-the same pattern as Apply Follower Count Migration). Idempotent.
+index.css — cgBudBloom keyframe
+  • scale(0.55) → scale(1) → scale(0.55)  becomes
+    scale(0.05) → scale(1) → scale(0.05)
+    Entire petal stack shrinks to nearly nothing then blooms back.
+  • The peach heart sits OUTSIDE the animated group, so during the
+    shrink moment the mark reads as a single peach dot — then petals
+    burst outward. Dramatic full bloom rhythm.
 
-  src/lib/api.js
-    createService now persists draft.serviceAreaGeoJson on the
-    services row. Same defensive retry pattern as taxonomy_* — if
-    PostgREST schema cache rejects the column (legacy deployment
-    that hasn't run the migration yet), retries without it so the
-    listing still publishes.
+What to expect on screen:
+  • Sitewide: every <LeafLogo /> now renders the C3 bud
+  • At rest (no working prop): static 8-petal flower at 0.72 scale
+  • Working (search-firing screens, splash, etc.): full shrink-and-
+    bloom cycle every 4s
 
-  src/App.jsx
-    listingDraft default + reset both add serviceAreaGeoJson: null.
-
-  src/screens/ServiceListAboutScreen.jsx
-    + serviceAreaGeoJson state, areaPickerOpen state
-    + "Draw your service area (optional)" button below the Service
-      location field. Disabled until coords/location are set
-      (the map needs an anchor).
-    + Mounts ServiceAreaMapPicker as a bottom-sheet when open.
-    + onNext forwards the polygon into updateListingDraft so
-      createService picks it up downstream.
-
-(3) CONSUMER-SIDE FILTER
-  src/lib/geo.js  (new) — pointInRing / pointInPolygon helpers.
-    Ray-casting (Franklin algorithm) on GeoJSON Polygon coordinates.
-    Sufficient for city-scale polygons; not great for nationwide or
-    antimeridian-crossing shapes (note in the file). No PostGIS,
-    no RLS surface, no extension to enable.
-
-  src/lib/api.js listServices proximity branch
-    + selects service_area_geojson in the hydrate query
-    + After budget/freeOnly filter, drops any service whose polygon
-      is set AND whose polygon does NOT contain the consumer's
-      (lat, lng). Services without a polygon are unaffected — the
-      existing services_near radius logic continues to govern them.
-
-When to swap for PostGIS: once we cross a few thousand providers
-returned per query, or once we need server-side filtering (so the
-DB scoring/ordering knows about the polygon). For now the client-side
-JS ray-cast is fine and adds zero infra.
-
-TARIK NEEDS TO DO (sequentially):
-  1. In Terminal, cd to cergio-app, run `npm install`
-     (picks up @googlemaps/js-api-loader from package.json)
-  2. Restart Vite (Ctrl+C, then `npm run dev` — or just double-click
-     Start Cergio.command)
-  3. Refresh localhost:5173/logo-lab — the lab should render now
-  4. Double-click "Apply Service Area Migration.command" to add the
-     services.service_area_geojson column
-  5. Add VITE_GOOGLE_MAPS_API_KEY to .env.local + Vercel env (if not
-     already done — it's needed for the picker to load any map)
-
-QA: 41/41 pass.
+QA: 41/41 pass. Existing qa #30 (LeafLogo wires all 4 variants) still
+passes — we didn't remove any variant, just flipped the default.
 
 Files:
-  Apply Service Area Migration.command  (new, repo root)
-  src/lib/geo.js                        (new)
-  src/components/ui/ServiceAreaMapPicker.jsx  (dynamic import fix)
-  src/lib/api.js                        (persist + read + filter)
-  src/App.jsx                           (listingDraft default + reset)
-  src/screens/ServiceListAboutScreen.jsx (picker wiring)
+  src/components/ui/LeafLogo.jsx
+  src/index.css

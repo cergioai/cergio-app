@@ -18,7 +18,7 @@
 //   <LeafLogo intensity={0.4} />  explicit dial
 //   <LeafLogo size={88} />        hero on Splash + Auth
 //   <LeafLogo variant="splash" /> legacy size hint, no longer required
-const LOGO_VARIANT = 'rings'; // 'sprout' | 'rings' | 'bud' | 'pollen'
+const LOGO_VARIANT = 'bud'; // 'sprout' | 'rings' | 'bud' | 'pollen' — Tarik picked C3 (bud) 2026-05-30
 
 // CERGIO-GUARD (2026-05-30): URL override for A/B testing the variants.
 // ?logo=rings  → Growth rings
@@ -109,26 +109,52 @@ function GrowthRings({ size, working }) {
   );
 }
 
-// ─── C · Bud bloom ────────────────────────────────────────────────────────
-// Four overlapping petals + a warm amber center. Bumped petal size
-// (rx=14, ry=32) so even at rest scale 0.72 the closed bud fills the
-// viewBox properly. Scales from 0.72 → 1.05 (slight over-shoot) when
-// working, so the bloom feels like a real breath in/out.
+// ─── C · Bud bloom — full-circle 8-petal version (picked from /logo-lab) ──
+// 2026-05-30: Tarik picked C3 (green petals + peach heart). Changes from
+// the prior 4-petal version:
+//   • 8 petals at 45° spacing — reads as a full flower, not a cross
+//   • Petal stack scales 0.05 → 1.0 when WORKING — entire bud shrinks
+//     to nearly nothing, then blooms outward. Dramatic shrink-and-open
+//     instead of the prior 0.72 → 1.05 breath.
+//   • Petals slightly thinner (rx=11) so 8 around the disc look like a
+//     real flower instead of an overlapping mush
+//   • Colors track the mascot palette exactly: deepGreen #2C5D21 +
+//     coreGreen #3FA821, alternating
+//   • Peach heart #F4A06A with a small white dot inside, matches
+//     the goat-on-green mascot's warm center
 function BudBloom({ size, working }) {
   const petalsClass = working ? 'cg-bud-bloom' : '';
   const restScale   = 0.72;
+  // 8 petals around the bud — alternating deep / core green for depth.
+  const petals = [
+    { rot: 0,   fill: '#2C5D21' },
+    { rot: 45,  fill: '#3FA821' },
+    { rot: 90,  fill: '#2C5D21' },
+    { rot: 135, fill: '#3FA821' },
+    { rot: 180, fill: '#2C5D21' },
+    { rot: 225, fill: '#3FA821' },
+    { rot: 270, fill: '#2C5D21' },
+    { rot: 315, fill: '#3FA821' },
+  ];
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
       <g
         className={petalsClass}
         style={{ transformOrigin: '60px 60px', transformBox: 'view-box', transform: working ? undefined : `scale(${restScale})` }}
       >
-        <ellipse cx="60" cy="36" rx="14" ry="32" fill="#3B6D11" opacity="0.92" />
-        <ellipse cx="60" cy="36" rx="14" ry="32" fill="#3B6D11" opacity="0.92" transform="rotate(90 60 60)" />
-        <ellipse cx="60" cy="36" rx="14" ry="32" fill="#639922" opacity="0.92" transform="rotate(45 60 60)" />
-        <ellipse cx="60" cy="36" rx="14" ry="32" fill="#639922" opacity="0.92" transform="rotate(135 60 60)" />
+        {petals.map((p, i) => (
+          <ellipse
+            key={i}
+            cx="60" cy="36" rx="11" ry="32"
+            fill={p.fill}
+            opacity="0.92"
+            transform={`rotate(${p.rot} 60 60)`}
+          />
+        ))}
       </g>
-      <circle cx="60" cy="60" r="10" fill="#EF9F27" />
+      {/* Peach heart — matches the mascot's warm center */}
+      <circle cx="60" cy="60" r="11" fill="#F4A06A" />
+      <circle cx="60" cy="60" r="4"  fill="#FFFFFF" opacity="0.85" />
     </svg>
   );
 }
