@@ -1,87 +1,59 @@
-Bundle: over-budget fallback + urgency + bare-number budget + logo variants B/C/D
+Fix: over-budget fallback firing via freeOnly path + location moved under search
 
-Three production fixes + the logo variant switch — all staged but
-never pushed across multiple iterations. Single bundled commit so
-Tarik can see everything land at once.
+Two changes:
 
-1. URGENCY-WORD CAPTURE — "plumber asap" no longer asks "when?"
+1. OVER-BUDGET FALLBACK — fire even when freeOnly was on
 
-Local capture in applyParseResult: when fields.when is empty and
-userInput contains an urgency word, set fields.when="ASAP" + mark
-urgency=true. Pattern matches the bare-number budget fix.
+Tarik tested live with Budget $50 + Free for Connectors ON → empty
+state again. Root cause: the freeOnly fallback path returns BEFORE
+the over-budget fallback code runs.
 
-  URGENCY_RE = /\b(asap|a\.s\.a\.p\.|now|right\s+now|right\s+away|
-                 immediately|urgent(?:ly)?|emergency|today|tonight|
-                 this\s+morning|this\s+afternoon|this\s+evening)\b/i
+  search(freeOnly=true, budget=50) → empty
+  → paid fallback: search(freeOnly=false, budget=50) → also empty
+  → setServices([]) + return
+  → over-budget fallback NEVER REACHED ✗
 
-  "plumber asap"          → when="ASAP", urgency=true
-  "plumber today"         → when="today", urgency=true
-  "need plumber tonight"  → when="tonight", urgency=true
-
-  src/hooks/useChat.js
-    • URGENCY_RE capture before the bare-number budget capture
-  scripts/qa.mjs #41 (new)
-    • Locks URGENCY_RE definition + canonical words
-
-2. OVER-BUDGET FALLBACK — show matches anyway, label them over budget
-
-When budget filter excluded everything AND user set a budget, re-query
-without maxBudgetCents and show the closest paid options with "Over
-budget $X" labels per card. Mirrors the existing freeOnly fallback.
-
-A soft amber banner explains:
-  "No plumbers within your $20 — showing closest options over budget.
-   Each card tags how much over your budget it runs."
+Fix: when the paid-fallback ALSO comes back empty AND a budget was
+set, try once more without the budget filter and surface over-budget
+options. Same banner + per-card "Over budget $X" tagging as the
+standalone over-budget path.
 
   src/screens/ResultsScreen.jsx
-    • New overBudgetFallback state
-    • Search effect retries without maxBudgetCents on empty result
-    • Amber banner renders above cards when fallback is active
-    • Cards already render the negative-savings ("Over budget $X") via
-      SavingsLabel — the math just needs the rows to be present
+    • freeOnly fallback empty path now tries one more no-budget query
+    • Sets paidFallback=false + overBudgetFallback=true on success
+    • Resets both fallback flags when truly empty
+    • New diagnostic console log [CERGIO/search:over-budget-fallback-via-freeonly]
 
-3. LOGO VARIANTS — switch between 4 organic marks behind one constant
+2. LOCATION STRIP — moved under the search box
 
-Tarik picking between sprout / growth-rings / bud-bloom / pollen-pulse.
-LeafLogo now dispatches via a LOGO_VARIANT constant. Each variant
-animates ONLY when working=true (search-triggered, splash hero, etc.).
+Per Tarik: "place the location under the search box... just above the
+'service ig/tiktok' link... make it part of the current search."
 
-  const LOGO_VARIANT = 'rings';  // 'sprout' | 'rings' | 'bud' | 'pollen'
+Old layout:
+  📍 5700 Collins…  Change         (above search box)
+  [search box]
+  Have a service? Spotlight (IG/TT) →
 
-  Variant rest-state proportions tuned for app render sizes (16-26px
-  inline): cores fill ~30% of viewBox so the mark reads at all sizes.
+New layout:
+  [search box]
+  📍 Searching near 5700 Collins…  Change   (anchored to search)
+                                  Have a service? Spotlight (IG/TT) →
 
-  B · Growth rings:    solid 32-radius core + expanding ring loops
-  C · Bud bloom:       4-petal closed bud at rest, blooms when working
-  D · Pollen pulse:    28-radius core + 6 satellite seeds, drift loops
+Both elements stay visible. The "Searching near" prefix makes it
+explicit that the address is tied to THIS search, not a separate
+profile setting. Pin icon takes the brand green (gd) and Change link
+is bold gd so it reads as actionable.
 
-  src/components/ui/LeafLogo.jsx
-    • LOGO_VARIANT switch + MARKS map
-    • Three new variant components (GrowthRings, BudBloom, PollenPulse)
-    • Original Sprout kept (variant='sprout')
-  src/index.css
-    • New @keyframes cgBudBloom, cgPollenCore, cgPollenS1..S6
-    • Scale + opacity transitions tuned for organic breathing feel
-  scripts/qa.mjs #30
-    • Updated for variant switch: locks all 4 variant components +
-      LOGO_VARIANT enum + MARKS map
-
-Default is B · Growth rings. To swap to C or D, change LOGO_VARIANT
-to 'bud' or 'pollen' and push — single-line change.
+  src/screens/HomeScreen.jsx
+    • Old location block above search box deleted (replaced with
+      a CERGIO-GUARD comment pointing to the new spot)
+    • New location strip inserted between the search box and the
+      spotlight intent toggle
+    • Three states: "Searching near …" + Change | "Add a search
+      location" | inline editor (when Change is tapped)
 
 QA: 41/41 pass.
 
-NEXT — TARIK:
-  Hard refresh the app (Cmd+Shift+R).
-  Try "plumber asap" — should skip the when question.
-  Search with budget $30 — if no $30 plumbers exist, you'll see the
-    amber over-budget banner + cards with red "Over budget $X" labels.
-  Watch the leaf logo during search — should pulse rings expanding
-    outward (variant B). Say "try C" or "try D" to swap.
-
 Files:
-  src/hooks/useChat.js                       (urgency capture)
-  src/screens/ResultsScreen.jsx              (over-budget fallback + banner)
-  src/components/ui/LeafLogo.jsx             (4-variant switch)
-  src/index.css                              (bud + pollen keyframes)
-  scripts/qa.mjs                             (+#41 urgency, #30 updated)
+  src/screens/ResultsScreen.jsx              (over-budget via freeOnly)
+  src/screens/HomeScreen.jsx                 (location under search)

@@ -829,58 +829,13 @@ export function HomeScreen() {
         );
       })()}
 
-      {/* Location chip + INLINE editor — sits ABOVE the search box.
-          CERGIO-GUARD: the chip is ALWAYS rendered so the user always
-          has a way to add / edit their location. When locEditing is
-          true, the chip's right side expands into an AddressAutocomplete
-          + Save / Cancel buttons IN PLACE — no bottom-sheet, no
-          page-jump. The compact size keeps the search box adjacent.
-          Inline status keeps the save feedback visible without a
-          transient toast. */}
-      <div className="px-5 mt-1 mb-1">
-        <div className="flex items-start gap-1.5 text-[11px] text-b3">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-1">
-            <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-            <circle cx="12" cy="9" r="2.5" />
-          </svg>
-          {!locEditing && locationText && (
-            <p className="flex-1 truncate text-[11px] font-normal text-b2 leading-snug pt-1">
-              <span>{locationText}</span>
-              <button
-                type="button"
-                onClick={() => setLocEditing(true)}
-                className="ml-2 text-[11px] font-normal text-g underline underline-offset-2"
-                aria-label="Edit saved location"
-              >
-                Change
-              </button>
-            </p>
-          )}
-          {!locEditing && !locationText && (
-            <button
-              type="button"
-              onClick={() => setLocEditing(true)}
-              className="flex-1 text-left text-[11px] font-normal text-g underline underline-offset-2 pt-1"
-            >
-              Add your location
-            </button>
-          )}
-          {locEditing && (
-            <InlineLocationEditor
-              initialAddress={locationText}
-              initialCoords={locationCoords}
-              isSignedIn={!!auth?.isSignedIn}
-              onCancel={() => setLocEditing(false)}
-              onSaved={(saved) => {
-                if (saved?.address) setLocationText(saved.address);
-                if (saved?.lat && saved?.lng) setLocationCoords({ lat: saved.lat, lng: saved.lng });
-                setLocEditing(false);
-              }}
-            />
-          )}
-        </div>
-      </div>
+      {/* CERGIO-GUARD (2026-05-30): the location strip used to sit ABOVE
+          the search box. Per Tarik's UX pass it's been moved BELOW the
+          search box — see the "Searching near …" row inserted between
+          the search box and the spotlight link further down. Both
+          location AND the IG/TT spotlight link stay visible in the
+          same scan path. Easier on the eye, and the "Searching near"
+          phrasing ties location explicitly to the active search. */}
 
       {/* Spotlight travel-radius — only after a location exists. */}
       {intent === 'spotlight' && locationText && !submitted && (
@@ -1063,8 +1018,72 @@ export function HomeScreen() {
               </div>
             </div>
 
-            {/* Direction switch — slim text link, right-aligned. Way less
-                visual weight than the previous full-width row. */}
+            {/* CERGIO-GUARD (2026-05-30): location strip — anchored to
+                the search box (sits directly below it, no breathing-
+                space gap) so the eye reads "I'm searching near X" as
+                ONE unit. "Searching near" prefix makes the tie explicit
+                so users never wonder if the address is a saved profile
+                setting vs a per-search filter. Inline editor expands
+                in place on Change. */}
+            <div className="mt-2 px-1">
+              {!locEditing && locationText && (
+                <div className="flex items-center gap-1.5 text-[11px] text-b3">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-gd">
+                    <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                  <span className="text-b3 font-normal">Searching near</span>
+                  <span className="font-bold text-b2 truncate">{locationText}</span>
+                  <button
+                    type="button"
+                    onClick={() => setLocEditing(true)}
+                    className="text-gd font-bold underline underline-offset-2 hover:opacity-80 flex-shrink-0"
+                    aria-label="Change search location"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+              {!locEditing && !locationText && (
+                <button
+                  type="button"
+                  onClick={() => setLocEditing(true)}
+                  className="flex items-center gap-1.5 text-[11px] text-gd font-bold underline underline-offset-2"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                    <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                  Add a search location
+                </button>
+              )}
+              {locEditing && (
+                <div className="flex items-start gap-1.5 text-[11px] text-b3">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-1 text-gd">
+                    <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                  <InlineLocationEditor
+                    initialAddress={locationText}
+                    initialCoords={locationCoords}
+                    isSignedIn={!!auth?.isSignedIn}
+                    onCancel={() => setLocEditing(false)}
+                    onSaved={(saved) => {
+                      if (saved?.address) setLocationText(saved.address);
+                      if (saved?.lat && saved?.lng) setLocationCoords({ lat: saved.lat, lng: saved.lng });
+                      setLocEditing(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Direction switch — slim text link, right-aligned. Sits
+                directly below the location strip so both share visual
+                space below the search box without competing. */}
             <div className="mt-1.5 flex justify-end px-1">
               <button
                 type="button"

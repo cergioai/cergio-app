@@ -372,11 +372,35 @@ export function ResultsScreen() {
           }
           clearTimeout(timeoutId);
           if (paidRes.error || !paidRes.data || paidRes.data.length === 0) {
+            // CERGIO-GUARD (2026-05-30): freeOnly fallback ALSO empty?
+            // Try once more without the budget filter — surface
+            // over-budget options instead of dead-ending on empty.
+            if (callArgs.maxBudgetCents) {
+              const obArgs = { ...callArgs, freeOnly: false, maxBudgetCents: null };
+              const obRes = await listServices(obArgs);
+              if (cancelled) return;
+              if (typeof window !== 'undefined' && window.__cergioDiag !== false) {
+                // eslint-disable-next-line no-console
+                console.log('[CERGIO/search:over-budget-fallback-via-freeonly]', {
+                  in: obArgs,
+                  out: { error: obRes.error?.message || null,
+                         count: (obRes.data || []).length },
+                });
+              }
+              if (!obRes.error && obRes.data && obRes.data.length > 0) {
+                setPaidFallback(false);
+                setOverBudgetFallback(true);
+                setServices(obRes.data);
+                return;
+              }
+            }
             setPaidFallback(false);
+            setOverBudgetFallback(false);
             setServices([]);
             return;
           }
           setPaidFallback(true);
+          setOverBudgetFallback(false);
           setServices(paidRes.data);
           return;
         }
