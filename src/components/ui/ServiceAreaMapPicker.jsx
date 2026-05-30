@@ -32,9 +32,16 @@ let _loaderPromise = null;
 async function ensureGoogleMaps(apiKey) {
   if (_loaderPromise) return _loaderPromise;
   _loaderPromise = (async () => {
+    // CERGIO-GUARD (2026-05-30): the /* @vite-ignore */ pragma tells
+    // Vite's import-analysis pass to skip resolving this module at
+    // build/dev-server start. Without it, Vite STILL tries to resolve
+    // even dynamic imports of literal strings — crashing the whole
+    // app when the package isn't installed. With the pragma, the
+    // resolve happens at runtime, only when the picker actually mounts.
     let Loader;
     try {
-      ({ Loader } = await import('@googlemaps/js-api-loader'));
+      const mod = await import(/* @vite-ignore */ '@googlemaps/js-api-loader');
+      Loader = mod.Loader;
     } catch (e) {
       throw new Error(
         '@googlemaps/js-api-loader is not installed. Run `npm install` in cergio-app.'

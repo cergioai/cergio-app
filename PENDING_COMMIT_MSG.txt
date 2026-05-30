@@ -1,36 +1,22 @@
-Pick C3 bud — 8-petal full-circle, full shrink + bloom, peach heart
+Fix: @vite-ignore so missing maps loader can't crash whole app
 
-Tarik picked C3 from /logo-lab + asked for two tweaks: (1) shrink the
-ENTIRE petal stack down then open back up, (2) full circle of petals.
+Same Vite crash Tarik just hit again. The previous "dynamic import"
+fix wasn't truly dynamic — Vite's import-analysis still tried to
+resolve the literal string `'@googlemaps/js-api-loader'` at dev-server
+start and crashed because the package isn't installed yet on Tarik's
+machine.
 
-Changes:
+Adding /* @vite-ignore */ before the specifier tells Vite to skip
+analysis entirely. The resolve now happens at RUNTIME, only when the
+ServiceAreaMapPicker actually mounts. If the package is missing the
+picker throws a friendly "run npm install" error — the rest of the
+app keeps running.
 
-LeafLogo.jsx — BudBloom component
-  • Default flipped: LOGO_VARIANT 'rings' → 'bud'
-  • Petals: 4 (cross pattern) → 8 (full 360° at 45° spacing)
-  • Petal width: rx=14 → rx=11 so 8 fit cleanly without overlap mush
-  • Colors: deepGreen #2C5D21 + coreGreen #3FA821 alternating —
-    tracks the mascot palette exactly
-  • Center: amber #EF9F27 (10px) → peach #F4A06A (11px) with a small
-    white dot (4px) inside, matching the goat-on-green mascot
+Permanent fix path is still: Tarik double-clicks
+"Reinstall Deps and Start.command" to install the package. This
+patch just keeps the app from crashing in the meantime.
 
-index.css — cgBudBloom keyframe
-  • scale(0.55) → scale(1) → scale(0.55)  becomes
-    scale(0.05) → scale(1) → scale(0.05)
-    Entire petal stack shrinks to nearly nothing then blooms back.
-  • The peach heart sits OUTSIDE the animated group, so during the
-    shrink moment the mark reads as a single peach dot — then petals
-    burst outward. Dramatic full bloom rhythm.
-
-What to expect on screen:
-  • Sitewide: every <LeafLogo /> now renders the C3 bud
-  • At rest (no working prop): static 8-petal flower at 0.72 scale
-  • Working (search-firing screens, splash, etc.): full shrink-and-
-    bloom cycle every 4s
-
-QA: 41/41 pass. Existing qa #30 (LeafLogo wires all 4 variants) still
-passes — we didn't remove any variant, just flipped the default.
+QA: 41/41 pass.
 
 Files:
-  src/components/ui/LeafLogo.jsx
-  src/index.css
+  src/components/ui/ServiceAreaMapPicker.jsx
