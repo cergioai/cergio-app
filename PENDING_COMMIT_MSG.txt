@@ -1,91 +1,112 @@
-ProviderCard recoText buckets + Home Budget pill ("flexible" by default)
+Budget chat flow + bare-number capture + PDP buildout (avatar/offerings/about)
 
-Per Tarik: "can we have these elements on the options cards.. optimize.
-Also add a budget price (optional like the date 'I'm flexible') so we
-can show users savings (or above budget)."
+Three fixes:
 
-  Jamie Hall.                                              111 Recos
-  Housekeeper.                                                $170
-  Post Party Cleaning Specialist ex 4 Seasons          Saves $65
-        Reco'd by Jennifer Hu, 3 other friends and 21 Connectors
+1. BUDGET — chat prompt + bare-number capture
 
-Two parts: (a) the reco line bucketing, (b) the budget input that lets
-the Saves $X / Over budget $X labels actually render.
+Per Tarik: "budget should be a prompt within the queries like when/where".
+Killed the Home Budget pill. Added budget as the 4th chat question
+after where:
 
-1. RECO LINE — bucketed format
+  useChat reply order:
+    1. what          (existing)
+    2. when          (existing)
+    3. where         (existing)
+    4. budget        ← NEW: "What's your budget? A max $ amount, or
+                     just 'flexible' works."
+    5. ready
 
-Old format: "Reco'd by Alex, Sam, Connie" (flat list of all names).
-New format: "Reco'd by {leadFriend}, {N} other friends and {M} Connectors"
-where the named anchor is the first NON-Connector friend (if any) and
-Connectors are surfaced separately so the social-proof reads cleanly.
+THEN Tarik tested live and the chat looped on the budget question
+because Claude's parser doesn't extract bare numeric replies as
+budgets. User typed "400", parser returned budget=null, gate asked
+again. THE FIX:
 
-Data layer:
-  src/lib/api.js — fetchRecommendersByServiceId
-    • SELECT now includes profiles.cc_verified_at
-    • Each recommender carries is_connector: !!p?.cc_verified_at
+  applyParseResult now has a bare-number capture step BEFORE merged
+  is built. Detects "we were asking about budget" purely from
+  prevState (what + when + where all set, budget missing) — no
+  stale-closure on lastBotReply. When detected:
+    • bare number like "400" or "$400"  →  fields.budget = "$400"
+    • flex words (flexible|any|skip|none|no max|nope|na)  → "flexible"
 
-Shape layer:
-  src/screens/ResultsScreen.jsx — serviceToProvider
-    • Buckets svc.recommenders into friendsRaw (non-Connector) and
-      connectorsRaw (cc_verified)
-    • Exposes friendCount, connectorCount, leadFriendName on the
-      provider object
-    • Accepts friendOwnerIds for future "in your network" filtering
-
-Render layer:
-  src/components/ui/ProviderCard.jsx — recoText()
-    • Builds the natural-language string:
-      "Reco'd by Jennifer Hu, 3 other friends and 21 Connectors"
-      "Reco'd by Jennifer Hu and 21 Connectors"      (1 friend + Cs)
-      "Reco'd by 21 Connectors"                       (no friends)
-      "Reco'd by Jennifer Hu"                         (1 friend, no Cs)
-    • Legacy fallback preserved for old codepaths that still set the
-      flat `friends` array without buckets
-
-  scripts/qa.mjs #40 (new)
-    • Locks the is_connector derivation in api.js
-    • Locks the friendCount + connectorCount + leadFriendName fields
-    • Locks the "other friend" + "Connector" wording in ProviderCard
-
-2. HOME BUDGET PILL — "flexible" by default
-
-Mirrors the date "I'm flexible" pattern. New optional Budget input
-sits inline in the search controls row, between the attach button
-and the Free/Pay mode toggle:
-
-  $ [____]   (placeholder reads "flexible" when empty)
-  $ [200]  ×  (clear button appears once a value is typed)
-
-Empty input = no budget filter (flexible). Typing a number flows
-into the existing submit pipeline as budget_cents, which the
-ResultsScreen savings calculator already uses to render
-"Saves $X" or "Over budget $X" labels per card.
-
-The manual budget wins over whatever the chat parser inferred
-from free text. (Old behaviour stays — "under $200" in chat text
-still works as a fallback when the explicit input is empty.)
+  budgetSatisfied accepts a digit OR flex/any/none/no max/skip so
+  both paths unblock the search. Phase 'ready' requires it too.
 
   src/screens/HomeScreen.jsx
-    • New `budget` state (string)
-    • Inline budget input pill in the search controls row
-    • submitQuery prefers manualBudget over s.budget for budget_cents
+    • Removed Budget pill + manualBudget override (chat is now the
+      only source again)
+  src/hooks/useChat.js
+    • Added budget reply gate (after where, before "Got it")
+    • Added bare-number / flex-word capture before merged is built
+    • Phase 'ready' requires budgetSatisfied too
+
+2. PDP buildout — Jennifer Leighton reference match
+
+The Figma PDP shows: avatar + name + role + Connector badge in the
+title row, multiple selectable offering cards (Apartment Clean /
+Linen Clean) each with description + price, About-the-provider
+section. Old PDP only had a single title + price.
+
+New layout:
+    ┌── Header (back · share) ─────────────────────────────────┐
+    │── Cover image / gradient ───────────────────────────────│
+    │── Provider row ─────────────────────────────────────────│
+    │  [Avatar]  Jennifer Leighton          Connector ✓       │
+    │            Housekeeper                                   │
+    │── Book Jennifer ────────────────────────────────────────│
+    │  Select a service offering below to book                 │
+    │   ┌── Apartment Clean    ──────────  $260 ──┐            │
+    │   │  Deep clean + laundry…                  │            │
+    │   └─────────────────────────────────────────┘            │
+    │   ┌── Linen Clean        ──────────   $80 ──┐            │
+    │   │  In-home cleaning…                      │            │
+    │   └─────────────────────────────────────────┘            │
+    │── Recommended by … (bucketed: friends + Connectors) ────│
+    │── About this service ──────────────────────────────────│
+    │── About Jennifer (bio + IG/TikTok) ────────────────────│
+    │── Book Jennifer · $260 ↗ ──────────────────────────────│
+    └──────────────────────────────────────────────────────────┘
+
+  src/screens/ServiceDetailScreen.jsx
+    • New offerings state — fetches ALL offerings from the services
+      join (not just default)
+    • New ownerProfile state — separate profiles query for the
+      provider's bio + cc_verified_at + social handles
+    • New selectedOfferingId state — tracks which card is selected
+    • Hydrates recommenders with cc_verified_at so the reco summary
+      buckets friends vs Connectors (same shape as ProviderCard)
+    • recoSummary uses the bucketed format
+    • Multi-offering card stack (selected = mint border + ring)
+    • New "About the provider" section
+    • Bottom Book CTA pulls price from the selected offering;
+      handleBook receives an overridden provider object so the
+      booking lands on the right offering
+
+  scripts/qa.mjs #38
+    • handleBook(...) assertion loosened from /handleBook\(provider\)/
+      to /handleBook\(/ — accepts the multi-offering shape
+
+3. RECO FORMAT — already correct, hard refresh needed
+
+The "Reco'd by Jennifer Hu, 3 other friends and 21 Connectors"
+format Tarik described was shipped in 3f76634. If a stale browser
+bundle is masking it, hard refresh (Cmd+Shift+R) loads the new JS.
+The build SHA pill at the bottom of the app confirms which commit
+is live.
 
 QA: 40/40 pass.
 
 NEXT — TARIK:
-  Refresh the running app (Cmd+Shift+R).
-  Search "plumber Miami Beach" with budget left blank → existing flow.
-  Type "200" in the budget pill, then search → cards show Saves $X /
-    Over budget $X labels based on the per-card price.
-  Penny's card should also show the bucketed reco line:
-    "Reco'd by [first friend name] and N Connectors"
-    (or similar based on whose recs landed on Penny — seed has 3 recs:
-    Alex + Sam (friends) + Connie (Connector, cc_verified) → expect
-    "Reco'd by Alex, 1 other friend and 1 Connector")
+  1. Refresh the running app (Cmd+Shift+R)
+  2. Search "plumber near me today" → chat now asks the 4 questions
+     (what / when / where / budget). Type "400" or "flexible" — both
+     advance the search.
+  3. Tap a result card photo → PDP renders avatar + offering cards +
+     bucketed recommended-by + about-the-provider
+  4. Reco line on cards reads "Reco'd by Alex Tester, 1 other friend
+     and 1 Connector" (Penny seed: Alex+Sam friends, Connie Connector)
 
 Files:
-  src/lib/api.js                            (is_connector + cc_verified_at select)
-  src/screens/ResultsScreen.jsx             (recommender bucketing)
-  src/components/ui/ProviderCard.jsx        (new recoText buckets)
-  src/screens/HomeScreen.jsx                (Budget pill)
-  scripts/qa.mjs                            (+#40 reco-buckets)
+  src/screens/HomeScreen.jsx                (Budget pill removed)
+  src/hooks/useChat.js                       (budget gate + bare-number capture)
+  src/screens/ServiceDetailScreen.jsx        (avatar + multi-offerings + about)
+  scripts/qa.mjs                             (#38 handleBook loosened)

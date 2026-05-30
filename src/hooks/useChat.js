@@ -537,6 +537,33 @@ export function useChat() {
     // locally but Claude returned what=null → empty-state loop.
     const whatFromTaxonomy = (!fields.what && !prevState.what && mergedProviderType) ? mergedProviderType : null;
 
+    // CERGIO-GUARD (2026-05-30): bare-number budget capture. The Claude
+    // parser doesn't always extract plain numeric replies as budgets —
+    // user types "400" in response to "What's your budget?" and the
+    // parser returns budget=null, so the chat loops on the question.
+    // Detect "we were asking about budget" from prevState (what/when/
+    // where all set, budget missing) and locally capture a bare number
+    // or flex word from the user's reply.
+    const wasAskingBudget =
+      !fields.budget &&
+      (prevState.what || prevState.provider_type) &&
+      (prevState.when || prevState.flexible_time) &&
+      prevState.where &&
+      !prevState.budget;
+    if (wasAskingBudget && userInput) {
+      const u = userInput.trim();
+      const numMatch = u.match(/\$?\s*(\d{1,5})/);
+      if (numMatch) {
+        fields.budget = `$${numMatch[1]}`;
+        // eslint-disable-next-line no-console
+        console.info('[useChat] captured bare-number budget reply: "%s" → "%s"', u, fields.budget);
+      } else if (/^(flexible|any|skip|none|no\s*max|nope|na|n\/?a)$/i.test(u)) {
+        fields.budget = 'flexible';
+        // eslint-disable-next-line no-console
+        console.info('[useChat] captured flex-word budget reply: "%s" → flexible', u);
+      }
+    }
+
     const merged = {
       what:           fields.what          ?? prevState.what          ?? whatFromTaxonomy ?? null,
       when:           fields.when          ?? prevState.when          ?? null,
@@ -563,6 +590,12 @@ export function useChat() {
     // pinned the provider type.
     const whenSatisfied = !!merged.when || !!merged.flexible_time;
     const whatKnown     = !!merged.what || !!merged.provider_type;
+    // CERGIO-GUARD (2026-05-30): budget is now a chat prompt like when/where.
+    // Asked AFTER where so the user's first answers cover the must-have
+    // identifiers. "flexible" / "any" / empty all count as satisfied — we
+    // never want to block the search on an optional number.
+    const budgetRaw = String(merged.budget || '').trim().toLowerCase();
+    const budgetSatisfied = !!budgetRaw && /\d|flex|any|none|no\s*max|skip/.test(budgetRaw);
     let reply;
     if (!whatKnown) {
       reply = "What service do you need? (e.g. plumber, sitter, cleaner, tutor…)";
@@ -570,6 +603,8 @@ export function useChat() {
       reply = "When do you need this? A date, time window, or just \"flexible\" works.";
     } else if (!merged.where) {
       reply = "Where should the provider come to? An address or area is fine.";
+    } else if (!budgetSatisfied) {
+      reply = "What's your budget? A max $ amount, or just \"flexible\" works.";
     } else {
       reply = "Got it — finding your best matches now.";
     }
@@ -580,7 +615,9 @@ export function useChat() {
     if (res.switch_to_form) setNeedsForm(true);
 
     // Phase reflects what we actually have, not what the parser claims.
-    const allCaptured = !!merged.what && whenSatisfied && !!merged.where;
+    // Budget IS included now so the user isn't surprised when "Got it"
+    // fires before they've answered all four questions.
+    const allCaptured = !!merged.what && whenSatisfied && !!merged.where && budgetSatisfied;
     setPhase(allCaptured ? 'ready' : 'chat');
 
     return merged;

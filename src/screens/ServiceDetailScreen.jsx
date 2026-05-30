@@ -78,41 +78,88 @@ export function ServiceDetailScreen() {
   const [recommenders, setRecommenders] = useState(
     location.state?.provider?.recommendersRaw || []
   );
+  // Multi-offering support — Figma PDP shows selectable cards
+  // (Apartment Clean / Linen Clean, etc.). Each card carries its own
+  // price + description. We render ALL offerings, not just the default.
+  const [offerings, setOfferings] = useState(
+    location.state?.provider?.offerings ||
+    (location.state?.provider?.offeringId
+      ? [{
+          id:           location.state.provider.offeringId,
+          name:         location.state.provider.name,
+          price_cents:  location.state.provider.priceCents,
+          is_default:   true,
+        }]
+      : [])
+  );
+  // Provider profile (the human behind the service). Owner_id → profiles
+  // join. Renders the avatar + name + role pill + Connector badge at
+  // the top of the PDP like the Jennifer Leighton reference.
+  const [ownerProfile, setOwnerProfile] = useState(null);
+  const [selectedOfferingId, setSelectedOfferingId] = useState(
+    location.state?.provider?.offeringId || null
+  );
   const [loading, setLoading] = useState(!seeded);
 
   useEffect(() => {
-    if (seeded || !supabaseReady || !serviceId) return;
+    if (!supabaseReady || !serviceId) return;
     let cancelled = false;
     (async () => {
-      setLoading(true);
-      const { data: svc } = await supabase
-        .from('services')
-        .select(`
-          id, title, category, description, location_text, photo_class,
-          cover_url, owner_id, rating_count,
-          offerings ( id, name, kind, price_cents, duration_minutes, is_default )
-        `)
-        .eq('id', serviceId)
-        .single();
-      if (cancelled) return;
-      if (!svc) { setLoading(false); return; }
-      const offering = svc.offerings?.find(o => o.is_default) || svc.offerings?.[0];
-      setProvider({
-        id:         svc.id,
-        ownerId:    svc.owner_id,
-        offeringId: offering?.id || null,
-        priceCents: offering?.price_cents ?? 0,
-        name:       svc.title || 'Service',
-        category:   svc.category || 'Service',
-        bio:        svc.description || '',
-        price:      Math.round((offering?.price_cents ?? 0) / 100),
-        coverUrl:   svc.cover_url || null,
-        photoClass: svc.photo_class || 'fv-jamie',
-      });
-      // Hydrate recommenders the same way listServices does.
-      // CERGIO-GUARD (2026-05-29): recommendations uses `sent_at`, not
-      // `created_at` — see api.js fetchRecommendersByServiceId for the
-      // diagnose that surfaced this column-name mismatch.
+      // Always fetch the full offerings list — the location.state may
+      // only carry the default offering's data, but the PDP needs the
+      // whole catalog.
+      if (!seeded || !offerings?.length || offerings.length === 1) {
+        const { data: svc } = await supabase
+          .from('services')
+          .select(`
+            id, title, category, description, location_text, photo_class,
+            cover_url, owner_id, rating_count,
+            offerings ( id, name, description, kind, price_cents, duration_minutes, is_default )
+          `)
+          .eq('id', serviceId)
+          .single();
+        if (cancelled) return;
+        if (!svc) { setLoading(false); return; }
+        const offs = svc.offerings || [];
+        const def  = offs.find(o => o.is_default) || offs[0];
+        if (!seeded) {
+          setProvider({
+            id:         svc.id,
+            ownerId:    svc.owner_id,
+            offeringId: def?.id || null,
+            priceCents: def?.price_cents ?? 0,
+            name:       svc.title || 'Service',
+            category:   svc.category || 'Service',
+            bio:        svc.description || '',
+            price:      Math.round((def?.price_cents ?? 0) / 100),
+            coverUrl:   svc.cover_url || null,
+            photoClass: svc.photo_class || 'fv-jamie',
+          });
+        }
+        if (offs.length) {
+          setOfferings(offs);
+          if (!selectedOfferingId) setSelectedOfferingId(def?.id || null);
+        }
+        // Owner profile lookup — for the provider info block.
+        if (svc.owner_id) {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('id, display_name, bio, cc_verified_at, instagram_handle, tiktok_handle')
+            .eq('id', svc.owner_id)
+            .maybeSingle();
+          if (!cancelled) setOwnerProfile(prof || null);
+        }
+      } else if (provider?.ownerId && !ownerProfile) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id, display_name, bio, cc_verified_at, instagram_handle, tiktok_handle')
+          .eq('id', provider.ownerId)
+          .maybeSingle();
+        if (!cancelled) setOwnerProfile(prof || null);
+      }
+
+      // Hydrate recommenders. CERGIO-GUARD (2026-05-29): recommendations
+      // uses `sent_at`, not `created_at`.
       const { data: recs } = await supabase
         .from('recommendations')
         .select('id, recommender_id, message, sent_at')
@@ -123,14 +170,15 @@ export function ServiceDetailScreen() {
         const ids = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
         const { data: profs } = await supabase
           .from('profiles')
-          .select('id, display_name')
+          .select('id, display_name, cc_verified_at')
           .in('id', ids);
-        const map = Object.fromEntries((profs || []).map(p => [p.id, p.display_name]));
+        const profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
         setRecommenders(recs.map(r => ({
-          id:         r.recommender_id,
-          name:       map[r.recommender_id] || 'A friend',
-          message:    r.message,
-          created_at: r.sent_at,
+          id:           r.recommender_id,
+          name:         profMap[r.recommender_id]?.display_name || 'A friend',
+          message:      r.message,
+          created_at:   r.sent_at,
+          is_connector: !!profMap[r.recommender_id]?.cc_verified_at,
         })));
       } else {
         setRecommenders([]);
@@ -138,15 +186,33 @@ export function ServiceDetailScreen() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [seeded, serviceId]);
+  }, [seeded, serviceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Bucketed reco summary — matches ProviderCard's format:
+  //   "Recommended by Alex Tester, 1 other friend and 1 Connector"
+  // Lead anchor = first non-Connector recommender's name.
   const recoSummary = useMemo(() => {
     const total = recommenders.length;
     if (total === 0) return null;
-    const names = recommenders.slice(0, 2).map(r => r.name).filter(Boolean);
-    const others = total - names.length;
-    if (others <= 0) return `Recommended by ${names.join(' and ')}`;
-    return `Recommended by ${names.join(', ')} and ${others} more`;
+    const friends    = recommenders.filter(r => !r.is_connector);
+    const connectors = recommenders.filter(r =>  r.is_connector);
+    const parts = [];
+    const lead = friends[0]?.name || connectors[0]?.name;
+    if (friends.length > 0 && friends[0]?.name) {
+      parts.push(friends[0].name);
+      const other = friends.length - 1;
+      if (other > 0) parts.push(`${other} other ${other === 1 ? 'friend' : 'friends'}`);
+    } else if (connectors.length > 0 && !lead) {
+      // edge case — handled below
+    }
+    if (connectors.length > 0) {
+      parts.push(`${connectors.length} ${connectors.length === 1 ? 'Connector' : 'Connectors'}`);
+    }
+    if (parts.length === 0) return `Recommended by ${total} ${total === 1 ? 'person' : 'people'}`;
+    const last = parts.pop();
+    return parts.length > 0
+      ? `Recommended by ${parts.join(', ')} and ${last}`
+      : `Recommended by ${last}`;
   }, [recommenders]);
 
   if (loading || !provider) {
@@ -205,18 +271,81 @@ export function ServiceDetailScreen() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/20" />
       </div>
 
-      {/* Title row */}
+      {/* Provider profile — avatar + name + role + Connector badge.
+          Matches the Jennifer Leighton reference in the Figma. */}
       <div className="px-5 pt-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[24px] font-extrabold text-black leading-tight">{provider.name}</h1>
-            <p className="text-[13px] text-b3 font-medium mt-0.5">{provider.category}</p>
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+                          text-white text-[18px] font-extrabold flex items-center justify-center flex-shrink-0
+                          ring-2 ring-white shadow-sm">
+            {initialsOf(ownerProfile?.display_name || provider.name)}
           </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-[20px] font-extrabold text-black leading-none">${provider.price}</p>
-            <p className="text-[11px] text-b3 font-medium mt-1">per job</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-[20px] font-extrabold text-black leading-tight truncate">
+              {ownerProfile?.display_name || provider.name}
+            </h1>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-[12px] text-b3 font-medium">{provider.category}</span>
+              {ownerProfile?.cc_verified_at && (
+                <span className="bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold">
+                  Connector ✓
+                </span>
+              )}
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Book section title — uses owner's first name like "Book Jennifer" */}
+      <div className="px-5 pt-5 pb-2">
+        <h2 className="text-[17px] font-extrabold text-black leading-tight">
+          Book {(ownerProfile?.display_name || provider.name).split(' ')[0]}
+        </h2>
+        <p className="text-[11.5px] text-b3 font-medium mt-1">Select a service offering below to book</p>
+      </div>
+
+      {/* Offering cards — Apartment Clean / Linen Clean style stack.
+          Each card: name + description + price + selected ring. Tapping
+          a card sets selectedOfferingId so the bottom Book CTA books
+          THAT offering specifically. */}
+      <div className="px-5 flex flex-col gap-2.5">
+        {(offerings || []).map((o) => {
+          const isSel = o.id === selectedOfferingId;
+          const priceDollars = Math.round((o.price_cents ?? 0) / 100);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setSelectedOfferingId(o.id)}
+              className={`w-full rounded-[14px] p-3.5 text-left transition-colors
+                          ${isSel
+                            ? 'bg-gl border-2 border-g shadow-sm'
+                            : 'bg-white border border-bdr hover:bg-bg5/30'}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[14px] font-extrabold leading-tight ${isSel ? 'text-gd' : 'text-black'}`}>
+                    {o.name || 'Service offering'}
+                  </p>
+                  {o.description && (
+                    <p className="text-[11.5px] text-b3 leading-snug mt-1">{o.description}</p>
+                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[15px] font-extrabold text-black leading-none">${priceDollars}</p>
+                  {o.duration_minutes && (
+                    <p className="text-[10px] text-b3 font-medium mt-1">{o.duration_minutes}m</p>
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+        {(!offerings || offerings.length === 0) && (
+          <div className="bg-bg5 rounded-[14px] p-3 text-center text-[11.5px] text-b3 font-medium">
+            No offerings listed yet — book this provider to request a custom quote.
+          </div>
+        )}
       </div>
 
       {/* Recommended by — avatar stack */}
@@ -256,7 +385,7 @@ export function ServiceDetailScreen() {
         </div>
       )}
 
-      {/* About */}
+      {/* About this service */}
       {provider.bio && (
         <div className="mx-5 mt-5">
           <h2 className="text-[15px] font-extrabold text-black mb-2">About this service</h2>
@@ -264,14 +393,48 @@ export function ServiceDetailScreen() {
         </div>
       )}
 
-      {/* Fixed-bottom Book CTA */}
+      {/* About the provider — owner's own bio, IG/TikTok handles */}
+      {(ownerProfile?.bio || ownerProfile?.instagram_handle || ownerProfile?.tiktok_handle) && (
+        <div className="mx-5 mt-5">
+          <h2 className="text-[15px] font-extrabold text-black mb-2">
+            About {(ownerProfile?.display_name || provider.name).split(' ')[0]}
+          </h2>
+          {ownerProfile?.bio && (
+            <p className="text-[13px] text-b2 leading-relaxed">{ownerProfile.bio}</p>
+          )}
+          {(ownerProfile?.instagram_handle || ownerProfile?.tiktok_handle) && (
+            <div className="flex items-center gap-3 mt-3">
+              {ownerProfile?.instagram_handle && (
+                <span className="text-[11.5px] text-b3 font-medium">IG @{ownerProfile.instagram_handle}</span>
+              )}
+              {ownerProfile?.tiktok_handle && (
+                <span className="text-[11.5px] text-b3 font-medium">TikTok @{ownerProfile.tiktok_handle}</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fixed-bottom Book CTA — pulls the selected offering's price so
+          the user sees what they're booking. Falls back to provider.price
+          when no offerings exist. */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-cream border-t border-bdr px-5 pt-3 pb-5 z-10">
         <button
-          onClick={() => handleBook(provider)}
+          onClick={() => {
+            const sel = offerings.find(o => o.id === selectedOfferingId) || offerings[0];
+            handleBook(sel
+              ? { ...provider, offeringId: sel.id, priceCents: sel.price_cents, price: Math.round((sel.price_cents ?? 0) / 100) }
+              : provider);
+          }}
           className="w-full bg-g text-white rounded-[24px] py-4 text-[16px] font-extrabold
                      hover:opacity-90 active:scale-[.98] transition-all"
         >
-          Book {provider.name.split(' ')[0]} · ${provider.price} ↗
+          {(() => {
+            const sel = offerings.find(o => o.id === selectedOfferingId) || offerings[0];
+            const selPrice = sel ? Math.round((sel.price_cents ?? 0) / 100) : provider.price;
+            const firstName = (ownerProfile?.display_name || provider.name).split(' ')[0];
+            return `Book ${firstName} · $${selPrice} ↗`;
+          })()}
         </button>
       </div>
     </div>

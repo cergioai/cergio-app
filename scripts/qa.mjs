@@ -1393,9 +1393,11 @@ test('pdp-wired', 'ServiceDetailScreen renders recommender stack + ResultsScreen
   // removing the fallback (which would 404 every /service/:id deep link).
   assert(/from\(['"]recommendations['"]\)[\s\S]{0,200}service_id/.test(pdpCode),
     'PDP cold-fallback must query the recommendations table by service_id.');
-  // The Book CTA must reuse the existing handleBook flow.
-  assert(/handleBook\(provider\)/.test(pdpCode),
-    'PDP Book CTA must call handleBook(provider) so the existing booking flow is reused.');
+  // The Book CTA must reuse the existing handleBook flow — accepts
+  // either handleBook(provider) directly OR handleBook(sel ? {...provider, ...} : provider)
+  // for multi-offering PDPs.
+  assert(/handleBook\(/.test(pdpCode),
+    'PDP Book CTA must call handleBook(...) so the existing booking flow is reused.');
 
   const app = readFile('src/App.jsx');
   assert(/path="\/service\/:serviceId"/.test(app),
