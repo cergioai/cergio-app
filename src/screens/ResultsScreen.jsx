@@ -924,7 +924,7 @@ export function ResultsScreen() {
             await navigator.clipboard.writeText(shareMsg);
             showToast('Copied — paste it to a friend ✓');
           } catch {
-            showToast('Share unavailable — try Send to friends.');
+            showToast('Share unavailable — try Forward to friends.');
           }
         };
         // CERGIO-GUARD (2026-05-30): the empty-state "Send to friends"
@@ -961,7 +961,7 @@ export function ResultsScreen() {
                 className="flex-1 bg-g text-white rounded-pill py-2 text-[12px] font-bold
                            hover:opacity-90 active:scale-[.98] transition-all"
               >
-                Send to friends →
+                Forward to friends →
               </button>
               <button
                 onClick={doNativeShare}

@@ -804,17 +804,16 @@ export function HomeScreen() {
           : `${greetingName}, tell me the Connector you need.`;
 
         return (
-          <div className="px-5 pt-5 pb-0.5 flex items-start gap-3">
-            {/* CERGIO-GUARD (2026-05-30 v3): brand mark at top — STATIC
-                until search fires (Tarik: "make logo static unless it's
-                executing action"). The bloom only plays on the
-                streaming-status block during search. Sized 44 so it
-                tucks tight next to the greeting line ("Hi Tarik, tell
-                me what you need."). Hidden post-submit because the
-                streaming status owns the brand presence then. */}
+          <div className="px-5 pt-5 pb-0.5 flex items-center gap-2.5">
+            {/* CERGIO-GUARD (2026-05-30 v4): brand mark vertically
+                CENTERED on the greeting line (Tarik: "move up the logo
+                to align with the 'hi what do you need'"). Smaller (36)
+                so it tucks neatly inline with the headline text. Static
+                — bloom only fires when search actually executes (on
+                the streaming-status block below). */}
             {!submitted && (
-              <div className="flex-shrink-0 pt-0.5">
-                <LeafLogo size={44} />
+              <div className="flex-shrink-0">
+                <LeafLogo size={36} />
               </div>
             )}
             <div className="flex-1 min-w-0">

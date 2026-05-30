@@ -1,42 +1,32 @@
-Chunk B + Connector paid flag
+Logo aligned on greeting line + "Forward to friends" rename
 
-(1) HOME: STATIC LOGO NEXT TO GREETING
-Tarik: "make logo static (unless it's executing action). move up to
-align next to Hi (user, tell me...)".
-The pre-submit brand mark is now sized 44 + STATIC (no working prop),
-anchored tight beside the "Hi Tarik, tell me what you need." line.
-Pulsating bloom only fires when the search actually executes (on the
-streaming-status block, which has its own larger LeafLogo with
-working={true}). Hidden post-submit because the streaming-status
-block owns the brand presence then.
+Two quick UX fixes from live testing:
 
-(2) SPLASH + AUTH: HERO SIZE BUMP
-SplashScreen: 88 → 120 with intensity 0.9 — first impression
-unmistakably shows the new organic bud bloom.
-AuthScreen: 64 → 96 with intensity 0.85 — login opens on a
-confident hero-sized mark.
+(1) HOME LOGO VERTICALLY ALIGNED WITH GREETING
+Tarik: "move up the logo to align with the 'hi what do you need'".
+Was: flex items-start + pt-0.5 + size 44 — logo sat slightly above
+text baseline and extended well below it, looking like a separate
+element stacked on top of the greeting.
+Now: flex items-center, no padding, size 36 — bud sits inline with
+"Hi {name}, tell me what you need." line, shared centerline, reads
+as one composed headline.
 
-(3) "CERGIO IS HUMAN-POWERED AI" FOOTER: BREATHING ROOM
-Tarik: "give more room (like distance above and below Claude is AI
-spaces)... Cergio is AI note above the bottom nav bar".
-Was bottom-[72px] (only 8px above BottomNav — cramped).
-Now bottom-[92px] (28px clear) + py-2 on text itself so content
-above doesn't crowd it. Matches Claude's "Claude can make mistakes"
-rhythm.
-
-(4) CONNECTOR BROWSE — FLAG PAID CONNECTORS
-Tarik: "for connectors search, flag when the connectors aren't free".
-Was: paid Connectors silently showed an "IG · $25/post" green pill,
-easy to mistake for a "Connector means free" implication.
-Now: leads each paid row with an amber "Paid Connector" pill (with a
-dollar-sign glyph) BEFORE the IG/TT rate pills. Free-only Connectors
-get a green "Free / swap only" pill with a shield glyph for visual
-parity. User immediately sees commitment level on each row.
-
-QA: 41/41 pass.
+(2) "SEND TO FRIENDS" → "FORWARD TO FRIENDS"
+Tarik: "forward to friends rather than send to friends". Forwarding
+matches what the action actually does (re-share the prefilled link
+via the native share sheet — there's no Cergio-side "send" happening,
+the user just hands it off). Plus error toast updated to match.
 
 Files:
   src/screens/HomeScreen.jsx
-  src/screens/SplashScreen.jsx
-  src/screens/AuthScreen.jsx
-  src/screens/BrowseConnectorsScreen.jsx
+  src/screens/ResultsScreen.jsx
+
+ALSO STAGED (on disk, not in cergio-app/):
+  /Users/tariksansal/Downloads/Cergio Claude/Seed Miami Services.command
+    Adds Maria/Sofia/Henry/Jackie service inventory in Miami Beach
+    + recommendations from existing Alex/Connie/Sam friend network,
+    so "house cleaner" / "driver" / "babysitter" searches return real
+    cards with friend avatars + a free-for-GOATs Connector listing.
+    Idempotent. Run AFTER Seed Money Flow Test Data.command.
+
+QA: 41/41 pass.
