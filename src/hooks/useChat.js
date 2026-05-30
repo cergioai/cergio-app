@@ -537,6 +537,23 @@ export function useChat() {
     // locally but Claude returned what=null → empty-state loop.
     const whatFromTaxonomy = (!fields.what && !prevState.what && mergedProviderType) ? mergedProviderType : null;
 
+    // CERGIO-GUARD (2026-05-30 #2): urgency-word capture. "plumber asap"
+    // / "need plumber now" / "urgent" / "emergency" should all satisfy
+    // the WHEN gate immediately — they ARE time signals, just informal
+    // ones the Claude parser sometimes misses. Detect from userInput
+    // when fields.when is empty; set fields.when="ASAP" AND mark urgency
+    // so the downstream notification flow can prioritize. This is the
+    // same pattern as the bare-number budget capture below.
+    const URGENCY_RE = /\b(asap|a\.s\.a\.p\.|now|right\s+now|right\s+away|immediately|urgent(?:ly)?|emergency|today|tonight|this\s+morning|this\s+afternoon|this\s+evening)\b/i;
+    if (!fields.when && userInput && URGENCY_RE.test(userInput)) {
+      const m = userInput.match(URGENCY_RE);
+      const matched = (m?.[0] || 'ASAP').toUpperCase();
+      fields.when = matched === 'TODAY' || matched === 'TONIGHT' ? matched.toLowerCase() : 'ASAP';
+      res.urgency = true;
+      // eslint-disable-next-line no-console
+      console.info('[useChat] captured urgency word "%s" as when="%s"', m?.[0], fields.when);
+    }
+
     // CERGIO-GUARD (2026-05-30): bare-number budget capture. The Claude
     // parser doesn't always extract plain numeric replies as budgets —
     // user types "400" in response to "What's your budget?" and the

@@ -1006,13 +1006,29 @@ test('search-tolerance', 'Local taxonomy + fuzzy matcher cover 50+ realistic sea
     `Search-tolerance battery — ${failures.length} of ${cases.length} cases failed:\n  ${failures.join('\n  ')}`);
 });
 
-// ─── INVARIANT #30: LeafLogo is the sprout v2 (two-leaf, stem, dew) ─────
-// User chose option B (sprout) on 2026-05-28. The geometry MUST be
-// the two-leaf sprout — single-lobed-leaf-only is a regression.
-// Multi-motion CSS classes must also be wired so the plant breathes.
-test('sprout-logo', 'LeafLogo renders the sprout v2 (two leaves + stem + dew + multi-motion)', '#30', async () => {
+// ─── INVARIANT #30: LeafLogo wires the four organic variants ────────────
+// 2026-05-30: LeafLogo now switches between four variants behind a
+// LOGO_VARIANT constant: sprout / rings / bud / pollen. The Sprout
+// component must still exist (one of the options) AND a MARKS map
+// must dispatch all four. The current active variant is whatever
+// LOGO_VARIANT is set to — Tarik changes that one line to switch.
+test('sprout-logo', 'LeafLogo wires all 4 organic variants (sprout/rings/bud/pollen) + animates when working', '#30', async () => {
   const src = readFile('src/components/ui/LeafLogo.jsx');
   const code = stripComments(src);
+  // LOGO_VARIANT switch must exist + be one of the canonical 4 values.
+  const m = code.match(/const\s+LOGO_VARIANT\s*=\s*['"](sprout|rings|bud|pollen)['"]/);
+  assert(m,
+    'LeafLogo must define LOGO_VARIANT = "sprout" | "rings" | "bud" | "pollen".');
+  // The MARKS map must dispatch all 4 variants.
+  for (const v of ['sprout', 'rings', 'bud', 'pollen']) {
+    assert(new RegExp(`${v}:\\s*\\w+`).test(code),
+      `LeafLogo MARKS map must include ${v}: <Component>.`);
+  }
+  // All four variant components must be defined.
+  for (const fn of ['Sprout', 'GrowthRings', 'BudBloom', 'PollenPulse']) {
+    assert(new RegExp(`function\\s+${fn}\\s*\\(`).test(code),
+      `LeafLogo must define the ${fn} variant component.`);
+  }
   assert(/function Sprout\s*\(/.test(code) || /Sprout\s*size=/.test(code),
     'LeafLogo must use the Sprout component (two-leaf composition).');
   // Both leaves + the stem must exist as separate animated groups.
@@ -1441,6 +1457,33 @@ test('earnings-tier', 'EarningsScreen surfaces direct vs friend-of-friend tier p
   // User-visible labels.
   assert(/Direct/.test(code) && /Chain \+5%/.test(code),
     'Tier pill labels "Direct" and "Chain +5%" must be present.');
+});
+
+// ─── INVARIANT #41: urgency words satisfy the WHEN chat gate ────────────
+// Tarik 2026-05-30: "plumber asap" was prompting "When do you need this?"
+// — asap/now/urgent/today are time signals the Claude parser sometimes
+// misses. Lock the local urgency-word capture in applyParseResult so a
+// future refactor can't drop it and re-introduce the awkward double-ask.
+test('urgency-capture', 'useChat captures asap/now/urgent/today as a WHEN signal', '#41', async () => {
+  const src = readFile('src/hooks/useChat.js');
+  const code = stripComments(src);
+
+  assert(/URGENCY_RE\s*=\s*\/\\b/.test(code),
+    'useChat must define URGENCY_RE to detect informal time phrases.');
+  // The pattern itself must cover the canonical set Tarik called out.
+  const urgencyRe = code.match(/URGENCY_RE\s*=\s*\/(.+?)\//);
+  assert(urgencyRe,
+    'URGENCY_RE must be a defined regex.');
+  const reSrc = urgencyRe[1];
+  for (const word of ['asap', 'now', 'urgent', 'today', 'emergency', 'immediately']) {
+    assert(new RegExp(word, 'i').test(reSrc),
+      `URGENCY_RE must recognise "${word}".`);
+  }
+  // The capture must set fields.when AND res.urgency=true.
+  assert(/fields\.when\s*=\s*['"`]?(?:ASAP|matched)/.test(code) || /fields\.when\s*=\s*matched/.test(code),
+    'Urgency capture must set fields.when to ASAP (or the matched literal).');
+  assert(/res\.urgency\s*=\s*true/.test(code),
+    'Urgency capture must set res.urgency = true so downstream notification can prioritize.');
 });
 
 // ─── INVARIANT #18: build version pill rendered + wired via Vite define ─

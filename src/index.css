@@ -247,6 +247,65 @@ body {
   animation: cgSproutDew calc(5s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
 }
 
+/* ── Logo variants B/C/D — earthy expand/contract motions ────────
+   Each variant only animates when LeafLogo's `working` prop is true.
+   The React component toggles className on/off; CSS keyframes here.
+   Speed scales with --cg-leaf-speed (1 = calm, 0.55 = fast). */
+
+/* C · Bud bloom — 4-petal flower opens and closes */
+@keyframes cgBudBloom {
+  0%, 100% { transform: scale(0.55); }
+  50%      { transform: scale(1); }
+}
+.cg-bud-bloom {
+  animation: cgBudBloom calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
+
+/* D · Pollen pulse — central core breathes; 6 seeds drift on a 4s cycle */
+@keyframes cgPollenCore {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.25); }
+}
+.cg-pollen-core {
+  animation: cgPollenCore calc(2.5s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
+/* Seeds drift FURTHER out from their resting orbit (cx=92, 82, 60... y=60, 82, 92...)
+   when working. At rest = stay put. Scale also pulses subtly so the
+   drift feels like a breath, not a slide. */
+@keyframes cgPollenS1 {
+  0%, 100% { transform: translate(0, 0)    scale(1);   opacity: 0.95; }
+  50%      { transform: translate(10px, 0) scale(1.3); opacity: 0.45; }
+}
+@keyframes cgPollenS2 {
+  0%, 100% { transform: translate(0, 0)       scale(1);   opacity: 0.95; }
+  50%      { transform: translate(8px, 8px)   scale(1.3); opacity: 0.45; }
+}
+@keyframes cgPollenS3 {
+  0%, 100% { transform: translate(0, 0)     scale(1);   opacity: 0.95; }
+  50%      { transform: translate(0, 10px)  scale(1.3); opacity: 0.45; }
+}
+@keyframes cgPollenS4 {
+  0%, 100% { transform: translate(0, 0)         scale(1);   opacity: 0.95; }
+  50%      { transform: translate(-8px, 8px)    scale(1.3); opacity: 0.45; }
+}
+@keyframes cgPollenS5 {
+  0%, 100% { transform: translate(0, 0)      scale(1);   opacity: 0.95; }
+  50%      { transform: translate(-10px, 0)  scale(1.3); opacity: 0.45; }
+}
+@keyframes cgPollenS6 {
+  0%, 100% { transform: translate(0, 0)      scale(1);   opacity: 0.95; }
+  50%      { transform: translate(0, -10px)  scale(1.3); opacity: 0.45; }
+}
+.cg-pollen-s1 { animation: cgPollenS1 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+.cg-pollen-s2 { animation: cgPollenS2 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+.cg-pollen-s3 { animation: cgPollenS3 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+.cg-pollen-s4 { animation: cgPollenS4 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+.cg-pollen-s5 { animation: cgPollenS5 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+.cg-pollen-s6 { animation: cgPollenS6 calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+
+/* (B · Growth rings uses raw SVG <animate> elements that respect the
+    `working` prop directly in the component — no CSS needed.) */
+
 /* ── Reward-flow animation (RewardFlowAnimation.jsx) ──────────────
    The 6-step "how earnings work" explainer animation. Keyframes
    here so the React component stays declarative — no inline style

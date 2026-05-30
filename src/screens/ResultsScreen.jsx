@@ -229,6 +229,13 @@ export function ResultsScreen() {
   // misleading "No plumbers yet" empty state. This is the honest
   // story: free filter is a preference, not the only inventory.
   const [paidFallback, setPaidFallback] = useState(false);
+  // CERGIO-GUARD (2026-05-30): over-budget fallback. When the budget
+  // filter strips ALL results, re-query without the budget cap and
+  // surface the over-budget options (cards already render "Over budget
+  // $X" via SavingsLabel since the budget vs price math goes negative).
+  // Honest UX: "we found these even though they're over your $20 budget"
+  // beats a hard "no plumbers yet" empty state.
+  const [overBudgetFallback, setOverBudgetFallback] = useState(false);
 
   // CERGIO-GUARD (2026-05-28): the status ticker is now driven by REAL
   // notification + bid counts on the open request, not a setInterval
@@ -375,6 +382,29 @@ export function ResultsScreen() {
         }
         clearTimeout(timeoutId);
         setPaidFallback(false);
+        // CERGIO-GUARD (2026-05-30): over-budget fallback. If the budget
+        // filter excluded everything AND the user set a budget, try
+        // again without it and show the over-budget options with a
+        // soft banner. Mirrors the freeOnly → paidFallback pattern above.
+        if ((!data || data.length === 0) && callArgs.maxBudgetCents) {
+          const noBudgetArgs = { ...callArgs, maxBudgetCents: null };
+          const obRes = await listServices(noBudgetArgs);
+          if (cancelled) return;
+          if (typeof window !== 'undefined' && window.__cergioDiag !== false) {
+            // eslint-disable-next-line no-console
+            console.log('[CERGIO/search:over-budget-fallback]', {
+              in: noBudgetArgs,
+              out: { error: obRes.error?.message || null,
+                     count: (obRes.data || []).length },
+            });
+          }
+          if (!obRes.error && obRes.data && obRes.data.length > 0) {
+            setOverBudgetFallback(true);
+            setServices(obRes.data);
+            return;
+          }
+        }
+        setOverBudgetFallback(false);
         if (!data) { setServices([]); return; }
         setServices(data);
       } catch (_e) {
@@ -637,6 +667,31 @@ export function ResultsScreen() {
             <p className="text-[11px] text-b3 leading-snug mt-1">
               Free offers come from Connectors. Ask a friend to join, or
               pick a paid option below.
+            </p>
+          </div>
+        );
+      })()}
+
+      {/* CERGIO-GUARD (2026-05-30): over-budget fallback banner. When
+          nothing fit the user's budget, we still show the closest paid
+          options with "Over budget $X" labels per card. This is the
+          honest move: don't pretend zero plumbers exist just because
+          your $20 budget is unrealistic — show what's there, mark it
+          clearly, let the user adjust. */}
+      {!isLoading && overBudgetFallback && services && services.length > 0 && (() => {
+        const ptLabel = safeProviderTypePlural
+          ? safeProviderTypePlural.toLowerCase()
+          : (userNoun ? `${userNoun}s` : 'options');
+        const budgetLabel = budget ? ` your ${budget}` : ' your budget';
+        return (
+          <div className="mx-5 mb-3 bg-warnBg border border-warn/40 rounded-[14px] px-4 py-3">
+            <p className="text-[13px] text-warnText leading-snug font-extrabold">
+              No {ptLabel} within{budgetLabel} —
+              {' '}showing closest options over budget.
+            </p>
+            <p className="text-[11px] text-warnText/80 leading-snug mt-1">
+              Each card below tags how much over your budget it runs.
+              Raise your budget or ask friends for a reco to find one within.
             </p>
           </div>
         );
