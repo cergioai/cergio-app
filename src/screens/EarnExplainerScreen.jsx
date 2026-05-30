@@ -1,15 +1,22 @@
-// How earnings work — anchored on the 7% platform fee + $250 per user.
-// CERGIO-GUARD: no "Cergio Cash" / "Cergio Coin" terms. No 25%-of-services
-// math — that wasn't accurate. The real model: Cergio takes 7% on
-// bookings; we share that with you up to $250 per friend who joins +
-// books. Growth Participation Income explainer is linked back to the
-// popup on Earnings.
+// CERGIO-GUARD (2026-05-29): copy anchored on the TRUE economics —
+// Cergio's platform fee is 10% of every booking. Of that, 7% goes
+// back to the inviting referrer (per invite/recommend context).
+// Tarik flagged the previous "Cergio earns 7%" framing as misleading.
+// All numbers from REWARDS — never hardcode percentages in copy.
 import { useNavigate } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
 import { RewardFlowAnimation } from '../components/ui/RewardFlowAnimation';
 
 export function EarnExplainerScreen() {
   const navigate = useNavigate();
+
+  // Concrete example: $300 booking → Cergio takes 10% ($30) → 7% ($21)
+  // flows to the inviter; Cergio retains 3% ($9) as platform margin.
+  const exampleBookingDollars = 300;
+  const exampleCergioCents = Math.round(exampleBookingDollars * (REWARDS.platformFeePercent / 100) * 100);
+  const exampleReferrerCents = Math.round(exampleBookingDollars * (REWARDS.referrerSharePercent / 100) * 100);
+  const exampleCergioDollars   = exampleCergioCents / 100;
+  const exampleReferrerDollars = exampleReferrerCents / 100;
 
   return (
     <div className="flex-1 flex flex-col bg-white pb-8 overflow-y-auto">
@@ -35,18 +42,15 @@ export function EarnExplainerScreen() {
         </p>
       </div>
 
-      {/* CERGIO-GUARD (2026-05-28 v2): live animation walks the four
-          mechanisms — direct cash → trust/network → Connector barter →
-          Growth Participation. Sprouts represent people. Self-paced. */}
       <div className="px-3 mb-5">
         <RewardFlowAnimation />
       </div>
 
       <div className="px-5 pb-5">
         <p className="text-[13px] text-b3 leading-relaxed">
-          Mechanically: when a friend you invited books a service, Cergio earns a
-          <span className="text-black font-extrabold"> 7% fee</span> — and we share that with you,
-          up to <span className="text-black font-extrabold">${REWARDS.perFriend}</span> per friend.
+          Cergio's platform fee is <span className="text-black font-extrabold">{REWARDS.platformFeePercent}%</span> on every booking.
+          When you invite or recommend, we share <span className="text-black font-extrabold">{REWARDS.referrerSharePercent}%</span> of
+          each booking with you — up to <span className="text-black font-extrabold">${REWARDS.perFriend}</span> per friend.
         </p>
       </div>
 
@@ -56,7 +60,7 @@ export function EarnExplainerScreen() {
         <ol className="text-[13px] text-b2 leading-relaxed space-y-2">
           <li><span className="font-bold">1.</span> You invite a friend (or recommend a service).</li>
           <li><span className="font-bold">2.</span> They join Cergio and book any service.</li>
-          <li><span className="font-bold">3.</span> Cergio earns a <span className="font-bold">7%</span> platform fee on each of their bookings; we share that with you until you've earned <span className="font-bold">${REWARDS.perFriend}</span> from them.</li>
+          <li><span className="font-bold">3.</span> Cergio charges a <span className="font-bold">{REWARDS.platformFeePercent}%</span> platform fee on each booking. We share <span className="font-bold">{REWARDS.referrerSharePercent}%</span> with you (the inviter) until you've earned <span className="font-bold">${REWARDS.perFriend}</span> from that friend. Only bookings within <span className="font-bold">{REWARDS.friendCapWindowMonths} months</span> of the invite count.</li>
         </ol>
       </div>
 
@@ -64,9 +68,12 @@ export function EarnExplainerScreen() {
       <div className="mx-5 bg-soft rounded-[18px] p-5 mb-4">
         <p className="text-[14px] font-extrabold text-black leading-tight mb-2">Example</p>
         <p className="text-[13px] text-b2 leading-relaxed">
-          Your friend Jamie books a $300 deep clean. Cergio's 7% fee on that booking is{' '}
-          <span className="font-bold">$21</span> — and you earn that. Keep going across Jamie's
-          future bookings until you've earned the full <span className="font-bold">${REWARDS.perFriend}</span>.
+          Jamie books a ${exampleBookingDollars} deep clean. Cergio's
+          {' '}<span className="font-bold">{REWARDS.platformFeePercent}%</span> fee on that booking
+          is <span className="font-bold">${exampleCergioDollars}</span>.
+          {' '}You earn <span className="font-bold">{REWARDS.referrerSharePercent}%</span> = <span className="font-bold">${exampleReferrerDollars}</span> as
+          Jamie's inviter. Keep going across Jamie's future bookings until you've earned the full
+          {' '}<span className="font-bold">${REWARDS.perFriend}</span>.
         </p>
       </div>
 

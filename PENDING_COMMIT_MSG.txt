@@ -1,116 +1,92 @@
-Engineering reset: diagnose script + idempotent seed + animation v6 (table)
+7%/10% truthfulness + Animation v7 (readable list, 5 ways to earn)
 
-Tarik: "didn't work.. don't have energy to go in circles again.. take to
-superior level of engineering standard." Three rebuilds in one push:
+Two fixes tracking Tarik's "doesn't work... animation is poorly formatted,
+can't see writing on the table... more than 2 ways to earn... copy says
+Cergio's fee is 7% which is incorrect — it's 10%, but misleading; should
+explain 7% in the context of inviting or recommending. Add that the 7%
+is from bookings made within 6 months of invite."
 
-1. DIAGNOSE — definitive DB state, no more guessing
+1. 7%/10% TRUTHFULNESS — copy now matches the real economics
 
-New "Diagnose Money Flow.command" prints the actual ground-truth state
-of the Supabase tables for Tarik's account. No silent failures. Output
-is meant to be pasted back so the next fix targets the real problem,
-not a guess.
+EarnExplainerScreen had three places saying "Cergio earns a 7% fee" or
+"Cergio's 7% fee on that booking is $21". Wrong. Cergio's actual fee
+is 10%; of that, 7% flows to the inviter/recommender. Old copy
+conflated the two — misleading.
 
-What it prints:
-  • recommendations + earnings + network column schemas
-  • RLS policies on recommendations + earnings (the most likely culprit)
-  • Row counts via SERVICE_KEY (ground truth) AND via ANON_KEY (what
-    Tarik's session can read) — if these diverge, RLS is the blocker
-  • Penny services with duplicate detection
-  • Recommendations on Penny services joined with profile names
-  • Tarik's earnings rows + network edges
+Fixed shape (uses REWARDS.platformFeePercent + referrerSharePercent
++ friendCapWindowMonths — no hardcoded percentages anywhere):
 
-  Diagnose Money Flow.command (new)
+  Old:   "Cergio earns a 7% fee — and we share that with you, up to $250"
+  New:   "Cergio's platform fee is 10% on every booking. When you invite
+          or recommend, we share 7% of each booking with you — up to $250
+          per friend."
 
-2. SEED — idempotent, loud, verified
+  Old:   "Your friend Jamie books a $300 deep clean. Cergio's 7% fee on
+          that booking is $21 — and you earn that."
+  New:   "Jamie books a $300 deep clean. Cergio's 10% fee on that booking
+          is $30. You earn 7% = $21 as Jamie's inviter. Keep going across
+          Jamie's future bookings until you've earned the full $250."
 
-Tarik's UI showed 3 duplicate "Penny's Test Plumbing" rows because the
-seed created a NEW Penny user on every run (unique email per BATCH
-timestamp) and inserts swallowed errors via `-s` + `>>$LOG`. Three fixes:
-
-  (a) Cleanup block at the TOP — deletes prior testflow personas, their
-      services/offerings, recommendations, network edges, connector
-      applications, and prior seed-marker earnings (meta @> '{seed:true}')
-      BEFORE inserting fresh ones. Idempotent.
-  (b) Earnings rows now carry "seed":true in meta so the cleanup can
-      target them precisely on re-run. Dropped `on conflict do nothing`
-      (earnings has no matching unique constraint — the parser was
-      silently rolling back the whole transaction).
-  (c) PAT/REF/MGMT defined ONCE at the top. Mid-script declarations
-      removed.
-  (d) Verification block at the END — queries actual row counts after
-      writes and prints them with expected values. If recs_on_penny=0
-      after a run, you know the inserts failed BEFORE looking elsewhere.
-
-  Seed Money Flow Test Data.command (hardened)
-
-3. ANIMATION v6 — User vs Connector table + 7% accumulator
-
-Per Tarik: "perhaps have a table with a summary of earnings and
-different benefits per user class. The estimated 1-10K is an estimate.
-Perhaps we say thousands of $$ worth (tens of free services). Show 3
-bookings 100 200 100 and user making 7 14 7 (so 28/250 etc). The 7% is
-strong and confusing — dim that. Normal users get 250 credit, not cash."
-
-Two scenes, no fluff:
-
-  01 BENEFITS TABLE       Side-by-side comparison (Connector leads):
-                            • per friend: $250 cash | $250 credit
-                            • free services: thousands of $$ (tens/mo) | —
-                            • spotlight income: yes | —
-                            • GPI: higher score | yes
-
-  02 THE MATH             Three bookings ($100 / $200 / $100) → 7% slices
-                          ($7 / $14 / $7) → running accumulator ($7 → $21
-                          → $28 / $250). 7% pills rendered SOFT (mint
-                          green on light) — the mechanism, not the
-                          headline. Footer punchline: "50 × $250 = $12,500".
-
-  src/lib/rewards.js
-    • New REWARD_COPY.barterSoft = "thousands of $$ in free services
-      (tens per month)" — softer language for everyday surfaces; the
-      precise $1K-$10K range stays available for high-intent surfaces.
-
-  src/components/ui/RewardFlowAnimation.jsx (full v6 rewrite)
-    • 2 STEPS (down from 3)
-    • PhaseBadge primitive + new table layout primitives
-    • Auto-advance 8s per scene (was 7s in v5)
+The example computes both numbers from REWARDS so they can never drift.
 
   src/screens/EarnExplainerScreen.jsx
-    • Lede updated: "What you earn as a User vs a Connector — and how the
-      math adds up."
+    • Header comment rewritten to spell out the 10%-platform-fee /
+      7%-referrer-share split
+    • Three copy blocks updated (intro paragraph, "The model" step 3,
+      example block) — all now distinguish Cergio's 10% fee from the
+      7% shared with the inviter
+    • Both example dollar amounts computed from REWARDS (no hardcoded $)
+    • 6-month-of-invite window made explicit in step 3
+
+2. ANIMATION v7 — readable 3-scene list, all 5 ways to earn
+
+v6's User-vs-Connector table had 8px font that Tarik flat-out couldn't
+read on mobile. Plus he flagged: "it's more than 2 ways to earn"
+(inviting, recommending, spotlights, free services, GPI). v7 throws
+the cramped table out and uses a bullet LIST with proper 13px headlines
++ 10px subtitles per row.
+
+  Scene 01 — WAYS TO EARN  Five rows, each with bullet + amount + tier tag:
+    • Invite friends            $250/friend                  [Both]
+    • Recommend services        same $250 stream             [Both]
+    • Friend-of-friend bonus    +$12.50 each                 [Both]
+    • Free services (barter)    thousands of $$ (tens/mo)    [Connector only]
+    • Spotlight income          IG / TikTok payouts          [Connector only]
+    + Header strip: "Growth Participation Income on every dollar earned"
+
+  Scene 02 — $250 MATH      Top strip explains: "Cergio's fee on every
+                            booking: 10% · → 7% goes to YOU (the
+                            inviter / recommender)". Then 3 example
+                            bookings ($100/$200/$100) → 7% slices
+                            ($7/$14/$7) into the running $28/$250
+                            accumulator. Footer: "Only bookings within
+                            6 months of the invite count."
+
+  Scene 03 — SCALE + GPI    Big hero card: "50 friends × $250 = $12,500".
+                            Plus a GPI strip explaining "on every dollar —
+                            your share of Cergio's growth." Tagline:
+                            "Human-Powered AI · Shared Prosperity".
+
+Auto-advance 8s/scene. Stage bumped 240 → 260 so the 5-row list breathes.
+
+  src/components/ui/RewardFlowAnimation.jsx (v7 full rewrite)
+    • 3 scenes (was 2), each properly sized for readability
+    • Pill primitive with palette (green/soft/amber/gray/dark)
+    • Scene 1 list pattern: colored dot + 13px headline + 10.5px
+      sub-amount + tier pill aligned right
+    • Scene 2 top strip cleanly distinguishes 10% vs 7%
+    • Scene 3 hero is the $12,500 punchline + dedicated GPI strip
 
   scripts/qa.mjs #31
-    • Locked: exactly 2 phases (01, 02)
-    • Locked: Scene 1 references BOTH perFriendConnector + perFriendUser
-    • Locked: cash + credit distinction surfaced in Scene 1
-    • Locked: Scene 2 uses referrerSharePercent + friendCapWindowMonths
-    • Locked: footer references exampleFriends + exampleTotal
-    • Locked: animation uses REWARD_COPY.barterSoft (not precise range)
-
-4. COPY — "joins" → "joins + books"
-
-ResultsScreen empty-state share card was telling users they earn $250
-"when any friend joins" — wrong; friend has to BOOK for accrual to
-start. Updated.
-
-  src/screens/ResultsScreen.jsx
-    • "when any friend joins" → "when a friend joins + books"
+    • Updated for 3-phase model
+    • Asserts both platformFeePercent + referrerSharePercent referenced
+      (catches a hardcoded-7% regression at the gate)
+    • Asserts "Connector only" tag present + Spotlight + barter + GPI
+      copy all rendered
 
 QA: 39/39 pass.
 
-NEXT-RUN ACTIONS FOR TARIK (in order):
-  1. Double-click "Seed Money Flow Test Data.command" — wipes the 3
-     duplicate Pennys, re-seeds cleanly, prints verification counts
-  2. If counts look wrong, double-click "Diagnose Money Flow.command"
-     and paste the output back to Claude
-  3. Refresh the running app at localhost:5173
-  4. Profile → How earnings work → animation v6 (2 scenes, table first)
-
 Files:
-  Diagnose Money Flow.command          (new — DB state diagnostic)
-  Seed Money Flow Test Data.command    (idempotent + verified + loud)
-  src/lib/rewards.js                   (+REWARD_COPY.barterSoft)
-  src/components/ui/RewardFlowAnimation.jsx  (v6 — table + math)
-  src/screens/EarnExplainerScreen.jsx  (lede copy)
-  src/screens/ResultsScreen.jsx        (joins → joins + books)
-  scripts/qa.mjs                       (#31 — 2 scenes + cash/credit + barterSoft locks)
+  src/screens/EarnExplainerScreen.jsx          (10% / 7% split spelled out)
+  src/components/ui/RewardFlowAnimation.jsx     (v7 — readable list + 3 scenes)
+  scripts/qa.mjs                                (#31 — 3 scenes + fee/share split locks)
