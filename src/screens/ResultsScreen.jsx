@@ -64,6 +64,40 @@ const MIN_LOADING_MS = 9000;
 const SAMPLE_FRIEND_NAMES   = ['Jessica', 'Sam', 'Alex', 'Connie', 'Jamie'];
 const SAMPLE_PROVIDER_NAMES = ['Maria', 'Henry', 'Penny', 'Sofia'];
 
+// CERGIO-GUARD (2026-05-30): unified share-message builder.
+// Two places (header share button + empty-state share card) were
+// building the same kind of "Hey — anyone know a good X" sentence
+// with slightly different glue, and the result read awkwardly:
+//   OLD: "Hey — anyone know a good house cleaner — This week, in
+//         5700 Collins Ave, Miami Beach, FL 33140, USA?"
+// Now consolidated into one helper that produces:
+//   NEW: "Hey — anyone know a good house cleaner? Need one this week
+//         in 5700 Collins Ave. Budget around $50.
+//         Booking on Cergio → <inviterUrl>"
+// Notes:
+//   • Address is truncated to its first comma segment so the message
+//     doesn't drown in "ZIP, USA" noise — recipients only need the
+//     neighbourhood-level marker
+//   • Budget is ALWAYS included when set (prior version skipped it
+//     if its text appeared anywhere in the user's query — which was
+//     too aggressive and dropped real budget signals)
+//   • when reads naturally without "for" — "this week", "tomorrow",
+//     "ASAP" all sit cleanly after "Need one"
+function buildShareMessage({ lead, when, where, budget, details, inviterUrl }) {
+  const shortAddr = where
+    ? where.split(',')[0].trim() || where
+    : null;
+  const parts = [`Hey — anyone know a good ${lead}?`];
+  const middle = [];
+  if (when)      middle.push(when);
+  if (shortAddr) middle.push(`in ${shortAddr}`);
+  if (middle.length) parts.push(`Need one ${middle.join(' ')}.`);
+  if (budget)  parts.push(`Budget around ${budget}.`);
+  if (details) parts.push(`${details}.`);
+  if (inviterUrl) parts.push(`Booking on Cergio → ${inviterUrl}`);
+  return parts.join(' ');
+}
+
 function buildStatusSteps(providerType, opts = {}) {
   // opts.friend = display_name of a real recommender if we have one
   // opts.provider = display_name of the recommended service title
@@ -635,17 +669,11 @@ export function ResultsScreen() {
           onClick={async () => {
             // CERGIO-GUARD: header share button — Web Share API first,
             // clipboard fallback. Includes the inviter's tracked URL so
-            // the friend's signup + first booking credits this user
-            // (see buildInviteUrl).
+            // the friend's signup + first booking credits this user.
+            // 2026-05-30: smoother grammar — see buildShareMessage above.
             const lead = (userQuery || userNoun || 'a service').toString().trim()
               .replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '');
-            const tail = [
-              when   && when,
-              where  && `in ${where}`,
-              budget && `max ${budget}`,
-            ].filter(Boolean);
-            const ctx = tail.length ? ` — ${tail.join(', ')}` : '';
-            const msg = `Hey — anyone know a good ${lead}${ctx}? Booking on Cergio → ${inviterUrl}`;
+            const msg = buildShareMessage({ lead, when, where, budget, inviterUrl });
             try {
               if (navigator.share) {
                 await navigator.share({ text: msg, title: 'Cergio request', url: inviterUrl });
@@ -886,17 +914,12 @@ export function ResultsScreen() {
         const lead = shareAction
           ? `${nounSingular} to ${shareAction}`
           : nounSingular;
-        const base = (userQuery || lead).toString();
-        const tail = [];
-        if (when   && !inText(when,   base)) tail.push(when);
-        if (where  && !inText(where,  base)) tail.push(`in ${where}`);
-        if (budget && !inText(budget, base)) tail.push(`max ${budget}`);
-        if (details && !inText(details, base)) tail.push(details);
-        const ctx     = tail.length ? ` — ${tail.join(', ')}` : '';
-        // CERGIO-GUARD: every share message MUST end with the inviter's
-        // tracked URL so the recipient's signup → first booking credits
-        // the user. Without this the chain breaks and they earn nothing.
-        const shareMsg = `Hey — anyone know a good ${lead}${ctx}? Booking on Cergio → ${inviterUrl}`;
+        // CERGIO-GUARD (2026-05-30): unified share-message builder.
+        // Smoother grammar than the prior em-dash-joined tail —
+        // "Need one this week in 5700 Collins Ave. Budget around $50."
+        // Always ends with inviter's tracked URL so the recipient's
+        // signup → first booking credits the user.
+        const shareMsg = buildShareMessage({ lead, when, where, budget, details, inviterUrl });
 
         const doNativeShare = async () => {
           try {

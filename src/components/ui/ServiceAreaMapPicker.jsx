@@ -23,38 +23,48 @@
 // First & last coordinate are equal (closed ring) per GeoJSON spec.
 import { useEffect, useRef, useState } from 'react';
 
-// CERGIO-GUARD (2026-05-30): dynamic import of @googlemaps/js-api-loader
-// so the rest of the app keeps running if the dep isn't installed yet
-// (Vite's static-import-analysis would otherwise crash the whole SPA
-// on first load when node_modules is stale). The map picker just
-// shows a friendly error in that case; nothing else breaks.
+// CERGIO-GUARD (2026-05-30): plain <script> tag loader for Google Maps
+// JS API. We previously used @googlemaps/js-api-loader but Vite's
+// import-analysis kept crashing the whole app when the package wasn't
+// installed (the /* @vite-ignore */ pragma is honored in production
+// builds but not in dev's import-analysis pass). The script-tag
+// approach has zero npm dependencies — Google's loader resolves +
+// caches itself, and Vite has nothing to analyze.
 let _loaderPromise = null;
-async function ensureGoogleMaps(apiKey) {
+function ensureGoogleMaps(apiKey) {
   if (_loaderPromise) return _loaderPromise;
-  _loaderPromise = (async () => {
-    // CERGIO-GUARD (2026-05-30): the /* @vite-ignore */ pragma tells
-    // Vite's import-analysis pass to skip resolving this module at
-    // build/dev-server start. Without it, Vite STILL tries to resolve
-    // even dynamic imports of literal strings — crashing the whole
-    // app when the package isn't installed. With the pragma, the
-    // resolve happens at runtime, only when the picker actually mounts.
-    let Loader;
-    try {
-      const mod = await import(/* @vite-ignore */ '@googlemaps/js-api-loader');
-      Loader = mod.Loader;
-    } catch (e) {
-      throw new Error(
-        '@googlemaps/js-api-loader is not installed. Run `npm install` in cergio-app.'
-      );
+  _loaderPromise = new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      reject(new Error('Google Maps requires a browser environment.'));
+      return;
     }
-    const loader = new Loader({
-      apiKey,
-      version: 'weekly',
-      libraries: ['geometry'], // for area calculations later
+    if (window.google?.maps?.Map) {
+      resolve(window.google);
+      return;
+    }
+    const callbackName = `__cergioGoogleMapsReady_${Math.random().toString(36).slice(2)}`;
+    window[callbackName] = () => {
+      delete window[callbackName];
+      if (window.google?.maps?.Map) resolve(window.google);
+      else reject(new Error('Google Maps loaded but window.google.maps.Map is missing.'));
+    };
+    const script = document.createElement('script');
+    const params = new URLSearchParams({
+      key:       apiKey,
+      libraries: 'geometry',
+      callback:  callbackName,
+      loading:   'async',
+      v:         'weekly',
     });
-    await loader.importLibrary('maps');
-    return window.google;
-  })();
+    script.src   = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+      delete window[callbackName];
+      reject(new Error('Failed to load Google Maps. Check the API key, referrer restrictions, and that Maps JavaScript API is enabled.'));
+    };
+    document.head.appendChild(script);
+  });
   return _loaderPromise;
 }
 
