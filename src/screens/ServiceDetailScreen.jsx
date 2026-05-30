@@ -188,32 +188,36 @@ export function ServiceDetailScreen() {
     return () => { cancelled = true; };
   }, [seeded, serviceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bucketed reco summary — matches ProviderCard's format:
-  //   "Recommended by Alex Tester, 1 other friend and 1 Connector"
-  // Lead anchor = first non-Connector recommender's name.
+  // Bucketed reco summary — Jennifer Leighton mockup format:
+  //   "Go-to service for 15 users, 4 friends and 30 experts, including Jennifer Connery"
+  // - users     = total recommenders (the headline number)
+  // - friends   = !is_connector
+  // - experts   = is_connector (Connectors are now "experts" in copy)
+  // - lead name = first friend (preferred) or first Connector
+  // Returns a structured object so the render can style the numbers as
+  // underlined chips per the mockup.
   const recoSummary = useMemo(() => {
     const total = recommenders.length;
     if (total === 0) return null;
     const friends    = recommenders.filter(r => !r.is_connector);
-    const connectors = recommenders.filter(r =>  r.is_connector);
-    const parts = [];
-    const lead = friends[0]?.name || connectors[0]?.name;
-    if (friends.length > 0 && friends[0]?.name) {
-      parts.push(friends[0].name);
-      const other = friends.length - 1;
-      if (other > 0) parts.push(`${other} other ${other === 1 ? 'friend' : 'friends'}`);
-    } else if (connectors.length > 0 && !lead) {
-      // edge case — handled below
-    }
-    if (connectors.length > 0) {
-      parts.push(`${connectors.length} ${connectors.length === 1 ? 'Connector' : 'Connectors'}`);
-    }
-    if (parts.length === 0) return `Recommended by ${total} ${total === 1 ? 'person' : 'people'}`;
-    const last = parts.pop();
-    return parts.length > 0
-      ? `Recommended by ${parts.join(', ')} and ${last}`
-      : `Recommended by ${last}`;
+    const experts    = recommenders.filter(r =>  r.is_connector);
+    const lead       = friends[0] || experts[0] || null;
+    return {
+      total,
+      friends:    friends.length,
+      experts:    experts.length,
+      leadName:   lead?.name || null,
+      leadAvatar: lead,
+    };
   }, [recommenders]);
+
+  // Free-for-GOATs detection — any offering at $0 means this service is
+  // a Connector-perk listing and we surface the green pill alongside
+  // the Housekeeper badge.
+  const hasFreeOffering = useMemo(
+    () => (offerings || []).some(o => (o.price_cents ?? 0) === 0),
+    [offerings]
+  );
 
   if (loading || !provider) {
     return (
@@ -224,41 +228,16 @@ export function ServiceDetailScreen() {
   }
 
   const coverFallback = 'bg-gradient-to-br from-[#e8dcc8] via-[#b89870] to-[#604030]';
+  const firstName = (ownerProfile?.display_name || provider.name).split(' ')[0];
+  const selectedOffering = (offerings || []).find(o => o.id === selectedOfferingId) || offerings?.[0] || null;
+  const selectedPrice = selectedOffering ? Math.round((selectedOffering.price_cents ?? 0) / 100) : provider.price;
 
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-32">
-      {/* Header */}
-      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-        <button
-          onClick={() => navigate(-1)}
-          aria-label="Back"
-          className="w-9 h-9 rounded-full bg-white border border-bdr flex items-center justify-center text-black text-[18px]"
-        >
-          ←
-        </button>
-        <button
-          onClick={async () => {
-            const url = typeof window !== 'undefined' ? window.location.href : '';
-            try {
-              if (navigator.share) {
-                await navigator.share({ title: provider.name, text: `${provider.name} on Cergio`, url });
-                return;
-              }
-            } catch { return; }
-            try {
-              await navigator.clipboard.writeText(url);
-              showToast?.('Link copied');
-            } catch { showToast?.('Share unavailable'); }
-          }}
-          aria-label="Share"
-          className="w-9 h-9 rounded-full bg-white border border-bdr flex items-center justify-center text-black"
-        >
-          🔗
-        </button>
-      </div>
-
-      {/* Cover */}
-      <div className={`mx-5 h-[200px] rounded-[18px] overflow-hidden relative ${provider.coverUrl ? 'bg-bg5' : coverFallback}`}>
+      {/* Story-progress banner — mockup ref: dim image w/ tagline +
+          7 progress dots up top + mute icon. Tap = back, for now (no
+          actual stories engine yet — this is the UI shell). */}
+      <div className={`relative h-[120px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : coverFallback}`}>
         {provider.coverUrl && (
           <img
             src={provider.coverUrl}
@@ -268,137 +247,178 @@ export function ServiceDetailScreen() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/45" />
+        {/* Progress dots (7-segment ruler, all uniform — decorative shell) */}
+        <div className="absolute top-3 left-4 right-4 flex items-center gap-1.5">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex-1 h-[2.5px] bg-white/55 rounded-full" />
+          ))}
+        </div>
+        {/* Mute (decorative — story engine TODO) */}
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Close"
+          className="absolute top-7 left-3 w-8 h-8 rounded-full bg-black/45 backdrop-blur-sm
+                     text-white text-[14px] flex items-center justify-center"
+        >
+          ×
+        </button>
+        <button
+          aria-label="Mute"
+          className="absolute top-7 right-3 w-8 h-8 rounded-full bg-black/45 backdrop-blur-sm
+                     text-white text-[12px] flex items-center justify-center"
+        >
+          🔇
+        </button>
+        <p className="absolute bottom-3 left-4 right-4 text-white text-[12.5px] font-bold drop-shadow">
+          Running all the errands you need
+        </p>
       </div>
 
-      {/* Provider profile — avatar + name + role + Connector badge.
-          Matches the Jennifer Leighton reference in the Figma. */}
-      <div className="px-5 pt-4">
-        <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
-                          text-white text-[18px] font-extrabold flex items-center justify-center flex-shrink-0
-                          ring-2 ring-white shadow-sm">
-            {initialsOf(ownerProfile?.display_name || provider.name)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[20px] font-extrabold text-black leading-tight truncate">
-              {ownerProfile?.display_name || provider.name}
-            </h1>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <span className="text-[12px] text-b3 font-medium">{provider.category}</span>
-              {ownerProfile?.cc_verified_at && (
-                <span className="bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold">
-                  Connector ✓
-                </span>
-              )}
-            </div>
-          </div>
+      {/* Big name + badges row — matches Jennifer Leighton mockup */}
+      <div className="px-5 pt-5">
+        <h1 className="text-[28px] font-extrabold text-black leading-[1.05]">
+          {ownerProfile?.display_name || provider.name}
+        </h1>
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
+              <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
+              <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            </svg>
+            {provider.category}
+          </span>
+          {hasFreeOffering && (
+            <span className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
+                <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
+              </svg>
+              Free for GOATs
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Reco line — "Go-to service for N users, F friends and E experts,
+          including {LeadName}" with single lead-recommender avatar pinned
+          right. Replaces the multi-avatar stack as the headline anchor.
+          Counts are underlined to feel tappable (taps to a future
+          "who recommended" sheet — TODO). */}
+      {recoSummary && (
+        <div className="mx-5 mt-4 pt-4 border-t border-bdr">
+          <div className="flex items-center gap-3">
+            <p className="flex-1 text-[13.5px] text-b2 leading-snug">
+              Go-to service for{' '}
+              <span className="text-gd font-extrabold underline">
+                {recoSummary.total} {recoSummary.total === 1 ? 'user' : 'users'}
+              </span>
+              {recoSummary.friends > 0 && (
+                <>
+                  ,{' '}
+                  <span className="text-gd font-extrabold underline">
+                    {recoSummary.friends} {recoSummary.friends === 1 ? 'friend' : 'friends'}
+                  </span>
+                </>
+              )}
+              {recoSummary.experts > 0 && (
+                <>
+                  {' '}and{' '}
+                  <span className="text-gd font-extrabold underline">
+                    {recoSummary.experts} {recoSummary.experts === 1 ? 'expert' : 'experts'}
+                  </span>
+                </>
+              )}
+              {recoSummary.leadName && (
+                <>, including <span className="text-gd font-extrabold underline">{recoSummary.leadName}</span></>
+              )}
+            </p>
+            {recoSummary.leadAvatar && (
+              <div className={`w-12 h-12 rounded-full text-white text-[14px] font-extrabold
+                               flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
+                               ${AV_GRADS[0]}`}>
+                {initialsOf(recoSummary.leadAvatar.name)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Book section title — uses owner's first name like "Book Jennifer" */}
-      <div className="px-5 pt-5 pb-2">
-        <h2 className="text-[17px] font-extrabold text-black leading-tight">
-          Book {(ownerProfile?.display_name || provider.name).split(' ')[0]}
+      <div className="px-5 pt-5 pb-3 border-t border-bdr mt-5">
+        <h2 className="text-[20px] font-extrabold text-black leading-tight">
+          Book {firstName}
         </h2>
-        <p className="text-[11.5px] text-b3 font-medium mt-1">Select a service offering below to book</p>
+        <p className="text-[12.5px] text-b3 font-medium mt-1.5 flex items-center gap-1">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-b3 text-b3 text-[9px] font-bold">i</span>
+          Select a service offering below to book
+        </p>
       </div>
 
-      {/* Offering cards — Apartment Clean / Linen Clean style stack.
-          Each card: name + description + price + selected ring. Tapping
-          a card sets selectedOfferingId so the bottom Book CTA books
-          THAT offering specifically. */}
-      <div className="px-5 flex flex-col gap-2.5">
-        {(offerings || []).map((o) => {
-          const isSel = o.id === selectedOfferingId;
-          const priceDollars = Math.round((o.price_cents ?? 0) / 100);
-          return (
-            <button
-              key={o.id}
-              type="button"
-              onClick={() => setSelectedOfferingId(o.id)}
-              className={`w-full rounded-[14px] p-3.5 text-left transition-colors
-                          ${isSel
-                            ? 'bg-gl border-2 border-g shadow-sm'
-                            : 'bg-white border border-bdr hover:bg-bg5/30'}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className={`text-[14px] font-extrabold leading-tight ${isSel ? 'text-gd' : 'text-black'}`}>
-                    {o.name || 'Service offering'}
+      {/* Offering cards — HORIZONTAL scroll per mockup (Apartment Clean
+          full-width, Linen Re... peek). Selected card has green border
+          and pale-green fill. */}
+      <div className="pl-5 -mr-2 overflow-x-auto overflow-y-hidden">
+        <div className="flex gap-3 pr-5 snap-x snap-mandatory">
+          {(offerings || []).map((o) => {
+            const isSel = o.id === selectedOfferingId;
+            const priceDollars = Math.round((o.price_cents ?? 0) / 100);
+            const isFree = (o.price_cents ?? 0) === 0;
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => setSelectedOfferingId(o.id)}
+                className={`snap-start text-left rounded-[18px] p-4 flex-shrink-0
+                            w-[78%] min-h-[140px] transition-all
+                            ${isSel
+                              ? 'bg-gl border-2 border-g shadow-sm'
+                              : 'bg-white border border-bdr'}`}
+              >
+                <p className="text-[18px] font-extrabold text-black leading-tight">
+                  {o.name || 'Service offering'}
+                </p>
+                {isFree ? (
+                  <p className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold mt-1.5">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
+                      <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
+                    </svg>
+                    Free for GOATs
                   </p>
-                  {o.description && (
-                    <p className="text-[11.5px] text-b3 leading-snug mt-1">{o.description}</p>
-                  )}
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-[15px] font-extrabold text-black leading-none">${priceDollars}</p>
-                  {o.duration_minutes && (
-                    <p className="text-[10px] text-b3 font-medium mt-1">{o.duration_minutes}m</p>
-                  )}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-        {(!offerings || offerings.length === 0) && (
-          <div className="bg-bg5 rounded-[14px] p-3 text-center text-[11.5px] text-b3 font-medium">
-            No offerings listed yet — book this provider to request a custom quote.
-          </div>
-        )}
-      </div>
-
-      {/* Recommended by — avatar stack */}
-      {recommenders.length > 0 ? (
-        <div className="mx-5 mt-5 bg-white rounded-[18px] border border-bdr p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <AvatarStack recommenders={recommenders} />
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-extrabold text-black leading-tight">{recoSummary}</p>
-              <p className="text-[11px] text-b3 mt-0.5">{recommenders.length} recommendation{recommenders.length === 1 ? '' : 's'}</p>
+                ) : (
+                  <p className="text-[15px] font-extrabold text-black mt-1.5">${priceDollars}</p>
+                )}
+                {o.description && (
+                  <p className="text-[12.5px] text-b3 leading-snug mt-2">{o.description}</p>
+                )}
+              </button>
+            );
+          })}
+          {(!offerings || offerings.length === 0) && (
+            <div className="bg-bg5 rounded-[18px] p-4 text-center text-[12px] text-b3 font-medium w-[78%] flex-shrink-0">
+              No offerings listed yet — book this provider to request a custom quote.
             </div>
-          </div>
-          {/* Top 3 blurbs as italic quote rows */}
-          <div className="flex flex-col gap-2.5">
-            {recommenders.slice(0, 3).map((r) => (
-              <div key={r.id} className="flex gap-2.5">
-                <div className={`w-7 h-7 rounded-full text-white text-[10px] font-extrabold flex-shrink-0
-                                 flex items-center justify-center
-                                 ${AV_GRADS[(recommenders.indexOf(r)) % AV_GRADS.length]}`}>
-                  {initialsOf(r.name)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] text-b2 leading-snug">
-                    <span className="font-extrabold text-black">{r.name}:</span>{' '}
-                    <span className="italic">"{r.message}"</span>
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
-      ) : (
-        <div className="mx-5 mt-5 bg-bg5 rounded-[18px] p-4 text-center">
-          <p className="text-[12px] text-b3 font-medium leading-snug">
-            No mutual friends yet — be the first to try and recommend.
-          </p>
-        </div>
-      )}
+      </div>
 
-      {/* About this service */}
-      {provider.bio && (
-        <div className="mx-5 mt-5">
-          <h2 className="text-[15px] font-extrabold text-black mb-2">About this service</h2>
-          <p className="text-[13px] text-b2 leading-relaxed">{provider.bio}</p>
-        </div>
-      )}
+      {/* "Don't see what you need?" cream callout — per mockup */}
+      <div className="mx-5 mt-5 bg-gl rounded-[14px] p-3.5 text-center">
+        <p className="text-[12.5px] text-b2 font-medium leading-snug">
+          Don't see what you need?{' '}
+          <button
+            onClick={() => navigate('/home')}
+            className="text-gd font-extrabold underline"
+          >
+            Submit a request for a custom quote.
+          </button>
+        </p>
+      </div>
 
-      {/* About the provider — owner's own bio, IG/TikTok handles */}
+      {/* About the provider — owner's own bio (mockup shows this below
+          the offering cards, before the sticky CTA). */}
       {(ownerProfile?.bio || ownerProfile?.instagram_handle || ownerProfile?.tiktok_handle) && (
-        <div className="mx-5 mt-5">
-          <h2 className="text-[15px] font-extrabold text-black mb-2">
-            About {(ownerProfile?.display_name || provider.name).split(' ')[0]}
-          </h2>
+        <div className="mx-5 mt-6">
+          <h2 className="text-[20px] font-extrabold text-black mb-2">About the provider</h2>
           {ownerProfile?.bio && (
             <p className="text-[13px] text-b2 leading-relaxed">{ownerProfile.bio}</p>
           )}
@@ -415,27 +435,45 @@ export function ServiceDetailScreen() {
         </div>
       )}
 
-      {/* Fixed-bottom Book CTA — pulls the selected offering's price so
-          the user sees what they're booking. Falls back to provider.price
-          when no offerings exist. */}
+      {/* Recommender blurbs — kept but moved BELOW About so the headline
+          area stays clean per mockup. Hidden if no recommenders. */}
+      {recommenders.length > 0 && (
+        <div className="mx-5 mt-6">
+          <h2 className="text-[17px] font-extrabold text-black mb-3">What people say</h2>
+          <div className="flex flex-col gap-3">
+            {recommenders.slice(0, 3).map((r, i) => (
+              <div key={r.id} className="flex gap-2.5">
+                <div className={`w-8 h-8 rounded-full text-white text-[11px] font-extrabold flex-shrink-0
+                                 flex items-center justify-center ${AV_GRADS[i % AV_GRADS.length]}`}>
+                  {initialsOf(r.name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-b2 leading-snug">
+                    <span className="font-extrabold text-black">{r.name}{r.is_connector ? ' · Expert' : ''}:</span>{' '}
+                    <span className="italic">"{r.message}"</span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Fixed-bottom CTA — "Request {OfferingName} ($X)" per mockup,
+          with "You won't be charged yet" microcopy. */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-cream border-t border-bdr px-5 pt-3 pb-5 z-10">
         <button
           onClick={() => {
-            const sel = offerings.find(o => o.id === selectedOfferingId) || offerings[0];
-            handleBook(sel
-              ? { ...provider, offeringId: sel.id, priceCents: sel.price_cents, price: Math.round((sel.price_cents ?? 0) / 100) }
+            handleBook(selectedOffering
+              ? { ...provider, offeringId: selectedOffering.id, priceCents: selectedOffering.price_cents, price: selectedPrice }
               : provider);
           }}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[16px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
                      hover:opacity-90 active:scale-[.98] transition-all"
         >
-          {(() => {
-            const sel = offerings.find(o => o.id === selectedOfferingId) || offerings[0];
-            const selPrice = sel ? Math.round((sel.price_cents ?? 0) / 100) : provider.price;
-            const firstName = (ownerProfile?.display_name || provider.name).split(' ')[0];
-            return `Book ${firstName} · $${selPrice} ↗`;
-          })()}
+          {`Request ${selectedOffering?.name || provider.name} ($${selectedPrice})`}
         </button>
+        <p className="text-center text-[11.5px] text-b3 font-medium mt-2">You won't be charged yet</p>
       </div>
     </div>
   );

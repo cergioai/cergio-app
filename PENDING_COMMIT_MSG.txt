@@ -1,35 +1,59 @@
-Add /logo-lab — 6 mascot-palette logo candidates for picking
+PDP rebuild — Jennifer Leighton mockup match
 
-Tarik uploaded the Jennifer Leighton PDP mockup. The mascot is an orange
-goat icon sitting on a bright Romio-green disc with a cream backdrop.
-He wants the animated brand mark re-skinned with that palette, in MIXED
-color dominances, so he can pick one final winner. Fixed + pulsating
-shown side-by-side so it's clear how the mark feels at rest AND alive.
+Brings the consumer service-profile screen up to the Figma reference
+Tarik uploaded. Old PDP had the right bones (selectable offerings,
+avatar stack, About section, sticky CTA) but the wrong RHYTHM — the
+mockup leads with name + badges + reco-line + "Book {Name}", not with
+a cover image and a small owner-avatar row.
 
-Built as a self-contained /logo-lab screen — does NOT touch LeafLogo
-yet. Once Tarik picks a winner, we port that single candidate back
-into LeafLogo.jsx and flip LOGO_VARIANT.
+Changes:
 
-Six candidates × 2 states each:
+(1) STORY-PROGRESS BANNER
+Top now shows a dim cover image (or gradient fallback) at 120px with:
+  • 7 uniform progress dots across the top (decorative shell — no
+    story engine yet)
+  • Close × top-left (acts as back)
+  • Mute 🔇 top-right (decorative)
+  • Tagline bottom-left: "Running all the errands you need"
 
-  C1 · Rings    Green-dominant · peach final ring
-  C2 · Rings    Peach core · green expanding rings
-  C3 · Bud      Green petals · peach heart
-  C4 · Bud      Peach petals (alternating) · green heart
-  C5 · Pollen   Green core · mixed peach/green/cream seeds
-  C6 · Pollen   Peach core · green seeds · cream halo
+(2) BIG NAME + BADGES ROW
+  • h1 at 28px / extrabold — provider's display_name
+  • Row of two pills: ✓ {Category} (green check) and 🛡️ Free for GOATs
+    (green shield) — the GOAT badge surfaces when any offering has
+    price_cents=0
+  • Connector ✓ chip moved off (the GOAT pill carries the same intent
+    for end-users; provider Connector status is implicit in eligibility)
 
-Mascot palette sampled from the mockup:
-  greenDeep  #2C5D21    greenCore  #3FA821    greenSoft  #9BD96B
-  peach      #F4A06A    peachDeep  #E67A3C    peachSoft  #FBCBA6
-  cream      #FFF6E0
+(3) RECO LINE — "Go-to service for N users, F friends and E experts,
+    including {LeadName}"
+Replaces the bulky avatar-stack headline. New format:
+  "Go-to service for 15 users, 4 friends and 30 experts, including
+   Jennifer Connery"  + lead-recommender avatar pinned right
+Counts are underlined green (look tappable — future "who recommended"
+sheet TODO). Connectors → "experts" in this copy per mockup.
 
-Reuses existing index.css keyframes (cg-rings-core, cg-bud-bloom,
-cg-pollen-core, cg-pollen-s1..s6) so the pulsating animations match
-exactly what ships sitewide.
+(4) HORIZONTAL-SCROLL OFFERING CARDS
+Was vertical stack. Now horizontal swipe — first card visible, next
+peeks. Snap-mandatory so each card locks in view. Cards now show
+"Free for GOATs" pill when price_cents=0 (instead of "$0").
 
-QA: 41/41 pass.
+(5) CREAM "CUSTOM QUOTE" CALLOUT
+New strip under the offering cards:
+  "Don't see what you need? Submit a request for a custom quote."
+Routes to /home (the chat) so the user can describe a custom job.
+
+(6) STICKY CTA REWORDED
+Was: "Book {firstName} · $X ↗"
+Now: "Request {OfferingName} ($X)"   +   "You won't be charged yet"
+Matches the mockup's commitment-light copy — request, not book yet.
+
+(7) WHAT PEOPLE SAY moved BELOW About
+Recommender quote blurbs are still there but no longer compete with
+the headline reco line. Sit under About the provider as social proof.
+
+Touched: src/screens/ServiceDetailScreen.jsx only.
+
+QA: 41/41 pass. #38 (recommender stack + onOpen routing) still green.
 
 Files:
-  src/screens/LogoLabScreen.jsx (new)
-  src/App.jsx (route)
+  src/screens/ServiceDetailScreen.jsx
