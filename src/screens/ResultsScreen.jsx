@@ -44,31 +44,49 @@ import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivit
 // negotiating with Maria and Henry." Once we wire real recos and real
 // provider-negotiation pings, swap the SAMPLE_* arrays for real names
 // pulled from the recommendations + bids tables.
-const STATUS_STEP_MS = 2200;
+// CERGIO-GUARD (2026-05-30): per-step dwell shortened so the richer
+// 9-line narration plays through in the same ~10s window. Each "action"
+// dwells ~1.4s — fast enough to feel live, slow enough to read.
+const STATUS_STEP_MS = 1400;
 // Minimum total loading time — even if Supabase returns in 200ms, hold
-// the loading state so the narration plays through ALL four steps AND
-// the leaf logo has time to breathe through a full ring-pulse cycle
-// (2.4s per ring × 5 rings = ~12s, but we don't need to see them all —
-// 8s lets the user feel the rhythm without being annoying).
-const MIN_LOADING_MS = 8000;
+// the loading state so the narration plays through enough of the
+// activity script (now 9 steps × 1.4s ≈ 12.6s, but 9s is plenty to
+// hit the meatiest negotiating/offers beats) AND the leaf logo has
+// time to breathe through a full ring-pulse cycle.
+const MIN_LOADING_MS = 9000;
 
 // Sample names for the narration when no recommenders are seeded for
 // the searched provider type. Once the seed has real friend + provider
 // names on Penny, the narration uses those instead (Alex's reco Penny).
-const SAMPLE_FRIEND_NAMES   = ['Alex', 'Sam', 'Connie', 'Jamie'];
-const SAMPLE_PROVIDER_NAMES = ['Penny', 'Maria', 'Henry', 'Sofia'];
+// CERGIO-GUARD (2026-05-30): expanded so the script can name TWO
+// friends + THREE providers across the sequence (Jessica asked → Maria
+// pinged → Sam reco'd → Henry pinged → both negotiating → both offer).
+const SAMPLE_FRIEND_NAMES   = ['Jessica', 'Sam', 'Alex', 'Connie', 'Jamie'];
+const SAMPLE_PROVIDER_NAMES = ['Maria', 'Henry', 'Penny', 'Sofia'];
 
 function buildStatusSteps(providerType, opts = {}) {
   // opts.friend = display_name of a real recommender if we have one
   // opts.provider = display_name of the recommended service title
+  // CERGIO-GUARD (2026-05-30): narration now plays as a sequence of
+  // DIFFERENT actions — ping → ask → suggest → schedule → reco →
+  // negotiate → offer → confirm. Each line is a distinct "event"
+  // rather than four flavors of "still searching". Tarik: "add
+  // different animated actions in this stream (pinging Jessica's
+  // friend...)". Drives perceived activity even when DB is mid-write.
   const plural = providerType ? `${providerType.toLowerCase()}s` : 'providers';
-  const friend = opts.friend || SAMPLE_FRIEND_NAMES[0];
+  const f1     = opts.friend || SAMPLE_FRIEND_NAMES[0];
+  const f2     = SAMPLE_FRIEND_NAMES[1];
   const pA     = opts.provider || SAMPLE_PROVIDER_NAMES[0];
   const pB     = SAMPLE_PROVIDER_NAMES[1];
   return [
     `Pinging your network`,
-    `Found ${friend}'s reco — ${pA}`,
+    `Asking ${f1} if she knows a ${providerType ? providerType.toLowerCase() : 'pro'}`,
+    `${f1} suggested ${pA} — pinging ${pA}`,
+    `${pA} checking her schedule`,
+    `${f2} recommended ${pB} — pinging ${pB}`,
+    `${pB} reviewing your request`,
     `Negotiating with ${pA} and ${pB}`,
+    `${pA} sent an offer`,
     `Confirming offers`,
   ];
 }

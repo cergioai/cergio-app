@@ -1,109 +1,71 @@
-Header cleanup: drop "Cergio AI" wordmark + big logo by status + travel-radius below box + forward-request fix + bolder logo
+Fix: chat quick-reply pills sync + richer search-status narration
 
-Five UX fixes from Tarik's live test run:
+Two fixes bundled:
 
-1. HEADER WORDMARK DROPPED — leaf moves to the loading status
+(1) QUICK-REPLY PILLS NOW MATCH THE CURRENT QUESTION
+Tarik tested: chat asked "What's your budget?" but the visible pills
+were still "Today / Tomorrow / Flexible" from the previous turn.
+Tapping "Today" auto-submitted the search with NO budget captured —
+the user couldn't enter $50 before the search fired.
 
-The "[leaf] CERGIO AI" lockup in the ResultsScreen header AND the
-small leaf next to "Hi Tarik, tell me what you need" on HomeScreen
-both removed. The brand mark now lives where the eye actually lands
-during search: as a big 56px leaf inline with the status ticker
-("Pinging your network… [breathing leaf]"). Header rows are bare —
-just back + share. Less chrome, more focus.
+Root cause: chat code blindly forwarded `res.quick_replies` from the
+Claude parser. The parser sometimes returned stale time-related pills
+while we were locally asking about budget. Tap → submit → search
+fires with the wrong field filled.
 
-  src/screens/ResultsScreen.jsx
-    • Header: [LeafLogo + "CERGIO AI"] → flex-1 spacer
-    • Loading block: LeafLogo size 16 → 56, layout switched to
-      flex-start with 12px gap so the leaf is the visual anchor
+Fix: each reply branch now carries its OWN step-specific QR pills.
+The visible pills ALWAYS match the active question:
 
-  src/screens/HomeScreen.jsx
-    • Pre-submit headline: LeafLogo deleted from the row
-    • Post-submit streaming status: LeafLogo size 16 → 56,
-      headline text bumped 13→14px bold, narration sub bumped
-      next to the leaf
+  Step                            Quick-reply pills
+  ──────────────────────────────  ───────────────────────────────────
+  "What service do you need?"     Plumber / House cleaner /
+                                  Babysitter / Tutor
+  "When do you need this?"        ASAP / Today / Tomorrow /
+                                  This week / Flexible
+  "Where should …?"               (none — needs typed address)
+  "What's your budget?"           $50 / $100 / $200 / $500 / Flexible
+  "Got it — finding matches"      (none)
 
-2. SPOTLIGHT TRAVEL-RADIUS — moved below the search box
+Fallback: when stepQR is empty AND the cloud returned its own pills,
+we still use res.quick_replies (e.g. "Where" step can show region
+suggestions if the parser provides them).
 
-Tarik: "move the location of the service side down below as well."
-The "Willing to travel: On-site only / 5 mi / 10 mi / 25 mi /
-Anywhere" pills used to sit ABOVE the search box. Now they sit BELOW
-it, in the same location strip zone as the find-side "Searching
-near …" copy. Mirrored layout, same scan path.
+  src/hooks/useChat.js
+    • Each reply gate branch carries a `stepQR` array
+    • setQR(stepQR.length > 0 ? stepQR : res.quick_replies || [])
 
-  src/screens/HomeScreen.jsx
-    • Spotlight travel-radius block lifted to the location strip
-    • Old above-the-box block replaced with a CERGIO-GUARD comment
+(2) SEARCH-STATUS STREAM NOW NARRATES DIFFERENT ACTIONS
+Old narration only had 4 lines and felt like four flavors of
+"still searching". Tarik: "add different animated actions in this
+stream (pinging Jessica's friend... Pinging your network…)".
 
-3. LOGO ANIMATION — bolder, core breathes too
+New script plays as a sequence of DISTINCT events — ping → ask →
+suggest → schedule → reco → ping again → negotiate → offer → confirm:
 
-The Growth Rings variant was too quiet at small render sizes:
-  • Ring count 4 → 5 (more density mid-pulse)
-  • Stroke widths 2 → 4 / 3.5 / 3 / 2.5 / 2 (boldest ring leads)
-  • Ring max radius 50-58 → 56 (uniform big-sweep)
-  • Cycle 3s → 2.4s (faster cadence)
-  • Opacity now stays 0.9 → 0.6 most of the cycle, then falls 0
-    via keyTimes — so rings are visible LONGER mid-flight
-  • NEW: core breathes (scale 1 → 1.08 → 1) via cg-rings-core class
-    during working. The mark feels alive, not static-with-rings.
+  Pinging your network
+  Asking Jessica if she knows a plumber
+  Jessica suggested Maria — pinging Maria
+  Maria checking her schedule
+  Sam recommended Henry — pinging Henry
+  Henry reviewing your request
+  Negotiating with Maria and Henry
+  Maria sent an offer
+  Confirming offers
 
-  src/components/ui/LeafLogo.jsx
-    • GrowthRings: 5 rings + cgRingsCore class
-  src/index.css
-    • @keyframes cgRingsCore — gentle 1.0 → 1.08 → 1.0 scale
+Per-step dwell shortened 2200ms → 1400ms so more events play in the
+~9s loading window. MIN_LOADING_MS bumped 8000 → 9000 to cover.
 
-4. ?logo=<variant> URL OVERRIDE
-
-To A/B the variants live without code edits — just change the URL:
-  localhost:5173/?logo=rings   → B · Growth rings
-  localhost:5173/?logo=bud     → C · Bud bloom
-  localhost:5173/?logo=pollen  → D · Pollen pulse
-  localhost:5173/?logo=sprout  → A · original sprout
-Fall-back is LOGO_VARIANT constant (currently 'rings').
-
-  src/components/ui/LeafLogo.jsx
-    • getActiveVariant() reads URLSearchParams; gates on MARKS_KEYS
-
-5. SLOWED + PERSONALIZED LOADING STATUS
-
-  STATUS_STEP_MS 1500 → 2200    (each step lingers ~50% longer)
-  MIN_LOADING_MS 4500 → 8000    (full leaf cycle visible)
-
-  Status ticker copy tightened:
-    "Pinging your network"
-    "Found Alex's reco — Penny"
-    "Negotiating with Penny and Henry"
-    "Confirming offers"
+SAMPLE_FRIEND_NAMES expanded (Jessica + Sam lead the script) and
+SAMPLE_PROVIDER_NAMES re-ordered (Maria + Henry lead) to match the
+canonical "Jessica suggested Maria / Sam recommended Henry" narrative.
 
   src/screens/ResultsScreen.jsx
-    • buildStatusSteps reduced word count + accepts opts.{friend,provider}
-      so real recommender names can flow through
-
-6. "SEND TO FRIENDS" FORWARDS REQUEST (not opens recommend form)
-
-Tarik's screenshot: empty SRP → "Send to friends" → was landing on
-the "Recommend a this service / Pick the service type, write a quick
-review" screen. WRONG flow — the user wanted to forward THEIR
-request, not pivot into a recommend-a-service form.
-
-Fix: route changed from /invite/friends?mode=reco to /invite/friends
-(plain invite mode). The prefilledMessage from ResultsScreen
-("Hey — anyone know a good plumber…") now flows through
-InviteFriendsScreen → InviteSelectedReviewScreen as the note body
-when in invite mode.
-
-  src/screens/ResultsScreen.jsx
-    • Renamed goReco → goForwardRequest; route mode=reco → invite
-  src/screens/InviteFriendsScreen.jsx
-    • Reads location.state.prefilledMessage; forwards to /invite/review
-  src/screens/InviteSelectedReviewScreen.jsx
-    • seedReview uses prefilledMessage when invite mode + provided
+    • buildStatusSteps → 9 distinct action lines
+    • STATUS_STEP_MS 2200 → 1400
+    • MIN_LOADING_MS 8000 → 9000
 
 QA: 41/41 pass.
 
 Files:
-  src/screens/ResultsScreen.jsx              (header + status + reco→invite)
-  src/screens/HomeScreen.jsx                 (pre-submit leaf + spotlight pills)
-  src/screens/InviteFriendsScreen.jsx        (prefilledMessage forward)
-  src/screens/InviteSelectedReviewScreen.jsx (use prefilledMessage as seed)
-  src/components/ui/LeafLogo.jsx             (?logo=, bolder rings, core breath)
-  src/index.css                              (cgRingsCore keyframe)
+  src/hooks/useChat.js
+  src/screens/ResultsScreen.jsx

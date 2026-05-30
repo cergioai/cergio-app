@@ -613,20 +613,35 @@ export function useChat() {
     // never want to block the search on an optional number.
     const budgetRaw = String(merged.budget || '').trim().toLowerCase();
     const budgetSatisfied = !!budgetRaw && /\d|flex|any|none|no\s*max|skip/.test(budgetRaw);
-    let reply;
+    // CERGIO-GUARD (2026-05-30): each reply branch carries its OWN
+    // quick-reply pills so the visible options always match the
+    // current question. Previously we used res.quick_replies blindly
+    // — the cloud parser sometimes returned stale time pills while we
+    // were locally asking about budget, so tapping "today" would
+    // submit the search with no budget captured. Step-specific QR
+    // fixes that.
+    let reply, stepQR;
     if (!whatKnown) {
       reply = "What service do you need? (e.g. plumber, sitter, cleaner, tutor…)";
+      stepQR = ['Plumber', 'House cleaner', 'Babysitter', 'Tutor'];
     } else if (!whenSatisfied) {
       reply = "When do you need this? A date, time window, or just \"flexible\" works.";
+      stepQR = ['ASAP', 'Today', 'Tomorrow', 'This week', 'Flexible'];
     } else if (!merged.where) {
       reply = "Where should the provider come to? An address or area is fine.";
+      stepQR = []; // address answers should be typed/picked, not chip-tapped
     } else if (!budgetSatisfied) {
       reply = "What's your budget? A max $ amount, or just \"flexible\" works.";
+      stepQR = ['$50', '$100', '$200', '$500', 'Flexible'];
     } else {
       reply = "Got it — finding your best matches now.";
+      stepQR = [];
     }
     addMsg(reply, 'bot');
-    setQR(Array.isArray(res.quick_replies) ? res.quick_replies : []);
+    // Prefer step-specific pills; only fall back to the cloud parser's
+    // quick_replies when the current step has none of its own AND the
+    // cloud actually returned something useful.
+    setQR(stepQR.length > 0 ? stepQR : (Array.isArray(res.quick_replies) ? res.quick_replies : []));
     setLastBot(reply);
 
     if (res.switch_to_form) setNeedsForm(true);
