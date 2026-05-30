@@ -1,49 +1,47 @@
-Maps via <script>, smoother share message, drop @googlemaps npm dep
+Chunk A: tiny share msg, organic logo, IG link distinct from location
 
-Bundled fixes — both blocking Tarik's testing session.
+(1) SHARE MESSAGE → ONE-LINE
+Tarik: "abbreviate or just keep initial few lines. no address (the
+recipient will see all but user forwarding doesn't)". Trimmed to:
 
-(1) MAPS LOADER → <script> TAG (no npm dep)
-Vite's dev-mode import-analysis ignores the /* @vite-ignore */ pragma
-on dynamic imports. Tarik hit the same "Failed to resolve" overlay
-twice after I patched it. Real fix: stop importing the npm package
-entirely. Inject a <script src="https://maps.googleapis.com/maps/
-api/js?..."> on demand from a module-level promise. Zero npm
-dependency — Google's loader resolves + caches itself, Vite has
-nothing to analyze. Removed @googlemaps/js-api-loader from
-package.json. Reinstall Deps and Start.command is no longer needed
-for the map to work (still useful for any future dep adds).
+  "Hey — anyone know a good house cleaner?
+   → http://localhost:5173/?ref=…"
 
-(2) SHARE MESSAGE GRAMMAR
-Tarik flagged the share text from the empty state read awkward:
-  OLD:
-    "Hey — anyone know a good house cleaner — This week, in 5700
-     Collins Ave, Miami Beach, FL 33140, USA? Booking on Cergio →
-     <url>"
-  NEW:
-    "Hey — anyone know a good house cleaner? Need one this week in
-     5700 Collins Ave. Budget around $50. Booking on Cergio →
-     <url>"
+Was previously a 3-line block w/ when + address + budget. The
+forwarded text was too intrusive in iMessage / WhatsApp threads. The
+recipient still sees full context on the linked page — no info lost.
 
-Two locations were building this string with slightly different glue
-(header share button + empty-state share card). Consolidated into
-one module-level helper `buildShareMessage({lead, when, where,
-budget, details, inviterUrl})` so both surfaces stay in sync.
+buildShareMessage keeps the {when,where,budget,details} args in its
+signature so all call sites work unchanged; the args are now no-ops
+(void'd). Easy to re-include later if we want a flag.
 
-Specific changes inside the helper:
-  • Address truncated to first comma segment ("5700 Collins Ave"
-    not "5700 Collins Ave, Miami Beach, FL 33140, USA") — recipients
-    don't need ZIP+country noise
-  • Budget ALWAYS included when set. Prior code skipped budget if
-    its text appeared anywhere in user's query — too aggressive,
-    dropped real budget signals
-  • Sentence rhythm: "Hey — anyone know a good {X}?" / "Need one
-    {when} in {where}." / "Budget around {budget}." / link
-  • "Need one {when}" reads naturally without "for" — works for
-    "this week", "tomorrow", "ASAP", "Friday morning", etc.
+(2) ORGANIC LOGO — "looks plastic, make it organic even if imperfect"
+8 identical petals scaling in unison felt geometric. Rewrote BudBloom
+with hand-tuned asymmetry:
+  • Each petal: own rx (9–13), own ry (28–34), own opacity (0.78–0.95),
+    own slight rotation nudge off the 45° grid (1–4° wobble)
+  • Each petal animates INDEPENDENTLY with its own delay (0.00s–0.30s)
+    so the bloom opens petal-by-petal instead of as one sprite
+  • New keyframe cgBudPetal: scale 0.08 → 0.98 → 1.03 with a small
+    rotate(-2deg → 1.5deg) wobble each cycle so the silhouette never
+    lands in the exact same spot
+  • Heart pulses on its OWN slower 5s rhythm (cgBudHeart, 0.96–1.12),
+    offset from the 4s petal cycle — two breathing layers, not one
+  • Added pale-orange smear ellipse inside the heart for hand-painted
+    feel; replaces the flat #FFFFFF dot with FBCBA6/FFF combo
 
-QA: 41/41 pass.
+(3) IG SPOTLIGHT LINK — DISTINCT VISUAL LANE
+Was: same container as the location strip, slim grey text, easy to
+miss as "another bit of address metadata".
+Now: lifted OUTSIDE the location container, centered, with a subtle
+border-top divider above, and an Instagram glyph leading the text.
+Still slim — single line, no card, no big chrome — but it now sits in
+its OWN region so the eye can find it without it shouting.
 
 Files:
-  src/screens/ResultsScreen.jsx       (helper + two call sites)
-  src/components/ui/ServiceAreaMapPicker.jsx  (script-tag loader)
-  package.json                        (remove @googlemaps/js-api-loader)
+  src/screens/ResultsScreen.jsx       (share builder)
+  src/components/ui/LeafLogo.jsx      (organic petals + heart)
+  src/index.css                       (cgBudPetal + cgBudHeart)
+  src/screens/HomeScreen.jsx          (IG link lifted out)
+
+QA: 41/41 pass.

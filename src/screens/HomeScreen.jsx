@@ -1129,21 +1129,33 @@ export function HomeScreen() {
               )}
             </div>
 
-            {/* Direction switch — slim text link, right-aligned. Sits
-                directly below the location strip so both share visual
-                space below the search box without competing. */}
-            <div className="mt-1.5 flex justify-end px-1">
-              <button
-                type="button"
-                onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
-                className="text-[11px] text-b3 font-normal hover:text-g transition-colors"
-                aria-pressed={intent === 'spotlight'}
-              >
-                {intent === 'find'
-                  ? 'Have a service? Spotlight it free (IG/TT) →'
-                  : '← Book a service instead'}
-              </button>
-            </div>
+          </div>
+
+          {/* CERGIO-GUARD (2026-05-30): Direction switch lifted OUT of
+              the location strip's container so the IG/TT spotlight link
+              has its own visual lane and isn't mistaken for an address
+              caption. Now sits centered below, framed by a subtle
+              divider above + IG/TT mini icons left so it reads as a
+              "service-provider entry point" rather than "another bit
+              of location metadata". Still slim — not intrusive. */}
+          <div className="mt-3 pt-2 border-t border-bdr/60 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
+              className="inline-flex items-center gap-1.5 text-[11.5px] font-extrabold text-g hover:text-gd transition-colors"
+              aria-pressed={intent === 'spotlight'}
+            >
+              {intent === 'find' ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/>
+                  </svg>
+                  Have a service? Spotlight it free on IG / TikTok →
+                </>
+              ) : (
+                <>← Book a service instead</>
+              )}
+            </button>
           </div>
 
           {/* Example pills removed — examples now rotate INSIDE the

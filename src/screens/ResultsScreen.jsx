@@ -64,38 +64,30 @@ const MIN_LOADING_MS = 9000;
 const SAMPLE_FRIEND_NAMES   = ['Jessica', 'Sam', 'Alex', 'Connie', 'Jamie'];
 const SAMPLE_PROVIDER_NAMES = ['Maria', 'Henry', 'Penny', 'Sofia'];
 
-// CERGIO-GUARD (2026-05-30): unified share-message builder.
-// Two places (header share button + empty-state share card) were
-// building the same kind of "Hey — anyone know a good X" sentence
-// with slightly different glue, and the result read awkwardly:
-//   OLD: "Hey — anyone know a good house cleaner — This week, in
-//         5700 Collins Ave, Miami Beach, FL 33140, USA?"
-// Now consolidated into one helper that produces:
-//   NEW: "Hey — anyone know a good house cleaner? Need one this week
-//         in 5700 Collins Ave. Budget around $50.
-//         Booking on Cergio → <inviterUrl>"
-// Notes:
-//   • Address is truncated to its first comma segment so the message
-//     doesn't drown in "ZIP, USA" noise — recipients only need the
-//     neighbourhood-level marker
-//   • Budget is ALWAYS included when set (prior version skipped it
-//     if its text appeared anywhere in the user's query — which was
-//     too aggressive and dropped real budget signals)
-//   • when reads naturally without "for" — "this week", "tomorrow",
-//     "ASAP" all sit cleanly after "Need one"
+// CERGIO-GUARD (2026-05-30 v2): minimal share-message builder.
+// Tarik feedback v2: "abbreviate or just keep the initial few lines.
+// no address (the recipient will see all but user forwarding doesn't)".
+// Pure lead + tracked link. The recipient clicks the link and lands
+// on the SAME results page where they can see when, where, budget,
+// the share card itself, etc. — so we don't duplicate any of that in
+// the forwarded text. Keeps the message tiny + less intrusive.
+//
+// OLD:  "Hey — anyone know a good house cleaner? Need one this week
+//        in 5700 Collins Ave. Budget around $50.
+//        Booking on Cergio → <inviterUrl>"
+// NEW:  "Hey — anyone know a good house cleaner?
+//        → <inviterUrl>"
+//
+// The {when,where,budget,details} args are accepted (so call sites
+// don't need to change) but intentionally unused. Keep the signature
+// stable — if we ever want to optionally re-include them, the wiring
+// is already there.
 function buildShareMessage({ lead, when, where, budget, details, inviterUrl }) {
-  const shortAddr = where
-    ? where.split(',')[0].trim() || where
-    : null;
+  // eslint-disable-next-line no-unused-vars
+  void when; void where; void budget; void details;
   const parts = [`Hey — anyone know a good ${lead}?`];
-  const middle = [];
-  if (when)      middle.push(when);
-  if (shortAddr) middle.push(`in ${shortAddr}`);
-  if (middle.length) parts.push(`Need one ${middle.join(' ')}.`);
-  if (budget)  parts.push(`Budget around ${budget}.`);
-  if (details) parts.push(`${details}.`);
-  if (inviterUrl) parts.push(`Booking on Cergio → ${inviterUrl}`);
-  return parts.join(' ');
+  if (inviterUrl) parts.push(`→ ${inviterUrl}`);
+  return parts.join('\n');
 }
 
 function buildStatusSteps(providerType, opts = {}) {

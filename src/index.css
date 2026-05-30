@@ -252,18 +252,26 @@ body {
    The React component toggles className on/off; CSS keyframes here.
    Speed scales with --cg-leaf-speed (1 = calm, 0.55 = fast). */
 
-/* C · Bud bloom — 8-petal full-circle flower. Entire petal stack shrinks
-   to nearly nothing (scale 0.05) then blooms back to full size.
-   2026-05-30: Tarik wanted "shrink entire petal and open back up". The
-   peach heart in the center stays visible the whole time, so during
-   the shrink the mark reads as a single peach dot with a faint green
-   ring — then the petals burst outward. */
-@keyframes cgBudBloom {
-  0%, 100% { transform: scale(0.05); }
-  50%      { transform: scale(1); }
+/* C · Bud bloom — ORGANIC v2 (Tarik: "looks plastic — make it organic
+   even if imperfect"). Per-petal animation with slight rotation
+   wobble each cycle so the silhouette never lands in the exact same
+   spot. Heart pulses on its own slower 5s rhythm, offset from the
+   4s petal cycle so the two breathing layers don't sync. */
+@keyframes cgBudPetal {
+  0%, 100% { transform: scale(0.08) rotate(-2deg); }
+  45%      { transform: scale(0.98) rotate(1.5deg); }
+  55%      { transform: scale(1.03) rotate(-1deg); }
 }
-.cg-bud-bloom {
-  animation: cgBudBloom calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+.cg-bud-petal {
+  animation: cgBudPetal calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+}
+@keyframes cgBudHeart {
+  0%, 100% { transform: scale(1); }
+  40%      { transform: scale(1.12); }
+  60%      { transform: scale(0.96); }
+}
+.cg-bud-heart {
+  animation: cgBudHeart calc(5s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
 }
 
 /* D · Pollen pulse — central core breathes; 6 seeds drift on a 4s cycle */

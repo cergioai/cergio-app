@@ -109,52 +109,67 @@ function GrowthRings({ size, working }) {
   );
 }
 
-// ─── C · Bud bloom — full-circle 8-petal version (picked from /logo-lab) ──
-// 2026-05-30: Tarik picked C3 (green petals + peach heart). Changes from
-// the prior 4-petal version:
-//   • 8 petals at 45° spacing — reads as a full flower, not a cross
-//   • Petal stack scales 0.05 → 1.0 when WORKING — entire bud shrinks
-//     to nearly nothing, then blooms outward. Dramatic shrink-and-open
-//     instead of the prior 0.72 → 1.05 breath.
-//   • Petals slightly thinner (rx=11) so 8 around the disc look like a
-//     real flower instead of an overlapping mush
-//   • Colors track the mascot palette exactly: deepGreen #2C5D21 +
-//     coreGreen #3FA821, alternating
-//   • Peach heart #F4A06A with a small white dot inside, matches
-//     the goat-on-green mascot's warm center
+// ─── C · Bud bloom — ORGANIC v2 (Tarik 2026-05-30 "looks plastic") ──
+// Changes from the v1 8-identical-petal cross:
+//   • Each petal has its own slight size (rx 9–13, ry 28–34) so the
+//     silhouette isn't perfectly geometric. Real flowers wobble.
+//   • Each petal has its own bloom animation with its own delay —
+//     petals don't all open at the exact same instant. Reads alive.
+//   • Each petal nudges 1–4° off its grid rotation — visible asymmetry
+//     without breaking the radial flower feel
+//   • Per-petal opacity varies 0.78–0.95 so colors don't read flat
+//   • Heart pulses on a slower rhythm, slightly off-beat from the
+//     petals so the mark has two breathing layers, not one
+//   • Small organic blob overlay inside the heart (pale orange smear)
+//     adds hand-painted feel
 function BudBloom({ size, working }) {
-  const petalsClass = working ? 'cg-bud-bloom' : '';
-  const restScale   = 0.72;
-  // 8 petals around the bud — alternating deep / core green for depth.
+  const restScale = 0.72;
+  // 8 petals — hand-tuned variation. Don't replace these with a loop
+  // generator; the asymmetry is the point.
   const petals = [
-    { rot: 0,   fill: '#2C5D21' },
-    { rot: 45,  fill: '#3FA821' },
-    { rot: 90,  fill: '#2C5D21' },
-    { rot: 135, fill: '#3FA821' },
-    { rot: 180, fill: '#2C5D21' },
-    { rot: 225, fill: '#3FA821' },
-    { rot: 270, fill: '#2C5D21' },
-    { rot: 315, fill: '#3FA821' },
+    { rot:   2, rx: 11, ry: 32, fill: '#2C5D21', opacity: 0.92, delay: '0.00s' },
+    { rot:  43, rx: 10, ry: 30, fill: '#3FA821', opacity: 0.85, delay: '0.18s' },
+    { rot:  91, rx: 12, ry: 33, fill: '#1E4D00', opacity: 0.94, delay: '0.05s' },
+    { rot: 134, rx:  9, ry: 28, fill: '#3FA821', opacity: 0.80, delay: '0.25s' },
+    { rot: 181, rx: 13, ry: 34, fill: '#2C5D21', opacity: 0.95, delay: '0.10s' },
+    { rot: 224, rx: 10, ry: 29, fill: '#3FA821', opacity: 0.82, delay: '0.30s' },
+    { rot: 271, rx: 11, ry: 31, fill: '#2C5D21', opacity: 0.90, delay: '0.08s' },
+    { rot: 313, rx: 12, ry: 30, fill: '#3FA821', opacity: 0.78, delay: '0.22s' },
   ];
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g
-        className={petalsClass}
-        style={{ transformOrigin: '60px 60px', transformBox: 'view-box', transform: working ? undefined : `scale(${restScale})` }}
-      >
-        {petals.map((p, i) => (
+      {/* Each petal animates independently — staggered delays make the
+          bloom look like a real flower opening petal-by-petal rather
+          than as a single scaling sprite. */}
+      {petals.map((p, i) => (
+        <g
+          key={i}
+          className={working ? 'cg-bud-petal' : ''}
+          style={{
+            transformOrigin: '60px 60px',
+            transformBox: 'view-box',
+            animationDelay: working ? p.delay : undefined,
+            transform: working ? undefined : `scale(${restScale})`,
+          }}
+        >
           <ellipse
-            key={i}
-            cx="60" cy="36" rx="11" ry="32"
+            cx="60" cy="36" rx={p.rx} ry={p.ry}
             fill={p.fill}
-            opacity="0.92"
+            opacity={p.opacity}
             transform={`rotate(${p.rot} 60 60)`}
           />
-        ))}
+        </g>
+      ))}
+      {/* Heart — slightly off-center for organic feel, pulses on its
+          own slower rhythm. Pale orange blob smear inside for life. */}
+      <g
+        className={working ? 'cg-bud-heart' : ''}
+        style={{ transformOrigin: '60px 60px', transformBox: 'view-box' }}
+      >
+        <circle cx="60" cy="60" r="11" fill="#F4A06A" />
+        <ellipse cx="57" cy="58" rx="6" ry="4" fill="#FBCBA6" opacity="0.55" />
+        <circle cx="60" cy="60" r="3.5" fill="#FFFFFF" opacity="0.88" />
       </g>
-      {/* Peach heart — matches the mascot's warm center */}
-      <circle cx="60" cy="60" r="11" fill="#F4A06A" />
-      <circle cx="60" cy="60" r="4"  fill="#FFFFFF" opacity="0.85" />
     </svg>
   );
 }
