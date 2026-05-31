@@ -118,9 +118,27 @@ export function RecommendServiceFormScreen() {
 
   // ── Contact Picker API — Chrome Android + iOS PWA only. Pulls real
   // contacts into the autosuggest pool for the rest of the session.
+  // CERGIO-GUARD (2026-05-30): on platforms without
+  // navigator.contacts (every desktop browser), the button used to
+  // show a "not supported" toast and bail. Tarik: "connect on reco
+  // form still not connecting to contacts.. (seed with data..) so
+  // test reco's invites". New behaviour: when navigator.contacts
+  // isn't available, the Connect button promotes the seeded pool
+  // (real DB profiles + deterministic synthesized phone/email from
+  // listInvitableProfiles) into `synced` so the autosuggest is
+  // unambiguously primed + the "Connect" CTA disappears. End-to-end
+  // testable from any browser.
   const connectContacts = async () => {
     if (!supportsContactPicker) {
-      showToast("Contact picker isn't supported on this browser. Type a name to use Cergio's sample contacts.");
+      // Fall through to the seeded pool — populate `synced` so the
+      // Connect card disappears and the autosuggest is primed.
+      if (seededPool.length > 0) {
+        setSynced(seededPool);
+        showToast(`${seededPool.length} sample contacts loaded — start typing a name.`);
+        nameRef.current?.focus();
+      } else {
+        showToast('No contacts available yet. Try again in a moment.');
+      }
       return;
     }
     setSyncing(true);

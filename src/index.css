@@ -282,47 +282,55 @@ body {
    element, the second animation would simply override the first.
    Browser support: Chrome 104+, Safari 14.1+, Firefox 72+ — safe for
    our app. */
+/* v7 (2026-05-30) — ENERGETIC contract + expand. Tarik: "make
+   animation contract and expand in fun animation.. it's boring now..
+   make energetic". v6 was calm fluid drift; v7 keeps the layered
+   architecture but pumps the breath amplitude (0.78 ↔ 1.18) AND
+   speeds the tempos so the silhouette is constantly contracting +
+   expanding in a way that reads as PLAYFUL/energetic. Drift rotation
+   pumped from ±2.5° → ±8°. */
 @keyframes cgLeafBreathA {
   0%   { scale: 1.00; }
-  30%  { scale: 1.04; }
-  55%  { scale: 0.96; }
-  80%  { scale: 1.03; }
+  22%  { scale: 1.18; }
+  46%  { scale: 0.80; }
+  70%  { scale: 1.14; }
   100% { scale: 1.00; }
 }
 @keyframes cgLeafBreathB {
-  0%   { scale: 0.97; }
-  35%  { scale: 1.05; }
-  60%  { scale: 0.95; }
-  100% { scale: 0.97; }
+  0%   { scale: 0.85; }
+  28%  { scale: 1.18; }
+  58%  { scale: 0.78; }
+  100% { scale: 0.85; }
 }
 @keyframes cgLeafBreathC {
-  0%   { scale: 1.02; }
-  25%  { scale: 0.95; }
-  60%  { scale: 1.06; }
-  100% { scale: 1.02; }
+  0%   { scale: 1.12; }
+  20%  { scale: 0.82; }
+  55%  { scale: 1.18; }
+  82%  { scale: 0.86; }
+  100% { scale: 1.12; }
 }
 @keyframes cgLeafBreathD {
-  0%   { scale: 0.96; }
-  45%  { scale: 1.04; }
-  75%  { scale: 0.98; }
-  100% { scale: 0.96; }
+  0%   { scale: 0.82; }
+  38%  { scale: 1.16; }
+  72%  { scale: 0.88; }
+  100% { scale: 0.82; }
 }
 
-/* Sub-pixel drift + rotation drift in TWO separate properties so they
-   compose with the scale breath above. Magnitudes kept tiny so the
-   silhouette stays coherent. */
+/* Energetic drift — bigger rotation swings, mid-pixel translates so
+   the leaves nod + sway with more attitude. Still kept the silhouette
+   coherent so the flower doesn't fall apart. */
 @keyframes cgLeafDrift {
-  0%   { translate: 0 0;        rotate: 0deg; }
-  25%  { translate: 0.8px -1px; rotate: -2deg; }
-  50%  { translate: -1px 0.6px; rotate: 1deg; }
-  75%  { translate: 0.4px 0.9px; rotate: -1deg; }
-  100% { translate: 0 0;        rotate: 0deg; }
+  0%   { translate: 0 0;          rotate: 0deg; }
+  22%  { translate: 1.6px -2px;   rotate: -7deg; }
+  48%  { translate: -1.8px 1.2px; rotate: 5deg; }
+  74%  { translate: 0.8px 1.8px;  rotate: -3deg; }
+  100% { translate: 0 0;          rotate: 0deg; }
 }
 @keyframes cgLeafDriftB {
   0%   { translate: 0 0;          rotate: 0deg; }
-  30%  { translate: -0.9px 0.7px; rotate: 2deg; }
-  55%  { translate: 0.6px -1px;   rotate: -1.5deg; }
-  80%  { translate: -0.5px -0.4px; rotate: 2.5deg; }
+  28%  { translate: -1.7px 1.4px; rotate: 8deg; }
+  52%  { translate: 1.2px -2px;   rotate: -6deg; }
+  78%  { translate: -0.9px -0.8px; rotate: 4deg; }
   100% { translate: 0 0;          rotate: 0deg; }
 }
 
@@ -337,33 +345,37 @@ body {
    (cubic-bezier(.34,1.56,.64,1) overshoots, which read as a
    bounce/pop in v4 — wrong for "fluid".) */
 
+/* v7: tempos tightened — breath cycles now 2.3–3.7s (was 3.7–5.7s),
+   drifts 3.1–4.7s (was 4.7–6.7s). cubic-bezier (.42,0,.58,1) sym
+   ease so the contract-expand reads as a confident PUMP instead of
+   a soft drift. Coprime still preserved. */
 .cg-leaf-1 {
-  animation: cgLeafBreathA calc(4.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite,
-             cgLeafDrift   calc(6.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite;
+  animation: cgLeafBreathA calc(2.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite,
+             cgLeafDrift   calc(3.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite;
 }
 .cg-leaf-2 {
-  animation: cgLeafBreathB calc(5.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.4s,
-             cgLeafDriftB  calc(6.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -1.2s;
+  animation: cgLeafBreathB calc(3.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -0.4s,
+             cgLeafDriftB  calc(4.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -1.2s;
 }
 .cg-leaf-3 {
-  animation: cgLeafBreathC calc(4.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.9s,
-             cgLeafDrift   calc(5.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -2.1s;
+  animation: cgLeafBreathC calc(2.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -0.9s,
+             cgLeafDrift   calc(3.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -2.1s;
 }
 .cg-leaf-4 {
-  animation: cgLeafBreathD calc(3.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.2s,
-             cgLeafDriftB  calc(5.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.6s;
+  animation: cgLeafBreathD calc(2.5s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -0.2s,
+             cgLeafDriftB  calc(3.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -0.6s;
 }
 .cg-leaf-5 {
-  animation: cgLeafBreathA calc(4.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -1.4s,
-             cgLeafDrift   calc(6.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -3s;
+  animation: cgLeafBreathA calc(2.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -1.4s,
+             cgLeafDrift   calc(4.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -2.8s;
 }
 .cg-leaf-6 {
-  animation: cgLeafBreathB calc(4.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.7s,
-             cgLeafDriftB  calc(5.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -2.4s;
+  animation: cgLeafBreathB calc(2.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -0.7s,
+             cgLeafDriftB  calc(3.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -2.4s;
 }
 .cg-leaf-7 {
-  animation: cgLeafBreathC calc(5.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.3s,
-             cgLeafDrift   calc(4.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -1.7s;
+  animation: cgLeafBreathC calc(3.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -0.3s,
+             cgLeafDrift   calc(3.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.42,0,.58,1) infinite -1.7s;
 }
 
 /* CERGIO-GUARD (2026-05-30 v6 — "super fun clever playful random
@@ -388,7 +400,9 @@ body {
   100% { rotate: 360deg; }
 }
 .cg-bud-spin {
-  animation: cgBudSpin calc(24s * var(--cg-leaf-speed, 1)) linear infinite;
+  /* v7: 24s → 12s — twice as fast so the whole-mark spin reads
+     within the contract/expand cycle, not as ambient drift. */
+  animation: cgBudSpin calc(12s * var(--cg-leaf-speed, 1)) linear infinite;
   transform-origin: 60px 60px;
   transform-box: view-box;
 }
@@ -397,7 +411,9 @@ body {
   100% { rotate: -360deg; }
 }
 .cg-bud-heart-spin {
-  animation: cgBudHeartSpin calc(38s * var(--cg-leaf-speed, 1)) linear infinite;
+  /* v7: 38s → 18s — heart counter-spin faster too so the two spins
+     visibly disagree even at a glance. */
+  animation: cgBudHeartSpin calc(18s * var(--cg-leaf-speed, 1)) linear infinite;
   transform-origin: 60px 60px;
   transform-box: view-box;
 }

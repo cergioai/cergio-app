@@ -237,6 +237,43 @@ export function ServiceDetailScreen() {
     [offerings]
   );
 
+  // CERGIO-GUARD (2026-05-30): for any FREE offering on this service,
+  // we render the "comparable paid price" struck through next to a
+  // big FREE label — Tarik: "for free for connectors... show the
+  // official price but crossed out and show free instead". Reference
+  // price priority:
+  //   1. Highest-priced sibling paid offering on the SAME service
+  //      (this captures "the same provider's normal rate").
+  //   2. Category-based fallback (median market rate per provider
+  //      type) when this service only lists the free perk.
+  const COMPARABLE_FALLBACK_CENTS = {
+    Cleaning:           16000,
+    Driving:             8000,
+    Childcare:           7500,
+    'Personal Driver':   8000,
+    'House Cleaner':    16000,
+    Babysitter:          7500,
+    Plumbing:           18000,
+    Electrician:        18000,
+    Handyman:           12000,
+    'Personal Trainer': 10000,
+    Hairstylist:         9000,
+    'Massage Therapist':12000,
+    Photography:        25000,
+    'Personal Chef':    15000,
+    'Dog Walker':        4000,
+    Gardener:            8500,
+    Mover:              15000,
+  };
+  const comparablePaidCents = useMemo(() => {
+    const paid = (offerings || []).filter(o => (o.price_cents ?? 0) > 0);
+    if (paid.length > 0) {
+      return Math.max(...paid.map(o => o.price_cents));
+    }
+    const key = provider?.taxonomy_provider_type || provider?.category || '';
+    return COMPARABLE_FALLBACK_CENTS[key] || null;
+  }, [offerings, provider]);
+
   if (loading || !provider) {
     return (
       <div className="flex-1 flex flex-col bg-cream items-center justify-center pb-24">
@@ -500,19 +537,30 @@ export function ServiceDetailScreen() {
                   {o.name || 'Service offering'}
                 </p>
                 {isFree ? (
-                  // CERGIO-GUARD (2026-05-30): explicit flex + self-start
-                  // so the "Free for Connectors" badge is unambiguously
-                  // left-aligned inside the offering card (Tarik:
-                  // "left allign free for connector"). `inline-flex`
-                  // worked in theory but on some browser/font combos the
-                  // block context collapsed and the badge drifted toward
-                  // center; this anchors it left for good.
-                  <p className="flex items-center justify-start gap-1.5 text-[13px] text-gd font-extrabold mt-1.5 self-start text-left">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
-                      <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-                    </svg>
-                    Free for Connectors
-                  </p>
+                  // CERGIO-GUARD (2026-05-30 v2): show the comparable
+                  // paid price struck through next to a big FREE label
+                  // — Tarik: "for free for connectors... show the
+                  // official price but crossed out and show free
+                  // instead". Reference price comes from the
+                  // comparablePaidCents memo above (max sibling paid
+                  // offering on this service, or category fallback).
+                  // Layout is left-anchored (justify-start +
+                  // self-start) so it lines up under the offering
+                  // name.
+                  <div className="mt-1.5 flex items-center justify-start gap-2 self-start text-left flex-wrap">
+                    {comparablePaidCents != null && (
+                      <span className="text-[15px] text-b3 font-medium line-through">
+                        ${Math.round(comparablePaidCents / 100)}
+                      </span>
+                    )}
+                    <span className="text-[18px] text-g font-extrabold leading-none">FREE</span>
+                    <span className="inline-flex items-center gap-1 text-[11.5px] text-gd font-extrabold">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
+                        <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
+                      </svg>
+                      for Connectors
+                    </span>
+                  </div>
                 ) : (
                   <p className="mt-1.5 leading-tight">
                     <span className="text-[15px] text-g font-extrabold">

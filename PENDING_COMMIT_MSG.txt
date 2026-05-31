@@ -1,71 +1,55 @@
-design: fluid v6 logo motion + home/PDP polish + booking demo + share icon
+design: crossed-out "FREE" price, energetic v7 logo, dedupe Pick tag, fix Reco Connect
 
-Logo motion v6 — Claude-style super-fun fluid morph (LeafLogo.jsx + index.css)
+PDP — free offering shows $X crossed out + big FREE
+  Tarik: "for free for connectors... show the official price but
+  crossed out and show free instead".
+  Free offering card now renders:
+    [ ~~$160~~  FREE  🛡 for Connectors ]
+  Reference price priority:
+    1. Highest-priced sibling paid offering on the SAME service
+       (captures "the same provider's normal rate").
+    2. Category-based fallback table (House Cleaner $160, Personal
+       Driver $80, Babysitter $75, etc.) when this service only
+       lists the free perk.
+  Layout is left-anchored (justify-start + self-start) so the strike-
+  through price sits under the offering name and lines up clean.
 
-  Tarik (across two messages): "try to copy the motion of Claude's logo
-  when animated.. make it infinitely more fluid... playful random" →
-  "animate logo on search with super fun clever playful random
-  patterns.. borrow from Claude's logo".
+Logo motion v7 — ENERGETIC contract + expand (LeafLogo.jsx + index.css)
+  Tarik: "make animation contract and expand in fun animation.. it's
+  boring now.. make energetic".
+  v6 was calm/fluid drift — leaves never got below scale 0.94 and
+  rotation stayed within ±2.5°. v7 keeps the layered architecture
+  (breath + drift + shimmer + slow spin) but pumps the amplitudes
+  AND tightens the tempos so the silhouette is in CONSTANT PUMP:
+    • Breath: scale 0.78 ↔ 1.18 (was 0.94 ↔ 1.06) — true contract
+      + expand
+    • Drift rotation: ±8° (was ±2.5°) — leaves nod with attitude
+    • Drift translate: ±2px (was ±1px)
+    • Per-leaf breath tempo 2.1–3.7s (was 3.7–5.7s)
+    • Per-leaf drift tempo 3.1–4.3s (was 4.7–6.7s)
+    • Whole-mark spin 12s (was 24s)
+    • Heart counter-spin 18s (was 38s)
+    • Easing cubic-bezier(.42,0,.58,1) — symmetric ease IN-OUT for a
+      confident PUMP feel (was .5,0,.5,1 for a soft drift)
+  Result reads as a playful, breathing flower that's clearly "doing
+  something", not gently floating. Still all coprime tempos so no
+  cycle repeats.
 
-  Three independent layers now compose every cycle, all on coprime
-  tempos so the silhouette never matches itself:
+ProviderCard — duplicate "Cergio Pick" tag removed
+  Tarik: "remove one of the cergio's pick's tags... its duplicated".
+  Cards rendered the green pill twice when `pick` was true (photo
+  top-right overlay + pill above the name). Dropped the in-content
+  pill; the photo overlay reads as the canonical Featured badge.
 
-  Layer 1 — per-leaf BREATH + DRIFT (kept from v5)
-    Continuous scale (0.94 ↔ 1.06) + sub-pixel translate (±1px) +
-    rotation sway (±2.5°). Composed via the CSS Transforms Module
-    Level 2 individual props (`scale`, `translate`, `rotate`) so
-    they STACK instead of overriding each other. 4 breath templates
-    × 2 drift templates × 7 jittered phase offsets.
-
-  Layer 2 — WHOLE-MARK SLOW SPIN (new in v6)
-    Outer wrapper rotates the entire flower around (60,60) on a 24s
-    revolution. Heart counter-rotates on 38s. The two coprime spins
-    make the geometry continuously evolve even when the per-leaf
-    transforms are mid-pose.
-
-  Layer 3 — PER-LEAF SHIMMER (new in v6)
-    Each leaf's opacity flickers 0.72 ↔ 1.0 ↔ 0.86 on its own
-    coprime 5-9s rhythm. Light catches one petal at a time and
-    ripples around the flower — Claude's "thinking sparkle" tell.
-    Composed via the `opacity` property so it doesn't fight the
-    breath/drift transforms.
-
-  Heart pulse upgraded to a 5-step fluid path on 7.3s using the same
-  individual-property approach so the center breathes with the same
-  character as the leaves.
-
-  All animation only fires when `working` is true. At rest the flower
-  is the still full-round bloom from v5.
-
-Home — logo inline + aligned to greeting
-  - Tarik: "move logo to next to 'hi tarik' on the homepage" → then
-    "allign logo to Hi tarik better".
-  - Reverted v5's stacked layout (which applied to Splash + Auth
-    only). Home is inline at size 40 with `self-center` so the leaf
-    rides the same vertical center as the headline. Splash + Auth
-    keep the top-stacked treatment.
-
-PDP — Free for Connectors anchored left
-  - Tarik: "left allign free for connector".
-  - Offering-card badge: `flex justify-start self-start text-left`
-    so it's unambiguously left even when its parent's text context
-    shifts. Header badges row gets explicit `justify-start` too.
-
-Booking — Stripe-not-configured no longer dead-ends
-  - Tarik: "offerings on the services should be clickable (and when
-    selected... together with book, it goes to CC form and confirm
-    (currently disabled)".
-  - When createPaymentIntent fails in test mode, the flow now falls
-    through to confirm the booking + navigate to /booking + show a
-    sticky toast ("Booked (demo mode — no card charged). Finish
-    Stripe setup to take live payments."). Real payments still go
-    through the PaymentSheet path when Stripe is configured.
-
-Results — share icon matches PDP
-  - Tarik: "make the share on the homepage results... same as share
-    icon on the services pic on profile".
-  - Replaced 🔗 emoji with the same upload-arrow SVG used on the PDP
-    hero share button. Same brand affordance now reads consistently
-    across surfaces.
+Reco form — Connect button now actually connects
+  Tarik: "connect on reco form still not connecting to contacts.. (seed
+  with data...)... so test reco's invites.. (test rigourously first)".
+  The Connect button used to toast "Contact picker isn't supported on
+  this browser" on desktop and bail. Now when navigator.contacts is
+  unavailable, the button promotes the seeded pool (real DB profiles
+  + deterministic synthesized phone/email from listInvitableProfiles)
+  into `synced` — autosuggest is primed, the Connect card disappears,
+  and the user gets confirmation toast ("N sample contacts loaded —
+  start typing a name"). End-to-end testable from any browser.
 
 Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.

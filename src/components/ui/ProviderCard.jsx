@@ -188,15 +188,12 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
 
       {/* ── CONTENT ── */}
       <div className="px-4 pt-3 pb-1">
-        {/* Cergio Pick label above name */}
-        {pick && (
-          <div className="mb-1.5">
-            <span className="inline-block bg-g text-white text-[10px] font-bold
-                             uppercase tracking-wide px-2.5 py-0.5 rounded-pill">
-              Cergio Pick
-            </span>
-          </div>
-        )}
+        {/* CERGIO-GUARD (2026-05-30): the "Cergio Pick" label above the
+            name was a DUPLICATE of the green pill anchored top-right
+            on the photo above (the same `pick` flag rendered both).
+            Removed per Tarik: "remove one of the cergio's pick's tags
+            ... its duplicated". The photo overlay stays — it's more
+            visible and reads as a Featured badge over the cover. */}
 
         {/* ROW 1 — Name · Recos */}
         <div className="flex justify-between items-baseline mb-1">
