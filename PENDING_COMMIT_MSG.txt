@@ -1,39 +1,26 @@
-Rename GOAT → Connector across user-visible UI + seed
+Spotlight area row: single line, Draw + On-site only (drop radius pills)
 
-Tarik: "change goat to connector". Consistent product terminology
-across all surfaces. The internal Connector tier was being labeled
-"GOAT" in a few spots inherited from the original mockup vocabulary
-— that's now harmonized.
+Tarik: "for the service booking connectors side, remove the radius..
+just keep draw on services area (and on-site only option)... perhaps
+all on one line".
 
-UI copy:
-  ServiceDetailScreen.jsx
-    "Free for GOATs"  →  "Free for Connectors"  (x2 — pill + offering)
+Was: two-row block with a wide "Draw your service area" button on top
+and an "Or quick-pick: [On-site only] [5 mi] [10 mi] [25 mi] [Anywhere]"
+pill row below.
 
-  ActivityScreen.jsx
-    "GOATs have shared their go-to services on Cergio"
-      → "Connectors have shared their go-to services on Cergio"
-    "#cergiogoats"  →  "#cergioconnectors"
-    "Shared by {name}, GOAT"  →  "Shared by {name}, Connector"
+Now: ONE horizontal row with two pill-shaped buttons:
+  • "Draw service area"  (or "Area drawn" + Clear when set)
+  • "On-site only"       (toggle, syncs travelRadius onsite ↔ 10mi)
 
-Seed data (Seed Miami Services.command):
-    Profile "Sofia GoatClean"               →  "Sofia Cleaner"
-    Service "Sofia's Free-for-GOATs Clean"  →  "Sofia's Free-for-Connectors Clean"
-    Offering "Deep Clean (GOAT perk)"       →  "Deep Clean (Connector perk)"
-    Rec "Sofia is free for GOATs..."        →  "Sofia is free for Connectors..."
-    Rec "GOAT-perk listing..."              →  "Connector-perk listing..."
-    Cleanup DELETE clause widened to drop BOTH old + new titles so the
-    re-run is idempotent on already-seeded DBs.
+5/10/25mi/Anywhere quick-picks removed — providers either Draw an
+explicit polygon for granular coverage OR flip On-site only for jobs
+they only do at the client's location. No middle ground needed for
+the spotlight intent.
 
-Internal symbols (listGoatShares helper, goatShares state, GoatShareCard
-component, lib/api.js comments, LogoLabScreen mascot-color comment)
-NOT renamed — they're code-side identifiers + design notes that
-reference the orange goat mascot icon (which is the actual brand
-mark, not the Connector tier). Keeping those decouples vocabulary
-from variable names.
+Cleaner, lighter, and aligns with the same "lighten the busy
+homepage" pass that moved the location chip into the search box.
 
 QA: 41/41 pass.
 
 Files:
-  src/screens/ServiceDetailScreen.jsx
-  src/screens/ActivityScreen.jsx
-  + Seed Miami Services.command updated on disk (re-run after push)
+  src/screens/HomeScreen.jsx
