@@ -60,6 +60,14 @@ export default {
         bdr: '#E5E5E3',
         bg5: '#F5F5F5',
         bg4: '#FAFAFA',
+        // line = ultra-thin separator on cream pages. cream-tinted so it
+        // blends into the page rather than reading as a neutral grey.
+        // Use this (border-line) for the hairline dividers between PDP
+        // sections, around offering cards, and any "barely there" border
+        // the Figma mockups call for. CERGIO-GUARD (2026-05-30):
+        // pixel-comp pass against Tarik's PDP/SRP mockups — bdr was too
+        // contrast-y on the warm cream bg; line lands the same intent.
+        line: '#EFE7D6',
 
         // ── Semantic: danger / destructive ───────────────────────────────
         // Consistent across the app for: required-field asterisks, sign-out

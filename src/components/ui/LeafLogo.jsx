@@ -146,47 +146,60 @@ function BudBloom({ size, working }) {
   //   rot    — degrees rotated around (60,60). Jittered, not 360/N.
   //   cls    — per-leaf keyframe class (.cg-leaf-1 … .cg-leaf-7)
   //   opacity — 0.78–0.96, varied so the layer reads with depth
+  // CERGIO-GUARD (2026-05-30 v4): wider, rounder, longer petals so the
+  // 7 leaves OVERLAP at rest into a closed full-round flower silhouette
+  // (Tarik: "make the still non animated state open into a full round
+  // flower... not perfectly symmetrical but full round"). Each petal:
+  //   • Reaches out to y≈18 (40-unit radius from heart, was ~30-32)
+  //     so the tips sit on a near-circle of radius ~42px in the 120
+  //     viewBox.
+  //   • 24-28 units wide at its midpoint (was ~16-20) so adjacent
+  //     petals touch + overlap at ~360/7 ≈ 51° spacing.
+  //   • Lobed (smooth rounded tip) instead of pointed — reads as a
+  //     daisy/marigold petal, not a leaf-spear.
+  //   • Still UNIQUE per leaf — control points jittered so the
+  //     silhouette isn't perfectly symmetrical.
   const leaves = [
     {
-      // 1: tall slim spear, dark forest, slight left lean
-      d: 'M 60 60 C 50 56, 47 38, 56 28 C 69 32, 71 53, 60 60 Z',
-      vein: 'M 60 60 L 58 31',
+      // 1: tall, dark forest, slight left lean
+      d: 'M 60 60 C 47 54, 44 32, 56 19 C 64 16, 71 22, 73 35, 71 56 Z',
+      vein: 'M 60 60 L 58 22',
       fill: '#1E4D00', opacity: 0.94, rot:   8, cls: 'cg-leaf-1',
     },
     {
-      // 2: broader, vivid emerald, curled tip
-      d: 'M 60 60 C 46 54, 44 40, 56 30 C 73 32, 75 54, 60 60 Z',
-      vein: 'M 60 60 Q 56 46 57 30',
+      // 2: broad emerald, fuller right side
+      d: 'M 60 60 C 47 54, 44 35, 56 21 C 64 17, 72 23, 74 38, 71 58 Z',
+      vein: 'M 60 60 Q 58 42 58 24',
       fill: '#3FA821', opacity: 0.86, rot:  56, cls: 'cg-leaf-2',
     },
     {
-      // 3: lance-shape, deepest green, tip pulled high
-      d: 'M 60 60 C 51 55, 46 32, 58 22 C 71 30, 73 54, 60 60 Z',
-      vein: 'M 60 60 L 58 24',
+      // 3: longest, deep green, tip pushed highest
+      d: 'M 60 60 C 47 55, 43 30, 56 17 C 64 14, 72 20, 74 34, 72 56 Z',
+      vein: 'M 60 60 L 58 19',
       fill: '#2C5D21', opacity: 0.95, rot: 110, cls: 'cg-leaf-3',
     },
     {
-      // 4: short + wide, sage colour, droopy outer edge
-      d: 'M 60 60 C 53 56, 52 44, 60 36 C 68 42, 69 56, 60 60 Z',
-      vein: 'M 60 60 L 60 37',
+      // 4: full sage lobe, slightly shorter
+      d: 'M 60 60 C 48 55, 45 36, 57 24 C 65 21, 72 26, 73 39, 71 57 Z',
+      vein: 'M 60 60 L 60 27',
       fill: '#639922', opacity: 0.82, rot: 162, cls: 'cg-leaf-4',
     },
     {
-      // 5: large blade, deep emerald, longest of the set
-      d: 'M 60 60 C 49 56, 43 36, 56 24 C 71 30, 73 55, 60 60 Z',
-      vein: 'M 60 60 Q 57 44 57 26',
+      // 5: largest blade, deep emerald
+      d: 'M 60 60 C 47 54, 43 30, 56 18 C 65 14, 72 21, 75 36, 71 58 Z',
+      vein: 'M 60 60 Q 58 38 58 21',
       fill: '#2F6E00', opacity: 0.96, rot: 218, cls: 'cg-leaf-5',
     },
     {
-      // 6: small new sprout, bright lime, leans right
-      d: 'M 60 60 C 53 56, 53 46, 60 38 C 68 42, 69 56, 60 60 Z',
-      vein: 'M 60 60 L 61 39',
-      fill: '#5BC404', opacity: 0.80, rot: 270, cls: 'cg-leaf-6',
+      // 6: vivid lime, leans right
+      d: 'M 60 60 C 48 56, 46 34, 58 22 C 66 18, 72 24, 74 38, 71 57 Z',
+      vein: 'M 60 60 L 61 24',
+      fill: '#5BC404', opacity: 0.84, rot: 270, cls: 'cg-leaf-6',
     },
     {
-      // 7: tilted oval, mid green, slight wave
-      d: 'M 60 60 C 49 56, 47 40, 58 30 C 70 34, 73 55, 60 60 Z',
-      vein: 'M 60 60 Q 58 48 59 31',
+      // 7: mid emerald, slightly waved
+      d: 'M 60 60 C 47 55, 44 33, 56 20 C 65 16, 72 22, 74 37, 71 57 Z',
+      vein: 'M 60 60 Q 58 42 58 23',
       fill: '#3FA821', opacity: 0.88, rot: 322, cls: 'cg-leaf-7',
     },
   ];

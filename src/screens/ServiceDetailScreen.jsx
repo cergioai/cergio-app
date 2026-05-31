@@ -252,15 +252,14 @@ export function ServiceDetailScreen() {
 
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-32">
-      {/* Story-progress banner — mockup ref: dim image w/ tagline +
-          7 progress dots up top + mute icon. Tap = back, for now (no
-          actual stories engine yet — this is the UI shell).
-          CERGIO-GUARD (2026-05-30): bumped 120px → 280px so the
-          cover photo dominates the top of the PDP like the Jennifer
-          Leighton mockup. The earlier 120px cropped the image to a
-          thin band — Tarik: "top image is cut off on service profile
-          page". */}
-      <div className={`relative h-[280px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : coverFallback}`}>
+      {/* Hero cover — Jennifer Leighton mockup, pixel pass:
+          CERGIO-GUARD (2026-05-30 v3): 280 → 360 to match the mockup
+          aspect, story-progress ruler moved from TOP → BOTTOM (5
+          segments, not 7), volume icon moved BOTTOM-LEFT, top-right
+          now carries the three-control row (heart / Connector badge /
+          share) in matching dark-translucent circles. Caption text
+          sits just above the ruler. */}
+      <div className={`relative h-[360px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : coverFallback}`}>
         {provider.coverUrl && (
           <img
             src={provider.coverUrl}
@@ -270,32 +269,82 @@ export function ServiceDetailScreen() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/45" />
-        {/* Progress dots (7-segment ruler, all uniform — decorative shell) */}
-        <div className="absolute top-3 left-4 right-4 flex items-center gap-1.5">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="flex-1 h-[2.5px] bg-white/55 rounded-full" />
-          ))}
-        </div>
-        {/* Mute (decorative — story engine TODO) */}
+        {/* lighter scrim — mockup is brighter than v2 */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/35" />
+
+        {/* Back arrow (top-left) — back to previous screen */}
         <button
           onClick={() => navigate(-1)}
-          aria-label="Close"
-          className="absolute top-7 left-3 w-8 h-8 rounded-full bg-black/45 backdrop-blur-sm
-                     text-white text-[14px] flex items-center justify-center"
+          aria-label="Back"
+          className="absolute top-4 left-3 w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm
+                     text-white flex items-center justify-center"
         >
-          ×
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
         </button>
+
+        {/* Top-right control trio: heart, Connector badge, share */}
+        <div className="absolute top-4 right-3 flex items-center gap-2">
+          <button
+            aria-label="Save"
+            className="w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm text-white flex items-center justify-center"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          </button>
+          <button
+            aria-label="Connector badge"
+            className="w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm text-white flex items-center justify-center"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
+            </svg>
+          </button>
+          <button
+            aria-label="Share"
+            onClick={() => {
+              if (typeof navigator !== 'undefined' && navigator.share) {
+                navigator.share({ title: provider.name, url: window.location.href }).catch(() => {});
+              }
+            }}
+            className="w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm text-white flex items-center justify-center"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Volume (bottom-left) — decorative story-engine shell */}
         <button
           aria-label="Mute"
-          className="absolute top-7 right-3 w-8 h-8 rounded-full bg-black/45 backdrop-blur-sm
-                     text-white text-[12px] flex items-center justify-center"
+          className="absolute bottom-7 left-3 w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm
+                     text-white flex items-center justify-center"
         >
-          🔇
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+            <line x1="23" y1="9" x2="17" y2="15"/>
+            <line x1="17" y1="9" x2="23" y2="15"/>
+          </svg>
         </button>
-        <p className="absolute bottom-3 left-4 right-4 text-white text-[12.5px] font-bold drop-shadow">
+
+        {/* Caption — sits just above the ruler */}
+        <p className="absolute bottom-7 left-16 right-5 text-white text-[12.5px] font-bold drop-shadow">
           Running all the errands you need
         </p>
+
+        {/* Story-progress ruler at BOTTOM (5 segments). First segment
+            full white indicates "leading" position. */}
+        <div className="absolute bottom-2 left-4 right-4 flex items-center gap-1.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className={`flex-1 h-[2.5px] rounded-full ${i === 0 ? 'bg-white' : 'bg-white/55'}`}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Big name + badges row — matches Jennifer Leighton mockup.
@@ -387,7 +436,7 @@ export function ServiceDetailScreen() {
             <Link
               to={`/u/${leadId}`}
               aria-label={`View ${recoSummary.leadName || 'recommender'}'s profile`}
-              className="block mx-5 mt-4 pt-4 px-3 pb-3 -mx-2 rounded-[14px] border-t border-bdr
+              className="block mx-5 mt-4 pt-4 px-3 pb-3 -mx-2 rounded-[14px] border-t border-line
                          hover:bg-gl/40 active:bg-gl/60 transition-colors"
             >
               {inner}
@@ -395,15 +444,17 @@ export function ServiceDetailScreen() {
           );
         }
         return (
-          <div className="mx-5 mt-4 pt-4 border-t border-bdr">
+          <div className="mx-5 mt-4 pt-4 border-t border-line">
             {inner}
           </div>
         );
       })()}
 
-      {/* Book section title — uses owner's first name like "Book Jennifer" */}
-      <div className="px-5 pt-5 pb-3 border-t border-bdr mt-5">
-        <h2 className="text-[20px] font-extrabold text-black leading-tight">
+      {/* Book section title — uses owner's first name like "Book Jennifer".
+          CERGIO-GUARD (2026-05-30): heading 20 → 22, divider switched
+          from bdr → line (cream-tinted hairline) per the mockup. */}
+      <div className="px-5 pt-6 pb-3 border-t border-line mt-6">
+        <h2 className="text-[22px] font-extrabold text-black leading-tight">
           Book {firstName}
         </h2>
         <p className="text-[12.5px] text-b3 font-medium mt-1.5 flex items-center gap-1">
@@ -412,27 +463,37 @@ export function ServiceDetailScreen() {
         </p>
       </div>
 
-      {/* Offering cards — HORIZONTAL scroll per mockup (Apartment Clean
-          full-width, Linen Re... peek). Selected card has green border
-          and pale-green fill. */}
+      {/* Offering cards — HORIZONTAL scroll per mockup. White bg with
+          ultra-thin `border-line` outline; selected card gains a 1.5px
+          green ring (no shadow, no fill swap) — keeps the surface
+          weight consistent. Price formatted as
+          "$150/session • 120 mins" (price in vivid green, duration in
+          b3), per the Cut and Color mockup card. Discount surfaces as
+          a vivid green pill at the bottom-left of the card. */}
       <div className="pl-5 -mr-2 overflow-x-auto overflow-y-hidden">
         <div className="flex gap-3 pr-5 snap-x snap-mandatory">
           {(offerings || []).map((o) => {
             const isSel = o.id === selectedOfferingId;
             const priceDollars = Math.round((o.price_cents ?? 0) / 100);
             const isFree = (o.price_cents ?? 0) === 0;
+            const unitLabel =
+              o.kind === 'hourly' ? 'hour'
+              : (o.duration_minutes ? `${o.duration_minutes} mins` : 'session');
+            const discountPct = typeof o.discount_percent === 'number'
+              ? Math.round(o.discount_percent)
+              : null;
             return (
               <button
                 key={o.id}
                 type="button"
                 onClick={() => setSelectedOfferingId(o.id)}
-                className={`snap-start text-left rounded-[18px] p-4 flex-shrink-0
-                            w-[78%] min-h-[140px] transition-all
+                className={`snap-start text-left rounded-[16px] p-4 flex-shrink-0
+                            w-[78%] min-h-[150px] bg-white transition-all
                             ${isSel
-                              ? 'bg-gl border-2 border-g shadow-sm'
-                              : 'bg-white border border-bdr'}`}
+                              ? 'border-[1.5px] border-g'
+                              : 'border border-line'}`}
               >
-                <p className="text-[18px] font-extrabold text-black leading-tight">
+                <p className="text-[17px] font-extrabold text-black leading-tight">
                   {o.name || 'Service offering'}
                 </p>
                 {isFree ? (
@@ -443,16 +504,35 @@ export function ServiceDetailScreen() {
                     Free for Connectors
                   </p>
                 ) : (
-                  <p className="text-[15px] font-extrabold text-black mt-1.5">${priceDollars}</p>
+                  <p className="mt-1.5 leading-tight">
+                    <span className="text-[15px] text-g font-extrabold">
+                      ${priceDollars}/{o.kind === 'hourly' ? 'hour' : 'session'}
+                    </span>
+                    {o.duration_minutes && o.kind !== 'hourly' && (
+                      <span className="text-[13px] text-b3 font-medium"> · {o.duration_minutes} mins</span>
+                    )}
+                  </p>
                 )}
                 {o.description && (
                   <p className="text-[12.5px] text-b3 leading-snug mt-2">{o.description}</p>
+                )}
+                {discountPct && discountPct > 0 && (
+                  <span className="inline-flex items-center gap-1 mt-3 bg-g text-white rounded-pill px-2.5 py-0.5 text-[11.5px] font-extrabold">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    </svg>
+                    {discountPct}% off
+                  </span>
+                )}
+                {/* Unit hint absorbed into the price line above; kept */}
+                {(!o.duration_minutes && !isFree) && (
+                  <p className="text-[11.5px] text-b3 mt-1.5">{unitLabel}</p>
                 )}
               </button>
             );
           })}
           {(!offerings || offerings.length === 0) && (
-            <div className="bg-bg5 rounded-[18px] p-4 text-center text-[12px] text-b3 font-medium w-[78%] flex-shrink-0">
+            <div className="bg-bg5 rounded-[16px] p-4 text-center text-[12px] text-b3 font-medium w-[78%] flex-shrink-0 border border-line">
               No offerings listed yet — book this provider to request a custom quote.
             </div>
           )}

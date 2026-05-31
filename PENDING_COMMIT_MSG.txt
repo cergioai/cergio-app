@@ -1,57 +1,62 @@
-fix(invite/reco): real seeded contacts + visible CTA + spotlight audit seed
+design: PDP pixel-comp pass + logo full-round flower + wordmark inline
 
-InviteFriendsScreen (/invite/friends)
-- Tarik: "button at bottom is hidden... populate with test data instead
-  of hard coded data".
-- Hard-coded CONTACTS mock dropped. Pool now loads via
-  listInvitableProfiles() — real profiles from the DB (seeded Alex /
-  Connie / Sam / Maria / Sofia / Henry / Jackie / Penny + any signups),
-  excluding the signed-in user.
-- Connector badge surfaces on contact rows whose profile has
-  cc_verified_at NOT NULL.
-- CTA footer was `fixed bottom-0` inside a `pb-24 overflow-hidden`
-  container — on some viewports the fixed positioning + parent overflow
-  clipped the button below the visible area. Switched to
-  shrink-0 / mt-auto inside the flex column so the CTA is always the
-  last block in the layout and CAN'T be covered. Loading + empty
-  states render visible "Pick at least one contact" copy in the footer
-  so it never reads as "broken".
+Big design-comp pass against Tarik's PDP/SRP mockups. He asked for a
+"rigorous process to put together a design spec that matches these,
+then execute" — so this lands the tokens + design-spec deltas FIRST
+and then applies them across the entry surfaces and the PDP.
 
-InviteSelectedReviewScreen (/invite/review)
-- Same swap: pulls picked contacts from listInvitableProfiles instead
-  of CONTACTS mock, so the names that appear here match the rows the
-  user actually tapped on the previous step.
+Design tokens
+- `line` (#EFE7D6) — ultra-thin cream-tinted hairline. Added to
+  tailwind.config.js + design-spec.md. Use it (border-line) for any
+  "barely there" separator on cream pages. `bdr` (#E5E5E3) stays for
+  borders on white surfaces.
+- design-spec.md now documents:
+    • PDP hero pattern (360px, ruler at bottom, 5 segments, dark-
+      translucent icon circles for back / heart / Connector / share /
+      mute).
+    • Offering card pattern (white bg + border-line, vivid-green
+      "$X/session • Ymins" price format, vivid-green `% off` pill).
 
-RecommendServiceFormScreen (/invite/recommend)
-- Tarik: "wire this to contacts (seed with fake data..)".
-- Autosuggest pool switched from CONTACTS mock → listInvitableProfiles
-  with deterministic synthesized phone + email per profile (305-555
-  numbers + name@cergio.test). The form flow (autofill on pick → send)
-  still works because the synthesized phone/email are accepted by
-  notify-user and the recommendations insert.
+PDP (ServiceDetailScreen.jsx)
+- Hero 280 → 360 to match the mockup aspect.
+- Story-progress ruler moved TOP → BOTTOM (5 segments, leading
+  segment full white).
+- Top-left back arrow (subtle dark circle).
+- Top-right control trio added: heart, Connector badge, share — all
+  in matching dark-translucent circles, share fires the Web Share
+  API when available.
+- Volume icon moved BOTTOM-LEFT (matches the mockup). Caption line
+  sits just above the ruler.
+- Section divider above "Book {Name}" switched from `border-bdr` to
+  `border-line` so it reads as a hairline on cream, not a contrasty
+  rule.
+- Offering cards refined:
+    • bg-white + 1px border-line (selected = 1.5px green ring, no
+      fill swap — kept surface weight constant).
+    • Price format "$X/session • 120 mins" (vivid green price, b3
+      duration).
+    • New `discount_percent` field support — solid green pill at
+      bottom-left when set ("20% off"), per the Cut and Color
+      mockup tile.
 
-api.js — listInvitableProfiles
-- New helper: pulls profiles, excludes current user, attaches
-  is_connector + a stable AvatarLink-style avatar_seed + synthesized
-  phone/email so the same row works in both pickers (Invite/Reco) and
-  the form (autofill).
+Logo restructure (LeafLogo.jsx + SplashScreen + AuthScreen + HomeScreen)
+- Tarik (#A): "use the cergio from the I'm (design it with different
+  font).. and remove from above to remove repetition... move the logo
+  to before Hi (from the top)".
+- Splash, Auth, Home: dropped the standalone CERGIO wordmark above
+  the tagline. Logo now leads at the top of the column at 96/120/44
+  respectively, then the tagline reads:
+    "Hi, I'm CERGIO. I'll negotiate and book…"
+  with "CERGIO" inline as an extra-bold uppercase tracking-wide span —
+  reads as the wordmark but lives inside the sentence, no repetition.
 
-Spotlights + free-services audit (Tarik: "audit the spotlights free
-services")
-- Free services: end-to-end path is implemented and live.
-  Sofia's "Deep Clean (Connector perk)" offering has price_cents=0 →
-  PDP renders "Free for Connectors" pill → handleBook detects
-  price_cents=0, skips Stripe, auto-confirms. No fix needed.
-- Spotlights: code paths are all wired (RequestSpotlightModal →
-  createSpotlightRequest → ConnectorRequestsScreen → counter / accept
-  → SpotlightPaymentModal → markSpotlightPosted → confirmSpotlightPost).
-  Gap is ONLY data — no seeded Connector had spotlight_price_*_cents
-  set, so /connectors/browse showed the EmptyState
-  ("Connectors are setting their spotlight rates..."). Added the
-  helper `Seed Connector Spotlight Rates.command` that sets:
-    Connie  — IG $250/post + TT $180/post (handle connieconnects, 4.2k)
-    Jackie  — IG $150/post
-  After running it, /connectors/browse renders real rows + the request
-  flow is demoable end-to-end.
+Full-round flower (LeafLogo.jsx)
+- Tarik (#B): "make the still non animated state open into a full
+  round flower... not perfectly symmetrical but full round".
+- Petal paths widened + lengthened so the 7 leaves overlap at rest
+  into a closed circular daisy/marigold silhouette. Asymmetry
+  preserved per-leaf (each path is unique — different lobe widths,
+  tilts, midribs). With restScale=1 the brand mark now reads as a
+  mature flower in full bloom, not a sunburst with gaps.
 
 Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.

@@ -231,19 +231,18 @@ export function AuthScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cr pb-8 overflow-y-auto">
       <div className="flex flex-col items-center pt-14 pb-6 px-7 text-center">
-        {/* CERGIO-GUARD (2026-05-30): static at rest — matches the
-            Splash treatment. Animation belongs to triggered actions
-            (search, etc.), not to initial-page loads. */}
+        {/* CERGIO-GUARD (2026-05-30 v3): logo leads, single brand
+            anchor. Matches Splash treatment. */}
         <LeafLogo variant="splash" size={96} />
-        <h1 className="text-[30px] font-extrabold text-black tracking-wide mt-4 leading-tight">Cergio</h1>
-        {/* CERGIO-GUARD (2026-05-30 v2): conversational tagline —
-            same wording as the splash so the sign-up flow feels
-            continuous, voiced as Cergio itself. */}
-        <div className="flex flex-col items-center gap-1 max-w-[300px] mt-2">
-          <p className="text-[13px] text-b3 leading-snug font-medium text-center">
-            Hi, I&apos;m Cergio. I&apos;ll negotiate and book services your friends actually trust.
+        <div className="flex flex-col items-center gap-1.5 max-w-[300px] mt-5">
+          <p className="text-[14px] text-b2 leading-snug font-medium text-center">
+            Hi, I&apos;m{' '}
+            <span className="font-extrabold tracking-[0.18em] uppercase text-black">
+              Cergio
+            </span>
+            . I&apos;ll negotiate and book services your friends actually trust.
           </p>
-          <p className="text-[11px] text-gd font-extrabold tracking-[0.18em] uppercase mt-0.5">
+          <p className="text-[11px] text-gd font-extrabold tracking-[0.18em] uppercase mt-1">
             Book · Barter · Earn
           </p>
         </div>

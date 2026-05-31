@@ -804,16 +804,21 @@ export function HomeScreen() {
           : `${greetingName}, tell me the Connector you need.`;
 
         return (
-          <div className="px-5 pt-5 pb-0.5 flex items-center gap-2.5">
-            {/* CERGIO-GUARD (2026-05-30 v4): brand mark vertically
+          <div className="px-5 pt-5 pb-0.5">
+            {/* CERGIO-GUARD (2026-05-30 v5): logo leads from the TOP
+                (Tarik: "move the logo to before Hi (from the top)").
+                Was inline at size 36; now stacked above the greeting
+                at size 44. Keeping the comment block below for the v4
+                reasoning (still partially applies — static at rest).
+                Old comment: brand mark vertically
                 CENTERED on the greeting line (Tarik: "move up the logo
                 to align with the 'hi what do you need'"). Smaller (36)
                 so it tucks neatly inline with the headline text. Static
                 — bloom only fires when search actually executes (on
                 the streaming-status block below). */}
             {!submitted && (
-              <div className="flex-shrink-0">
-                <LeafLogo size={36} />
+              <div className="mb-3">
+                <LeafLogo size={44} />
               </div>
             )}
             <div className="flex-1 min-w-0">
@@ -822,15 +827,22 @@ export function HomeScreen() {
                   key={`rolling-${intent}`}
                   className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight cg-headline-toast"
                 >
-                  {longWords.map((w, i) => (
-                    <span
-                      key={i}
-                      className="inline-block cg-word-roll"
-                      style={{ animationDelay: `${i * 120}ms` }}
-                    >
-                      {w}{i < longWords.length - 1 ? ' ' : ''}
-                    </span>
-                  ))}
+                  {longWords.map((w, i) => {
+                    // CERGIO-GUARD (2026-05-30): brand-style "Cergio"
+                    // inline so the wordmark lives inside the sentence
+                    // (no separate CERGIO header above). Matches Splash
+                    // + Auth treatment.
+                    const isBrand = /^Cergio[.,!?]?$/i.test(w);
+                    return (
+                      <span
+                        key={i}
+                        className={`inline-block cg-word-roll ${isBrand ? 'font-extrabold tracking-[0.18em] uppercase text-black' : ''}`}
+                        style={{ animationDelay: `${i * 120}ms` }}
+                      >
+                        {w}{i < longWords.length - 1 ? ' ' : ''}
+                      </span>
+                    );
+                  })}
                 </h1>
               ) : (
                 <div className="cg-fade-in-soft">

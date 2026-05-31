@@ -8,28 +8,27 @@ export function SplashScreen() {
     <div className="flex-1 flex flex-col items-center justify-center bg-black relative overflow-hidden">
       <div className="absolute inset-0 splash-glow pointer-events-none" />
 
-      <div className="relative z-10 flex flex-col items-center gap-5 animate-fade-up">
-        {/* CERGIO-GUARD (2026-05-30 v2): hero size bumped 88 → 120 so
-            the new organic bud bloom anchors the splash. Higher
-            intensity (0.9) so the petal-by-petal stagger is unmistakable
-            on first impression. */}
-        {/* CERGIO-GUARD (2026-05-30): static at rest. Tarik: "make the
-            logo full and static on loading the initial pages... only
-            animate when it triggers an action". The splash is just an
-            entry; nothing is "doing work" yet. */}
+      <div className="relative z-10 flex flex-col items-center gap-6 animate-fade-up">
+        {/* CERGIO-GUARD (2026-05-30 v4): logo leads, no separate
+            wordmark. Tarik: "use the cergio from the I'm (design it
+            with different font).. and remove from above to remove
+            repetition... move the logo to before Hi". The wordmark
+            now lives INSIDE the tagline (the styled "Cergio" span
+            below) so the screen has a single brand anchor. */}
         <LeafLogo variant="splash" size={120} />
-        <h1 className="text-[34px] font-extrabold text-white tracking-widest uppercase">Cergio</h1>
-        {/* CERGIO-GUARD (2026-05-30 v2): conversational tagline —
-            matches the HomeScreen greeting voice ("Hi, I'm Cergio,
-            I'll negotiate and book…"). Tarik: "make this
-            conversational... hi i'm cergio, i'll negotiate book et."
-            The wordmark above already says CERGIO so we don't repeat
-            the brand inside the tagline. */}
-        <div className="flex flex-col items-center gap-1.5 max-w-[300px]">
-          <p className="text-[14px] text-white/75 font-medium text-center leading-snug">
-            Hi, I&apos;m Cergio. I&apos;ll negotiate and book services your friends actually trust.
+        {/* Tagline with brand-styled "Cergio" inline. The styled span
+            uses the same uppercase + wide tracking as the old wordmark
+            so the word still reads as the logotype, just embedded in
+            the sentence instead of sitting alone above it. */}
+        <div className="flex flex-col items-center gap-2 max-w-[320px]">
+          <p className="text-[15px] text-white/80 font-medium text-center leading-snug">
+            Hi, I&apos;m{' '}
+            <span className="font-extrabold tracking-[0.18em] uppercase text-white">
+              Cergio
+            </span>
+            . I&apos;ll negotiate and book services your friends actually trust.
           </p>
-          <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase">
+          <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase mt-1">
             Book · Barter · Earn
           </p>
         </div>
