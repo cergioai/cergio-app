@@ -193,12 +193,21 @@ export function PublicProfileScreen() {
       setNotFound(false);
 
       // Profile + Connector flag + IG/TikTok handles.
-      const { data: prof } = await supabase
+      // CERGIO-GUARD (2026-05-30): SELECT trimmed to columns that
+      // actually exist on profiles. avatar_url was rejected by
+      // PostgREST (column doesn't exist), which silently nulled the
+      // whole row → "blank profile page" bug Tarik hit. Now we only
+      // ask for what's verified across api.js.
+      const { data: prof, error: profErr } = await supabase
         .from('profiles')
-        .select('id, display_name, bio, avatar_url, cc_verified_at, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, follower_count')
+        .select('id, display_name, bio, cc_verified_at, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, follower_count')
         .eq('id', profileId)
         .maybeSingle();
       if (cancelled) return;
+      if (profErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[PublicProfile] profile fetch error:', profErr);
+      }
       if (!prof) { setNotFound(true); setLoading(false); return; }
       setProfile(prof);
 
@@ -244,33 +253,38 @@ export function PublicProfileScreen() {
         }
         if (!cancelled) setSvcRecoSummary(summary);
 
-        // Reviews for those services — bookings → reviews join.
-        // Schema: reviews(id, booking_id, stars, comment, created_at);
-        // bookings(id, service_id, consumer_id). We only need recent rows.
+        // Reviews for those services — go reviews → bookings join.
+        // Schema (verified against api.js): reviews(id, booking_id,
+        // rater_id, rated_id, stars, comment, created_at);
+        // bookings(id, service_id, consumer_id, created_at). The
+        // reviewer is reviews.rater_id directly (not booking.consumer_id),
+        // so we read it from reviews and skip the booking-side hop.
         const { data: bkgs } = await supabase
           .from('bookings')
-          .select('id, service_id, consumer_id, created_at')
+          .select('id, service_id, created_at')
           .in('service_id', svcIds);
         const bkgMap = Object.fromEntries((bkgs || []).map(b => [b.id, b]));
         const bkgIds = (bkgs || []).map(b => b.id);
-        const { data: revs } = bkgIds.length
+        const { data: revs, error: revsErr } = bkgIds.length
           ? await supabase
               .from('reviews')
-              .select('id, booking_id, stars, comment, created_at')
+              .select('id, booking_id, rater_id, stars, comment, created_at')
               .in('booking_id', bkgIds)
               .order('created_at', { ascending: false })
               .limit(8)
-          : { data: [] };
-        const consumerIds = [...new Set((revs || [])
-          .map(r => bkgMap[r.booking_id]?.consumer_id)
-          .filter(Boolean))];
-        const { data: revProfs } = consumerIds.length
-          ? await supabase.from('profiles').select('id, display_name').in('id', consumerIds)
+          : { data: [], error: null };
+        if (revsErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[PublicProfile] reviews fetch error:', revsErr);
+        }
+        const raterIds = [...new Set((revs || []).map(r => r.rater_id).filter(Boolean))];
+        const { data: revProfs } = raterIds.length
+          ? await supabase.from('profiles').select('id, display_name').in('id', raterIds)
           : { data: [] };
         const revProfMap = Object.fromEntries((revProfs || []).map(p => [p.id, p]));
         const shaped = (revs || []).map(r => {
           const bk = bkgMap[r.booking_id];
-          const reviewer = bk ? revProfMap[bk.consumer_id] : null;
+          const reviewer = revProfMap[r.rater_id] || null;
           return {
             id: r.id,
             stars: r.stars,
@@ -359,27 +373,51 @@ export function PublicProfileScreen() {
   const igHandle = profile?.instagram_handle || null;
   const igFollowers = profile?.instagram_followers || profile?.follower_count || 0;
 
+  // Skeleton shell — keeps the close button + cream background visible
+  // even while data is in-flight or missing, so the user always has a
+  // way out and is never staring at a blank scroll area. CERGIO-GUARD
+  // (2026-05-30): added after Tarik hit a "blank page" on a freshly-
+  // visited /u/{id} link — root cause was a 400 on the profile SELECT
+  // that crashed the inner state without ever revealing the X.
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col bg-cream items-center justify-center pb-24">
-        <p className="text-[14px] text-b3 font-medium">Loading profile…</p>
+      <div className="flex-1 flex flex-col bg-cream pb-24">
+        <div className="px-5 pt-7">
+          <button
+            onClick={() => navigate(-1)}
+            aria-label="Close"
+            className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+          >×</button>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-[14px] text-b3 font-medium">Loading profile…</p>
+        </div>
       </div>
     );
   }
 
   if (notFound) {
     return (
-      <div className="flex-1 flex flex-col bg-cream items-center justify-center pb-24 px-6">
-        <p className="text-[16px] font-extrabold text-black mb-1">Profile not found</p>
-        <p className="text-[13px] text-b3 font-medium text-center">
-          This user may no longer be on Cergio.
-        </p>
-        <button
-          onClick={() => navigate(-1)}
-          className="mt-4 bg-g text-white rounded-pill px-5 py-2.5 text-[13px] font-extrabold"
-        >
-          Go back
-        </button>
+      <div className="flex-1 flex flex-col bg-cream pb-24">
+        <div className="px-5 pt-7">
+          <button
+            onClick={() => navigate(-1)}
+            aria-label="Close"
+            className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+          >×</button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <p className="text-[16px] font-extrabold text-black mb-1">Profile not found</p>
+          <p className="text-[13px] text-b3 font-medium text-center">
+            This user may no longer be on Cergio.
+          </p>
+          <button
+            onClick={() => navigate(-1)}
+            className="mt-4 bg-g text-white rounded-pill px-5 py-2.5 text-[13px] font-extrabold"
+          >
+            Go back
+          </button>
+        </div>
       </div>
     );
   }

@@ -233,9 +233,17 @@ export function AuthScreen() {
       <div className="flex flex-col items-center pt-14 pb-6 px-7 text-center">
         <LeafLogo variant="splash" size={96} working intensity={0.85} />
         <h1 className="text-[30px] font-extrabold text-black tracking-wide mt-4 leading-tight">Cergio</h1>
-        <p className="text-[13px] text-b3 leading-snug mt-2 font-medium max-w-[280px]">
-          Services your friends actually trust. Book, host, or earn — all in one place.
-        </p>
+        {/* CERGIO-GUARD (2026-05-30): tagline aligned with the new Cergio
+            AI positioning — same wording as the splash screen so the
+            sign-up flow feels continuous. */}
+        <div className="flex flex-col items-center gap-1 max-w-[280px] mt-2">
+          <p className="text-[13px] text-b3 leading-snug font-medium text-center">
+            AI that negotiates and books services your friends actually trust.
+          </p>
+          <p className="text-[11px] text-gd font-extrabold tracking-[0.18em] uppercase mt-0.5">
+            Book · Barter · Earn
+          </p>
+        </div>
         {/* Invited-by-a-friend banner — pops only when an active ?ref was
             captured on app boot. Makes the attribution visible + warmer
             welcome than a cold sign-up screen. */}

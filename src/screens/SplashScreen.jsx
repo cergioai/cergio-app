@@ -15,9 +15,19 @@ export function SplashScreen() {
             on first impression. */}
         <LeafLogo variant="splash" size={120} working intensity={0.9} />
         <h1 className="text-[34px] font-extrabold text-white tracking-widest uppercase">Cergio</h1>
-        <p className="text-[14px] text-white/50 font-medium text-center max-w-[240px] leading-relaxed">
-          Find trusted services, recommended by friends
-        </p>
+        {/* CERGIO-GUARD (2026-05-30): tagline aligned with the new Cergio
+            AI positioning — "negotiate and book services your friends
+            actually trust", followed by the three-verb action line. The
+            wordmark above already says CERGIO, so we don't repeat the
+            brand inside the tagline. */}
+        <div className="flex flex-col items-center gap-1.5 max-w-[280px]">
+          <p className="text-[14px] text-white/70 font-medium text-center leading-snug">
+            AI that negotiates and books services your friends actually trust.
+          </p>
+          <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase">
+            Book · Barter · Earn
+          </p>
+        </div>
       </div>
 
       <div className="relative z-10 flex flex-col gap-3 w-[280px] mt-12">

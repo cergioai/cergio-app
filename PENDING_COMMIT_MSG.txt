@@ -1,51 +1,44 @@
-feat(profile): clickable avatars + public profile view (/u/:profileId)
+fix(profile): blank /u/{id} page + bulletproof loading + tagline switch
 
-Tarik feedback: "make all the avatars/profiles etc on the profile of
-services (recommenders avatars) clickable to the users (showing their
-recommendations)... replace Go-To with Reco'd or endorsed".
+Two fixes in one commit:
 
-New screen:
-  src/screens/PublicProfileScreen.jsx — modeled on the 7 attached
-  Jennifer Leighton / Jacob Flores mockups. Sections (all from real
-  DB rows; empty sections collapse silently — no fake data):
-    • Header: large avatar + name + role badge + Connector badge
-    • About: bio prose, "No bio yet!" empty state
-    • Social: IG handle + follower count (or grey "Instagram" when
-      not connected)
-    • {Name}'s Services: services they own, opens PDP on tap, with
-      "Reco'd by N friends and N Connectors" pill on each card
-    • People who love {Name}: review rows pulled from bookings+reviews
-    • {Name}'s Go-Tos: services this profile has recommended, joined
-      to owners; tap message → service PDP, tap owner avatar → owner
-      profile
+1. Public profile rendered blank
+   Tarik: "click link goes to blank page (populate even seeded
+   profiles..)".
 
-Routing:
-  src/App.jsx — new <Route path="/u/:profileId" /> + HIDE_NAV prefix
-  so the profile renders without the bottom nav (modal-sheet style
-  matching the mockups).
+   Root cause: the profile SELECT included `avatar_url`, which doesn't
+   exist on the profiles table. PostgREST 400'd the query → prof=null
+   → notFound branch fell through silently in some HMR states.
 
-Clickable avatars throughout the app:
-  - ServiceDetailScreen (PDP) — recommender AvatarStack, lead-recommender
-    avatar, recommender-blurb avatars, provider-name header → all Links
-    to /u/{id}. Per Tarik: "make all the avatars profiles etc on the
-    profile of services".
-  - ActivityScreen GoatShareCard — service-owner avatar + recommender
-    pill avatar + recommender name in "Shared by X" → all Links to
-    /u/{id}. Owner avatar Link uses stopPropagation so it doesn't fire
-    the wrapping PDP-tap button.
-  - ResultsScreen ProviderCard — FriendAvatars now renders Links when
-    recommendersRaw is provided. Falls back to the old name-only avatars
-    for any legacy/mock paths.
+   Fix:
+   - Drop `avatar_url` from the SELECT (no other code reads it; we
+     render initials avatars instead).
+   - Console.warn on profile / reviews fetch errors so future drift is
+     visible.
+   - Loading + notFound branches now render the X close button + cream
+     background, so the user is never on a truly blank scroll area.
+   - Reviews query rewritten to use reviews.rater_id directly (was
+     hopping reviews → bookings.consumer_id, which is wrong — the
+     reviewer is rater_id).
 
-PDP copy:
-  ServiceDetailScreen reco line: "Go-to service for N users, F friends
-  and E experts, including Jennifer" → "Reco'd by F friends and E
-  Connectors, including Jennifer". Comment block updated to match.
+2. Tagline switched on Splash + Auth (sign-up) screens
+   Tarik: "Cergio AI negotiate and book services your friends actually
+   trust. Book, Barter, Earn... or a succinct variation."
 
-API:
-  lib/api.js listGoatShares — adds service.owner_id to each row so the
-  GoatShareCard owner avatar can link to /u/{ownerId}.
+   Picked the succinct rewrite — the wordmark above the tagline
+   already says CERGIO, so we don't repeat the brand:
 
-Verified:
-  - qa.mjs: 41/41 pass
-  - JSX syntax check on all edited files: pass
+     AI that negotiates and books services your friends actually trust.
+     Book · Barter · Earn
+
+   Applied to SplashScreen (replaces "Find trusted services,
+   recommended by friends") and AuthScreen (replaces "Services your
+   friends actually trust. Book, host, or earn — all in one place.").
+   Sub-line uses tracking-[0.18em] uppercase to read as a verb stamp.
+
+Companion script (root, not in cergio-app):
+  "Enrich Seeded Friends.command" — UPSERT bio + IG handle + follower
+  count onto Alex Tester / Connie Connect / Sam Sample so visiting
+  their /u/{id} shows a populated About + Social row. Idempotent.
+
+Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.
