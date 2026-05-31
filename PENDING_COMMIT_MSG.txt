@@ -1,59 +1,57 @@
-feat+design: PDP request sheet, earnings v8, static logo, cross-post flow
+fix(invite/reco): real seeded contacts + visible CTA + spotlight audit seed
 
-PDP "Submit a request" sheet (RequestQuoteSheet.jsx)
-- Tarik: "submit a request should open a request box... to the
-  specific service (when clicked on on service profile)... can you
-  same homepage box (and same logic (what where etc..)... it can also
-  offer ... the ability to cross post that to all services at the end
-  post submission".
-- New component RequestQuoteSheet — modal sheet that opens from the
-  "Don't see what you need?" callout on the PDP. Pre-fills:
-    what  ← service.taxonomy_provider_type
-    where ← default address (if signed in)
-- Two-step flow:
-    step 1 — compose: what / where / when / budget / notes. Submit
-    calls api.createRequestToProvider() (new) — writes a requests row
-    + a single notification to that provider's owner_id.
-    step 2 — sent: "Sent to {Name}. Also notify other matching
-    providers nearby?" → calls api.crossPostRequest() (new) which
-    fans the SAME request_id to all other matching providers in
-    range (same thread, more options).
-- Replaces the prior navigate('/home') jump from the callout.
+InviteFriendsScreen (/invite/friends)
+- Tarik: "button at bottom is hidden... populate with test data instead
+  of hard coded data".
+- Hard-coded CONTACTS mock dropped. Pool now loads via
+  listInvitableProfiles() — real profiles from the DB (seeded Alex /
+  Connie / Sam / Maria / Sofia / Henry / Jackie / Penny + any signups),
+  excluding the signed-in user.
+- Connector badge surfaces on contact rows whose profile has
+  cc_verified_at NOT NULL.
+- CTA footer was `fixed bottom-0` inside a `pb-24 overflow-hidden`
+  container — on some viewports the fixed positioning + parent overflow
+  clipped the button below the visible area. Switched to
+  shrink-0 / mt-auto inside the flex column so the CTA is always the
+  last block in the layout and CAN'T be covered. Loading + empty
+  states render visible "Pick at least one contact" copy in the footer
+  so it never reads as "broken".
 
-Earnings animation v8 (RewardFlowAnimation.jsx + index.css)
-- Tarik: "rethink the earnings animation... it's way way too busy..
-  compress, simplify, make the animation go slower (not pop back to
-  back)... should just be 1-invite reco earn.. 2-barter (free
-  services..etc)...3-GPI (prosperity together...)... ai driven shared
-  prosperity via GPI".
-- Rebuilt around three elegant scenes:
-    01 — "Invite. Reco. Earn."  — three big words + single $250/friend
-         payoff. Drops the prior 5-row "ways to earn" table.
-    02 — "Free services. Real value." — two profile circles +
-         double-headed arrow showing Connector ↔ Provider barter.
-         Drops the 3-row math accumulator + fee anatomy strip.
-    03 — "AI-driven shared prosperity · via GPI" — rising line +
-         single sentence. Drops the WHAT/HOW/WHEN three-card grid.
-- rf-pop keyframe: 0.6s back-to-back overshoot → 1.4s gentle ease.
-- Scene auto-advance: 8s → 11s so each idea breathes before the next.
-- All numbers (perFriend, exampleTotal, referrerSharePercent) still
-  derived from REWARDS constants — no hardcoded values.
-- qa.mjs #31 invariant rewritten to match the new structure while
-  still locking the three-phase grid + REWARDS sourcing.
+InviteSelectedReviewScreen (/invite/review)
+- Same swap: pulls picked contacts from listInvitableProfiles instead
+  of CONTACTS mock, so the names that appear here match the rows the
+  user actually tapped on the previous step.
 
-Logo static at rest (LeafLogo.jsx + SplashScreen.jsx + AuthScreen.jsx)
-- Tarik: "make the logo full and static on loading the initial pages
-  and homepage... only animate when it triggers an action".
-- BudBloom rest scale 0.62 → 1.0 — at rest the 7 leaves are fully
-  open and the brand mark reads as a finished mature plant.
-- Splash + Auth hero no longer pass `working` — they render static.
-  The HomeScreen header was already static. The animation now fires
-  only when something is actively triggered (search executing, etc.).
+RecommendServiceFormScreen (/invite/recommend)
+- Tarik: "wire this to contacts (seed with fake data..)".
+- Autosuggest pool switched from CONTACTS mock → listInvitableProfiles
+  with deterministic synthesized phone + email per profile (305-555
+  numbers + name@cergio.test). The form flow (autofill on pick → send)
+  still works because the synthesized phone/email are accepted by
+  notify-user and the recommendations insert.
 
-API (api.js)
-- createRequestToProvider({ toProviderOwnerId, ... }) — single-target
-  request + one notification.
-- crossPostRequest({ requestId, excludeOwnerId, ... }) — adds
-  notifications fanned to other matching providers, same request_id.
+api.js — listInvitableProfiles
+- New helper: pulls profiles, excludes current user, attaches
+  is_connector + a stable AvatarLink-style avatar_seed + synthesized
+  phone/email so the same row works in both pickers (Invite/Reco) and
+  the form (autofill).
+
+Spotlights + free-services audit (Tarik: "audit the spotlights free
+services")
+- Free services: end-to-end path is implemented and live.
+  Sofia's "Deep Clean (Connector perk)" offering has price_cents=0 →
+  PDP renders "Free for Connectors" pill → handleBook detects
+  price_cents=0, skips Stripe, auto-confirms. No fix needed.
+- Spotlights: code paths are all wired (RequestSpotlightModal →
+  createSpotlightRequest → ConnectorRequestsScreen → counter / accept
+  → SpotlightPaymentModal → markSpotlightPosted → confirmSpotlightPost).
+  Gap is ONLY data — no seeded Connector had spotlight_price_*_cents
+  set, so /connectors/browse showed the EmptyState
+  ("Connectors are setting their spotlight rates..."). Added the
+  helper `Seed Connector Spotlight Rates.command` that sets:
+    Connie  — IG $250/post + TT $180/post (handle connieconnects, 4.2k)
+    Jackie  — IG $150/post
+  After running it, /connectors/browse renders real rows + the request
+  flow is demoable end-to-end.
 
 Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.

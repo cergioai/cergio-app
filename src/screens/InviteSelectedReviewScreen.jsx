@@ -6,9 +6,9 @@
 // Service type is prefilled from chat.state.provider_type when the
 // user came from a search ("Recommend a {type}?"), so they don't
 // re-type. CERGIO-GUARD: provider_type-level only, no offering names.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
-import { CONTACTS } from '../data/mock';
+import { listInvitableProfiles } from '../lib/api';
 import { PROVIDER_TYPES } from '../data/providerTypes';
 import { deriveDisplayNoun } from '../lib/serviceNoun';
 
@@ -22,7 +22,19 @@ export function InviteSelectedReviewScreen() {
   const { showToast, chat } = useOutletContext();
 
   const { mode = 'invite', selectedIds = [], prefilledMessage = null } = location.state || {};
-  const picked = CONTACTS.filter(c => selectedIds.includes(c.id));
+  // CERGIO-GUARD (2026-05-30): hydrate the picked contacts from real
+  // profiles. Was filtering CONTACTS (mock) by selectedIds — now we
+  // pull the profiles table and pick the matching ids. Same shape as
+  // InviteFriendsScreen so the avatar/name rendering carries over.
+  const [allContacts, setAllContacts] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    listInvitableProfiles({ limit: 200 }).then(({ data }) => {
+      if (!cancelled) setAllContacts(data || []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const picked = allContacts.filter(c => selectedIds.includes(c.id));
 
   // CERGIO-GUARD: seed the service type from the USER'S OWN WORDS
   // VERBATIM. Auto-canonicalization to PROVIDER_TYPES was hurting more

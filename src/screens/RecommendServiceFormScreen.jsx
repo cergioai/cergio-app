@@ -19,9 +19,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { CONTACTS } from '../data/mock';
+// CERGIO-GUARD (2026-05-30): pool now comes from real profiles +
+// synthesized phone/email (listInvitableProfiles). Was reading the
+// CONTACTS mock — Tarik: "wire this to contacts (seed with fake
+// data..)". Seeded test friends (Alex / Connie / Sam / etc.) are
+// returned with deterministic synthesized contact channels so the
+// form is usable end-to-end against real DB rows.
 import { REWARDS } from '../lib/rewards';
-import { notifyUser } from '../lib/api';
+import { notifyUser, listInvitableProfiles } from '../lib/api';
 import { buildInviteUrl } from '../lib/referral';
 import { supabase, supabaseReady } from '../lib/supabase';
 
@@ -42,14 +47,24 @@ export function RecommendServiceFormScreen() {
   const navigate = useNavigate();
   const { showToast, auth } = useOutletContext();
 
-  // Synced phone contacts (this session only). Fallback to mock CONTACTS
-  // when the user hasn't synced — keeps autosuggest useful for first-timers.
+  // Synced phone contacts (this session only). Fallback to the seeded
+  // pool (real profiles via listInvitableProfiles) when the user hasn't
+  // synced — keeps autosuggest useful for first-timers and pre-launch
+  // testing alike.
   const [synced, setSynced] = useState([]);
   const [syncing, setSyncing] = useState(false);
+  const [seededPool, setSeededPool] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    listInvitableProfiles({ limit: 200 }).then(({ data }) => {
+      if (!cancelled) setSeededPool(data || []);
+    });
+    return () => { cancelled = true; };
+  }, []);
   const hasSynced = synced.length > 0;
   const pool = useMemo(
-    () => hasSynced ? synced : CONTACTS,
-    [hasSynced, synced],
+    () => hasSynced ? synced : seededPool,
+    [hasSynced, synced, seededPool],
   );
 
   // Unified recipient state — name + phone + email + an optional pickedId
