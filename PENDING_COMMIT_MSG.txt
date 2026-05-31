@@ -1,41 +1,51 @@
-Logo organic v3 — drift bloom (Tarik picked candidate A)
+feat(profile): clickable avatars + public profile view (/u/:profileId)
 
-Each of the 8 petals now runs on its OWN keyframe with a coprime
-duration so the bloom cycles NEVER line up — the silhouette is
-constantly in flux, never repeats a pose. Heart drifts a sub-pixel
-as it pulses on yet another rhythm.
+Tarik feedback: "make all the avatars/profiles etc on the profile of
+services (recommenders avatars) clickable to the users (showing their
+recommendations)... replace Go-To with Reco'd or endorsed".
 
-index.css
-  3 organic keyframes:
-    cgBudPetalA — scale 0.08 → 1.00, rotate -3° → 2°
-    cgBudPetalB — scale 0.10 → 0.95, rotate  2° → -1.5°
-    cgBudPetalC — scale 0.06 → 1.04, rotate -1° → 3°
-  8 petal classes, each with its own duration + delay:
-    .cg-bud-p1  3.7s
-    .cg-bud-p2  4.3s   .20s delay
-    .cg-bud-p3  5.1s   .45s delay
-    .cg-bud-p4  4.1s   .10s delay
-    .cg-bud-p5  4.9s   .35s delay
-    .cg-bud-p6  3.9s   .60s delay
-    .cg-bud-p7  5.3s   .25s delay
-    .cg-bud-p8  4.7s   .50s delay
-  Heart on its own 6.1s rhythm:
-    cgBudHeart  — translate(-1,1)/(1,-1) + scale 0.96 ↔ 1.08
+New screen:
+  src/screens/PublicProfileScreen.jsx — modeled on the 7 attached
+  Jennifer Leighton / Jacob Flores mockups. Sections (all from real
+  DB rows; empty sections collapse silently — no fake data):
+    • Header: large avatar + name + role badge + Connector badge
+    • About: bio prose, "No bio yet!" empty state
+    • Social: IG handle + follower count (or grey "Instagram" when
+      not connected)
+    • {Name}'s Services: services they own, opens PDP on tap, with
+      "Reco'd by N friends and N Connectors" pill on each card
+    • People who love {Name}: review rows pulled from bookings+reviews
+    • {Name}'s Go-Tos: services this profile has recommended, joined
+      to owners; tap message → service PDP, tap owner avatar → owner
+      profile
 
-LeafLogo.jsx — BudBloom
-  Removed shared cg-bud-petal class. Each petal now gets a per-index
-  class (p1…p8) tied to its own keyframe + duration combo. Same hand-
-  tuned per-petal size/color variation kept from v2.
+Routing:
+  src/App.jsx — new <Route path="/u/:profileId" /> + HIDE_NAV prefix
+  so the profile renders without the bottom nav (modal-sheet style
+  matching the mockups).
 
-Total cycle length before any two petals align:
-  LCM(37,43,51,41,49,39,53,47) is enormous — practically, the bloom
-  never repeats inside a session. The mark feels alive without
-  jitter, exactly the Claude-logo "calm but never twice the same"
-  rhythm Tarik wanted.
+Clickable avatars throughout the app:
+  - ServiceDetailScreen (PDP) — recommender AvatarStack, lead-recommender
+    avatar, recommender-blurb avatars, provider-name header → all Links
+    to /u/{id}. Per Tarik: "make all the avatars profiles etc on the
+    profile of services".
+  - ActivityScreen GoatShareCard — service-owner avatar + recommender
+    pill avatar + recommender name in "Shared by X" → all Links to
+    /u/{id}. Owner avatar Link uses stopPropagation so it doesn't fire
+    the wrapping PDP-tap button.
+  - ResultsScreen ProviderCard — FriendAvatars now renders Links when
+    recommendersRaw is provided. Falls back to the old name-only avatars
+    for any legacy/mock paths.
 
-QA: 41/41 pass. Existing #30 (LeafLogo wires all 4 variants) still
-green — we only modified the bud animation, not the variant wiring.
+PDP copy:
+  ServiceDetailScreen reco line: "Go-to service for N users, F friends
+  and E experts, including Jennifer" → "Reco'd by F friends and E
+  Connectors, including Jennifer". Comment block updated to match.
 
-Files:
-  src/index.css
-  src/components/ui/LeafLogo.jsx
+API:
+  lib/api.js listGoatShares — adds service.owner_id to each row so the
+  GoatShareCard owner avatar can link to /u/{ownerId}.
+
+Verified:
+  - qa.mjs: 41/41 pass
+  - JSX syntax check on all edited files: pass

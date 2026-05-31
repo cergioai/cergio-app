@@ -85,9 +85,10 @@ import { ManageServicesScreen }             from './screens/ManageServicesScreen
 import { ServiceDetailProviderScreen }      from './screens/ServiceDetailProviderScreen';
 import { AuthScreen }                       from './screens/AuthScreen';
 import { MessagesScreen }                   from './screens/MessagesScreen';
+import { PublicProfileScreen }              from './screens/PublicProfileScreen';
 
 const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
-const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages']; // focused linear flows
+const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/']; // focused linear flows
 const HIDE_NAV_PATHS_EXTRA = [
   '/intake',                          // chat composer at bottom — nav was covering it
   '/intake-form',                     // structured form fallback — same reason
@@ -425,6 +426,10 @@ export default function App() {
           <Route path="/services/manage"       element={<ManageServicesScreen />} />
           <Route path="/services/:id"          element={<ServiceDetailProviderScreen />} />
           <Route path="/messages/:id"          element={<MessagesScreen />} />
+
+          {/* CERGIO-GUARD (2026-05-30): public profile view — every
+              avatar across the app links here via /u/{profileId}. */}
+          <Route path="/u/:profileId"          element={<PublicProfileScreen />} />
 
           <Route path="/logo-lab"              element={<LogoLabScreen />} />
 

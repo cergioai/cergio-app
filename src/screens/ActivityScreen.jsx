@@ -12,7 +12,7 @@
 // Provider-side outgoing requests live in /inbox 'Sent' tab — this screen
 // is the consumer's view only.
 import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { listConsumerBookings, listMyOutboundSpotlightRequests, listGoatShares } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 // FEED + REWARDS imports removed along with the fake "Friends
@@ -129,8 +129,10 @@ function initials(name) {
 function GoatShareCard({ row, onClick }) {
   const svc        = row.service;
   const goatName   = row.recommender.display_name || 'A Connector';
+  const goatId     = row.recommender.id || null;
   const followers  = row.recommender.follower_count || 0;
   const ownerName  = svc.owner_display_name || svc.title;
+  const ownerId    = svc.owner_id || null;
   const cover      = svc.cover_url;
   const gradient   = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
   // CERGIO-GUARD (2026-05-30): real follower count > 0 → show the
@@ -139,54 +141,96 @@ function GoatShareCard({ row, onClick }) {
   const headline = followers > 0
     ? `was shared to ${followers.toLocaleString()} followers`
     : 'was shared on Cergio';
+
+  // Both avatars (owner + recommender pill) are Links to public
+  // profiles. The card itself is also clickable → service PDP, so the
+  // avatar Links stopPropagation to avoid double-navigation.
+  const ownerAvatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+                          text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+  const goatAvatarCls  = `w-5 h-5 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+                          text-white text-[9px] font-extrabold flex items-center justify-center`;
+
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-transparent"
-    >
-      <div className="flex items-center gap-2.5 mb-2">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
-                        text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0">
-          {initials(ownerName)}
+    <div className="w-full text-left bg-transparent">
+      <button onClick={onClick} className="w-full text-left bg-transparent">
+        <div className="flex items-center gap-2.5 mb-2">
+          {ownerId ? (
+            <Link
+              to={`/u/${ownerId}`}
+              aria-label={`View ${ownerName}`}
+              onClick={(e) => e.stopPropagation()}
+              className={ownerAvatarCls}
+            >
+              {initials(ownerName)}
+            </Link>
+          ) : (
+            <div className={ownerAvatarCls}>{initials(ownerName)}</div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] leading-snug text-black">
+              {ownerId ? (
+                <Link
+                  to={`/u/${ownerId}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="font-extrabold underline"
+                >
+                  {ownerName}
+                </Link>
+              ) : (
+                <span className="font-extrabold">{ownerName}</span>
+              )}
+              <span className="font-medium text-b2"> {headline}</span>
+            </p>
+            <p className="text-[11.5px] text-gd font-extrabold mt-0.5">
+              <span className="inline-flex items-center gap-1">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
+                  <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
+                  <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                </svg>
+                {svc.category || 'Service'}
+              </span>
+              {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
+            </p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] leading-snug text-black">
-            <span className="font-extrabold">{ownerName}</span>
-            <span className="font-medium text-b2"> {headline}</span>
-          </p>
-          <p className="text-[11.5px] text-gd font-extrabold mt-0.5">
-            <span className="inline-flex items-center gap-1">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-                <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-                <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-              </svg>
-              {svc.category || 'Service'}
-            </span>
-            {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
-          </p>
+        <div className={`h-[140px] rounded-[14px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
+          {cover && (
+            <img
+              src={cover}
+              alt=""
+              loading="lazy"
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
         </div>
-      </div>
-      <div className={`h-[140px] rounded-[14px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
-        {cover && (
-          <img
-            src={cover}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        )}
-      </div>
+      </button>
+      {/* Shared-by pill — separate from the PDP-tap button so the
+          recommender avatar + name can navigate to the recommender's
+          public profile without firing the PDP nav. */}
       <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
-        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
-                        text-white text-[9px] font-extrabold flex items-center justify-center">
-          {initials(goatName)}
-        </div>
+        {goatId ? (
+          <Link
+            to={`/u/${goatId}`}
+            aria-label={`View ${goatName}`}
+            className={goatAvatarCls}
+          >
+            {initials(goatName)}
+          </Link>
+        ) : (
+          <div className={goatAvatarCls}>{initials(goatName)}</div>
+        )}
         <p className="text-[12px] text-gd font-extrabold">
-          Shared by {goatName}, Connector
+          Shared by{' '}
+          {goatId ? (
+            <Link to={`/u/${goatId}`} className="underline">{goatName}</Link>
+          ) : (
+            goatName
+          )}
+          , Connector
         </p>
       </div>
-    </button>
+    </div>
   );
 }
 

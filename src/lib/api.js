@@ -1932,6 +1932,9 @@ export async function listGoatShares({ limit = 24 } = {}) {
           location_text:       svc.location_text,
           photo_class:         svc.photo_class,
           cover_url:           svc.cover_url,
+          // CERGIO-GUARD (2026-05-30): owner_id exposed so the
+          // activity-feed card can link the owner avatar → /u/{ownerId}.
+          owner_id:            svc.owner_id || null,
           owner_display_name:  owner?.display_name || null,
         },
         recommender: {

@@ -21,7 +21,7 @@
 //   • Book CTA — fixed-bottom, same handleBook flow as ProviderCard
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useLocation, useOutletContext } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 
 function initialsOf(name) {
@@ -39,22 +39,37 @@ const AV_GRADS = [
   'bg-gradient-to-br from-[#4478AA] to-[#2A5070]',
 ];
 
+// CERGIO-GUARD (2026-05-30): every avatar in this stack is a Link to
+// the recommender's public profile (/u/{id}). Tarik's spec:
+// "make all the avatars profiles etc on the profile of services
+// (recommenders avatars)" clickable.
 function AvatarStack({ recommenders, maxVisible = 4 }) {
   if (!recommenders?.length) return null;
   const visible = recommenders.slice(0, maxVisible);
   const overflow = Math.max(0, recommenders.length - maxVisible);
   return (
     <div className="flex items-center">
-      {visible.map((r, i) => (
-        <div
-          key={r.id || i}
-          className={`w-9 h-9 rounded-full border-2 border-white text-white text-[12px] font-extrabold
-                      ${AV_GRADS[i % AV_GRADS.length]} ${i > 0 ? '-ml-2.5' : ''}
-                      flex items-center justify-center shadow-sm`}
-        >
-          {initialsOf(r.name)}
-        </div>
-      ))}
+      {visible.map((r, i) => {
+        const cls = `w-9 h-9 rounded-full border-2 border-white text-white text-[12px] font-extrabold
+                     ${AV_GRADS[i % AV_GRADS.length]} ${i > 0 ? '-ml-2.5' : ''}
+                     flex items-center justify-center shadow-sm`;
+        if (r.id) {
+          return (
+            <Link
+              key={r.id || i}
+              to={`/u/${r.id}`}
+              aria-label={`View ${r.name || 'profile'}`}
+              className={cls}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {initialsOf(r.name)}
+            </Link>
+          );
+        }
+        return (
+          <div key={i} className={cls}>{initialsOf(r.name)}</div>
+        );
+      })}
       {overflow > 0 && (
         <div className="w-9 h-9 rounded-full border-2 border-white bg-gl text-gd text-[11px] font-extrabold
                         -ml-2.5 flex items-center justify-center shadow-sm">
@@ -189,10 +204,11 @@ export function ServiceDetailScreen() {
   }, [seeded, serviceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Bucketed reco summary — Jennifer Leighton mockup format:
-  //   "Go-to service for 15 users, 4 friends and 30 experts, including Jennifer Connery"
-  // - users     = total recommenders (the headline number)
+  //   "Reco'd by 4 friends and 30 Connectors, including Jennifer Connery"
+  // - total     = total recommenders (headline number, used in
+  //               friend/Connector-less fallback)
   // - friends   = !is_connector
-  // - experts   = is_connector (Connectors are now "experts" in copy)
+  // - experts   = is_connector (rendered as "Connector(s)" in copy)
   // - lead name = first friend (preferred) or first Connector
   // Returns a structured object so the render can style the numbers as
   // underlined chips per the mockup.
@@ -275,11 +291,23 @@ export function ServiceDetailScreen() {
         </p>
       </div>
 
-      {/* Big name + badges row — matches Jennifer Leighton mockup */}
+      {/* Big name + badges row — matches Jennifer Leighton mockup.
+          CERGIO-GUARD (2026-05-30): the provider's name is a Link to
+          their public profile (/u/{ownerId}) so users can audit who
+          they're booking from. */}
       <div className="px-5 pt-5">
-        <h1 className="text-[28px] font-extrabold text-black leading-[1.05]">
-          {ownerProfile?.display_name || provider.name}
-        </h1>
+        {provider.ownerId ? (
+          <Link
+            to={`/u/${provider.ownerId}`}
+            className="text-[28px] font-extrabold text-black leading-[1.05] hover:underline"
+          >
+            {ownerProfile?.display_name || provider.name}
+          </Link>
+        ) : (
+          <h1 className="text-[28px] font-extrabold text-black leading-[1.05]">
+            {ownerProfile?.display_name || provider.name}
+          </h1>
+        )}
         <div className="flex items-center gap-3 mt-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
@@ -299,45 +327,66 @@ export function ServiceDetailScreen() {
         </div>
       </div>
 
-      {/* Reco line — "Go-to service for N users, F friends and E experts,
-          including {LeadName}" with single lead-recommender avatar pinned
-          right. Replaces the multi-avatar stack as the headline anchor.
-          Counts are underlined to feel tappable (taps to a future
-          "who recommended" sheet — TODO). */}
+      {/* Reco line — "Reco'd by N friends and E Connectors, including
+          {LeadName}" with single lead-recommender avatar pinned right.
+          The lead avatar + lead name are both Links to the recommender's
+          public profile (/u/{id}). The bucket counts stay underlined to
+          feel tappable (future "who recommended" sheet — TODO).
+          CERGIO-GUARD (2026-05-30): copy switched from "Go-to service
+          for…" to "Reco'd by…" per Tarik's vocabulary preference. */}
       {recoSummary && (
         <div className="mx-5 mt-4 pt-4 border-t border-bdr">
           <div className="flex items-center gap-3">
             <p className="flex-1 text-[13.5px] text-b2 leading-snug">
-              Go-to service for{' '}
-              <span className="text-gd font-extrabold underline">
-                {recoSummary.total} {recoSummary.total === 1 ? 'user' : 'users'}
-              </span>
+              Reco&apos;d by{' '}
               {recoSummary.friends > 0 && (
-                <>
-                  ,{' '}
-                  <span className="text-gd font-extrabold underline">
-                    {recoSummary.friends} {recoSummary.friends === 1 ? 'friend' : 'friends'}
-                  </span>
-                </>
+                <span className="text-gd font-extrabold underline">
+                  {recoSummary.friends} {recoSummary.friends === 1 ? 'friend' : 'friends'}
+                </span>
               )}
+              {recoSummary.friends > 0 && recoSummary.experts > 0 && <> and </>}
               {recoSummary.experts > 0 && (
+                <span className="text-gd font-extrabold underline">
+                  {recoSummary.experts} {recoSummary.experts === 1 ? 'Connector' : 'Connectors'}
+                </span>
+              )}
+              {recoSummary.friends === 0 && recoSummary.experts === 0 && (
+                <span className="text-gd font-extrabold underline">
+                  {recoSummary.total} {recoSummary.total === 1 ? 'person' : 'people'}
+                </span>
+              )}
+              {recoSummary.leadName && recoSummary.leadAvatar?.id ? (
                 <>
-                  {' '}and{' '}
-                  <span className="text-gd font-extrabold underline">
-                    {recoSummary.experts} {recoSummary.experts === 1 ? 'expert' : 'experts'}
-                  </span>
+                  , including{' '}
+                  <Link
+                    to={`/u/${recoSummary.leadAvatar.id}`}
+                    className="text-gd font-extrabold underline"
+                  >
+                    {recoSummary.leadName}
+                  </Link>
                 </>
-              )}
-              {recoSummary.leadName && (
+              ) : recoSummary.leadName ? (
                 <>, including <span className="text-gd font-extrabold underline">{recoSummary.leadName}</span></>
-              )}
+              ) : null}
             </p>
             {recoSummary.leadAvatar && (
-              <div className={`w-12 h-12 rounded-full text-white text-[14px] font-extrabold
-                               flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
-                               ${AV_GRADS[0]}`}>
-                {initialsOf(recoSummary.leadAvatar.name)}
-              </div>
+              recoSummary.leadAvatar.id ? (
+                <Link
+                  to={`/u/${recoSummary.leadAvatar.id}`}
+                  aria-label={`View ${recoSummary.leadAvatar.name || 'profile'}`}
+                  className={`w-12 h-12 rounded-full text-white text-[14px] font-extrabold
+                              flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
+                              ${AV_GRADS[0]}`}
+                >
+                  {initialsOf(recoSummary.leadAvatar.name)}
+                </Link>
+              ) : (
+                <div className={`w-12 h-12 rounded-full text-white text-[14px] font-extrabold
+                                 flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
+                                 ${AV_GRADS[0]}`}>
+                  {initialsOf(recoSummary.leadAvatar.name)}
+                </div>
+              )
             )}
           </div>
         </div>
@@ -441,20 +490,33 @@ export function ServiceDetailScreen() {
         <div className="mx-5 mt-6">
           <h2 className="text-[17px] font-extrabold text-black mb-3">What people say</h2>
           <div className="flex flex-col gap-3">
-            {recommenders.slice(0, 3).map((r, i) => (
-              <div key={r.id} className="flex gap-2.5">
-                <div className={`w-8 h-8 rounded-full text-white text-[11px] font-extrabold flex-shrink-0
-                                 flex items-center justify-center ${AV_GRADS[i % AV_GRADS.length]}`}>
-                  {initialsOf(r.name)}
+            {recommenders.slice(0, 3).map((r, i) => {
+              const avatarCls = `w-8 h-8 rounded-full text-white text-[11px] font-extrabold flex-shrink-0
+                                 flex items-center justify-center ${AV_GRADS[i % AV_GRADS.length]}`;
+              return (
+                <div key={r.id} className="flex gap-2.5">
+                  {r.id ? (
+                    <Link to={`/u/${r.id}`} aria-label={`View ${r.name || 'profile'}`} className={avatarCls}>
+                      {initialsOf(r.name)}
+                    </Link>
+                  ) : (
+                    <div className={avatarCls}>{initialsOf(r.name)}</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] text-b2 leading-snug">
+                      {r.id ? (
+                        <Link to={`/u/${r.id}`} className="font-extrabold text-black underline">
+                          {r.name}{r.is_connector ? ' · Connector' : ''}:
+                        </Link>
+                      ) : (
+                        <span className="font-extrabold text-black">{r.name}{r.is_connector ? ' · Connector' : ''}:</span>
+                      )}{' '}
+                      <span className="italic">&quot;{r.message}&quot;</span>
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] text-b2 leading-snug">
-                    <span className="font-extrabold text-black">{r.name}{r.is_connector ? ' · Expert' : ''}:</span>{' '}
-                    <span className="italic">"{r.message}"</span>
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

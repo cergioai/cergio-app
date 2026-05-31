@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 // Photo background classes — CSS gradients, no external images
 const PHOTO_BG = {
   'fv-jamie': 'bg-gradient-to-br from-[#e8dcc8] via-[#b89870] to-[#604030]',
@@ -21,25 +23,49 @@ function SavingsLabel({ savings }) {
   );
 }
 
-function FriendAvatars({ friends }) {
-  if (!friends || friends.length === 0) return null;
-  const initials = friends.slice(0, 3).map(f => f.slice(0, 2).toUpperCase());
+// CERGIO-GUARD (2026-05-30): when recommenders[] (full objects with
+// id+name) is provided, render each avatar as a Link to /u/{id}.
+// Falls back to friends[] (strings only) for legacy/mock paths.
+function FriendAvatars({ friends, recommenders }) {
   const colors = [
     'bg-gradient-to-br from-[#b06090] to-[#703050]',
     'bg-gradient-to-br from-[#4478aa] to-[#2a5070]',
     'bg-gradient-to-br from-g to-gd',
   ];
+  const initialsOf = (s) => (s || '?').slice(0, 2).toUpperCase();
+  const cls = (i) =>
+    `w-[22px] h-[22px] rounded-full border-2 border-cr text-white text-[8px] font-bold
+     ${colors[i]} ${i > 0 ? '-ml-1.5' : ''} flex items-center justify-center`;
+
+  if (recommenders && recommenders.length > 0) {
+    const visible = recommenders.slice(0, 3);
+    return (
+      <div className="flex">
+        {visible.map((r, i) => (
+          r.id ? (
+            <Link
+              key={r.id}
+              to={`/u/${r.id}`}
+              aria-label={`View ${r.name || 'profile'}`}
+              onClick={(e) => e.stopPropagation()}
+              className={cls(i)}
+            >
+              {initialsOf(r.name)}
+            </Link>
+          ) : (
+            <div key={i} className={cls(i)}>{initialsOf(r.name)}</div>
+          )
+        ))}
+      </div>
+    );
+  }
+
+  if (!friends || friends.length === 0) return null;
+  const ini = friends.slice(0, 3).map(f => initialsOf(f));
   return (
     <div className="flex">
-      {initials.map((ini, i) => (
-        <div
-          key={i}
-          className={`w-[22px] h-[22px] rounded-full border-2 border-cr text-white text-[8px] font-bold
-                      ${colors[i]} ${i > 0 ? '-ml-1.5' : ''}`}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          {ini}
-        </div>
+      {ini.map((s, i) => (
+        <div key={i} className={cls(i)}>{s}</div>
       ))}
     </div>
   );
@@ -47,7 +73,10 @@ function FriendAvatars({ friends }) {
 
 export function ProviderCard({ provider, onBook, onSave, onOpen }) {
   const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl,
-          friendCount = 0, connectorCount = 0, leadFriendName = null } = provider;
+          friendCount = 0, connectorCount = 0, leadFriendName = null,
+          // CERGIO-GUARD (2026-05-30): full recommender objects (id+name)
+          // — used to render the FriendAvatars as Links to /u/{id}.
+          recommendersRaw = null } = provider;
 
   // CERGIO-GUARD (2026-05-30): reco line format:
   //   "Reco'd by Jennifer Hu, 3 other friends and 21 Connectors"
@@ -190,7 +219,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
         {/* Reco line */}
         {recoText() ? (
           <div className="flex items-center gap-2 mb-3">
-            <FriendAvatars friends={friends} />
+            <FriendAvatars friends={friends} recommenders={recommendersRaw} />
             <p className="text-[12px] italic text-b2 leading-snug">{recoText()}</p>
           </div>
         ) : (
