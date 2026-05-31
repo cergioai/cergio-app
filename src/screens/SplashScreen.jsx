@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { LeafLogo } from '../components/ui/LeafLogo';
 
 export function SplashScreen() {
@@ -49,6 +49,16 @@ export function SplashScreen() {
         >
           Continue as guest
         </button>
+      </div>
+
+      {/* CERGIO-GUARD (2026-05-31): minimal company link row.
+          Reachable from the splash without overwhelming the hero. */}
+      <div className="relative z-10 mt-8 flex items-center gap-4 text-[11.5px] font-medium text-white/40">
+        <Link to="/about"   className="hover:text-white/70 transition-colors">About</Link>
+        <span>·</span>
+        <Link to="/contact" className="hover:text-white/70 transition-colors">Contact</Link>
+        <span>·</span>
+        <Link to="/terms"   className="hover:text-white/70 transition-colors">Terms</Link>
       </div>
     </div>
   );

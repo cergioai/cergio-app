@@ -1,64 +1,75 @@
-design-audit: Phase 1 foundation + sampling tool + spotlight audit
+feat(company): wire About + Contact + Terms + entry-point footers
 
-Tarik: "the designs audit is still very far... can we set up a proper
-plan to audit the designs png set up spec and then execute ... suggest
-a solid solution that gets quality execution.. (no change to
-architecture ... just fonts and design brand lines etc..)".
+Tarik supplied the spec + canonical copy in chat: "begin to wire about
+us... Add Mission (around Human Powered Guided AI for Shared
+prosperity .. introduce Asset Growth Participation Income concept),
+contact (Press, Investors, Support, Partnerships, Influencers opens
+the same form, with subject options...), terms of use... (highlight
+no liability etc)... use standard booking platform.."
 
-This commit ships the FOUNDATION for a methodical visual-skin audit.
-No screen changes yet — those land in Phase 3 commits per the plan.
+New screens
+  src/screens/AboutScreen.jsx        — /about
+    • Hero: logo + "Friend-powered AI. Every result is backed by
+      someone you know."
+    • Mission card: "Human-powered Guided AI for shared prosperity."
+    • Three revenue streams: Cash earnings · Free service barters ·
+      Asset Participation Income (APIC)
+    • Team credibility: "Tech leads from Uber, Google, Grubhub, and
+      Goldman Sachs."
+    • Three-column footer (Platform / Company / Support) with links
+      to How it works, Join, Terms, About, Contact (+ Press /
+      Investors / Partnerships pre-filling the subject), Get help,
+      Privacy.
 
-DESIGN_AUDIT.md (new, root of Cergio Claude)
-  Master plan + process + per-screen punch list.
-    1. Why this audit exists (gap analysis vs prior pixel-perfect pass).
-    2. Mockup canon (which PNGs map to which screens).
-    3. Five phases (Tokens → Primitives → Per-screen → Interactions →
-       Screenshot QA).
-    4. Pixel-sampling protocol (never eyeball).
-    5. Per-screen punch lists with ✓ / ☐ checkboxes already pre-marked
-       for what's done vs what's outstanding.
-    6. Execution order (Home → PDP → PublicProfile → SRP → polish).
-    7. Definition of done.
+  src/screens/ContactScreen.jsx      — /contact
+    • Single unified form. Subject dropdown:
+        General · Support · Press · Investors · Partnerships · Influencers
+    • Press / Investors / Partnerships / Influencers / Support all
+      land here; ?subject= pre-selects the dropdown so the company
+      footer links route correctly.
+    • Submit writes to a contact_messages table when supabase is
+      ready; soft-falls to a thank-you state if the table doesn't
+      exist yet so the form is testable in any environment.
+    • Inline links to Terms + Privacy on the submit fineprint.
 
-Sample Mockup Tokens.command (new, root)
-  Drag a PNG onto the script — get back:
-    • Top 15 colors by area frequency (brand palette)
-    • Spot samples at 5 hard-coded coordinates (edit per mockup)
-    • Vertical scan column-by-column listing color transitions
-      (reveals divider heights + section bands)
-    • Horizontal scan to confirm left content margin
-  Tarik never has to eyeball a hex again.
+  src/screens/TermsScreen.jsx        — /terms
+    • Standard booking-platform terms, structured for a layperson read:
+      Acceptance · What Cergio does · Eligibility · Bookings, payments,
+      cancellations · Connectors and spotlights · User content + recos ·
+      APIC disclaimer · Disclaimers · Limitation of liability · Indemnity ·
+      IP · Termination · Governing law · Changes · Contact.
+    • Amber-warn highlight block at the top makes the no-liability +
+      booking-platform character unmistakable:
+        "Cergio is a booking + introduction platform. We connect Users,
+         Providers, and Connectors and facilitate payments — we do not
+         deliver the underlying services, we are not your employer or
+         theirs, and we accept no liability for the actions or outputs
+         of any party introduced via the platform."
+    • APIC section explicitly frames it as a contractual loyalty
+      bonus, not a security and not a guarantee.
+    • NOT legal advice — file ships as a template Tarik will tune
+      with counsel.
 
-Audit Spotlights.command (new, root)
-  Runs the spotlight-flow audit Tarik asked for separately. Reports:
-    • Status histogram (where rows pile up in the funnel)
-    • Per-request detail with cross-refs to profiles, services,
-      earnings, notifications
-    • Five red flags (paid w/o earnings, posted w/o URL, confirmed w/o
-      cleared, paid > 7d not posted, declined w/ earnings)
-    • RLS sanity check (anon role should NOT see pending requests)
+Routes (src/App.jsx)
+  Added /about · /contact · /terms. AboutScreen + ContactScreen +
+  TermsScreen each render the BottomNav so users can hop back to
+  Home / Activity / Profile mid-read.
 
-Type scale locked in tailwind.config.js + design-spec.md
-  Phase 1 foundation. Adds the named type scale to Tailwind so every
-  text element can use a scale step instead of an arbitrary `text-[Npx]`:
-    display-1 (32/900) display-2 (28/800) heading-1 (22/800)
-    heading-2 (18/800) body-lg (16/500)   body (14/500)
-    body-sm (13/500)   meta (12/500)      meta-sm (11/600)
-    caps (10/800/0.06em letter-spacing/uppercase implicit in component)
-  design-spec.md "Typography" section rewritten as a strict table
-  pointing at these tokens. Spacing scale also documented (strict
-  4/8/12/16/20/24/32/40/48).
+Entry points
+  • SplashScreen: minimal "About · Contact · Terms" link row at the
+    bottom of the screen, white/40 so it doesn't compete with the hero.
+  • AuthScreen: same row below the "Continue as guest" button so the
+    legals are reachable before sign-up.
+  • HomeScreen: "About · Contact · Terms" added BELOW the existing
+    "Cergio is human-powered AI for shared prosperity" disclaimer,
+    inside the same floating footer block.
 
-Next commits — Phase 3 execution per DESIGN_AUDIT.md § 6 order:
-  - Phase 3a: Home — apply scales + greeting headline review
-  - Phase 3b: PDP — apply scales + add Reviews section + "Leave a go-to
-    review" button per Jennifer Leighton mockup
-  - Phase 3c: PublicProfile — apply scales + Services-section
-    conditionals + "See all (N)" pagination affordances
-  - Phase 3d: SRP/Results — biggest deviation (category icon row +
-    filter pills + ProviderCard refit)
-  - Phase 4: interactions (focus rings, press states)
-  - Phase 5: screenshot QA
+Out of scope for this commit (next pass):
+  - contact_messages table migration (form falls through gracefully
+    until it exists).
+  - Hamburger overlay on inner screens (Splash/Auth/Home footers
+    cover the entry-point requirement for now).
+  - APIC dedicated explainer page — linked from About's revenue-stream
+    section once we have the long-form copy.
 
-Verified: qa.mjs 41/41 · type scale loads without breaking existing
-screens (Tailwind merges with defaults).
+Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.

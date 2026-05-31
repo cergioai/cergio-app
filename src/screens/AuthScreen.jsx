@@ -6,7 +6,7 @@
 // OAuth identities — for now they route to the existing connect modals
 // inside Profile after sign-in).
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useOutletContext, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useLocation } from 'react-router-dom';
 import { LeafLogo } from '../components/ui/LeafLogo';
 import { getActiveRef } from '../lib/referral';
 import { REWARDS } from '../lib/rewards';
@@ -448,6 +448,17 @@ export function AuthScreen() {
         >
           Continue as guest
         </button>
+
+        {/* CERGIO-GUARD (2026-05-31): company link row at the foot of
+            the Auth screen, same pattern as Splash. Keeps these reachable
+            even before the user signs in. */}
+        <div className="mt-8 flex items-center justify-center gap-4 text-[11.5px] font-medium text-b3">
+          <Link to="/about"   className="hover:text-gd transition-colors">About</Link>
+          <span>·</span>
+          <Link to="/contact" className="hover:text-gd transition-colors">Contact</Link>
+          <span>·</span>
+          <Link to="/terms"   className="hover:text-gd transition-colors">Terms</Link>
+        </div>
       </div>
 
       {/* Forgot-password bottom sheet — send a Supabase reset link. */}

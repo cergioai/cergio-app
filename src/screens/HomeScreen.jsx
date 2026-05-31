@@ -1486,6 +1486,17 @@ export function HomeScreen() {
         <p className="text-center text-[11px] text-b3 font-normal leading-snug py-2">
           Cergio is human-powered AI for shared prosperity
         </p>
+        {/* CERGIO-GUARD (2026-05-31): About · Contact · Terms link
+            row. pointer-events-auto so the links are tappable even
+            though the parent disables them (so it doesn't block the
+            nav). */}
+        <div className="flex items-center justify-center gap-3 text-[10.5px] font-medium text-b3 pointer-events-auto">
+          <a href="/about"   className="hover:text-gd transition-colors">About</a>
+          <span>·</span>
+          <a href="/contact" className="hover:text-gd transition-colors">Contact</a>
+          <span>·</span>
+          <a href="/terms"   className="hover:text-gd transition-colors">Terms</a>
+        </div>
       </div>
 
       {/* CC identity gate */}

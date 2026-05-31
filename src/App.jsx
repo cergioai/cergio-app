@@ -86,6 +86,9 @@ import { ServiceDetailProviderScreen }      from './screens/ServiceDetailProvide
 import { AuthScreen }                       from './screens/AuthScreen';
 import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
+import { AboutScreen }                      from './screens/AboutScreen';
+import { ContactScreen }                    from './screens/ContactScreen';
+import { TermsScreen }                      from './screens/TermsScreen';
 
 const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
 // CERGIO-GUARD (2026-05-30): /service/ added — the PDP has a fixed-
@@ -449,6 +452,14 @@ export default function App() {
           {/* CERGIO-GUARD (2026-05-30): public profile view — every
               avatar across the app links here via /u/{profileId}. */}
           <Route path="/u/:profileId"          element={<PublicProfileScreen />} />
+
+          {/* CERGIO-GUARD (2026-05-31): company surfaces — About,
+              Contact (single form, ?subject= pre-fills), Terms of
+              Use. Reached via the new footer link row on Splash /
+              Auth / Home. */}
+          <Route path="/about"                 element={<AboutScreen />} />
+          <Route path="/contact"               element={<ContactScreen />} />
+          <Route path="/terms"                 element={<TermsScreen />} />
 
           <Route path="/logo-lab"              element={<LogoLabScreen />} />
 

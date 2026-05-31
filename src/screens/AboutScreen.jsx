@@ -1,0 +1,173 @@
+// CERGIO-GUARD (2026-05-31): About Cergio — Mission + Asset
+// Participation Income concept + team credibility.
+//
+// Tarik supplied the canonical copy in chat:
+//   "I'm Cergio — friend-powered AI. Every result is backed by someone
+//    you know.
+//    I create revenue through cash earnings, free service barters, and
+//    Asset Participation Income — sharing Cergio's growth with the
+//    people who build it.
+//    Built with tech leads from Uber, Google, Grubhub, and Goldman Sachs."
+//
+// Mission framing: "Human-Powered Guided AI for Shared Prosperity".
+//
+// Route: /about. Reached via the small "About · Contact · Terms"
+// row in HomeScreen / Splash / Auth footers, or directly.
+
+import { Link, useNavigate } from 'react-router-dom';
+import { LeafLogo } from '../components/ui/LeafLogo';
+
+export function AboutScreen() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex-1 flex flex-col bg-cream pb-16 overflow-y-auto">
+      {/* Top bar — close back to wherever the user came from */}
+      <div className="px-5 pt-7 flex items-center justify-between">
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Back"
+          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+        >
+          ‹
+        </button>
+        <Link
+          to="/contact"
+          className="text-[12.5px] font-extrabold text-gd hover:underline"
+        >
+          Contact us →
+        </Link>
+      </div>
+
+      {/* Hero — logo + name + the canonical one-line tagline */}
+      <div className="px-5 pt-8 flex flex-col items-center text-center">
+        <LeafLogo size={88} />
+        <h1 className="text-[28px] font-extrabold text-black leading-tight mt-5 tracking-wide">
+          About <span className="tracking-[0.18em] uppercase">Cergio</span>
+        </h1>
+        <p className="text-[14px] text-b2 font-medium leading-relaxed mt-3 max-w-[320px]">
+          Friend-powered AI. Every result is backed by someone you know.
+        </p>
+      </div>
+
+      {/* Mission card */}
+      <div className="mx-5 mt-8 bg-white border border-line rounded-[18px] p-5">
+        <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
+          Our mission
+        </p>
+        <h2 className="text-[20px] font-extrabold text-black leading-tight mt-2">
+          Human-powered Guided AI for shared prosperity.
+        </h2>
+        <p className="text-[13.5px] text-b2 leading-relaxed mt-3">
+          Cergio routes through your real network — friends, trusted
+          providers, Connectors — and uses AI to negotiate, book, and
+          settle on your behalf. The intelligence is in the guidance;
+          the trust is in the people.
+        </p>
+      </div>
+
+      {/* Three revenue streams — short, scannable */}
+      <div className="mx-5 mt-5 bg-white border border-line rounded-[18px] p-5">
+        <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
+          Three ways Cergio creates value
+        </p>
+        <div className="mt-3 flex flex-col gap-3">
+          <div>
+            <p className="text-[14px] font-extrabold text-black leading-tight">
+              1. Cash earnings
+            </p>
+            <p className="text-[13px] text-b2 leading-snug mt-0.5">
+              Connectors earn cash per client booked. Users earn credit
+              from every invite + reco that turns into a booking.
+            </p>
+          </div>
+          <div>
+            <p className="text-[14px] font-extrabold text-black leading-tight">
+              2. Free service barters
+            </p>
+            <p className="text-[13px] text-b2 leading-snug mt-0.5">
+              Connectors trade their reach (Instagram, TikTok) for free
+              services from providers. Service for spotlight — no cash,
+              real value.
+            </p>
+          </div>
+          <div>
+            <p className="text-[14px] font-extrabold text-black leading-tight">
+              3. Asset Participation Income (APIC)
+            </p>
+            <p className="text-[13px] text-b2 leading-snug mt-0.5">
+              Every dollar you earn on Cergio also accrues a share of
+              Cergio&apos;s growth. The earlier you join + the more your
+              network grows, the larger your participation. Regular
+              income tied to the orchard you help grow — not a one-off
+              referral bonus.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Team credibility */}
+      <div className="mx-5 mt-5 bg-gl border border-g/25 rounded-[18px] p-5">
+        <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
+          Built by
+        </p>
+        <p className="text-[14px] font-extrabold text-black leading-tight mt-2">
+          Tech leads from Uber, Google, Grubhub, and Goldman Sachs.
+        </p>
+        <p className="text-[12.5px] text-b2 leading-snug mt-2">
+          Marketplaces, money flow, search ranking, and growth — the
+          stack that scaled the last decade of consumer apps, now
+          building one where the network earns alongside the platform.
+        </p>
+      </div>
+
+      {/* Footer link row */}
+      <div className="mt-8 px-5">
+        <div className="grid grid-cols-3 gap-3">
+          <FooterCol heading="Platform">
+            <FooterLink to="/home" label="How it works" />
+            <FooterLink to="/auth" label="Join" />
+            <FooterLink to="/terms" label="Terms" />
+          </FooterCol>
+          <FooterCol heading="Company">
+            <FooterLink to="/about" label="About" />
+            <FooterLink to="/contact" label="Contact" />
+            <FooterLink to="/contact?subject=press" label="Press" />
+            <FooterLink to="/contact?subject=investors" label="Investors" />
+            <FooterLink to="/contact?subject=partnerships" label="Partnerships" />
+          </FooterCol>
+          <FooterCol heading="Support">
+            <FooterLink to="/contact?subject=support" label="Get help" />
+            <FooterLink to="/terms" label="Terms" />
+            <FooterLink to="/privacy" label="Privacy" />
+          </FooterCol>
+        </div>
+        <p className="text-[11px] text-b3 font-medium mt-6 text-center">
+          &copy; {new Date().getFullYear()} Cergio.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FooterCol({ heading, children }) {
+  return (
+    <div>
+      <p className="text-[11px] font-extrabold text-b2 tracking-[0.12em] uppercase mb-2">
+        {heading}
+      </p>
+      <div className="flex flex-col gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function FooterLink({ to, label }) {
+  return (
+    <Link
+      to={to}
+      className="text-[12.5px] text-b2 font-medium hover:text-gd hover:underline"
+    >
+      {label}
+    </Link>
+  );
+}
