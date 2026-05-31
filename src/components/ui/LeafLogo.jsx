@@ -124,31 +124,29 @@ function GrowthRings({ size, working }) {
 //     adds hand-painted feel
 function BudBloom({ size, working }) {
   const restScale = 0.72;
-  // 8 petals — hand-tuned variation. Don't replace these with a loop
-  // generator; the asymmetry is the point.
+  // 8 petals — each assigned its OWN keyframe + coprime duration in
+  // index.css (.cg-bud-p1 … .cg-bud-p8). With 8 cycles never matching,
+  // the silhouette is constantly in flux. Hand-tuned size + color
+  // variation keeps the geometric perfection from creeping back in.
   const petals = [
-    { rot:   2, rx: 11, ry: 32, fill: '#2C5D21', opacity: 0.92, delay: '0.00s' },
-    { rot:  43, rx: 10, ry: 30, fill: '#3FA821', opacity: 0.85, delay: '0.18s' },
-    { rot:  91, rx: 12, ry: 33, fill: '#1E4D00', opacity: 0.94, delay: '0.05s' },
-    { rot: 134, rx:  9, ry: 28, fill: '#3FA821', opacity: 0.80, delay: '0.25s' },
-    { rot: 181, rx: 13, ry: 34, fill: '#2C5D21', opacity: 0.95, delay: '0.10s' },
-    { rot: 224, rx: 10, ry: 29, fill: '#3FA821', opacity: 0.82, delay: '0.30s' },
-    { rot: 271, rx: 11, ry: 31, fill: '#2C5D21', opacity: 0.90, delay: '0.08s' },
-    { rot: 313, rx: 12, ry: 30, fill: '#3FA821', opacity: 0.78, delay: '0.22s' },
+    { rot:   2, rx: 11, ry: 32, fill: '#2C5D21', opacity: 0.92, cls: 'cg-bud-p1' },
+    { rot:  43, rx: 10, ry: 30, fill: '#3FA821', opacity: 0.85, cls: 'cg-bud-p2' },
+    { rot:  91, rx: 12, ry: 33, fill: '#1E4D00', opacity: 0.94, cls: 'cg-bud-p3' },
+    { rot: 134, rx:  9, ry: 28, fill: '#3FA821', opacity: 0.80, cls: 'cg-bud-p4' },
+    { rot: 181, rx: 13, ry: 34, fill: '#2C5D21', opacity: 0.95, cls: 'cg-bud-p5' },
+    { rot: 224, rx: 10, ry: 29, fill: '#3FA821', opacity: 0.82, cls: 'cg-bud-p6' },
+    { rot: 271, rx: 11, ry: 31, fill: '#2C5D21', opacity: 0.90, cls: 'cg-bud-p7' },
+    { rot: 313, rx: 12, ry: 30, fill: '#3FA821', opacity: 0.78, cls: 'cg-bud-p8' },
   ];
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Each petal animates independently — staggered delays make the
-          bloom look like a real flower opening petal-by-petal rather
-          than as a single scaling sprite. */}
       {petals.map((p, i) => (
         <g
           key={i}
-          className={working ? 'cg-bud-petal' : ''}
+          className={working ? p.cls : ''}
           style={{
             transformOrigin: '60px 60px',
             transformBox: 'view-box',
-            animationDelay: working ? p.delay : undefined,
             transform: working ? undefined : `scale(${restScale})`,
           }}
         >
@@ -160,8 +158,9 @@ function BudBloom({ size, working }) {
           />
         </g>
       ))}
-      {/* Heart — slightly off-center for organic feel, pulses on its
-          own slower rhythm. Pale orange blob smear inside for life. */}
+      {/* Heart drifts a sub-pixel as it pulses — adds the "alive" feel
+          even when petals are mid-cycle. Pale-orange blob smear for
+          painterly depth. */}
       <g
         className={working ? 'cg-bud-heart' : ''}
         style={{ transformOrigin: '60px 60px', transformBox: 'view-box' }}

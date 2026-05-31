@@ -1,26 +1,41 @@
-Spotlight area row: single line, Draw + On-site only (drop radius pills)
+Logo organic v3 — drift bloom (Tarik picked candidate A)
 
-Tarik: "for the service booking connectors side, remove the radius..
-just keep draw on services area (and on-site only option)... perhaps
-all on one line".
+Each of the 8 petals now runs on its OWN keyframe with a coprime
+duration so the bloom cycles NEVER line up — the silhouette is
+constantly in flux, never repeats a pose. Heart drifts a sub-pixel
+as it pulses on yet another rhythm.
 
-Was: two-row block with a wide "Draw your service area" button on top
-and an "Or quick-pick: [On-site only] [5 mi] [10 mi] [25 mi] [Anywhere]"
-pill row below.
+index.css
+  3 organic keyframes:
+    cgBudPetalA — scale 0.08 → 1.00, rotate -3° → 2°
+    cgBudPetalB — scale 0.10 → 0.95, rotate  2° → -1.5°
+    cgBudPetalC — scale 0.06 → 1.04, rotate -1° → 3°
+  8 petal classes, each with its own duration + delay:
+    .cg-bud-p1  3.7s
+    .cg-bud-p2  4.3s   .20s delay
+    .cg-bud-p3  5.1s   .45s delay
+    .cg-bud-p4  4.1s   .10s delay
+    .cg-bud-p5  4.9s   .35s delay
+    .cg-bud-p6  3.9s   .60s delay
+    .cg-bud-p7  5.3s   .25s delay
+    .cg-bud-p8  4.7s   .50s delay
+  Heart on its own 6.1s rhythm:
+    cgBudHeart  — translate(-1,1)/(1,-1) + scale 0.96 ↔ 1.08
 
-Now: ONE horizontal row with two pill-shaped buttons:
-  • "Draw service area"  (or "Area drawn" + Clear when set)
-  • "On-site only"       (toggle, syncs travelRadius onsite ↔ 10mi)
+LeafLogo.jsx — BudBloom
+  Removed shared cg-bud-petal class. Each petal now gets a per-index
+  class (p1…p8) tied to its own keyframe + duration combo. Same hand-
+  tuned per-petal size/color variation kept from v2.
 
-5/10/25mi/Anywhere quick-picks removed — providers either Draw an
-explicit polygon for granular coverage OR flip On-site only for jobs
-they only do at the client's location. No middle ground needed for
-the spotlight intent.
+Total cycle length before any two petals align:
+  LCM(37,43,51,41,49,39,53,47) is enormous — practically, the bloom
+  never repeats inside a session. The mark feels alive without
+  jitter, exactly the Claude-logo "calm but never twice the same"
+  rhythm Tarik wanted.
 
-Cleaner, lighter, and aligns with the same "lighten the busy
-homepage" pass that moved the location chip into the search box.
-
-QA: 41/41 pass.
+QA: 41/41 pass. Existing #30 (LeafLogo wires all 4 variants) still
+green — we only modified the bud animation, not the variant wiring.
 
 Files:
-  src/screens/HomeScreen.jsx
+  src/index.css
+  src/components/ui/LeafLogo.jsx

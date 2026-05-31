@@ -252,26 +252,39 @@ body {
    The React component toggles className on/off; CSS keyframes here.
    Speed scales with --cg-leaf-speed (1 = calm, 0.55 = fast). */
 
-/* C · Bud bloom — ORGANIC v2 (Tarik: "looks plastic — make it organic
-   even if imperfect"). Per-petal animation with slight rotation
-   wobble each cycle so the silhouette never lands in the exact same
-   spot. Heart pulses on its own slower 5s rhythm, offset from the
-   4s petal cycle so the two breathing layers don't sync. */
-@keyframes cgBudPetal {
-  0%, 100% { transform: scale(0.08) rotate(-2deg); }
-  45%      { transform: scale(0.98) rotate(1.5deg); }
-  55%      { transform: scale(1.03) rotate(-1deg); }
+/* C · Bud bloom — ORGANIC v3 DRIFT BLOOM (Tarik picked candidate A
+   2026-05-30). Each petal runs on its OWN keyframe with a coprime
+   duration so 8 petals never line up — the silhouette is constantly
+   in flux without any two cycles ever matching. Heart drifts a
+   sub-pixel as it pulses on yet another rhythm. */
+@keyframes cgBudPetalA {
+  0%, 100% { transform: scale(0.08) rotate(-3deg); }
+  47%      { transform: scale(1)    rotate(2deg); }
 }
-.cg-bud-petal {
-  animation: cgBudPetal calc(4s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+@keyframes cgBudPetalB {
+  0%, 100% { transform: scale(0.10) rotate(2deg); }
+  52%      { transform: scale(0.95) rotate(-1.5deg); }
 }
+@keyframes cgBudPetalC {
+  0%, 100% { transform: scale(0.06) rotate(-1deg); }
+  48%      { transform: scale(1.04) rotate(3deg); }
+}
+.cg-bud-p1 { animation: cgBudPetalA calc(3.7s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+.cg-bud-p2 { animation: cgBudPetalB calc(4.3s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .20s; }
+.cg-bud-p3 { animation: cgBudPetalC calc(5.1s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .45s; }
+.cg-bud-p4 { animation: cgBudPetalA calc(4.1s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .10s; }
+.cg-bud-p5 { animation: cgBudPetalB calc(4.9s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .35s; }
+.cg-bud-p6 { animation: cgBudPetalC calc(3.9s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .60s; }
+.cg-bud-p7 { animation: cgBudPetalA calc(5.3s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .25s; }
+.cg-bud-p8 { animation: cgBudPetalB calc(4.7s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .50s; }
+
 @keyframes cgBudHeart {
-  0%, 100% { transform: scale(1); }
-  40%      { transform: scale(1.12); }
-  60%      { transform: scale(0.96); }
+  0%, 100% { transform: translate(0, 0)   scale(1); }
+  30%      { transform: translate(-1px, 1px)  scale(1.08); }
+  60%      { transform: translate(1px, -1px) scale(0.96); }
 }
 .cg-bud-heart {
-  animation: cgBudHeart calc(5s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+  animation: cgBudHeart calc(6.1s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
 }
 
 /* D · Pollen pulse — central core breathes; 6 seeds drift on a 4s cycle */
