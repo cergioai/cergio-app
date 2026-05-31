@@ -1589,6 +1589,151 @@ export async function createRequestAndFanOut({
   return { request, notified: ownerIds.length, error: null };
 }
 
+/**
+ * createRequestToProvider — single-provider request from the PDP.
+ *
+ * Tarik (2026-05-30): "submit a request should open a request box...
+ * to the specific service... it can also offer the ability to cross
+ * post that to all services at the end post submission".
+ *
+ * Mirrors createRequestAndFanOut but only pings the one targeted
+ * provider. Returns { request, error } so the UI can stash request.id
+ * for the optional follow-up cross-post step.
+ */
+export async function createRequestToProvider({
+  toProviderOwnerId,
+  toServiceId = null,
+  query,
+  provider_type,
+  category,
+  what,
+  when_text,
+  where_text,
+  lat, lng,
+  budget_cents,
+} = {}) {
+  if (!supabaseReady) return { request: null, error: NOT_WIRED.error };
+  if (!toProviderOwnerId) {
+    return { request: null, error: { message: 'toProviderOwnerId required' } };
+  }
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user?.id) {
+    return { request: null, error: { message: 'sign-in required to submit a request' } };
+  }
+  const uid = userRes.user.id;
+
+  // Anchor the request row — same shape as the fan-out path so any
+  // future bid/booking tooling that joins on request_id works either way.
+  const { data: request, error: insErr } = await supabase
+    .from('requests')
+    .insert({
+      requester_id:  uid,
+      service_type:  provider_type || (what || 'service'),
+      description:   (query || '').slice(0, 500),
+      location_text: where_text || null,
+      status:        'pending',
+      query:         (query || '').slice(0, 500),
+      provider_type: provider_type || null,
+      category:      category || null,
+      what:          what || null,
+      when_text:     when_text || null,
+      lat:           (lat ?? null),
+      lng:           (lng ?? null),
+      budget_cents:  (typeof budget_cents === 'number') ? budget_cents : null,
+    })
+    .select()
+    .single();
+  if (insErr || !request) return { request: null, error: insErr };
+
+  // Single-recipient notification — same shape as fan-out so the
+  // provider's inbox renders it identically.
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
+  const deep_link = `${origin}/results?req=${request.id}`;
+  await supabase.from('notifications').insert({
+    profile_id: toProviderOwnerId,
+    kind:       'new_request',
+    body:       `New ${provider_type || 'service'} request — direct to you`,
+    data: {
+      request_id:    request.id,
+      requester_id:  uid,
+      provider_type: provider_type || null,
+      service_id:    toServiceId,
+      query:         (query || '').slice(0, 200),
+      where_text:    where_text || null,
+      deep_link,
+    },
+  });
+  return { request, error: null };
+}
+
+/**
+ * crossPostRequest — second step from the PDP request flow.
+ *
+ * After a single-provider request is sent, the user can opt to "also
+ * notify other matching providers". This re-uses getProvidersForNotify
+ * to find them, then inserts notifications pointing at the SAME
+ * requests row so the consumer still sees one open thread (not N).
+ *
+ * `excludeOwnerId` skips the original targeted provider so they don't
+ * get a duplicate notification.
+ */
+export async function crossPostRequest({
+  requestId,
+  provider_type,
+  query,
+  where_text,
+  lat, lng,
+  notifySafe,
+  excludeOwnerId = null,
+  radiusMiles = 25,
+} = {}) {
+  if (!supabaseReady) return { notified: 0, error: NOT_WIRED.error };
+  if (!requestId) return { notified: 0, error: { message: 'requestId required' } };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user?.id) {
+    return { notified: 0, error: { message: 'sign-in required' } };
+  }
+  const uid = userRes.user.id;
+
+  const { data: provs, error: provErr, blocked } = await getProvidersForNotify({
+    verifiedProviderType: provider_type,
+    notifySafe:           !!notifySafe,
+    lat, lng,
+    radiusMiles,
+  });
+  if (provErr) return { notified: 0, error: provErr };
+  if (blocked) return { notified: 0, error: null, blocked };
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
+  const deep_link = `${origin}/results?req=${requestId}`;
+  const ownerIds = Array.from(new Set(
+    (provs || [])
+      .map(s => s.owner_id)
+      .filter(Boolean)
+      .filter(id => id !== excludeOwnerId)
+  ));
+  if (ownerIds.length === 0) return { notified: 0, error: null };
+
+  const rows = ownerIds.map(owner_id => ({
+    profile_id: owner_id,
+    kind:       'new_request',
+    body:       `New ${provider_type || 'service'} request near you`,
+    data: {
+      request_id:    requestId,
+      requester_id:  uid,
+      provider_type: provider_type || null,
+      query:         (query || '').slice(0, 200),
+      where_text:    where_text || null,
+      deep_link,
+      cross_post:    true,
+    },
+  }));
+  const { error: notifyErr } = await supabase.from('notifications').insert(rows);
+  if (notifyErr) return { notified: 0, error: notifyErr };
+
+  return { notified: ownerIds.length, error: null };
+}
+
 // ─── Booking notifications ──────────────────────────────────────────────────
 
 /**

@@ -1062,35 +1062,35 @@ test('reward-flow-embedded', 'RewardFlowAnimation component exists + EarnExplain
   const cmp = readFile('src/components/ui/RewardFlowAnimation.jsx');
   assert(/export function RewardFlowAnimation/.test(cmp),
     'src/components/ui/RewardFlowAnimation.jsx must export RewardFlowAnimation.');
-  // v7 (2026-05-29): 3-scene model — 01 Ways to Earn (5 streams list),
-  // 02 $250 Math (10% fee → 7% to you, 6-month-of-invite window),
-  // 03 Scale + GPI. Both tiers' earnings shown across the 5 rows so
-  // User vs Connector distinction is visible.
+  // v8 (2026-05-30): compressed/simplified 3-scene model per Tarik —
+  //   01 Invite. Reco. Earn.   (single $250/friend payoff number)
+  //   02 Barter for free services
+  //   03 AI-driven shared prosperity via GPI
+  // Removed: the 5-row "ways to earn" table, 3-row math accumulator,
+  // and 3-card WHAT/HOW/WHEN GPI grid. Lock the new structure so a
+  // future regression doesn't bring back the busy table layout.
   assert(/num:\s*['"]01['"]/.test(cmp) && /num:\s*['"]02['"]/.test(cmp) && /num:\s*['"]03['"]/.test(cmp),
     'Animation must define exactly three phases: 01, 02, 03.');
-  // Scene 1 — Ways to Earn. Must mention all five streams + Connector tier.
-  assert(/Invite friends/i.test(cmp) && /Recommend services/i.test(cmp),
-    'Scene 1 must list "Invite friends" and "Recommend services".');
-  assert(/spotlight/i.test(cmp) && /barter|free services/i.test(cmp),
-    'Scene 1 must include Spotlight income + barter/free services (Connector streams).');
-  assert(/Connector only/i.test(cmp),
-    'Scene 1 must tag Connector-only streams explicitly with "Connector only".');
-  assert(/Growth Participation/.test(cmp),
-    'Scene 1 must mention Growth Participation Income.');
-  // Scene 2 — Math. Both 10% (platform fee) AND 7% (referrer share) must
-  // appear distinctly. The 6-month-of-invite window must be surfaced too.
-  assert(/platformFeePercent/.test(cmp),
-    'Scene 2 must derive Cergio platform fee % from REWARDS (the 10%).');
-  assert(/referrerSharePercent/.test(cmp),
-    'Scene 2 must derive referrer share % from REWARDS (the 7%).');
-  assert(/friendCapWindowMonths/.test(cmp),
-    'Scene 2 must surface the 6-month-of-invite cap window from REWARDS.');
-  // Scene 3 — Scale punchline.
+  // Scene 1 — Invite / Reco / Earn. Must use the three-verb framing
+  // and pull the per-friend payoff + N-friends scale from REWARDS.
+  assert(/Invite\./.test(cmp) && /Reco\./.test(cmp) && /Earn\./.test(cmp),
+    'Scene 1 must use the "Invite. Reco. Earn." three-verb framing.');
+  assert(/perFriend/.test(cmp),
+    'Scene 1 must derive the per-friend payoff from REWARDS.perFriend.');
   assert(/exampleFriends/.test(cmp) && /exampleTotal/.test(cmp),
-    'Scene 3 must reference REWARDS.exampleFriends + exampleTotal (the 50 → $12,500 punchline).');
-  // Soft barter language for the user-facing copy.
-  assert(/barterSoft/.test(cmp),
-    'Animation must use REWARD_COPY.barterSoft (not the precise 1K-10K range).');
+    'Scene 1 must reference REWARDS.exampleFriends + exampleTotal for the scale punchline.');
+  // Scene 2 — Barter. Must mention barter + free services framing.
+  assert(/barter|Free services/i.test(cmp),
+    'Scene 2 must frame the barter / free-services play (Connectors trade reach for services).');
+  // Scene 3 — AI-driven shared prosperity via GPI.
+  assert(/Growth Participation|GPI/i.test(cmp),
+    'Scene 3 must reference Growth Participation Income (GPI).');
+  assert(/shared prosperity|prosperity/i.test(cmp),
+    'Scene 3 must use the "shared prosperity" framing.');
+  // Referrer-share % is still part of the system copy (Scene 1 sub-body),
+  // verified via REWARDS so it stays the source of truth.
+  assert(/referrerSharePercent/.test(cmp),
+    'Animation must reference REWARDS.referrerSharePercent (the 7% share) in the supporting copy.');
 
   const screen = readFile('src/screens/EarnExplainerScreen.jsx');
   assert(/import\s*\{\s*RewardFlowAnimation\s*\}\s*from/.test(screen),

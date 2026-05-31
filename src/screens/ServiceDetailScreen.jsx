@@ -23,6 +23,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
+import { RequestQuoteSheet } from '../components/ui/RequestQuoteSheet';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -84,7 +85,8 @@ export function ServiceDetailScreen() {
   const navigate = useNavigate();
   const { serviceId } = useParams();
   const location = useLocation();
-  const { handleBook, showToast } = useOutletContext();
+  const { handleBook, showToast, defaultAddress } = useOutletContext();
+  const [requestSheetOpen, setRequestSheetOpen] = useState(false);
 
   // Prefer state passed from ResultsScreen (fast path). Cold-deep-link
   // fallback re-fetches the row + its recommenders.
@@ -457,12 +459,18 @@ export function ServiceDetailScreen() {
         </div>
       </div>
 
-      {/* "Don't see what you need?" cream callout — per mockup */}
+      {/* "Don't see what you need?" cream callout — per mockup.
+          CERGIO-GUARD (2026-05-30): tapping "Submit a request" now
+          opens the RequestQuoteSheet (pre-filled with this provider +
+          category) instead of bouncing back to /home. After the
+          single-provider send, the sheet offers to cross-post to
+          other matching providers — same request thread, more
+          options. Tarik's spec. */}
       <div className="mx-5 mt-5 bg-gl rounded-[14px] p-3.5 text-center">
         <p className="text-[12.5px] text-b2 font-medium leading-snug">
-          Don't see what you need?{' '}
+          Don&apos;t see what you need?{' '}
           <button
-            onClick={() => navigate('/home')}
+            onClick={() => setRequestSheetOpen(true)}
             className="text-gd font-extrabold underline"
           >
             Submit a request for a custom quote.
@@ -542,8 +550,35 @@ export function ServiceDetailScreen() {
         >
           {`Request ${selectedOffering?.name || provider.name} ($${selectedPrice})`}
         </button>
-        <p className="text-center text-[11.5px] text-b3 font-medium mt-2">You won't be charged yet</p>
+        <p className="text-center text-[11.5px] text-b3 font-medium mt-2">You won&apos;t be charged yet</p>
       </div>
+
+      {/* CERGIO-GUARD (2026-05-30): the request modal. Mounted at the
+          PDP root so its scrim covers the entire screen + the fixed
+          Book CTA. Opens when the "Submit a request" callout link is
+          tapped. */}
+      {requestSheetOpen && (
+        <RequestQuoteSheet
+          service={{
+            id:                     provider.id,
+            ownerId:                provider.ownerId,
+            name:                   provider.name,
+            category:               provider.category,
+            taxonomy_provider_type: provider.category, // best available signal
+            location_text:          provider.location_text || null,
+            lat:                    provider.lat || null,
+            lng:                    provider.lng || null,
+          }}
+          providerName={ownerProfile?.display_name || provider.name}
+          defaultLocation={defaultAddress
+            ? { formatted_address: defaultAddress.formatted_address, lat: defaultAddress.lat, lng: defaultAddress.lng }
+            : null}
+          notifySafe={false}
+          showToast={showToast}
+          onClose={() => setRequestSheetOpen(false)}
+          onSent={() => { /* Sent toast handled inside sheet */ }}
+        />
+      )}
     </div>
   );
 }

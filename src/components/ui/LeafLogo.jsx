@@ -130,7 +130,15 @@ function GrowthRings({ size, working }) {
 //     with a brief wobble at peak — "playful, alive" per Tarik
 //   • Heart drifts slowly on a 6.1s rhythm (off-beat from every leaf)
 function BudBloom({ size, working }) {
-  const restScale = 0.62;
+  // CERGIO-GUARD (2026-05-30): rest state is now FULL bloom (scale 1)
+  // not 0.62. Tarik: "make the logo full and static on loading the
+  // initial pages and homepage... only animate when it triggers an
+  // action". At rest, all 7 leaves sit fully extended; the animation
+  // only fires when `working` is true (search executing, splash hero
+  // working flag, etc.). Was 0.62 (closed-bud rest) — now the brand
+  // mark always reads as a finished, mature plant unless something is
+  // actively happening.
+  const restScale = 1;
   // Each leaf:
   //   d      — path RELATIVE to (60,60) center, pointing up; tip ≈ y=22–34
   //   vein   — subtle midrib path (1.1px dark stroke) for "real leaf" anatomy

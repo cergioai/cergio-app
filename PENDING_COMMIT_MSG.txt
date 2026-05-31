@@ -1,63 +1,59 @@
-polish: PDP fixes, profile design pass, organic leaves, social feed, Stripe bypass
+feat+design: PDP request sheet, earnings v8, static logo, cross-post flow
 
-Bundle of fixes for Tarik's evening review session.
+PDP "Submit a request" sheet (RequestQuoteSheet.jsx)
+- Tarik: "submit a request should open a request box... to the
+  specific service (when clicked on on service profile)... can you
+  same homepage box (and same logic (what where etc..)... it can also
+  offer ... the ability to cross post that to all services at the end
+  post submission".
+- New component RequestQuoteSheet — modal sheet that opens from the
+  "Don't see what you need?" callout on the PDP. Pre-fills:
+    what  ← service.taxonomy_provider_type
+    where ← default address (if signed in)
+- Two-step flow:
+    step 1 — compose: what / where / when / budget / notes. Submit
+    calls api.createRequestToProvider() (new) — writes a requests row
+    + a single notification to that provider's owner_id.
+    step 2 — sent: "Sent to {Name}. Also notify other matching
+    providers nearby?" → calls api.crossPostRequest() (new) which
+    fans the SAME request_id to all other matching providers in
+    range (same thread, more options).
+- Replaces the prior navigate('/home') jump from the callout.
 
-PDP (ServiceDetailScreen.jsx)
-- "Book button hidden" — BottomNav was covering the fixed-bottom
-  "Request {offering} ($N)" CTA. Added /service/ to HIDE_NAV_PREFIXES
-  so the PDP renders without the nav (it's a focused booking flow).
-- "Top image is cut off" — cover hero 120px → 280px so the photo
-  dominates like the Jennifer Leighton mockup.
-- "Reco'd by … not clickable" v3 — the row now is a single outer
-  Link (not nested Links) to the lead recommender's /u/{id}, with
-  hover/active background + a › chevron so it reads unmistakably as
-  tappable. Bucket counts stay visually underlined.
+Earnings animation v8 (RewardFlowAnimation.jsx + index.css)
+- Tarik: "rethink the earnings animation... it's way way too busy..
+  compress, simplify, make the animation go slower (not pop back to
+  back)... should just be 1-invite reco earn.. 2-barter (free
+  services..etc)...3-GPI (prosperity together...)... ai driven shared
+  prosperity via GPI".
+- Rebuilt around three elegant scenes:
+    01 — "Invite. Reco. Earn."  — three big words + single $250/friend
+         payoff. Drops the prior 5-row "ways to earn" table.
+    02 — "Free services. Real value." — two profile circles +
+         double-headed arrow showing Connector ↔ Provider barter.
+         Drops the 3-row math accumulator + fee anatomy strip.
+    03 — "AI-driven shared prosperity · via GPI" — rising line +
+         single sentence. Drops the WHAT/HOW/WHEN three-card grid.
+- rf-pop keyframe: 0.6s back-to-back overshoot → 1.4s gentle ease.
+- Scene auto-advance: 8s → 11s so each idea breathes before the next.
+- All numbers (perFriend, exampleTotal, referrerSharePercent) still
+  derived from REWARDS constants — no hardcoded values.
+- qa.mjs #31 invariant rewritten to match the new structure while
+  still locking the three-phase grid + REWARDS sourcing.
 
-Public profile (PublicProfileScreen.jsx)
-- Design pass to match the mockup: avatar 64 → 72, name 26 → 28,
-  section headers 20 → 22, tighter top spacing.
-- {Name}'s Go-Tos cards rebuilt: dropped the redundant
-  "Reco'd by {self}" inner row (we're already on their profile;
-  every entry is implicitly by them). Comment bubble now shows the
-  profile-owner's small avatar (matches the gray quote box on the
-  mockup), Reco'd date pinned top-right, owner name linked to their
-  /u/{id} too.
+Logo static at rest (LeafLogo.jsx + SplashScreen.jsx + AuthScreen.jsx)
+- Tarik: "make the logo full and static on loading the initial pages
+  and homepage... only animate when it triggers an action".
+- BudBloom rest scale 0.62 → 1.0 — at rest the 7 leaves are fully
+  open and the brand mark reads as a finished mature plant.
+- Splash + Auth hero no longer pass `working` — they render static.
+  The HomeScreen header was already static. The animation now fires
+  only when something is actively triggered (search executing, etc.).
 
-Logo (LeafLogo.jsx + index.css)
-- v3 (8 identical ellipses) → v4 (7 unique <path> leaves). Each leaf
-  has its own taper, width, midrib (center vein), tilt, opacity. Color
-  palette spans 5 greens. Tarik: "more playful, leaves less symmetrical,
-  like real leaves, different from each other".
-- Keyframes swapped to cubic-bezier-overshoot (1.56 bounce) with a
-  brief mid-bloom wobble — playful, not mechanical. 4 distinct
-  keyframe shapes × 7 coprime durations × jittered delays = silhouette
-  never repeats.
+API (api.js)
+- createRequestToProvider({ toProviderOwnerId, ... }) — single-target
+  request + one notification.
+- crossPostRequest({ requestId, excludeOwnerId, ... }) — adds
+  notifications fanned to other matching providers, same request_id.
 
-Tagline (SplashScreen.jsx + AuthScreen.jsx)
-- "AI that negotiates and books services your friends actually trust."
-  → "Hi, I'm Cergio. I'll negotiate and book services your friends
-  actually trust." Matches the HomeScreen greeting voice. Sub-line
-  "Book · Barter · Earn" preserved.
-
-Activity feed (api.js listSocialFeed + ActivityScreen.jsx)
-- Old feed only showed Connector go-to shares. New unified feed
-  merges: friend AND Connector recommendations, new sign-ups
-  ("X joined Cergio"), new service listings ("X listed a new service:
-  Y"), confirmed Instagram/TikTok spotlights. All from real tables
-  (recommendations / profiles / services / spotlight_requests).
-  No fake feeds (feedback_no_fake_feeds preserved).
-- ActivityScreen now renders four card kinds: reco (GoatShareCard),
-  join (JoinedCard), listing (ListingCard), spotlight (SpotlightCard).
-- Section heading switched to "What's happening on Cergio" /
-  #cergiofeed.
-
-Stripe-payouts bypass (RequestDetailScreen.jsx)
-- Tarik: "disable the payment setup condition so we test... we can
-  enable this regardless and then services are notified to set up to
-  receive payment". Accept button is now always enabled. The Stripe
-  reminder banner is non-blocking copy ("You can accept now — finish
-  Stripe payouts setup so funds reach your bank"). On accept of a paid
-  booking without payouts_enabled, a sticky toast reminds the provider
-  to finish Stripe setup.
-
-Verified: qa.mjs 41/41 · JSX syntax check on all touched files: green.
+Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.

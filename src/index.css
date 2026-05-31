@@ -381,11 +381,14 @@ body {
 .rf-fruit { animation: rfBob 2.4s ease-in-out infinite; transform-origin: center; }
 
 @keyframes rfPop {
-  0%   { transform: scale(0); opacity: 0; }
-  60%  { transform: scale(1.18); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1);    opacity: 1; }
 }
-.rf-pop { animation: rfPop 0.6s ease-out forwards; transform-origin: center; }
+/* CERGIO-GUARD (2026-05-30): slowed 0.6s overshoot → 1.4s gentle
+   ease so elements fade-in rather than pop-pop-pop. Tarik:
+   "compress, simplify, make the animation go slower
+   (not pop back to back)". */
+.rf-pop { animation: rfPop 1.4s cubic-bezier(.22,.61,.36,1) forwards; transform-origin: center; opacity: 0; }
 
 @keyframes rfSway { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(1.5deg); } }
 .rf-sway   { animation: rfSway 5.5s ease-in-out infinite; }

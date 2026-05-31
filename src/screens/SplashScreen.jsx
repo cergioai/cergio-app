@@ -13,7 +13,11 @@ export function SplashScreen() {
             the new organic bud bloom anchors the splash. Higher
             intensity (0.9) so the petal-by-petal stagger is unmistakable
             on first impression. */}
-        <LeafLogo variant="splash" size={120} working intensity={0.9} />
+        {/* CERGIO-GUARD (2026-05-30): static at rest. Tarik: "make the
+            logo full and static on loading the initial pages... only
+            animate when it triggers an action". The splash is just an
+            entry; nothing is "doing work" yet. */}
+        <LeafLogo variant="splash" size={120} />
         <h1 className="text-[34px] font-extrabold text-white tracking-widest uppercase">Cergio</h1>
         {/* CERGIO-GUARD (2026-05-30 v2): conversational tagline —
             matches the HomeScreen greeting voice ("Hi, I'm Cergio,

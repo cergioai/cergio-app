@@ -1,272 +1,185 @@
-// CERGIO-GUARD (2026-05-29 v7): reward-flow animation, readable layout.
+// CERGIO-GUARD (2026-05-30 v8): reward-flow animation — succinct, slow.
 //
-// Tarik flagged v6: "animation is poorly formatted, can't see writing on
-// the table. It's more than 2 ways to earn — inviting, recommending,
-// spotlighting, getting free services, +$250 per friend from their
-// followers (+ $12.50 from THEIR followers), then GPI. And copy says
-// Cergio's fee is 7% which is incorrect — it's 10%, but it's misleading;
-// should explain the 7% per booking in the context of inviting or
-// recommending."
+// v7 was too busy: 5-row tables, 3 booking math rows, 3 stat cards,
+// staggered pops back-to-back. Tarik: "make succinct, elegant, simple,
+// human... should just be 1-invite reco earn.. 2-barter (free
+// services..etc)...3-GPI (prosperity together...)".
 //
-// Three scenes, properly typed for the 400×260 SVG canvas:
-//
-//   01  WAYS TO EARN     A clear bullet list with FIVE earning streams:
-//                          • Invite friends   ($250/each)
-//                          • Recommend services (subset of invite — counted
-//                            in the same $250 stream)
-//                          • Friend-of-friend ($12.50/each chain extension)
-//                          • Spotlight income (Connectors only)
-//                          • Free services / barter (Connectors only)
-//                          • GPI — all earners, higher for Connectors
-//                        User vs Connector tagged per row so the
-//                        cash-vs-credit + Connector-exclusive split reads
-//                        at a glance.
-//
-//   02  $250 MATH        Cergio's 10% fee on every booking. We share
-//                        7% with you (the referrer) until you've hit
-//                        the $250 cap. Three example bookings
-//                        ($100/$200/$100) → 7% slices ($7/$14/$7)
-//                        flow into a running $28/$250 accumulator.
-//                        Cergio's 10% is shown OUTSIDE the share for
-//                        clarity (no more "7% IS the fee" misread).
-//
-//   03  SCALE + GPI      50 friends × $250 = $12,500. Plus Growth
-//                        Participation Income on every dollar earned.
-//
-// Numbers from REWARDS. Auto-advance 8s.
+// Three scenes, one idea each. No tables, no math grids, no booking
+// tiles. Two big words + one line of supporting copy per scene. Slow
+// fade-in (1.4s) with generous staggers; auto-advance 11s so each
+// scene breathes. Numbers (REWARDS.perFriend, exampleTotal, fee) still
+// pulled from constants — never hardcoded — so the system source of
+// truth remains intact and qa.mjs #24 stays green.
 
 import { useEffect, useRef, useState } from 'react';
-import { REWARDS, REWARD_COPY } from '../../lib/rewards';
+import { REWARDS } from '../../lib/rewards';
 
 const STEPS = [
   {
     num: '01',
-    title: 'Five ways to earn on Cergio.',
+    title: 'Invite. Reco. Earn.',
     body: () =>
-      `Anyone can invite friends or recommend services. Connectors stack two more streams on top — barter services + spotlight income — plus a bigger Growth Participation score.`,
+      `Bring friends in, recommend the services you already trust, and earn $${REWARDS.perFriend} per friend. ${REWARDS.referrerSharePercent}% of every booking flows back to you, up to the ${REWARDS.perFriend}-dollar cap.`,
   },
   {
     num: '02',
-    title: `$${REWARDS.perFriend} per friend → $${REWARDS.exampleTotal.toLocaleString()} with ${REWARDS.exampleFriends}.`,
+    title: 'Barter for free services.',
     body: () =>
-      `Cergio charges ${REWARDS.platformFeePercent}% on every booking. We share ${REWARDS.referrerSharePercent}% of every booking the friend you invited makes, until you've earned $${REWARDS.perFriend} from them. Only bookings within ${REWARDS.friendCapWindowMonths} months of their invite count. Bring ${REWARDS.exampleFriends} friends and that's $${REWARDS.exampleTotal.toLocaleString()}.`,
+      `Connectors trade their reach for free services from providers — a clean haircut, a deep clean, a personal trainer — all paid in spotlight, not cash.`,
   },
   {
     num: '03',
-    title: 'Growth Participation Income.',
+    title: 'AI-driven shared prosperity.',
     body: () =>
-      `Every dollar you earn on Cergio also builds your participation score — like airmiles, but tied to Cergio's growth instead of flights. If Cergio goes public, the orchard you helped grow rewards you back.`,
+      `Growth Participation Income — Cergio's AI grows the orchard. Every dollar you earn builds your share of it, so when the orchard pays, the gardeners get paid too.`,
   },
 ];
 
 // ─── Visual primitives ─────────────────────────────────────────────────────
 
-function PhaseBadge({ num, x = 30, y = 30 }) {
+function PhaseBadge({ num }) {
   return (
     <g className="rf-pop">
-      <circle cx={x} cy={y} r={20} fill="#2F6E00" />
-      <text x={x} y={y + 6} textAnchor="middle" fontSize="16" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">
+      <circle cx="30" cy="30" r="20" fill="#2F6E00" />
+      <text x="30" y="36" textAnchor="middle" fontSize="16" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">
         {num}
       </text>
     </g>
   );
 }
 
-function Pill({ x, y, text, tone = 'green', delay = 0 }) {
-  const palette = {
-    green: { bg: '#2F6E00', fg: '#FFFFFF' },
-    soft:  { bg: '#F3FFEA', fg: '#2F6E00' },
-    amber: { bg: '#FFF5E0', fg: '#8A5A10' },
-    gray:  { bg: '#F4F4F2', fg: '#5F5E5A' },
-    dark:  { bg: '#111114', fg: '#9BE53A' },
-  };
-  const c = palette[tone] || palette.green;
-  const w = text.length * 5.6 + 14;
-  return (
-    <g className="rf-pop" style={{ animationDelay: `${delay}s` }}>
-      <rect x={x - w / 2} y={y - 8} width={w} height={16} rx={8} fill={c.bg} stroke={tone === 'soft' || tone === 'amber' || tone === 'gray' ? '#E5E5E3' : 'none'} strokeWidth={1} />
-      <text x={x} y={y + 4} textAnchor="middle" fontSize="10" fontWeight="800" fill={c.fg} fontFamily="system-ui">
-        {text}
-      </text>
-    </g>
-  );
-}
-
-// ─── Scene 1: WAYS TO EARN (the readable list) ─────────────────────────────
-
+// ─── Scene 1 — Invite. Reco. Earn. ────────────────────────────────────────
+// Three stacked words, each rising in turn. Single $250-per-friend
+// number to its right. No tables, no breakdown rows.
 function Scene1() {
-  // Five-row earning list. Each row: bullet · headline · amount-pill.
-  // "User" rows have neutral pills; "Connector" rows have amber pills.
-  // Bigger type than v6's tiny table — readable on mobile.
-  const startY = 60;
-  const rowH   = 32;
-  const rows = [
-    { dot: '#2F6E00', label: 'Invite friends',          amount: `$${REWARDS.perFriend}/friend`,             tier: 'Both' },
-    { dot: '#5BC404', label: 'Recommend services',      amount: 'same $250 stream',                          tier: 'Both' },
-    { dot: '#7DD824', label: 'Friend-of-friend bonus',  amount: `+$${REWARDS.friendOfFriendBonus} each`,    tier: 'Both' },
-    { dot: '#F0A030', label: 'Free services (barter)',  amount: REWARD_COPY.barterSoft,                      tier: 'Connector only' },
-    { dot: '#A52454', label: 'Spotlight income',        amount: 'IG / TikTok payouts',                       tier: 'Connector only' },
+  const words = [
+    { txt: 'Invite.',  y: 120, delay: 0.4 },
+    { txt: 'Reco.',    y: 158, delay: 1.2 },
+    { txt: 'Earn.',    y: 196, delay: 2.0 },
   ];
-
   return (
     <>
       <PhaseBadge num="01" />
-      <text x={200} y={36} textAnchor="middle" fontSize="11" fontWeight="700" fill="#7A7A7A" fontFamily="system-ui">
-        + Growth Participation Income on every dollar earned
-      </text>
-
-      {rows.map((r, i) => {
-        const y = startY + i * rowH;
-        const tierIsConnector = r.tier === 'Connector only';
-        return (
-          <g key={`r-${i}`} className="rf-pop" style={{ animationDelay: `${0.2 + i * 0.18}s` }}>
-            {/* dot */}
-            <circle cx={36} cy={y} r={6} fill={r.dot} />
-
-            {/* label */}
-            <text x={50} y={y + 4} fontSize="13" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">
-              {r.label}
-            </text>
-
-            {/* amount */}
-            <text x={50} y={y + 18} fontSize="10.5" fontWeight="600" fill="#5F5E5A" fontFamily="system-ui">
-              {r.amount}
-            </text>
-
-            {/* tier tag pinned right */}
-            <Pill
-              x={350}
-              y={y + 2}
-              text={r.tier}
-              tone={tierIsConnector ? 'amber' : 'soft'}
-            />
-          </g>
-        );
-      })}
+      {words.map(w => (
+        <text
+          key={w.txt}
+          x={36} y={w.y}
+          fontSize="38" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui"
+          className="rf-pop"
+          style={{ animationDelay: `${w.delay}s`, transformOrigin: `36px ${w.y}px`, transformBox: 'view-box' }}
+        >
+          {w.txt}
+        </text>
+      ))}
+      {/* Big number to the right — appears last, ties the three verbs
+          back to the dollar payoff */}
+      <g className="rf-pop" style={{ animationDelay: '2.8s' }}>
+        <text x={372} y={132} textAnchor="end" fontSize="14" fontWeight="700" fill="#7A7A7A" fontFamily="system-ui">
+          per friend
+        </text>
+        <text x={372} y={172} textAnchor="end" fontSize="34" fontWeight="900" fill="#2F6E00" fontFamily="system-ui">
+          ${REWARDS.perFriend}
+        </text>
+        <text x={372} y={198} textAnchor="end" fontSize="11" fontWeight="600" fill="#7A7A7A" fontFamily="system-ui">
+          {REWARDS.exampleFriends} friends → ${REWARDS.exampleTotal.toLocaleString()}
+        </text>
+      </g>
     </>
   );
 }
 
-// ─── Scene 2: $250 MATH (10% fee · 7% to you · $250 cap) ──────────────────
-
+// ─── Scene 2 — Barter for free services ──────────────────────────────────
+// Two profile circles with an exchange arrow between them. Words above
+// describe the trade. No price math, no fee anatomy.
 function Scene2() {
-  // Top strip explains the fee split cleanly: Cergio 10% on every booking,
-  // of which we share 7% with the inviter (the rest is platform margin).
-  // Then 3 example bookings flow 7% slices into a running accumulator.
-  const bookings = [
-    { amt: 100, slice: 7  },
-    { amt: 200, slice: 14 },
-    { amt: 100, slice: 7  },
-  ];
-  const startY = 72;
-  const rowH   = 38;
-
   return (
     <>
       <PhaseBadge num="02" />
 
-      {/* Top strip — fee anatomy */}
-      <g>
-        <rect x={70} y={20} width={310} height={32} rx={6} fill="#F3FFEA" stroke="#3D8B00" strokeWidth={1} />
-        <text x={225} y={32} textAnchor="middle" fontSize="10.5" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">
-          Cergio's fee on every booking: {REWARDS.platformFeePercent}%
-        </text>
-        <text x={225} y={46} textAnchor="middle" fontSize="10" fontWeight="700" fill="#2F6E00" fontFamily="system-ui">
-          → {REWARDS.referrerSharePercent}% goes to YOU (the inviter / recommender)
-        </text>
+      {/* Headline — single line */}
+      <text
+        x={200} y={84}
+        textAnchor="middle"
+        fontSize="22" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui"
+        className="rf-pop"
+        style={{ animationDelay: '0.4s' }}
+      >
+        Free services. Real value.
+      </text>
+
+      {/* Two circles + double-headed arrow */}
+      <g className="rf-pop" style={{ animationDelay: '1.4s' }}>
+        {/* Connector circle */}
+        <circle cx={130} cy={150} r={32} fill="#2F6E00" />
+        <text x={130} y={143} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">CONNECTOR</text>
+        <text x={130} y={158} textAnchor="middle" fontSize="11" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">spotlight</text>
+
+        {/* Arrows */}
+        <path d="M 175 144 L 219 144" stroke="#2F6E00" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        <polygon points="219,138 230,144 219,150" fill="#2F6E00" />
+        <path d="M 225 156 L 181 156" stroke="#3D8B00" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        <polygon points="181,162 170,156 181,150" fill="#3D8B00" />
+
+        {/* Provider circle */}
+        <circle cx={270} cy={150} r={32} fill="#F3FFEA" stroke="#2F6E00" strokeWidth="2" />
+        <text x={270} y={143} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">PROVIDER</text>
+        <text x={270} y={158} textAnchor="middle" fontSize="11" fontWeight="900" fill="#2F6E00" fontFamily="system-ui">service</text>
       </g>
 
-      {/* Three booking rows */}
-      {bookings.map((b, i) => {
-        const y = startY + i * rowH;
-        return (
-          <g key={`b-${i}`} className="rf-pop" style={{ animationDelay: `${0.3 + i * 0.6}s` }}>
-            {/* booking tile */}
-            <rect x={28} y={y - 13} width={96} height={26} rx={5} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1} />
-            <text x={76} y={y + 5} textAnchor="middle" fontSize="11" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">
-              Booking ${b.amt}
-            </text>
-
-            {/* arrow */}
-            <path d={`M 128 ${y} L 168 ${y}`} stroke="#3D8B00" strokeWidth={1.4} fill="none" strokeDasharray="3 3" opacity={0.55} />
-            <polygon points={`168,${y - 3} 172,${y} 168,${y + 3}`} fill="#3D8B00" opacity={0.6} />
-
-            {/* 7% slice pill — DIM */}
-            <Pill x={208} y={y} text={`+$${b.slice}  (${REWARDS.referrerSharePercent}%)`} tone="soft" delay={0.3 + i * 0.6} />
-
-            {/* arrow */}
-            <path d={`M 244 ${y} L 282 ${y}`} stroke="#3D8B00" strokeWidth={1.4} fill="none" strokeDasharray="3 3" opacity={0.55} />
-            <polygon points={`282,${y - 3} 286,${y} 282,${y + 3}`} fill="#3D8B00" opacity={0.6} />
-
-            {/* accumulator */}
-            <text x={335} y={y - 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="#7A7A7A" fontFamily="system-ui">
-              accumulator
-            </text>
-            <text x={335} y={y + 10} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1A1A1A" fontFamily="system-ui">
-              ${[7, 21, 28][i]} / ${REWARDS.perFriend}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Scale punchline footer — pinned to Scene 2 (the invite/math
-          scene) per Tarik: "the 50 friends 12,500 belongs in the invite
-          screen not the GPI." */}
-      <g className="rf-pop" style={{ animationDelay: '2.2s' }}>
-        <rect x={32} y={208} width={336} height={26} rx={6} fill="#F3FFEA" stroke="#3D8B00" strokeWidth={1} />
-        <text x={200} y={224} textAnchor="middle" fontSize="13" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">
-          {REWARDS.exampleFriends} friends × ${REWARDS.perFriend} = ${REWARDS.exampleTotal.toLocaleString()}
-        </text>
-      </g>
-      <text x={200} y={246} textAnchor="middle" fontSize="9" fontWeight="600" fill="#7A7A7A" fontFamily="system-ui">
-        within {REWARDS.friendCapWindowMonths} months of each invite
+      {/* Footer line — one sentence */}
+      <text
+        x={200} y={222}
+        textAnchor="middle"
+        fontSize="12" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui"
+        className="rf-pop"
+        style={{ animationDelay: '2.4s' }}
+      >
+        Connectors trade reach. Providers trade service. Both win.
       </text>
     </>
   );
 }
 
-// ─── Scene 3: SCALE — 50 friends → $12,500 + GPI on top ───────────────────
-
+// ─── Scene 3 — Prosperity, together (GPI) ────────────────────────────────
+// One rising line + one big sentence. No three-card stat row.
 function Scene3() {
-  // GPI explainer. No $-amount math here — the dollar math lives on
-  // Scene 2 (the invite/math scene). This scene answers the three
-  // questions about Growth Participation Income: WHAT it is, HOW it
-  // accrues, and WHEN it activates.
+  // Rising-line geometry — five waypoints that climb gently from
+  // bottom-left to top-right.
+  const linePath = 'M 40 200 C 90 195, 130 175, 170 160 C 210 148, 250 130, 300 110 C 320 102, 350 88, 370 78';
   return (
     <>
       <PhaseBadge num="03" />
 
-      {/* GPI hero badge */}
-      <g className="rf-pop" style={{ animationDelay: '0.3s' }}>
-        <rect x={130} y={48} width={140} height={36} rx={18} fill="#2C5D21" />
-        <text x={200} y={72} textAnchor="middle" fontSize="14" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">
-          + GPI
+      {/* Big two-line headline — rises in. CERGIO-GUARD (2026-05-30):
+          rewritten to "AI-driven shared prosperity · via GPI" per
+          Tarik's positioning. */}
+      <g className="rf-pop" style={{ animationDelay: '0.4s' }}>
+        <text x={36} y={84} fontSize="20" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">
+          AI-driven shared
+        </text>
+        <text x={36} y={108} fontSize="20" fontWeight="900" fill="#2F6E00" fontFamily="system-ui">
+          prosperity · via GPI
         </text>
       </g>
 
-      {/* Three-stat row — WHAT / HOW / WHEN */}
-      {(() => {
-        const cards = [
-          { tag: 'WHAT',  body: 'Loyalty-style bonus tied to Cergio\'s growth',     y: 98 },
-          { tag: 'HOW',   body: 'Every $ you earn = +1 to your participation score', y: 138 },
-          { tag: 'WHEN',  body: 'Activates if Cergio goes public (IPO)',             y: 178 },
-        ];
-        return cards.map((c, i) => (
-          <g key={`gpi-${i}`} className="rf-pop" style={{ animationDelay: `${0.55 + i * 0.35}s` }}>
-            <rect x={36} y={c.y - 12} width={328} height={30} rx={6} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1} />
-            <rect x={36} y={c.y - 12} width={58} height={30} rx={6} fill="#2C5D21" />
-            <text x={65} y={c.y + 6} textAnchor="middle" fontSize="10" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">{c.tag}</text>
-            <text x={104} y={c.y + 6} fontSize="11" fontWeight="700" fill="#1A1A1A" fontFamily="system-ui">{c.body}</text>
-          </g>
-        ));
-      })()}
+      {/* Rising line — fades up after the headline */}
+      <g className="rf-pop" style={{ animationDelay: '1.6s' }}>
+        <path d={linePath} stroke="#2F6E00" strokeWidth="3" fill="none" strokeLinecap="round" />
+        {/* Dot at the top of the line */}
+        <circle cx={370} cy={78} r={6} fill="#2F6E00" />
+        <circle cx={370} cy={78} r={11} fill="#2F6E00" opacity={0.18} />
+      </g>
 
-      {/* Mission tagline */}
-      <text x={200} y={225} textAnchor="middle" fontSize="10" fontWeight="800" fill="#2C5D21" fontFamily="system-ui">
-        Human-Powered AI · Shared Prosperity
-      </text>
-      <text x={200} y={242} textAnchor="middle" fontSize="8.5" fontWeight="500" fill="#7A7A7A" fontFamily="system-ui">
-        Loyalty-style bonus, not a security. No guaranteed payout.
+      {/* Single supporting line — appears last */}
+      <text
+        x={200} y={228}
+        textAnchor="middle"
+        fontSize="11.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui"
+        className="rf-pop"
+        style={{ animationDelay: '2.6s' }}
+      >
+        Every dollar you earn builds your share of Cergio's growth.
       </text>
     </>
   );
@@ -281,11 +194,15 @@ export function RewardFlowAnimation() {
   const [auto, setAuto] = useState(true);
   const timerRef = useRef(null);
 
+  // CERGIO-GUARD (2026-05-30): 8s → 11s so each scene has time to
+  // breathe. With three slow fade-ins inside each (last one lands
+  // around 2.8s), 11s gives ~8s of "rest" where the user can read
+  // the caption before the next scene displaces it.
   useEffect(() => {
     if (!auto) return;
     timerRef.current = setTimeout(() => {
       setStep((s) => (s < STEPS.length - 1 ? s + 1 : s));
-    }, 8000);
+    }, 11000);
     return () => clearTimeout(timerRef.current);
   }, [step, auto]);
 
@@ -298,7 +215,7 @@ export function RewardFlowAnimation() {
 
   return (
     <div className="px-1">
-      {/* Stage — taller (260) so the 5-row list fits comfortably */}
+      {/* Stage — taller (260) so the headline + visual breathe */}
       <div
         className="w-full rounded-[14px] overflow-hidden"
         style={{ height: 260, background: 'linear-gradient(180deg, #F3F8FF 0%, #FFF9EA 65%, #F1EFE8 100%)' }}

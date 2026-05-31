@@ -231,7 +231,10 @@ export function AuthScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cr pb-8 overflow-y-auto">
       <div className="flex flex-col items-center pt-14 pb-6 px-7 text-center">
-        <LeafLogo variant="splash" size={96} working intensity={0.85} />
+        {/* CERGIO-GUARD (2026-05-30): static at rest — matches the
+            Splash treatment. Animation belongs to triggered actions
+            (search, etc.), not to initial-page loads. */}
+        <LeafLogo variant="splash" size={96} />
         <h1 className="text-[30px] font-extrabold text-black tracking-wide mt-4 leading-tight">Cergio</h1>
         {/* CERGIO-GUARD (2026-05-30 v2): conversational tagline —
             same wording as the splash so the sign-up flow feels
