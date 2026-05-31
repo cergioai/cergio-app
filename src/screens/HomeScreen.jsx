@@ -998,6 +998,41 @@ export function HomeScreen() {
                   )}
                 </div>
 
+                {/* CERGIO-GUARD (2026-05-30): location chip lives INSIDE
+                    the search-box footer now (Tarik: "move location next
+                    to execution button… abbreviate… first 2 words…
+                    revealed when Change clicked. lighten busy homepage").
+                    Sits between the Free/Pay dropdown and the send arrow,
+                    matching how Opus 4.7 model selector tucks in a chat
+                    composer. Tap → opens the existing inline editor
+                    below (full address + autocomplete). */}
+                {locationText && !locEditing && (() => {
+                  // Abbreviate to first 2 whitespace-separated tokens so
+                  // "5700 Collins Ave, Miami Beach, FL 33140, USA" reads
+                  // as "5700 Collins". Recipients of the long address
+                  // only see it when they tap Edit.
+                  const tokens = locationText.replace(/,/g, '').trim().split(/\s+/);
+                  const abbr = tokens.slice(0, 2).join(' ');
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setLocEditing(true)}
+                      aria-label={`Search location: ${locationText} — tap to edit`}
+                      className="flex items-center gap-1 px-1.5 text-[12px] font-normal text-b3 hover:text-b2 transition-colors max-w-[140px]"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-gd">
+                        <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
+                        <circle cx="12" cy="9" r="2.5" />
+                      </svg>
+                      <span className="truncate font-bold text-b2">{abbr}</span>
+                      <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5 opacity-70 flex-shrink-0">
+                        <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  );
+                })()}
+
                 <div className="flex-1" />
                 <button
                   type="button"
@@ -1019,25 +1054,11 @@ export function HomeScreen() {
                 setting vs a per-search filter. Inline editor expands
                 in place on Change. */}
             <div className="mt-2 px-1">
-              {!locEditing && locationText && (
-                <div className="flex items-center gap-1.5 text-[11px] text-b3">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-gd">
-                    <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
-                    <circle cx="12" cy="9" r="2.5" />
-                  </svg>
-                  <span className="text-b3 font-normal">Searching near</span>
-                  <span className="font-bold text-b2 truncate">{locationText}</span>
-                  <button
-                    type="button"
-                    onClick={() => setLocEditing(true)}
-                    className="text-gd font-bold underline underline-offset-2 hover:opacity-80 flex-shrink-0"
-                    aria-label="Change search location"
-                  >
-                    Change
-                  </button>
-                </div>
-              )}
+              {/* CERGIO-GUARD (2026-05-30): when locationText is set,
+                  the chip is shown INSIDE the search box (above) — no
+                  redundant "Searching near …" strip down here. The
+                  below-box space only renders for the "Add a location"
+                  prompt OR the inline editor. */}
               {!locEditing && !locationText && (
                 <button
                   type="button"

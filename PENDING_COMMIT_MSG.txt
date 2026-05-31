@@ -1,0 +1,31 @@
+Location chip moves INTO the search box (Opus-4.7 style)
+
+Tarik: "move the location to next to the execution button within the
+search box… with edit next to it (model similar to where OPUS 4.7 is
+within the box)… abbreviate (perhaps just first 2 words of address,
+then revealed once change is clicked)… this will lighten up the busy
+homepage".
+
+Was: a "Searching near 5700 Collins Ave, Miami Beach, FL 33140, USA
+[Change]" strip below the search box — visually heavy, redundant
+with the search context, drew the eye away from the headline.
+
+Now: inside the search-box footer, between the Free/Pay dropdown and
+the send arrow, a compact chip:
+  📍 5700 Collins  ⌄
+Tap = opens the inline editor (which still appears in its old spot
+below the box, only when editing OR when no location set yet).
+
+Abbreviation: first 2 whitespace-separated tokens of the address.
+So "5700 Collins Ave, Miami Beach, FL 33140, USA" reads as
+"5700 Collins" in the chip — the full address is revealed when the
+user taps to edit.
+
+Result: the homepage chrome below the search box is dramatically
+lighter when a location is set (which is most of the time after
+first use). Only the IG/TT spotlight link sits there now.
+
+Files:
+  src/screens/HomeScreen.jsx
+
+QA: 41/41 pass.
