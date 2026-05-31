@@ -88,7 +88,11 @@ import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
 
 const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
-const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/']; // focused linear flows
+// CERGIO-GUARD (2026-05-30): /service/ added — the PDP has a fixed-
+// bottom "Request {offering} ($N)" button that the BottomNav was
+// covering, so users on Tarik's screenshot saw the Book CTA hidden.
+// PDP is a focused booking flow anyway; nav is wrong on it.
+const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/', '/service/']; // focused linear flows
 const HIDE_NAV_PATHS_EXTRA = [
   '/intake',                          // chat composer at bottom — nav was covering it
   '/intake-form',                     // structured form fallback — same reason

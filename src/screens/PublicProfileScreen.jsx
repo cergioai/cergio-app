@@ -439,11 +439,14 @@ export function PublicProfileScreen() {
         </button>
       </div>
 
-      {/* Header — avatar + big name + role/Connector badge row */}
+      {/* Header — avatar + big name + role/Connector badge row.
+          CERGIO-GUARD (2026-05-30 v2): avatar 64 → 72 + name 26 → 28
+          to match the heavier hierarchy on the mockup. Badges drop a
+          row below name so the line doesn't crowd. */}
       <div className="px-5 pt-4">
-        <div className="flex items-center gap-3">
-          <AvatarLink id={profile?.id} name={name} size={64} clickable={false} className="ring-2 ring-white shadow-sm" />
-          <h1 className="text-[26px] font-extrabold text-black leading-[1.05]">{name}</h1>
+        <div className="flex items-center gap-3.5">
+          <AvatarLink id={profile?.id} name={name} size={72} clickable={false} className="ring-2 ring-white shadow-sm" />
+          <h1 className="text-[28px] font-extrabold text-black leading-[1.05]">{name}</h1>
         </div>
         {(role || isConnector) && (
           <div className="flex items-center gap-3 mt-3 flex-wrap">
@@ -454,8 +457,8 @@ export function PublicProfileScreen() {
       </div>
 
       {/* About */}
-      <div className="px-5 mt-6">
-        <h2 className="text-[20px] font-extrabold text-black">About</h2>
+      <div className="px-5 mt-7">
+        <h2 className="text-[22px] font-extrabold text-black">About</h2>
         {profile?.bio ? (
           <p className="text-[13.5px] text-b2 leading-relaxed mt-2">{profile.bio}</p>
         ) : (
@@ -464,8 +467,8 @@ export function PublicProfileScreen() {
       </div>
 
       {/* Social */}
-      <div className="px-5 mt-6">
-        <h2 className="text-[20px] font-extrabold text-black">Social</h2>
+      <div className="px-5 mt-7">
+        <h2 className="text-[22px] font-extrabold text-black">Social</h2>
         <div className="flex items-center justify-between gap-3 mt-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border-2 border-gd">
@@ -491,8 +494,8 @@ export function PublicProfileScreen() {
 
       {/* Their Services */}
       {services.length > 0 && (
-        <div className="px-5 mt-7">
-          <h2 className="text-[20px] font-extrabold text-black">{firstName}&apos;s Services</h2>
+        <div className="px-5 mt-8">
+          <h2 className="text-[22px] font-extrabold text-black">{firstName}&apos;s Services</h2>
           <div className="mt-3 flex flex-col gap-4">
             {services.slice(0, 4).map(svc => (
               <ServiceTile
@@ -508,8 +511,8 @@ export function PublicProfileScreen() {
 
       {/* People who love {firstName} — review rows from bookings */}
       {reviews.length > 0 && (
-        <div className="px-5 mt-7">
-          <h2 className="text-[20px] font-extrabold text-black">People who love {firstName}</h2>
+        <div className="px-5 mt-8">
+          <h2 className="text-[22px] font-extrabold text-black">People who love {firstName}</h2>
           <p className="text-[12.5px] text-b3 font-medium mt-0.5">See top reviews of their service</p>
           <div className="mt-3 flex flex-col gap-3">
             {reviews.slice(0, 5).map(r => (
@@ -543,35 +546,45 @@ export function PublicProfileScreen() {
         </div>
       )}
 
-      {/* {firstName}'s Go-Tos — services they've recommended */}
+      {/* {firstName}'s Go-Tos — services they've recommended.
+          CERGIO-GUARD (2026-05-30 v2): card layout rebuilt to match
+          the Jennifer Leighton mockup. Dropped the redundant
+          "Reco'd by {firstName}" row inside each card — we're already
+          on their profile, so every entry here is implicitly by them.
+          Card now is: owner avatar (linked) + owner name (linked) +
+          role badge; Reco'd date pinned top-right; comment bubble
+          below with the profile-owner's avatar inside (matches the
+          tiny "reviewer" avatar on the mockup's gray quote box). */}
       {recoServices.length > 0 && (
-        <div className="px-5 mt-7">
-          <h2 className="text-[20px] font-extrabold text-black">{firstName}&apos;s Go-Tos</h2>
-          <p className="text-[12.5px] text-b3 font-medium mt-0.5">See their top rated service providers!</p>
-          <div className="mt-3 flex flex-col gap-3">
+        <div className="px-5 mt-8">
+          <h2 className="text-[22px] font-extrabold text-black">{firstName}&apos;s Go-Tos</h2>
+          <p className="text-[12.5px] text-b3 font-medium mt-1">See their top-rated service providers</p>
+          <div className="mt-4 flex flex-col gap-3">
             {recoServices.slice(0, 8).map(r => (
-              <div key={r.id} className="bg-white border border-bdr rounded-[14px] p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <AvatarLink id={r.owner?.id} name={r.owner?.name} size={40} />
+              <div key={r.id} className="bg-white border border-bdr rounded-[16px] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <AvatarLink id={r.owner?.id} name={r.owner?.name} size={44} />
                     <div className="min-w-0">
-                      <p className="text-[14px] font-extrabold text-black truncate">
-                        {r.owner?.name || r.service?.title || 'A provider'}
-                      </p>
-                      <p className="inline-flex items-center gap-1 text-[12px] text-gd font-extrabold mt-0.5">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
+                      {r.owner?.id ? (
+                        <Link to={`/u/${r.owner.id}`} className="text-[15px] font-extrabold text-black hover:underline truncate block">
+                          {r.owner?.name || r.service?.title || 'A provider'}
+                        </Link>
+                      ) : (
+                        <p className="text-[15px] font-extrabold text-black truncate">
+                          {r.owner?.name || r.service?.title || 'A provider'}
+                        </p>
+                      )}
+                      <p className="inline-flex items-center gap-1 text-[12.5px] text-gd font-extrabold mt-0.5">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
                           <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
                           <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                         </svg>
                         {r.service?.taxonomy_provider_type || r.service?.category || 'Service'}
                       </p>
-                      <p className="inline-flex items-center gap-1 text-[12px] text-gd font-extrabold mt-0.5">
-                        <AvatarLink id={profile?.id} name={name} size={16} clickable={false} className="border border-white" />
-                        Reco&apos;d by {firstName}
-                      </p>
                     </div>
                   </div>
-                  <p className="text-[11.5px] text-b3 font-medium whitespace-nowrap">
+                  <p className="text-[11.5px] text-b3 font-medium whitespace-nowrap pt-1">
                     {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
                   </p>
                 </div>
@@ -579,10 +592,16 @@ export function PublicProfileScreen() {
                   <button
                     type="button"
                     onClick={() => navigate(`/service/${r.service.id}`)}
-                    className="w-full text-left mt-2.5 bg-bg5 rounded-[12px] p-3 flex items-start gap-2.5 hover:bg-bdr/40 transition-colors"
+                    className="w-full text-left mt-3 bg-bg5 rounded-[14px] p-3 flex items-start gap-2.5 hover:bg-bdr/40 transition-colors"
                   >
-                    <span className="w-7 h-7 rounded-full bg-gradient-to-br from-[#e8dcc8] to-[#604030] flex-shrink-0" />
-                    <p className="flex-1 text-[12.5px] text-b2 leading-snug">{r.message}</p>
+                    <AvatarLink
+                      id={profile?.id}
+                      name={name}
+                      size={28}
+                      clickable={false}
+                      className="ring-2 ring-white"
+                    />
+                    <p className="flex-1 text-[12.5px] text-b2 leading-snug pt-1">{r.message}</p>
                   </button>
                 )}
               </div>

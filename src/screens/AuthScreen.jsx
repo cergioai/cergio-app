@@ -233,12 +233,12 @@ export function AuthScreen() {
       <div className="flex flex-col items-center pt-14 pb-6 px-7 text-center">
         <LeafLogo variant="splash" size={96} working intensity={0.85} />
         <h1 className="text-[30px] font-extrabold text-black tracking-wide mt-4 leading-tight">Cergio</h1>
-        {/* CERGIO-GUARD (2026-05-30): tagline aligned with the new Cergio
-            AI positioning — same wording as the splash screen so the
-            sign-up flow feels continuous. */}
-        <div className="flex flex-col items-center gap-1 max-w-[280px] mt-2">
+        {/* CERGIO-GUARD (2026-05-30 v2): conversational tagline —
+            same wording as the splash so the sign-up flow feels
+            continuous, voiced as Cergio itself. */}
+        <div className="flex flex-col items-center gap-1 max-w-[300px] mt-2">
           <p className="text-[13px] text-b3 leading-snug font-medium text-center">
-            AI that negotiates and books services your friends actually trust.
+            Hi, I&apos;m Cergio. I&apos;ll negotiate and book services your friends actually trust.
           </p>
           <p className="text-[11px] text-gd font-extrabold tracking-[0.18em] uppercase mt-0.5">
             Book · Barter · Earn

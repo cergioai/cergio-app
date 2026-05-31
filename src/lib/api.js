@@ -1951,6 +1951,182 @@ export async function listGoatShares({ limit = 24 } = {}) {
   return { data: rows, error: null };
 }
 
+/**
+ * Unified social activity feed — friend recommendations, Connector
+ * shares, new sign-ups, new service listings, completed spotlights.
+ *
+ * Tarik (2026-05-30): the old feed only showed Connector go-to
+ * shares (listGoatShares). He wants the full social view: "all
+ * recommendations from friends, bookings, joining, spotlights...
+ * friend announced a service, friend joined".
+ *
+ * Each returned row is shaped as { kind, at, ...payload } where kind
+ * is 'reco' | 'join' | 'listing' | 'spotlight'. The caller renders
+ * a different card per kind. All data is REAL (never mocked, per
+ * feedback_no_fake_feeds) — sections collapse silently if zero rows.
+ */
+export async function listSocialFeed({ limit = 40, days = 60 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+
+  const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  // ── 1. Recommendations (friend AND Connector) ────────────────────
+  const { data: recs } = await supabase
+    .from('recommendations')
+    .select('id, recommender_id, service_id, message, sent_at')
+    .gte('sent_at', sinceIso)
+    .order('sent_at', { ascending: false })
+    .limit(limit);
+
+  const recRecIds   = [...new Set((recs || []).map(r => r.recommender_id).filter(Boolean))];
+  const recSvcIds   = [...new Set((recs || []).map(r => r.service_id).filter(Boolean))];
+  const { data: recProfs } = recRecIds.length
+    ? await supabase.from('profiles')
+        .select('id, display_name, cc_verified_at, follower_count')
+        .in('id', recRecIds)
+    : { data: [] };
+  const recProfMap = Object.fromEntries((recProfs || []).map(p => [p.id, p]));
+  const { data: recSvcs } = recSvcIds.length
+    ? await supabase.from('services')
+        .select('id, title, category, location_text, photo_class, cover_url, owner_id')
+        .in('id', recSvcIds)
+    : { data: [] };
+  const recSvcMap = Object.fromEntries((recSvcs || []).map(s => [s.id, s]));
+  const recOwnerIds = [...new Set((recSvcs || []).map(s => s.owner_id).filter(Boolean))];
+  const { data: recOwners } = recOwnerIds.length
+    ? await supabase.from('profiles')
+        .select('id, display_name')
+        .in('id', recOwnerIds)
+    : { data: [] };
+  const recOwnerMap = Object.fromEntries((recOwners || []).map(p => [p.id, p]));
+
+  const recoEvents = (recs || [])
+    .map(r => {
+      const svc  = recSvcMap[r.service_id];
+      const prof = recProfMap[r.recommender_id];
+      if (!svc || !prof) return null;
+      const owner = recOwnerMap[svc.owner_id] || null;
+      return {
+        kind: 'reco',
+        at:   r.sent_at,
+        id:   `reco-${r.id}`,
+        message: r.message || null,
+        service: {
+          id:                 svc.id,
+          title:              svc.title,
+          category:           svc.category,
+          location_text:      svc.location_text,
+          photo_class:        svc.photo_class,
+          cover_url:          svc.cover_url,
+          owner_id:           svc.owner_id || null,
+          owner_display_name: owner?.display_name || null,
+        },
+        recommender: {
+          id:             prof.id,
+          display_name:   prof.display_name,
+          is_connector:   !!prof.cc_verified_at,
+          follower_count: prof.follower_count ?? 0,
+        },
+      };
+    })
+    .filter(Boolean);
+
+  // ── 2. Sign-ups (friend joined Cergio) ───────────────────────────
+  // CERGIO-GUARD: profiles.created_at is the auth signup time when
+  // the trigger ran. Some seed rows have created_at == NULL — exclude
+  // those so they don't show "Joined unknown" cards.
+  const { data: joins } = await supabase
+    .from('profiles')
+    .select('id, display_name, cc_verified_at, created_at')
+    .not('display_name', 'is', null)
+    .not('created_at', 'is', null)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(15);
+  const joinEvents = (joins || []).map(p => ({
+    kind: 'join',
+    at:   p.created_at,
+    id:   `join-${p.id}`,
+    profile: { id: p.id, display_name: p.display_name, is_connector: !!p.cc_verified_at },
+  }));
+
+  // ── 3. New service listings ──────────────────────────────────────
+  const { data: newSvcs } = await supabase
+    .from('services')
+    .select('id, title, category, location_text, photo_class, cover_url, owner_id, created_at, status')
+    .eq('status', 'listed')
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(15);
+  const listOwnerIds = [...new Set((newSvcs || []).map(s => s.owner_id).filter(Boolean))];
+  const { data: listOwners } = listOwnerIds.length
+    ? await supabase.from('profiles')
+        .select('id, display_name, cc_verified_at')
+        .in('id', listOwnerIds)
+    : { data: [] };
+  const listOwnerMap = Object.fromEntries((listOwners || []).map(p => [p.id, p]));
+  const listingEvents = (newSvcs || []).map(s => {
+    const o = listOwnerMap[s.owner_id] || null;
+    return {
+      kind: 'listing',
+      at:   s.created_at,
+      id:   `listing-${s.id}`,
+      service: {
+        id:            s.id,
+        title:         s.title,
+        category:      s.category,
+        location_text: s.location_text,
+        photo_class:   s.photo_class,
+        cover_url:     s.cover_url,
+        owner_id:      s.owner_id || null,
+      },
+      owner: o ? { id: o.id, display_name: o.display_name, is_connector: !!o.cc_verified_at } : null,
+    };
+  });
+
+  // ── 4. Confirmed spotlights ──────────────────────────────────────
+  // CERGIO-GUARD: pull spotlight_requests in any "live" terminal state
+  // (posted / confirmed) — those are the ones worth surfacing. Quietly
+  // skip if the table doesn't exist on this project.
+  let spotEvents = [];
+  try {
+    const { data: spots } = await supabase
+      .from('spotlight_requests')
+      .select('id, connector_id, requester_id, platform, status, service_id, created_at, posted_at')
+      .in('status', ['posted', 'confirmed'])
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const spotProfIds = [...new Set([
+      ...(spots || []).map(s => s.connector_id),
+      ...(spots || []).map(s => s.requester_id),
+    ].filter(Boolean))];
+    const { data: spotProfs } = spotProfIds.length
+      ? await supabase.from('profiles').select('id, display_name').in('id', spotProfIds)
+      : { data: [] };
+    const spotProfMap = Object.fromEntries((spotProfs || []).map(p => [p.id, p]));
+    spotEvents = (spots || []).map(s => ({
+      kind: 'spotlight',
+      at:   s.posted_at || s.created_at,
+      id:   `spotlight-${s.id}`,
+      platform:  s.platform,
+      connector: spotProfMap[s.connector_id]   ? { id: s.connector_id,  display_name: spotProfMap[s.connector_id].display_name } : null,
+      requester: spotProfMap[s.requester_id]   ? { id: s.requester_id,  display_name: spotProfMap[s.requester_id].display_name } : null,
+    }));
+  } catch (e) {
+    // table missing → silently skip
+    spotEvents = [];
+  }
+
+  // ── 5. Merge + sort by timestamp DESC + cap to `limit` ──────────
+  const merged = [...recoEvents, ...joinEvents, ...listingEvents, ...spotEvents]
+    .filter(ev => ev.at)
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, limit);
+
+  return { data: merged, error: null };
+}
+
 /** Fetch a single service + its offerings. */
 export async function getService(id) {
   if (!supabaseReady) return NOT_WIRED;

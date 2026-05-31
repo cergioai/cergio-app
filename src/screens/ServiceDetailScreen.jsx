@@ -252,8 +252,13 @@ export function ServiceDetailScreen() {
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-32">
       {/* Story-progress banner — mockup ref: dim image w/ tagline +
           7 progress dots up top + mute icon. Tap = back, for now (no
-          actual stories engine yet — this is the UI shell). */}
-      <div className={`relative h-[120px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : coverFallback}`}>
+          actual stories engine yet — this is the UI shell).
+          CERGIO-GUARD (2026-05-30): bumped 120px → 280px so the
+          cover photo dominates the top of the PDP like the Jennifer
+          Leighton mockup. The earlier 120px cropped the image to a
+          thin band — Tarik: "top image is cut off on service profile
+          page". */}
+      <div className={`relative h-[280px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : coverFallback}`}>
         {provider.coverUrl && (
           <img
             src={provider.coverUrl}
@@ -329,13 +334,17 @@ export function ServiceDetailScreen() {
 
       {/* Reco line — "Reco'd by N friends and E Connectors, including
           {LeadName}" with single lead-recommender avatar pinned right.
-          The lead avatar + lead name are both Links to the recommender's
-          public profile (/u/{id}). The bucket counts stay underlined to
-          feel tappable (future "who recommended" sheet — TODO).
-          CERGIO-GUARD (2026-05-30): copy switched from "Go-to service
-          for…" to "Reco'd by…" per Tarik's vocabulary preference. */}
-      {recoSummary && (
-        <div className="mx-5 mt-4 pt-4 border-t border-bdr">
+          CERGIO-GUARD (2026-05-30 v3): the ENTIRE row is a single Link
+          to the lead recommender's public profile. Earlier shipped a
+          nested-Link version (one Link for the avatar + another for the
+          lead name + spans for the counts) — Tarik still reported
+          "not clickable", so the visual nesting wasn't reading as
+          tappable. One outer Link + hover background change is
+          unmistakable. Bucket counts stay underlined to hint at the
+          (future) "all recommenders" sheet. */}
+      {recoSummary && (() => {
+        const leadId = recoSummary.leadAvatar?.id || null;
+        const inner = (
           <div className="flex items-center gap-3">
             <p className="flex-1 text-[13.5px] text-b2 leading-snug">
               Reco&apos;d by{' '}
@@ -355,42 +364,40 @@ export function ServiceDetailScreen() {
                   {recoSummary.total} {recoSummary.total === 1 ? 'person' : 'people'}
                 </span>
               )}
-              {recoSummary.leadName && recoSummary.leadAvatar?.id ? (
-                <>
-                  , including{' '}
-                  <Link
-                    to={`/u/${recoSummary.leadAvatar.id}`}
-                    className="text-gd font-extrabold underline"
-                  >
-                    {recoSummary.leadName}
-                  </Link>
-                </>
-              ) : recoSummary.leadName ? (
+              {recoSummary.leadName && (
                 <>, including <span className="text-gd font-extrabold underline">{recoSummary.leadName}</span></>
-              ) : null}
+              )}
+              {leadId && (
+                <span className="text-b3 text-[12px] font-medium"> ›</span>
+              )}
             </p>
             {recoSummary.leadAvatar && (
-              recoSummary.leadAvatar.id ? (
-                <Link
-                  to={`/u/${recoSummary.leadAvatar.id}`}
-                  aria-label={`View ${recoSummary.leadAvatar.name || 'profile'}`}
-                  className={`w-12 h-12 rounded-full text-white text-[14px] font-extrabold
-                              flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
-                              ${AV_GRADS[0]}`}
-                >
-                  {initialsOf(recoSummary.leadAvatar.name)}
-                </Link>
-              ) : (
-                <div className={`w-12 h-12 rounded-full text-white text-[14px] font-extrabold
-                                 flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
-                                 ${AV_GRADS[0]}`}>
-                  {initialsOf(recoSummary.leadAvatar.name)}
-                </div>
-              )
+              <div className={`w-12 h-12 rounded-full text-white text-[14px] font-extrabold
+                               flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
+                               ${AV_GRADS[0]}`}>
+                {initialsOf(recoSummary.leadAvatar.name)}
+              </div>
             )}
           </div>
-        </div>
-      )}
+        );
+        if (leadId) {
+          return (
+            <Link
+              to={`/u/${leadId}`}
+              aria-label={`View ${recoSummary.leadName || 'recommender'}'s profile`}
+              className="block mx-5 mt-4 pt-4 px-3 pb-3 -mx-2 rounded-[14px] border-t border-bdr
+                         hover:bg-gl/40 active:bg-gl/60 transition-colors"
+            >
+              {inner}
+            </Link>
+          );
+        }
+        return (
+          <div className="mx-5 mt-4 pt-4 border-t border-bdr">
+            {inner}
+          </div>
+        );
+      })()}
 
       {/* Book section title — uses owner's first name like "Book Jennifer" */}
       <div className="px-5 pt-5 pb-3 border-t border-bdr mt-5">

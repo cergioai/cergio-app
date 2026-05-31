@@ -109,58 +109,114 @@ function GrowthRings({ size, working }) {
   );
 }
 
-// ─── C · Bud bloom — ORGANIC v2 (Tarik 2026-05-30 "looks plastic") ──
-// Changes from the v1 8-identical-petal cross:
-//   • Each petal has its own slight size (rx 9–13, ry 28–34) so the
-//     silhouette isn't perfectly geometric. Real flowers wobble.
-//   • Each petal has its own bloom animation with its own delay —
-//     petals don't all open at the exact same instant. Reads alive.
-//   • Each petal nudges 1–4° off its grid rotation — visible asymmetry
-//     without breaking the radial flower feel
-//   • Per-petal opacity varies 0.78–0.95 so colors don't read flat
-//   • Heart pulses on a slower rhythm, slightly off-beat from the
-//     petals so the mark has two breathing layers, not one
-//   • Small organic blob overlay inside the heart (pale orange smear)
-//     adds hand-painted feel
+// ─── C · Bud bloom — ORGANIC v3 (Tarik 2026-05-30 "more playful, leaves
+//     less symmetrical, like real leaves, different from each other") ──
+//
+// v2 was 8 identical-shape ellipses with hand-tuned rx/ry — still read
+// as "plastic flower". v3 replaces each petal with a UNIQUE custom
+// SVG path so every leaf has its own taper, asymmetry, width, and
+// midrib (center vein) — like a real leaf, not a math primitive.
+//
+// Visible changes:
+//   • 7 leaves (not 8) — odd count breaks the "kaleidoscope" feel
+//   • Each leaf is a different hand-drawn <path>: slim, wide, droopy,
+//     pointed, curled. None match.
+//   • Each carries a faint dark midrib stroke — anatomy that says LEAF
+//   • Color palette spans 5 greens (forest → emerald → lime → sage →
+//     deep) so the spread reads natural, not factory-coated
+//   • Jittered radial angles ([8°, 56°, 110°, 162°, 218°, 270°, 322°])
+//     so leaves don't sit on a 360/7 grid — closer to a real sprig
+//   • Bouncy cubic-bezier-overshoot keyframes (cg-leaf-1 … cg-leaf-7)
+//     with a brief wobble at peak — "playful, alive" per Tarik
+//   • Heart drifts slowly on a 6.1s rhythm (off-beat from every leaf)
 function BudBloom({ size, working }) {
-  const restScale = 0.72;
-  // 8 petals — each assigned its OWN keyframe + coprime duration in
-  // index.css (.cg-bud-p1 … .cg-bud-p8). With 8 cycles never matching,
-  // the silhouette is constantly in flux. Hand-tuned size + color
-  // variation keeps the geometric perfection from creeping back in.
-  const petals = [
-    { rot:   2, rx: 11, ry: 32, fill: '#2C5D21', opacity: 0.92, cls: 'cg-bud-p1' },
-    { rot:  43, rx: 10, ry: 30, fill: '#3FA821', opacity: 0.85, cls: 'cg-bud-p2' },
-    { rot:  91, rx: 12, ry: 33, fill: '#1E4D00', opacity: 0.94, cls: 'cg-bud-p3' },
-    { rot: 134, rx:  9, ry: 28, fill: '#3FA821', opacity: 0.80, cls: 'cg-bud-p4' },
-    { rot: 181, rx: 13, ry: 34, fill: '#2C5D21', opacity: 0.95, cls: 'cg-bud-p5' },
-    { rot: 224, rx: 10, ry: 29, fill: '#3FA821', opacity: 0.82, cls: 'cg-bud-p6' },
-    { rot: 271, rx: 11, ry: 31, fill: '#2C5D21', opacity: 0.90, cls: 'cg-bud-p7' },
-    { rot: 313, rx: 12, ry: 30, fill: '#3FA821', opacity: 0.78, cls: 'cg-bud-p8' },
+  const restScale = 0.62;
+  // Each leaf:
+  //   d      — path RELATIVE to (60,60) center, pointing up; tip ≈ y=22–34
+  //   vein   — subtle midrib path (1.1px dark stroke) for "real leaf" anatomy
+  //   fill   — green from the 5-stop palette
+  //   rot    — degrees rotated around (60,60). Jittered, not 360/N.
+  //   cls    — per-leaf keyframe class (.cg-leaf-1 … .cg-leaf-7)
+  //   opacity — 0.78–0.96, varied so the layer reads with depth
+  const leaves = [
+    {
+      // 1: tall slim spear, dark forest, slight left lean
+      d: 'M 60 60 C 50 56, 47 38, 56 28 C 69 32, 71 53, 60 60 Z',
+      vein: 'M 60 60 L 58 31',
+      fill: '#1E4D00', opacity: 0.94, rot:   8, cls: 'cg-leaf-1',
+    },
+    {
+      // 2: broader, vivid emerald, curled tip
+      d: 'M 60 60 C 46 54, 44 40, 56 30 C 73 32, 75 54, 60 60 Z',
+      vein: 'M 60 60 Q 56 46 57 30',
+      fill: '#3FA821', opacity: 0.86, rot:  56, cls: 'cg-leaf-2',
+    },
+    {
+      // 3: lance-shape, deepest green, tip pulled high
+      d: 'M 60 60 C 51 55, 46 32, 58 22 C 71 30, 73 54, 60 60 Z',
+      vein: 'M 60 60 L 58 24',
+      fill: '#2C5D21', opacity: 0.95, rot: 110, cls: 'cg-leaf-3',
+    },
+    {
+      // 4: short + wide, sage colour, droopy outer edge
+      d: 'M 60 60 C 53 56, 52 44, 60 36 C 68 42, 69 56, 60 60 Z',
+      vein: 'M 60 60 L 60 37',
+      fill: '#639922', opacity: 0.82, rot: 162, cls: 'cg-leaf-4',
+    },
+    {
+      // 5: large blade, deep emerald, longest of the set
+      d: 'M 60 60 C 49 56, 43 36, 56 24 C 71 30, 73 55, 60 60 Z',
+      vein: 'M 60 60 Q 57 44 57 26',
+      fill: '#2F6E00', opacity: 0.96, rot: 218, cls: 'cg-leaf-5',
+    },
+    {
+      // 6: small new sprout, bright lime, leans right
+      d: 'M 60 60 C 53 56, 53 46, 60 38 C 68 42, 69 56, 60 60 Z',
+      vein: 'M 60 60 L 61 39',
+      fill: '#5BC404', opacity: 0.80, rot: 270, cls: 'cg-leaf-6',
+    },
+    {
+      // 7: tilted oval, mid green, slight wave
+      d: 'M 60 60 C 49 56, 47 40, 58 30 C 70 34, 73 55, 60 60 Z',
+      vein: 'M 60 60 Q 58 48 59 31',
+      fill: '#3FA821', opacity: 0.88, rot: 322, cls: 'cg-leaf-7',
+    },
   ];
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {petals.map((p, i) => (
+      {leaves.map((leaf, i) => (
         <g
           key={i}
-          className={working ? p.cls : ''}
+          className={working ? leaf.cls : ''}
           style={{
             transformOrigin: '60px 60px',
             transformBox: 'view-box',
             transform: working ? undefined : `scale(${restScale})`,
           }}
         >
-          <ellipse
-            cx="60" cy="36" rx={p.rx} ry={p.ry}
-            fill={p.fill}
-            opacity={p.opacity}
-            transform={`rotate(${p.rot} 60 60)`}
-          />
+          <g transform={`rotate(${leaf.rot} 60 60)`}>
+            <path
+              d={leaf.d}
+              fill={leaf.fill}
+              opacity={leaf.opacity}
+              strokeLinejoin="round"
+            />
+            {/* midrib — sub-pixel inset of the leaf body so it reads
+                as anatomical rather than decorative */}
+            <path
+              d={leaf.vein}
+              stroke="#0F2A00"
+              strokeWidth="0.9"
+              strokeLinecap="round"
+              fill="none"
+              opacity="0.55"
+            />
+          </g>
         </g>
       ))}
       {/* Heart drifts a sub-pixel as it pulses — adds the "alive" feel
-          even when petals are mid-cycle. Pale-orange blob smear for
-          painterly depth. */}
+          even when leaves are mid-cycle. Pale-orange blob smear for
+          painterly depth, white highlight for life. */}
       <g
         className={working ? 'cg-bud-heart' : ''}
         style={{ transformOrigin: '60px 60px', transformBox: 'view-box' }}

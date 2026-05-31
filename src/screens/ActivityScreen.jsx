@@ -13,7 +13,7 @@
 // is the consumer's view only.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
-import { listConsumerBookings, listMyOutboundSpotlightRequests, listGoatShares } from '../lib/api';
+import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 // FEED + REWARDS imports removed along with the fake "Friends
 // recently booked" section — see CERGIO-GUARD in the JSX below.
@@ -234,6 +234,151 @@ function GoatShareCard({ row, onClick }) {
   );
 }
 
+// CERGIO-GUARD (2026-05-30): "X joined Cergio" card — small, single-
+// row, avatar + name. No image (signups aren't media events). Connector
+// signups get the Connector chip; everyone else just the join verb.
+function JoinedCard({ ev }) {
+  const p = ev.profile;
+  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+                     text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+  return (
+    <div className="flex items-center gap-2.5">
+      {p.id ? (
+        <Link to={`/u/${p.id}`} aria-label={`View ${p.display_name}`} className={avatarCls}>
+          {initials(p.display_name)}
+        </Link>
+      ) : (
+        <div className={avatarCls}>{initials(p.display_name)}</div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] leading-snug text-black">
+          {p.id ? (
+            <Link to={`/u/${p.id}`} className="font-extrabold underline">{p.display_name}</Link>
+          ) : (
+            <span className="font-extrabold">{p.display_name}</span>
+          )}
+          <span className="font-medium text-b2"> joined Cergio</span>
+        </p>
+        <p className="text-[11.5px] text-b3 font-medium mt-0.5">
+          {timeAgo(ev.at)}
+          {p.is_connector && <span className="text-gd font-extrabold"> · Connector</span>}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// CERGIO-GUARD (2026-05-30): "X listed a new service" card. Mid-size
+// — name + small cover image so the listing reads as a "new thing
+// available" event rather than a heavy reco. Tap the row → service PDP.
+function ListingCard({ ev, onClick }) {
+  const svc   = ev.service;
+  const owner = ev.owner;
+  const ownerName = owner?.display_name || 'A provider';
+  const ownerId   = owner?.id || null;
+  const gradient  = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+  const cover     = svc.cover_url;
+  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+                     text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+  return (
+    <div className="w-full text-left bg-transparent">
+      <button onClick={onClick} className="w-full text-left bg-transparent">
+        <div className="flex items-center gap-2.5 mb-2">
+          {ownerId ? (
+            <Link
+              to={`/u/${ownerId}`}
+              aria-label={`View ${ownerName}`}
+              onClick={(e) => e.stopPropagation()}
+              className={avatarCls}
+            >
+              {initials(ownerName)}
+            </Link>
+          ) : (
+            <div className={avatarCls}>{initials(ownerName)}</div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] leading-snug text-black">
+              {ownerId ? (
+                <Link to={`/u/${ownerId}`} onClick={(e) => e.stopPropagation()} className="font-extrabold underline">
+                  {ownerName}
+                </Link>
+              ) : (
+                <span className="font-extrabold">{ownerName}</span>
+              )}
+              <span className="font-medium text-b2"> listed a new service: </span>
+              <span className="font-extrabold">{svc.title}</span>
+            </p>
+            <p className="text-[11.5px] text-gd font-extrabold mt-0.5">
+              <span className="inline-flex items-center gap-1">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
+                  <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
+                  <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                </svg>
+                {svc.category || 'Service'}
+              </span>
+              {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
+            </p>
+          </div>
+        </div>
+        <div className={`h-[120px] rounded-[14px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
+          {cover && (
+            <img
+              src={cover}
+              alt=""
+              loading="lazy"
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
+        </div>
+      </button>
+    </div>
+  );
+}
+
+// CERGIO-GUARD (2026-05-30): "X spotlighted Y on Instagram/TikTok"
+// card. Single-line summary linking both profiles. Small platform
+// chip so it's distinguishable at a glance from regular recos.
+function SpotlightCard({ ev }) {
+  const connector = ev.connector;
+  const requester = ev.requester;
+  const platform  = ev.platform === 'tiktok' ? 'TikTok' : 'Instagram';
+  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#8A6FD6] to-[#4F3DB0]
+                     text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+  const cName = connector?.display_name || 'A Connector';
+  const rName = requester?.display_name || 'a provider';
+  return (
+    <div className="flex items-center gap-2.5">
+      {connector?.id ? (
+        <Link to={`/u/${connector.id}`} aria-label={`View ${cName}`} className={avatarCls}>
+          {initials(cName)}
+        </Link>
+      ) : (
+        <div className={avatarCls}>{initials(cName)}</div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] leading-snug text-black">
+          {connector?.id ? (
+            <Link to={`/u/${connector.id}`} className="font-extrabold underline">{cName}</Link>
+          ) : (
+            <span className="font-extrabold">{cName}</span>
+          )}
+          <span className="font-medium text-b2"> spotlighted </span>
+          {requester?.id ? (
+            <Link to={`/u/${requester.id}`} className="font-extrabold underline">{rName}</Link>
+          ) : (
+            <span className="font-extrabold">{rName}</span>
+          )}
+          <span className="font-medium text-b2"> on {platform}</span>
+        </p>
+        <p className="text-[11.5px] text-b3 font-medium mt-0.5">
+          {timeAgo(ev.at)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ActivityScreen() {
   const navigate = useNavigate();
   const { auth } = useOutletContext() || {};
@@ -242,17 +387,20 @@ export function ActivityScreen() {
   // Real data — loaded lazily on auth flip.
   const [bookings, setBookings]     = useState(null); // null = loading
   const [spotlights, setSpotlights] = useState(null);
-  // CERGIO-GUARD: GOAT shares feed. Always loaded (public-ish data —
-  // recommendations RLS is `select using (true)` so signed-out users
-  // see the same feed). Hides the section when zero rows.
-  const [goatShares, setGoatShares] = useState(null);
+  // CERGIO-GUARD (2026-05-30): unified social feed. Replaces the old
+  // Connector-only goatShares list. Includes friend recos, Connector
+  // shares, new sign-ups ("X joined Cergio"), new service listings,
+  // and confirmed spotlights — all from real tables, never mocked.
+  // Tarik: "need to see all recommendations from friends, bookings,
+  // joining, spotlights... friend announced a service, friend joined".
+  const [feed, setFeed] = useState(null);
   useEffect(() => {
     if (!isSignedIn) { setBookings([]); setSpotlights([]); }
     else {
       listConsumerBookings().then(({ data }) => setBookings(data || []));
       listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => setSpotlights(data || []));
     }
-    listGoatShares({ limit: 24 }).then(({ data }) => setGoatShares(data || []));
+    listSocialFeed({ limit: 40, days: 60 }).then(({ data }) => setFeed(data || []));
   }, [isSignedIn]);
 
   // Active = anything that isn't in a terminal state — those are what
@@ -271,26 +419,48 @@ export function ActivityScreen() {
         </p>
       </div>
 
-      {/* ─── GOAT shares — real data only. Hidden when zero. ─────────────
-          CERGIO-GUARD (2026-05-30): the cards here are REAL recommendations
-          authored by Connectors (cc_verified_at NOT NULL). No fake feed,
-          no fake numbers — see feedback_no_fake_feeds. */}
-      {goatShares && goatShares.length > 0 && (
+      {/* ─── Social feed — real data only. Hidden when zero. ──────────
+          CERGIO-GUARD (2026-05-30): unified feed mixing four event
+          kinds (reco / join / listing / spotlight). Each event renders
+          with its own card style. All rows come from real tables —
+          recommendations / profiles / services / spotlight_requests.
+          See feedback_no_fake_feeds. */}
+      {feed && feed.length > 0 && (
         <div className="mt-2 pb-4 border-b border-bdr">
           <div className="px-5 mb-3">
             <h2 className="text-[17px] font-extrabold text-black leading-tight">
-              Connectors have shared their go-to services on Cergio
+              What&apos;s happening on Cergio
             </h2>
-            <p className="text-[12px] text-gd font-extrabold mt-1">#cergioconnectors</p>
+            <p className="text-[12px] text-gd font-extrabold mt-1">#cergiofeed</p>
           </div>
           <div className="px-5 flex flex-col gap-5">
-            {goatShares.map(row => (
-              <GoatShareCard
-                key={row.id}
-                row={row}
-                onClick={() => navigate(`/service/${row.service.id}`)}
-              />
-            ))}
+            {feed.map(ev => {
+              if (ev.kind === 'reco') {
+                return (
+                  <GoatShareCard
+                    key={ev.id}
+                    row={ev}
+                    onClick={() => navigate(`/service/${ev.service.id}`)}
+                  />
+                );
+              }
+              if (ev.kind === 'join') {
+                return <JoinedCard key={ev.id} ev={ev} />;
+              }
+              if (ev.kind === 'listing') {
+                return (
+                  <ListingCard
+                    key={ev.id}
+                    ev={ev}
+                    onClick={() => navigate(`/service/${ev.service.id}`)}
+                  />
+                );
+              }
+              if (ev.kind === 'spotlight') {
+                return <SpotlightCard key={ev.id} ev={ev} />;
+              }
+              return null;
+            })}
           </div>
         </div>
       )}

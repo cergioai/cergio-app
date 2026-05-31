@@ -15,14 +15,15 @@ export function SplashScreen() {
             on first impression. */}
         <LeafLogo variant="splash" size={120} working intensity={0.9} />
         <h1 className="text-[34px] font-extrabold text-white tracking-widest uppercase">Cergio</h1>
-        {/* CERGIO-GUARD (2026-05-30): tagline aligned with the new Cergio
-            AI positioning — "negotiate and book services your friends
-            actually trust", followed by the three-verb action line. The
-            wordmark above already says CERGIO, so we don't repeat the
-            brand inside the tagline. */}
-        <div className="flex flex-col items-center gap-1.5 max-w-[280px]">
-          <p className="text-[14px] text-white/70 font-medium text-center leading-snug">
-            AI that negotiates and books services your friends actually trust.
+        {/* CERGIO-GUARD (2026-05-30 v2): conversational tagline —
+            matches the HomeScreen greeting voice ("Hi, I'm Cergio,
+            I'll negotiate and book…"). Tarik: "make this
+            conversational... hi i'm cergio, i'll negotiate book et."
+            The wordmark above already says CERGIO so we don't repeat
+            the brand inside the tagline. */}
+        <div className="flex flex-col items-center gap-1.5 max-w-[300px]">
+          <p className="text-[14px] text-white/75 font-medium text-center leading-snug">
+            Hi, I&apos;m Cergio. I&apos;ll negotiate and book services your friends actually trust.
           </p>
           <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase">
             Book · Barter · Earn

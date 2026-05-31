@@ -252,31 +252,58 @@ body {
    The React component toggles className on/off; CSS keyframes here.
    Speed scales with --cg-leaf-speed (1 = calm, 0.55 = fast). */
 
-/* C · Bud bloom — ORGANIC v3 DRIFT BLOOM (Tarik picked candidate A
-   2026-05-30). Each petal runs on its OWN keyframe with a coprime
-   duration so 8 petals never line up — the silhouette is constantly
-   in flux without any two cycles ever matching. Heart drifts a
-   sub-pixel as it pulses on yet another rhythm. */
-@keyframes cgBudPetalA {
-  0%, 100% { transform: scale(0.08) rotate(-3deg); }
-  47%      { transform: scale(1)    rotate(2deg); }
+/* C · Bud bloom — ORGANIC v4 PLAYFUL LEAVES (Tarik 2026-05-30
+   "more playful, leaves less symmetrical, like real leaves, different
+   from each other"). v3 used 8 identical ellipses with hand-tuned
+   sizes; v4 swaps to 7 unique <path> leaves AND swaps the keyframes
+   to bouncier cubic-bezier-overshoot curves with a brief mid-bloom
+   wobble — every leaf nods/sways differently before settling. With
+   7 coprime durations + 7 different keyframe shapes the silhouette
+   never repeats; with cubic-bezier overshoot it reads playful, not
+   mechanical. */
+
+/* Each keyframe overshoots scale 1.0 → 1.08 around 40%, dips slightly
+   at 55% (the "settle"), wobbles back up briefly at 70% (Claude-like
+   double-pulse), then collapses. Rotations also overshoot in
+   different directions per keyframe so no two leaves nod the same way. */
+@keyframes cgLeafBloomA {
+  0%   { transform: scale(0.04) rotate(-12deg); }
+  40%  { transform: scale(1.08) rotate(4deg); }
+  55%  { transform: scale(0.96) rotate(-2deg); }
+  70%  { transform: scale(1.03) rotate(3deg); }
+  100% { transform: scale(0.04) rotate(-12deg); }
 }
-@keyframes cgBudPetalB {
-  0%, 100% { transform: scale(0.10) rotate(2deg); }
-  52%      { transform: scale(0.95) rotate(-1.5deg); }
+@keyframes cgLeafBloomB {
+  0%   { transform: scale(0.05) rotate(10deg); }
+  42%  { transform: scale(1.06) rotate(-3deg); }
+  58%  { transform: scale(0.97) rotate(1deg); }
+  72%  { transform: scale(1.02) rotate(-2deg); }
+  100% { transform: scale(0.05) rotate(10deg); }
 }
-@keyframes cgBudPetalC {
-  0%, 100% { transform: scale(0.06) rotate(-1deg); }
-  48%      { transform: scale(1.04) rotate(3deg); }
+@keyframes cgLeafBloomC {
+  0%   { transform: scale(0.03) rotate(-6deg); }
+  38%  { transform: scale(1.10) rotate(2deg); }
+  52%  { transform: scale(0.94) rotate(-1deg); }
+  68%  { transform: scale(1.04) rotate(4deg); }
+  100% { transform: scale(0.03) rotate(-6deg); }
 }
-.cg-bud-p1 { animation: cgBudPetalA calc(3.7s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
-.cg-bud-p2 { animation: cgBudPetalB calc(4.3s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .20s; }
-.cg-bud-p3 { animation: cgBudPetalC calc(5.1s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .45s; }
-.cg-bud-p4 { animation: cgBudPetalA calc(4.1s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .10s; }
-.cg-bud-p5 { animation: cgBudPetalB calc(4.9s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .35s; }
-.cg-bud-p6 { animation: cgBudPetalC calc(3.9s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .60s; }
-.cg-bud-p7 { animation: cgBudPetalA calc(5.3s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .25s; }
-.cg-bud-p8 { animation: cgBudPetalB calc(4.7s * var(--cg-leaf-speed, 1)) ease-in-out infinite; animation-delay: .50s; }
+@keyframes cgLeafBloomD {
+  0%   { transform: scale(0.06) rotate(8deg); }
+  45%  { transform: scale(1.05) rotate(-4deg); }
+  60%  { transform: scale(0.98) rotate(2deg); }
+  100% { transform: scale(0.06) rotate(8deg); }
+}
+
+/* Bouncy cubic-bezier (slight overshoot on the way out, soft on return)
+   — feels playful, not stiff. Coprime durations + jittered delays mean
+   no two leaves bloom in sync. */
+.cg-leaf-1 { animation: cgLeafBloomA calc(3.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; }
+.cg-leaf-2 { animation: cgLeafBloomB calc(4.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .18s; }
+.cg-leaf-3 { animation: cgLeafBloomC calc(5.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .42s; }
+.cg-leaf-4 { animation: cgLeafBloomD calc(4.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .08s; }
+.cg-leaf-5 { animation: cgLeafBloomA calc(4.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .32s; }
+.cg-leaf-6 { animation: cgLeafBloomB calc(3.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .56s; }
+.cg-leaf-7 { animation: cgLeafBloomC calc(5.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .22s; }
 
 @keyframes cgBudHeart {
   0%, 100% { transform: translate(0, 0)   scale(1); }

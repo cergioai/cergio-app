@@ -1,44 +1,63 @@
-fix(profile): blank /u/{id} page + bulletproof loading + tagline switch
+polish: PDP fixes, profile design pass, organic leaves, social feed, Stripe bypass
 
-Two fixes in one commit:
+Bundle of fixes for Tarik's evening review session.
 
-1. Public profile rendered blank
-   Tarik: "click link goes to blank page (populate even seeded
-   profiles..)".
+PDP (ServiceDetailScreen.jsx)
+- "Book button hidden" — BottomNav was covering the fixed-bottom
+  "Request {offering} ($N)" CTA. Added /service/ to HIDE_NAV_PREFIXES
+  so the PDP renders without the nav (it's a focused booking flow).
+- "Top image is cut off" — cover hero 120px → 280px so the photo
+  dominates like the Jennifer Leighton mockup.
+- "Reco'd by … not clickable" v3 — the row now is a single outer
+  Link (not nested Links) to the lead recommender's /u/{id}, with
+  hover/active background + a › chevron so it reads unmistakably as
+  tappable. Bucket counts stay visually underlined.
 
-   Root cause: the profile SELECT included `avatar_url`, which doesn't
-   exist on the profiles table. PostgREST 400'd the query → prof=null
-   → notFound branch fell through silently in some HMR states.
+Public profile (PublicProfileScreen.jsx)
+- Design pass to match the mockup: avatar 64 → 72, name 26 → 28,
+  section headers 20 → 22, tighter top spacing.
+- {Name}'s Go-Tos cards rebuilt: dropped the redundant
+  "Reco'd by {self}" inner row (we're already on their profile;
+  every entry is implicitly by them). Comment bubble now shows the
+  profile-owner's small avatar (matches the gray quote box on the
+  mockup), Reco'd date pinned top-right, owner name linked to their
+  /u/{id} too.
 
-   Fix:
-   - Drop `avatar_url` from the SELECT (no other code reads it; we
-     render initials avatars instead).
-   - Console.warn on profile / reviews fetch errors so future drift is
-     visible.
-   - Loading + notFound branches now render the X close button + cream
-     background, so the user is never on a truly blank scroll area.
-   - Reviews query rewritten to use reviews.rater_id directly (was
-     hopping reviews → bookings.consumer_id, which is wrong — the
-     reviewer is rater_id).
+Logo (LeafLogo.jsx + index.css)
+- v3 (8 identical ellipses) → v4 (7 unique <path> leaves). Each leaf
+  has its own taper, width, midrib (center vein), tilt, opacity. Color
+  palette spans 5 greens. Tarik: "more playful, leaves less symmetrical,
+  like real leaves, different from each other".
+- Keyframes swapped to cubic-bezier-overshoot (1.56 bounce) with a
+  brief mid-bloom wobble — playful, not mechanical. 4 distinct
+  keyframe shapes × 7 coprime durations × jittered delays = silhouette
+  never repeats.
 
-2. Tagline switched on Splash + Auth (sign-up) screens
-   Tarik: "Cergio AI negotiate and book services your friends actually
-   trust. Book, Barter, Earn... or a succinct variation."
+Tagline (SplashScreen.jsx + AuthScreen.jsx)
+- "AI that negotiates and books services your friends actually trust."
+  → "Hi, I'm Cergio. I'll negotiate and book services your friends
+  actually trust." Matches the HomeScreen greeting voice. Sub-line
+  "Book · Barter · Earn" preserved.
 
-   Picked the succinct rewrite — the wordmark above the tagline
-   already says CERGIO, so we don't repeat the brand:
+Activity feed (api.js listSocialFeed + ActivityScreen.jsx)
+- Old feed only showed Connector go-to shares. New unified feed
+  merges: friend AND Connector recommendations, new sign-ups
+  ("X joined Cergio"), new service listings ("X listed a new service:
+  Y"), confirmed Instagram/TikTok spotlights. All from real tables
+  (recommendations / profiles / services / spotlight_requests).
+  No fake feeds (feedback_no_fake_feeds preserved).
+- ActivityScreen now renders four card kinds: reco (GoatShareCard),
+  join (JoinedCard), listing (ListingCard), spotlight (SpotlightCard).
+- Section heading switched to "What's happening on Cergio" /
+  #cergiofeed.
 
-     AI that negotiates and books services your friends actually trust.
-     Book · Barter · Earn
+Stripe-payouts bypass (RequestDetailScreen.jsx)
+- Tarik: "disable the payment setup condition so we test... we can
+  enable this regardless and then services are notified to set up to
+  receive payment". Accept button is now always enabled. The Stripe
+  reminder banner is non-blocking copy ("You can accept now — finish
+  Stripe payouts setup so funds reach your bank"). On accept of a paid
+  booking without payouts_enabled, a sticky toast reminds the provider
+  to finish Stripe setup.
 
-   Applied to SplashScreen (replaces "Find trusted services,
-   recommended by friends") and AuthScreen (replaces "Services your
-   friends actually trust. Book, host, or earn — all in one place.").
-   Sub-line uses tracking-[0.18em] uppercase to read as a verb stamp.
-
-Companion script (root, not in cergio-app):
-  "Enrich Seeded Friends.command" — UPSERT bio + IG handle + follower
-  count onto Alex Tester / Connie Connect / Sam Sample so visiting
-  their /u/{id} shows a populated About + Social row. Idempotent.
-
-Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.
+Verified: qa.mjs 41/41 · JSX syntax check on all touched files: green.

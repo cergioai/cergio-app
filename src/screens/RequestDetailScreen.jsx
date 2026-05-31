@@ -91,21 +91,24 @@ export function RequestDetailScreen() {
       navigate('/job');
       return;
     }
-    // Paid bookings require the provider to be Stripe-ready. Free Connector
-    // bookings bypass this check since no payout happens.
-    if (!data.isFree && !provider.ready) {
-      showToast(
-        provider.hasAccount
-          ? 'Stripe is still verifying your account — try again in a moment'
-          : 'Finish payouts setup in Profile → Service view before accepting'
-      );
-      return;
-    }
+    // CERGIO-GUARD (2026-05-30): the Stripe-ready check used to BLOCK
+    // acceptance for paid bookings. Tarik: "disable the payment setup
+    // condition... we can enable this regardless and then services are
+    // notified to set up to receive payment". New policy: always allow
+    // acceptance; remind the provider afterward (via toast + the
+    // non-blocking banner above the CTA) to finish payouts setup so
+    // funds actually land.
     setBusy(true);
     const { error } = await updateBookingStatus(data.id, 'confirmed');
     setBusy(false);
     if (error) { showToast(`Failed: ${error.message}`); return; }
-    showToast('Accepted!');
+    if (!data.isFree && !provider.ready) {
+      // Sticky so the provider sees the payouts-setup reminder long
+      // enough to act on it.
+      showToast('Accepted! Finish Stripe payouts setup to get paid.', { sticky: true });
+    } else {
+      showToast('Accepted!');
+    }
     navigate('/job', { state: { bookingId: data.id } });
   };
 
@@ -206,15 +209,18 @@ export function RequestDetailScreen() {
       {/* actions */}
       {!alreadyResolved && (
         <>
+          {/* CERGIO-GUARD (2026-05-30): non-blocking Stripe reminder.
+              Used to disable Accept; now informs only. Provider can
+              accept + finish Stripe setup afterward to get paid out. */}
           {data.real && !data.isFree && !provider.loading && !provider.ready && (
             <div className="mx-5 mt-3 mb-1 bg-warnBg border border-warn/40 rounded-[14px] p-3">
               <p className="text-[13px] font-extrabold text-warnText mb-0.5">
-                {provider.hasAccount ? 'Payouts not yet enabled' : 'Set up payouts first'}
+                {provider.hasAccount ? 'Payouts not yet enabled' : 'Stripe payouts not set up yet'}
               </p>
               <p className="text-[12px] text-warnText leading-relaxed">
-                {provider.hasAccount
-                  ? 'Stripe is still verifying your account. You can accept once it switches to enabled.'
-                  : 'You need a Stripe payout account before you can accept paid bookings. Profile → Switch to Service view → Set up payouts.'}
+                You can accept now — finish Stripe payouts setup in
+                <span className="font-extrabold"> Profile → Service view </span>
+                so funds reach your bank.
               </p>
             </div>
           )}
@@ -225,7 +231,7 @@ export function RequestDetailScreen() {
           <div className="px-5 pb-3 flex flex-col gap-2">
             <button
               onClick={handleAccept}
-              disabled={busy || (data.real && !data.isFree && !provider.ready)}
+              disabled={busy}
               className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
                          hover:opacity-90 active:scale-[.97] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
