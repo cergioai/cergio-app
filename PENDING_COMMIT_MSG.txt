@@ -1,61 +1,53 @@
-design(earnings): Scene 2 barter sequence + Scene 3 GPI growth curves
+design(earnings + browse): cash/credit + ripple-back + GPI network note + (i) explainer + no-free-Connector banner
 
-Tarik: "on how earnings work, show instagram tiktok and better layout
-of barter superior simple designs perhaps show the sequence first free
-services then free spotlight.. use arrows... show the audience of the
-influencer... and how a connector can get 10's of services per month
-(worth thousands). Then for 3-spell out Growth Participation Income.
-With Human Powered AI ... show it's regular income relative to platform
-use and initial date of adoption... ultra simple but users should
-infer the power of 1-spotlight (and ripples of networks turning into
-users) and 2-the intelligence and humanity of being a partner via
-growth participation income".
+Earnings animation
+  Tarik (one message): "add small note that connectors get cash and
+  normal users get credit... arrows back from the connector's audience
+  to the services... or other to show the effect of spotlight... add
+  small note on GPI (relative to participation / connector's network
+  growth..)".
 
-Scene 2 — Free service → Free spotlight (barter sequence)
-Was: two circles + double-headed arrow + "Free services. Real value."
-  Now reads as a clear two-step diagram users SCAN top→bottom:
+  Scene 1 — cash vs credit footnote
+    Two pills below the $250 payoff:
+      [ Connectors earn CASH ]   [ Users earn credit ]
+    Mint pill for Connectors, neutral for Users — soft, no shouting.
+    Lands at 3.4s after the verbs settle.
 
-    [ PROVIDER ]  ── free service ──→  [ CONNECTOR · that's you ]
-                                              │
-                                              │ free spotlight
-                                              ↓
-    [ IG · TT · Your audience · 50K+ followers · ●●●●● reach ]
+  Scene 2 — ripple-back arrow (audience → new customers)
+    A dashed orange curve sweeps from the audience cluster on the left
+    BACK up to the Provider tile, labelled "new customers" along the
+    vertical. The spotlight isn't a one-way payment — it's a loop:
+    audience → bookings → revenue to the provider, which is why the
+    provider was willing to barter in the first place.
 
-  IG icon = mockup-style rounded square + lens + dot. TT icon =
-  stylized music-note glyph (no asset dependency).
-  Audience cluster is 5 fading dots so the "ripple into followers"
-  read is visual, not text.
-  Footer punchline: "10+ services / month · thousands in value · all
-  free" — anchors the $ value Tarik wants users to infer.
-  STEPS body for the auto-advance caption rewritten to match:
-    "Connectors swap reach for service. The provider gives you a
-    free service; you post one IG / TikTok spotlight back. 10+
-    services a month, thousands in value, all free — paid in
-    audience, not cash."
+  Scene 3 — GPI network-growth note
+    Small line above the punchline footer:
+      "Tied to YOUR participation × YOUR network's growth"
+    Two-fact stack ensures users read both:
+      • the math (participation × network)
+      • the timing (earlier joiner = bigger ripples).
 
-Scene 3 — Growth Participation Income (curves over adoption time)
-  Was: single rising line + "AI-driven shared prosperity · via GPI".
-  Now spells the term out + shows THREE growth curves on a 5-year X
-  axis so the adoption-timing argument is visible:
-    • Early adopter — steepest, climbs full 5 years to top-right
-    • Mid adopter   — gentler, joined Year 3
-    • Late adopter  — flattest, joined Year 4
-  Each curve has its own end-of-line dot + label. Y-axis tick
-  labelled `$$$`; X-axis ticks YR 1 / YR 3 / YR 5.
-  Title block: "Growth Participation Income." + sub
-  "Human-powered AI · Shared prosperity."
-  Footer: "The earlier you join, the bigger your ripples — regular
-  income for life." — "ripples" hints at the spotlight network-of-
-  networks effect, "regular income" lands the GPI character.
-  STEPS body: "Human-powered AI · Shared prosperity. Every dollar
-  you earn becomes a share of Cergio's growth. The earlier you join,
-  the more your share compounds — regular income, tied to how much
-  the network you helped grow keeps growing."
+Connector explainer (Home + EarnExplainer)
+  Tarik: "add a connector's explainer somewhere (perhaps a small i that
+  pops up...(also on homepage).. to take to /rainmaker/apply".
+  - Home: tiny (i) chip next to the "Free for Connectors" toggle in
+    the search box (only when the toggle is active). Tap → /rainmaker/apply.
+  - EarnExplainerScreen: green "i What's a Connector? Apply to become
+    one →" link under the page subtitle. Tap → /rainmaker/apply.
+  Both keep the existing big "Invite your clients → become a
+  Connector" promo block — these are just additional curiosity
+  on-ramps.
 
-qa.mjs #31 invariants still green — Scene 2 retains "Barter" (in the
-section comment header) + "free service" anchor; Scene 3 retains
-"Growth Participation Income" + "Shared prosperity"; Scene 1
-continues to reference REWARDS.referrerSharePercent in its body copy
-so the system-source-of-truth check stays satisfied.
+Browse Connectors — "no free Connector right now" banner
+  Tarik: "add a msg if there's no free connector to say (and that
+  below are some connectors who'll spotlight for a fee)".
+  When the loaded Connector list contains zero rows with BOTH
+  spotlight_price_*_cents IS NULL, render a soft warn banner above
+  the list:
+    "No free Connectors available right now"
+    "All of the Connectors below set a fee per spotlight post — but
+     it's often negotiable. Ask for a lower price (or a free post in
+     exchange for your service) inside the request."
+  Banner disappears the moment any free/swap-only Connector is loaded.
 
-Verified: qa.mjs 41/41 · JSX syntax check on the touched file: green.
+Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.

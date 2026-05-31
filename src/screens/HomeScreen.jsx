@@ -995,6 +995,24 @@ export function HomeScreen() {
                       <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
+                  {/* CERGIO-GUARD (2026-05-30): tiny "what's a Connector?"
+                      info button next to the toggle. Tarik: "add a
+                      connector's explainer somewhere (perhaps a small
+                      i that pops up...(also on homepage).. to take to
+                      /rainmaker/apply". Routes to the apply flow so
+                      curious users can read what Connectors are and
+                      sign up in one tap. */}
+                  {freeServices && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); navigate('/rainmaker/apply'); }}
+                      aria-label="What's a Connector?"
+                      className="ml-1 w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold
+                                 flex items-center justify-center hover:bg-gl transition-colors"
+                    >
+                      i
+                    </button>
+                  )}
                   {modeOpen && (
                     <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[220px]">
                       <ModeOption

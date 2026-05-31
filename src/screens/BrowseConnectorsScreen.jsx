@@ -87,17 +87,42 @@ export function BrowseConnectorsScreen() {
         <p className="px-5 mt-10 text-[14px] text-b3">Loading Connectors…</p>
       ) : connectors.length === 0 ? (
         <EmptyState />
-      ) : (
-        <div className="mt-6 flex flex-col">
-          {connectors.map(c => (
-            <ConnectorRow
-              key={c.id}
-              connector={c}
-              onClick={() => setRequestTarget(c)}
-            />
-          ))}
-        </div>
-      )}
+      ) : (() => {
+        // CERGIO-GUARD (2026-05-30): banner when zero free/swap-only
+        // Connectors are loaded. Tarik: "add a msg if there's no free
+        // connector to say (and that below are some connectors who'll
+        // spotlight for a fee)". A Connector counts as "free / swap"
+        // when BOTH platform rates are unset (price_*_cents IS NULL).
+        const hasFreeConnector = connectors.some(c =>
+          c.spotlight_price_instagram_cents == null &&
+          c.spotlight_price_tiktok_cents == null
+        );
+        return (
+          <>
+            {!hasFreeConnector && (
+              <div className="mx-5 mt-5 bg-warnBg border border-warn/40 rounded-[14px] p-3.5">
+                <p className="text-[13px] font-extrabold text-warnText leading-tight mb-1">
+                  No free Connectors available right now
+                </p>
+                <p className="text-[12.5px] text-warnText leading-snug">
+                  All of the Connectors below set a fee per spotlight post —
+                  but it&apos;s often negotiable. Ask for a lower price (or a
+                  free post in exchange for your service) inside the request.
+                </p>
+              </div>
+            )}
+            <div className="mt-6 flex flex-col">
+              {connectors.map(c => (
+                <ConnectorRow
+                  key={c.id}
+                  connector={c}
+                  onClick={() => setRequestTarget(c)}
+                />
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {requestTarget && (
         <RequestSpotlightModal

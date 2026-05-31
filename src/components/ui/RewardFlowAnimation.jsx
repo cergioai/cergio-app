@@ -85,6 +85,19 @@ function Scene1() {
           {REWARDS.exampleFriends} friends → ${REWARDS.exampleTotal.toLocaleString()}
         </text>
       </g>
+      {/* CERGIO-GUARD (2026-05-30): cash-vs-credit footnote per Tarik:
+          "add small note that connectors get cash and normal users
+          get credit". Two soft pills at the bottom, no shouting. */}
+      <g className="rf-pop" style={{ animationDelay: '3.4s' }}>
+        <rect x={36} y={232} width={166} height={18} rx={9} fill="#F3FFEA" stroke="#3D8B00" strokeWidth={0.8} />
+        <text x={119} y={245} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">
+          Connectors earn CASH
+        </text>
+        <rect x={210} y={232} width={154} height={18} rx={9} fill="#F4F4F2" stroke="#A0A0A2" strokeWidth={0.8} />
+        <text x={287} y={245} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#3D3D3D" fontFamily="system-ui">
+          Users earn credit
+        </text>
+      </g>
     </>
   );
 }
@@ -170,13 +183,35 @@ function Scene2() {
         </g>
       </g>
 
+      {/* CERGIO-GUARD (2026-05-30): ripple-back arrows from the
+          audience BACK to the Provider tile so the network effect
+          reads visually — Tarik: "arrows back from the connector's
+          audience to the services... or other to show the effect of
+          spotlight". The spotlight isn't a one-way payment, it's a
+          loop: audience → new customers → more revenue to provider
+          → which is why the provider was willing to barter in the
+          first place. */}
+      <g className="rf-pop" style={{ animationDelay: '2.8s' }}>
+        {/* Curved arrow from audience-left back up to provider tile.
+            Quadratic curve sweeping out left of the diagram. */}
+        <path
+          d="M 50 196 Q 12 150, 30 96 Q 36 84, 60 84"
+          stroke="#F0A030" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeDasharray="3 3"
+        />
+        <polygon points="60,80 70,84 60,88" fill="#F0A030" />
+        <text x={4} y={150} fontSize="9.5" fontWeight="800" fill="#8A5A10" fontFamily="system-ui"
+              transform="rotate(-90 14 150)">
+          new customers
+        </text>
+      </g>
+
       {/* Punchline footer — the "thousands of dollars" payoff */}
       <text
         x={200} y={250}
         textAnchor="middle"
         fontSize="11" fontWeight="800" fill="#2C5D21" fontFamily="system-ui"
         className="rf-pop"
-        style={{ animationDelay: '3.0s' }}
+        style={{ animationDelay: '3.4s' }}
       >
         10+ services / month · thousands in value · all free
       </text>
@@ -258,15 +293,30 @@ function Scene3() {
         <text x={364} y={174} textAnchor="end" fontSize="8.5" fontWeight="700" fill="#77A038" fontFamily="system-ui">late adopter</text>
       </g>
 
+      {/* CERGIO-GUARD (2026-05-30): network-growth note — Tarik:
+          "add small note on GPI (relative to participation /
+          connector's network growth...)". Sits just above the footer
+          punchline so the user reads: "tied to YOUR network", then
+          "earlier you join → bigger ripples". Two facts stacked,
+          neither lost. */}
+      <text
+        x={200} y={236}
+        textAnchor="middle"
+        fontSize="9.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui"
+        className="rf-pop"
+        style={{ animationDelay: '3.0s' }}
+      >
+        Tied to YOUR participation × YOUR network&apos;s growth
+      </text>
       {/* Footer — single sentence the user infers everything from.
           "Ripples" hints at the spotlight network-of-networks effect;
           "human-powered" hints at the AI+partnership story. */}
       <text
-        x={200} y={246}
+        x={200} y={252}
         textAnchor="middle"
         fontSize="10.5" fontWeight="800" fill="#2C5D21" fontFamily="system-ui"
         className="rf-pop"
-        style={{ animationDelay: '3.4s' }}
+        style={{ animationDelay: '3.6s' }}
       >
         The earlier you join, the bigger your ripples — regular income for life.
       </text>

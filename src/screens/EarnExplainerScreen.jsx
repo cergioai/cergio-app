@@ -40,6 +40,20 @@ export function EarnExplainerScreen() {
         <p className="text-[13px] text-b3 leading-relaxed mt-2">
           What you earn as a User vs a Connector — and how the math adds up.
         </p>
+        {/* CERGIO-GUARD (2026-05-30): Connector explainer CTA — Tarik:
+            "add a connector's explainer somewhere (perhaps a small i
+            that pops up...(also on homepage).. to take to
+            /rainmaker/apply". Small text link so it doesn't compete
+            with the Replay/Back controls below the animation. */}
+        <button
+          onClick={() => navigate('/rainmaker/apply')}
+          className="inline-flex items-center gap-1.5 mt-2 text-[12px] font-extrabold text-gd hover:underline"
+        >
+          <span className="w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold inline-flex items-center justify-center">
+            i
+          </span>
+          What&apos;s a Connector? Apply to become one →
+        </button>
       </div>
 
       <div className="px-3 mb-5">
