@@ -1,55 +1,61 @@
-design: crossed-out "FREE" price, energetic v7 logo, dedupe Pick tag, fix Reco Connect
+design(earnings): Scene 2 barter sequence + Scene 3 GPI growth curves
 
-PDP — free offering shows $X crossed out + big FREE
-  Tarik: "for free for connectors... show the official price but
-  crossed out and show free instead".
-  Free offering card now renders:
-    [ ~~$160~~  FREE  🛡 for Connectors ]
-  Reference price priority:
-    1. Highest-priced sibling paid offering on the SAME service
-       (captures "the same provider's normal rate").
-    2. Category-based fallback table (House Cleaner $160, Personal
-       Driver $80, Babysitter $75, etc.) when this service only
-       lists the free perk.
-  Layout is left-anchored (justify-start + self-start) so the strike-
-  through price sits under the offering name and lines up clean.
+Tarik: "on how earnings work, show instagram tiktok and better layout
+of barter superior simple designs perhaps show the sequence first free
+services then free spotlight.. use arrows... show the audience of the
+influencer... and how a connector can get 10's of services per month
+(worth thousands). Then for 3-spell out Growth Participation Income.
+With Human Powered AI ... show it's regular income relative to platform
+use and initial date of adoption... ultra simple but users should
+infer the power of 1-spotlight (and ripples of networks turning into
+users) and 2-the intelligence and humanity of being a partner via
+growth participation income".
 
-Logo motion v7 — ENERGETIC contract + expand (LeafLogo.jsx + index.css)
-  Tarik: "make animation contract and expand in fun animation.. it's
-  boring now.. make energetic".
-  v6 was calm/fluid drift — leaves never got below scale 0.94 and
-  rotation stayed within ±2.5°. v7 keeps the layered architecture
-  (breath + drift + shimmer + slow spin) but pumps the amplitudes
-  AND tightens the tempos so the silhouette is in CONSTANT PUMP:
-    • Breath: scale 0.78 ↔ 1.18 (was 0.94 ↔ 1.06) — true contract
-      + expand
-    • Drift rotation: ±8° (was ±2.5°) — leaves nod with attitude
-    • Drift translate: ±2px (was ±1px)
-    • Per-leaf breath tempo 2.1–3.7s (was 3.7–5.7s)
-    • Per-leaf drift tempo 3.1–4.3s (was 4.7–6.7s)
-    • Whole-mark spin 12s (was 24s)
-    • Heart counter-spin 18s (was 38s)
-    • Easing cubic-bezier(.42,0,.58,1) — symmetric ease IN-OUT for a
-      confident PUMP feel (was .5,0,.5,1 for a soft drift)
-  Result reads as a playful, breathing flower that's clearly "doing
-  something", not gently floating. Still all coprime tempos so no
-  cycle repeats.
+Scene 2 — Free service → Free spotlight (barter sequence)
+Was: two circles + double-headed arrow + "Free services. Real value."
+  Now reads as a clear two-step diagram users SCAN top→bottom:
 
-ProviderCard — duplicate "Cergio Pick" tag removed
-  Tarik: "remove one of the cergio's pick's tags... its duplicated".
-  Cards rendered the green pill twice when `pick` was true (photo
-  top-right overlay + pill above the name). Dropped the in-content
-  pill; the photo overlay reads as the canonical Featured badge.
+    [ PROVIDER ]  ── free service ──→  [ CONNECTOR · that's you ]
+                                              │
+                                              │ free spotlight
+                                              ↓
+    [ IG · TT · Your audience · 50K+ followers · ●●●●● reach ]
 
-Reco form — Connect button now actually connects
-  Tarik: "connect on reco form still not connecting to contacts.. (seed
-  with data...)... so test reco's invites.. (test rigourously first)".
-  The Connect button used to toast "Contact picker isn't supported on
-  this browser" on desktop and bail. Now when navigator.contacts is
-  unavailable, the button promotes the seeded pool (real DB profiles
-  + deterministic synthesized phone/email from listInvitableProfiles)
-  into `synced` — autosuggest is primed, the Connect card disappears,
-  and the user gets confirmation toast ("N sample contacts loaded —
-  start typing a name"). End-to-end testable from any browser.
+  IG icon = mockup-style rounded square + lens + dot. TT icon =
+  stylized music-note glyph (no asset dependency).
+  Audience cluster is 5 fading dots so the "ripple into followers"
+  read is visual, not text.
+  Footer punchline: "10+ services / month · thousands in value · all
+  free" — anchors the $ value Tarik wants users to infer.
+  STEPS body for the auto-advance caption rewritten to match:
+    "Connectors swap reach for service. The provider gives you a
+    free service; you post one IG / TikTok spotlight back. 10+
+    services a month, thousands in value, all free — paid in
+    audience, not cash."
 
-Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.
+Scene 3 — Growth Participation Income (curves over adoption time)
+  Was: single rising line + "AI-driven shared prosperity · via GPI".
+  Now spells the term out + shows THREE growth curves on a 5-year X
+  axis so the adoption-timing argument is visible:
+    • Early adopter — steepest, climbs full 5 years to top-right
+    • Mid adopter   — gentler, joined Year 3
+    • Late adopter  — flattest, joined Year 4
+  Each curve has its own end-of-line dot + label. Y-axis tick
+  labelled `$$$`; X-axis ticks YR 1 / YR 3 / YR 5.
+  Title block: "Growth Participation Income." + sub
+  "Human-powered AI · Shared prosperity."
+  Footer: "The earlier you join, the bigger your ripples — regular
+  income for life." — "ripples" hints at the spotlight network-of-
+  networks effect, "regular income" lands the GPI character.
+  STEPS body: "Human-powered AI · Shared prosperity. Every dollar
+  you earn becomes a share of Cergio's growth. The earlier you join,
+  the more your share compounds — regular income, tied to how much
+  the network you helped grow keeps growing."
+
+qa.mjs #31 invariants still green — Scene 2 retains "Barter" (in the
+section comment header) + "free service" anchor; Scene 3 retains
+"Growth Participation Income" + "Shared prosperity"; Scene 1
+continues to reference REWARDS.referrerSharePercent in its body copy
+so the system-source-of-truth check stays satisfied.
+
+Verified: qa.mjs 41/41 · JSX syntax check on the touched file: green.

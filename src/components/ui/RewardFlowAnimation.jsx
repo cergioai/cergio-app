@@ -24,15 +24,15 @@ const STEPS = [
   },
   {
     num: '02',
-    title: 'Barter for free services.',
+    title: 'Free service → Free spotlight.',
     body: () =>
-      `Connectors trade their reach for free services from providers — a clean haircut, a deep clean, a personal trainer — all paid in spotlight, not cash.`,
+      `Connectors swap reach for service. The provider gives you a free service; you post one IG / TikTok spotlight back. 10+ services a month, thousands in value, all free — paid in audience, not cash.`,
   },
   {
     num: '03',
-    title: 'AI-driven shared prosperity.',
+    title: 'Growth Participation Income.',
     body: () =>
-      `Growth Participation Income — Cergio's AI grows the orchard. Every dollar you earn builds your share of it, so when the orchard pays, the gardeners get paid too.`,
+      `Human-powered AI · Shared prosperity. Every dollar you earn becomes a share of Cergio's growth. The earlier you join, the more your share compounds — regular income, tied to how much the network you helped grow keeps growing.`,
   },
 ];
 
@@ -89,9 +89,19 @@ function Scene1() {
   );
 }
 
-// ─── Scene 2 — Barter for free services ──────────────────────────────────
-// Two profile circles with an exchange arrow between them. Words above
-// describe the trade. No price math, no fee anatomy.
+// ─── Scene 2 — Barter sequence (Free service → Free spotlight) ──────────
+// CERGIO-GUARD (2026-05-30 v9): rebuilt per Tarik: "show instagram
+// tiktok and better layout of barter superior simple designs perhaps
+// show the sequence first free services then free spotlight.. use
+// arrows... show the audience of the influencer... and how a
+// connector can get 10's of services per month (worth thousands)".
+//
+// Two-step diagram:
+//   PROVIDER — free service →  CONNECTOR (you)
+//                                   ↓ free spotlight
+//                               IG · TT audience (50K+ reach)
+// Footer punchline anchors the value: 10+ services/month, thousands
+// in barter value, all free.
 function Scene2() {
   return (
     <>
@@ -99,87 +109,166 @@ function Scene2() {
 
       {/* Headline — single line */}
       <text
-        x={200} y={84}
+        x={200} y={56}
         textAnchor="middle"
-        fontSize="22" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui"
+        fontSize="18" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui"
         className="rf-pop"
-        style={{ animationDelay: '0.4s' }}
+        style={{ animationDelay: '0.3s' }}
       >
-        Free services. Real value.
+        Free service → Free spotlight.
       </text>
 
-      {/* Two circles + double-headed arrow */}
-      <g className="rf-pop" style={{ animationDelay: '1.4s' }}>
-        {/* Connector circle */}
-        <circle cx={130} cy={150} r={32} fill="#2F6E00" />
-        <text x={130} y={143} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#FFFFFF" fontFamily="system-ui">CONNECTOR</text>
-        <text x={130} y={158} textAnchor="middle" fontSize="11" fontWeight="900" fill="#FFFFFF" fontFamily="system-ui">spotlight</text>
+      {/* Step 1 — Provider gives free service to Connector */}
+      <g className="rf-pop" style={{ animationDelay: '1.1s' }}>
+        {/* Provider tile */}
+        <rect x={28} y={80} width={130} height={54} rx={10} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1} />
+        <text x={93} y={100} textAnchor="middle" fontSize="10" fontWeight="800" fill="#5F5E5A" fontFamily="system-ui">PROVIDER</text>
+        <text x={93} y={120} textAnchor="middle" fontSize="14" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">$250 service</text>
 
-        {/* Arrows */}
-        <path d="M 175 144 L 219 144" stroke="#2F6E00" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <polygon points="219,138 230,144 219,150" fill="#2F6E00" />
-        <path d="M 225 156 L 181 156" stroke="#3D8B00" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <polygon points="181,162 170,156 181,150" fill="#3D8B00" />
+        {/* Arrow with label */}
+        <path d="M 162 107 L 230 107" stroke="#2F6E00" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <polygon points="230,101 240,107 230,113" fill="#2F6E00" />
+        <text x={196} y={97} textAnchor="middle" fontSize="10" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">free service</text>
 
-        {/* Provider circle */}
-        <circle cx={270} cy={150} r={32} fill="#F3FFEA" stroke="#2F6E00" strokeWidth="2" />
-        <text x={270} y={143} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">PROVIDER</text>
-        <text x={270} y={158} textAnchor="middle" fontSize="11" fontWeight="900" fill="#2F6E00" fontFamily="system-ui">service</text>
+        {/* Connector tile (you) */}
+        <rect x={244} y={80} width={130} height={54} rx={10} fill="#F3FFEA" stroke="#2F6E00" strokeWidth={1.5} />
+        <text x={309} y={100} textAnchor="middle" fontSize="10" fontWeight="800" fill="#2C5D21" fontFamily="system-ui">CONNECTOR</text>
+        <text x={309} y={120} textAnchor="middle" fontSize="14" fontWeight="900" fill="#2C5D21" fontFamily="system-ui">that&apos;s you</text>
       </g>
 
-      {/* Footer line — one sentence */}
+      {/* Step 2 — Connector posts spotlight to IG/TT audience */}
+      <g className="rf-pop" style={{ animationDelay: '2.1s' }}>
+        {/* Down arrow from Connector tile to audience */}
+        <path d="M 309 142 L 309 168" stroke="#2F6E00" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <polygon points="303,168 309,178 315,168" fill="#2F6E00" />
+        <text x={319} y={158} fontSize="10" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">free spotlight</text>
+
+        {/* Audience bar at bottom — IG + TT + reach dots */}
+        <rect x={28} y={186} width={344} height={42} rx={10} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1} />
+
+        {/* IG icon (rounded square + lens + dot) */}
+        <g transform="translate(50, 207)">
+          <rect x="-9" y="-9" width="18" height="18" rx="4.5" fill="none" stroke="#1A1A1A" strokeWidth="1.6" />
+          <circle cx="0" cy="0" r="4.5" fill="none" stroke="#1A1A1A" strokeWidth="1.6" />
+          <circle cx="6" cy="-6" r="1.4" fill="#1A1A1A" />
+        </g>
+        {/* TT mark (stylized musical note) */}
+        <g transform="translate(82, 207)">
+          <path d="M 6 -9 L 6 4.5 A 4.5 4.5 0 1 1 -1 0 L -1 -4.5 A 8 8 0 0 0 6 0 Z"
+                fill="#1A1A1A" />
+        </g>
+
+        {/* Reach label */}
+        <text x={110} y={202} fontSize="11.5" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">Your audience</text>
+        <text x={110} y={218} fontSize="10.5" fontWeight="600" fill="#5F5E5A" fontFamily="system-ui">50K+ followers</text>
+
+        {/* Reach indicator — cluster of fading people-dots */}
+        <g transform="translate(296, 207)">
+          {[0, 12, 24, 36, 48].map((dx, i) => (
+            <circle key={i} cx={dx - 24} cy={0} r={5 - i * 0.4} fill="#2F6E00" opacity={1 - i * 0.16} />
+          ))}
+        </g>
+      </g>
+
+      {/* Punchline footer — the "thousands of dollars" payoff */}
       <text
-        x={200} y={222}
+        x={200} y={250}
         textAnchor="middle"
-        fontSize="12" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui"
+        fontSize="11" fontWeight="800" fill="#2C5D21" fontFamily="system-ui"
         className="rf-pop"
-        style={{ animationDelay: '2.4s' }}
+        style={{ animationDelay: '3.0s' }}
       >
-        Connectors trade reach. Providers trade service. Both win.
+        10+ services / month · thousands in value · all free
       </text>
     </>
   );
 }
 
-// ─── Scene 3 — Prosperity, together (GPI) ────────────────────────────────
-// One rising line + one big sentence. No three-card stat row.
+// ─── Scene 3 — Growth Participation Income (curves over time) ──────────
+// CERGIO-GUARD (2026-05-30 v9): rebuilt per Tarik: "spell out Growth
+// Participation Income... With Human Powered AI... show it's regular
+// income relative to platform use and initial date of adoption... make
+// ultra simple but users should infer the power of [1] spotlight (and
+// ripples of networks turning into users) and [2] the intelligence
+// and humanity of being a partner via growth participation income".
+//
+// Layout: spelled-out title at top-left, then THREE growth curves
+// (early / mid / late adopter) over a 5-year X axis. The early-adopter
+// curve climbs fastest because their ripples (invites, recos,
+// spotlights) compounded across the whole platform window. Footer
+// caps the meaning in one line.
 function Scene3() {
-  // Rising-line geometry — five waypoints that climb gently from
-  // bottom-left to top-right.
-  const linePath = 'M 40 200 C 90 195, 130 175, 170 160 C 210 148, 250 130, 300 110 C 320 102, 350 88, 370 78';
+  // X-axis at y=210 spans 50 → 370. Each curve starts at a different
+  // year (earlier joiners start earlier) and climbs progressively.
   return (
     <>
       <PhaseBadge num="03" />
 
-      {/* Big two-line headline — rises in. CERGIO-GUARD (2026-05-30):
-          rewritten to "AI-driven shared prosperity · via GPI" per
-          Tarik's positioning. */}
-      <g className="rf-pop" style={{ animationDelay: '0.4s' }}>
-        <text x={36} y={84} fontSize="20" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">
-          AI-driven shared
+      {/* Title spelled OUT — Tarik: "spell out Growth Participation
+          Income" */}
+      <g className="rf-pop" style={{ animationDelay: '0.3s' }}>
+        <text x={36} y={62} fontSize="17" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">
+          Growth Participation Income.
         </text>
-        <text x={36} y={108} fontSize="20" fontWeight="900" fill="#2F6E00" fontFamily="system-ui">
-          prosperity · via GPI
+        <text x={36} y={80} fontSize="11" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">
+          Human-powered AI · Shared prosperity.
         </text>
       </g>
 
-      {/* Rising line — fades up after the headline */}
+      {/* Axes — subtle */}
+      <g className="rf-pop" style={{ animationDelay: '0.9s' }}>
+        <line x1={50} y1={210} x2={370} y2={210} stroke="#A0A0A2" strokeWidth={1} />
+        <line x1={50} y1={100} x2={50} y2={210} stroke="#A0A0A2" strokeWidth={1} />
+        {/* Year tick labels */}
+        <text x={50}  y={224} fontSize="8.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui">YR 1</text>
+        <text x={210} y={224} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui">YR 3</text>
+        <text x={370} y={224} textAnchor="end" fontSize="8.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui">YR 5</text>
+        {/* Y axis label */}
+        <text x={44} y={104} textAnchor="end" fontSize="8.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui">$$$</text>
+      </g>
+
+      {/* Early adopter — steepest, full 5-year compound */}
       <g className="rf-pop" style={{ animationDelay: '1.6s' }}>
-        <path d={linePath} stroke="#2F6E00" strokeWidth="3" fill="none" strokeLinecap="round" />
-        {/* Dot at the top of the line */}
-        <circle cx={370} cy={78} r={6} fill="#2F6E00" />
-        <circle cx={370} cy={78} r={11} fill="#2F6E00" opacity={0.18} />
+        <path
+          d="M 50 205 Q 130 195, 200 165 T 370 100"
+          stroke="#2F6E00" strokeWidth="3" fill="none" strokeLinecap="round"
+        />
+        <circle cx={370} cy={100} r={4.5} fill="#2F6E00" />
+        <circle cx={370} cy={100} r={10}  fill="#2F6E00" opacity={0.18} />
+        <text x={364} y={94} textAnchor="end" fontSize="9.5" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">early adopter</text>
       </g>
 
-      {/* Single supporting line — appears last */}
+      {/* Mid adopter — joined later, lower ceiling */}
+      <g className="rf-pop" style={{ animationDelay: '2.1s' }}>
+        <path
+          d="M 130 205 Q 200 198, 270 175 T 370 142"
+          stroke="#639922" strokeWidth="2.4" fill="none" strokeLinecap="round"
+        />
+        <circle cx={370} cy={142} r={4} fill="#639922" />
+        <text x={364} y={138} textAnchor="end" fontSize="9" fontWeight="700" fill="#639922" fontFamily="system-ui">mid adopter</text>
+      </g>
+
+      {/* Late adopter — joined recently, gentler slope */}
+      <g className="rf-pop" style={{ animationDelay: '2.6s' }}>
+        <path
+          d="M 230 205 Q 280 200, 320 192 T 370 178"
+          stroke="#97C459" strokeWidth="2" fill="none" strokeLinecap="round"
+        />
+        <circle cx={370} cy={178} r={3.5} fill="#97C459" />
+        <text x={364} y={174} textAnchor="end" fontSize="8.5" fontWeight="700" fill="#77A038" fontFamily="system-ui">late adopter</text>
+      </g>
+
+      {/* Footer — single sentence the user infers everything from.
+          "Ripples" hints at the spotlight network-of-networks effect;
+          "human-powered" hints at the AI+partnership story. */}
       <text
-        x={200} y={228}
+        x={200} y={246}
         textAnchor="middle"
-        fontSize="11.5" fontWeight="700" fill="#5F5E5A" fontFamily="system-ui"
+        fontSize="10.5" fontWeight="800" fill="#2C5D21" fontFamily="system-ui"
         className="rf-pop"
-        style={{ animationDelay: '2.6s' }}
+        style={{ animationDelay: '3.4s' }}
       >
-        Every dollar you earn builds your share of Cergio's growth.
+        The earlier you join, the bigger your ripples — regular income for life.
       </text>
     </>
   );
