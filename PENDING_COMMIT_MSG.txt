@@ -1,62 +1,71 @@
-design: PDP pixel-comp pass + logo full-round flower + wordmark inline
+design: fluid v6 logo motion + home/PDP polish + booking demo + share icon
 
-Big design-comp pass against Tarik's PDP/SRP mockups. He asked for a
-"rigorous process to put together a design spec that matches these,
-then execute" — so this lands the tokens + design-spec deltas FIRST
-and then applies them across the entry surfaces and the PDP.
+Logo motion v6 — Claude-style super-fun fluid morph (LeafLogo.jsx + index.css)
 
-Design tokens
-- `line` (#EFE7D6) — ultra-thin cream-tinted hairline. Added to
-  tailwind.config.js + design-spec.md. Use it (border-line) for any
-  "barely there" separator on cream pages. `bdr` (#E5E5E3) stays for
-  borders on white surfaces.
-- design-spec.md now documents:
-    • PDP hero pattern (360px, ruler at bottom, 5 segments, dark-
-      translucent icon circles for back / heart / Connector / share /
-      mute).
-    • Offering card pattern (white bg + border-line, vivid-green
-      "$X/session • Ymins" price format, vivid-green `% off` pill).
+  Tarik (across two messages): "try to copy the motion of Claude's logo
+  when animated.. make it infinitely more fluid... playful random" →
+  "animate logo on search with super fun clever playful random
+  patterns.. borrow from Claude's logo".
 
-PDP (ServiceDetailScreen.jsx)
-- Hero 280 → 360 to match the mockup aspect.
-- Story-progress ruler moved TOP → BOTTOM (5 segments, leading
-  segment full white).
-- Top-left back arrow (subtle dark circle).
-- Top-right control trio added: heart, Connector badge, share — all
-  in matching dark-translucent circles, share fires the Web Share
-  API when available.
-- Volume icon moved BOTTOM-LEFT (matches the mockup). Caption line
-  sits just above the ruler.
-- Section divider above "Book {Name}" switched from `border-bdr` to
-  `border-line` so it reads as a hairline on cream, not a contrasty
-  rule.
-- Offering cards refined:
-    • bg-white + 1px border-line (selected = 1.5px green ring, no
-      fill swap — kept surface weight constant).
-    • Price format "$X/session • 120 mins" (vivid green price, b3
-      duration).
-    • New `discount_percent` field support — solid green pill at
-      bottom-left when set ("20% off"), per the Cut and Color
-      mockup tile.
+  Three independent layers now compose every cycle, all on coprime
+  tempos so the silhouette never matches itself:
 
-Logo restructure (LeafLogo.jsx + SplashScreen + AuthScreen + HomeScreen)
-- Tarik (#A): "use the cergio from the I'm (design it with different
-  font).. and remove from above to remove repetition... move the logo
-  to before Hi (from the top)".
-- Splash, Auth, Home: dropped the standalone CERGIO wordmark above
-  the tagline. Logo now leads at the top of the column at 96/120/44
-  respectively, then the tagline reads:
-    "Hi, I'm CERGIO. I'll negotiate and book…"
-  with "CERGIO" inline as an extra-bold uppercase tracking-wide span —
-  reads as the wordmark but lives inside the sentence, no repetition.
+  Layer 1 — per-leaf BREATH + DRIFT (kept from v5)
+    Continuous scale (0.94 ↔ 1.06) + sub-pixel translate (±1px) +
+    rotation sway (±2.5°). Composed via the CSS Transforms Module
+    Level 2 individual props (`scale`, `translate`, `rotate`) so
+    they STACK instead of overriding each other. 4 breath templates
+    × 2 drift templates × 7 jittered phase offsets.
 
-Full-round flower (LeafLogo.jsx)
-- Tarik (#B): "make the still non animated state open into a full
-  round flower... not perfectly symmetrical but full round".
-- Petal paths widened + lengthened so the 7 leaves overlap at rest
-  into a closed circular daisy/marigold silhouette. Asymmetry
-  preserved per-leaf (each path is unique — different lobe widths,
-  tilts, midribs). With restScale=1 the brand mark now reads as a
-  mature flower in full bloom, not a sunburst with gaps.
+  Layer 2 — WHOLE-MARK SLOW SPIN (new in v6)
+    Outer wrapper rotates the entire flower around (60,60) on a 24s
+    revolution. Heart counter-rotates on 38s. The two coprime spins
+    make the geometry continuously evolve even when the per-leaf
+    transforms are mid-pose.
+
+  Layer 3 — PER-LEAF SHIMMER (new in v6)
+    Each leaf's opacity flickers 0.72 ↔ 1.0 ↔ 0.86 on its own
+    coprime 5-9s rhythm. Light catches one petal at a time and
+    ripples around the flower — Claude's "thinking sparkle" tell.
+    Composed via the `opacity` property so it doesn't fight the
+    breath/drift transforms.
+
+  Heart pulse upgraded to a 5-step fluid path on 7.3s using the same
+  individual-property approach so the center breathes with the same
+  character as the leaves.
+
+  All animation only fires when `working` is true. At rest the flower
+  is the still full-round bloom from v5.
+
+Home — logo inline + aligned to greeting
+  - Tarik: "move logo to next to 'hi tarik' on the homepage" → then
+    "allign logo to Hi tarik better".
+  - Reverted v5's stacked layout (which applied to Splash + Auth
+    only). Home is inline at size 40 with `self-center` so the leaf
+    rides the same vertical center as the headline. Splash + Auth
+    keep the top-stacked treatment.
+
+PDP — Free for Connectors anchored left
+  - Tarik: "left allign free for connector".
+  - Offering-card badge: `flex justify-start self-start text-left`
+    so it's unambiguously left even when its parent's text context
+    shifts. Header badges row gets explicit `justify-start` too.
+
+Booking — Stripe-not-configured no longer dead-ends
+  - Tarik: "offerings on the services should be clickable (and when
+    selected... together with book, it goes to CC form and confirm
+    (currently disabled)".
+  - When createPaymentIntent fails in test mode, the flow now falls
+    through to confirm the booking + navigate to /booking + show a
+    sticky toast ("Booked (demo mode — no card charged). Finish
+    Stripe setup to take live payments."). Real payments still go
+    through the PaymentSheet path when Stripe is configured.
+
+Results — share icon matches PDP
+  - Tarik: "make the share on the homepage results... same as share
+    icon on the services pic on profile".
+  - Replaced 🔗 emoji with the same upload-arrow SVG used on the PDP
+    hero share button. Same brand affordance now reads consistently
+    across surfaces.
 
 Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.

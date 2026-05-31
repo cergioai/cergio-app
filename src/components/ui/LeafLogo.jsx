@@ -205,46 +205,67 @@ function BudBloom({ size, working }) {
   ];
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {leaves.map((leaf, i) => (
-        <g
-          key={i}
-          className={working ? leaf.cls : ''}
-          style={{
-            transformOrigin: '60px 60px',
-            transformBox: 'view-box',
-            transform: working ? undefined : `scale(${restScale})`,
-          }}
-        >
-          <g transform={`rotate(${leaf.rot} 60 60)`}>
-            <path
-              d={leaf.d}
-              fill={leaf.fill}
-              opacity={leaf.opacity}
-              strokeLinejoin="round"
-            />
-            {/* midrib — sub-pixel inset of the leaf body so it reads
-                as anatomical rather than decorative */}
-            <path
-              d={leaf.vein}
-              stroke="#0F2A00"
-              strokeWidth="0.9"
-              strokeLinecap="round"
-              fill="none"
-              opacity="0.55"
-            />
+      {/* CERGIO-GUARD (2026-05-30 v6): outer wrapper carries the
+          whole-mark slow spin so the leaves drift around the heart in
+          one big lazy revolution while each individually breathes and
+          drifts. Tarik: "borrow from Claude's logo". The spin is ONLY
+          applied when working — at rest the flower is a still full-
+          round bloom. */}
+      <g className={working ? 'cg-bud-spin' : ''}>
+        {leaves.map((leaf, i) => (
+          <g
+            key={i}
+            className={working ? leaf.cls : ''}
+            style={{
+              transformOrigin: '60px 60px',
+              transformBox: 'view-box',
+              transform: working ? undefined : `scale(${restScale})`,
+            }}
+          >
+            <g transform={`rotate(${leaf.rot} 60 60)`}>
+              {/* CERGIO-GUARD: the leaf body opacity gets a SHIMMER
+                  animation when working — each leaf catches the light
+                  on its own rhythm so the ripple feels random.
+                  Composed via `opacity` so it doesn't fight the breath/
+                  drift transforms above. */}
+              <path
+                d={leaf.d}
+                fill={leaf.fill}
+                opacity={leaf.opacity}
+                strokeLinejoin="round"
+                className={working ? `cg-leaf-shimmer-${i + 1}` : ''}
+                style={!working ? { opacity: leaf.opacity } : undefined}
+              />
+              {/* midrib — sub-pixel inset of the leaf body so it reads
+                  as anatomical rather than decorative */}
+              <path
+                d={leaf.vein}
+                stroke="#0F2A00"
+                strokeWidth="0.9"
+                strokeLinecap="round"
+                fill="none"
+                opacity="0.55"
+              />
+            </g>
           </g>
-        </g>
-      ))}
-      {/* Heart drifts a sub-pixel as it pulses — adds the "alive" feel
-          even when leaves are mid-cycle. Pale-orange blob smear for
-          painterly depth, white highlight for life. */}
+        ))}
+      </g>
+      {/* Heart drifts a sub-pixel as it pulses + slowly counter-rotates
+          relative to the leaves' spin (cg-bud-heart-spin) so the
+          mark is never visually static. Two layers of motion: pulse
+          + spin. */}
       <g
-        className={working ? 'cg-bud-heart' : ''}
+        className={working ? 'cg-bud-heart-spin' : ''}
         style={{ transformOrigin: '60px 60px', transformBox: 'view-box' }}
       >
-        <circle cx="60" cy="60" r="11" fill="#F4A06A" />
-        <ellipse cx="57" cy="58" rx="6" ry="4" fill="#FBCBA6" opacity="0.55" />
-        <circle cx="60" cy="60" r="3.5" fill="#FFFFFF" opacity="0.88" />
+        <g
+          className={working ? 'cg-bud-heart' : ''}
+          style={{ transformOrigin: '60px 60px', transformBox: 'view-box' }}
+        >
+          <circle cx="60" cy="60" r="11" fill="#F4A06A" />
+          <ellipse cx="57" cy="58" rx="6" ry="4" fill="#FBCBA6" opacity="0.55" />
+          <circle cx="60" cy="60" r="3.5" fill="#FFFFFF" opacity="0.88" />
+        </g>
       </g>
     </svg>
   );

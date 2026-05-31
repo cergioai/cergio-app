@@ -804,12 +804,13 @@ export function HomeScreen() {
           : `${greetingName}, tell me the Connector you need.`;
 
         return (
-          <div className="px-5 pt-5 pb-0.5">
-            {/* CERGIO-GUARD (2026-05-30 v5): logo leads from the TOP
-                (Tarik: "move the logo to before Hi (from the top)").
-                Was inline at size 36; now stacked above the greeting
-                at size 44. Keeping the comment block below for the v4
-                reasoning (still partially applies — static at rest).
+          <div className="px-5 pt-5 pb-0.5 flex items-center gap-2.5">
+            {/* CERGIO-GUARD (2026-05-30 v6): logo back inline with the
+                greeting (Tarik: "move logo to next to 'hi tarik' on
+                the homepage"). v5 stacked it on top per a different
+                request that applied to Splash + Auth only — Home is
+                back to the v4 inline treatment. Splash + Auth still
+                lead with the logo on top.
                 Old comment: brand mark vertically
                 CENTERED on the greeting line (Tarik: "move up the logo
                 to align with the 'hi what do you need'"). Smaller (36)
@@ -817,8 +818,14 @@ export function HomeScreen() {
                 — bloom only fires when search actually executes (on
                 the streaming-status block below). */}
             {!submitted && (
-              <div className="mb-3">
-                <LeafLogo size={44} />
+              // CERGIO-GUARD (2026-05-30 v7): inline + vertically
+              // centered on the greeting (Tarik: "allign logo to Hi
+              // tarik better"). Size 40 so it reads as a strong anchor
+              // without overwhelming the 15px text. The outer flex
+              // container above uses items-center so the leaf and the
+              // headline ride the same baseline.
+              <div className="flex-shrink-0 self-center">
+                <LeafLogo size={40} />
               </div>
             )}
             <div className="flex-1 min-w-0">

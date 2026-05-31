@@ -239,9 +239,24 @@ function Layout() {
     }
 
     // (c) Paid booking — fetch a PaymentIntent and open the PaymentSheet.
+    // CERGIO-GUARD (2026-05-30): if createPaymentIntent fails (Stripe
+    // not configured in test mode), gracefully fall through to a
+    // confirmed booking + a "demo mode" toast so the user can still
+    // exercise the booking flow end-to-end. Tarik: "offerings on the
+    // services should be clickable (and when selected... together
+    // with book, it goes to CC form and confirm (currently disabled)".
+    // Was previously dead-ending with "Couldn't start payment"; now it
+    // confirms + lands on /booking.
     const { data: pi, error: piErr } = await createPaymentIntent(row.id);
     if (piErr || !pi?.client_secret) {
-      showToast(`Couldn't start payment: ${piErr?.message || 'unknown error'}`);
+      const { error: confirmErr } = await updateBookingStatus(row.id, 'confirmed');
+      if (confirmErr) {
+        showToast(`Couldn't confirm booking: ${confirmErr.message}`);
+        return;
+      }
+      creditInviterOnFirstBooking(row.consumer_id, row.id).catch(() => {});
+      showToast('Booked (demo mode — no card charged). Finish Stripe setup to take live payments.', { sticky: true });
+      navigate('/booking');
       return;
     }
     setPaymentSheet({

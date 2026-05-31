@@ -364,7 +364,10 @@ export function ServiceDetailScreen() {
             {ownerProfile?.display_name || provider.name}
           </h1>
         )}
-        <div className="flex items-center gap-3 mt-2 flex-wrap">
+        {/* CERGIO-GUARD (2026-05-30): explicit justify-start so the
+            badges row stays anchored left even when only one badge
+            renders (Tarik: "left allign free for connector"). */}
+        <div className="flex items-center justify-start gap-3 mt-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
               <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
@@ -497,7 +500,14 @@ export function ServiceDetailScreen() {
                   {o.name || 'Service offering'}
                 </p>
                 {isFree ? (
-                  <p className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold mt-1.5">
+                  // CERGIO-GUARD (2026-05-30): explicit flex + self-start
+                  // so the "Free for Connectors" badge is unambiguously
+                  // left-aligned inside the offering card (Tarik:
+                  // "left allign free for connector"). `inline-flex`
+                  // worked in theory but on some browser/font combos the
+                  // block context collapsed and the badge drifted toward
+                  // center; this anchors it left for good.
+                  <p className="flex items-center justify-start gap-1.5 text-[13px] text-gd font-extrabold mt-1.5 self-start text-left">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
                       <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
                     </svg>

@@ -252,66 +252,183 @@ body {
    The React component toggles className on/off; CSS keyframes here.
    Speed scales with --cg-leaf-speed (1 = calm, 0.55 = fast). */
 
-/* C · Bud bloom — ORGANIC v4 PLAYFUL LEAVES (Tarik 2026-05-30
-   "more playful, leaves less symmetrical, like real leaves, different
-   from each other"). v3 used 8 identical ellipses with hand-tuned
-   sizes; v4 swaps to 7 unique <path> leaves AND swaps the keyframes
-   to bouncier cubic-bezier-overshoot curves with a brief mid-bloom
-   wobble — every leaf nods/sways differently before settling. With
-   7 coprime durations + 7 different keyframe shapes the silhouette
-   never repeats; with cubic-bezier overshoot it reads playful, not
-   mechanical. */
+/* C · Bud bloom — FLUID DRIFT v5 (Tarik 2026-05-30 "try to copy the
+   motion of Claude's logo when animated.. make it infinitely more
+   fluid... playful random").
+   v4 had a bloom-collapse cycle: leaves shrank to scale 0.04 and
+   re-bloomed. That read as a discrete "open / close" gesture, not
+   the continuous organic morph Claude's mark has. v5 keeps the
+   leaves ALWAYS VISIBLE (scale stays between 0.94 and 1.06) and
+   layers three independent gentle motions per leaf:
+     • scale breath (0.94 ↔ 1.06)
+     • rotation sway (±4°)
+     • sub-pixel translate drift (±1–2px in x AND y)
+   Each leaf runs on its own coprime period for each axis. Because
+   the three axes use DIFFERENT prime periods (e.g. 4.7s scale +
+   6.1s rotate + 5.3s drift), no leaf ever repeats the same pose
+   twice in any human-scale viewing window. Result: a continuously
+   morphing fluid silhouette — Claude-style. */
 
-/* Each keyframe overshoots scale 1.0 → 1.08 around 40%, dips slightly
-   at 55% (the "settle"), wobbles back up briefly at 70% (Claude-like
-   double-pulse), then collapses. Rotations also overshoot in
-   different directions per keyframe so no two leaves nod the same way. */
-@keyframes cgLeafBloomA {
-  0%   { transform: scale(0.04) rotate(-12deg); }
-  40%  { transform: scale(1.08) rotate(4deg); }
-  55%  { transform: scale(0.96) rotate(-2deg); }
-  70%  { transform: scale(1.03) rotate(3deg); }
-  100% { transform: scale(0.04) rotate(-12deg); }
+/* Eight motion templates: four scale-breath, four rotation-sway, and
+   four drift, each with slightly different phase + magnitude. We mix
+   one of each per leaf via composed animations. Coprime durations:
+   3.7 / 4.1 / 4.3 / 4.7 / 4.9 / 5.1 / 5.3 / 5.7 / 6.1 / 6.7 s. */
+
+/* IMPORTANT: we layer breath + drift on the SAME element by using
+   the individual CSS Transforms Module Level 2 properties (`scale`,
+   `translate`, `rotate`) instead of the composite `transform`. CSS
+   composes individual props naturally; if we used `transform: scale()`
+   AND `transform: translate()` in two keyframe sets on the same
+   element, the second animation would simply override the first.
+   Browser support: Chrome 104+, Safari 14.1+, Firefox 72+ — safe for
+   our app. */
+@keyframes cgLeafBreathA {
+  0%   { scale: 1.00; }
+  30%  { scale: 1.04; }
+  55%  { scale: 0.96; }
+  80%  { scale: 1.03; }
+  100% { scale: 1.00; }
 }
-@keyframes cgLeafBloomB {
-  0%   { transform: scale(0.05) rotate(10deg); }
-  42%  { transform: scale(1.06) rotate(-3deg); }
-  58%  { transform: scale(0.97) rotate(1deg); }
-  72%  { transform: scale(1.02) rotate(-2deg); }
-  100% { transform: scale(0.05) rotate(10deg); }
+@keyframes cgLeafBreathB {
+  0%   { scale: 0.97; }
+  35%  { scale: 1.05; }
+  60%  { scale: 0.95; }
+  100% { scale: 0.97; }
 }
-@keyframes cgLeafBloomC {
-  0%   { transform: scale(0.03) rotate(-6deg); }
-  38%  { transform: scale(1.10) rotate(2deg); }
-  52%  { transform: scale(0.94) rotate(-1deg); }
-  68%  { transform: scale(1.04) rotate(4deg); }
-  100% { transform: scale(0.03) rotate(-6deg); }
+@keyframes cgLeafBreathC {
+  0%   { scale: 1.02; }
+  25%  { scale: 0.95; }
+  60%  { scale: 1.06; }
+  100% { scale: 1.02; }
 }
-@keyframes cgLeafBloomD {
-  0%   { transform: scale(0.06) rotate(8deg); }
-  45%  { transform: scale(1.05) rotate(-4deg); }
-  60%  { transform: scale(0.98) rotate(2deg); }
-  100% { transform: scale(0.06) rotate(8deg); }
+@keyframes cgLeafBreathD {
+  0%   { scale: 0.96; }
+  45%  { scale: 1.04; }
+  75%  { scale: 0.98; }
+  100% { scale: 0.96; }
 }
 
-/* Bouncy cubic-bezier (slight overshoot on the way out, soft on return)
-   — feels playful, not stiff. Coprime durations + jittered delays mean
-   no two leaves bloom in sync. */
-.cg-leaf-1 { animation: cgLeafBloomA calc(3.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; }
-.cg-leaf-2 { animation: cgLeafBloomB calc(4.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .18s; }
-.cg-leaf-3 { animation: cgLeafBloomC calc(5.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .42s; }
-.cg-leaf-4 { animation: cgLeafBloomD calc(4.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .08s; }
-.cg-leaf-5 { animation: cgLeafBloomA calc(4.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .32s; }
-.cg-leaf-6 { animation: cgLeafBloomB calc(3.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .56s; }
-.cg-leaf-7 { animation: cgLeafBloomC calc(5.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.34,1.56,.64,1) infinite; animation-delay: .22s; }
+/* Sub-pixel drift + rotation drift in TWO separate properties so they
+   compose with the scale breath above. Magnitudes kept tiny so the
+   silhouette stays coherent. */
+@keyframes cgLeafDrift {
+  0%   { translate: 0 0;        rotate: 0deg; }
+  25%  { translate: 0.8px -1px; rotate: -2deg; }
+  50%  { translate: -1px 0.6px; rotate: 1deg; }
+  75%  { translate: 0.4px 0.9px; rotate: -1deg; }
+  100% { translate: 0 0;        rotate: 0deg; }
+}
+@keyframes cgLeafDriftB {
+  0%   { translate: 0 0;          rotate: 0deg; }
+  30%  { translate: -0.9px 0.7px; rotate: 2deg; }
+  55%  { translate: 0.6px -1px;   rotate: -1.5deg; }
+  80%  { translate: -0.5px -0.4px; rotate: 2.5deg; }
+  100% { translate: 0 0;          rotate: 0deg; }
+}
 
+/* Each leaf composes ONE breath + ONE drift, each on its own
+   coprime tempo + delay. CSS `animation` supports comma-separated
+   lists so we layer the two transform animations. The browser
+   composes them via matrix multiply — net effect is continuous
+   morph that never matches itself.
+
+   Easing: cubic-bezier(.5,0,.5,1) — symmetric ease so the motion
+   feels weightless, like leaves floating on water, not bouncing.
+   (cubic-bezier(.34,1.56,.64,1) overshoots, which read as a
+   bounce/pop in v4 — wrong for "fluid".) */
+
+.cg-leaf-1 {
+  animation: cgLeafBreathA calc(4.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite,
+             cgLeafDrift   calc(6.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite;
+}
+.cg-leaf-2 {
+  animation: cgLeafBreathB calc(5.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.4s,
+             cgLeafDriftB  calc(6.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -1.2s;
+}
+.cg-leaf-3 {
+  animation: cgLeafBreathC calc(4.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.9s,
+             cgLeafDrift   calc(5.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -2.1s;
+}
+.cg-leaf-4 {
+  animation: cgLeafBreathD calc(3.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.2s,
+             cgLeafDriftB  calc(5.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.6s;
+}
+.cg-leaf-5 {
+  animation: cgLeafBreathA calc(4.9s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -1.4s,
+             cgLeafDrift   calc(6.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -3s;
+}
+.cg-leaf-6 {
+  animation: cgLeafBreathB calc(4.1s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.7s,
+             cgLeafDriftB  calc(5.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -2.4s;
+}
+.cg-leaf-7 {
+  animation: cgLeafBreathC calc(5.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -0.3s,
+             cgLeafDrift   calc(4.7s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite -1.7s;
+}
+
+/* CERGIO-GUARD (2026-05-30 v6 — "super fun clever playful random
+   patterns... borrow from Claude's logo"): two more layers on top of
+   v5's breath + drift.
+
+   1) Whole-mark slow spin — the entire flower drifts around its
+      center on a 24s rotation, with a SECOND much-slower 38s
+      counter-rotation on the heart so the geometry is never
+      visually static even when each individual leaf is mid-pose.
+      The slow spin is applied via the .cg-bud-spin class on the
+      outer wrapper <g>.
+   2) Per-leaf opacity SHIMMER — each leaf flickers softly (0.72 ↔
+      1.0 ↔ 0.86) on its own coprime 5–9s rhythm with staggered
+      phase offsets, so light catches one petal at a time and
+      ripples around the flower. Claude's mark does exactly this
+      sparkle thing — it's the "thinking" tell. The shimmer is
+      composed via the `opacity` property so it doesn't fight
+      with the breath/drift transforms. */
+@keyframes cgBudSpin {
+  0%   { rotate: 0deg; }
+  100% { rotate: 360deg; }
+}
+.cg-bud-spin {
+  animation: cgBudSpin calc(24s * var(--cg-leaf-speed, 1)) linear infinite;
+  transform-origin: 60px 60px;
+  transform-box: view-box;
+}
+@keyframes cgBudHeartSpin {
+  0%   { rotate: 0deg; }
+  100% { rotate: -360deg; }
+}
+.cg-bud-heart-spin {
+  animation: cgBudHeartSpin calc(38s * var(--cg-leaf-speed, 1)) linear infinite;
+  transform-origin: 60px 60px;
+  transform-box: view-box;
+}
+
+@keyframes cgLeafShimmer {
+  0%   { opacity: 0.82; }
+  40%  { opacity: 1.00; }
+  72%  { opacity: 0.76; }
+  100% { opacity: 0.82; }
+}
+.cg-leaf-shimmer-1 { animation: cgLeafShimmer calc(5.3s * var(--cg-leaf-speed, 1)) ease-in-out infinite; }
+.cg-leaf-shimmer-2 { animation: cgLeafShimmer calc(6.1s * var(--cg-leaf-speed, 1)) ease-in-out infinite -0.7s; }
+.cg-leaf-shimmer-3 { animation: cgLeafShimmer calc(4.9s * var(--cg-leaf-speed, 1)) ease-in-out infinite -1.4s; }
+.cg-leaf-shimmer-4 { animation: cgLeafShimmer calc(7.3s * var(--cg-leaf-speed, 1)) ease-in-out infinite -2.1s; }
+.cg-leaf-shimmer-5 { animation: cgLeafShimmer calc(5.7s * var(--cg-leaf-speed, 1)) ease-in-out infinite -0.4s; }
+.cg-leaf-shimmer-6 { animation: cgLeafShimmer calc(6.7s * var(--cg-leaf-speed, 1)) ease-in-out infinite -1.8s; }
+.cg-leaf-shimmer-7 { animation: cgLeafShimmer calc(8.3s * var(--cg-leaf-speed, 1)) ease-in-out infinite -2.7s; }
+
+/* Heart pulse — moved to individual properties (scale + translate)
+   so it composes the same way the leaf v5 drift does, and gets a
+   gentler 5-step path (was a hard 3-stop ping-pong) so it reads as
+   a breathing core, not a tic. */
 @keyframes cgBudHeart {
-  0%, 100% { transform: translate(0, 0)   scale(1); }
-  30%      { transform: translate(-1px, 1px)  scale(1.08); }
-  60%      { transform: translate(1px, -1px) scale(0.96); }
+  0%   { scale: 1.00; translate: 0 0; }
+  22%  { scale: 1.06; translate: -0.6px 0.8px; }
+  48%  { scale: 0.97; translate: 0.7px -0.4px; }
+  74%  { scale: 1.03; translate: -0.3px -0.6px; }
+  100% { scale: 1.00; translate: 0 0; }
 }
 .cg-bud-heart {
-  animation: cgBudHeart calc(6.1s * var(--cg-leaf-speed, 1)) ease-in-out infinite;
+  animation: cgBudHeart calc(7.3s * var(--cg-leaf-speed, 1)) cubic-bezier(.5,0,.5,1) infinite;
 }
 
 /* D · Pollen pulse — central core breathes; 6 seeds drift on a 4s cycle */

@@ -679,10 +679,18 @@ export function ResultsScreen() {
               showToast('Share unavailable on this device.');
             }
           }}
-          className="w-10 h-10 rounded-full bg-gl flex items-center justify-center border-none cursor-pointer text-lg"
+          className="w-10 h-10 rounded-full bg-gl text-gd flex items-center justify-center border-none cursor-pointer"
           aria-label="Share this request"
         >
-          🔗
+          {/* CERGIO-GUARD (2026-05-30): match the PDP share-icon style
+              — Tarik: "make the share on the homepage results... same
+              as share icon on the services pic on profile". Was the
+              🔗 emoji; now the same upload-arrow SVG the PDP uses, so
+              the brand share affordance reads consistently across
+              surfaces. */}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
+          </svg>
         </button>
       </div>
 
