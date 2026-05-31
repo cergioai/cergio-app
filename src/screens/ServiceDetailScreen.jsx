@@ -293,7 +293,7 @@ export function ServiceDetailScreen() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
                 <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
               </svg>
-              Free for GOATs
+              Free for Connectors
             </span>
           )}
         </div>
@@ -382,7 +382,7 @@ export function ServiceDetailScreen() {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
                       <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
                     </svg>
-                    Free for GOATs
+                    Free for Connectors
                   </p>
                 ) : (
                   <p className="text-[15px] font-extrabold text-black mt-1.5">${priceDollars}</p>

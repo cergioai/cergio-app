@@ -183,7 +183,7 @@ function GoatShareCard({ row, onClick }) {
           {initials(goatName)}
         </div>
         <p className="text-[12px] text-gd font-extrabold">
-          Shared by {goatName}, GOAT
+          Shared by {goatName}, Connector
         </p>
       </div>
     </button>
@@ -235,9 +235,9 @@ export function ActivityScreen() {
         <div className="mt-2 pb-4 border-b border-bdr">
           <div className="px-5 mb-3">
             <h2 className="text-[17px] font-extrabold text-black leading-tight">
-              GOATs have shared their go-to services on Cergio
+              Connectors have shared their go-to services on Cergio
             </h2>
-            <p className="text-[12px] text-gd font-extrabold mt-1">#cergiogoats</p>
+            <p className="text-[12px] text-gd font-extrabold mt-1">#cergioconnectors</p>
           </div>
           <div className="px-5 flex flex-col gap-5">
             {goatShares.map(row => (
