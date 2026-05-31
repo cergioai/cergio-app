@@ -1,53 +1,64 @@
-design(earnings + browse): cash/credit + ripple-back + GPI network note + (i) explainer + no-free-Connector banner
+design-audit: Phase 1 foundation + sampling tool + spotlight audit
 
-Earnings animation
-  Tarik (one message): "add small note that connectors get cash and
-  normal users get credit... arrows back from the connector's audience
-  to the services... or other to show the effect of spotlight... add
-  small note on GPI (relative to participation / connector's network
-  growth..)".
+Tarik: "the designs audit is still very far... can we set up a proper
+plan to audit the designs png set up spec and then execute ... suggest
+a solid solution that gets quality execution.. (no change to
+architecture ... just fonts and design brand lines etc..)".
 
-  Scene 1 — cash vs credit footnote
-    Two pills below the $250 payoff:
-      [ Connectors earn CASH ]   [ Users earn credit ]
-    Mint pill for Connectors, neutral for Users — soft, no shouting.
-    Lands at 3.4s after the verbs settle.
+This commit ships the FOUNDATION for a methodical visual-skin audit.
+No screen changes yet — those land in Phase 3 commits per the plan.
 
-  Scene 2 — ripple-back arrow (audience → new customers)
-    A dashed orange curve sweeps from the audience cluster on the left
-    BACK up to the Provider tile, labelled "new customers" along the
-    vertical. The spotlight isn't a one-way payment — it's a loop:
-    audience → bookings → revenue to the provider, which is why the
-    provider was willing to barter in the first place.
+DESIGN_AUDIT.md (new, root of Cergio Claude)
+  Master plan + process + per-screen punch list.
+    1. Why this audit exists (gap analysis vs prior pixel-perfect pass).
+    2. Mockup canon (which PNGs map to which screens).
+    3. Five phases (Tokens → Primitives → Per-screen → Interactions →
+       Screenshot QA).
+    4. Pixel-sampling protocol (never eyeball).
+    5. Per-screen punch lists with ✓ / ☐ checkboxes already pre-marked
+       for what's done vs what's outstanding.
+    6. Execution order (Home → PDP → PublicProfile → SRP → polish).
+    7. Definition of done.
 
-  Scene 3 — GPI network-growth note
-    Small line above the punchline footer:
-      "Tied to YOUR participation × YOUR network's growth"
-    Two-fact stack ensures users read both:
-      • the math (participation × network)
-      • the timing (earlier joiner = bigger ripples).
+Sample Mockup Tokens.command (new, root)
+  Drag a PNG onto the script — get back:
+    • Top 15 colors by area frequency (brand palette)
+    • Spot samples at 5 hard-coded coordinates (edit per mockup)
+    • Vertical scan column-by-column listing color transitions
+      (reveals divider heights + section bands)
+    • Horizontal scan to confirm left content margin
+  Tarik never has to eyeball a hex again.
 
-Connector explainer (Home + EarnExplainer)
-  Tarik: "add a connector's explainer somewhere (perhaps a small i that
-  pops up...(also on homepage).. to take to /rainmaker/apply".
-  - Home: tiny (i) chip next to the "Free for Connectors" toggle in
-    the search box (only when the toggle is active). Tap → /rainmaker/apply.
-  - EarnExplainerScreen: green "i What's a Connector? Apply to become
-    one →" link under the page subtitle. Tap → /rainmaker/apply.
-  Both keep the existing big "Invite your clients → become a
-  Connector" promo block — these are just additional curiosity
-  on-ramps.
+Audit Spotlights.command (new, root)
+  Runs the spotlight-flow audit Tarik asked for separately. Reports:
+    • Status histogram (where rows pile up in the funnel)
+    • Per-request detail with cross-refs to profiles, services,
+      earnings, notifications
+    • Five red flags (paid w/o earnings, posted w/o URL, confirmed w/o
+      cleared, paid > 7d not posted, declined w/ earnings)
+    • RLS sanity check (anon role should NOT see pending requests)
 
-Browse Connectors — "no free Connector right now" banner
-  Tarik: "add a msg if there's no free connector to say (and that
-  below are some connectors who'll spotlight for a fee)".
-  When the loaded Connector list contains zero rows with BOTH
-  spotlight_price_*_cents IS NULL, render a soft warn banner above
-  the list:
-    "No free Connectors available right now"
-    "All of the Connectors below set a fee per spotlight post — but
-     it's often negotiable. Ask for a lower price (or a free post in
-     exchange for your service) inside the request."
-  Banner disappears the moment any free/swap-only Connector is loaded.
+Type scale locked in tailwind.config.js + design-spec.md
+  Phase 1 foundation. Adds the named type scale to Tailwind so every
+  text element can use a scale step instead of an arbitrary `text-[Npx]`:
+    display-1 (32/900) display-2 (28/800) heading-1 (22/800)
+    heading-2 (18/800) body-lg (16/500)   body (14/500)
+    body-sm (13/500)   meta (12/500)      meta-sm (11/600)
+    caps (10/800/0.06em letter-spacing/uppercase implicit in component)
+  design-spec.md "Typography" section rewritten as a strict table
+  pointing at these tokens. Spacing scale also documented (strict
+  4/8/12/16/20/24/32/40/48).
 
-Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.
+Next commits — Phase 3 execution per DESIGN_AUDIT.md § 6 order:
+  - Phase 3a: Home — apply scales + greeting headline review
+  - Phase 3b: PDP — apply scales + add Reviews section + "Leave a go-to
+    review" button per Jennifer Leighton mockup
+  - Phase 3c: PublicProfile — apply scales + Services-section
+    conditionals + "See all (N)" pagination affordances
+  - Phase 3d: SRP/Results — biggest deviation (category icon row +
+    filter pills + ProviderCard refit)
+  - Phase 4: interactions (focus rings, press states)
+  - Phase 5: screenshot QA
+
+Verified: qa.mjs 41/41 · type scale loads without breaking existing
+screens (Tailwind merges with defaults).

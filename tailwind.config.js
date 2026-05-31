@@ -87,6 +87,24 @@ export default {
       fontFamily: {
         sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
       },
+      // CERGIO-GUARD (2026-05-31 — Design Audit Phase 1): strict named
+      // type scale. Each entry pairs the size with its line-height (and
+      // letter-spacing where the eyebrow caps style needs it), so a
+      // single class like `text-heading-1` fully locks the typography.
+      // Use these instead of arbitrary `text-[Npx]`. Source of truth:
+      // ../design-spec.md "Typography" section.
+      fontSize: {
+        'display-1': ['32px', { lineHeight: '1.05', fontWeight: '900' }],
+        'display-2': ['28px', { lineHeight: '1.05', fontWeight: '800' }],
+        'heading-1': ['22px', { lineHeight: '1.10', fontWeight: '800' }],
+        'heading-2': ['18px', { lineHeight: '1.15', fontWeight: '800' }],
+        'body-lg':   ['16px', { lineHeight: '1.45', fontWeight: '500' }],
+        'body':      ['14px', { lineHeight: '1.45', fontWeight: '500' }],
+        'body-sm':   ['13px', { lineHeight: '1.40', fontWeight: '500' }],
+        'meta':      ['12px', { lineHeight: '1.35', fontWeight: '500' }],
+        'meta-sm':   ['11px', { lineHeight: '1.30', fontWeight: '600' }],
+        'caps':      ['10px', { lineHeight: '1.20', fontWeight: '800', letterSpacing: '0.06em' }],
+      },
       borderRadius: {
         '4xl': '2rem',
         pill: '99px',
