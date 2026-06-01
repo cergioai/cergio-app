@@ -1,79 +1,26 @@
-feat(inbox): make booking purpose explicit — "free spotlight ask" vs "booking request"
+design-qa: capture request_detail + inbox + activity (booking-purpose surfaces)
 
-Per Tarik (2026-06-01 screenshot review of /request/795c...): the
-RequestDetailScreen confirmation copy reads "Accept to confirm this
-booking · It will appear on your calendar," which is fine for a
-paid booking but misleading when the row is actually a Connector
-asking for a free spotlight slot in exchange for promoting the
-service on their socials. The user had to mentally translate the
-"Free for Connectors" pill into "this is a barter, not a sale."
-Same opacity issue on the inbox list — the row preview just
-echoes the service title with no exchange context.
+Phase 6 follow-up: the prior commit shipped the booking-purpose
+context banner/eyebrow on three screens, but the screenshot-qa
+harness didn't visit any of them. Without coverage, the next QA
+gallery would silently regress those surfaces.
 
-Now both surfaces explain WHAT the booking represents.
+Added three rows to SCREENS in scripts/screenshot-qa.mjs:
 
-### RequestDetailScreen (/request/:id) — provider side
+  key              route                                           section
+  ────────────────────────────────────────────────────────────────────
+  request_detail   /request/795c2713-463a-458c-9cd1-67e1e5255f64   § 5.9
+  inbox            /inbox                                          § 5.9
+  activity         /activity                                       § 5.9
 
-NEW purpose banner above the service info — two variants, driven
-by `data.isFree` (= `b.is_free_for_rainmaker`):
+The request_detail route hits a real seeded UUID; falls back to the
+FALLBACK demo shape if Supabase 404s, so the capture is always
+non-empty.
 
-  Free spotlight exchange  [bg-gl/60 + g/30 border]
-    {Consumer} is asking for a free slot of {service}.
-    In exchange, they'll spotlight it to their social
-    audience — no cash changes hands.
+Gallery now captures 13 screens (was 10). Vertical-baseline
+tolerance per § 7 stays at 2px. design-qa/index.html + the three
+new PNGs go in this commit so the gallery state in git matches
+what's in Tarik's browser right now.
 
-  Paid booking request     [bg-cr2 + bdr border]
-    {Consumer} wants to book {service}.
-    You'll be paid out after the job (via Stripe).
-
-Bottom CTA copy now follows the same fork:
-  Free: "Accept to confirm this free spotlight slot ·
-         It will appear on your calendar — they post the
-         spotlight in return."
-  Paid: "Accept to confirm this booking · It will appear on
-         your calendar."
-
-The existing "Free for Connectors" inline pill stays — it now
-reads as a secondary chip rather than the only signal.
-
-### JobsInboxScreen (/inbox) — provider side
-
-`bookingToRequest` now derives a purpose-aware preview line:
-  free → "Free spotlight ask · {service}"
-  paid → "Booking request · {service}"
-
-Row layout:
-  • Purpose line (text-gd font-extrabold when free, text-black
-    when paid) — leads the row
-  • Consumer's free-text note (if any) drops below in italics
-    "{note}" — was previously stuffed into preview, which
-    competed with the purpose
-
-So the inbox now scans top-to-bottom as: who · what kind of
-ask · what they said · when · status.
-
-### ActivityScreen (/activity) — consumer / Connector side ("vice versa")
-
-`BookingRow` mirrors the purpose label so when the SAME user opens
-their own Activity tab to see what they've asked for, the row reads:
-
-  [eyebrow caps] FREE SPOTLIGHT ASK   (gd) — or — BOOKING REQUEST (b3)
-  {service title}
-  {when} · {status pill}
-
-Eyebrow is a tiny `text-[11px] font-extrabold uppercase` line above
-the service title; visual weight matches the purpose pill on the
-provider side so both ends of the exchange use the same vocabulary.
-
-### Wiring stays clean
-
-- Bookings table `is_free_for_rainmaker` is the single source of
-  truth; no new fields added.
-- No API changes; both screens already select the column.
-- Status, Stripe-payouts banner, message bubble, etc. unchanged.
-
-### Verified
-
-qa.mjs — 41/41 PASS
-acorn-jsx parse: RequestDetailScreen / JobsInboxScreen /
-ActivityScreen all GREEN.
+Verified: re-ran Screenshot QA.command end-to-end after the edit,
+gallery rendered 13 rows at 1:17:37 AM 2026-06-01.

@@ -76,6 +76,18 @@ const SCREENS = [
     mockup: null,                                    ready: 'h1' },
   { key: 'earnings',   label: 'Earnings explainer',      route: '/earnings/learn',   section: '§ 5.6',
     mockup: null,                                    ready: 'h1, h2' },
+  // Phase 6 (2026-06-01) — booking-purpose context surfaces.
+  // RequestDetailScreen takes a real booking UUID; the dev/seed flow
+  // exposes a known free-spotlight row at this id, so the gallery
+  // captures the new purpose banner. Falls back to the FALLBACK
+  // demo shape if the id isn't in DB.
+  { key: 'request_detail', label: 'Request detail (spotlight ask)',
+    route: '/request/795c2713-463a-458c-9cd1-67e1e5255f64', section: '§ 5.9',
+    mockup: null,                                    ready: 'h2, button' },
+  { key: 'inbox',      label: 'Jobs inbox',              route: '/inbox',            section: '§ 5.9',
+    mockup: null,                                    ready: 'h1' },
+  { key: 'activity',   label: 'Activity (consumer side)', route: '/activity',         section: '§ 5.9',
+    mockup: null,                                    ready: 'h1, button' },
   { key: 'about',      label: 'About',                   route: '/about',            section: '§ 5.7',
     mockup: null,                                    ready: 'h1' },
   { key: 'contact',    label: 'Contact',                 route: '/contact',          section: '§ 5.7',
