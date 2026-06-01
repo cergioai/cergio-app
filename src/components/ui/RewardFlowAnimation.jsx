@@ -183,24 +183,38 @@ function Scene2() {
         </g>
       </g>
 
-      {/* CERGIO-GUARD (2026-05-30): ripple-back arrows from the
-          audience BACK to the Provider tile so the network effect
-          reads visually — Tarik: "arrows back from the connector's
-          audience to the services... or other to show the effect of
-          spotlight". The spotlight isn't a one-way payment, it's a
-          loop: audience → new customers → more revenue to provider
-          → which is why the provider was willing to barter in the
-          first place. */}
-      <g className="rf-pop" style={{ animationDelay: '2.8s' }}>
-        {/* Curved arrow from audience-left back up to provider tile.
-            Quadratic curve sweeping out left of the diagram. */}
-        <path
-          d="M 50 196 Q 12 150, 30 96 Q 36 84, 60 84"
-          stroke="#F0A030" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeDasharray="3 3"
-        />
-        <polygon points="60,80 70,84 60,88" fill="#F0A030" />
-        <text x={4} y={150} fontSize="9.5" fontWeight="800" fill="#8A5A10" fontFamily="system-ui"
-              transform="rotate(-90 14 150)">
+      {/* CERGIO-GUARD (2026-05-31 v3): FAN of ripple-back arrows from
+          the audience to the Provider tile. v2 had ONE curve; Tarik:
+          "make the few arrows from instagram to service on the
+          spotlight (to show the audience size from single actions
+          spotlight and free services)". Five arrows fan from the
+          audience cluster — they emphasise that a single spotlight
+          ripples into many conversions, not one. Different start-x
+          + curve shapes + staggered pop delays so they fly in like a
+          fan, not a stripe. */}
+      <g>
+        {[
+          { d: 'M  60 198 Q 28 150, 32 100 Q 38 86, 60 86', delay: '2.7s' },
+          { d: 'M 110 198 Q 86 158, 84 110 Q 88 96, 100 86', delay: '2.9s' },
+          { d: 'M 200 198 Q 174 154, 150 110 Q 142 96, 140 86', delay: '3.1s' },
+          { d: 'M 270 198 Q 234 156, 188 108 Q 178 94, 168 86', delay: '3.3s' },
+          { d: 'M 332 198 Q 282 154, 222 108 Q 210 94, 200 86', delay: '3.5s' },
+        ].map((a, i) => (
+          <g key={i} className="rf-pop" style={{ animationDelay: a.delay }}>
+            <path
+              d={a.d}
+              stroke="#F0A030" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeDasharray="3 3"
+              opacity="0.85"
+            />
+          </g>
+        ))}
+        {/* Vertical "new customers" label runs up the left margin —
+            anchors the fan visually. */}
+        <text
+          x={6} y={154} fontSize="9.5" fontWeight="800" fill="#8A5A10" fontFamily="system-ui"
+          className="rf-pop" style={{ animationDelay: '2.6s' }}
+          transform="rotate(-90 14 154)"
+        >
           new customers
         </text>
       </g>

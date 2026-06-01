@@ -127,20 +127,37 @@ function initials(name) {
 // badge + city, single cover image (when present), and the "Shared by
 // {Connector}, GOAT" pill at the bottom. Tap → routes to the service PDP.
 function GoatShareCard({ row, onClick }) {
-  const svc        = row.service;
-  const goatName   = row.recommender.display_name || 'A Connector';
-  const goatId     = row.recommender.id || null;
-  const followers  = row.recommender.follower_count || 0;
-  const ownerName  = svc.owner_display_name || svc.title;
-  const ownerId    = svc.owner_id || null;
-  const cover      = svc.cover_url;
-  const gradient   = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
-  // CERGIO-GUARD (2026-05-30): real follower count > 0 → show the
-  // "Sabir was shared to 45,414 followers" headline. Otherwise fall
-  // back to the count-free copy. NEVER faked.
-  const headline = followers > 0
-    ? `was shared to ${followers.toLocaleString()} followers`
-    : 'was shared on Cergio';
+  // CERGIO-GUARD (2026-05-31): personalized feed copy per Tarik:
+  // "your friend/Connector Jordan... Penny was spotlighted by
+  // Connector X to 7388 followers". Card now reads as a single,
+  // social-feed-style sentence:
+  //   Penny Plumber — Plumbing · Miami Beach, FL
+  //   Spotlighted by your Connector Connie Connect to 8,930 followers
+  //
+  // The headline owner-name + the actor's relation prefix
+  // ("your Connector" / "your friend") + the actor's follower count
+  // are all in one block. Follower count is the AUDIENCE reached,
+  // not the count-free fallback the v1 had.
+  const svc          = row.service;
+  const goatName     = row.recommender.display_name || 'A Connector';
+  const goatId       = row.recommender.id || null;
+  const goatIsConn   = !!row.recommender.is_connector;
+  const goatIsFriend = !!row.recommender.is_friend; // wired when graph lands
+  const followers    = row.recommender.follower_count || 0;
+  const ownerName    = svc.owner_display_name || svc.title;
+  const ownerId      = svc.owner_id || null;
+  const cover        = svc.cover_url;
+  const gradient     = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+
+  // Relation prefix logic: priority Friend > Connector > nothing.
+  // "your friend Connector Connie" reads weird, so when someone is
+  // both, we anchor on "your friend" and let the Connector chip carry
+  // the cc_verified context.
+  const relation = goatIsFriend
+    ? 'your friend'
+    : goatIsConn
+      ? 'your Connector'
+      : null;
 
   // Both avatars (owner + recommender pill) are Links to public
   // profiles. The card itself is also clickable → service PDP, so the
@@ -167,7 +184,7 @@ function GoatShareCard({ row, onClick }) {
             <div className={ownerAvatarCls}>{initials(ownerName)}</div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-[14px] leading-snug text-black">
+            <p className="text-body leading-snug text-black">
               {ownerId ? (
                 <Link
                   to={`/u/${ownerId}`}
@@ -179,15 +196,19 @@ function GoatShareCard({ row, onClick }) {
               ) : (
                 <span className="font-extrabold">{ownerName}</span>
               )}
-              <span className="font-medium text-b2"> {headline}</span>
             </p>
-            <p className="text-[11.5px] text-gd font-extrabold mt-0.5">
+            <p className="text-meta-sm text-gd font-extrabold mt-0.5">
               <span className="inline-flex items-center gap-1">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
                   <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
                   <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                 </svg>
-                {svc.category || 'Service'}
+                {/* CERGIO-GUARD (2026-05-31): service TYPE wins over
+                    category — Tarik: "share service type (plumber
+                    trainer etc..) not the category (cleaning etc..)".
+                    Fall through to category only if the type wasn't
+                    set on the listing. */}
+                {svc.taxonomy_provider_type || svc.category || 'Service'}
               </span>
               {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
             </p>
@@ -205,9 +226,9 @@ function GoatShareCard({ row, onClick }) {
           )}
         </div>
       </button>
-      {/* Shared-by pill — separate from the PDP-tap button so the
-          recommender avatar + name can navigate to the recommender's
-          public profile without firing the PDP nav. */}
+      {/* Spotlighted-by pill — full sentence with relation prefix + actor
+          name + audience reached. Separate from the PDP-tap button so
+          the actor name/avatar can navigate without firing the PDP nav. */}
       <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
         {goatId ? (
           <Link
@@ -220,14 +241,17 @@ function GoatShareCard({ row, onClick }) {
         ) : (
           <div className={goatAvatarCls}>{initials(goatName)}</div>
         )}
-        <p className="text-[12px] text-gd font-extrabold">
-          Shared by{' '}
+        <p className="text-meta text-gd font-extrabold">
+          Spotlighted by{' '}
+          {relation && <span>{relation} </span>}
           {goatId ? (
             <Link to={`/u/${goatId}`} className="underline">{goatName}</Link>
           ) : (
             goatName
           )}
-          , Connector
+          {followers > 0 && (
+            <span className="font-medium text-b2"> to {followers.toLocaleString()} followers</span>
+          )}
         </p>
       </div>
     </div>
@@ -314,7 +338,7 @@ function ListingCard({ ev, onClick }) {
                   <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
                   <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                 </svg>
-                {svc.category || 'Service'}
+                {svc.taxonomy_provider_type || svc.category || 'Service'}
               </span>
               {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
             </p>
@@ -424,17 +448,32 @@ export function ActivityScreen() {
           kinds (reco / join / listing / spotlight). Each event renders
           with its own card style. All rows come from real tables —
           recommendations / profiles / services / spotlight_requests.
-          See feedback_no_fake_feeds. */}
-      {feed && feed.length > 0 && (
+          See feedback_no_fake_feeds.
+          CERGIO-GUARD (2026-05-31): per Tarik "you don't see anything
+          unless it's from Connectors or your network (friends and
+          friends-of-friends recommending or booking or listing a
+          service)". The friend graph isn't in the DB yet — filter
+          to Connector-driven events only. When the graph lands,
+          extend the predicate to include is_friend / is_fof. */}
+      {(() => {
+        const visibleFeed = (feed || []).filter(ev => {
+          if (ev.kind === 'reco')      return !!ev.recommender?.is_connector || !!ev.recommender?.is_friend;
+          if (ev.kind === 'spotlight') return true; // spotlights are by definition Connector-driven
+          if (ev.kind === 'listing')   return !!ev.owner?.is_connector || !!ev.owner?.is_friend;
+          if (ev.kind === 'join')      return !!ev.profile?.is_connector || !!ev.profile?.is_friend;
+          return false;
+        });
+        if (visibleFeed.length === 0) return null;
+        return (
         <div className="mt-2 pb-4 border-b border-bdr">
           <div className="px-5 mb-3">
             <h2 className="text-[17px] font-extrabold text-black leading-tight">
               What&apos;s happening on Cergio
             </h2>
-            <p className="text-[12px] text-gd font-extrabold mt-1">#cergiofeed</p>
+            <p className="text-[12px] text-gd font-extrabold mt-1">From your Connectors and network · #cergiofeed</p>
           </div>
           <div className="px-5 flex flex-col gap-5">
-            {feed.map(ev => {
+            {visibleFeed.map(ev => {
               if (ev.kind === 'reco') {
                 return (
                   <GoatShareCard
@@ -463,7 +502,8 @@ export function ActivityScreen() {
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* CERGIO-GUARD: the "Friends recently booked" section that
           rendered FEED (Stephanie K. booked Jamie Hall — Deep

@@ -2047,7 +2047,7 @@ export async function listGoatShares({ limit = 24 } = {}) {
   const sIds = [...new Set(goatRecs.map(r => r.service_id).filter(Boolean))];
   const { data: svcs } = await supabase
     .from('services')
-    .select('id, title, category, location_text, photo_class, cover_url, owner_id')
+    .select('id, title, category, taxonomy_provider_type, location_text, photo_class, cover_url, owner_id')
     .in('id', sIds);
   const svcMap = Object.fromEntries((svcs || []).map(s => [s.id, s]));
 
@@ -2133,7 +2133,7 @@ export async function listSocialFeed({ limit = 40, days = 60 } = {}) {
   const recProfMap = Object.fromEntries((recProfs || []).map(p => [p.id, p]));
   const { data: recSvcs } = recSvcIds.length
     ? await supabase.from('services')
-        .select('id, title, category, location_text, photo_class, cover_url, owner_id')
+        .select('id, title, category, taxonomy_provider_type, location_text, photo_class, cover_url, owner_id')
         .in('id', recSvcIds)
     : { data: [] };
   const recSvcMap = Object.fromEntries((recSvcs || []).map(s => [s.id, s]));
@@ -2157,19 +2157,24 @@ export async function listSocialFeed({ limit = 40, days = 60 } = {}) {
         id:   `reco-${r.id}`,
         message: r.message || null,
         service: {
-          id:                 svc.id,
-          title:              svc.title,
-          category:           svc.category,
-          location_text:      svc.location_text,
-          photo_class:        svc.photo_class,
-          cover_url:          svc.cover_url,
-          owner_id:           svc.owner_id || null,
-          owner_display_name: owner?.display_name || null,
+          id:                     svc.id,
+          title:                  svc.title,
+          category:               svc.category,
+          taxonomy_provider_type: svc.taxonomy_provider_type || null,
+          location_text:          svc.location_text,
+          photo_class:            svc.photo_class,
+          cover_url:              svc.cover_url,
+          owner_id:               svc.owner_id || null,
+          owner_display_name:     owner?.display_name || null,
         },
         recommender: {
           id:             prof.id,
           display_name:   prof.display_name,
           is_connector:   !!prof.cc_verified_at,
+          // CERGIO-GUARD (2026-05-31): friend graph not in DB yet;
+          // wired as `false` for now. When we have a follower/friend
+          // table, set this from a join on the viewer's id.
+          is_friend:      false,
           follower_count: prof.follower_count ?? 0,
         },
       };
@@ -2198,7 +2203,7 @@ export async function listSocialFeed({ limit = 40, days = 60 } = {}) {
   // ── 3. New service listings ──────────────────────────────────────
   const { data: newSvcs } = await supabase
     .from('services')
-    .select('id, title, category, location_text, photo_class, cover_url, owner_id, created_at, status')
+    .select('id, title, category, taxonomy_provider_type, location_text, photo_class, cover_url, owner_id, created_at, status')
     .eq('status', 'listed')
     .gte('created_at', sinceIso)
     .order('created_at', { ascending: false })
@@ -2217,15 +2222,16 @@ export async function listSocialFeed({ limit = 40, days = 60 } = {}) {
       at:   s.created_at,
       id:   `listing-${s.id}`,
       service: {
-        id:            s.id,
-        title:         s.title,
-        category:      s.category,
-        location_text: s.location_text,
-        photo_class:   s.photo_class,
-        cover_url:     s.cover_url,
-        owner_id:      s.owner_id || null,
+        id:                     s.id,
+        title:                  s.title,
+        category:               s.category,
+        taxonomy_provider_type: s.taxonomy_provider_type || null,
+        location_text:          s.location_text,
+        photo_class:            s.photo_class,
+        cover_url:              s.cover_url,
+        owner_id:               s.owner_id || null,
       },
-      owner: o ? { id: o.id, display_name: o.display_name, is_connector: !!o.cc_verified_at } : null,
+      owner: o ? { id: o.id, display_name: o.display_name, is_connector: !!o.cc_verified_at, is_friend: false } : null,
     };
   });
 

@@ -79,10 +79,10 @@ function ModeOption({ active, label, sub, onClick }) {
       className={`w-full text-left px-3 py-2.5 flex items-start gap-2 hover:bg-bg5/40 transition-colors
                   ${active ? 'bg-gl/30' : ''}`}
     >
-      <span className={`mt-1 text-[12px] flex-shrink-0 ${active ? 'text-g' : 'text-transparent'}`}>✓</span>
+      <span className={`mt-1 text-meta flex-shrink-0 ${active ? 'text-g' : 'text-transparent'}`}>✓</span>
       <span className="flex-1">
-        <span className="block text-[13px] font-extrabold text-black leading-tight">{label}</span>
-        <span className="block text-[11px] text-b3 mt-0.5 leading-snug">{sub}</span>
+        <span className="block text-body-sm font-extrabold text-black leading-tight">{label}</span>
+        <span className="block text-meta-sm text-b3 mt-0.5 leading-snug">{sub}</span>
       </span>
     </button>
   );
@@ -188,14 +188,14 @@ function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, onSav
             onChange={setText}
             onSelect={handleSelect}
             placeholder="Type your address…"
-            className="w-full bg-bg5 rounded-[10px] px-3 py-1.5 text-[12px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+            className="w-full bg-bg5 rounded-[10px] px-3 py-1.5 text-meta text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
         </div>
         <button
           type="button"
           onClick={handleSave}
           disabled={busy || !text.trim()}
-          className={`text-[11px] font-extrabold underline underline-offset-2 px-1
+          className={`text-meta-sm font-extrabold underline underline-offset-2 px-1
             ${busy || !text.trim() ? 'text-b3 cursor-not-allowed' : 'text-g'}`}
         >
           {busy ? '…' : 'Save'}
@@ -204,7 +204,7 @@ function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, onSav
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="text-[11px] font-normal text-b3 underline underline-offset-2 px-1"
+          className="text-meta-sm font-normal text-b3 underline underline-offset-2 px-1"
         >
           Cancel
         </button>
@@ -832,7 +832,7 @@ export function HomeScreen() {
               {headlinePhase === 'rolling' && !submitted ? (
                 <h1
                   key={`rolling-${intent}`}
-                  className="text-[15px] font-normal text-b2 leading-relaxed tracking-tight cg-headline-toast"
+                  className="text-body-lg font-normal text-b2 leading-relaxed tracking-tight cg-headline-toast"
                 >
                   {longWords.map((w, i) => {
                     // CERGIO-GUARD (2026-05-30): brand-style "Cergio"
@@ -853,7 +853,7 @@ export function HomeScreen() {
                 </h1>
               ) : (
                 <div className="cg-fade-in-soft">
-                  <h1 className="text-[14px] font-normal text-b2 leading-snug">
+                  <h1 className="text-body font-normal text-b2 leading-snug">
                     {compactText}
                   </h1>
                   {/* "Start typing" hint moved into the box placeholder
@@ -907,7 +907,7 @@ export function HomeScreen() {
                   >
                     <span
                       key={`${intent}-${idx}`}
-                      className={`block text-[14px] text-b3 font-medium leading-snug ${isLast ? 'cg-example-settle' : 'cg-example-rotate'}`}
+                      className={`block text-body text-b3 font-medium leading-snug ${isLast ? 'cg-example-settle' : 'cg-example-rotate'}`}
                     >
                       {cur.hint}
                     </span>
@@ -931,7 +931,7 @@ export function HomeScreen() {
                 rows={intent === 'spotlight' ? 4 : 3}
                 style={{ minHeight: intent === 'spotlight' ? 96 : 72 }}
                 className="w-full bg-transparent outline-none resize-none px-4 pt-3 pb-1.5
-                           text-[14px] text-black placeholder-b3 font-medium leading-snug"
+                           text-body text-black placeholder-b3 font-medium leading-snug"
               />
               {images.length > 0 && (
                 <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
@@ -946,7 +946,7 @@ export function HomeScreen() {
                         type="button"
                         onClick={() => removeImage(i)}
                         aria-label="Remove image"
-                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-[12px] font-bold flex items-center justify-center"
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-meta font-bold flex items-center justify-center"
                       >
                         ×
                       </button>
@@ -986,7 +986,7 @@ export function HomeScreen() {
                     onClick={() => setModeOpen(o => !o)}
                     aria-haspopup="listbox"
                     aria-expanded={modeOpen}
-                    className={`flex items-center gap-1 px-1 text-[12px] font-normal
+                    className={`flex items-center gap-1 px-1 text-meta font-normal
                                 transition-colors
                                 ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
                   >
@@ -1055,7 +1055,7 @@ export function HomeScreen() {
                       type="button"
                       onClick={() => setLocEditing(true)}
                       aria-label={`Search location: ${locationText} — tap to edit`}
-                      className="flex items-center gap-1 px-1.5 text-[12px] font-normal text-b3 hover:text-b2 transition-colors max-w-[140px]"
+                      className="flex items-center gap-1 px-1.5 text-meta font-normal text-b3 hover:text-b2 transition-colors max-w-[140px]"
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-gd">
@@ -1100,7 +1100,7 @@ export function HomeScreen() {
                 <button
                   type="button"
                   onClick={() => setLocEditing(true)}
-                  className="flex items-center gap-1.5 text-[11px] text-gd font-bold underline underline-offset-2"
+                  className="flex items-center gap-1.5 text-meta-sm text-gd font-bold underline underline-offset-2"
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -1111,7 +1111,7 @@ export function HomeScreen() {
                 </button>
               )}
               {locEditing && (
-                <div className="flex items-start gap-1.5 text-[11px] text-b3">
+                <div className="flex items-start gap-1.5 text-meta-sm text-b3">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-1 text-gd">
                     <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
@@ -1139,7 +1139,11 @@ export function HomeScreen() {
                   gone; providers either Draw their area on the map OR
                   flip the On-site only toggle. */}
               {intent === 'spotlight' && locationText && (
-                <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                // CERGIO-GUARD (2026-05-31 — Phase 3a): scale-aligned
+                // gap above the spotlight row. Was `mt-1.5` (6px),
+                // moved to `mt-4` (16px) to match the strict spacing
+                // scale per DESIGN_AUDIT.md § 5.2.
+                <div className="mt-4 flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setAreaPickerOpen(true)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-pill border text-left
@@ -1151,7 +1155,7 @@ export function HomeScreen() {
                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                       <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"/><path d="M9 4v13"/><path d="M15 7v13"/>
                     </svg>
-                    <span className="text-[11.5px] font-extrabold">
+                    <span className="text-meta-sm font-extrabold">
                       {serviceAreaGeoJson ? 'Area drawn' : 'Draw service area'}
                     </span>
                     {serviceAreaGeoJson && (
@@ -1167,7 +1171,7 @@ export function HomeScreen() {
                   </button>
                   <button
                     onClick={() => setTravelRadius(travelRadius === 'onsite' ? '10mi' : 'onsite')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-pill border text-[11.5px] font-extrabold transition-colors
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-pill border text-meta-sm font-extrabold transition-colors
                                 ${travelRadius === 'onsite'
                                   ? 'bg-gl text-gd border-g/40'
                                   : 'bg-white text-b2 border-bdr hover:border-g/40'}`}
@@ -1195,7 +1199,7 @@ export function HomeScreen() {
             <button
               type="button"
               onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
-              className="inline-flex items-center gap-1.5 text-[11.5px] font-extrabold text-g hover:text-gd transition-colors"
+              className="inline-flex items-center gap-1.5 text-meta-sm font-extrabold text-g hover:text-gd transition-colors"
               aria-pressed={intent === 'spotlight'}
             >
               {intent === 'find' ? (
@@ -1235,18 +1239,18 @@ export function HomeScreen() {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-b3">Your request</p>
-                <p className="text-[13px] font-medium text-black leading-snug mt-0.5 break-words">
+                <p className="text-caps uppercase text-b3">Your request</p>
+                <p className="text-body-sm font-medium text-black leading-snug mt-0.5 break-words">
                   {submittedText}
                 </p>
-                <p className="text-[11px] text-b3 mt-1 leading-snug truncate">
+                <p className="text-meta-sm text-b3 mt-1 leading-snug truncate">
                   {locationText ? `${locationText} · ` : ''}
                   {freeServices ? 'Free for Connectors' : 'Pay full price'}
                 </p>
               </div>
               <button
                 onClick={() => resetSubmit({ keepQuery: true })}
-                className="text-[11px] font-medium text-g underline underline-offset-2 flex-shrink-0 mt-0.5"
+                className="text-meta-sm font-medium text-g underline underline-offset-2 flex-shrink-0 mt-0.5"
               >
                 Edit
               </button>
@@ -1266,8 +1270,8 @@ export function HomeScreen() {
               <div
                 key={m.id}
                 className={m.role === 'user'
-                  ? 'self-end max-w-[80%] bg-gl text-black rounded-[14px] rounded-br-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug'
-                  : 'self-start max-w-[85%] bg-white border border-bdr text-black rounded-[14px] rounded-bl-[4px] px-3 py-1.5 text-[12px] font-medium leading-snug whitespace-pre-line'}
+                  ? 'self-end max-w-[80%] bg-gl text-black rounded-[14px] rounded-br-[4px] px-3 py-1.5 text-meta font-medium leading-snug'
+                  : 'self-start max-w-[85%] bg-white border border-bdr text-black rounded-[14px] rounded-bl-[4px] px-3 py-1.5 text-meta font-medium leading-snug whitespace-pre-line'}
               >
                 {m.text}
               </div>
@@ -1300,11 +1304,11 @@ export function HomeScreen() {
                       : 0}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] text-gd font-bold leading-snug">
+                    <p className="text-body text-gd font-bold leading-snug">
                       {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
                     </p>
                     {!planDone && activeStage?.detail && (
-                      <p className="text-[11px] text-b3 font-normal leading-snug mt-1">
+                      <p className="text-meta-sm text-b3 font-normal leading-snug mt-1">
                         {activeStage.detail}
                       </p>
                     )}
@@ -1322,8 +1326,8 @@ export function HomeScreen() {
                              hover:opacity-95 active:scale-[.99] transition-all"
                 >
                   <div>
-                    <p className="text-[13px] font-extrabold leading-tight">Go to inbox</p>
-                    <p className="text-[11px] text-white/85 mt-0.5 font-medium">
+                    <p className="text-body-sm font-extrabold leading-tight">Go to inbox</p>
+                    <p className="text-meta-sm text-white/85 mt-0.5 font-medium">
                       Offers land there. We'll text + email you when they come in.
                     </p>
                   </div>
@@ -1332,7 +1336,7 @@ export function HomeScreen() {
                 <button
                   onClick={resetSubmit}
                   className="w-full bg-white border border-bdr rounded-[14px] px-4 py-2.5
-                             text-[12px] font-medium text-b2 hover:border-g/40 transition-colors"
+                             text-meta font-medium text-b2 hover:border-g/40 transition-colors"
                 >
                   Send another request
                 </button>
@@ -1354,7 +1358,7 @@ export function HomeScreen() {
                       key={q}
                       onClick={() => { setReply(''); chat?.send?.(q); }}
                       className="bg-white border border-bdr rounded-pill px-2.5 py-1
-                                 text-[11px] font-normal text-b2 hover:border-g hover:text-gd transition-colors"
+                                 text-meta-sm font-normal text-b2 hover:border-g hover:text-gd transition-colors"
                     >
                       {q}
                     </button>
@@ -1379,7 +1383,7 @@ export function HomeScreen() {
                   placeholder="Your reply…"
                   rows={3}
                   style={{ minHeight: 96 }}
-                  className="flex-1 bg-transparent outline-none resize-none text-[13px] text-black placeholder-b3 font-medium leading-snug"
+                  className="flex-1 bg-transparent outline-none resize-none text-body-sm text-black placeholder-b3 font-medium leading-snug"
                   autoFocus
                 />
                 <button
@@ -1409,7 +1413,7 @@ export function HomeScreen() {
           copy is 'Become a Connector — $250 cash per friend'). */}
       {/* CERGIO-GUARD (2026-05-28): house ad softened per user audit.
           Was bg-gl + p-4 + 10x10 icon — felt sales-y. Now bg-cr2 +
-          py-3 + 8x8 icon + text-[13px] headline. Same routing, half
+          py-3 + 8x8 icon + text-body-sm headline. Same routing, half
           the visual weight. */}
       {intent === 'find' && !submitted && (
         <div className="px-5 mt-1 mb-6">
@@ -1427,10 +1431,10 @@ export function HomeScreen() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-black leading-tight">
+              <p className="text-body-sm font-bold text-black leading-tight">
                 Become a Connector — ${REWARDS.perFriendConnector} cash + free services
               </p>
-              <p className="text-[11px] text-b3 mt-0.5 leading-snug font-normal">
+              <p className="text-meta-sm text-b3 mt-0.5 leading-snug font-normal">
                 Or stay a user → ${REWARDS.perFriendUser} credit per friend who joins + books.
               </p>
             </div>
@@ -1461,10 +1465,10 @@ export function HomeScreen() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-black leading-tight">
+              <p className="text-body-sm font-bold text-black leading-tight">
                 Invite your clients → become a Connector
               </p>
-              <p className="text-[11px] text-b3 mt-0.5 leading-snug font-normal">
+              <p className="text-meta-sm text-b3 mt-0.5 leading-snug font-normal">
                 ${REWARDS.perFriendConnector} cash per client who books + free spotlights (barter) + Growth Participation Income.
               </p>
             </div>
@@ -1483,14 +1487,14 @@ export function HomeScreen() {
           felt cramped). Now bottom-[92px] (28px clear above the nav)
           + py-3 inside so content above doesn't crowd it. */}
       <div className="fixed bottom-[92px] left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 z-[60] pointer-events-none">
-        <p className="text-center text-[11px] text-b3 font-normal leading-snug py-2">
+        <p className="text-center text-meta-sm text-b3 font-normal leading-snug py-2">
           Cergio is human-powered AI for shared prosperity
         </p>
         {/* CERGIO-GUARD (2026-05-31): About · Contact · Terms link
             row. pointer-events-auto so the links are tappable even
             though the parent disables them (so it doesn't block the
             nav). */}
-        <div className="flex items-center justify-center gap-3 text-[10.5px] font-medium text-b3 pointer-events-auto">
+        <div className="flex items-center justify-center gap-3 text-meta-sm font-medium text-b3 pointer-events-auto">
           <a href="/about"   className="hover:text-gd transition-colors">About</a>
           <span>·</span>
           <a href="/contact" className="hover:text-gd transition-colors">Contact</a>

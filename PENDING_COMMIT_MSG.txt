@@ -1,75 +1,57 @@
-feat(company): wire About + Contact + Terms + entry-point footers
+design-audit Phase 3a + activity feed personalization + ripple-fan
 
-Tarik supplied the spec + canonical copy in chat: "begin to wire about
-us... Add Mission (around Human Powered Guided AI for Shared
-prosperity .. introduce Asset Growth Participation Income concept),
-contact (Press, Investors, Support, Partnerships, Influencers opens
-the same form, with subject options...), terms of use... (highlight
-no liability etc)... use standard booking platform.."
+Tarik over four messages:
+  1. format tweak the activity feed: "your friend/Connector Jordan"
+     prefix + Penny "spotlighted by Connector X to 7,388 followers"
+  2. "this is your friends feed or one where Connectors share — you
+     don't see anything unless it's from Connectors or your network
+     (friends and friends-of-friends recommending or booking or
+     listing a service)"
+  3. "share service TYPE (plumber, trainer etc.) not the category
+     (cleaning etc.)"
+  4. "re: animation, make the few arrows from Instagram to service on
+     the spotlight (to show the audience size from single actions
+     spotlight and free services)"
 
-New screens
-  src/screens/AboutScreen.jsx        — /about
-    • Hero: logo + "Friend-powered AI. Every result is backed by
-      someone you know."
-    • Mission card: "Human-powered Guided AI for shared prosperity."
-    • Three revenue streams: Cash earnings · Free service barters ·
-      Asset Participation Income (APIC)
-    • Team credibility: "Tech leads from Uber, Google, Grubhub, and
-      Goldman Sachs."
-    • Three-column footer (Platform / Company / Support) with links
-      to How it works, Join, Terms, About, Contact (+ Press /
-      Investors / Partnerships pre-filling the subject), Get help,
-      Privacy.
+Activity feed (src/screens/ActivityScreen.jsx + src/lib/api.js)
+  - GoatShareCard rewritten:
+    Headline collapses to one social-feed-style block:
+      {Owner name}
+      {Service TYPE} · {City}                     ← was Category
+    Spotlighted-by pill becomes a single sentence:
+      "Spotlighted by your Connector {Name} to {N} followers"
+    Relation prefix priority: friend > Connector > none. When the
+    friend-graph table lands we just set `is_friend` and the prefix
+    swaps to "your friend Connie" automatically.
+  - ListingCard service line: same swap to taxonomy_provider_type
+    with category fallback.
+  - listSocialFeed:
+    • SELECT widened to include `taxonomy_provider_type` on the three
+      service-fetch queries (recos, listings, spotlights).
+    • Service shape now exposes `taxonomy_provider_type` to every card.
+    • Recommender + owner now expose `is_friend: false` placeholder
+      so the predicate is uniform once the graph wires up.
+  - ActivityScreen feed predicate:
+    Only renders events where the actor is a Connector OR (when wired)
+    a friend / friend-of-friend. Section sub-heading reads
+    "From your Connectors and network · #cergiofeed". Section hides
+    entirely when the filter leaves zero rows — never silently shows
+    non-network spam.
 
-  src/screens/ContactScreen.jsx      — /contact
-    • Single unified form. Subject dropdown:
-        General · Support · Press · Investors · Partnerships · Influencers
-    • Press / Investors / Partnerships / Influencers / Support all
-      land here; ?subject= pre-selects the dropdown so the company
-      footer links route correctly.
-    • Submit writes to a contact_messages table when supabase is
-      ready; soft-falls to a thank-you state if the table doesn't
-      exist yet so the form is testable in any environment.
-    • Inline links to Terms + Privacy on the submit fineprint.
+Earnings animation — Scene 2 fan of ripple arrows
+  Was: one dashed orange curve from the audience back to the Provider
+  tile, labelled "new customers".
+  Now: FIVE dashed arrows fan from across the audience cluster (x =
+  60, 110, 200, 270, 332) up to the Provider tile, staggered 200ms
+  apart so they fly in like a sweep — emphasises that a single
+  spotlight ripples into MANY conversions, not one. Vertical
+  "new customers" label still anchors the fan visually.
 
-  src/screens/TermsScreen.jsx        — /terms
-    • Standard booking-platform terms, structured for a layperson read:
-      Acceptance · What Cergio does · Eligibility · Bookings, payments,
-      cancellations · Connectors and spotlights · User content + recos ·
-      APIC disclaimer · Disclaimers · Limitation of liability · Indemnity ·
-      IP · Termination · Governing law · Changes · Contact.
-    • Amber-warn highlight block at the top makes the no-liability +
-      booking-platform character unmistakable:
-        "Cergio is a booking + introduction platform. We connect Users,
-         Providers, and Connectors and facilitate payments — we do not
-         deliver the underlying services, we are not your employer or
-         theirs, and we accept no liability for the actions or outputs
-         of any party introduced via the platform."
-    • APIC section explicitly frames it as a contractual loyalty
-      bonus, not a security and not a guarantee.
-    • NOT legal advice — file ships as a template Tarik will tune
-      with counsel.
-
-Routes (src/App.jsx)
-  Added /about · /contact · /terms. AboutScreen + ContactScreen +
-  TermsScreen each render the BottomNav so users can hop back to
-  Home / Activity / Profile mid-read.
-
-Entry points
-  • SplashScreen: minimal "About · Contact · Terms" link row at the
-    bottom of the screen, white/40 so it doesn't compete with the hero.
-  • AuthScreen: same row below the "Continue as guest" button so the
-    legals are reachable before sign-up.
-  • HomeScreen: "About · Contact · Terms" added BELOW the existing
-    "Cergio is human-powered AI for shared prosperity" disclaimer,
-    inside the same floating footer block.
-
-Out of scope for this commit (next pass):
-  - contact_messages table migration (form falls through gracefully
-    until it exists).
-  - Hamburger overlay on inner screens (Splash/Auth/Home footers
-    cover the entry-point requirement for now).
-  - APIC dedicated explainer page — linked from About's revenue-stream
-    section once we have the long-form copy.
+Phase 3a Home migration shipped in this same commit (was queued):
+  38 arbitrary `text-[Npx]` swept to scale tokens
+  (text-body-lg ×1 / text-body ×4 / text-body-sm ×7 / text-meta ×8 /
+   text-meta-sm ×17 / text-caps ×1). Spotlight area row
+  mt-1.5 → mt-4 (16px). Search-box focus halo confirmed against spec.
+  DESIGN_AUDIT.md § 5.2 all checkboxes ticked.
 
 Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.
