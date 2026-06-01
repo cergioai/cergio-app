@@ -1,68 +1,39 @@
-design: unify APGI brand term + "barter or pay" framing
+fix(ux): map picker exit controls + remove service-side promo on user Home
 
-Tarik (two messages): "allign" → "free services bartner (add with
-option to pay)".
+Tarik (two messages):
+  1. "draw on may should have save or cancel so user can exit of that
+     screen"
+  2. "remove the 'service side from the user side (they'll know to
+     switch to service side to list a service etc)"
 
-APGI term unification
-  About already shipped on the new term in commit 2e53bd8. This
-  commit aligns the remaining surfaces:
+ServiceAreaMapPicker — explicit Cancel + Save
+  Before: footer had Clear (disabled when no shape) + Save (disabled
+  when no shape with copy "Draw an area first"). The ONLY exit when
+  nothing was drawn was the small ✕ in the header — easy to miss on
+  mobile.
+  After:
+    [ Cancel ]   [ Clear (only when shape) ]   [ Save area ]
+    • Cancel — always-enabled white pill, closes the sheet without
+      saving. The labelled escape hatch Tarik asked for.
+    • Clear — only renders once the user has drawn a shape (no longer
+      a permanently-greyed-out button taking up space).
+    • Save area — primary green pill, enabled the moment a shape
+      exists. Copy switches between "Save area" and "Draw an area
+      first" depending on hasShape.
+  Header ✕ kept for users who reach for the corner; both exits land
+  in the same `onClose` callback so behaviour is consistent.
 
-  TermsScreen § 7
-    Was: "7. Asset Participation Income (APIC)" — APIC is a
-          contractual bonus only...
-    Now: "7. Asset Participation Growth Income (APGI)" — APGI is a
-          contractual bonus only...
-    Same legal substance (not a security, not a guarantee, may be
-    modified, no fixed dollar value, not redeemable except per
-    policy). Acronym + display name aligned only.
+HomeScreen — consumer-side "Become a Connector" promo removed
+  Block that rendered when `intent === 'find'` showed a "Become a
+  Connector — $X cash + free services" CTA above the footer. Tarik
+  wants the consumer Home focused on FINDING services, not on being
+  recruited to the service side. Block removed; a CERGIO-GUARD
+  comment marks the spot so we don't accidentally reintroduce it.
+  The Connector apply flow stays reachable from:
+    • the (i) chip next to "Free for Connectors" in the search box
+    • /about (Mission + Streams + (i) link)
+    • /earnings/how (explainer + apply CTA)
+    • the spotlight-intent equivalent promo (still rendered when
+      intent === 'spotlight')
 
-  RewardFlowAnimation Scene 3
-    STEPS[2].title: "Growth Participation Income." → "Asset
-                    Participation Growth Income."
-    STEPS[2].body: Opens with "Human-powered AI · Shared prosperity
-                    via Asset Participation Growth Income (APGI)."
-                    then the participation-scaled compound sentence.
-    Scene 3 SVG headline block:
-      Was: "Growth Participation Income." + "Human-powered AI ·
-           Shared prosperity."
-      Now: "Asset Participation Growth Income." + "Human-powered AI ·
-           Shared prosperity · APGI."
-    Title font 17 → 16 so the longer phrase fits one line in the
-    400px viewBox.
-
-  qa.mjs #31 stays green untouched — CERGIO-GUARD section comments
-  still mention "Growth Participation" / "GPI" as part of the
-  rename rationale, so the regex still matches.
-
-"Barter or pay" clarification
-  Tarik: "free services bartner (add with option to pay)". Connectors
-  can either barter their reach OR pay cash; the platform routes
-  either flow.
-
-  AboutScreen Stream #2:
-    Was: "2. Free service barters"
-         "Connectors trade their reach (Instagram, TikTok) for free
-          services from providers. Service for spotlight — no cash,
-          real value."
-    Now: "2. Free service barters — or pay"
-         "Connectors trade their reach (Instagram, TikTok) for free
-          services from providers — or pay cash if they prefer.
-          Spotlight, service, money, or any mix — match the deal to
-          the moment."
-
-  RewardFlowAnimation Scene 2 STEPS body:
-    Was: "...post one IG / TikTok spotlight back. 10+ services a
-          month, thousands in value, all free — paid in audience,
-          not cash."
-    Now: "...post one IG / TikTok spotlight back. Prefer cash? Pay
-          the spotlight fee instead — same flow, your pick. 10+
-          services a month, thousands in value, all free or mixed."
-
-  Visual Scene 2 stays barter-focused (Provider → free service →
-  Connector → free spotlight → audience + fanning ripple). The pay
-  branch is mentioned in the supporting body so the screen doesn't
-  get visually overloaded.
-
-Verified: qa.mjs 41/41 · JSX syntax check on every touched file:
-green. All three brand-surface mentions (About + Terms + Earnings
-Animation) now use "Asset Participation Growth Income" / "APGI".
+Verified: qa.mjs 41/41 · JSX syntax check on both touched files: green.

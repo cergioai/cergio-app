@@ -350,27 +350,41 @@ export function ServiceAreaMapPicker({
           )}
         </div>
 
-        {/* Footer — Clear + Save */}
+        {/* Footer — Cancel (always works) + Clear (only when shape) +
+            Save (only when shape).
+            CERGIO-GUARD (2026-05-31): Tarik: "draw on map should have
+            save or cancel so user can exit of that screen". Before
+            this fix, the only exit when nothing was drawn was the
+            small ✕ in the header. Now there is a clearly-labelled
+            Cancel button in the same footer band as Save — so the
+            user always has a labelled escape hatch. */}
         <div className="px-5 pt-3 pb-5 border-t border-bdr bg-cream flex items-center gap-3">
           <button
-            onClick={clearShape}
-            disabled={!hasShape}
-            className={`px-4 py-3 rounded-pill text-[13px] font-extrabold border
-                        ${hasShape
-                          ? 'bg-white text-b2 border-bdr hover:border-warn/50'
-                          : 'bg-bg5 text-b3 border-bdr opacity-60'}`}
+            onClick={onClose}
+            aria-label="Cancel and close map"
+            className="px-4 py-3 rounded-pill text-[13px] font-extrabold border bg-white text-b2 border-bdr
+                       hover:border-b3 transition-colors"
           >
-            Clear
+            Cancel
           </button>
+          {hasShape && (
+            <button
+              onClick={clearShape}
+              className="px-4 py-3 rounded-pill text-[13px] font-extrabold border bg-white text-b2 border-bdr
+                         hover:border-warn/50 transition-colors"
+            >
+              Clear
+            </button>
+          )}
           <button
             onClick={onClose}
             disabled={!hasShape}
-            className={`flex-1 py-3 rounded-pill text-[14px] font-extrabold
+            className={`flex-1 py-3 rounded-pill text-[14px] font-extrabold transition-colors
                         ${hasShape
                           ? 'bg-g text-white hover:opacity-90'
-                          : 'bg-bg5 text-b3 opacity-60'}`}
+                          : 'bg-bg5 text-b3 opacity-60 cursor-not-allowed'}`}
           >
-            {hasShape ? 'Use this area' : 'Draw an area first'}
+            {hasShape ? 'Save area' : 'Draw an area first'}
           </button>
         </div>
       </div>

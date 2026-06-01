@@ -1415,33 +1415,16 @@ export function HomeScreen() {
           Was bg-gl + p-4 + 10x10 icon — felt sales-y. Now bg-cr2 +
           py-3 + 8x8 icon + text-body-sm headline. Same routing, half
           the visual weight. */}
-      {intent === 'find' && !submitted && (
-        <div className="px-5 mt-1 mb-6">
-          <button
-            onClick={() => navigate('/rainmaker/apply')}
-            className="w-full bg-cr2 text-b2 border border-bdr rounded-[16px] px-4 py-3 flex items-center gap-3 text-left
-                       hover:bg-bg5/30 active:scale-[.99] transition-all"
-          >
-            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center flex-shrink-0 border border-bdr">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
-                   strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M22 11h-6M19 8v6"/>
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-body-sm font-bold text-black leading-tight">
-                Become a Connector — ${REWARDS.perFriendConnector} cash + free services
-              </p>
-              <p className="text-meta-sm text-b3 mt-0.5 leading-snug font-normal">
-                Or stay a user → ${REWARDS.perFriendUser} credit per friend who joins + books.
-              </p>
-            </div>
-            <span className="text-b3 text-base flex-shrink-0">›</span>
-          </button>
-        </div>
-      )}
+      {/* CERGIO-GUARD (2026-05-31): consumer-side "Become a Connector"
+          promo REMOVED. Tarik: "remove the service side from the user
+          side (they'll know to switch to service side to list a
+          service etc)". The user can still reach the Connector
+          apply flow from the small (i) chip next to the
+          "Free for Connectors" toggle in the search box, plus the
+          /about and /earnings/how surfaces — but the consumer Home
+          itself stays focused on finding services.
+          The spotlight-intent promo below STAYS because that surface
+          is the provider/Connector side of the same toggle. */}
 
       {/* Spotlight-side house ad — provider parallel to the find-side
           card. Same soft-green palette. Copy leads with the provider
