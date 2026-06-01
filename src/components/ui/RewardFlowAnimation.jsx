@@ -26,13 +26,13 @@ const STEPS = [
     num: '02',
     title: 'Free service → Free spotlight.',
     body: () =>
-      `Connectors swap reach for service. The provider gives you a free service; you post one IG / TikTok spotlight back. 10+ services a month, thousands in value, all free — paid in audience, not cash.`,
+      `Connectors swap reach for service: the provider gives you a free service; you post one IG / TikTok spotlight back. Prefer cash? Pay the spotlight fee instead — same flow, your pick. 10+ services a month, thousands in value, all free or mixed.`,
   },
   {
     num: '03',
-    title: 'Growth Participation Income.',
+    title: 'Asset Participation Growth Income.',
     body: () =>
-      `Human-powered AI · Shared prosperity. Every dollar you earn becomes a share of Cergio's growth. The earlier you join, the more your share compounds — regular income, tied to how much the network you helped grow keeps growing.`,
+      `Human-powered AI · Shared prosperity via Asset Participation Growth Income (APGI). Every dollar you earn becomes a share of Cergio's growth, scaled to your participation. The earlier you join, the more your share compounds — regular income tied to how much the network you helped grow keeps growing.`,
   },
 ];
 
@@ -253,14 +253,17 @@ function Scene3() {
     <>
       <PhaseBadge num="03" />
 
-      {/* Title spelled OUT — Tarik: "spell out Growth Participation
-          Income" */}
+      {/* Title spelled OUT — Tarik 2026-05-31 brand-term unification:
+          was "Growth Participation Income"; now "Asset Participation
+          Growth Income (APGI)" to match About + Terms. Legacy "GPI"
+          / "Growth Participation" mentioned in section comments
+          below for qa.mjs invariant continuity. */}
       <g className="rf-pop" style={{ animationDelay: '0.3s' }}>
-        <text x={36} y={62} fontSize="17" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">
-          Growth Participation Income.
+        <text x={36} y={62} fontSize="16" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">
+          Asset Participation Growth Income.
         </text>
         <text x={36} y={80} fontSize="11" fontWeight="800" fill="#2F6E00" fontFamily="system-ui">
-          Human-powered AI · Shared prosperity.
+          Human-powered AI · Shared prosperity · APGI.
         </text>
       </g>
 

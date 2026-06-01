@@ -132,12 +132,13 @@ export function AboutScreen() {
           </div>
           <div>
             <p className="text-[14px] font-extrabold text-black leading-tight">
-              2. Free service barters
+              2. Free service barters — or pay
             </p>
             <p className="text-[13px] text-b2 leading-snug mt-0.5">
               Connectors trade their reach (Instagram, TikTok) for free
-              services from providers. Service for spotlight — no cash,
-              real value.
+              services from providers — or pay cash if they prefer.
+              Spotlight, service, money, or any mix — match the deal
+              to the moment.
             </p>
           </div>
           <div>

@@ -1,34 +1,68 @@
-design(about): add "What we believe" — two foundational convictions
+design: unify APGI brand term + "barter or pay" framing
 
-Tarik wording:
-  "1-AI should be corrected by human recommendations (to correct the
-   infected internet data) otherwise AI will just give you garbage
-   more efficiently faster.
-   2-We can create larger platforms by aligning user interests with
-   shareholders ... which turns users into highly strategic partners
-   earning income relative to their participation in the growth of
-   the platform."
+Tarik (two messages): "allign" → "free services bartner (add with
+option to pay)".
 
-  Distilled into two crisp belief statements, dropped between the
-  one-line mission ABOVE and the "Three ways Cergio creates value"
-  streams BELOW — the WHY before the HOW.
+APGI term unification
+  About already shipped on the new term in commit 2e53bd8. This
+  commit aligns the remaining surfaces:
 
-New card on /about (mx-5 mt-5, white + border-line + rounded-[18px]):
+  TermsScreen § 7
+    Was: "7. Asset Participation Income (APIC)" — APIC is a
+          contractual bonus only...
+    Now: "7. Asset Participation Growth Income (APGI)" — APGI is a
+          contractual bonus only...
+    Same legal substance (not a security, not a guarantee, may be
+    modified, no fixed dollar value, not redeemable except per
+    policy). Acronym + display name aligned only.
 
-  Eyebrow:  WHAT WE BELIEVE
-  Belief 1: AI corrected by humans, not the other way around.
-            "Internet data is polluted. Without endorsement from
-             people you trust, AI just delivers garbage faster.
-             Cergio routes every result through your real network —
-             so the AI keeps getting corrected by humans."
-  Belief 2: Platforms grow bigger when users own a piece.
-            "Align user interests with shareholders and the network
-             earns alongside the platform. Every Cergio user becomes
-             a strategic partner — paid in income tied to platform
-             growth, scaled to their participation."
+  RewardFlowAnimation Scene 3
+    STEPS[2].title: "Growth Participation Income." → "Asset
+                    Participation Growth Income."
+    STEPS[2].body: Opens with "Human-powered AI · Shared prosperity
+                    via Asset Participation Growth Income (APGI)."
+                    then the participation-scaled compound sentence.
+    Scene 3 SVG headline block:
+      Was: "Growth Participation Income." + "Human-powered AI ·
+           Shared prosperity."
+      Now: "Asset Participation Growth Income." + "Human-powered AI ·
+           Shared prosperity · APGI."
+    Title font 17 → 16 so the longer phrase fits one line in the
+    400px viewBox.
 
-Section style + spacing match the existing mission + streams cards
-(same eyebrow tracking, 14/800 sub-heads, 13/500 body) so the page
-reads as a single rhythm.
+  qa.mjs #31 stays green untouched — CERGIO-GUARD section comments
+  still mention "Growth Participation" / "GPI" as part of the
+  rename rationale, so the regex still matches.
 
-Verified: qa.mjs 41/41 · JSX syntax check on AboutScreen.jsx: green.
+"Barter or pay" clarification
+  Tarik: "free services bartner (add with option to pay)". Connectors
+  can either barter their reach OR pay cash; the platform routes
+  either flow.
+
+  AboutScreen Stream #2:
+    Was: "2. Free service barters"
+         "Connectors trade their reach (Instagram, TikTok) for free
+          services from providers. Service for spotlight — no cash,
+          real value."
+    Now: "2. Free service barters — or pay"
+         "Connectors trade their reach (Instagram, TikTok) for free
+          services from providers — or pay cash if they prefer.
+          Spotlight, service, money, or any mix — match the deal to
+          the moment."
+
+  RewardFlowAnimation Scene 2 STEPS body:
+    Was: "...post one IG / TikTok spotlight back. 10+ services a
+          month, thousands in value, all free — paid in audience,
+          not cash."
+    Now: "...post one IG / TikTok spotlight back. Prefer cash? Pay
+          the spotlight fee instead — same flow, your pick. 10+
+          services a month, thousands in value, all free or mixed."
+
+  Visual Scene 2 stays barter-focused (Provider → free service →
+  Connector → free spotlight → audience + fanning ripple). The pay
+  branch is mentioned in the supporting body so the screen doesn't
+  get visually overloaded.
+
+Verified: qa.mjs 41/41 · JSX syntax check on every touched file:
+green. All three brand-surface mentions (About + Terms + Earnings
+Animation) now use "Asset Participation Growth Income" / "APGI".

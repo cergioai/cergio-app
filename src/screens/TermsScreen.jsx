@@ -121,14 +121,15 @@ export function TermsScreen() {
           recommendations you make and the content you post.
         </Section>
 
-        <Section title="7. Asset Participation Income (APIC)">
-          Cergio may credit some Users with Asset Participation Income
-          ("APIC") as a loyalty bonus tied to platform usage and
-          network growth. APIC is a contractual bonus only — not a
-          security, not a guarantee, not a promise of future payout —
-          and may be modified, paused, or discontinued at any time.
-          APIC has no fixed dollar value and is not redeemable for
-          cash except as described in published payout policies.
+        <Section title="7. Asset Participation Growth Income (APGI)">
+          Cergio may credit some Users with Asset Participation Growth
+          Income ("APGI") as a loyalty bonus tied to platform usage
+          and network growth. APGI is a contractual bonus only — not
+          a security, not a guarantee, not a promise of future
+          payout — and may be modified, paused, or discontinued at
+          any time. APGI has no fixed dollar value and is not
+          redeemable for cash except as described in published payout
+          policies.
         </Section>
 
         <Section title="8. Disclaimers">
