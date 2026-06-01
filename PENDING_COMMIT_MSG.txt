@@ -1,32 +1,34 @@
-design(about): tweak mission to APGI framing — succinct + elegant
+design(about): add "What we believe" — two foundational convictions
 
 Tarik wording:
-  "Upgrade Ai with Human Friend to Friend Endorsements and Guide it
-   to Enable Shared Prosperity via Asset Participation Growth Income
-   to provide users with rewards tied to platform growth relative to
-   their particiaption.. Turning users into stratregic partners".
+  "1-AI should be corrected by human recommendations (to correct the
+   infected internet data) otherwise AI will just give you garbage
+   more efficiently faster.
+   2-We can create larger platforms by aligning user interests with
+   shareholders ... which turns users into highly strategic partners
+   earning income relative to their participation in the growth of
+   the platform."
 
-  Compressed to a two-line mission headline + one-paragraph proof:
+  Distilled into two crisp belief statements, dropped between the
+  one-line mission ABOVE and the "Three ways Cergio creates value"
+  streams BELOW — the WHY before the HOW.
 
-    Eyebrow:  OUR MISSION
-    Headline: Upgrade AI with human endorsements.
-              Share its growth with the network that built it.
-    Body:     Cergio guides AI through friend-to-friend trust, then
-              returns the upside as Asset Participation Growth Income —
-              every user's share of Cergio's growth, scaled to their
-              participation. Users become strategic partners, not
-              customers.
+New card on /about (mx-5 mt-5, white + border-line + rounded-[18px]):
 
-Stream #3 (Three ways Cergio creates value) renamed to match:
-  "3. Asset Participation Growth Income"
-  Body tightened: dropped one redundant "Regular income…" sentence
-  start; phrased the timing argument as scale rather than the
-  prior orchard repeat.
+  Eyebrow:  WHAT WE BELIEVE
+  Belief 1: AI corrected by humans, not the other way around.
+            "Internet data is polluted. Without endorsement from
+             people you trust, AI just delivers garbage faster.
+             Cergio routes every result through your real network —
+             so the AI keeps getting corrected by humans."
+  Belief 2: Platforms grow bigger when users own a piece.
+            "Align user interests with shareholders and the network
+             earns alongside the platform. Every Cergio user becomes
+             a strategic partner — paid in income tied to platform
+             growth, scaled to their participation."
 
-Out of scope for this commit (next consistency pass):
-  - TermsScreen § 7 still uses "Asset Participation Income (APIC)" —
-    will rename to APGI in a single sweep when we touch Terms next.
-  - RewardFlowAnimation Scene 3 still uses "Growth Participation
-    Income (GPI)" in its caption + on-screen text. Same sweep.
+Section style + spacing match the existing mission + streams cards
+(same eyebrow tracking, 14/800 sub-heads, 13/500 body) so the page
+reads as a single rhythm.
 
 Verified: qa.mjs 41/41 · JSX syntax check on AboutScreen.jsx: green.

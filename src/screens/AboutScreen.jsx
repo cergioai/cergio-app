@@ -74,6 +74,47 @@ export function AboutScreen() {
         </p>
       </div>
 
+      {/* What we believe — Tarik 2026-05-31:
+            "1-AI should be corrected by human recommendations (to
+             correct the infected internet data) otherwise AI will
+             just give you garbage more efficiently faster.
+             2-We can create larger platforms by aligning user
+             interests with shareholders... which turns users into
+             highly strategic partners earning income relative to
+             their participation in the growth of the platform."
+          The two convictions underneath everything. Sits between
+          the one-line mission above and the "three revenue streams"
+          below — the WHY before the HOW. */}
+      <div className="mx-5 mt-5 bg-white border border-line rounded-[18px] p-5">
+        <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
+          What we believe
+        </p>
+        <div className="mt-3 flex flex-col gap-4">
+          <div>
+            <p className="text-[14px] font-extrabold text-black leading-tight">
+              1. AI corrected by humans, not the other way around.
+            </p>
+            <p className="text-[13px] text-b2 leading-snug mt-1">
+              Internet data is polluted. Without endorsement from
+              people you trust, AI just delivers garbage faster.
+              Cergio routes every result through your real network —
+              so the AI keeps getting corrected by humans.
+            </p>
+          </div>
+          <div>
+            <p className="text-[14px] font-extrabold text-black leading-tight">
+              2. Platforms grow bigger when users own a piece.
+            </p>
+            <p className="text-[13px] text-b2 leading-snug mt-1">
+              Align user interests with shareholders and the network
+              earns alongside the platform. Every Cergio user
+              becomes a strategic partner — paid in income tied to
+              platform growth, scaled to their participation.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Three revenue streams — short, scannable */}
       <div className="mx-5 mt-5 bg-white border border-line rounded-[18px] p-5">
         <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
