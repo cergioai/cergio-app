@@ -127,6 +127,9 @@ export async function recordInviteFromActiveRef(inviteeUserId) {
  *  CERGIO-GUARD: a Postgres trigger would be more reliable for this,
  *  but writing the migration is gated on the user applying it. The
  *  client-side path is the safety net until the trigger ships.
+ *
+ *  Side-effect: also fires `creditChainOnFirstBooking` for the 2nd-hop
+ *  inviter (friend-of-friend bonus). See that function below.
  */
 export async function creditInviterOnFirstBooking(consumerId, bookingId) {
   if (!supabaseReady) return { error: null };
@@ -159,11 +162,107 @@ export async function creditInviterOnFirstBooking(consumerId, bookingId) {
       source_id:    invite.id,
       amount_cents: REWARD_CENTS,
       status:       'pending',
-      meta:         { booking_id: bookingId || null, invitee_id: consumerId },
+      meta:         { booking_id: bookingId || null, invitee_id: consumerId, tier: 'direct' },
     });
   if (earnErr) {
     // eslint-disable-next-line no-console
     console.warn('[referral] could not write earnings:', earnErr.message);
+  }
+
+  // 2nd-hop: walk the chain and credit the grandparent inviter with the
+  // friend-of-friend bonus. Fire-and-forget — failure here doesn't
+  // affect the direct earnings write above.
+  creditChainOnFirstBooking({
+    invite,
+    consumerId,
+    bookingId,
+  }).catch((e) => {
+    // eslint-disable-next-line no-console
+    console.warn('[referral] chain credit failed:', e?.message || e);
+  });
+
+  return { error: earnErr };
+}
+
+/** 2-degree (friend-of-friend) credit. CERGIO-GUARD (2026-06-01): the
+ *  REWARDS contract since 2026-05-28 promises a 5% chain bonus
+ *  (`friendOfFriendBonus` = $12.50) to the inviter's inviter when a
+ *  3rd-hop user makes their first booking — but no code path actually
+ *  wrote those earnings rows. EarningsScreen.jsx had the "Chain +5%"
+ *  tier badge wired but `meta.tier='fof'` rows were never produced.
+ *  This function closes that gap.
+ *
+ *  Contract:
+ *    • Cap at depth 2: the great-grandparent (3rd hop) does NOT earn.
+ *    • Bonus is a FLAT $12.50, not a % of the booking — keeps the math
+ *      consistent with rewards.js `friendOfFriendBonus`.
+ *    • Best-effort: a missing chain (invitee at depth 1 has no inviter)
+ *      is a silent no-op, not an error.
+ *    • Idempotent: keyed off the booking_id + earner so re-firing
+ *      doesn't double-credit. The audit verifies this.
+ *
+ *  Args:
+ *    invite       — the direct invite row (already loaded by caller)
+ *    consumerId   — the invitee (3rd-hop user) — only used for telemetry
+ *    bookingId    — the booking that triggered the credit
+ */
+export async function creditChainOnFirstBooking({ invite, consumerId, bookingId }) {
+  if (!supabaseReady) return { error: null };
+  if (!invite?.inviter_id) return { error: null };
+
+  // Look up the GRANDPARENT invite — the row where the direct inviter
+  // is the invitee. If none exists, the chain stops at depth 1 and
+  // there's no fof bonus to write.
+  const { data: gpInvite, error: gpErr } = await supabase
+    .from('invites')
+    .select('id, inviter_id, joined_at')
+    .eq('invitee_id', invite.inviter_id)
+    .limit(1)
+    .maybeSingle();
+  if (gpErr || !gpInvite?.inviter_id) return { error: gpErr || null };
+  if (gpInvite.inviter_id === invite.inviter_id) {
+    // Self-loop guard. Should never happen if invites are well-formed.
+    return { error: null };
+  }
+
+  // Idempotency: check whether we already credited this earner for
+  // this booking with the fof tier. The earnings table doesn't have a
+  // hard unique constraint on (profile_id, booking_id, tier), so the
+  // client enforces it.
+  const { data: dupes } = await supabase
+    .from('earnings')
+    .select('id')
+    .eq('profile_id', gpInvite.inviter_id)
+    .eq('kind', 'invite')
+    .contains('meta', { booking_id: bookingId, tier: 'fof' })
+    .limit(1);
+  if (Array.isArray(dupes) && dupes.length > 0) {
+    // Already credited — silent no-op.
+    return { error: null };
+  }
+
+  const FOF_BONUS_CENTS = 1250; // $12.50 — must match REWARDS.friendOfFriendBonus
+
+  const { error: earnErr } = await supabase
+    .from('earnings')
+    .insert({
+      profile_id:   gpInvite.inviter_id,
+      kind:         'invite',
+      source_id:    gpInvite.id,
+      amount_cents: FOF_BONUS_CENTS,
+      status:       'pending',
+      meta:         {
+        booking_id:           bookingId || null,
+        invitee_id:           consumerId,
+        // The DIRECT inviter (depth-1) of this booking's consumer.
+        // Useful for the Earnings UI to render "via {direct_inviter}".
+        via_inviter_id:       invite.inviter_id,
+        tier:                 'fof',
+      },
+    });
+  if (earnErr) {
+    // eslint-disable-next-line no-console
+    console.warn('[referral] could not write fof earnings:', earnErr.message);
   }
   return { error: earnErr };
 }
