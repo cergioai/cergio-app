@@ -62,6 +62,14 @@ function StatusPill({ status }) {
 function BookingRow({ booking, onClick }) {
   const title  = booking.service?.title || 'Service request';
   const when   = booking.scheduled_at ? fmtDate(booking.scheduled_at) : timeAgo(booking.created_at);
+  // Phase 6 (2026-06-01): "vice versa" — the consumer/Connector side of
+  // the booking now reads the same exchange context the provider sees
+  // on RequestDetailScreen. The booking row leads with the purpose
+  // ("Free spotlight ask" / "Booking request"), so when this user
+  // (the consumer in this row) opens their own activity, they see
+  // what they asked for, not just a calendar event title.
+  const isFree  = !!booking.is_free_for_rainmaker;
+  const purpose = isFree ? 'Free spotlight ask' : 'Booking request';
   return (
     <button
       onClick={onClick}
@@ -74,6 +82,9 @@ function BookingRow({ booking, onClick }) {
         </svg>
       </div>
       <div className="flex-1 min-w-0">
+        <p className={`text-[11px] font-extrabold leading-none mb-0.5 ${isFree ? 'text-gd' : 'text-b3'}`}>
+          {purpose.toUpperCase()}
+        </p>
         <p className="text-[13px] font-extrabold text-black leading-tight truncate">{title}</p>
         <p className="text-[11px] text-b3 mt-0.5 leading-snug">
           {when} · <StatusPill status={booking.status || 'pending'} />

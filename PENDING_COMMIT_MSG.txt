@@ -1,21 +1,79 @@
-fix(screenshot-qa): resolve playwright via createRequire, not NODE_PATH
+feat(inbox): make booking purpose explicit — "free spotlight ask" vs "booking request"
 
-First run of Screenshot QA.command hit ERR_MODULE_NOT_FOUND on the
-`import { chromium } from 'playwright'` line. Root cause: Node ESM
-resolution does not honor NODE_PATH (which CJS does honor) — the
-.mjs script couldn't see the playwright install at
-~/.cergio-playwright/node_modules even though the launcher set
-NODE_PATH to that directory.
+Per Tarik (2026-06-01 screenshot review of /request/795c...): the
+RequestDetailScreen confirmation copy reads "Accept to confirm this
+booking · It will appear on your calendar," which is fine for a
+paid booking but misleading when the row is actually a Connector
+asking for a free spotlight slot in exchange for promoting the
+service on their socials. The user had to mentally translate the
+"Free for Connectors" pill into "this is a barter, not a sale."
+Same opacity issue on the inbox list — the row preview just
+echoes the service title with no exchange context.
 
-Fix: drop NODE_PATH; export CERGIO_PW_DIR pointing at the absolute
-playwright dir; in the script, use createRequire(import.meta.url)
-to require playwright as a CJS module from that absolute path.
-Playwright's CJS entry exports `{ chromium, firefox, webkit }`, so
-the destructured shape works under both module systems.
+Now both surfaces explain WHAT the booking represents.
 
-Verified end-to-end: relaunched Screenshot QA.command after the
-edit; all 10 canonical screens captured, gallery opened in
-default browser at 5/31/2026 11:47:31 PM.
+### RequestDetailScreen (/request/:id) — provider side
 
-No code path inside cergio-app changed — this is a tooling fix
-for the design-qa harness only. qa.mjs untouched, still 41/41.
+NEW purpose banner above the service info — two variants, driven
+by `data.isFree` (= `b.is_free_for_rainmaker`):
+
+  Free spotlight exchange  [bg-gl/60 + g/30 border]
+    {Consumer} is asking for a free slot of {service}.
+    In exchange, they'll spotlight it to their social
+    audience — no cash changes hands.
+
+  Paid booking request     [bg-cr2 + bdr border]
+    {Consumer} wants to book {service}.
+    You'll be paid out after the job (via Stripe).
+
+Bottom CTA copy now follows the same fork:
+  Free: "Accept to confirm this free spotlight slot ·
+         It will appear on your calendar — they post the
+         spotlight in return."
+  Paid: "Accept to confirm this booking · It will appear on
+         your calendar."
+
+The existing "Free for Connectors" inline pill stays — it now
+reads as a secondary chip rather than the only signal.
+
+### JobsInboxScreen (/inbox) — provider side
+
+`bookingToRequest` now derives a purpose-aware preview line:
+  free → "Free spotlight ask · {service}"
+  paid → "Booking request · {service}"
+
+Row layout:
+  • Purpose line (text-gd font-extrabold when free, text-black
+    when paid) — leads the row
+  • Consumer's free-text note (if any) drops below in italics
+    "{note}" — was previously stuffed into preview, which
+    competed with the purpose
+
+So the inbox now scans top-to-bottom as: who · what kind of
+ask · what they said · when · status.
+
+### ActivityScreen (/activity) — consumer / Connector side ("vice versa")
+
+`BookingRow` mirrors the purpose label so when the SAME user opens
+their own Activity tab to see what they've asked for, the row reads:
+
+  [eyebrow caps] FREE SPOTLIGHT ASK   (gd) — or — BOOKING REQUEST (b3)
+  {service title}
+  {when} · {status pill}
+
+Eyebrow is a tiny `text-[11px] font-extrabold uppercase` line above
+the service title; visual weight matches the purpose pill on the
+provider side so both ends of the exchange use the same vocabulary.
+
+### Wiring stays clean
+
+- Bookings table `is_free_for_rainmaker` is the single source of
+  truth; no new fields added.
+- No API changes; both screens already select the column.
+- Status, Stripe-payouts banner, message bubble, etc. unchanged.
+
+### Verified
+
+qa.mjs — 41/41 PASS
+acorn-jsx parse: RequestDetailScreen / JobsInboxScreen /
+ActivityScreen all GREEN.

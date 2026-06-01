@@ -178,6 +178,44 @@ export function RequestDetailScreen() {
         )}
       </div>
 
+      {/* Purpose banner — Phase 6 (2026-06-01): tell the provider what
+          THIS booking actually represents, so the Accept CTA reads as
+          a meaningful exchange instead of a generic calendar event.
+          Two cases:
+            • is_free_for_rainmaker = true  → Connector is asking for a
+              free slot in exchange for spotlighting the service on
+              their socials (free service ↔ free social reach).
+            • is_free_for_rainmaker = false → paid booking; just a
+              consumer asking to book the listed service.
+          Banner sits above the service info so the user reads
+          "what is this?" before "when / where". */}
+      <div className="px-5 pb-3">
+        {data.isFree ? (
+          <div className="bg-gl/60 border border-g/30 rounded-[14px] p-3.5">
+            <p className="text-[13px] font-extrabold text-gd leading-snug">
+              Free spotlight exchange
+            </p>
+            <p className="text-[12px] text-b2 mt-1 leading-snug">
+              <span className="font-extrabold text-black">{data.consumerName}</span> is asking for
+              a free slot of <span className="font-extrabold text-black">{data.serviceType || 'your service'}</span>.
+              In exchange, they'll spotlight it to their social audience —
+              no cash changes hands.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-cr2 border border-bdr rounded-[14px] p-3.5">
+            <p className="text-[13px] font-extrabold text-black leading-snug">
+              Paid booking request
+            </p>
+            <p className="text-[12px] text-b2 mt-1 leading-snug">
+              <span className="font-extrabold text-black">{data.consumerName}</span> wants to book
+              <span className="font-extrabold text-black"> {data.serviceType || 'your service'}</span>.
+              You'll be paid out after the job (via Stripe).
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* service info */}
       <div className="px-5 pb-4">
         <h2 className="text-[22px] font-extrabold text-black leading-tight mb-2">
@@ -225,8 +263,16 @@ export function RequestDetailScreen() {
             </div>
           )}
           <div className="px-5 pt-4 pb-2 mt-auto text-center">
-            <p className="text-[15px] font-extrabold text-black">Accept to confirm this booking</p>
-            <p className="text-[13px] text-b3 mb-4">It will appear on your calendar.</p>
+            <p className="text-[15px] font-extrabold text-black">
+              {data.isFree
+                ? `Accept to confirm this free spotlight slot`
+                : `Accept to confirm this booking`}
+            </p>
+            <p className="text-[13px] text-b3 mb-4">
+              {data.isFree
+                ? 'It will appear on your calendar — they post the spotlight in return.'
+                : 'It will appear on your calendar.'}
+            </p>
           </div>
           <div className="px-5 pb-3 flex flex-col gap-2">
             <button

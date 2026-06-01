@@ -9,10 +9,23 @@ function bookingToRequest(b) {
   const appt = dt
     ? `${dt.toLocaleDateString('en-US', { weekday: 'short' })}, ${date} — ${dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
     : '—';
+  // Phase 6 (2026-06-01): purpose-aware preview line. Was "free-text
+  // notes || service title || 'New booking request'" — which didn't
+  // explain WHAT the consumer was asking for. Now leads with the
+  // exchange type so the inbox reads like a meaningful queue:
+  //   free spotlight ask → "Free spotlight ask · {service}"
+  //   paid booking       → "Booking request · {service}"
+  const svcTitle = b.service?.title || 'your service';
+  const purpose = b.is_free_for_rainmaker
+    ? `Free spotlight ask · ${svcTitle}`
+    : `Booking request · ${svcTitle}`;
   return {
     id:                  b.id,
     sender:              b.consumer?.display_name || 'Cergio user',
-    preview:             b.notes || b.service?.title || 'New booking request',
+    // Free-form note (if the consumer left one) becomes the secondary
+    // preview; the purpose line above is what reads as the "what".
+    preview:             purpose,
+    note:                b.notes || '',
     date,
     appointmentTime:     appt,
     isFreeForRainmakers: !!b.is_free_for_rainmaker,
@@ -206,9 +219,15 @@ export function JobsInboxScreen() {
                 <span className="text-[12px] text-b3 font-medium flex-shrink-0 ml-2">{req.date}</span>
               </div>
 
-              <p className="text-[13px] text-b3 font-medium leading-snug mb-2 truncate">
+              <p className={`text-[13px] font-extrabold leading-snug mb-1 truncate
+                              ${req.isFreeForRainmakers ? 'text-gd' : 'text-black'}`}>
                 {req.preview}
               </p>
+              {req.note && (
+                <p className="text-[12px] text-b3 font-medium leading-snug mb-2 line-clamp-2">
+                  "{req.note}"
+                </p>
+              )}
 
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[12px] text-b3 font-medium">{req.appointmentTime}</span>
