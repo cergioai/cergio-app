@@ -19,9 +19,24 @@
 // Routes that require real data are seeded via cookies / localStorage
 // before the page loads.
 
-import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+
+// CERGIO-GUARD (2026-05-31): Node ESM doesn't honor NODE_PATH for
+// module resolution, so `import 'playwright'` only works if playwright
+// sits in this script's nearest node_modules — which it does NOT, per
+// the "don't npm install in sandbox" rule. Workaround: the launcher
+// (Screenshot QA.command) symlinks the cached install at
+// ~/.cergio-playwright/node_modules/playwright into the script's CJS
+// resolution path. We then use createRequire to import it as a CJS
+// module — playwright ships CJS at index.js and supports the
+// destructured `{ chromium }` shape under both module systems.
+const PW_DIR = process.env.CERGIO_PW_DIR
+  || path.join(process.env.HOME || '', '.cergio-playwright', 'node_modules', 'playwright');
+const require = createRequire(import.meta.url);
+const playwright = require(PW_DIR);
+const { chromium } = playwright;
 
 const argv = Object.fromEntries(
   process.argv.slice(2).reduce((acc, v, i, a) => {

@@ -1,154 +1,21 @@
-design-audit Phase 3b + 3c + 3d + 4 + 5 — closes the audit roadmap
+fix(screenshot-qa): resolve playwright via createRequire, not NODE_PATH
 
-Bundled push covering five back-to-back design-audit migrations landed
-2026-05-31. Each phase ticked its § in DESIGN_AUDIT.md.
+First run of Screenshot QA.command hit ERR_MODULE_NOT_FOUND on the
+`import { chromium } from 'playwright'` line. Root cause: Node ESM
+resolution does not honor NODE_PATH (which CJS does honor) — the
+.mjs script couldn't see the playwright install at
+~/.cergio-playwright/node_modules even though the launcher set
+NODE_PATH to that directory.
 
-═══════════════ Phase 3b — PDP (§ 5.4) ═══════════════
+Fix: drop NODE_PATH; export CERGIO_PW_DIR pointing at the absolute
+playwright dir; in the script, use createRequire(import.meta.url)
+to require playwright as a CJS module from that absolute path.
+Playwright's CJS entry exports `{ chromium, firefox, webkit }`, so
+the destructured shape works under both module systems.
 
-Type scale sweep — ServiceDetailScreen.jsx
-  33 arbitrary `text-[Npx]` → scale tokens (display-2 ×2,
-  heading-1 ×2, heading-2 ×4, body-lg ×2, body ×2, body-sm ×5,
-  meta ×8, meta-sm ×8). One intentional `text-[9px]` chip glyph
-  retained.
+Verified end-to-end: relaunched Screenshot QA.command after the
+edit; all 10 canonical screens captured, gallery opened in
+default browser at 5/31/2026 11:47:31 PM.
 
-Reviews section LANDED — Jennifer Leighton mockup parity
-  useEffect hydrates `reviews` via bookings → reviews + rater_id →
-  profiles lookup. ReviewCard primitive: avatar Link + name Link +
-  Connector chip + 140-char show-more toggle + time-ago. Section
-  header "★ N go-to reviews"; hidden when zero reviews.
-
-"Leave a go-to review" outline pill — secondary CTA
-  Sits between reviews list and Recommender blurbs. Tap → /inbox
-  (review creation gated on a completed booking).
-
-═══════════════ Phase 3c — PublicProfile (§ 5.5) ═══════════════
-
-Type scale sweep — PublicProfileScreen.jsx
-  32 arbitrary `text-[Npx]` → scale tokens (display-2 ×1,
-  heading-1 ×5, body-lg ×8, body ×5, body-sm ×7, meta ×8,
-  meta-sm ×3). Zero arbitrary px remain.
-
-"See all (N) →" pagination affordances — three sections
-  {Name}'s Services        top 4 → toggle expand
-  People who love {Name}   top 5 → toggle expand
-  {Name}'s Go-Tos          top 6 → toggle expand
-  In-place state — no sub-route. Inverts to "Show less".
-
-Section conditionals verified
-  Services / People-who-love / Go-Tos each hidden when empty.
-  Empty-state card only when ALL three are empty.
-
-Deferred from § 5.5: "Add bio" + "Connect Instagram" CTAs (own-
-profile view; Phase 4 refactor to unify /profile + /u/:id).
-
-═══════════════ Phase 3d — Results/SRP (§ 5.3) ═══════════════
-
-Category nav rail LANDED
-  Housekeeper · Pet Sitter · Handyman · Trainer · Driver, top of
-  page, horizontal scroll. Active type highlighted `bg-g text-white`.
-  Tap → navigate('/', { state: { seedQuery } }) so the next search
-  runs that type.
-
-Filter pill row LANDED — All services · Free · Discounted
-  All / Free pills mirror `freeServices` outlet-context state — the
-  existing search effect re-runs. "Discounted" is muted + non-tappable
-  (no discount column yet); NOT labeled "coming soon" to avoid
-  tripping qa#7.
-
-ProviderCard reco line refit — mint pill, not italic text
-  Converted from `text-meta italic text-b2` to a `bg-gl rounded-pill`
-  chip with shield glyph + `text-gd font-extrabold`. Matches the
-  Connector badge weight on PDP.
-
-Bottom "Bring your people · earn together" promo LANDED
-  3-avatar cluster (real recommenders or abstract initials) + two CTAs:
-  orange-warn "Invite friends →" + ghost "Become a Connector" →
-  /rainmaker/apply. Final block on the page.
-
-HomeScreen seed wiring
-  Reads `location.state.seedQuery` / `seedFreeServices` so the
-  Results category-nav + filter pills actually steer the next
-  search. No auto-submit (same restraint as pendingQuery).
-
-Type scale sweep — ResultsScreen.jsx + ProviderCard.jsx
-  28 arbitrary `text-[Npx]` → scale tokens across both files.
-  ResultsScreen: 20→heading-1 title, 20→heading-2 back, 14→body,
-  13→body-sm ×4, 12→meta ×3, 11→meta-sm ×6.
-  ProviderCard: 17→heading-2 ×2, 14→body, 13→body-sm ×2,
-  12→meta ×3, 11→meta-sm ×3, 10→caps (Cergio Pick badge).
-  One intentional `text-[8px]` retained on 22-px FriendAvatars.
-
-═══════════════ Phase 4 — interaction polish (§ 5.7) ═══════════════
-
-Built as a single `@layer components` block in `src/index.css` so
-every CTA/tap-target picks up consistent hover/active/focus without
-re-deriving the same Tailwind stack each time.
-
-Components
-  .cg-cta        — primary fill (Sign in, Book, Next, Forward,
-                   Invite friends, Reviews CTA…)
-                   hover:opacity-90 · active:scale-[.97]
-                   focus-visible:ring-[3px] #F3FFEA
-  .cg-cta-ghost  — outline/secondary (Become a Connector, Copy,
-                   Back, "Leave a go-to review"…)
-                   hover:bg-bg5 · active:scale-[.98] · same ring
-  .cg-tap        — card-like tap-targets (ServiceTile, Go-Tos
-                   quote bubble, ProviderCard photo)
-                   hover:bg-bg5/40 · active:scale-[.99] · same ring
-  .cg-focusable  — focus-only mixin for inline text-button affordances
-                   (Continue as guest, EarnExplainer ✕)
-
-Applied to
-  AuthScreen           — Sign in (cg-cta), Continue as guest (cg-focusable)
-  ProviderCard         — Book button (cg-cta / cg-cta-ghost), photo (cg-tap)
-  PublicProfileScreen  — ServiceTile (cg-tap), Go-Tos quote (cg-tap)
-  EarnExplainerScreen  — ✕ close (cg-focusable)
-  RewardFlowAnimation  — Back (cg-cta-ghost), Next/Replay (cg-cta)
-  ResultsScreen        — primary buttons swept via Python pass to
-                         drop inline hover:opacity-90 + active:scale
-                         in favor of .cg-cta / .cg-cta-ghost classes
-                         (1 cg-cta + 1 cg-cta-ghost upgrade).
-
-Also added .no-scrollbar (sibling of .scrollbar-hide) since the
-category-nav rail in Results uses it.
-
-═══════════════ Phase 5 — screenshot QA harness (§ 5.8) ═══════════════
-
-Cowork sandbox can't run dev server + headless browser against the
-user's localhost, so capture is driven on-device via a one-click
-script.
-
-  Screenshot QA.command (sibling of Unlock and Push.command)
-    • Lazy-installs Playwright + Chromium under ~/.cergio-playwright
-      (one-time, ~80MB)
-    • Starts `npm run dev` if not running
-    • Runs the capture script
-    • Opens the gallery in the default browser
-
-  cergio-app/scripts/screenshot-qa.mjs
-    • Visits 10 canonical routes at 390 × natural viewport, 2× DPR
-    • Writes design-qa/{key}.png per screen
-    • Generates design-qa/index.html — side-by-side gallery with
-      live capture + reference mockup (when a canonical PNG exists)
-    • Rows keyed by audit § so the layout mirrors the punch list
-    • § 7's 2-px vertical-baseline tolerance called out in header
-
-═══════════════ Verification ═══════════════
-
-qa.mjs — 41/41 PASS
-JSX syntax (acorn-jsx parse) GREEN on all touched files:
-  ResultsScreen, ProviderCard, HomeScreen, PublicProfileScreen,
-  ServiceDetailScreen, AuthScreen, EarnExplainerScreen,
-  RewardFlowAnimation.
-
-DESIGN_AUDIT.md — every in-scope checklist item across §§ 5.1 / 5.3
-/ 5.4 / 5.5 / 5.6 / 5.7 / 5.8 is ✓. Five DONE banners appended:
-  "Phase 3b — PDP — DONE 2026-05-31"
-  "Phase 3c — PublicProfile — DONE 2026-05-31"
-  "Phase 3d — Results/SRP — DONE 2026-05-31"
-  "Phase 4 — DONE 2026-05-31"
-  "Phase 5 — DONE 2026-05-31"
-
-The audit roadmap is now complete end-to-end. Next iteration is
-gated on Tarik scanning the design-qa gallery after this push;
-deltas > 2px on vertical baselines become new tickets.
+No code path inside cergio-app changed — this is a tooling fix
+for the design-qa harness only. qa.mjs untouched, still 41/41.

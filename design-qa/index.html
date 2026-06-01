@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Cergio Design QA · 390px gallery</title>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #FAF4EE; font-family: -apple-system, BlinkMacSystemFont, 'DM Sans', sans-serif; margin: 0; padding: 32px; color: #222; }
+  h1 { font-weight: 800; margin: 0 0 6px; }
+  p.sub { color: #6a6a6a; margin: 0 0 24px; font-size: 14px; }
+  .row { background: #fff; border: 1px solid #EFE7D6; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .row header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .row header .sec { font-weight: 800; color: #3FA821; font-size: 12px; letter-spacing: .04em; }
+  .row header .lbl { font-weight: 800; font-size: 16px; }
+  .row header .route { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #6a6a6a; }
+  .row header .status { margin-left: auto; font-size: 12px; font-weight: 700; }
+  .row header .status.ok  { color: #3FA821; }
+  .row header .status.bad { color: #C04030; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .col { background: #FAF4EE; border-radius: 10px; padding: 8px; }
+  .col .cap { font-size: 11px; color: #6a6a6a; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .col img { width: 390px; max-width: 100%; display: block; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .col.ghost .empty { color: #b3b3b3; font-style: italic; font-size: 13px; padding: 32px; text-align: center; }
+  footer { margin-top: 24px; color: #6a6a6a; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Cergio Design QA · 390px gallery</h1>
+  <p class="sub">
+    Captured 5/31/2026, 11:47:31 PM · 10 screens · double-click any image to open full-size.
+    Vertical-baseline tolerance per § 7: <strong>2px</strong>. Anything beyond becomes a Phase 4/5 ticket.
+  </p>
+  
+      <section class="row" data-key="splash">
+        <header>
+          <span class="sec">§ 5.1</span>
+          <span class="lbl">Splash + Auth</span>
+          <span class="route">/</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="splash.png" alt="Splash + Auth live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="auth">
+        <header>
+          <span class="sec">§ 5.1</span>
+          <span class="lbl">Auth (Sign in)</span>
+          <span class="route">/auth</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="auth.png" alt="Auth (Sign in) live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="home">
+        <header>
+          <span class="sec">§ 5.2</span>
+          <span class="lbl">Home — find</span>
+          <span class="route">/home</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="home.png" alt="Home — find live"/></div>
+          <div class="col"><div class="cap">Mockup</div><img src="file:///Users/tariksansal/Downloads/Cergio Claude/Trending Free and Discounted Home.png" alt="Home — find mockup"/></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="results">
+        <header>
+          <span class="sec">§ 5.3</span>
+          <span class="lbl">Results / SRP</span>
+          <span class="route">/results</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="results.png" alt="Results / SRP live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="pdp">
+        <header>
+          <span class="sec">§ 5.4</span>
+          <span class="lbl">Service detail (PDP)</span>
+          <span class="route">/service/_seed</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="pdp.png" alt="Service detail (PDP) live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="profile">
+        <header>
+          <span class="sec">§ 5.5</span>
+          <span class="lbl">Public profile (Jennifer)</span>
+          <span class="route">/u/_seed</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="profile.png" alt="Public profile (Jennifer) live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="earnings">
+        <header>
+          <span class="sec">§ 5.6</span>
+          <span class="lbl">Earnings explainer</span>
+          <span class="route">/earnings/learn</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="earnings.png" alt="Earnings explainer live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="about">
+        <header>
+          <span class="sec">§ 5.7</span>
+          <span class="lbl">About</span>
+          <span class="route">/about</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="about.png" alt="About live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="contact">
+        <header>
+          <span class="sec">§ 5.7</span>
+          <span class="lbl">Contact</span>
+          <span class="route">/contact</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="contact.png" alt="Contact live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+
+      <section class="row" data-key="terms">
+        <header>
+          <span class="sec">§ 5.7</span>
+          <span class="lbl">Terms</span>
+          <span class="route">/terms</span>
+          <span class="status ok">✓ captured</span>
+        </header>
+        <div class="grid">
+          <div class="col"><div class="cap">Live (390 × natural)</div><img src="terms.png" alt="Terms live"/></div>
+          <div class="col ghost"><div class="cap">Mockup</div><div class="empty">— no canonical PNG —</div></div>
+        </div>
+      </section>
+  <footer>
+    Generated by <code>scripts/screenshot-qa.mjs</code> · run via <code>Screenshot QA.command</code>.
+  </footer>
+</body>
+</html>
