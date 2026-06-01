@@ -1,57 +1,32 @@
-design-audit Phase 3a + activity feed personalization + ripple-fan
+design(about): tweak mission to APGI framing — succinct + elegant
 
-Tarik over four messages:
-  1. format tweak the activity feed: "your friend/Connector Jordan"
-     prefix + Penny "spotlighted by Connector X to 7,388 followers"
-  2. "this is your friends feed or one where Connectors share — you
-     don't see anything unless it's from Connectors or your network
-     (friends and friends-of-friends recommending or booking or
-     listing a service)"
-  3. "share service TYPE (plumber, trainer etc.) not the category
-     (cleaning etc.)"
-  4. "re: animation, make the few arrows from Instagram to service on
-     the spotlight (to show the audience size from single actions
-     spotlight and free services)"
+Tarik wording:
+  "Upgrade Ai with Human Friend to Friend Endorsements and Guide it
+   to Enable Shared Prosperity via Asset Participation Growth Income
+   to provide users with rewards tied to platform growth relative to
+   their particiaption.. Turning users into stratregic partners".
 
-Activity feed (src/screens/ActivityScreen.jsx + src/lib/api.js)
-  - GoatShareCard rewritten:
-    Headline collapses to one social-feed-style block:
-      {Owner name}
-      {Service TYPE} · {City}                     ← was Category
-    Spotlighted-by pill becomes a single sentence:
-      "Spotlighted by your Connector {Name} to {N} followers"
-    Relation prefix priority: friend > Connector > none. When the
-    friend-graph table lands we just set `is_friend` and the prefix
-    swaps to "your friend Connie" automatically.
-  - ListingCard service line: same swap to taxonomy_provider_type
-    with category fallback.
-  - listSocialFeed:
-    • SELECT widened to include `taxonomy_provider_type` on the three
-      service-fetch queries (recos, listings, spotlights).
-    • Service shape now exposes `taxonomy_provider_type` to every card.
-    • Recommender + owner now expose `is_friend: false` placeholder
-      so the predicate is uniform once the graph wires up.
-  - ActivityScreen feed predicate:
-    Only renders events where the actor is a Connector OR (when wired)
-    a friend / friend-of-friend. Section sub-heading reads
-    "From your Connectors and network · #cergiofeed". Section hides
-    entirely when the filter leaves zero rows — never silently shows
-    non-network spam.
+  Compressed to a two-line mission headline + one-paragraph proof:
 
-Earnings animation — Scene 2 fan of ripple arrows
-  Was: one dashed orange curve from the audience back to the Provider
-  tile, labelled "new customers".
-  Now: FIVE dashed arrows fan from across the audience cluster (x =
-  60, 110, 200, 270, 332) up to the Provider tile, staggered 200ms
-  apart so they fly in like a sweep — emphasises that a single
-  spotlight ripples into MANY conversions, not one. Vertical
-  "new customers" label still anchors the fan visually.
+    Eyebrow:  OUR MISSION
+    Headline: Upgrade AI with human endorsements.
+              Share its growth with the network that built it.
+    Body:     Cergio guides AI through friend-to-friend trust, then
+              returns the upside as Asset Participation Growth Income —
+              every user's share of Cergio's growth, scaled to their
+              participation. Users become strategic partners, not
+              customers.
 
-Phase 3a Home migration shipped in this same commit (was queued):
-  38 arbitrary `text-[Npx]` swept to scale tokens
-  (text-body-lg ×1 / text-body ×4 / text-body-sm ×7 / text-meta ×8 /
-   text-meta-sm ×17 / text-caps ×1). Spotlight area row
-  mt-1.5 → mt-4 (16px). Search-box focus halo confirmed against spec.
-  DESIGN_AUDIT.md § 5.2 all checkboxes ticked.
+Stream #3 (Three ways Cergio creates value) renamed to match:
+  "3. Asset Participation Growth Income"
+  Body tightened: dropped one redundant "Regular income…" sentence
+  start; phrased the timing argument as scale rather than the
+  prior orchard repeat.
 
-Verified: qa.mjs 41/41 · JSX syntax check on every touched file: green.
+Out of scope for this commit (next consistency pass):
+  - TermsScreen § 7 still uses "Asset Participation Income (APIC)" —
+    will rename to APGI in a single sweep when we touch Terms next.
+  - RewardFlowAnimation Scene 3 still uses "Growth Participation
+    Income (GPI)" in its caption + on-screen text. Same sweep.
+
+Verified: qa.mjs 41/41 · JSX syntax check on AboutScreen.jsx: green.

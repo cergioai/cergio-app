@@ -50,19 +50,27 @@ export function AboutScreen() {
         </p>
       </div>
 
-      {/* Mission card */}
+      {/* Mission card — Tarik tweak 2026-05-31:
+          "Upgrade Ai with Human Friend to Friend Endorsements and
+           Guide it to Enable Shared Prosperity via Asset Participation
+           Growth Income to provide users with rewards tied to platform
+           growth relative to their participation.. Turning users into
+           strategic partners".
+          Compressed to a one-line mission + one-line proof. */}
       <div className="mx-5 mt-8 bg-white border border-line rounded-[18px] p-5">
         <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
           Our mission
         </p>
         <h2 className="text-[20px] font-extrabold text-black leading-tight mt-2">
-          Human-powered Guided AI for shared prosperity.
+          Upgrade AI with human endorsements.<br />
+          Share its growth with the network that built it.
         </h2>
         <p className="text-[13.5px] text-b2 leading-relaxed mt-3">
-          Cergio routes through your real network — friends, trusted
-          providers, Connectors — and uses AI to negotiate, book, and
-          settle on your behalf. The intelligence is in the guidance;
-          the trust is in the people.
+          Cergio guides AI through friend-to-friend trust, then returns
+          the upside as <span className="font-extrabold text-black">Asset Participation Growth Income</span> —
+          every user&apos;s share of Cergio&apos;s growth, scaled to
+          their participation. Users become strategic partners, not
+          customers.
         </p>
       </div>
 
@@ -93,14 +101,14 @@ export function AboutScreen() {
           </div>
           <div>
             <p className="text-[14px] font-extrabold text-black leading-tight">
-              3. Asset Participation Income (APIC)
+              3. Asset Participation Growth Income
             </p>
             <p className="text-[13px] text-b2 leading-snug mt-0.5">
-              Every dollar you earn on Cergio also accrues a share of
-              Cergio&apos;s growth. The earlier you join + the more your
-              network grows, the larger your participation. Regular
-              income tied to the orchard you help grow — not a one-off
-              referral bonus.
+              Every dollar you earn also accrues a share of
+              Cergio&apos;s growth, scaled to your participation. The
+              earlier you join and the more your network grows, the
+              larger your share. Regular income tied to the orchard
+              you helped grow — not a one-off referral bonus.
             </p>
           </div>
         </div>
