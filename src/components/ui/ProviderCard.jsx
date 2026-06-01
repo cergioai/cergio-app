@@ -11,13 +11,13 @@ function SavingsLabel({ savings }) {
   if (!savings || savings === 0) return null;
   if (savings < 0) {
     return (
-      <span className="text-[11px] font-bold text-danger">
+      <span className="text-meta-sm font-bold text-danger">
         ${Math.abs(savings)} over budget
       </span>
     );
   }
   return (
-    <span className="text-[11px] font-bold text-gd">
+    <span className="text-meta-sm font-bold text-gd">
       Saves ${savings}
     </span>
   );
@@ -128,7 +128,10 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
             when no real photo is available so existing seeded rows still
             render. img tag uses object-cover + lazy loading. */}
       <div
-        className={`relative mx-4 h-[210px] rounded-2xl overflow-hidden cursor-pointer
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpen(); } }}
+        className={`relative mx-4 h-[210px] rounded-2xl overflow-hidden cursor-pointer cg-tap
                     ${coverUrl ? 'bg-bg5' : (PHOTO_BG[photoClass] || PHOTO_BG['fv-jamie'])}`}
         onClick={handleOpen}
       >
@@ -166,7 +169,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
         {/* pick badge */}
         {pick && (
           <span className="absolute top-2.5 right-2.5 bg-g text-white
-                           text-[10px] font-bold uppercase tracking-wide
+                           text-caps font-bold uppercase tracking-wide
                            px-2.5 py-1 rounded-pill z-10">
             Cergio Pick
           </span>
@@ -175,7 +178,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
         {/* over/save on photo for non-pick cards */}
         {!pick && savings !== 0 && (
           <span
-            className={`absolute top-2.5 right-2.5 text-[11px] font-bold
+            className={`absolute top-2.5 right-2.5 text-meta-sm font-bold
                         px-2.5 py-1 rounded-pill z-10
                         ${savings < 0
                           ? 'bg-red-50/95 text-danger'
@@ -197,39 +200,55 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
 
         {/* ROW 1 — Name · Recos */}
         <div className="flex justify-between items-baseline mb-1">
-          <span className="text-[17px] font-extrabold text-black">{name}</span>
-          <span className="text-[13px] font-bold text-black">{recos} Recos</span>
+          <span className="text-heading-2 font-extrabold text-black">{name}</span>
+          <span className="text-body-sm font-bold text-black">{recos} Recos</span>
         </div>
 
         {/* ROW 2 — Category · Price */}
         <div className="flex justify-between items-baseline mb-1">
-          <span className="text-[13px] text-b3 font-medium">{category}</span>
-          <span className="text-[17px] font-extrabold text-black">${price}</span>
+          <span className="text-body-sm text-b3 font-medium">{category}</span>
+          <span className="text-heading-2 font-extrabold text-black">${price}</span>
         </div>
 
         {/* ROW 3 — Bio · Savings */}
         <div className="flex justify-between items-start mb-2">
-          <span className="text-[12px] text-b3 font-normal flex-1 pr-3 leading-snug">{bio}</span>
+          <span className="text-meta text-b3 font-normal flex-1 pr-3 leading-snug">{bio}</span>
           <SavingsLabel savings={savings} />
         </div>
 
-        {/* Reco line */}
+        {/* Reco line — Phase 3d (2026-05-31): converted from italic
+            inline text to a mint pill matching the Jennifer L SRP
+            mockup. Pill anchors bottom-left of the content block, sits
+            inline with the avatar stack. Reads "Reco'd by Jennifer Hu,
+            3 other friends and 21 Connectors" in green-dark on a
+            green-light wash, with a shield glyph echoing the Connector
+            badge from the PDP. Empty case stays as muted body copy so
+            cards without friend recos don't render a hollow pill. */}
         {recoText() ? (
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <FriendAvatars friends={friends} recommenders={recommendersRaw} />
-            <p className="text-[12px] italic text-b2 leading-snug">{recoText()}</p>
+            <span className="inline-flex items-center gap-1.5 bg-gl rounded-pill px-2.5 py-1
+                             text-meta-sm font-extrabold text-gd leading-none">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
+                <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
+              </svg>
+              {recoText()}
+            </span>
           </div>
         ) : (
-          <p className="text-[12px] text-b3 mb-3">No mutual friends yet</p>
+          <p className="text-meta text-b3 mb-3">No mutual friends yet</p>
         )}
 
-        {/* Book button */}
+        {/* Book button — Phase 4 (2026-05-31): standardized to .cg-cta
+            for primary fill, .cg-cta-ghost for outline. Both pick up
+            hover opacity, active scale, and focus-visible mint ring
+            from the global components layer. */}
         <button
           onClick={() => onBook(provider)}
-          className={`w-full rounded-pill py-3 text-[14px] font-extrabold transition-opacity
-                      active:scale-[.98] ${pick
-                        ? 'bg-g text-white hover:opacity-90'
-                        : 'bg-transparent border border-bdr text-black hover:bg-bg5'}`}
+          className={`w-full rounded-pill py-3 text-body font-extrabold
+                      ${pick
+                        ? 'bg-g text-white cg-cta'
+                        : 'bg-transparent border border-bdr text-black cg-cta-ghost'}`}
         >
           Book {name} · ${price} ↗
         </button>

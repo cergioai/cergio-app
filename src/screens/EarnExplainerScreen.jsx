@@ -27,7 +27,8 @@ export function EarnExplainerScreen() {
         </div>
         <button
           onClick={() => navigate(-1)}
-          className="w-9 h-9 flex items-center justify-center text-black"
+          aria-label="Close"
+          className="w-9 h-9 flex items-center justify-center text-black rounded-full cg-focusable"
         >
           ✕
         </button>

@@ -76,7 +76,7 @@ function AvatarLink({ id, name, size = 40, className = '', clickable = true }) {
 
 function ConnectorBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold">
+    <span className="inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
         <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
       </svg>
@@ -88,7 +88,7 @@ function ConnectorBadge() {
 function RoleBadge({ label }) {
   if (!label) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 text-[13px] text-gd font-extrabold">
+    <span className="inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
         <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
         <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -114,7 +114,7 @@ function ServiceTile({ svc, recoSummary, onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className="w-full text-left bg-white border border-bdr rounded-[16px] overflow-hidden hover:border-g/40 transition-colors"
+      className="w-full text-left bg-white border border-bdr rounded-[16px] overflow-hidden hover:border-g/40 cg-tap"
     >
       <div className={`relative h-[160px] bg-gradient-to-br ${grad}`}>
         {svc.cover_url && (
@@ -133,15 +133,15 @@ function ServiceTile({ svc, recoSummary, onOpen }) {
       </div>
       <div className="p-3.5">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="text-[16px] font-extrabold text-black truncate">{svc.title || 'Service'}</p>
+          <p className="text-body-lg font-extrabold text-black truncate">{svc.title || 'Service'}</p>
           {price != null && (
-            <p className="text-[16px] font-extrabold text-black">
+            <p className="text-body-lg font-extrabold text-black">
               {price === 0 ? 'Free' : `$${price}`}
             </p>
           )}
         </div>
         {svc.category && (
-          <p className="inline-flex items-center gap-1 text-[12.5px] text-gd font-extrabold mt-0.5">
+          <p className="inline-flex items-center gap-1 text-meta text-gd font-extrabold mt-0.5">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
               <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
               <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -150,14 +150,14 @@ function ServiceTile({ svc, recoSummary, onOpen }) {
           </p>
         )}
         {svc.description && (
-          <p className="text-[12.5px] text-b3 leading-snug mt-1.5 line-clamp-2">{svc.description}</p>
+          <p className="text-meta text-b3 leading-snug mt-1.5 line-clamp-2">{svc.description}</p>
         )}
         {recoSummary && recoSummary.total > 0 && (
           <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
               <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
             </svg>
-            <p className="text-[11.5px] text-gd font-extrabold leading-none">
+            <p className="text-meta-sm text-gd font-extrabold leading-none">
               Reco&apos;d by {recoSummary.friends || 0} {(recoSummary.friends === 1) ? 'friend' : 'friends'}
               {recoSummary.connectors > 0 && (
                 <> and {recoSummary.connectors} {recoSummary.connectors === 1 ? 'Connector' : 'Connectors'}</>
@@ -184,6 +184,15 @@ export function PublicProfileScreen() {
   const [recoServices, setRecoServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  // "See all (N) →" pagination toggles per § 5.5 — collapsed by default
+  // (top 4 / 5 / 6 rows shown), tap to expand the section in place. No
+  // sub-route needed; the affordance is a soft expand within the page so
+  // every Reco'd / review / service remains discoverable without
+  // bouncing the user off the profile they're inspecting.
+  const [showAllServices, setShowAllServices] = useState(false);
+  const [showAllReviews,  setShowAllReviews]  = useState(false);
+  const [showAllGoTos,    setShowAllGoTos]    = useState(false);
 
   useEffect(() => {
     if (!supabaseReady || !profileId) { setLoading(false); return; }
@@ -386,11 +395,11 @@ export function PublicProfileScreen() {
           <button
             onClick={() => navigate(-1)}
             aria-label="Close"
-            className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+            className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-body-lg flex items-center justify-center shadow-sm"
           >×</button>
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-[14px] text-b3 font-medium">Loading profile…</p>
+          <p className="text-body text-b3 font-medium">Loading profile…</p>
         </div>
       </div>
     );
@@ -403,17 +412,17 @@ export function PublicProfileScreen() {
           <button
             onClick={() => navigate(-1)}
             aria-label="Close"
-            className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+            className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-body-lg flex items-center justify-center shadow-sm"
           >×</button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <p className="text-[16px] font-extrabold text-black mb-1">Profile not found</p>
-          <p className="text-[13px] text-b3 font-medium text-center">
+          <p className="text-body-lg font-extrabold text-black mb-1">Profile not found</p>
+          <p className="text-body-sm text-b3 font-medium text-center">
             This user may no longer be on Cergio.
           </p>
           <button
             onClick={() => navigate(-1)}
-            className="mt-4 bg-g text-white rounded-pill px-5 py-2.5 text-[13px] font-extrabold"
+            className="mt-4 bg-g text-white rounded-pill px-5 py-2.5 text-body-sm font-extrabold"
           >
             Go back
           </button>
@@ -433,7 +442,7 @@ export function PublicProfileScreen() {
         <button
           onClick={() => navigate(-1)}
           aria-label="Close"
-          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-body-lg flex items-center justify-center shadow-sm"
         >
           ×
         </button>
@@ -446,7 +455,7 @@ export function PublicProfileScreen() {
       <div className="px-5 pt-4">
         <div className="flex items-center gap-3.5">
           <AvatarLink id={profile?.id} name={name} size={72} clickable={false} className="ring-2 ring-white shadow-sm" />
-          <h1 className="text-[28px] font-extrabold text-black leading-[1.05]">{name}</h1>
+          <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">{name}</h1>
         </div>
         {(role || isConnector) && (
           <div className="flex items-center gap-3 mt-3 flex-wrap">
@@ -458,17 +467,17 @@ export function PublicProfileScreen() {
 
       {/* About */}
       <div className="px-5 mt-7">
-        <h2 className="text-[22px] font-extrabold text-black">About</h2>
+        <h2 className="text-heading-1 font-extrabold text-black">About</h2>
         {profile?.bio ? (
-          <p className="text-[13.5px] text-b2 leading-relaxed mt-2">{profile.bio}</p>
+          <p className="text-body-sm text-b2 leading-relaxed mt-2">{profile.bio}</p>
         ) : (
-          <p className="text-[13.5px] text-b3 leading-relaxed mt-2">No bio yet!</p>
+          <p className="text-body-sm text-b3 leading-relaxed mt-2">No bio yet!</p>
         )}
       </div>
 
       {/* Social */}
       <div className="px-5 mt-7">
-        <h2 className="text-[22px] font-extrabold text-black">Social</h2>
+        <h2 className="text-heading-1 font-extrabold text-black">Social</h2>
         <div className="flex items-center justify-between gap-3 mt-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border-2 border-gd">
@@ -479,25 +488,28 @@ export function PublicProfileScreen() {
               </svg>
             </span>
             {igHandle ? (
-              <span className="text-[14px] font-extrabold text-black truncate">{igHandle}</span>
+              <span className="text-body font-extrabold text-black truncate">{igHandle}</span>
             ) : (
-              <span className="text-[14px] font-medium text-b3">Instagram</span>
+              <span className="text-body font-medium text-b3">Instagram</span>
             )}
           </div>
           {igHandle && igFollowers > 0 && (
-            <span className="text-[13px] font-extrabold text-black whitespace-nowrap">
+            <span className="text-body-sm font-extrabold text-black whitespace-nowrap">
               {Number(igFollowers).toLocaleString()} followers
             </span>
           )}
         </div>
       </div>
 
-      {/* Their Services */}
+      {/* Their Services — conditional: section is hidden entirely when
+          the profile owns no listed services (e.g. a pure Connector who
+          only spotlights others). "See all (N) →" toggle expands the
+          list in place when more than 4 exist. */}
       {services.length > 0 && (
         <div className="px-5 mt-8">
-          <h2 className="text-[22px] font-extrabold text-black">{firstName}&apos;s Services</h2>
+          <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Services</h2>
           <div className="mt-3 flex flex-col gap-4">
-            {services.slice(0, 4).map(svc => (
+            {(showAllServices ? services : services.slice(0, 4)).map(svc => (
               <ServiceTile
                 key={svc.id}
                 svc={svc}
@@ -506,16 +518,27 @@ export function PublicProfileScreen() {
               />
             ))}
           </div>
+          {services.length > 4 && (
+            <button
+              type="button"
+              onClick={() => setShowAllServices(v => !v)}
+              className="mt-3 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
+            >
+              {showAllServices
+                ? 'Show less'
+                : `See all ${firstName}'s services (${services.length}) →`}
+            </button>
+          )}
         </div>
       )}
 
       {/* People who love {firstName} — review rows from bookings */}
       {reviews.length > 0 && (
         <div className="px-5 mt-8">
-          <h2 className="text-[22px] font-extrabold text-black">People who love {firstName}</h2>
-          <p className="text-[12.5px] text-b3 font-medium mt-0.5">See top reviews of their service</p>
+          <h2 className="text-heading-1 font-extrabold text-black">People who love {firstName}</h2>
+          <p className="text-meta text-b3 font-medium mt-0.5">See top reviews of their service</p>
           <div className="mt-3 flex flex-col gap-3">
-            {reviews.slice(0, 5).map(r => (
+            {(showAllReviews ? reviews : reviews.slice(0, 5)).map(r => (
               <div key={r.id} className="bg-white border border-bdr rounded-[14px] p-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -525,11 +548,11 @@ export function PublicProfileScreen() {
                       size={36}
                       clickable={!!r.reviewer?.id}
                     />
-                    <p className="text-[14px] font-extrabold text-black truncate">
+                    <p className="text-body font-extrabold text-black truncate">
                       {r.reviewer?.name || 'A customer'}
                     </p>
                   </div>
-                  <p className="text-[11.5px] text-b3 font-medium whitespace-nowrap">
+                  <p className="text-meta-sm text-b3 font-medium whitespace-nowrap">
                     {fmtMonthYear(r.booked_at)
                       ? `Booked ${fmtMonthYear(r.booked_at)}`
                       : ''}
@@ -537,12 +560,23 @@ export function PublicProfileScreen() {
                 </div>
                 {r.comment && (
                   <div className="mt-2 bg-bg5 rounded-[12px] p-3">
-                    <p className="text-[12.5px] text-b2 leading-snug">{r.comment}</p>
+                    <p className="text-meta text-b2 leading-snug">{r.comment}</p>
                   </div>
                 )}
               </div>
             ))}
           </div>
+          {reviews.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setShowAllReviews(v => !v)}
+              className="mt-3 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
+            >
+              {showAllReviews
+                ? 'Show less'
+                : `See all go-to reviews (${reviews.length}) →`}
+            </button>
+          )}
         </div>
       )}
 
@@ -557,25 +591,25 @@ export function PublicProfileScreen() {
           tiny "reviewer" avatar on the mockup's gray quote box). */}
       {recoServices.length > 0 && (
         <div className="px-5 mt-8">
-          <h2 className="text-[22px] font-extrabold text-black">{firstName}&apos;s Go-Tos</h2>
-          <p className="text-[12.5px] text-b3 font-medium mt-1">See their top-rated service providers</p>
+          <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Go-Tos</h2>
+          <p className="text-meta text-b3 font-medium mt-1">See their top-rated service providers</p>
           <div className="mt-4 flex flex-col gap-3">
-            {recoServices.slice(0, 8).map(r => (
+            {(showAllGoTos ? recoServices : recoServices.slice(0, 6)).map(r => (
               <div key={r.id} className="bg-white border border-bdr rounded-[16px] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <AvatarLink id={r.owner?.id} name={r.owner?.name} size={44} />
                     <div className="min-w-0">
                       {r.owner?.id ? (
-                        <Link to={`/u/${r.owner.id}`} className="text-[15px] font-extrabold text-black hover:underline truncate block">
+                        <Link to={`/u/${r.owner.id}`} className="text-body-lg font-extrabold text-black hover:underline truncate block">
                           {r.owner?.name || r.service?.title || 'A provider'}
                         </Link>
                       ) : (
-                        <p className="text-[15px] font-extrabold text-black truncate">
+                        <p className="text-body-lg font-extrabold text-black truncate">
                           {r.owner?.name || r.service?.title || 'A provider'}
                         </p>
                       )}
-                      <p className="inline-flex items-center gap-1 text-[12.5px] text-gd font-extrabold mt-0.5">
+                      <p className="inline-flex items-center gap-1 text-meta text-gd font-extrabold mt-0.5">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
                           <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
                           <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -584,7 +618,7 @@ export function PublicProfileScreen() {
                       </p>
                     </div>
                   </div>
-                  <p className="text-[11.5px] text-b3 font-medium whitespace-nowrap pt-1">
+                  <p className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-1">
                     {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
                   </p>
                 </div>
@@ -592,7 +626,7 @@ export function PublicProfileScreen() {
                   <button
                     type="button"
                     onClick={() => navigate(`/service/${r.service.id}`)}
-                    className="w-full text-left mt-3 bg-bg5 rounded-[14px] p-3 flex items-start gap-2.5 hover:bg-bdr/40 transition-colors"
+                    className="w-full text-left mt-3 bg-bg5 rounded-[14px] p-3 flex items-start gap-2.5 cg-tap"
                   >
                     <AvatarLink
                       id={profile?.id}
@@ -601,12 +635,23 @@ export function PublicProfileScreen() {
                       clickable={false}
                       className="ring-2 ring-white"
                     />
-                    <p className="flex-1 text-[12.5px] text-b2 leading-snug pt-1">{r.message}</p>
+                    <p className="flex-1 text-meta text-b2 leading-snug pt-1">{r.message}</p>
                   </button>
                 )}
               </div>
             ))}
           </div>
+          {recoServices.length > 6 && (
+            <button
+              type="button"
+              onClick={() => setShowAllGoTos(v => !v)}
+              className="mt-3 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
+            >
+              {showAllGoTos
+                ? 'Show less'
+                : `See all of ${firstName}'s go-tos (${recoServices.length}) →`}
+            </button>
+          )}
         </div>
       )}
 
@@ -615,8 +660,8 @@ export function PublicProfileScreen() {
       {services.length === 0 && recoServices.length === 0 && reviews.length === 0 && (
         <div className="px-5 mt-8 mb-8">
           <div className="bg-white border border-bdr rounded-[14px] p-5 text-center">
-            <p className="text-[14px] font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>
-            <p className="text-[12.5px] text-b3 font-medium mt-1 leading-snug">
+            <p className="text-body font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>
+            <p className="text-meta text-b3 font-medium mt-1 leading-snug">
               Their recommendations + listed services will appear here.
             </p>
           </div>

@@ -11,7 +11,7 @@
 // We keep the user on this screen so the experience feels seamless —
 // no /roaming / /intake takeover unless they need to chat for missing fields.
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useLocation } from 'react-router-dom';
 import { CcGateModal } from '../components/ui/CcGateModal';
 import { LeafLogo } from '../components/ui/LeafLogo';
 import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
@@ -225,6 +225,7 @@ const TOAST_SHOWN_KEY = 'cergio.toastShown';
 
 export function HomeScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     showToast,
     freeServices,
@@ -284,6 +285,28 @@ export function HomeScreen() {
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth?.isSignedIn]);
+
+  // Phase 3d (2026-05-31) — accept seeds from ResultsScreen's category
+  // nav + filter pills. seedQuery: pre-fills the search box with a
+  // canonical provider type (e.g. "housekeeper") so the user can tap
+  // send to search; seedFreeServices: flips the Free toggle without
+  // touching the query. We do not auto-submit — same restraint as
+  // pendingQuery above — to keep the user in control.
+  useEffect(() => {
+    const seed = location.state || {};
+    if (typeof seed.seedFreeServices === 'boolean' && seed.seedFreeServices !== freeServices) {
+      setFreeServices(seed.seedFreeServices);
+    }
+    if (seed.seedQuery && typeof seed.seedQuery === 'string') {
+      setQuery(seed.seedQuery);
+      // Clear nav state so a refresh doesn't loop. Replace the entry so
+      // the back button still goes where the user came from.
+      navigate(location.pathname, { replace: true, state: null });
+      // Bring focus to the input so the user can hit send immediately.
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // Engine state — kicks off once chat.phase flips to 'ready' (all
   // mandatory fields captured). We stay on Home through the whole thing.

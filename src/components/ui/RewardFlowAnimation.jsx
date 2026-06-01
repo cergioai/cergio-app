@@ -393,7 +393,8 @@ export function RewardFlowAnimation() {
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={prev}
-          className="text-[12px] font-bold text-b2 bg-white border border-bdr rounded-pill px-3 py-1.5 hover:bg-bg5/30"
+          aria-label="Previous scene"
+          className="text-[12px] font-bold text-b2 bg-white border border-bdr rounded-pill px-3 py-1.5 cg-cta-ghost"
         >
           Back
         </button>
@@ -405,7 +406,8 @@ export function RewardFlowAnimation() {
         </div>
         <button
           onClick={step === STEPS.length - 1 ? replay : next}
-          className="text-[12px] font-bold text-white bg-g rounded-pill px-3 py-1.5 hover:opacity-90"
+          aria-label={step === STEPS.length - 1 ? 'Replay scenes' : 'Next scene'}
+          className="text-[12px] font-bold text-white bg-g rounded-pill px-3 py-1.5 cg-cta"
         >
           {step === STEPS.length - 1 ? 'Replay' : 'Next'}
         </button>

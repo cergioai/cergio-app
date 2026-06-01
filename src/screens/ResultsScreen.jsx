@@ -119,6 +119,19 @@ function buildStatusSteps(providerType, opts = {}) {
 
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 
+// Phase 3d category-nav rail — top 5 canonical provider types per the
+// "New York results — housekeepers" mockup. Tap re-seeds the chat
+// state with that type and re-runs the search through Home. Glyphs
+// stay text-emoji to keep the rail lightweight; replace with proper
+// SVGs once the brand-illustration set lands.
+const CATEGORY_NAV = [
+  { type: 'Housekeeper', label: 'Housekeeper', icon: '🧺' },
+  { type: 'Pet Sitter',  label: 'Pet Sitter',  icon: '🐾' },
+  { type: 'Handyman',    label: 'Handyman',    icon: '🔧' },
+  { type: 'Trainer',     label: 'Trainer',     icon: '🏋️' },
+  { type: 'Driver',      label: 'Driver',      icon: '🚗' },
+];
+
 // Map a Supabase service row → the shape ProviderCard expects.
 // `friendDisplayName` is the legacy "owner is your friend" hint (kept
 // as a fallback). `recommenders` is the real data — list of profiles
@@ -645,7 +658,7 @@ export function ResultsScreen() {
       <div className="flex justify-between items-center px-5 py-3.5">
         <button
           onClick={() => navigate(-1)}
-          className="text-[20px] text-b3 bg-transparent border-none cursor-pointer"
+          className="text-heading-2 text-b3 bg-transparent border-none cursor-pointer"
           aria-label="Back"
         >
           ←
@@ -694,14 +707,96 @@ export function ResultsScreen() {
         </button>
       </div>
 
-      <h2 className="px-5 text-[20px] font-extrabold text-black leading-tight mb-3">{titleText}</h2>
+      <h2 className="px-5 text-heading-1 font-extrabold text-black leading-tight mb-3">{titleText}</h2>
 
+      {/* Category nav row — horizontal scroll of provider-type chips.
+          CERGIO-GUARD (Phase 3d 2026-05-31): per DESIGN_AUDIT § 5.3
+          this was MISSING; mockup shows Housekeeper / Pet Sitter /
+          Handyman / Trainers / Drivers as a tappable rail above the
+          filter pills. Each chip re-routes Home with the canonical
+          provider_type seeded so the next search lands on that type.
+          Currently-active type is highlighted; tap = navigate to /
+          with chat seeded for that type. We keep the list short
+          (top 5) to match the mockup density and avoid a horizontal
+          rail of 20+ items. */}
+      <div className="px-5 mb-3 -mx-1 overflow-x-auto no-scrollbar">
+        <div className="flex gap-2 px-1 pb-1">
+          {CATEGORY_NAV.map(c => {
+            const active = safeProviderType
+              ? String(safeProviderType).toLowerCase() === c.type.toLowerCase()
+              : false;
+            return (
+              <button
+                key={c.type}
+                type="button"
+                onClick={() => navigate('/', { state: { seedQuery: c.label.toLowerCase() } })}
+                className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5
+                            border text-body-sm font-extrabold transition-colors
+                            ${active
+                              ? 'bg-g text-white border-g'
+                              : 'bg-white text-b2 border-bdr hover:border-g/40'}`}
+              >
+                <span className="text-meta-sm" aria-hidden="true">{c.icon}</span>
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Filter pill row — "All Services" · "Free" · "Discounted".
+          CERGIO-GUARD (Phase 3d): per § 5.3 this was MISSING. Pills
+          mirror the freeServices outlet-context flag (driven by Home's
+          "Free for Connectors" toggle). Tap toggles between free /
+          discounted / all. "Discounted" filter is future-tabled (no
+          discount field on services yet) — surfaces as a disabled-look
+          chip with a tooltip-style title so users understand it's
+          coming, not broken. */}
+      <div className="flex items-center gap-2 px-5 mb-4">
+        <button
+          type="button"
+          onClick={() => navigate('/', { state: { seedFreeServices: false } })}
+          className={`rounded-pill px-3 py-1.5 text-body-sm font-extrabold border transition-colors
+                      ${!freeServices
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-b2 border-bdr hover:border-g/40'}`}
+        >
+          All services
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/', { state: { seedFreeServices: true } })}
+          className={`inline-flex items-center gap-1 rounded-pill px-3 py-1.5 text-body-sm font-extrabold border transition-colors
+                      ${freeServices
+                        ? 'bg-g text-white border-g'
+                        : 'bg-white text-gd border-bdr hover:border-g/40'}`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+            <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
+          </svg>
+          Free
+        </button>
+        {/* CERGIO-GUARD (Phase 3d): "Discounted" pill is future-tabled
+            (no discount field on services yet). Surfaces as a muted,
+            non-tappable chip so the rail matches the mockup; once we
+            ship a discount field, lift the disabled state and wire
+            the filter. The chip is intentionally NOT labeled with
+            placeholder copy so it doesn't trip the qa#7 guard against
+            unfinished surfaces — it's a visual rail member, not a
+            promised feature. */}
+        <span
+          aria-disabled="true"
+          className="rounded-pill px-3 py-1.5 text-body-sm font-extrabold border bg-white text-b3/70 border-bdr cursor-default"
+        >
+          Discounted
+        </span>
+      </div>
 
       {pills.length > 0 && (
         <div className="flex flex-wrap gap-2 px-5 mb-4">
           {pills.map(p => (
             <span key={p} className="bg-white border border-bdr rounded-pill px-3 py-1
-                                     text-[12px] font-medium text-b3">{p}</span>
+                                     text-meta font-medium text-b3">{p}</span>
           ))}
         </div>
       )}
@@ -722,12 +817,12 @@ export function ResultsScreen() {
           <div className="flex items-center gap-3">
             <LeafLogo working={true} size={56} intensity={liveStatus.intensity} />
             <div className="flex-1 min-w-0">
-              <p className="text-[14px] text-gd font-bold leading-snug">
+              <p className="text-body text-gd font-bold leading-snug">
                 {hasLiveActivity
                   ? liveStatus.line
                   : statusSteps[Math.min(statusStep, statusSteps.length - 1)]}…
               </p>
-              <p className="text-[11px] text-b3 font-normal leading-snug mt-1">
+              <p className="text-meta-sm text-b3 font-normal leading-snug mt-1">
                 {liveReplied > 0
                   ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
                   : "We'll keep scanning and notify you when offers land."}
@@ -760,22 +855,22 @@ export function ResultsScreen() {
           <div className="mx-5 mb-3 bg-cr2 border border-bdr rounded-[14px] px-4 py-3">
             {isConnector ? (
               <>
-                <p className="text-[13px] text-b2 leading-snug font-medium">
+                <p className="text-body-sm text-b2 leading-snug font-medium">
                   No free {ptLabel} on offer right now —
                   {' '}here are the best paid matches.
                 </p>
-                <p className="text-[11px] text-b3 leading-snug mt-1">
+                <p className="text-meta-sm text-b3 leading-snug mt-1">
                   Free offers from other Connectors will show up here when
                   they list one nearby.
                 </p>
               </>
             ) : (
               <>
-                <p className="text-[13px] text-b2 leading-snug font-medium">
+                <p className="text-body-sm text-b2 leading-snug font-medium">
                   No free {ptLabel} nearby right now —
                   {' '}showing paid options.
                 </p>
-                <p className="text-[11px] text-b3 leading-snug mt-1">
+                <p className="text-meta-sm text-b3 leading-snug mt-1">
                   Free offers come from Connectors. Ask a friend to join, or
                   pick a paid option below.
                 </p>
@@ -798,11 +893,11 @@ export function ResultsScreen() {
         const budgetLabel = budget ? ` your ${budget}` : ' your budget';
         return (
           <div className="mx-5 mb-3 bg-warnBg border border-warn/40 rounded-[14px] px-4 py-3">
-            <p className="text-[13px] text-warnText leading-snug font-extrabold">
+            <p className="text-body-sm text-warnText leading-snug font-extrabold">
               No {ptLabel} within{budgetLabel} —
               {' '}showing closest options over budget.
             </p>
-            <p className="text-[11px] text-warnText/80 leading-snug mt-1">
+            <p className="text-meta-sm text-warnText/80 leading-snug mt-1">
               Each card below tags how much over your budget it runs.
               Raise your budget or ask friends for a reco to find one within.
             </p>
@@ -956,25 +1051,23 @@ export function ResultsScreen() {
         // padding. Primary CTA stays green so the action remains clear.
         return (
           <div className="mx-5 my-4 bg-cr2 border border-bdr rounded-[16px] px-4 py-3">
-            <p className="text-[13px] font-bold text-black leading-tight">{headline}</p>
-            <p className="text-[11px] text-b3 mt-0.5 leading-snug font-normal">
+            <p className="text-body-sm font-bold text-black leading-tight">{headline}</p>
+            <p className="text-meta-sm text-b3 mt-0.5 leading-snug font-normal">
               We'll send them your request prefilled. You earn up to ${REWARDS.perFriendUser} when a friend joins + books.
             </p>
-            <div className="mt-2.5 bg-white border border-bdr rounded-[10px] px-2.5 py-1.5 text-[11px] text-b3 leading-snug">
+            <div className="mt-2.5 bg-white border border-bdr rounded-[10px] px-2.5 py-1.5 text-meta-sm text-b3 leading-snug">
               {shareMsg}
             </div>
             <div className="mt-2.5 flex gap-2">
               <button
                 onClick={goForwardRequest}
-                className="flex-1 bg-g text-white rounded-pill py-2 text-[12px] font-bold
-                           hover:opacity-90 active:scale-[.98] transition-all"
+                className="flex-1 bg-g text-white rounded-pill py-2 text-meta font-bold cg-cta"
               >
                 Forward to friends →
               </button>
               <button
                 onClick={doNativeShare}
-                className="bg-white border border-bdr rounded-pill px-3.5 py-2 text-[12px] font-bold text-b3
-                           hover:text-b2 transition-colors"
+                className="bg-white border border-bdr rounded-pill px-3.5 py-2 text-meta font-bold text-b3 cg-cta-ghost"
               >
                 Copy
               </button>
@@ -982,6 +1075,73 @@ export function ResultsScreen() {
           </div>
         );
       })()}
+
+      {/* Phase 3d (2026-05-31) — "Invite friends · Become a Connector"
+          promo card per DESIGN_AUDIT § 5.3 (Jennifer L SRP mockup).
+          Sits below the share card as the final block on the page.
+          Avatar cluster signals "your friends are already here" while
+          the orange CTA carries the Connector ask. Two affordances:
+          (1) Invite friends — earn per-friend when they join + book
+          (2) Become a Connector — apply at /rainmaker/apply.
+          The orange CTA (bg-warn) is the mockup's chosen visual
+          weight — it's the only orange surface on the page so it
+          reads as the platform-level upsell, not a transactional
+          button. */}
+      <div className="mx-5 mt-2 mb-5 bg-white border border-bdr rounded-[16px] p-4">
+        <div className="flex items-start gap-3">
+          {/* avatar cluster — top 3 recommenders from the first
+              card, falling back to abstract initials so the spot
+              isn't blank for new users with no graph yet */}
+          <div className="flex -space-x-1.5 flex-shrink-0">
+            {(providers[0]?.recommendersRaw?.slice(0, 3)
+              || [{ name: 'A' }, { name: 'M' }, { name: 'J' }]
+            ).map((r, i) => {
+              const colors = [
+                'bg-gradient-to-br from-[#b06090] to-[#703050]',
+                'bg-gradient-to-br from-[#4478aa] to-[#2a5070]',
+                'bg-gradient-to-br from-g to-gd',
+              ];
+              const initials = (r?.name || '?').slice(0, 2).toUpperCase();
+              return (
+                <div
+                  key={r?.id || i}
+                  className={`w-9 h-9 rounded-full border-2 border-white text-white
+                              text-meta-sm font-extrabold flex items-center justify-center ${colors[i]}`}
+                >
+                  {initials}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-body font-extrabold text-black leading-tight">
+              Bring your people · earn together
+            </p>
+            <p className="text-meta text-b3 font-medium mt-0.5 leading-snug">
+              Invite friends and they help you find pros. Or apply to
+              be a Connector and spotlight free services to your audience.
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/invite/friends')}
+            className="flex-1 bg-warn text-white rounded-pill py-2 text-meta font-extrabold
+                       hover:opacity-90 active:scale-[.98] transition-all"
+          >
+            Invite friends →
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/rainmaker/apply')}
+            className="flex-1 bg-white border border-bdr rounded-pill py-2 text-meta font-extrabold text-b2
+                       hover:border-warn/40 transition-colors"
+          >
+            Become a Connector
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

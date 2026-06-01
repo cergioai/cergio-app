@@ -428,9 +428,9 @@ export function AuthScreen() {
         <button
           onClick={submit}
           disabled={!valid || busy}
-          className={`w-full rounded-[24px] py-4 text-[17px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-[17px] font-extrabold cg-cta
             ${valid && !busy
-              ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
+              ? 'bg-g text-white'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}
         >
           {busy ? 'Please wait…' : (isSignup ? 'Create account' : 'Sign in')}
@@ -444,7 +444,7 @@ export function AuthScreen() {
 
         <button
           onClick={() => navigate('/home')}
-          className="w-full mt-4 text-[14px] font-extrabold text-b3 underline underline-offset-2"
+          className="w-full mt-4 text-[14px] font-extrabold text-b3 underline underline-offset-2 cg-focusable rounded-pill py-1"
         >
           Continue as guest
         </button>
