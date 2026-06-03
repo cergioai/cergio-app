@@ -995,53 +995,47 @@ export function HomeScreen() {
                     Same affordance covers both the consumer→service and
                     service→Connector intents — toggling intent just
                     relabels the dropdown options. */}
-                {/* CERGIO-GUARD (2026-06-03 v2): order is [text] (i) [chevron]
-                    per Tarik — (i) sits to the LEFT of the chevron arrow.
-                    Chevron is now its own sibling button so the (i) can
-                    slot between text + chevron without nesting buttons. */}
-                <div ref={modeBtnRef} className="relative flex items-center">
+                {/* CERGIO-GUARD (2026-06-03 v3): everything inside the
+                    mode toggle is now in a SINGLE button with the (i)
+                    embedded as a clickable span — guarantees the (i)
+                    can never drop to a new line at narrow widths. The
+                    span stops propagation so its own click routes to
+                    /rainmaker/apply instead of toggling the dropdown.
+                    Order: [Free for Connectors] (i) ▼ — all flush
+                    right of the attach icon, never wraps. */}
+                <div ref={modeBtnRef} className="relative flex items-center flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setModeOpen(o => !o)}
                     aria-haspopup="listbox"
                     aria-expanded={modeOpen}
-                    className={`px-1 text-meta font-normal transition-colors
+                    className={`group/mode inline-flex items-center gap-1 px-1 text-meta font-normal
+                                whitespace-nowrap transition-colors
                                 ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
                   >
                     {freeServices ? 'Free for Connectors' : 'Pay full price'}
-                  </button>
-                  {freeServices && (
-                    <span className="relative group inline-flex items-center">
-                      <button
-                        type="button"
+                    {freeServices && (
+                      <span
+                        role="button"
+                        tabIndex={0}
                         onClick={(e) => { e.stopPropagation(); navigate('/rainmaker/apply'); }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            navigate('/rainmaker/apply');
+                          }
+                        }}
                         aria-label="What's a Connector?"
                         title="Creators, influencers, super-users with strong local networks. Tap for details."
-                        className="ml-1.5 w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold
-                                   flex items-center justify-center hover:bg-gl transition-colors"
+                        className="w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold
+                                   inline-flex items-center justify-center hover:bg-gl transition-colors
+                                   flex-shrink-0 cursor-pointer"
                       >
                         i
-                      </button>
-                      <span
-                        role="tooltip"
-                        className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5
-                                   opacity-0 group-hover:opacity-100 transition-opacity
-                                   bg-black/85 text-white text-[11px] font-medium
-                                   leading-snug rounded-lg px-2.5 py-1.5 w-[210px] text-center z-20 shadow-card"
-                      >
-                        Creators, influencers, super-users with strong local
-                        networks. Tap for details.
                       </span>
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setModeOpen(o => !o)}
-                    aria-label="Toggle mode menu"
-                    className={`ml-1 p-0.5 transition-colors
-                                ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
-                  >
-                    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="opacity-70">
+                    )}
+                    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="opacity-70 flex-shrink-0">
                       <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>

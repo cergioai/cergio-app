@@ -1,62 +1,55 @@
-style(mission): three-pillar APGI thesis + tagline + cascading copy
+fix(earnings): unblock $0 ledger + (i) embedded inside toggle button
 
-Tarik 2026-06-03:
-  "tweak mission with hard hitting succinct short and visually
-   impactful copy:
-     1. Correct AI with friend + endorsements vs gamed/false web
-        data it was trained on
-     2. Direct AI to enable shared human prosperity, distribute
-        abundance profitable for everyone
-     3. Create architectures that drive everyone's prosperity
-        together (rather than shortsighted individualist goals
-        that create conflict between users and investors, users
-        and other users etc)
-   tweak all copy below mission relative to above.. then tweak
-   the human-centered tagline etc. to infer this while keeping
-   a one liner."
+═══════════════ (1) Earnings shows $0 for t@cergio.ai ═══════════════
 
-═══════════════ AboutScreen ═══════════════
+Tarik 2026-06-03 — Earnings page rendered $0 even though the
+referral audit showed t@cergio has 6 invite payouts worth $838.
 
-  • Tagline (hero): "Friend-powered AI — built so we all prosper
-    together." (single line, hints at all three pillars.)
-  • Mission card rewritten as three verb-led pillars:
-      Correct AI. Direct AI. Align AI.
-        1. Correct it.  Friend-to-friend trust replaces gamed,
-           ad-saturated web data.
-        2. Direct it.  Aim at shared human prosperity —
-           distribute the abundance profitably for everyone.
-        3. Align it.   Architectures where users, builders, and
-           investors all earn together.
-  • "What we believe" card REMOVED — the new mission card absorbs
-    its two convictions with sharper, more visual framing.
-  • "Three ways Cergio creates value" → "How the alignment works"
-    with a new lead sentence tying the three earning surfaces to
-    pillar 3 (Align it). APGI line now closes with
-    "This is how the abundance gets distributed."
-  • Team card sub-copy reframed to land on the mission:
-    "...now turned toward an AI that corrects itself on human
-     trust and shares its upside with everyone it serves."
+Root cause in src/lib/api.js → getMyEarnings():
 
-═══════════════ Cascading taglines (one line each) ═══════════════
+  .select('id, kind, source_id, amount_cents, currency, status,
+           created_at, meta')
+  .order('created_at', { ascending: false })
 
-  rewards.js missionLine, HomeScreen footer ad, EarnExplainer
-  mission line, EarningsScreen GPI section, RainmakerApply footer
-  — all swapped from
-    "human-powered AI that enables shared prosperity"
-  to
-    "friend-powered AI — built so we all prosper together"
+But the actual `earnings` table column is `occurred_at`
+(confirmed via Test Referral Payments.command schema probe).
+PostgREST silently returns a 400 on the unknown column → data
+is null → setEarnings(data || []) lands as an empty array →
+totals.all = 0 → "$0".
+
+Fix:
+  • Select + order by `occurred_at`.
+  • Map `occurred_at` → `created_at` in the returned shape so
+    EarningsScreen and other consumers don't need to change.
+
+Net behavior after refresh: t@cergio.ai will see all 6 invite
+rows (4 direct $250s + 2 chain $12.50s) in the Referrals tab,
+cleared/pending split matching section 3 of the audit.
+
+═══════════════ (2) (i) icon was wrapping below toggle at narrow widths ═══════════════
+
+Tarik: "the i is back at the bottom left.. place just to the left
+of the arrow on top right."
+
+v2's sibling-button layout still wrapped at the narrow phone-shell
+width. Restructured so the entire toggle is ONE button containing
+[text] (i) [chevron] with:
+  • inline-flex items-center
+  • whitespace-nowrap on the button
+  • flex-shrink-0 on the (i) and chevron
+  • the (i) is a clickable <span role="button"> nested inside the
+    button, stopPropagation on click/Enter so it routes to
+    /rainmaker/apply instead of toggling the dropdown.
+
+Guarantees the (i) stays inline with the chevron, no matter the
+container width.
 
 ═══════════════ Files ═══════════════
 
-  cergio-app/src/screens/AboutScreen.jsx
   cergio-app/src/screens/HomeScreen.jsx
-  cergio-app/src/screens/EarnExplainerScreen.jsx
-  cergio-app/src/screens/EarningsScreen.jsx
-  cergio-app/src/screens/RainmakerApplyScreen.jsx
-  cergio-app/src/lib/rewards.js
+  cergio-app/src/lib/api.js
 
 ═══════════════ Verified ═══════════════
 
-  scripts/qa.mjs — 41/41 PASS (APGI assertions still satisfied —
-    "prosperity" still in the Scene 3 copy via cascading lines).
-  @babel/parser JSX on all six files — OK.
+  scripts/qa.mjs — 41/41 PASS
+  @babel/parser JSX on both files — OK.

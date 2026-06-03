@@ -1646,11 +1646,18 @@ export async function markCcVerified() {
 }
 
 /**
- * Read the signed-in user's earnings ledger (bookings + spotlights merged).
- * Returns rows ordered by created_at desc, capped at `limit`. Each row has
- * { id, kind, source_id, amount_cents, currency, status, created_at, meta }.
- * Includes both kind='booking' (from paid services) and kind='spotlight'
- * (from accepted + paid spotlight requests).
+ * Read the signed-in user's earnings ledger (bookings + spotlights + invite
+ * referrals merged). Returns rows ordered by occurred_at desc, capped at
+ * `limit`. Each row has { id, kind, source_id, amount_cents, currency,
+ * status, occurred_at, meta }.
+ *
+ * CERGIO-GUARD (2026-06-03): the real earnings table column is
+ * `occurred_at`, not `created_at`. Previous version selected/ordered by
+ * `created_at` and PostgREST silently 400'd → t@cergio.ai's Earnings
+ * screen showed $0 even though the ledger had $838 in invite payouts.
+ *
+ * Aliased to `created_at` in the returned shape so EarningsScreen and
+ * other consumers don't have to know the underlying column name.
  */
 export async function getMyEarnings({ limit = 50, kind } = {}) {
   if (!supabaseReady) return { data: [], error: null };
@@ -1658,12 +1665,18 @@ export async function getMyEarnings({ limit = 50, kind } = {}) {
   if (!userRes?.user) return { data: [], error: null };
   let q = supabase
     .from('earnings')
-    .select('id, kind, source_id, amount_cents, currency, status, created_at, meta')
+    .select('id, kind, source_id, amount_cents, currency, status, occurred_at, meta')
     .eq('profile_id', userRes.user.id)
-    .order('created_at', { ascending: false })
+    .order('occurred_at', { ascending: false })
     .limit(limit);
   if (kind) q = q.eq('kind', kind);
-  return await q;
+  const res = await q;
+  if (res.data) {
+    // Backwards-compat: expose occurred_at as created_at so existing UI
+    // (EarningsScreen ledger row formatter) doesn't have to change.
+    res.data = res.data.map(r => ({ ...r, created_at: r.occurred_at }));
+  }
+  return res;
 }
 
 /**
