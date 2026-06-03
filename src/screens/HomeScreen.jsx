@@ -286,27 +286,12 @@ export function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth?.isSignedIn]);
 
-  // Phase 3d (2026-05-31) — accept seeds from ResultsScreen's category
-  // nav + filter pills. seedQuery: pre-fills the search box with a
-  // canonical provider type (e.g. "housekeeper") so the user can tap
-  // send to search; seedFreeServices: flips the Free toggle without
-  // touching the query. We do not auto-submit — same restraint as
-  // pendingQuery above — to keep the user in control.
-  useEffect(() => {
-    const seed = location.state || {};
-    if (typeof seed.seedFreeServices === 'boolean' && seed.seedFreeServices !== freeServices) {
-      setFreeServices(seed.seedFreeServices);
-    }
-    if (seed.seedQuery && typeof seed.seedQuery === 'string') {
-      setQuery(seed.seedQuery);
-      // Clear nav state so a refresh doesn't loop. Replace the entry so
-      // the back button still goes where the user came from.
-      navigate(location.pathname, { replace: true, state: null });
-      // Bring focus to the input so the user can hit send immediately.
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
+  // CERGIO-GUARD (2026-06-02): seedQuery / seedFreeServices wiring
+  // removed along with the ResultsScreen category nav + filter pills
+  // (per Tarik's directive to keep the design audit typography-only
+  // and not touch the information architecture). The only remaining
+  // pendingQuery path stays — that's the auth round-trip restore,
+  // unrelated to the category rail.
 
   // Engine state — kicks off once chat.phase flips to 'ready' (all
   // mandatory fields captured). We stay on Home through the whole thing.

@@ -119,19 +119,6 @@ function buildStatusSteps(providerType, opts = {}) {
 
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 
-// Phase 3d category-nav rail — top 5 canonical provider types per the
-// "New York results — housekeepers" mockup. Tap re-seeds the chat
-// state with that type and re-runs the search through Home. Glyphs
-// stay text-emoji to keep the rail lightweight; replace with proper
-// SVGs once the brand-illustration set lands.
-const CATEGORY_NAV = [
-  { type: 'Housekeeper', label: 'Housekeeper', icon: '🧺' },
-  { type: 'Pet Sitter',  label: 'Pet Sitter',  icon: '🐾' },
-  { type: 'Handyman',    label: 'Handyman',    icon: '🔧' },
-  { type: 'Trainer',     label: 'Trainer',     icon: '🏋️' },
-  { type: 'Driver',      label: 'Driver',      icon: '🚗' },
-];
-
 // Map a Supabase service row → the shape ProviderCard expects.
 // `friendDisplayName` is the legacy "owner is your friend" hint (kept
 // as a fallback). `recommenders` is the real data — list of profiles
@@ -709,88 +696,16 @@ export function ResultsScreen() {
 
       <h2 className="px-5 text-heading-1 font-extrabold text-black leading-tight mb-3">{titleText}</h2>
 
-      {/* Category nav row — horizontal scroll of provider-type chips.
-          CERGIO-GUARD (Phase 3d 2026-05-31): per DESIGN_AUDIT § 5.3
-          this was MISSING; mockup shows Housekeeper / Pet Sitter /
-          Handyman / Trainers / Drivers as a tappable rail above the
-          filter pills. Each chip re-routes Home with the canonical
-          provider_type seeded so the next search lands on that type.
-          Currently-active type is highlighted; tap = navigate to /
-          with chat seeded for that type. We keep the list short
-          (top 5) to match the mockup density and avoid a horizontal
-          rail of 20+ items. */}
-      <div className="px-5 mb-3 -mx-1 overflow-x-auto no-scrollbar">
-        <div className="flex gap-2 px-1 pb-1">
-          {CATEGORY_NAV.map(c => {
-            const active = safeProviderType
-              ? String(safeProviderType).toLowerCase() === c.type.toLowerCase()
-              : false;
-            return (
-              <button
-                key={c.type}
-                type="button"
-                onClick={() => navigate('/', { state: { seedQuery: c.label.toLowerCase() } })}
-                className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5
-                            border text-body-sm font-extrabold transition-colors
-                            ${active
-                              ? 'bg-g text-white border-g'
-                              : 'bg-white text-b2 border-bdr hover:border-g/40'}`}
-              >
-                <span className="text-meta-sm" aria-hidden="true">{c.icon}</span>
-                {c.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Filter pill row — "All Services" · "Free" · "Discounted".
-          CERGIO-GUARD (Phase 3d): per § 5.3 this was MISSING. Pills
-          mirror the freeServices outlet-context flag (driven by Home's
-          "Free for Connectors" toggle). Tap toggles between free /
-          discounted / all. "Discounted" filter is future-tabled (no
-          discount field on services yet) — surfaces as a disabled-look
-          chip with a tooltip-style title so users understand it's
-          coming, not broken. */}
-      <div className="flex items-center gap-2 px-5 mb-4">
-        <button
-          type="button"
-          onClick={() => navigate('/', { state: { seedFreeServices: false } })}
-          className={`rounded-pill px-3 py-1.5 text-body-sm font-extrabold border transition-colors
-                      ${!freeServices
-                        ? 'bg-black text-white border-black'
-                        : 'bg-white text-b2 border-bdr hover:border-g/40'}`}
-        >
-          All services
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/', { state: { seedFreeServices: true } })}
-          className={`inline-flex items-center gap-1 rounded-pill px-3 py-1.5 text-body-sm font-extrabold border transition-colors
-                      ${freeServices
-                        ? 'bg-g text-white border-g'
-                        : 'bg-white text-gd border-bdr hover:border-g/40'}`}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
-            <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-          </svg>
-          Free
-        </button>
-        {/* CERGIO-GUARD (Phase 3d): "Discounted" pill is future-tabled
-            (no discount field on services yet). Surfaces as a muted,
-            non-tappable chip so the rail matches the mockup; once we
-            ship a discount field, lift the disabled state and wire
-            the filter. The chip is intentionally NOT labeled with
-            placeholder copy so it doesn't trip the qa#7 guard against
-            unfinished surfaces — it's a visual rail member, not a
-            promised feature. */}
-        <span
-          aria-disabled="true"
-          className="rounded-pill px-3 py-1.5 text-body-sm font-extrabold border bg-white text-b3/70 border-bdr cursor-default"
-        >
-          Discounted
-        </span>
-      </div>
+      {/* CERGIO-GUARD (2026-06-02): the category-nav rail (Housekeeper
+          / Pet Sitter / Handyman / Trainer / Driver) and the filter
+          pill row ("All services · Free · Discounted") were removed
+          per Tarik's directive — "they were in designs that should
+          not have been carried through... as I had asked for design
+          audit without changing that information architecture."
+          The audit was supposed to stay typography + brand only,
+          not introduce new navigation surfaces. Free-toggling stays
+          on Home (the canonical "Free for Connectors" entry); search
+          re-targeting stays through the chat input on Home. */}
 
       {pills.length > 0 && (
         <div className="flex flex-wrap gap-2 px-5 mb-4">
