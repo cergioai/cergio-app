@@ -136,6 +136,36 @@ export function EarningsScreen() {
   const visibleRows  = activeTab === 'bookings' ? bookingRows : referralRows;
   const visibleTotal = activeTab === 'bookings' ? totals.bookings : totals.referrals;
 
+  // CERGIO-GUARD (2026-06-03): per-friend totals — used by
+  // ReferralsSummary's "top contributors" block AND by each row's
+  // running tally pill. Aggregates across direct + chain payouts
+  // keyed on meta.friend (first token before "->" for chain rows).
+  const friendName = (e) => {
+    const raw = e.meta?.friend;
+    if (!raw) return null;
+    return String(raw).split('->')[0];
+  };
+  const perFriend = (() => {
+    const map = {};
+    for (const e of referralRows) {
+      const name = friendName(e);
+      if (!name) continue;
+      if (!map[name]) map[name] = { name, total: 0, count: 0 };
+      map[name].total += e.amount_cents;
+      map[name].count += 1;
+    }
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  })();
+
+  // CERGIO-GUARD (2026-06-03): sort control on Referrals tab.
+  // 'recent' = chronological (current behavior).
+  // 'top'    = highest payout first — surfaces which friends are
+  //            driving the earnings.
+  const [sortMode, setSortMode] = useState('recent');
+  const sortedVisibleRows = activeTab === 'referrals' && sortMode === 'top'
+    ? [...visibleRows].sort((a, b) => (b.amount_cents || 0) - (a.amount_cents || 0))
+    : visibleRows;
+
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
       {/* Page title aligns with Profile canon: 30px / 800 / leading-tight,
@@ -247,6 +277,21 @@ export function EarningsScreen() {
 
           {visibleRows.length > 0 ? (
             <>
+              {/* CERGIO-GUARD (2026-06-03): aggregate summary + per-friend
+                  context per Tarik: "show calculation 7% of 250 booking ..
+                  tally so far $X out of $250 from alex.. aggregate balances
+                  (N friends invited, M reco'd, $X/$Y potential)... sorts
+                  to see top connections driving earnings". Renders only
+                  on Referrals tab; Bookings keeps the original simple list. */}
+              {activeTab === 'referrals' && (
+                <ReferralsSummary
+                  referralRows={referralRows}
+                  invitesCount={invitesCount}
+                  recsCount={recsCount}
+                  sortMode={sortMode}
+                  onSortChange={setSortMode}
+                />
+              )}
               <div className="flex items-center justify-between px-5 mb-2">
                 <p className="text-[14px] font-extrabold uppercase tracking-widest text-b3">
                   {activeTab === 'bookings' ? 'Service bookings' : 'Referrals & spotlights'}
@@ -254,7 +299,7 @@ export function EarningsScreen() {
                 <p className="text-[14px] font-extrabold text-g">{fmtDollars(visibleTotal)}</p>
               </div>
               <div className="px-5 flex flex-col gap-2 mb-6">
-                {visibleRows.map(e => (
+                {sortedVisibleRows.map(e => (
                   <div key={e.id} className="bg-white border border-bdr rounded-[14px] p-3.5 flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
                                       ${e.kind === 'spotlight' ? 'bg-gl text-gd'
@@ -289,20 +334,23 @@ export function EarningsScreen() {
                       {(() => {
                         const tier   = earningTier(e);
                         const friend = e.meta?.friend;
+                        const friendShort = friend ? String(friend).split('->')[0] : null;
                         let headline = 'Friend referral';
                         if (e.kind === 'spotlight') {
                           headline = `${e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram'} spotlight`;
                         } else if (e.kind === 'booking') {
                           headline = 'Service booking';
-                        } else if (friend && tier === 'direct') {
-                          headline = `${friend.split('->')[0]} booked`;
-                        } else if (friend && tier === 'chain') {
-                          // "Sam->FriendA" → "via Sam" (chain through Sam)
-                          const via = friend.split('->')[0];
-                          headline = `Chain payout via ${via}`;
+                        } else if (friendShort && tier === 'direct') {
+                          headline = `${friendShort} booked`;
+                        } else if (friendShort && tier === 'chain') {
+                          headline = `Chain payout via ${friendShort}`;
                         } else if (tier === 'chain') {
                           headline = 'Chain payout';
                         }
+                        // Per-friend running total — used by the tally pill.
+                        const friendTotal = friendShort
+                          ? (perFriend.find(p => p.name === friendShort)?.total || 0)
+                          : 0;
                         return (
                           <>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -315,20 +363,23 @@ export function EarningsScreen() {
                                   {tier === 'direct' ? 'Direct' : 'Chain +5%'}
                                 </span>
                               )}
+                              {friendShort && (
+                                <FriendTallyPill name={friendShort} friendTotalCents={friendTotal} />
+                              )}
                             </div>
-                            {/* Sub-line: friend context + via + date + status */}
+                            {/* Sub-line: calculation + chain origin + date + status */}
+                            {e.kind === 'invite' && (
+                              <p className="text-[11px] text-b3 mt-0.5 leading-snug">
+                                {tier === 'direct' && friendShort
+                                  ? <>{REWARDS.referrerSharePercent}% of {friendShort}&apos;s bookings · up to ${REWARDS.perFriend} cap</>
+                                  : tier === 'chain' && friend && friend.includes('->')
+                                  ? <>Friend-of-friend ({friend.split('->')[1]}) booked · {REWARDS.friendOfFriendPercent}% chain bonus</>
+                                  : tier === 'chain'
+                                  ? <>Friend-of-friend booked · {REWARDS.friendOfFriendPercent}% chain bonus</>
+                                  : <>{REWARDS.referrerSharePercent}% of friend&apos;s bookings</>}
+                              </p>
+                            )}
                             <p className="text-[11px] text-b3 mt-0.5 leading-snug">
-                              {e.kind === 'invite' && friend && tier === 'chain' && friend.includes('->') && (
-                                <span className="text-b2 font-medium">
-                                  Friend-of-friend booked ({friend.split('->')[1]})
-                                  {' · '}
-                                </span>
-                              )}
-                              {e.kind === 'invite' && !friend && tier === 'chain' && (
-                                <span className="text-b2 font-medium">
-                                  Friend-of-friend booked · {' '}
-                                </span>
-                              )}
                               {timeAgo(e.created_at)} · {e.status === 'cleared' ? 'cleared' : e.status}
                             </p>
                           </>
@@ -520,3 +571,137 @@ export function EarningsScreen() {
 // ActionCard + ICONS helpers removed — replaced by the inline Invite
 // + Reco buttons next to the counter row + the "How earnings work"
 // link. Less surface, clearer signal.
+
+// CERGIO-GUARD (2026-06-03): aggregate referral summary block.
+// Renders above the per-row ledger when the Referrals tab is active.
+// Sections:
+//   1. Aggregates — N friends invited, M reco'd, $X earned / $Y potential
+//      with a progress bar so the room-to-grow is visceral.
+//   2. Top contributors — top 3 friends driving total earnings + their share.
+//   3. Sort control — Most recent / Top earners.
+// Pulls REWARDS.referrerSharePercent for the calculation copy so the
+// number stays in sync with the legal/payments docs.
+function ReferralsSummary({ referralRows, invitesCount, recsCount, sortMode, onSortChange }) {
+  const totalCents = referralRows.reduce((s, e) => s + (e.amount_cents || 0), 0);
+  // Potential cap = perFriend × number of invites (one slot per invited
+  // friend). $250 × 23 = $5,750 if Tarik has 23 invites. This is the
+  // "energizing" number — what's left on the table.
+  const perFriendCents = REWARDS.perFriend * 100;
+  const potentialCents = perFriendCents * Math.max(invitesCount, 1);
+  const pct = potentialCents > 0
+    ? Math.min(100, Math.round((totalCents / potentialCents) * 100))
+    : 0;
+
+  // Per-friend totals — surface top 3 driving earnings.
+  const friendMap = {};
+  for (const e of referralRows) {
+    const raw = e.meta?.friend;
+    if (!raw) continue;
+    const name = String(raw).split('->')[0];
+    if (!friendMap[name]) friendMap[name] = { name, total: 0 };
+    friendMap[name].total += (e.amount_cents || 0);
+  }
+  const friends = Object.values(friendMap).sort((a, b) => b.total - a.total);
+  const top3 = friends.slice(0, 3);
+  const top3Share = totalCents > 0
+    ? Math.round((top3.reduce((s, f) => s + f.total, 0) / totalCents) * 100)
+    : 0;
+
+  return (
+    <div className="mx-5 mb-4 bg-white border border-bdr rounded-[16px] p-4">
+      {/* Aggregates */}
+      <div className="flex items-baseline justify-between mb-1">
+        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3">
+          Your referral pool
+        </p>
+        <p className="text-[11px] text-b3 font-medium">
+          {REWARDS.referrerSharePercent}% per booking · up to ${REWARDS.perFriend}/friend
+        </p>
+      </div>
+      <p className="text-[18px] font-extrabold text-black leading-tight">
+        ${(totalCents / 100).toFixed(0)}
+        <span className="text-b3 font-bold text-[14px]">
+          {' '}of ${(potentialCents / 100).toLocaleString()} potential
+        </span>
+      </p>
+      {/* Progress bar — green to mint */}
+      <div className="mt-2 h-1.5 rounded-full bg-bg5 overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-g to-gd rounded-full"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="mt-2 flex items-baseline justify-between text-[12px] text-b3">
+        <span>
+          <span className="font-extrabold text-b2">{invitesCount}</span> friends invited
+          {' · '}
+          <span className="font-extrabold text-b2">{recsCount}</span> reco&apos;d
+        </span>
+        <span className="text-gd font-extrabold">{pct}%</span>
+      </div>
+
+      {/* Top contributors */}
+      {top3.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-bdr">
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-1.5">
+            Top 3 · {top3Share}% of your earnings
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {top3.map((f) => {
+              const share = totalCents > 0 ? Math.round((f.total / totalCents) * 100) : 0;
+              return (
+                <div key={f.name} className="flex items-center justify-between text-[13px]">
+                  <span className="font-extrabold text-black truncate pr-2">{f.name}</span>
+                  <span className="text-b3 font-bold flex-shrink-0">
+                    ${(f.total / 100).toFixed(0)}
+                    <span className="ml-1.5 text-gd">{share}%</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Sort */}
+      <div className="mt-4 pt-3 border-t border-bdr flex items-center gap-2">
+        <span className="text-[11px] font-extrabold uppercase tracking-widest text-b3">Sort</span>
+        <button
+          type="button"
+          onClick={() => onSortChange('recent')}
+          className={`text-[12px] font-extrabold rounded-pill px-2.5 py-0.5 transition-colors
+                      ${sortMode === 'recent' ? 'bg-gl text-gd' : 'bg-bg5 text-b3 hover:text-b2'}`}
+        >
+          Most recent
+        </button>
+        <button
+          type="button"
+          onClick={() => onSortChange('top')}
+          className={`text-[12px] font-extrabold rounded-pill px-2.5 py-0.5 transition-colors
+                      ${sortMode === 'top' ? 'bg-gl text-gd' : 'bg-bg5 text-b3 hover:text-b2'}`}
+        >
+          Top earners
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// CERGIO-GUARD (2026-06-03): per-friend running tally pill rendered on
+// each referral row. Shows lifetime $earned / $cap (from REWARDS) so the
+// user knows how much room is left on each friend slot.
+function FriendTallyPill({ name, friendTotalCents }) {
+  const capCents  = REWARDS.perFriend * 100;
+  const pct       = Math.min(100, Math.round((friendTotalCents / capCents) * 100));
+  const maxedOut  = pct >= 100;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold rounded-pill px-1.5 py-0.5
+                  ${maxedOut ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}
+      title={`${name}: $${(friendTotalCents/100).toFixed(0)} of $${REWARDS.perFriend} cap`}
+    >
+      ${(friendTotalCents/100).toFixed(0)}/${REWARDS.perFriend}
+      {maxedOut && <span aria-hidden="true">✓</span>}
+    </span>
+  );
+}

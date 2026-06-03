@@ -1,30 +1,60 @@
-fix(earnings): smart default tab — flip to Referrals when Bookings empty
+feat(earnings): referral context + tally + top contributors + sort
 
-Tarik 2026-06-03: "can't see Earnings $588 USD."
+Tarik 2026-06-03:
+  "don't see context around the earnings... so alex booking 250..
+   is that how much I make? show the calculation.. 7% of 250 booking
+   .. and a tally (so far $7 out of $250 from alex..)... also show
+   what alex booked, when etc... succinct, easy to read, with
+   aggregate balances (23 friends invites, 50 services recommended,
+   $437/$7,250 potential earnings...)... energize users... add sorts
+   to see top connections driving their earnings (especially for
+   second degree)."
 
-The screen showed the $588 balance + cash-out CTA, but the
-breakdown rows were hidden behind the Bookings tab's empty
-state ("No service bookings yet"). t@cergio.ai is detected
-as a provider (has the test plumber listings), so the
-default-tab effect routed to Bookings — which has zero
-rows — instead of Referrals where the $588 lives.
+═══════════════ ReferralsSummary block (above ledger) ═══════════════
 
-Added a second useEffect that runs after earnings load:
-  if (isProvider && _bookingRowCount === 0 && _referralRowCount > 0)
-    setActiveTab('referrals');
+Lands above the per-row list on the Referrals tab only:
 
-Still respects an explicit user tap (tabSetByUser gate).
-Original `if (!tabSetByUser && isProvider) setActiveTab('bookings')`
-line preserved verbatim so qa.mjs invariant #33 keeps passing.
+  • Pool header — "Your referral pool" · "7% per booking · up to
+    $250/friend" (pulls REWARDS.referrerSharePercent + perFriend).
+  • Hero stat — "$588 of $5,750 potential" with a green→mint
+    progress bar so the room to grow is visceral.
+  • Counter row — "{N} friends invited · {M} reco'd" + green %
+    completion badge.
+  • Top 3 contributors — leaderboard of the friends driving the
+    biggest share, with their cumulative dollar + % share of total.
+    Surfaces "3 of your 50 friends are responsible for 50%"
+    intuition.
+  • Sort toggle — "Most recent" / "Top earners" pills that flip
+    the row ordering. Tarik directive: see top connections at a
+    glance, especially for second-degree drivers.
 
-Net behavior:
-  • Provider with bookings AND referrals → defaults to Bookings.
-    (no change)
-  • Provider with no bookings yet AND referrals → defaults to
-    Referrals so payouts are visible immediately. (the fix)
-  • Provider with neither → defaults to Bookings (qa-locked).
-  • User explicitly taps a tab → respects their choice.
+═══════════════ Per-row context (every Referrals row) ═══════════════
+
+Each row now carries the full calculation + tally context:
+
+  • Headline (unchanged): "{Friend} booked" / "Chain payout via X"
+  • Tier pill (unchanged): Direct / Chain +5%
+  • NEW — Friend tally pill: "$250/$250 ✓" (maxed out) or
+    "$63/$250" (still room). Sums lifetime earnings per friend.
+  • NEW — Sub-line: "7% of {Friend}'s bookings · up to $250 cap"
+    (direct) or "Friend-of-friend ({fof name}) booked · 5% chain
+    bonus" (chain). REWARDS.referrerSharePercent +
+    friendOfFriendPercent — source of truth, never hardcoded copy.
+
+═══════════════ Wiring ═══════════════
+
+  • EarningsScreen: new perFriend memoized aggregate keyed on
+    meta.friend (first token before "->" for chain rows). Sort
+    state ('recent' | 'top') flips sortedVisibleRows on Referrals.
+  • Both helpers (ReferralsSummary, FriendTallyPill) are tiny
+    presentational components at the bottom of the file —
+    Reusable if we extract them later.
+
+═══════════════ Files ═══════════════
+
+  cergio-app/src/screens/EarningsScreen.jsx
 
 ═══════════════ Verified ═══════════════
 
-  scripts/qa.mjs — 41/41 PASS (invariant #33 happy).
+  scripts/qa.mjs — 41/41 PASS
+  @babel/parser JSX on EarningsScreen.jsx — OK
