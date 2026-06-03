@@ -437,9 +437,32 @@ export function ServiceListAboutScreen() {
             const canonicalMatch = (STARTER_TYPES.find(t => t.toLowerCase() === typedTrim.toLowerCase())
                                  || PROVIDER_TYPES.find(t => t.toLowerCase() === typedTrim.toLowerCase())
                                  || null);
-            const resolvedProviderType = useTaxo
-              ? (taxo.provider_type || canonicalMatch)
-              : canonicalMatch;
+            // CERGIO-GUARD (2026-06-03): when chat-parse stalls / drifts
+            // it can return a generic catch-all string like "Service
+            // Provider" or "Professional". listServices' strict filter
+            // AND getProvidersForNotify's allowlist BOTH require an
+            // exact canonical match — generic values mean the row is
+            // invisible AND the provider misses every notification.
+            // Discovered 2026-06-03 from info@cergio.ai's two Personal
+            // Chef listings both saved with taxonomy_provider_type=
+            // 'Service Provider' → didn't appear in fan-out.
+            // Guard: drop the parser's value when it's generic and
+            // fall through to the dropdown canonical.
+            const GENERIC_PT = new Set([
+              'service','services','service provider','service providers',
+              'provider','providers','professional','professionals',
+              'expert','experts','specialist','specialists',
+              'worker','workers','helper','helpers',
+              'contractor','contractors','vendor','vendors',
+              'business','businesses','company','companies',
+              'freelancer','freelancers',
+            ]);
+            const isGeneric = (v) =>
+              !v || GENERIC_PT.has(String(v).trim().toLowerCase());
+            const parserPT = (useTaxo && !isGeneric(taxo.provider_type))
+              ? taxo.provider_type
+              : null;
+            const resolvedProviderType = parserPT || canonicalMatch;
 
             // CERGIO-GUARD (2026-06-02): novel-type telemetry. Per
             // Tarik: "augment the taxonomy gradually (and add related

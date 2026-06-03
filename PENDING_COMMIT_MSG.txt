@@ -1,142 +1,75 @@
-feat(marketplace): Step 1+2 bundle — request_responses + provider inbox + Results filter
+fix(list-service): never save generic taxonomy_provider_type
 
-MARKETPLACE_SPEC.md Steps 1-3 of the notify → confirm → show flow.
-Greenlighted by Tarik 2026-06-03.
-
-═══════════════ Step 1: Schema (ships as .command) ═══════════════
-
-`Apply Request Responses Migration.command` (sibling of Unlock and
-Push.command) creates the table + 3 indexes + 5 RLS policies.
-Idempotent: CREATE TABLE IF NOT EXISTS, DROP POLICY IF EXISTS before
-CREATE.
-
-  Table: request_responses (12 columns)
-    id                       uuid PK
-    request_id               uuid REFERENCES requests(id) ON DELETE CASCADE
-    responder_id             uuid REFERENCES profiles(id)
-    service_id               uuid REFERENCES services(id)
-    status                   text  CHECK IN (offered,countered,declined,
-                                              withdrawn,accepted,expired)
-    offered_price_cents      int   CHECK >= 0
-    message                  text
-    responded_at             timestamptz DEFAULT NOW()
-    last_counter_by          text  CHECK IN (provider, consumer)
-    time_to_offer_seconds    int   (telemetry for time-decay ranking)
-    wave_n                   int   (broadcast wave attribution)
-    UNIQUE (request_id, responder_id, service_id)
-
-  Indexes: request_id · responder_id · status
-
-  RLS policies (5):
-    request_owner_can_select_responses
-    responder_can_select_own
-    responder_can_insert_own
-    responder_can_update_own
-    owner_can_accept_or_expire
-
-  Anon role: cannot read. Verified by the migration's sanity step.
-
-═══════════════ Step 1: Client API (lib/api.js) ═══════════════
-
-Four core helpers + one inbound-list helper for the provider inbox:
-
-  respondToRequest(requestId, {status, serviceId, offeredPriceCents,
-                               message, waveN})
-    — Upserts on (request_id, responder_id, service_id) so repeated
-      clicks don't duplicate. Stamps last_counter_by='provider' on
-      counters and computes time_to_offer_seconds from the request's
-      created_at for time-decay telemetry.
-
-  listResponsesForRequest(requestId, {limit})
-    — Consumer-side read: joins responder profile + service. Filters
-      to status IN (offered, countered, accepted).
-
-  counterRequestResponse(responseId, {offeredPriceCents, message})
-    — Consumer counters back. last_counter_by='consumer'.
-
-  acceptRequestResponse(responseId)
-    — Flips chosen → 'accepted', bulk-withdraws siblings.
-
-  listInboundRequests({limit})    ← NEW in Step 2
-    — Provider-side read: pulls open consumer requests whose
-      service_type matches one of the provider's listed services AND
-      which the provider hasn't already responded to. Returns rows
-      shaped {id, service_type, description, location_text,
-      created_at, requester:{id, display_name}, my_service_id}.
-      "Open" = pending status AND created in the last 60 minutes
-      (broadcast window per MARKETPLACE_SPEC § 6 S3).
-
-═══════════════ Step 1: Audit (.command) ═══════════════
-
-`Audit Request Responses.command`:
-  • Funnel: total / no_offers / partial / ready_to_pick / accepted
-  • Per-request detail (last 50) — response counts by status
-  • Time-to-offer p50 + p90 per wave for cadence tuning
-  • R1-R5 red flags + RLS sanity (anon must read 0)
-
-═══════════════ Step 2: Consumer-side filter (ResultsScreen) ═══════════════
+═══════════════ The bug ═══════════════
 
 Tarik 2026-06-03:
-  "should not have seen results (as they did not accept the request)..
-   ONLY show Accepted requests... THIS IS CENTRAL TO THE SPEC!..
-   SO USERS GET REAL CONFIRMED SERVICES"
+  "sent a plumber request with t@cergio.ai .. logged in as
+   info@cergio.ai .. didn't find any notification."
 
-  • ResultsScreen polls listResponsesForRequest(requestId) every 4s
-    while open and builds confirmedServiceIds — the set of service_ids
-    with an offered / countered / accepted row.
-  • servicesFiltered restricts the rendered list to those service_ids
-    whenever a request_id is in chat state or navigation state.
-  • isLoading now also waits for the confirmed-response set, so the
-    screen doesn't flash "0 matches" while the response query is in
-    flight. Empty state only renders after the responses query lands
-    AND returns zero.
-  • Browse-mode (no request_id) is unchanged.
+Notify-chain audit surfaced the actual cause: info@cergio.ai's TWO
+Personal Chef listings both carried taxonomy_provider_type=
+'Service Provider' — the generic catch-all string. Both
+getProvidersForNotify (fan-out allowlist) and listInboundRequests
+(provider's open-requests inbox) do an EXACT-match against the
+canonical taxonomy. Generic values silently exclude the provider
+from every fan-out AND every search result.
 
-═══════════════ Step 2: Provider-side inbox (JobsInboxScreen) ═══════════════
+Same root cause as the NULL-taxonomy bug shipped in a5909e6
+(2026-06-02). a5909e6 fixed NULL → canonical via the dropdown
+fast path; it did NOT guard against chat-parse returning a
+generic non-NULL string. So a stalled / drifted parser response
+could still poison the row.
 
-  • New "New requests near you" section pinned ABOVE the existing
-    booking-request list in the Requests tab. Pulls
-    listInboundRequests every 30s.
-  • Each card shows requester name, "Needs a {service_type}",
-    description, location, time elapsed.
-  • Three actions:
-      Accept   → respondToRequest(status='offered', price=null)
-      Counter  → window.prompt for dollars → respondToRequest(
-                   status='countered', price=cents)
-      Decline  → respondToRequest(status='declined')
-  • Optimistic update: row drops from inbox immediately on success.
-  • Empty / no matching services → no section rendered (silent).
+═══════════════ Source fix (ServiceListAboutScreen) ═══════════════
 
-═══════════════ Step 2: Free-flow budget skip (useChat + App) ═══════════════
+  • GENERIC_PT set + isGeneric() guard.
+  • When useTaxo is true but taxo.provider_type is generic, fall
+    through to canonicalMatch (the dropdown selection).
+  • Net behavior: resolvedProviderType is either
+      - a canonical PROVIDER_TYPES entry from the parser, OR
+      - the canonical dropdown selection, OR
+      - null (handled downstream — never a generic catch-all).
+  • Matches the GENERIC_PROVIDER_TYPES set ResultsScreen
+    already uses to skip generic values in display copy.
 
-  • useChat now accepts {wantFree} and skips the budget gate when
-    wantFree=true. wantFreeRef pattern keeps the latest value
-    available to the captured-closure chain in tickReply().
-  • App.jsx forwards `freeServices` into useChat({wantFree}). When
-    "Free for Connectors" is on, the bot stops asking for a budget.
+═══════════════ Data fix (one-shot .command) ═══════════════
 
-  Tarik 2026-06-03:
-    "should not request price budget (when requesting free services)."
+`Fix Generic Taxonomy.command` walked every services row whose
+taxonomy_provider_type was in the generic set and remapped to
+canonical via title / category keyword. Ran clean: 2 rows
+remapped (info@cergio.ai's Personal Chef pair), 0 remaining
+generic, spot-check confirms they're now visible to Personal
+Chef searches + fan-outs.
 
-═══════════════ Run order on Tarik's Mac ═══════════════
+═══════════════ Diagnostics shipped today ═══════════════
 
-  1. ./Apply Request Responses Migration.command
-       → creates the table + RLS. Re-run safe.
-  2. ./Audit Request Responses.command
-       → all red flags empty (table is brand new — no rows yet).
+  • Diagnose info@cergio.ai Services.command — surfaces missing
+    rows, force-backfills taxonomy + status from title keyword.
+  • Patch NullGeo Test Services.command — drops Miami coords on
+    rows where verifyAddress failed and lat/lng saved NULL.
+  • Audit Notify Chain.command — walks the requests → fan-out
+    → notifications → request_responses chain for the latest
+    plumber requests.
+  • Fix Generic Taxonomy.command — this one.
 
-═══════════════ NOT in this commit ═══════════════
+═══════════════ Test loop now ═══════════════
 
-  • Step 3: Wave dispatcher (edge function / cron that batches the
-    10-providers-every-2-min rolling broadcast).
-  • Step 4: UA-via-broadcast — roll through cold-crawled local
-    providers + cold-crawled IG influencers after the warm tiers
-    are exhausted (MARKETPLACE_SPEC § 6).
-  • Step 5: accept-and-book bridge from ResultsScreen
-    (acceptRequestResponse → bookings row).
+To verify the chain end-to-end:
+
+  Option A — match info@cergio.ai's listing:
+    Sign in as t@cergio.ai → search "I need a personal chef
+    in Miami" → submit request → info@cergio.ai should now see
+    it in Jobs → Requests within seconds.
+
+  Option B — register a matching plumber:
+    Sign in as info@cergio.ai → list a Plumber service in
+    Miami → log out → sign in as t@cergio.ai → re-send the
+    plumber request → info@cergio.ai sees it.
+
+Email channel still dark (Resend prod domain not verified).
+In-app notification rows + listInboundRequests are the real test.
 
 ═══════════════ Verified ═══════════════
 
 scripts/qa.mjs — 41/41 PASS
-@babel/parser JSX check on api.js, JobsInboxScreen.jsx,
-ResultsScreen.jsx, App.jsx, useChat.js — all OK.
+@babel/parser JSX on ServiceListAboutScreen.jsx — OK.
