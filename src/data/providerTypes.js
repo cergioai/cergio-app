@@ -5,6 +5,43 @@
 // service-type dropdown on ServiceListAboutScreen filters this list
 // as the user types. CERGIO-GUARD: keep this in sync with the
 // backend taxonomy. Provider-type level only — no offering names.
+//
+// CERGIO-GUARD (2026-06-03): out-of-scope categories per Tarik —
+// these MUST be excluded from BOTH services taxonomy AND the local-
+// business directory (crawler). If chat-parse or the regenerator
+// tries to re-introduce one, isOutOfScopeProviderType filters it
+// at the resolver layer. Keep the list canonical-cased; the helper
+// does case-insensitive matching.
+export const OUT_OF_SCOPE_PROVIDER_TYPES = new Set([
+  // Food + drink — restaurants, breweries, wine bars, food trucks
+  'Restaurant', 'Cafe', 'Coffee Shop', 'Brewery', 'Winery', 'Wine Bar',
+  'Distillery', 'Pub', 'Bar', 'Cocktail Bar', 'Sports Bar', 'Food Truck',
+  'Food Truck Operator', 'Food Cart Operator',
+  // DJs (parties, weddings, clubs — out of focus)
+  'DJ', 'Mobile DJ', 'Wedding DJ', 'Club DJ',
+  // Massage therapists (mobile or studio — all out)
+  'Massage Therapist', 'Mobile Massage Therapist',
+  'Prenatal Massage Therapist', 'Sports Massage Therapist',
+  // Dance studios / instructors (all variants out)
+  'Dance Studio', 'Dance Instructor', 'Kids Dance Instructor',
+  'Latin Dance Instructor', 'Ballet Instructor', 'Ballroom Dance Instructor',
+  'Dance Floor Supplier',
+]);
+
+/**
+ * Case-insensitive denylist check. Use at the canonical resolver layer
+ * (see serviceTaxonomy.resolveProviderTypeLocal + the chat-parse edge
+ * function on the backend) to belt-and-suspenders block any re-add.
+ */
+export function isOutOfScopeProviderType(value) {
+  if (!value) return false;
+  const want = String(value).trim().toLowerCase();
+  for (const t of OUT_OF_SCOPE_PROVIDER_TYPES) {
+    if (t.toLowerCase() === want) return true;
+  }
+  return false;
+}
+
 export const PROVIDER_TYPES = [
   '360 Photo Booth Operator',
   'ADHD Coach',
@@ -83,9 +120,9 @@ export const PROVIDER_TYPES = [
   'Crypto Tax Specialist',
   'Custom Garment Maker',
   'Cybersecurity Consultant',
-  'DJ',
-  'Dance Floor Supplier',
-  'Dance Instructor',
+  // 'DJ',                    — REMOVED (out of scope per Tarik 2026-06-03)
+  // 'Dance Floor Supplier',   — REMOVED (out of scope per Tarik 2026-06-03)
+  // 'Dance Instructor',       — REMOVED (out of scope per Tarik 2026-06-03)
   'Data Entry Specialist',
   'Data Recovery Specialist',
   'Deck Builder',
@@ -135,7 +172,7 @@ export const PROVIDER_TYPES = [
   'Flooring Installer',
   'Floral Designer',
   'Florist',
-  'Food Truck Operator',
+  // 'Food Truck Operator', — REMOVED (out of scope per Tarik 2026-06-03)
   'Foundation Inspector',
   'Fractional CFO',
   'Freight Broker',
@@ -179,7 +216,7 @@ export const PROVIDER_TYPES = [
   'Irrigation Specialist',
   'Japanese Garden Designer',
   'Junk Removal Specialist',
-  'Kids Dance Instructor',
+  // 'Kids Dance Instructor', — REMOVED (out of scope per Tarik 2026-06-03)
   'Kitchen & Bath Designer',
   'Lactation Consultant',
   'Landscape Contractor',
@@ -188,7 +225,7 @@ export const PROVIDER_TYPES = [
   'Language Tutor',
   'Laser Technician',
   'Lash Technician',
-  'Latin Dance Instructor',
+  // 'Latin Dance Instructor', — REMOVED (out of scope per Tarik 2026-06-03)
   'Lighting Designer',
   'Lighting Technician',
   'Link Building Specialist',
@@ -207,7 +244,7 @@ export const PROVIDER_TYPES = [
   'Magician',
   'Makeup Artist',
   'Masonry Contractor',
-  'Massage Therapist',
+  // 'Massage Therapist', — REMOVED (out of scope per Tarik 2026-06-03)
   'Math Tutor',
   'Mechanic',
   'Meditation Coach',
@@ -218,7 +255,7 @@ export const PROVIDER_TYPES = [
   'Mindfulness Coach',
   'Mobile Car Wash Technician',
   'Mobile Detailer',
-  'Mobile Massage Therapist',
+  // 'Mobile Massage Therapist', — REMOVED (out of scope per Tarik 2026-06-03)
   'Mobile Mechanic',
   'Mold Remediation Specialist',
   'Mortgage Advisor',
@@ -272,7 +309,7 @@ export const PROVIDER_TYPES = [
   'Post-Construction Cleaner',
   'Postpartum Doula',
   'Pre/Postnatal Trainer',
-  'Prenatal Massage Therapist',
+  // 'Prenatal Massage Therapist', — REMOVED (out of scope per Tarik 2026-06-03)
   'Prenatal Yoga Instructor',
   'Presentation Designer',
   'Personal Chef',
@@ -322,7 +359,7 @@ export const PROVIDER_TYPES = [
   'Solar Panel Cleaner',
   'Sound Healer',
   'Sports Chiropractor',
-  'Sports Massage Therapist',
+  // 'Sports Massage Therapist', — REMOVED (out of scope per Tarik 2026-06-03)
   'Sports Nutritionist',
   'Spray Foam Installer',
   'Spray Tan Artist',

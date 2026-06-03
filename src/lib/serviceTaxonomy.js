@@ -154,8 +154,9 @@ export const PROVIDER_TYPE_MAP = [
   ['makeup',               'Makeup Artist'],
   ['make-up',              'Makeup Artist'],
   ['glam',                 'Makeup Artist'],
-  ['massage',              'Massage Therapist'],
-  ['masseuse',             'Massage Therapist'],
+  // CERGIO-GUARD (2026-06-03): 'massage' / 'masseuse' mappings REMOVED —
+  // Massage Therapist is now an out-of-scope provider type per Tarik
+  // (lives in OUT_OF_SCOPE_PROVIDER_TYPES in data/providerTypes.js).
 
   // ── fitness / wellness ───────────────────────────────────────────────
   ['personal trainer',     'Personal Trainer'],
@@ -228,6 +229,22 @@ export const PROVIDER_TYPE_MAP = [
 // user token. Conservative — never overrides an exact-substring hit.
 export function resolveProviderTypeLocal(text) {
   const l = String(text || '').toLowerCase();
+
+  // CERGIO-GUARD (2026-06-03): out-of-scope short-circuit. If the user's
+  // text mentions an out-of-scope category (massage, dance, DJ, food/
+  // drink venues, etc.), return null up-front so we never route those
+  // requests through the marketplace.
+  // eslint-disable-next-line global-require
+  // Local import to avoid a circular dep cycle.
+  const OUT_OF_SCOPE_KEYWORDS = [
+    'massage', 'masseuse', 'dance', 'ballet', 'ballroom',
+    'dj ', ' dj', 'restaurant', 'cafe', 'coffee shop',
+    'brewery', 'winery', 'wine bar', 'cocktail bar',
+    'sports bar', 'food truck', 'food cart', 'distillery', 'pub',
+  ];
+  for (const kw of OUT_OF_SCOPE_KEYWORDS) {
+    if (l.includes(kw)) return null;
+  }
 
   // Pass 1: exact-substring match (canonical, fast path).
   let bestKey = null;

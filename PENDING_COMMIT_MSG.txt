@@ -1,60 +1,77 @@
-feat(earnings): referral context + tally + top contributors + sort
+feat(taxonomy): out-of-scope categories denylist + CRAWLER_BRIEF.md
 
 Tarik 2026-06-03:
-  "don't see context around the earnings... so alex booking 250..
-   is that how much I make? show the calculation.. 7% of 250 booking
-   .. and a tally (so far $7 out of $250 from alex..)... also show
-   what alex booked, when etc... succinct, easy to read, with
-   aggregate balances (23 friends invites, 50 services recommended,
-   $437/$7,250 potential earnings...)... energize users... add sorts
-   to see top connections driving their earnings (especially for
-   second degree)."
+  (1) "yes except always exclude the following categories from both
+       services and physical places... there're outside business
+       focus... Food + drink — restaurants, breweries, wine bars,
+       food trucks... DJ's... Massage therapists, dance studios..."
+  (2) "also export instructions related to this crawler to share
+       with an agent building directories under a different project
+       to run from there... to keep this for platform dev"
 
-═══════════════ ReferralsSummary block (above ledger) ═══════════════
+═══════════════ (1) Out-of-scope denylist ═══════════════
 
-Lands above the per-row list on the Referrals tab only:
+  src/data/providerTypes.js:
+    • OUT_OF_SCOPE_PROVIDER_TYPES set added (exported).
+    • isOutOfScopeProviderType(value) helper (case-insensitive).
+    • Removed from PROVIDER_TYPES (kept as commented placeholders):
+        - DJ
+        - Dance Floor Supplier
+        - Dance Instructor
+        - Kids Dance Instructor
+        - Latin Dance Instructor
+        - Food Truck Operator
+        - Massage Therapist
+        - Mobile Massage Therapist
+        - Prenatal Massage Therapist
+        - Sports Massage Therapist
+    • Restaurant / Cafe / Brewery / Winery / Wine Bar / Pub /
+      Cocktail Bar / Sports Bar / Distillery / Food Cart added
+      to the denylist defensively (none were in the original
+      taxonomy but they're locked out for the crawler import path).
 
-  • Pool header — "Your referral pool" · "7% per booking · up to
-    $250/friend" (pulls REWARDS.referrerSharePercent + perFriend).
-  • Hero stat — "$588 of $5,750 potential" with a green→mint
-    progress bar so the room to grow is visceral.
-  • Counter row — "{N} friends invited · {M} reco'd" + green %
-    completion badge.
-  • Top 3 contributors — leaderboard of the friends driving the
-    biggest share, with their cumulative dollar + % share of total.
-    Surfaces "3 of your 50 friends are responsible for 50%"
-    intuition.
-  • Sort toggle — "Most recent" / "Top earners" pills that flip
-    the row ordering. Tarik directive: see top connections at a
-    glance, especially for second-degree drivers.
+  src/lib/serviceTaxonomy.js:
+    • Dropped the 'massage' / 'masseuse' → 'Massage Therapist'
+      mappings.
+    • resolveProviderTypeLocal now short-circuits to null when the
+      user text contains any out-of-scope keyword (massage, dance,
+      DJ, food/drink venues). Belt-and-suspenders against future
+      taxonomy.json re-adds.
 
-═══════════════ Per-row context (every Referrals row) ═══════════════
+  scripts/qa.mjs:
+    • Dropped the 'massage therapist' → 'Massage Therapist' search
+      case from invariant #29 — that route is now intentionally null.
 
-Each row now carries the full calculation + tally context:
+═══════════════ (2) CRAWLER_BRIEF.md ═══════════════
 
-  • Headline (unchanged): "{Friend} booked" / "Chain payout via X"
-  • Tier pill (unchanged): Direct / Chain +5%
-  • NEW — Friend tally pill: "$250/$250 ✓" (maxed out) or
-    "$63/$250" (still room). Sums lifetime earnings per friend.
-  • NEW — Sub-line: "7% of {Friend}'s bookings · up to $250 cap"
-    (direct) or "Friend-of-friend ({fof name}) booked · 5% chain
-    bonus" (chain). REWARDS.referrerSharePercent +
-    friendOfFriendPercent — source of truth, never hardcoded copy.
+  New doc at Cergio Claude/CRAWLER_BRIEF.md — self-contained
+  spec for the SEPARATE project / agent that builds the
+  local-business + influencer directories.
 
-═══════════════ Wiring ═══════════════
-
-  • EarningsScreen: new perFriend memoized aggregate keyed on
-    meta.friend (first token before "->" for chain rows). Sort
-    state ('recent' | 'top') flips sortedVisibleRows on Referrals.
-  • Both helpers (ReferralsSummary, FriendTallyPill) are tiny
-    presentational components at the bottom of the file —
-    Reusable if we extract them later.
+  Sections:
+    1. Output schema (local_businesses.csv + influencers.csv)
+    2. Exclusion list (verbatim from OUT_OF_SCOPE_PROVIDER_TYPES)
+    3. Inclusion rules for local-biz directory — brick-and-mortar
+       only, plus the high-ad-spend verticals to include
+       (accountants, lawyers, florists, dental, HVAC, funeral
+       homes, hearing aids, bail bonds, etc.)
+    4. Canonical provider_type strings — pull from
+       src/data/providerTypes.js
+    5. DO NOT crawl Craigslist — anti-bot + 3taps/CFAA precedent +
+       ToS prohibition. Use Google Business Profile / Yelp Fusion /
+       Yellow Pages / BBB / OSM / OpenCorporates instead.
+    6. Output cadence + handoff (weekly full + daily delta)
+    7. Coordination — PRs to this brief, NOT to cergio-app/
+    8. Canonical files in the platform repo to mirror
 
 ═══════════════ Files ═══════════════
 
-  cergio-app/src/screens/EarningsScreen.jsx
+  cergio-app/src/data/providerTypes.js
+  cergio-app/src/lib/serviceTaxonomy.js
+  cergio-app/scripts/qa.mjs
+  CRAWLER_BRIEF.md (new, lives at root next to MARKETPLACE_SPEC.md mirror)
 
 ═══════════════ Verified ═══════════════
 
   scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX on EarningsScreen.jsx — OK
+  @babel/parser JSX on providerTypes.js + serviceTaxonomy.js — OK

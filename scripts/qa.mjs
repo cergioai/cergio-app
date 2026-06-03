@@ -949,7 +949,8 @@ test('search-tolerance', 'Local taxonomy + fuzzy matcher cover 50+ realistic sea
     ['manicure tonight',                   'Nail Tech'],
     ['pedicure',                           'Nail Tech'],
     ['makeup for a wedding',               'Makeup Artist'],
-    ['massage therapist',                  'Massage Therapist'],
+    // ['massage therapist', 'Massage Therapist'] — REMOVED 2026-06-03:
+    //   out-of-scope category (see OUT_OF_SCOPE_PROVIDER_TYPES).
 
     // ── Fitness / Wellness ───────────────────────────────────────────
     ['personal trainer 3x/week',           'Personal Trainer'],
