@@ -414,6 +414,33 @@ export function ServiceListAboutScreen() {
             }
             const useTaxo = !overrideTaxonomy && taxo?.ok;
 
+            // CERGIO-GUARD (2026-06-02): canonical-match fast path.
+            // Per Tarik (2026-06-02): "registered a service as a
+            // plumber info@cergio.ai .. then logged in as t@cergio.ai
+            // and did a search and couldn't find the service." Root
+            // cause: when the chat-parse resolver stalls / returns
+            // low confidence, `taxonomy_provider_type` saved as NULL.
+            // listServices' STRICT filter (lib/api.js: provider_type
+            // → `s.taxonomy_provider_type == want`) and
+            // getProvidersForNotify's exact-match allowlist BOTH
+            // exclude rows with NULL taxonomy. Result: service is
+            // invisible to search AND providers don't get notified
+            // of matching free-spotlight requests from Connectors.
+            //
+            // Fix: when the typed serviceType is an EXACT match
+            // (case-insensitive) against the canonical PROVIDER_TYPES
+            // catalog, lock it in as taxonomy_provider_type
+            // regardless of chat-parse confidence. The dropdown
+            // selection IS the verified taxonomy — chat-parse is
+            // only needed for fuzzy free-text input.
+            const typedTrim = serviceType.trim();
+            const canonicalMatch = (STARTER_TYPES.find(t => t.toLowerCase() === typedTrim.toLowerCase())
+                                 || PROVIDER_TYPES.find(t => t.toLowerCase() === typedTrim.toLowerCase())
+                                 || null);
+            const resolvedProviderType = useTaxo
+              ? (taxo.provider_type || canonicalMatch)
+              : canonicalMatch;
+
             // CERGIO-GUARD (2026-06-02): novel-type telemetry. Per
             // Tarik: "augment the taxonomy gradually (and add related
             // terms)." When a provider types something that doesn't
@@ -451,7 +478,7 @@ export function ServiceListAboutScreen() {
               description: headline.trim(),
               lat, lng,
               taxonomy_category:      useTaxo ? (taxo.category || null) : null,
-              taxonomy_provider_type: useTaxo ? (taxo.provider_type || null) : null,
+              taxonomy_provider_type: resolvedProviderType,
               taxonomy_offering_id:   useTaxo ? (taxo.offering_id || null) : null,
               // CERGIO-GUARD (2026-05-30): forward the drawn polygon
               // (if any) into the draft so createService persists it.

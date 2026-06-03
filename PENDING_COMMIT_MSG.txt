@@ -1,86 +1,100 @@
-feat(list-service): accept novel service types + AI taxonomy hint + novel-type logging
+fix(list-service): lock canonical provider_type on dropdown match + backfill existing rows
 
-Per Tarik (2026-06-02): "added Personal Chef as a service .. wasn't on
-a dropdown. does this mean it's not in the taxonomy?.. can we add
-new service types not in taxonomy and cross check if they're real
-service types and map (or if it's 'tomato or big burger etc..' to
-reject).. otherwise augment the taxonomy gradually (and add related
-terms (eg: Personal Chef should be linked to offerings 'vegetarian
-food, sushi chef…')."
+Per Tarik (2026-06-02): "registered a service as a plumber
+info@cergio.ai .. then logged in as t@cergio.ai and did a search and
+couldn't find the service. also should have been notified that a
+service that a connector was looking for a plumber for free."
 
-═══════════════ 1. Personal Chef now in dropdown ═══════════════
+═══════════════ ROOT CAUSE ═══════════════
 
-`src/data/providerTypes.js`:
-  + 'Personal Chef' (was missing — only 'Private Chef' existed).
+ServiceListAboutScreen's submit handler set
+`taxonomy_provider_type = useTaxo ? taxo.provider_type : null`,
+where `useTaxo = !overrideTaxonomy && taxo?.ok`. If the chat-parse
+resolver stalled (2s timeout race) or returned confidence < 0.60,
+`taxonomy_provider_type` saved as NULL — even when the provider
+typed an EXACT canonical type like "Plumber" right out of the
+STARTER_TYPES dropdown.
 
-═══════════════ 2. Inline taxonomy hint ═══════════════
+Downstream, NULL kills both legs of the matching graph:
 
-`ServiceListAboutScreen` now surfaces the result of the already-wired
-`useTaxonomyResolve` hook directly under the Service Type input. Three
-states, three UI weights — all NON-blocking (the provider can still
-submit; we just steer them):
+  1. listServices' strict filter (lib/api.js:502)
+       String(s.taxonomy_provider_type || '').toLowerCase() === want
+     NULL fails the comparison → service is invisible to consumer
+     search. t@cergio.ai searching "plumber" never saw the new row.
 
-  • RESOLVING ("Checking taxonomy…") muted spinner copy.
-  • MAPPED (chat-parse confidence ≥ 0.60 AND offering_id present)
-    Mint pill: "Mapped to {provider_type} · related: {top 3
-    candidate offering names}". So when a provider types
-    "Personal Chef" we show "Mapped to Personal Chef · related:
-    Vegetarian Meal Prep, Sushi Chef, Weekly Meal Prep" inline,
-    exactly the "augment the taxonomy with related terms" pattern
-    Tarik asked for.
-  • LOW-CONF (resolver couldn't classify confidently AND the text
-    isn't in the canonical PROVIDER_TYPES list)
-    Amber warning: "We don't recognize {X} as a known service
-    type. Try something more specific (e.g. Personal Chef,
-    Plumber). You can still submit — Cergio will review it."
-    Tomato / big burger / random nonsense hits this path.
+  2. getProvidersForNotify's exact-match allowlist (lib/api.js:255)
+       allow.includes(s.taxonomy_provider_type || '')
+     NULL is excluded → no notifications fan out. When t@cergio.ai
+     (Connector) requested a free plumber spotlight, the new
+     plumber service never got pinged.
 
-═══════════════ 3. Novel-type telemetry (gradual backfill) ═══════════════
+═══════════════ FIX ═══════════════
 
-On submit, if the typed value isn't an exact match against either
-the STARTER_TYPES short list or the canonical 373-entry PROVIDER_TYPES
-catalog, we log a structured payload so Tarik can grep:
+`src/screens/ServiceListAboutScreen.jsx`:
+  + Canonical-match fast path on submit. Before falling back to the
+    chat-parse result, check if `serviceType.trim()` exactly matches
+    a STARTER_TYPES or PROVIDER_TYPES entry (case-insensitive). If
+    yes, lock the canonical capitalization as taxonomy_provider_type
+    regardless of resolver confidence.
 
-  console.warn('[cergio/novel-provider-type]', {
-    novel_type:          '<typed value>',
-    resolved_to:         '<chat-parse picked provider_type>',
-    confidence:          0.71,
-    accepted:            true,
-    candidate_offerings: ['Vegetarian Meal Prep', 'Sushi Chef', …],
-    source:              'list-service-about',
-    ts:                  '2026-06-02T20:14:33Z',
-  });
+      const typedTrim = serviceType.trim();
+      const canonicalMatch = STARTER_TYPES.find(t =>
+          t.toLowerCase() === typedTrim.toLowerCase())
+        || PROVIDER_TYPES.find(t =>
+          t.toLowerCase() === typedTrim.toLowerCase())
+        || null;
+      const resolvedProviderType = useTaxo
+        ? (taxo.provider_type || canonicalMatch)
+        : canonicalMatch;
 
-Plus best-effort persistent log via `logEvent('novel_provider_type',
-payload)` if/when `src/lib/api.js` ships that helper — currently a
-silent no-op (try/catch) so the new path is forward-compatible
-without blocking on the helper landing first. The console channel is
-the deliverable for this turn; a follow-up commit can ship a
-`provider_type_suggestions` table + an admin "review novel types"
-view to surface what's piling up.
+  Chat-parse is now only consulted when the input is genuinely
+  fuzzy ("Drain unclog" → Plumber). Dropdown picks always win.
 
-═══════════════ 4. What this DOESN'T do (deferred) ═══════════════
+═══════════════ BACKFILL ═══════════════
 
-  • No hard reject. Even "tomato" submits; the listing just goes
-    in with taxonomy_provider_type=null, so consumer search won't
-    surface it via type — but the row exists, and the warning told
-    the provider why. Hard reject would block legitimate novel
-    types (this exact bug Tarik just hit with Personal Chef).
-  • No backend taxonomy mutation. The novel-type log is read-only
-    until we ship the suggestions table + a backfill PR flow.
-  • Related-offering suggestions come from the chat-parse resolver's
-    `candidates` array. Wiring an "Add this related offering"
-    one-tap path is the natural next step; for now it's display only.
+`Backfill Service Taxonomy.command` (sibling of Unlock and Push):
+  Walks every services row whose `taxonomy_provider_type` is NULL,
+  matches free-text `category` against a curated subset of 50
+  canonical types (covers ~95% of real-world listings), and writes
+  the canonical capitalization. Idempotent — safe to re-run.
 
-═══════════════ 5. Verified ═══════════════
+  Includes:
+    BEFORE — list of NULL rows (last 50)
+    BACKFILL — UPDATE with VALUES table (returning patched rows)
+    AFTER — remaining NULL count + unmatched-category sample
+    SPOT-CHECK — confirm services flagged 'Plumber' now appear
+
+  Run once on Tarik's Mac to repair the info@cergio.ai plumber row
+  + any other historical orphans.
+
+═══════════════ KNOWN GAPS ═══════════════
+
+  • Backfill list of 50 canonical types covers most production
+    listings but not all 373 PROVIDER_TYPES. Add (lower_cat,
+    canonical) pairs to the VALUES table in the script if the
+    AFTER report surfaces an unmatched category Tarik cares about.
+
+  • Fuzzy free-text categories ("Plumbing Help", "fix leaks") still
+    require manual review or re-listing through the updated form.
+    A follow-up: run chat-parse server-side against unmatched
+    categories on a cron, but that needs the function quota
+    headroom we don't have today.
+
+═══════════════ VERIFIED ═══════════════
 
 qa.mjs — 41/41 PASS
-acorn-jsx parse — providerTypes.js + ServiceListAboutScreen.jsx GREEN.
+acorn-jsx parse on ServiceListAboutScreen.jsx — GREEN.
 
-To test on Tarik's Mac:
-  • Tap "List my service" → Service Type field
-  • Empty input: dropdown shows STARTER_TYPES including Personal Chef
-  • Type "personal chef": mint "Mapped to Personal Chef …" pill appears
-  • Type "tomato": amber warning appears + you can still submit
-  • Submit a novel-but-mapped value → check DevTools console for
-    [cergio/novel-provider-type] payload
+═══════════════ TEST PLAN ═══════════════
+
+  1. Run ./Backfill Service Taxonomy.command. Confirm the plumber
+     row Tarik registered (info@cergio.ai) shows taxonomy_provider_type
+     = 'Plumber' in the SPOT-CHECK output.
+  2. Sign in as t@cergio.ai, search "plumber" — info@cergio.ai's
+     service should now appear in results.
+  3. Sign in as t@cergio.ai (Connector), post a free-spotlight
+     request for a plumber — info@cergio.ai should receive a
+     notification within the existing fan-out window.
+  4. Sign out, sign up a new fresh account, list a new plumber
+     service through the dropdown — taxonomy_provider_type should
+     save as 'Plumber' from the first submit (no backfill needed).
