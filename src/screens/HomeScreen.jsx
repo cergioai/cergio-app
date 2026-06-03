@@ -985,10 +985,19 @@ export function HomeScreen() {
                   </svg>
                 </button>
 
-                <div ref={modeBtnRef} className="relative">
+                {/* CERGIO-GUARD (2026-06-03): mode toggle + "i" affordance
+                    sit INLINE on a single flex row per Tarik — previously
+                    the i wrapped below the toggle because the parent div
+                    wasn't flex. Now they're vertically aligned + the i
+                    has a hover tooltip ("Connectors are creators, influencers,
+                    super-users with strong local networks…") plus the
+                    existing click → /rainmaker/apply for more details.
+                    Same affordance covers both the consumer→service and
+                    service→Connector intents — toggling intent just
+                    relabels the dropdown options. */}
+                <div ref={modeBtnRef} className="relative flex items-center">
                   {/* Free/Pay mode — flat text + chevron. No pill, no
-                      background. A small green dot signals the active
-                      Free-for-Connectors state without shouting. */}
+                      background. */}
                   <button
                     type="button"
                     onClick={() => setModeOpen(o => !o)}
@@ -1003,23 +1012,32 @@ export function HomeScreen() {
                       <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
-                  {/* CERGIO-GUARD (2026-05-30): tiny "what's a Connector?"
-                      info button next to the toggle. Tarik: "add a
-                      connector's explainer somewhere (perhaps a small
-                      i that pops up...(also on homepage).. to take to
-                      /rainmaker/apply". Routes to the apply flow so
-                      curious users can read what Connectors are and
-                      sign up in one tap. */}
                   {freeServices && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); navigate('/rainmaker/apply'); }}
-                      aria-label="What's a Connector?"
-                      className="ml-1 w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold
-                                 flex items-center justify-center hover:bg-gl transition-colors"
-                    >
-                      i
-                    </button>
+                    <span className="relative group inline-flex items-center">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate('/rainmaker/apply'); }}
+                        aria-label="What's a Connector?"
+                        title="Creators, influencers, super-users with strong local networks. Tap for details."
+                        className="ml-1.5 w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold
+                                   flex items-center justify-center hover:bg-gl transition-colors"
+                      >
+                        i
+                      </button>
+                      {/* Hover tooltip — appears above the icon. Hidden on
+                          touch where hover doesn't exist; the title attr +
+                          tap-to-details fall back gracefully. */}
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5
+                                   opacity-0 group-hover:opacity-100 transition-opacity
+                                   bg-black/85 text-white text-[11px] font-medium
+                                   leading-snug rounded-lg px-2.5 py-1.5 w-[210px] text-center z-20 shadow-card"
+                      >
+                        Creators, influencers, super-users with strong local
+                        networks. Tap for details.
+                      </span>
+                    </span>
                   )}
                   {modeOpen && (
                     <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[220px]">

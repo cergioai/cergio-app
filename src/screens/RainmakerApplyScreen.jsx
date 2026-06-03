@@ -52,9 +52,14 @@ export function RainmakerApplyScreen() {
         <h1 className="text-[26px] font-extrabold text-white leading-tight">
           Become a Connector
         </h1>
+        {/* CERGIO-GUARD (2026-06-03): elegant succinct copy per Tarik —
+            who a Connector is + why it matters. Frames the role around
+            shared prosperity and asset-participation growth rather than
+            a generic "share in the upside." */}
         <p className="text-[13px] text-white/90 leading-relaxed mt-2 font-medium">
-          Influencers and super-users with strong local networks.
-          Drive growth for your community — share in the upside.
+          Creators, influencers, and super-users with strong local networks
+          — driving shared prosperity and asset-participation growth in the
+          communities they already shape.
         </p>
       </div>
 

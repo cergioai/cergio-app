@@ -1,19 +1,52 @@
-style(results): one quiet right-aligned forward link + earnings hint
+style: inline Connector "i" on Free toggle + rewrite apply intro copy
 
 Tarik 2026-06-03:
-  "just keep the link and remove the 1st forward copy... redundant...
-   perhaps right align and add 'earn $250 per friend... make non
-   intrusive..."
+  (1) "make the i icon on free for connectors more centered and
+       perhaps alongside 'free for…' on the first line… rather
+       than on the 3rd line below the button… also show a brief
+       description when hovering over… same for connector to
+       service…"
+  (2) "make this copy elegant and succinct, explaining connectors
+       are creators, influencers, super-users with strong local
+       networks and interested in driving shared prosperity and
+       asset participation growth"
 
-ShareRequestRow now renders a single line: a quiet green
-"Forward to friends →" hyperlink right-aligned to the gutter,
-followed by a muted "· earn $250 per friend" tail (reads
-straight from REWARDS.perFriendUser).
+═══════════════ (1) HomeScreen i-icon ═══════════════
 
-Removed:
-  • The inline preview ("Forward your request: personal chef")
-  • The Edit affordance
-  • The separate Copy link
-All three were redundant with the underlying forward flow.
+The (i) was wrapping below the Free-for-Connectors toggle because
+the parent <div ref={modeBtnRef}> had no flex; two block-level
+buttons stacked vertically. Wrapping it as `flex items-center`
+pulls them onto a single row.
 
-Verified: scripts/qa.mjs 41/41 PASS · @babel/parser JSX OK.
+  • Toggle + (i) now sit inline + vertically aligned on the same
+    row.
+  • Hover tooltip — pure CSS via `group` + `group-hover`. Black/85
+    bubble above the icon: "Creators, influencers, super-users
+    with strong local networks. Tap for details."
+  • `title` attribute carries the same string as a touch fallback
+    (hover doesn't exist on phones).
+  • Click still routes to /rainmaker/apply for the full pitch.
+  • One icon serves both intents — find (consumer→service) AND
+    spotlight (service→connector) — because freeServices toggles
+    on both flows. No parallel surface needed.
+
+═══════════════ (2) Become a Connector intro copy ═══════════════
+
+  Before:
+    Influencers and super-users with strong local networks.
+    Drive growth for your community — share in the upside.
+
+  After:
+    Creators, influencers, and super-users with strong local
+    networks — driving shared prosperity and asset-participation
+    growth in the communities they already shape.
+
+═══════════════ Files ═══════════════
+
+  cergio-app/src/screens/HomeScreen.jsx
+  cergio-app/src/screens/RainmakerApplyScreen.jsx
+
+═══════════════ Verified ═══════════════
+
+  scripts/qa.mjs — 41/41 PASS
+  @babel/parser JSX — both files OK.
