@@ -266,31 +266,60 @@ export function EarningsScreen() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-[14px] font-extrabold text-black leading-tight">
-                          {e.kind === 'spotlight'
-                            ? `${(e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram')} spotlight`
-                            : e.kind === 'booking'
-                            ? 'Service booking'
-                            : 'Friend referral'}
-                        </p>
-                        {/* CERGIO-GUARD: degree-of-separation pill so users
-                            see which payouts are direct ($250-track) vs
-                            friend-of-friend chain bonus ($12.50). */}
-                        {(() => {
-                          const tier = earningTier(e);
-                          if (!tier) return null;
-                          return (
-                            <span className={`text-[9.5px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-pill
-                              ${tier === 'direct' ? 'bg-gl text-gd' : 'bg-warnBg text-warnText'}`}>
-                              {tier === 'direct' ? 'Direct' : 'Chain +5%'}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      <p className="text-[11px] text-b3 mt-0.5">
-                        {timeAgo(e.created_at)} · {e.status === 'cleared' ? 'cleared' : e.status}
-                      </p>
+                      {/* CERGIO-GUARD (2026-06-03): per Tarik — show
+                          breakdown of WHERE each payout came from.
+                          Headline carries the friend name when known
+                          (e.g. "Alex booked", "Jamie via your chain"),
+                          falls back to generic copy when meta is sparse.
+                          Tier pill stays as the secondary signal. */}
+                      {(() => {
+                        const tier   = earningTier(e);
+                        const friend = e.meta?.friend;
+                        let headline = 'Friend referral';
+                        if (e.kind === 'spotlight') {
+                          headline = `${e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram'} spotlight`;
+                        } else if (e.kind === 'booking') {
+                          headline = 'Service booking';
+                        } else if (friend && tier === 'direct') {
+                          headline = `${friend.split('->')[0]} booked`;
+                        } else if (friend && tier === 'chain') {
+                          // "Sam->FriendA" → "via Sam" (chain through Sam)
+                          const via = friend.split('->')[0];
+                          headline = `Chain payout via ${via}`;
+                        } else if (tier === 'chain') {
+                          headline = 'Chain payout';
+                        }
+                        return (
+                          <>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-[14px] font-extrabold text-black leading-tight">
+                                {headline}
+                              </p>
+                              {tier && (
+                                <span className={`text-[9.5px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-pill
+                                  ${tier === 'direct' ? 'bg-gl text-gd' : 'bg-warnBg text-warnText'}`}>
+                                  {tier === 'direct' ? 'Direct' : 'Chain +5%'}
+                                </span>
+                              )}
+                            </div>
+                            {/* Sub-line: friend context + via + date + status */}
+                            <p className="text-[11px] text-b3 mt-0.5 leading-snug">
+                              {e.kind === 'invite' && friend && tier === 'chain' && friend.includes('->') && (
+                                <span className="text-b2 font-medium">
+                                  Friend-of-friend booked ({friend.split('->')[1]})
+                                  {' · '}
+                                </span>
+                              )}
+                              {e.kind === 'invite' && !friend && tier === 'chain' && (
+                                <span className="text-b2 font-medium">
+                                  Friend-of-friend booked · {' '}
+                                </span>
+                              )}
+                              {timeAgo(e.created_at)} · {e.status === 'cleared' ? 'cleared' : e.status}
+                            </p>
+                          </>
+                        );
+                      })()}
                     </div>
                     <span className="text-[15px] font-extrabold text-black">
                       +{fmtDollars(e.amount_cents)}

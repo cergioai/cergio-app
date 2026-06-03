@@ -134,6 +134,39 @@ function initials(name) {
   return name.split(' ').map(s => s[0] || '').slice(0, 2).join('').toUpperCase();
 }
 
+// CERGIO-GUARD (2026-06-03): one-tap share. Web Share API first,
+// clipboard fallback. Same icon set as ResultsScreen.share. Lives
+// on every feed card so the user can forward any spotlight / reco
+// / listing without leaving the feed.
+async function shareItem({ title, text, url, onCopied }) {
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, text, url });
+      return;
+    }
+  } catch { /* user cancelled */ return; }
+  try {
+    await navigator.clipboard.writeText(`${text}${url ? `\n${url}` : ''}`);
+    onCopied?.();
+  } catch { /* silent */ }
+}
+function ShareIconButton({ onClick, label = 'Share' }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
+      aria-label={label}
+      className="w-8 h-8 rounded-full bg-white border border-bdr text-b2 hover:text-gd hover:border-g/40
+                 flex items-center justify-center flex-shrink-0 transition-colors"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
+      </svg>
+    </button>
+  );
+}
+
 // One share row matching the mockup: owner-name headline, category
 // badge + city, single cover image (when present), and the "Shared by
 // {Connector}, GOAT" pill at the bottom. Tap → routes to the service PDP.
@@ -178,54 +211,78 @@ function GoatShareCard({ row, onClick }) {
   const goatAvatarCls  = `w-5 h-5 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
                           text-white text-[9px] font-extrabold flex items-center justify-center`;
 
+  const serviceTypeLabel = svc.taxonomy_provider_type || svc.category || 'Service';
+  const shareUrl  = typeof window !== 'undefined'
+    ? `${window.location.origin}/service/${svc.id}`
+    : `/service/${svc.id}`;
+  const shareText = `${relation ? relation + ' ' : ''}${goatName} spotlighted ${ownerName} (${serviceTypeLabel}${svc.location_text ? ' · ' + svc.location_text : ''})${followers > 0 ? ` to ${followers.toLocaleString()} followers` : ''}.`;
+
   return (
-    <div className="w-full text-left bg-transparent">
-      <button onClick={onClick} className="w-full text-left bg-transparent">
-        <div className="flex items-center gap-2.5 mb-2">
+    <div className="w-full text-left bg-white border border-bdr rounded-[16px] p-3.5">
+      {/* CERGIO-GUARD (2026-06-03): all the WHO / WHAT / TO-WHOM lives
+          in ONE block at the top of the card per Tarik — actor pill,
+          service title, type + location, audience reached. Photo is
+          DECORATION only, sits below the text block. Share button
+          right-aligned in the same row as the actor. */}
+      <div className="flex items-start gap-2.5">
+        {goatId ? (
+          <Link
+            to={`/u/${goatId}`}
+            aria-label={`View ${goatName}`}
+            onClick={(e) => e.stopPropagation()}
+            className={ownerAvatarCls}
+          >
+            {initials(goatName)}
+          </Link>
+        ) : (
+          <div className={ownerAvatarCls}>{initials(goatName)}</div>
+        )}
+        <p className="flex-1 min-w-0 text-[14px] leading-snug text-black">
+          <span className="font-medium text-b2">
+            {relation ? `${relation} ` : ''}
+          </span>
+          {goatId ? (
+            <Link
+              to={`/u/${goatId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="font-extrabold underline"
+            >
+              {goatName}
+            </Link>
+          ) : (
+            <span className="font-extrabold">{goatName}</span>
+          )}
+          <span className="font-medium text-b2"> spotlighted </span>
           {ownerId ? (
             <Link
               to={`/u/${ownerId}`}
-              aria-label={`View ${ownerName}`}
               onClick={(e) => e.stopPropagation()}
-              className={ownerAvatarCls}
+              className="font-extrabold underline"
             >
-              {initials(ownerName)}
+              {ownerName}
             </Link>
           ) : (
-            <div className={ownerAvatarCls}>{initials(ownerName)}</div>
+            <span className="font-extrabold">{ownerName}</span>
           )}
-          <div className="flex-1 min-w-0">
-            <p className="text-body leading-snug text-black">
-              {ownerId ? (
-                <Link
-                  to={`/u/${ownerId}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="font-extrabold underline"
-                >
-                  {ownerName}
-                </Link>
-              ) : (
-                <span className="font-extrabold">{ownerName}</span>
-              )}
-            </p>
-            <p className="text-meta-sm text-gd font-extrabold mt-0.5">
-              <span className="inline-flex items-center gap-1">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-                  <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-                  <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                </svg>
-                {/* CERGIO-GUARD (2026-05-31): service TYPE wins over
-                    category — Tarik: "share service type (plumber
-                    trainer etc..) not the category (cleaning etc..)".
-                    Fall through to category only if the type wasn't
-                    set on the listing. */}
-                {svc.taxonomy_provider_type || svc.category || 'Service'}
-              </span>
-              {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
-            </p>
-          </div>
-        </div>
-        <div className={`h-[140px] rounded-[14px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
+          <span className="font-medium text-b2">
+            {' '}({serviceTypeLabel}{svc.location_text ? ` · ${svc.location_text}` : ''})
+          </span>
+          {followers > 0 && (
+            <span className="font-medium text-b2"> to {followers.toLocaleString()} followers</span>
+          )}
+        </p>
+        <ShareIconButton
+          onClick={() => shareItem({ title: ownerName, text: shareText, url: shareUrl })}
+          label={`Share ${ownerName}`}
+        />
+      </div>
+      {/* Photo — pure decoration, tap to open PDP. */}
+      <button
+        onClick={onClick}
+        className="block w-full mt-2.5 text-left bg-transparent border-none p-0 cursor-pointer"
+        aria-label={`View ${ownerName}`}
+      >
+        <div className={`h-[120px] rounded-[12px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
           {cover && (
             <img
               src={cover}
@@ -237,34 +294,6 @@ function GoatShareCard({ row, onClick }) {
           )}
         </div>
       </button>
-      {/* Spotlighted-by pill — full sentence with relation prefix + actor
-          name + audience reached. Separate from the PDP-tap button so
-          the actor name/avatar can navigate without firing the PDP nav. */}
-      <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
-        {goatId ? (
-          <Link
-            to={`/u/${goatId}`}
-            aria-label={`View ${goatName}`}
-            className={goatAvatarCls}
-          >
-            {initials(goatName)}
-          </Link>
-        ) : (
-          <div className={goatAvatarCls}>{initials(goatName)}</div>
-        )}
-        <p className="text-meta text-gd font-extrabold">
-          Spotlighted by{' '}
-          {relation && <span>{relation} </span>}
-          {goatId ? (
-            <Link to={`/u/${goatId}`} className="underline">{goatName}</Link>
-          ) : (
-            goatName
-          )}
-          {followers > 0 && (
-            <span className="font-medium text-b2"> to {followers.toLocaleString()} followers</span>
-          )}
-        </p>
-      </div>
     </div>
   );
 }
@@ -315,10 +344,16 @@ function ListingCard({ ev, onClick }) {
   const cover     = svc.cover_url;
   const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
                      text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+  // CERGIO-GUARD (2026-06-03): inline share for the listing announcement.
+  const serviceTypeLabel = svc.taxonomy_provider_type || svc.category || 'Service';
+  const shareUrl  = typeof window !== 'undefined'
+    ? `${window.location.origin}/service/${svc.id}`
+    : `/service/${svc.id}`;
+  const shareText = `${ownerName} listed a new service: ${svc.title} (${serviceTypeLabel}${svc.location_text ? ' · ' + svc.location_text : ''}).`;
   return (
-    <div className="w-full text-left bg-transparent">
-      <button onClick={onClick} className="w-full text-left bg-transparent">
-        <div className="flex items-center gap-2.5 mb-2">
+    <div className="w-full text-left bg-white border border-bdr rounded-[16px] p-3.5">
+      <div className="flex items-start gap-2.5">
+        <button onClick={onClick} className="flex-1 flex items-start gap-2.5 text-left bg-transparent border-none p-0 cursor-pointer min-w-0">
           {ownerId ? (
             <Link
               to={`/u/${ownerId}`}
@@ -342,20 +377,19 @@ function ListingCard({ ev, onClick }) {
               )}
               <span className="font-medium text-b2"> listed a new service: </span>
               <span className="font-extrabold">{svc.title}</span>
-            </p>
-            <p className="text-[11.5px] text-gd font-extrabold mt-0.5">
-              <span className="inline-flex items-center gap-1">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-                  <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-                  <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                </svg>
-                {svc.taxonomy_provider_type || svc.category || 'Service'}
+              <span className="font-medium text-b2">
+                {' '}({serviceTypeLabel}{svc.location_text ? ` · ${svc.location_text}` : ''})
               </span>
-              {svc.location_text && <span className="text-b3 font-medium"> · {svc.location_text}</span>}
             </p>
           </div>
-        </div>
-        <div className={`h-[120px] rounded-[14px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
+        </button>
+        <ShareIconButton
+          onClick={() => shareItem({ title: svc.title, text: shareText, url: shareUrl })}
+          label={`Share ${svc.title}`}
+        />
+      </div>
+      <button onClick={onClick} className="block w-full mt-2.5 text-left bg-transparent border-none p-0 cursor-pointer" aria-label={`View ${svc.title}`}>
+        <div className={`h-[120px] rounded-[12px] overflow-hidden relative bg-gradient-to-br ${gradient}`}>
           {cover && (
             <img
               src={cover}

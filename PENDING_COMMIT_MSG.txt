@@ -1,53 +1,63 @@
-fix(earnings): unblock $0 ledger + (i) embedded inside toggle button
+feat(activity+earnings): compact feed cards + share buttons + referral source breakdown
 
-═══════════════ (1) Earnings shows $0 for t@cergio.ai ═══════════════
+Tarik 2026-06-03:
+  (1) "clean up activity feed UX here.. the information is all far
+       from each other.. need service in same line as the action
+       taken (your friend Jane spotlight service V to followers...
+       Connector G announced a dog walking service etc...)"
+  (2) "add share buttons on content on reco's on services"
+  (3) "show earnings breakdowns on referrals (to see where each
+       came from)"
 
-Tarik 2026-06-03 — Earnings page rendered $0 even though the
-referral audit showed t@cergio has 6 invite payouts worth $838.
+═══════════════ (1) Activity feed compaction ═══════════════
 
-Root cause in src/lib/api.js → getMyEarnings():
+GoatShareCard restructured so WHO + WHAT + TO-WHOM all live in
+one sentence at the top of the card:
 
-  .select('id, kind, source_id, amount_cents, currency, status,
-           created_at, meta')
-  .order('created_at', { ascending: false })
+  [avatar]  your Connector Mia Influencer spotlighted
+            Tomas Dog Walker (Dog Walker · Miami, FL) to
+            92,000 followers                              [⇧ Share]
 
-But the actual `earnings` table column is `occurred_at`
-(confirmed via Test Referral Payments.command schema probe).
-PostgREST silently returns a 400 on the unknown column → data
-is null → setEarnings(data || []) lands as an empty array →
-totals.all = 0 → "$0".
+Photo dropped below as pure decoration. The old layout split
+"Tomas Dog Walker / Dog Walker · Miami, FL" at the top and
+"Spotlighted by your Connector Mia to 92k followers" pill below
+the photo — the eye had to bridge the photo to connect them.
+Now they read as one sentence.
 
-Fix:
-  • Select + order by `occurred_at`.
-  • Map `occurred_at` → `created_at` in the returned shape so
-    EarningsScreen and other consumers don't need to change.
+ListingCard given the same treatment — single-line sentence
+("Owner listed a new service: X (Type · City)") + share button.
 
-Net behavior after refresh: t@cergio.ai will see all 6 invite
-rows (4 direct $250s + 2 chain $12.50s) in the Referrals tab,
-cleared/pending split matching section 3 of the audit.
+═══════════════ (2) Share buttons ═══════════════
 
-═══════════════ (2) (i) icon was wrapping below toggle at narrow widths ═══════════════
+  • shareItem({ title, text, url }) helper — Web Share API
+    first, clipboard fallback (matches ResultsScreen pattern).
+  • ShareIconButton component (white pill + b2 upload icon) —
+    one tap on the card.
+  • Wired on GoatShareCard (spotlights) and ListingCard
+    (new-service announcements). Forwarded text includes the
+    full sentence + the canonical service URL.
 
-Tarik: "the i is back at the bottom left.. place just to the left
-of the arrow on top right."
+═══════════════ (3) Earnings breakdown on Referrals tab ═══════════════
 
-v2's sibling-button layout still wrapped at the narrow phone-shell
-width. Restructured so the entire toggle is ONE button containing
-[text] (i) [chevron] with:
-  • inline-flex items-center
-  • whitespace-nowrap on the button
-  • flex-shrink-0 on the (i) and chevron
-  • the (i) is a clickable <span role="button"> nested inside the
-    button, stopPropagation on click/Enter so it routes to
-    /rainmaker/apply instead of toggling the dropdown.
+Each row now leads with the friend who triggered it:
 
-Guarantees the (i) stays inline with the chevron, no matter the
-container width.
+  • Direct ($250): headline "<Friend name> booked"
+                   pill: Direct
+  • Chain ($12.50): headline "Chain payout via <inviter friend>"
+                    sub-line: "Friend-of-friend booked (<fof name>)"
+                    pill: Chain +5%
+  • Spotlight: "Instagram spotlight" / "TikTok spotlight"
+  • Booking (own service): "Service booking"
+
+Pulls from earnings.meta — `tier` ('direct'/'fof') and
+`friend` ('Alex' for direct, 'Sam->FriendA' for chain). When
+meta is sparse (no friend name), falls back to generic copy
+that still reads honest.
 
 ═══════════════ Files ═══════════════
 
-  cergio-app/src/screens/HomeScreen.jsx
-  cergio-app/src/lib/api.js
+  cergio-app/src/screens/ActivityScreen.jsx
+  cergio-app/src/screens/EarningsScreen.jsx
 
 ═══════════════ Verified ═══════════════
 
