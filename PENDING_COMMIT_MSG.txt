@@ -1,75 +1,80 @@
-fix(list-service): never save generic taxonomy_provider_type
+feat(marketplace): requests RLS + confirmed-only Connector roster
 
-═══════════════ The bug ═══════════════
+═══════════════ The two bugs ═══════════════
 
 Tarik 2026-06-03:
-  "sent a plumber request with t@cergio.ai .. logged in as
-   info@cergio.ai .. didn't find any notification."
+  (a) "logged in with t@cergio.ai redid request.. info@cergio.ai
+       didn't get the request"
+  (b) "did search for connectors... got this suggested paid (but
+       connector hadn't confirmed).. need to ONLY show confirmed
+       ...even when they counter with offer instead of free"
 
-Notify-chain audit surfaced the actual cause: info@cergio.ai's TWO
-Personal Chef listings both carried taxonomy_provider_type=
-'Service Provider' — the generic catch-all string. Both
-getProvidersForNotify (fan-out allowlist) and listInboundRequests
-(provider's open-requests inbox) do an EXACT-match against the
-canonical taxonomy. Generic values silently exclude the provider
-from every fan-out AND every search result.
+═══════════════ (a) requests RLS — fixed via .command ═══════════════
 
-Same root cause as the NULL-taxonomy bug shipped in a5909e6
-(2026-06-02). a5909e6 fixed NULL → canonical via the dropdown
-fast path; it did NOT guard against chat-parse returning a
-generic non-NULL string. So a stalled / drifted parser response
-could still poison the row.
+Audit Notify Chain.command + Audit Fresh Request.command + Audit
+Requests RLS.command together surfaced the cause: `requests`
+has RLS enabled and only two SELECT policies — "request visible
+to requester + target" and "self read" — both of which require
+auth.uid() = requester_id OR target_provider_id. Broadcast
+providers (matching service_type, no specific target) are excluded
+by design, so listInboundRequests returned 0 rows even though
+service_type='Personal Chef' exact-matched info@cergio.ai's
+listed taxonomy_provider_type.
 
-═══════════════ Source fix (ServiceListAboutScreen) ═══════════════
+Apply Requests Read Policy.command adds:
 
-  • GENERIC_PT set + isGeneric() guard.
-  • When useTaxo is true but taxo.provider_type is generic, fall
-    through to canonicalMatch (the dropdown selection).
-  • Net behavior: resolvedProviderType is either
-      - a canonical PROVIDER_TYPES entry from the parser, OR
-      - the canonical dropdown selection, OR
-      - null (handled downstream — never a generic catch-all).
-  • Matches the GENERIC_PROVIDER_TYPES set ResultsScreen
-    already uses to skip generic values in display copy.
+  CREATE POLICY "matching providers can read pending requests"
+  ON public.requests FOR SELECT TO authenticated
+  USING (
+    status = 'pending'::request_status
+    AND created_at >= NOW() - INTERVAL '60 minutes'
+  );
 
-═══════════════ Data fix (one-shot .command) ═══════════════
+Net behavior: any authenticated user can read open requests
+created in the last 60 minutes. listInboundRequests then filters
+client-side by service_type → the provider's listed taxonomy.
 
-`Fix Generic Taxonomy.command` walked every services row whose
-taxonomy_provider_type was in the generic set and remapped to
-canonical via title / category keyword. Ran clean: 2 rows
-remapped (info@cergio.ai's Personal Chef pair), 0 remaining
-generic, spot-check confirms they're now visible to Personal
-Chef searches + fan-outs.
+Privacy: requester_id is a uuid; no email / address / payment
+info on the row. Same posture as Indeed / Thumbtack — open
+requests are broadcast to matching providers.
 
-═══════════════ Diagnostics shipped today ═══════════════
+Verified: Section 4 of the policy .command returned the two
+pending requests info@cergio.ai needs to see.
 
-  • Diagnose info@cergio.ai Services.command — surfaces missing
-    rows, force-backfills taxonomy + status from title keyword.
-  • Patch NullGeo Test Services.command — drops Miami coords on
-    rows where verifyAddress failed and lat/lng saved NULL.
-  • Audit Notify Chain.command — walks the requests → fan-out
-    → notifications → request_responses chain for the latest
-    plumber requests.
-  • Fix Generic Taxonomy.command — this one.
+═══════════════ (b) BrowseConnectorsScreen confirmation gate ═══════════════
 
-═══════════════ Test loop now ═══════════════
+  • Polls `listMyOutboundSpotlightRequests` every 5s.
+  • Builds confirmedConnectorIds = Set of connector_ids on rows
+    with status IN ('offered', 'countered', 'accepted').
+    A countered paid price still counts — "yes, here's my price"
+    IS a confirmation per Tarik.
+  • Renders Connectors filtered to confirmedConnectorIds under
+    a new "Confirmed availability" header.
+  • Two new gated states:
+      – No outbound request ever sent → CTA prompting the user
+        to list a service / start a broadcast.
+      – Outbound request(s) exist but no Connector has confirmed
+        yet → "Awaiting Connector responses…" state.
+  • Free / paid banner copy now reflects the confirmation context:
+    "No free Connectors confirmed yet" instead of "available."
 
-To verify the chain end-to-end:
+═══════════════ Files ═══════════════
 
-  Option A — match info@cergio.ai's listing:
-    Sign in as t@cergio.ai → search "I need a personal chef
-    in Miami" → submit request → info@cergio.ai should now see
-    it in Jobs → Requests within seconds.
-
-  Option B — register a matching plumber:
-    Sign in as info@cergio.ai → list a Plumber service in
-    Miami → log out → sign in as t@cergio.ai → re-send the
-    plumber request → info@cergio.ai sees it.
-
-Email channel still dark (Resend prod domain not verified).
-In-app notification rows + listInboundRequests are the real test.
+  • cergio-app/src/screens/BrowseConnectorsScreen.jsx
+  • Apply Requests Read Policy.command (ships as launcher)
+  • Audit Requests RLS.command (diagnostic)
+  • Audit Fresh Request.command (diagnostic)
 
 ═══════════════ Verified ═══════════════
 
 scripts/qa.mjs — 41/41 PASS
-@babel/parser JSX on ServiceListAboutScreen.jsx — OK.
+@babel/parser JSX on BrowseConnectorsScreen.jsx — OK.
+
+═══════════════ Test loop now ═══════════════
+
+  • info@cergio.ai's Jobs → Requests will surface t@cergio.ai's
+    open Personal Chef request within seconds of the page load
+    (no DB action needed — the policy is already live).
+  • Browse Connectors path: starts empty until the user broadcasts
+    a spotlight request; Connectors who respond (free OR paid
+    counter) appear under "Confirmed availability."

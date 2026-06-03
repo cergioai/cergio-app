@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestSpotlightModal } from '../components/ui/RequestSpotlightModal';
+import { listMyOutboundSpotlightRequests } from '../lib/api';
 
 function fmtFollowers(n) {
   if (!Number.isFinite(+n) || n == null) return '—';
@@ -33,6 +34,20 @@ export function BrowseConnectorsScreen() {
   const [connectors, setConnectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [requestTarget, setRequestTarget] = useState(null);  // Connector row open in modal
+  // CERGIO-GUARD (2026-06-03): per Tarik — same notify→confirm→show
+  // gate as the consumer-side ResultsScreen applies here.
+  // "did search for connectors... got this suggested paid (but
+  //  connector hadn't confirmed).. need to ONLY show confirmed
+  //  ...even when they counter with offer instead of free"
+  // We restrict the roster to Connectors who've responded with
+  // status IN ('offered','countered','accepted') on at least one
+  // outbound spotlight_requests row from this provider. A counter
+  // at a paid price still counts as confirmed — the Connector said
+  // "yes, here's my price." Until they respond, they don't appear.
+  // confirmedConnectorIds === null → not yet fetched (loading gate)
+  // confirmedConnectorIds === Set() → fetched, zero confirmations yet
+  const [confirmedConnectorIds, setConfirmedConnectorIds] = useState(null);
+  const [hasAnyOutboundRequest, setHasAnyOutboundRequest] = useState(false);
 
   useEffect(() => {
     if (!supabaseReady) { setLoading(false); return; }
@@ -63,6 +78,32 @@ export function BrowseConnectorsScreen() {
     })();
   }, []);
 
+  // CERGIO-GUARD (2026-06-03): poll the user's outbound
+  // spotlight_requests so we know which Connectors have actually
+  // confirmed. Status 'offered' / 'countered' / 'accepted' all
+  // count — a paid counter is still a "yes, here's my price."
+  // 'pending' / 'declined' / 'withdrawn' / 'expired' do NOT count.
+  // Refreshes every 5s while the screen is open.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchOnce = async () => {
+      const { data } = await listMyOutboundSpotlightRequests({ limit: 100 });
+      if (cancelled) return;
+      const rows = data || [];
+      setHasAnyOutboundRequest(rows.length > 0);
+      const confirmed = new Set();
+      for (const r of rows) {
+        if (['offered', 'countered', 'accepted'].includes(r.status) && r.connector_id) {
+          confirmed.add(r.connector_id);
+        }
+      }
+      setConfirmedConnectorIds(confirmed);
+    };
+    fetchOnce();
+    const t = setInterval(fetchOnce, 5000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
       {/* header */}
@@ -83,36 +124,83 @@ export function BrowseConnectorsScreen() {
         for a lower price — they're often willing for the right service.
       </p>
 
-      {loading ? (
+      {loading || confirmedConnectorIds === null ? (
         <p className="px-5 mt-10 text-[14px] text-b3">Loading Connectors…</p>
       ) : connectors.length === 0 ? (
         <EmptyState />
       ) : (() => {
-        // CERGIO-GUARD (2026-05-30): banner when zero free/swap-only
-        // Connectors are loaded. Tarik: "add a msg if there's no free
-        // connector to say (and that below are some connectors who'll
-        // spotlight for a fee)". A Connector counts as "free / swap"
-        // when BOTH platform rates are unset (price_*_cents IS NULL).
-        const hasFreeConnector = connectors.some(c =>
+        // CERGIO-GUARD (2026-06-03): apply the confirmation-only
+        // gate. Until a Connector has responded (offered / countered
+        // / accepted) on one of this provider's outbound spotlight
+        // requests, they don't show up in the roster. A countered
+        // paid price still counts — "yes, here's my price" IS a
+        // confirmation per Tarik's directive.
+        const confirmedOnly = connectors.filter(c => confirmedConnectorIds.has(c.id));
+        const hasFreeConnector = confirmedOnly.some(c =>
           c.spotlight_price_instagram_cents == null &&
           c.spotlight_price_tiktok_cents == null
         );
+
+        // No outbound request ever sent → CTA prompting the user to
+        // broadcast one first. This is the cleanest path to the gate.
+        if (!hasAnyOutboundRequest) {
+          return (
+            <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-5 text-center">
+              <p className="text-[15px] font-extrabold text-black mb-1">
+                Send a spotlight request first
+              </p>
+              <p className="text-[13px] text-b3 leading-snug mb-4">
+                Cergio asks matching Connectors if they can take your
+                request — when they confirm (free or with a paid offer),
+                they show up here.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/list-service')}
+                className="bg-g text-white rounded-pill px-5 py-2.5 text-[13px] font-extrabold cg-cta"
+              >
+                List a service to start →
+              </button>
+            </div>
+          );
+        }
+
+        // Outbound request(s) exist but no Connector has confirmed yet.
+        if (confirmedOnly.length === 0) {
+          return (
+            <div className="mx-5 mt-6 bg-cr2 border border-bdr rounded-[16px] p-5 text-center">
+              <p className="text-[15px] font-extrabold text-black mb-1">
+                Awaiting Connector responses…
+              </p>
+              <p className="text-[13px] text-b3 leading-snug">
+                Your spotlight request is out. Confirmed Connectors —
+                including those who counter with a paid offer — will
+                appear here as they respond.
+              </p>
+            </div>
+          );
+        }
+
         return (
           <>
             {!hasFreeConnector && (
               <div className="mx-5 mt-5 bg-warnBg border border-warn/40 rounded-[14px] p-3.5">
                 <p className="text-[13px] font-extrabold text-warnText leading-tight mb-1">
-                  No free Connectors available right now
+                  No free Connectors confirmed yet
                 </p>
                 <p className="text-[12.5px] text-warnText leading-snug">
-                  All of the Connectors below set a fee per spotlight post —
-                  but it&apos;s often negotiable. Ask for a lower price (or a
-                  free post in exchange for your service) inside the request.
+                  The Connectors below confirmed with a paid offer —
+                  it&apos;s often still negotiable. Ask for a lower price
+                  (or a free post in exchange for your service) inside
+                  the counter.
                 </p>
               </div>
             )}
-            <div className="mt-6 flex flex-col">
-              {connectors.map(c => (
+            <p className="px-5 mt-5 mb-2 text-[12px] font-extrabold text-b3 uppercase tracking-wide">
+              Confirmed availability
+            </p>
+            <div className="flex flex-col">
+              {confirmedOnly.map(c => (
                 <ConnectorRow
                   key={c.id}
                   connector={c}
