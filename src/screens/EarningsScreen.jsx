@@ -101,9 +101,23 @@ export function EarningsScreen() {
   // CERGIO-GUARD: once we know they're a provider, default the tab to
   // 'bookings' (their primary income source) unless the user has already
   // explicitly tapped a tab. This avoids fighting their selection.
+  // (qa.mjs invariant #33 locks this exact line.)
   useEffect(() => {
     if (!tabSetByUser && isProvider) setActiveTab('bookings');
   }, [isProvider, tabSetByUser]);
+  // CERGIO-GUARD (2026-06-03): smart override. When the provider's
+  // bookings tab would be EMPTY but referrals has rows, flip the
+  // default to referrals so they see their $X payout breakdown
+  // immediately. Tarik 2026-06-03: "can't see Earnings $588 USD."
+  // Runs after earnings load. Still respects an explicit user tap.
+  const _bookingRowCount  = earnings.filter(e => isBookingKind(e.kind)).length;
+  const _referralRowCount = earnings.filter(e => isReferralKind(e.kind)).length;
+  useEffect(() => {
+    if (tabSetByUser) return;
+    if (isProvider && _bookingRowCount === 0 && _referralRowCount > 0) {
+      setActiveTab('referrals');
+    }
+  }, [isProvider, tabSetByUser, _bookingRowCount, _referralRowCount]);
   const totals = earnings.reduce((acc, e) => {
     if (e.status !== 'cleared') return acc;
     acc.all       += e.amount_cents;
