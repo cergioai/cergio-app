@@ -1,15 +1,17 @@
-// CERGIO-GUARD (2026-05-31): About Cergio — Mission + Asset
-// Participation Income concept + team credibility.
+// CERGIO-GUARD (2026-06-03): About Cergio — three-pillar mission
+// (Correct AI / Direct AI / Align AI) + APGI mechanics + team.
 //
-// Tarik supplied the canonical copy in chat:
-//   "I'm Cergio — friend-powered AI. Every result is backed by someone
-//    you know.
-//    I create revenue through cash earnings, free service barters, and
-//    Asset Participation Income — sharing Cergio's growth with the
-//    people who build it.
-//    Built with tech leads from Uber, Google, Grubhub, and Goldman Sachs."
+// Tarik 2026-06-03 mission tweak:
+//   1. Correct AI with friend & endorsements vs gamed web data it
+//      was trained on.
+//   2. Direct AI to enable shared human prosperity — distribute
+//      abundance profitably for everyone.
+//   3. Create architectures that drive everyone's prosperity
+//      together (vs shortsighted individualist goals that pit
+//      users vs investors, users vs users, etc).
 //
-// Mission framing: "Human-Powered Guided AI for Shared Prosperity".
+// One-line tagline: "Friend-powered AI — built so we all
+// prosper together."
 //
 // Route: /about. Reached via the small "About · Contact · Terms"
 // row in HomeScreen / Splash / Auth footers, or directly.
@@ -45,89 +47,91 @@ export function AboutScreen() {
         <h1 className="text-[28px] font-extrabold text-black leading-tight mt-5 tracking-wide">
           About <span className="tracking-[0.18em] uppercase">Cergio</span>
         </h1>
-        <p className="text-[14px] text-b2 font-medium leading-relaxed mt-3 max-w-[320px]">
-          Friend-powered AI. Every result is backed by someone you know.
+        {/* CERGIO-GUARD (2026-06-03): one-line tagline now hints at
+            all three mission pillars (correction, direction,
+            shared prosperity) without going over a single line. */}
+        <p className="text-[14px] text-b2 font-medium leading-relaxed mt-3 max-w-[340px]">
+          Friend-powered AI — built so we all prosper together.
         </p>
       </div>
 
-      {/* Mission card — Tarik tweak 2026-05-31:
-          "Upgrade Ai with Human Friend to Friend Endorsements and
-           Guide it to Enable Shared Prosperity via Asset Participation
-           Growth Income to provide users with rewards tied to platform
-           growth relative to their participation.. Turning users into
-           strategic partners".
-          Compressed to a one-line mission + one-line proof. */}
+      {/* Mission — Tarik 2026-06-03:
+          Three hard-hitting pillars distilled from Tarik's direction:
+            1. Correct AI with friend + endorsement data vs gamed
+               web data it was trained on.
+            2. Direct AI toward shared human prosperity, distributing
+               abundance profitably for everyone.
+            3. Create architectures that drive everyone's prosperity
+               together — instead of pitting users vs investors,
+               users vs users, etc.
+          Three short verb-led pillars. The cascading copy below
+          (revenue streams + team) lands relative to these. */}
       <div className="mx-5 mt-8 bg-white border border-line rounded-[18px] p-5">
         <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
           Our mission
         </p>
         <h2 className="text-[20px] font-extrabold text-black leading-tight mt-2">
-          Upgrade AI with human endorsements.<br />
-          Share its growth with the network that built it.
+          Correct AI. Direct AI. Align AI.
         </h2>
-        <p className="text-[13.5px] text-b2 leading-relaxed mt-3">
-          Cergio guides AI through friend-to-friend trust, then returns
-          the upside as <span className="font-extrabold text-black">Asset Participation Growth Income</span> —
-          every user&apos;s share of Cergio&apos;s growth, scaled to
-          their participation. Users become strategic partners, not
-          customers.
+        <p className="text-[13.5px] text-b2 leading-relaxed mt-2">
+          Rebuilding AI on three foundations the web economy refuses
+          to fix.
         </p>
-      </div>
-
-      {/* What we believe — Tarik 2026-05-31:
-            "1-AI should be corrected by human recommendations (to
-             correct the infected internet data) otherwise AI will
-             just give you garbage more efficiently faster.
-             2-We can create larger platforms by aligning user
-             interests with shareholders... which turns users into
-             highly strategic partners earning income relative to
-             their participation in the growth of the platform."
-          The two convictions underneath everything. Sits between
-          the one-line mission above and the "three revenue streams"
-          below — the WHY before the HOW. */}
-      <div className="mx-5 mt-5 bg-white border border-line rounded-[18px] p-5">
-        <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
-          What we believe
-        </p>
-        <div className="mt-3 flex flex-col gap-4">
+        <div className="mt-4 flex flex-col gap-4">
           <div>
             <p className="text-[14px] font-extrabold text-black leading-tight">
-              1. AI corrected by humans, not the other way around.
+              1. Correct it.
             </p>
             <p className="text-[13px] text-b2 leading-snug mt-1">
-              Internet data is polluted. Without endorsement from
-              people you trust, AI just delivers garbage faster.
-              Cergio routes every result through your real network —
-              so the AI keeps getting corrected by humans.
+              Friend-to-friend trust and human endorsements replace
+              the gamed, ad-saturated web data today&apos;s AI was
+              trained on. Real signal beats clickbait.
             </p>
           </div>
           <div>
             <p className="text-[14px] font-extrabold text-black leading-tight">
-              2. Platforms grow bigger when users own a piece.
+              2. Direct it.
             </p>
             <p className="text-[13px] text-b2 leading-snug mt-1">
-              Align user interests with shareholders and the network
-              earns alongside the platform. Every Cergio user
-              becomes a strategic partner — paid in income tied to
-              platform growth, scaled to their participation.
+              Aim AI at shared human prosperity — distribute the
+              abundance it unlocks profitably for everyone, not
+              quarterly extraction for a few.
+            </p>
+          </div>
+          <div>
+            <p className="text-[14px] font-extrabold text-black leading-tight">
+              3. Align it.
+            </p>
+            <p className="text-[13px] text-b2 leading-snug mt-1">
+              Build architectures where users, builders, and investors
+              all earn together — instead of pitting users against
+              investors, or users against each other.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Three revenue streams — short, scannable */}
+      {/* Three revenue streams — Tarik 2026-06-03: framing tweaked
+          so this section reads as the concrete mechanics that DELIVER
+          on pillar 3 (Align it). The section header + intro tie the
+          model back to the mission instead of standing alone. */}
       <div className="mx-5 mt-5 bg-white border border-line rounded-[18px] p-5">
         <p className="text-[11px] font-extrabold text-gd tracking-[0.18em] uppercase">
-          Three ways Cergio creates value
+          How the alignment works
         </p>
-        <div className="mt-3 flex flex-col gap-3">
+        <p className="text-[13px] text-b2 leading-snug mt-2">
+          Three earning surfaces, one platform — designed so users,
+          providers, Connectors, and investors all grow together.
+        </p>
+        <div className="mt-4 flex flex-col gap-3">
           <div>
             <p className="text-[14px] font-extrabold text-black leading-tight">
               1. Cash earnings
             </p>
             <p className="text-[13px] text-b2 leading-snug mt-0.5">
-              Connectors earn cash per client booked. Users earn credit
-              from every invite + reco that turns into a booking.
+              Providers and Connectors earn cash per booking.
+              Users earn credit from every invite + reco that turns
+              into a booking. Real money for real signal.
             </p>
           </div>
           <div>
@@ -135,22 +139,22 @@ export function AboutScreen() {
               2. Free service barters — or pay
             </p>
             <p className="text-[13px] text-b2 leading-snug mt-0.5">
-              Connectors trade their reach (Instagram, TikTok) for free
-              services from providers — or pay cash if they prefer.
-              Spotlight, service, money, or any mix — match the deal
-              to the moment.
+              Connectors trade their reach (Instagram, TikTok) for
+              free services — or pay cash if they prefer. Spotlight,
+              service, money, or any mix; the deal flexes to the
+              moment.
             </p>
           </div>
           <div>
             <p className="text-[14px] font-extrabold text-black leading-tight">
-              3. Asset Participation Growth Income
+              3. Asset Participation Growth Income (APGI)
             </p>
             <p className="text-[13px] text-b2 leading-snug mt-0.5">
-              Every dollar you earn also accrues a share of
-              Cergio&apos;s growth, scaled to your participation. The
-              earlier you join and the more your network grows, the
-              larger your share. Regular income tied to the orchard
-              you helped grow — not a one-off referral bonus.
+              Every dollar earned also accrues a share of Cergio&apos;s
+              growth, scaled to your participation. Regular income
+              tied to the network you helped build — not a one-off
+              referral bonus. This is how the abundance gets
+              distributed.
             </p>
           </div>
         </div>
@@ -165,9 +169,10 @@ export function AboutScreen() {
           Tech leads from Uber, Google, Grubhub, and Goldman Sachs.
         </p>
         <p className="text-[12.5px] text-b2 leading-snug mt-2">
-          Marketplaces, money flow, search ranking, and growth — the
-          stack that scaled the last decade of consumer apps, now
-          building one where the network earns alongside the platform.
+          Marketplaces, money flow, ranking, and growth — the stack
+          that scaled the last decade of consumer apps, now turned
+          toward an AI that corrects itself on human trust and
+          shares its upside with everyone it serves.
         </p>
       </div>
 

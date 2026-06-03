@@ -453,7 +453,7 @@ export function EarningsScreen() {
                 Cergio's mission
               </p>
               <p className="text-[12px] text-gd/85 mt-1 leading-snug font-normal">
-                Build human-powered AI that enables shared prosperity. Your bonus is directly
+                Build friend-powered AI so we all prosper together. Your bonus is directly
                 tied to your participation in that growth.
               </p>
             </div>

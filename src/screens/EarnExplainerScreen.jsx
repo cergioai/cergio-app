@@ -106,8 +106,8 @@ export function EarnExplainerScreen() {
 
       {/* Mission. */}
       <p className="mx-5 text-[11px] text-b3 font-normal leading-snug">
-        Cergio's mission: human-powered AI that enables shared prosperity. Your bonus is
-        directly tied to your participation in that growth.
+        Cergio's mission: friend-powered AI — built so we all prosper together. Your bonus
+        is directly tied to your participation in that growth.
       </p>
     </div>
   );

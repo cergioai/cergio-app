@@ -1512,7 +1512,7 @@ export function HomeScreen() {
           + py-3 inside so content above doesn't crowd it. */}
       <div className="fixed bottom-[92px] left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 z-[60] pointer-events-none">
         <p className="text-center text-meta-sm text-b3 font-normal leading-snug py-2">
-          Cergio is human-powered AI for shared prosperity
+          Cergio is friend-powered AI — built so we all prosper together
         </p>
         {/* CERGIO-GUARD (2026-05-31): About · Contact · Terms link
             row. pointer-events-auto so the links are tappable even

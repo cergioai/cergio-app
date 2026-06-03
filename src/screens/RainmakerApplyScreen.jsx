@@ -136,7 +136,7 @@ export function RainmakerApplyScreen() {
         </div>
 
         <p className="text-[11px] text-gd/80 font-normal mt-6 leading-snug text-center">
-          Cergio's mission: human-powered AI that enables shared prosperity.
+          Cergio's mission: friend-powered AI — built so we all prosper together.
         </p>
       </div>
 

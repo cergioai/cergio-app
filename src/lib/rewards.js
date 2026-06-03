@@ -121,5 +121,7 @@ export const REWARD_COPY = {
   gpiOneLine:            `Growth Participation Income — your earnings drive a higher participation bonus as Cergio grows. Loyalty-style, not a security.`,
 
   // Mission tagline — footer / closing line on prosperity-themed surfaces.
-  missionLine:           `Cergio's mission: human-powered AI that enables shared prosperity.`,
+  // CERGIO-GUARD (2026-06-03): tightened to hint at all three pillars
+  // (Correct AI / Direct AI / Align AI) in one line.
+  missionLine:           `Cergio's mission: friend-powered AI — built so we all prosper together.`,
 };
