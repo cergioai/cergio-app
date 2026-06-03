@@ -1200,6 +1200,243 @@ export async function getMySpotlightPrices() {
     .maybeSingle();
 }
 
+// ─── Request responses (MARKETPLACE_SPEC Step 1, 2026-06-03) ────────────────
+// A provider's confirmed offer on an open consumer request. Each row
+// represents ONE provider responding to ONE request with ONE service —
+// status='offered' (took the asking price), 'countered' (added a price),
+// 'declined' (passed), 'withdrawn' (changed their mind), 'accepted'
+// (consumer picked them), or 'expired' (broadcast hit the 60-min cap).
+//
+// RLS (enforced by the migration, mirrored here for documentation):
+//   • Request owner (the consumer) SELECTs all responses on their request.
+//   • Responder (the provider) SELECTs / INSERTs / UPDATEs their own row.
+//   • No one else can read these rows — open offers are private.
+
+/**
+ * Provider writes a response to an open request.
+ * @param {string} requestId  — the request being responded to
+ * @param {Object} opts
+ * @param {'offered' | 'countered' | 'declined' | 'withdrawn'} opts.status
+ * @param {string} [opts.serviceId]      — the provider's own service
+ *                                          fulfilling this offer (optional)
+ * @param {number} [opts.offeredPriceCents] — null = accept at asking price;
+ *                                            >0 = counter at this amount
+ * @param {string} [opts.message]        — free-form note to the consumer
+ * @param {number} [opts.waveN]          — broadcast wave the responder is in
+ *                                          (set by the wave dispatcher in
+ *                                          a later step; null on direct
+ *                                          provider-side accept).
+ *
+ * Idempotent — upserts on the unique (request_id, responder_id,
+ * service_id) tuple so re-clicks don't duplicate. If a previous
+ * row exists, status / price / message overwrite.
+ *
+ * Returns { data, error }.
+ */
+export async function respondToRequest(requestId, {
+  status,
+  serviceId         = null,
+  offeredPriceCents = null,
+  message           = null,
+  waveN             = null,
+} = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!requestId) return { data: null, error: { message: 'requestId required' } };
+  if (!['offered', 'countered', 'declined', 'withdrawn'].includes(status)) {
+    return { data: null, error: { message: 'invalid status' } };
+  }
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  const uid = userRes.user.id;
+
+  // Time-to-offer telemetry — used by rank_results for time-decay
+  // weighting (MARKETPLACE_SPEC § 6 Q3). Best-effort; if the request
+  // lookup fails we still write the row without it.
+  let timeToOfferSeconds = null;
+  try {
+    const { data: req } = await supabase
+      .from('requests')
+      .select('created_at')
+      .eq('id', requestId)
+      .maybeSingle();
+    if (req?.created_at) {
+      timeToOfferSeconds = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(req.created_at).getTime()) / 1000),
+      );
+    }
+  } catch { /* ignore — telemetry is optional */ }
+
+  const row = {
+    request_id:            requestId,
+    responder_id:          uid,
+    service_id:            serviceId,
+    status,
+    offered_price_cents:   offeredPriceCents,
+    message:               (message || '').slice(0, 1000) || null,
+    last_counter_by:       status === 'countered' ? 'provider' : null,
+    time_to_offer_seconds: timeToOfferSeconds,
+    wave_n:                waveN,
+    responded_at:          new Date().toISOString(),
+  };
+
+  return await supabase
+    .from('request_responses')
+    .upsert(row, { onConflict: 'request_id,responder_id,service_id' })
+    .select()
+    .maybeSingle();
+}
+
+/**
+ * List every confirmed response on a request. The request owner sees
+ * all rows; a responder only sees their own. Caller is expected to be
+ * the consumer who posted the request (called from ResultsScreen).
+ *
+ * Joins the responder profile + service so the consumer card can
+ * render the provider's name + service title without an extra fetch.
+ */
+export async function listResponsesForRequest(requestId, { limit = 50 } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!requestId) return { data: [], error: null };
+  return await supabase
+    .from('request_responses')
+    .select(`
+      id, request_id, responder_id, service_id, status,
+      offered_price_cents, message, responded_at, last_counter_by,
+      time_to_offer_seconds, wave_n,
+      responder:profiles!request_responses_responder_id_fkey ( id, display_name, cc_verified_at ),
+      service:services ( id, title, category, taxonomy_provider_type,
+                         description, location_text, photo_class, cover_url )
+    `)
+    .eq('request_id', requestId)
+    .in('status', ['offered', 'countered', 'accepted'])
+    .order('responded_at', { ascending: true })
+    .limit(limit);
+}
+
+/**
+ * Consumer counters a provider's offer — writes status='countered' and
+ * stamps last_counter_by='consumer' so the UI knows it's the provider's
+ * turn again. Mirrors the spotlight counter loop.
+ */
+export async function counterRequestResponse(responseId, {
+  offeredPriceCents,
+  message = null,
+} = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!responseId) return { data: null, error: { message: 'responseId required' } };
+  return await supabase
+    .from('request_responses')
+    .update({
+      status:              'countered',
+      offered_price_cents: Math.max(0, Math.round(+offeredPriceCents || 0)),
+      message:             (message || '').slice(0, 1000) || null,
+      last_counter_by:     'consumer',
+      responded_at:        new Date().toISOString(),
+    })
+    .eq('id', responseId)
+    .select()
+    .maybeSingle();
+}
+
+/**
+ * Consumer picks one of the confirmed responses — flips that row to
+ * 'accepted' and withdraws every other open response on the same
+ * request in one transaction-ish update pair. Returns the chosen row.
+ */
+export async function acceptRequestResponse(responseId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!responseId) return { data: null, error: { message: 'responseId required' } };
+
+  // 1. Accept the chosen row.
+  const { data: chosen, error: acceptErr } = await supabase
+    .from('request_responses')
+    .update({ status: 'accepted', responded_at: new Date().toISOString() })
+    .eq('id', responseId)
+    .select('id, request_id')
+    .maybeSingle();
+  if (acceptErr || !chosen) return { data: null, error: acceptErr };
+
+  // 2. Withdraw all other open offers on the same request.
+  await supabase
+    .from('request_responses')
+    .update({ status: 'withdrawn', responded_at: new Date().toISOString() })
+    .eq('request_id', chosen.request_id)
+    .neq('id', chosen.id)
+    .in('status', ['offered', 'countered']);
+
+  return { data: chosen, error: null };
+}
+
+/**
+ * Provider-side: list open consumer requests this provider should
+ * respond to. Filters to requests whose taxonomy_provider_type the
+ * provider matches via at least one of their listed services AND
+ * which the provider hasn't already responded to.
+ *
+ * Returns rows shaped { id, service_type, description, location_text,
+ * created_at, requester:{id, display_name}, my_service_id }
+ * — `my_service_id` is the provider's matching service so the inbox
+ * card knows what to attach when respondToRequest fires.
+ */
+export async function listInboundRequests({ limit = 20 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const uid = userRes.user.id;
+
+  // 1. What provider types does this provider serve?
+  const { data: mySvcs, error: svcErr } = await supabase
+    .from('services')
+    .select('id, taxonomy_provider_type')
+    .eq('owner_id', uid)
+    .eq('status', 'listed');
+  if (svcErr) return { data: [], error: svcErr };
+  const myTypes = [...new Set((mySvcs || []).map(s => s.taxonomy_provider_type).filter(Boolean))];
+  if (myTypes.length === 0) return { data: [], error: null };
+  // Map provider_type → first service id, so a card can attach a real service.
+  const typeToSvc = {};
+  for (const s of mySvcs) {
+    if (s.taxonomy_provider_type && !typeToSvc[s.taxonomy_provider_type]) {
+      typeToSvc[s.taxonomy_provider_type] = s.id;
+    }
+  }
+
+  // 2. Pull open requests whose service_type matches one of my types.
+  //    "Open" = created in last 60 minutes (per the broadcast window in
+  //    MARKETPLACE_SPEC § 6 S3) AND status='pending'. RLS lets any
+  //    matching provider read these.
+  const { data: reqs, error: reqErr } = await supabase
+    .from('requests')
+    .select(`
+      id, service_type, description, location_text, created_at,
+      requester:profiles!requests_requester_id_fkey ( id, display_name )
+    `)
+    .in('service_type', myTypes)
+    .eq('status', 'pending')
+    .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (reqErr) return { data: [], error: reqErr };
+
+  // 3. Drop requests I've already responded to.
+  if (reqs && reqs.length > 0) {
+    const { data: mine } = await supabase
+      .from('request_responses')
+      .select('request_id')
+      .eq('responder_id', uid)
+      .in('request_id', reqs.map(r => r.id));
+    const skip = new Set((mine || []).map(r => r.request_id));
+    return {
+      data: reqs
+        .filter(r => !skip.has(r.id))
+        .map(r => ({ ...r, my_service_id: typeToSvc[r.service_type] || null })),
+      error: null,
+    };
+  }
+  return { data: [], error: null };
+}
+
 // ─── Spotlight requests (v10) ───────────────────────────────────────────────
 // Provider asks Connector for an IG/TT spotlight. Connector can counter at
 // a lower price. RLS scopes reads to the two parties on the row.

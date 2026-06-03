@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { listProviderBookings, listMyOutboundSpotlightRequests } from '../lib/api';
+import {
+  listProviderBookings,
+  listMyOutboundSpotlightRequests,
+  listInboundRequests,
+  respondToRequest,
+} from '../lib/api';
 
 // Map a Supabase bookings row → the same shape the existing UI uses.
 function bookingToRequest(b) {
@@ -98,6 +103,58 @@ export function JobsInboxScreen() {
   const requests   = real ?? [];
   const badgeCount = requests.filter(r => r.isUnread).length;
 
+  // CERGIO-GUARD (2026-06-03): open consumer requests this provider can
+  // respond to. Sits ABOVE the existing booking list because every
+  // second a provider takes here is bid-decay time
+  // (MARKETPLACE_SPEC § 4 time-decay weighting). Accept / Counter /
+  // Decline call respondToRequest with the corresponding status.
+  const [inbound, setInbound] = useState(null);
+  const [responding, setResponding] = useState({}); // { [requestId]: 'pending'|'done' }
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setInbound([]); return; }
+    let cancelled = false;
+    const fetchOnce = () => {
+      listInboundRequests({ limit: 20 }).then(({ data }) => {
+        if (cancelled) return;
+        setInbound(data || []);
+      });
+    };
+    fetchOnce();
+    // Refresh every 30s so a provider sitting on the Jobs tab sees new
+    // requests roll in without manually pulling.
+    const t = setInterval(fetchOnce, 30000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [auth?.isSignedIn]);
+
+  async function handleInboundResponse(req, status) {
+    if (!req.my_service_id) {
+      showToast('You need a listed service to respond.');
+      return;
+    }
+    setResponding(prev => ({ ...prev, [req.id]: 'pending' }));
+    const { error } = await respondToRequest(req.id, {
+      status,
+      serviceId: req.my_service_id,
+      offeredPriceCents: null, // null = take the asking price; counter UI sets a value
+      message: null,
+      waveN: null,
+    });
+    if (error) {
+      showToast('Could not send response — try again.');
+      setResponding(prev => ({ ...prev, [req.id]: undefined }));
+      return;
+    }
+    setResponding(prev => ({ ...prev, [req.id]: 'done' }));
+    // Optimistically drop this row so the inbox visibly shrinks.
+    setInbound(prev => (prev || []).filter(r => r.id !== req.id));
+    showToast(
+      status === 'offered'   ? 'Offer sent ✓'   :
+      status === 'declined'  ? 'Request declined' :
+      status === 'countered' ? 'Counter sent ✓' :
+      'Response sent'
+    );
+  }
+
   // Sent — provider's outgoing spotlight asks. Loaded lazily so the
   // Inbox tab doesn't pay the cost until the user opens the Sent tab.
   const [sent, setSent] = useState(null);
@@ -183,6 +240,127 @@ export function JobsInboxScreen() {
 
       {/* request list — filter pills removed per audit */}
       <div className="px-5 flex flex-col gap-3 pt-4">
+
+        {/* CERGIO-GUARD (2026-06-03): open consumer requests for this
+            provider's service type — the "notify → confirm" half of
+            MARKETPLACE_SPEC. Sits ABOVE existing bookings because
+            every second of provider lag is bid-decay
+            (MARKETPLACE_SPEC § 4). */}
+        {activeTab === 'Requests' && inbound && inbound.length > 0 && (
+          <>
+            <p className="text-[12px] font-extrabold text-b3 uppercase tracking-wide pt-1">
+              New requests near you
+            </p>
+            {inbound.filter(req => {
+              if (!searchQ.trim()) return true;
+              const q = searchQ.toLowerCase();
+              const name = req.requester?.display_name || '';
+              return [name, req.service_type, req.description, req.location_text]
+                .filter(Boolean)
+                .some(v => String(v).toLowerCase().includes(q));
+            }).map((req, i) => {
+              const senderName = req.requester?.display_name || 'A Cergio user';
+              const state = responding[req.id];
+              const minutesAgo = req.created_at
+                ? Math.max(0, Math.round((Date.now() - new Date(req.created_at).getTime()) / 60000))
+                : 0;
+              return (
+                <div
+                  key={req.id}
+                  className="bg-white border-2 border-g/30 rounded-[20px] p-4 flex gap-3"
+                >
+                  <div className="w-2 flex-shrink-0 mt-1.5">
+                    <div className="w-2 h-2 rounded-full bg-g" />
+                  </div>
+                  <Avatar name={senderName} idx={i} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <span className="text-[15px] font-extrabold text-black truncate">
+                        {senderName}
+                      </span>
+                      <span className="text-[12px] text-b3 font-medium flex-shrink-0 ml-2">
+                        {minutesAgo === 0 ? 'just now' : `${minutesAgo}m ago`}
+                      </span>
+                    </div>
+                    <p className="text-[13px] font-extrabold text-black leading-snug mb-1 truncate">
+                      Needs a {req.service_type}
+                    </p>
+                    {req.description && (
+                      <p className="text-[12px] text-b3 font-medium leading-snug mb-2 line-clamp-2">
+                        "{req.description}"
+                      </p>
+                    )}
+                    {req.location_text && (
+                      <p className="text-[12px] text-b3 font-medium leading-snug">
+                        {req.location_text}
+                      </p>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={state === 'pending'}
+                        onClick={() => handleInboundResponse(req, 'offered')}
+                        className="flex-1 bg-g text-white rounded-pill py-2 text-[12px] font-extrabold cg-cta disabled:opacity-60"
+                      >
+                        {state === 'pending' ? 'Sending…' : 'Accept'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={state === 'pending'}
+                        onClick={async () => {
+                          if (!req.my_service_id) {
+                            showToast('You need a listed service to respond.');
+                            return;
+                          }
+                          const raw = window.prompt('Counter offer in dollars (e.g. 75):');
+                          if (raw === null) return;
+                          const dollars = parseFloat(raw);
+                          if (!Number.isFinite(dollars) || dollars < 0) {
+                            showToast('Please enter a non-negative number.');
+                            return;
+                          }
+                          setResponding(prev => ({ ...prev, [req.id]: 'pending' }));
+                          const { error } = await respondToRequest(req.id, {
+                            status: 'countered',
+                            serviceId: req.my_service_id,
+                            offeredPriceCents: Math.round(dollars * 100),
+                            message: null,
+                            waveN: null,
+                          });
+                          if (error) {
+                            showToast('Could not send counter — try again.');
+                            setResponding(prev => ({ ...prev, [req.id]: undefined }));
+                            return;
+                          }
+                          setResponding(prev => ({ ...prev, [req.id]: 'done' }));
+                          setInbound(prev => (prev || []).filter(r => r.id !== req.id));
+                          showToast('Counter sent ✓');
+                        }}
+                        className="bg-white border border-bdr rounded-pill px-3 py-2 text-[12px] font-extrabold text-b2 cg-cta-ghost disabled:opacity-60"
+                      >
+                        Counter
+                      </button>
+                      <button
+                        type="button"
+                        disabled={state === 'pending'}
+                        onClick={() => handleInboundResponse(req, 'declined')}
+                        className="bg-white border border-bdr rounded-pill px-3 py-2 text-[12px] font-extrabold text-b3 cg-cta-ghost disabled:opacity-60"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {requests.length > 0 && (
+              <p className="text-[12px] font-extrabold text-b3 uppercase tracking-wide pt-3">
+                Bookings
+              </p>
+            )}
+          </>
+        )}
+
         {activeTab === 'Requests' && requests.length === 0 && (
           <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
             <p className="text-[14px] font-extrabold text-black">No requests yet</p>

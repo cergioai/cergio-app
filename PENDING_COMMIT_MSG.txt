@@ -1,129 +1,142 @@
-feat(results): tiered ranking per spec + marketplace confirm-availability spec
+feat(marketplace): Step 1+2 bundle — request_responses + provider inbox + Results filter
 
-Per Tarik (2026-06-02): "the spec is that services get notified and
-confirm ability to offer free services (which then has them show up
-in the results). it's not like a search. All results need to have
-'confirmed availability + confirmed ability to do service for free'
-(or added a price to counter). Same the other way around (services
-requesting free spotlights from Connectors). For testing, need to see
-the services being notified, accepting, then their profiles showing
-up. Same for Connectors.
+MARKETPLACE_SPEC.md Steps 1-3 of the notify → confirm → show flow.
+Greenlighted by Tarik 2026-06-03.
 
-The rank priority is:
-  1 — highest match of friend recos + free (if free is requested)
-  2 — if no free is requested, rank based on highest friend recos +
-      within the budget price, then Connector recos + within budget
-  Prioritize friend connections OVER budget for Cergio's pick — i.e.
-    show friend-recommended service Out of Budget, AHEAD of a service
-    that has NO friend connections.
-  BUT: if a service has ≥1 friend reco + within budget, it ranks
-    HIGHER than a service with more friend recos but over budget."
+═══════════════ Step 1: Schema (ships as .command) ═══════════════
 
-═══════════════ 1. Ranking — SHIPPED ═══════════════
+`Apply Request Responses Migration.command` (sibling of Unlock and
+Push.command) creates the table + 3 indexes + 5 RLS policies.
+Idempotent: CREATE TABLE IF NOT EXISTS, DROP POLICY IF EXISTS before
+CREATE.
 
-`src/lib/rankResults.js`:
-  Pure function. Six-tier classification, deterministic sort, zero
-  dependencies. Easy to unit-test from a node REPL.
+  Table: request_responses (12 columns)
+    id                       uuid PK
+    request_id               uuid REFERENCES requests(id) ON DELETE CASCADE
+    responder_id             uuid REFERENCES profiles(id)
+    service_id               uuid REFERENCES services(id)
+    status                   text  CHECK IN (offered,countered,declined,
+                                              withdrawn,accepted,expired)
+    offered_price_cents      int   CHECK >= 0
+    message                  text
+    responded_at             timestamptz DEFAULT NOW()
+    last_counter_by          text  CHECK IN (provider, consumer)
+    time_to_offer_seconds    int   (telemetry for time-decay ranking)
+    wave_n                   int   (broadcast wave attribution)
+    UNIQUE (request_id, responder_id, service_id)
 
-  Tier hierarchy (highest first):
-    T1   friend_recos ≥ 1   AND  within_budget
-    T2   friend_recos ≥ 1   AND  NOT within_budget
-    T3   connector_recos ≥1 AND  within_budget
-    T4   connector_recos ≥1 AND  NOT within_budget
-    T5   no recos            AND  within_budget
-    T6   everything else
+  Indexes: request_id · responder_id · status
 
-  Within a tier:
-    friend_count DESC > connector_count DESC > rating DESC
-    > priceCents ASC > distance_miles ASC
+  RLS policies (5):
+    request_owner_can_select_responses
+    responder_can_select_own
+    responder_can_insert_own
+    responder_can_update_own
+    owner_can_accept_or_expire
 
-  When `wantFree=true`:
-    • Free services come BEFORE paid ones, full stop.
-    • Within free, the same T1..T6 ordering applies.
-    • Paid options follow as a fallback band so the page is never
-      empty, but they sit below all free ones regardless of recos.
+  Anon role: cannot read. Verified by the migration's sanity step.
 
-  First item gets the `pick=true` flag (Cergio's Pick badge).
+═══════════════ Step 1: Client API (lib/api.js) ═══════════════
 
-  Exports:
-    rankResults(services, { budgetCents, wantFree }) → ranked array
-    applyPickFlag(ranked) → mutates pick=true on [0], false on rest
-    classifyTier(service, opts) → integer tier 1..7 (exposed for tests)
+Four core helpers + one inbound-list helper for the provider inbox:
 
-  Verified against Tarik's worked example end-to-end:
-    A: friend=1, $150, budget=$100  → T2 (over budget but has friend)
-    B: friend=0, $80,  budget=$100  → T5 (within budget, no friend)
-    C: friend=1, $90,  budget=$100  → T1 (friend AND within budget)
-    Result: C > A > B  ✓
+  respondToRequest(requestId, {status, serviceId, offeredPriceCents,
+                               message, waveN})
+    — Upserts on (request_id, responder_id, service_id) so repeated
+      clicks don't duplicate. Stamps last_counter_by='provider' on
+      counters and computes time_to_offer_seconds from the request's
+      created_at for time-decay telemetry.
 
-  Verified free-first behaviour:
-    F1: free, friend=0, connector=1
-    F2: free, friend=2, connector=0
-    P1: $50,  friend=5, connector=0
-    With wantFree=true: F2 > F1 > P1  ✓ (free wins despite P1 having
-                                        more friend recos)
+  listResponsesForRequest(requestId, {limit})
+    — Consumer-side read: joins responder profile + service. Filters
+      to status IN (offered, countered, accepted).
 
-`src/screens/ResultsScreen.jsx`:
-  Replaces the legacy two-line sort (just friend-bucket flag) with
-  `applyPickFlag(rankResults(providersRaw, { budgetCents, wantFree }))`.
-  Pulls `budgetCents` and `freeServices` from existing state — no
-  wiring changes.
+  counterRequestResponse(responseId, {offeredPriceCents, message})
+    — Consumer counters back. last_counter_by='consumer'.
 
-═══════════════ 2. Confirm-availability marketplace — SPECCED ═══════════════
+  acceptRequestResponse(responseId)
+    — Flips chosen → 'accepted', bulk-withdraws siblings.
 
-`MARKETPLACE_SPEC.md` (in Cergio Claude/, alongside DESIGN_AUDIT.md):
-  Full spec for the notify → confirm → show marketplace model Tarik
-  described, both directions (consumer→provider and service→Connector).
+  listInboundRequests({limit})    ← NEW in Step 2
+    — Provider-side read: pulls open consumer requests whose
+      service_type matches one of the provider's listed services AND
+      which the provider hasn't already responded to. Returns rows
+      shaped {id, service_type, description, location_text,
+      created_at, requester:{id, display_name}, my_service_id}.
+      "Open" = pending status AND created in the last 60 minutes
+      (broadcast window per MARKETPLACE_SPEC § 6 S3).
 
-  Sections:
-    1. The two flows (with ASCII funnels)
-    2. Schema additions — proposed `request_responses` table
-       (REFERENCES requests + responder/service + status + offered
-       price + message; RLS policies sketched).
-    3. UI surfaces to build — Provider's inbox new Request row with
-       Accept / Counter / Decline; Consumer's Results data source
-       change from listServices → request_responses join; Connector's
-       inbox role-flip.
-    4. Ranking — what shipped today (rankResults), with the worked
-       example walked through line by line.
-    5. Testing the loop — a future `E2E Request Confirm Flow.command`
-       outline.
-    6. Open questions (notification cadence, counter loop, time-decay,
-       no-response fallback).
+═══════════════ Step 1: Audit (.command) ═══════════════
 
-  Not in this commit (need design + migration confirmations):
-    • The `request_responses` table itself
-    • Provider's inbox Accept / Counter / Decline buttons
-    • Consumer's Results pulling from responses instead of services
-    • Connector-side mirror
+`Audit Request Responses.command`:
+  • Funnel: total / no_offers / partial / ready_to_pick / accepted
+  • Per-request detail (last 50) — response counts by status
+  • Time-to-offer p50 + p90 per wave for cadence tuning
+  • R1-R5 red flags + RLS sanity (anon must read 0)
 
-  When you're ready to go, the spec document is the source-of-truth
-  to iterate from.
+═══════════════ Step 2: Consumer-side filter (ResultsScreen) ═══════════════
 
-═══════════════ 3. What this does NOT change ═══════════════
+Tarik 2026-06-03:
+  "should not have seen results (as they did not accept the request)..
+   ONLY show Accepted requests... THIS IS CENTRAL TO THE SPEC!..
+   SO USERS GET REAL CONFIRMED SERVICES"
 
-  • The consumer's notify fan-out (createRequestAndFanOut) still
-    runs the same as today.
-  • The provider's inbox still shows existing bookings.
-  • Connector-side BrowseConnectors / spotlight flow untouched.
-  • The new ranking is applied on TOP of the existing listServices
-    output — providers still surface from search; we're just sorting
-    them per the new tiers. The "confirmed availability gate" lands
-    in the next iteration once the responses table is approved.
+  • ResultsScreen polls listResponsesForRequest(requestId) every 4s
+    while open and builds confirmedServiceIds — the set of service_ids
+    with an offered / countered / accepted row.
+  • servicesFiltered restricts the rendered list to those service_ids
+    whenever a request_id is in chat state or navigation state.
+  • isLoading now also waits for the confirmed-response set, so the
+    screen doesn't flash "0 matches" while the response query is in
+    flight. Empty state only renders after the responses query lands
+    AND returns zero.
+  • Browse-mode (no request_id) is unchanged.
 
-═══════════════ 4. Verified ═══════════════
+═══════════════ Step 2: Provider-side inbox (JobsInboxScreen) ═══════════════
 
-qa.mjs — 41/41 PASS
-acorn-jsx parse — rankResults.js + ResultsScreen.jsx GREEN.
-Ranking unit test (Tarik's worked example) passes: C > A > B + free
-example: F2 > F1 > P1.
+  • New "New requests near you" section pinned ABOVE the existing
+    booking-request list in the Requests tab. Pulls
+    listInboundRequests every 30s.
+  • Each card shows requester name, "Needs a {service_type}",
+    description, location, time elapsed.
+  • Three actions:
+      Accept   → respondToRequest(status='offered', price=null)
+      Counter  → window.prompt for dollars → respondToRequest(
+                   status='countered', price=cents)
+      Decline  → respondToRequest(status='declined')
+  • Optimistic update: row drops from inbox immediately on success.
+  • Empty / no matching services → no section rendered (silent).
 
-═══════════════ 5. Test on Tarik's Mac ═══════════════
+═══════════════ Step 2: Free-flow budget skip (useChat + App) ═══════════════
 
-  1. Refresh `/results` from a search that returns ≥3 providers with
-     mixed friend recos and prices around your budget. The Cergio's
-     Pick should now be the friend-recommended within-budget option,
-     not the cheapest one.
-  2. Open `MARKETPLACE_SPEC.md` (it's in `/Users/tariksansal/Downloads/
-     Cergio Claude/`). Comment on schema + UI proposals before the
-     next commit ships the actual table + inbox actions.
+  • useChat now accepts {wantFree} and skips the budget gate when
+    wantFree=true. wantFreeRef pattern keeps the latest value
+    available to the captured-closure chain in tickReply().
+  • App.jsx forwards `freeServices` into useChat({wantFree}). When
+    "Free for Connectors" is on, the bot stops asking for a budget.
+
+  Tarik 2026-06-03:
+    "should not request price budget (when requesting free services)."
+
+═══════════════ Run order on Tarik's Mac ═══════════════
+
+  1. ./Apply Request Responses Migration.command
+       → creates the table + RLS. Re-run safe.
+  2. ./Audit Request Responses.command
+       → all red flags empty (table is brand new — no rows yet).
+
+═══════════════ NOT in this commit ═══════════════
+
+  • Step 3: Wave dispatcher (edge function / cron that batches the
+    10-providers-every-2-min rolling broadcast).
+  • Step 4: UA-via-broadcast — roll through cold-crawled local
+    providers + cold-crawled IG influencers after the warm tiers
+    are exhausted (MARKETPLACE_SPEC § 6).
+  • Step 5: accept-and-book bridge from ResultsScreen
+    (acceptRequestResponse → bookings row).
+
+═══════════════ Verified ═══════════════
+
+scripts/qa.mjs — 41/41 PASS
+@babel/parser JSX check on api.js, JobsInboxScreen.jsx,
+ResultsScreen.jsx, App.jsx, useChat.js — all OK.

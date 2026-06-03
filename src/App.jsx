@@ -113,7 +113,6 @@ function Layout() {
   const location = useLocation();
 
   const { toast, showToast, dismissToast } = useToast();
-  const chat                 = useChat();
   const auth                 = useSession();
 
   // CERGIO-GUARD: capture ?ref=<inviter_uuid> on first paint and stash it
@@ -137,6 +136,10 @@ function Layout() {
   const [paymentSheet, setPaymentSheet] = useState(null); // {clientSecret, bookingId, totalCents, providerName} | null
   const [freeServices, setFreeServices] = useState(true); // Connector default
   const [serviceMode, setServiceMode]   = useState(false); // false=consumer, true=provider
+  // CERGIO-GUARD (2026-06-03): pass freeServices into the chat hook so
+  // the budget question is SKIPPED on free flows. Tarik (2026-06-03):
+  // "should not request price budget (when requesting free services)."
+  const chat                            = useChat({ wantFree: freeServices });
   // Default saved address — loaded on sign-in so the chat can pre-fill
   // "your home, right?" and bypass re-typing. Refreshable by screens that
   // save a new address (Profile → manage, IntakeScreen label prompt).

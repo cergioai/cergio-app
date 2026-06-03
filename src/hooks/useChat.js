@@ -17,7 +17,7 @@
 // If Claude errors out (Anthropic outage, missing API key, etc.) we
 // fall back to a tiny regex parser so the chat doesn't deadlock.
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { chatParse } from '../lib/api';
 
 // ─── tiny regex fallback (only used when Claude is unreachable) ─────────────
@@ -356,7 +356,7 @@ function sharesWordsWith(parserWhat, userText) {
   return false;
 }
 
-export function useChat() {
+export function useChat({ wantFree = false } = {}) {
   const [messages, setMessages]     = useState([]);
   const [state, setState]           = useState(INITIAL_STATE);
   const [quickReplies, setQR]       = useState([]);
@@ -364,6 +364,13 @@ export function useChat() {
   const [typing, setTyping]         = useState(false);
   const [needsForm, setNeedsForm]   = useState(false);      // Claude wants us to bail to /intake-form
   const [lastBotReply, setLastBot]  = useState(null);
+  // CERGIO-GUARD (2026-06-03): when the user has toggled "Free for
+  // Connectors", we MUST NOT ask for a budget — the request is free
+  // by definition. Tarik: "should not request price budget (when
+  // requesting free services)." Keep a ref so the latest value is
+  // always read by the reply gate without re-deriving callbacks.
+  const wantFreeRef = useRef(wantFree);
+  useEffect(() => { wantFreeRef.current = wantFree; }, [wantFree]);
   // Track attempts per step so Claude (and the fallback) can decide when
   // to suggest switching to the form.
   const attemptsRef = useRef({ what: 0, when: 0, where: 0, budget: 0 });
@@ -611,8 +618,14 @@ export function useChat() {
     // Asked AFTER where so the user's first answers cover the must-have
     // identifiers. "flexible" / "any" / empty all count as satisfied — we
     // never want to block the search on an optional number.
+    // CERGIO-GUARD (2026-06-03): when the user has toggled "Free for
+    // Connectors" we MUST NOT ask for a budget — the request is free
+    // by definition. Mark budgetSatisfied=true so the gate falls
+    // through to "Got it — finding matches". Tarik: "should not
+    // request price budget (when requesting free services)."
     const budgetRaw = String(merged.budget || '').trim().toLowerCase();
-    const budgetSatisfied = !!budgetRaw && /\d|flex|any|none|no\s*max|skip/.test(budgetRaw);
+    const budgetSatisfied = wantFreeRef.current
+      || (!!budgetRaw && /\d|flex|any|none|no\s*max|skip/.test(budgetRaw));
     // CERGIO-GUARD (2026-05-30): each reply branch carries its OWN
     // quick-reply pills so the visible options always match the
     // current question. Previously we used res.quick_replies blindly

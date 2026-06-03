@@ -304,6 +304,35 @@ export function ResultsScreen() {
   const requestId = chatState.request_id || location.state?.requestId || null;
   const { notified: liveNotified, replied: liveReplied } = useRequestActivity(requestId);
 
+  // CERGIO-GUARD (2026-06-03): poll request_responses for the active
+  // request so the results list reflects who's actually offered. We
+  // poll every 4s while the screen is open; future iteration moves
+  // this to a Supabase realtime channel on request_responses.
+  // Tarik (2026-06-03): "ONLY show Accepted requests... THIS IS CENTRAL
+  // TO THE SPEC!" — this is the wiring that enforces it.
+  useEffect(() => {
+    if (!requestId) { setConfirmedServiceIds(null); return; }
+    let cancelled = false;
+    const fetchOnce = async () => {
+      const { listResponsesForRequest } = await import('../lib/api');
+      const { data } = await listResponsesForRequest(requestId, { limit: 100 });
+      if (cancelled) return;
+      const ids = new Set();
+      for (const row of (data || [])) {
+        // Filter to actually-confirmed: offered / countered / accepted.
+        // (listResponsesForRequest already filters declined / withdrawn
+        // / expired, but defensive anyway.)
+        if (['offered', 'countered', 'accepted'].includes(row.status) && row.service_id) {
+          ids.add(row.service_id);
+        }
+      }
+      setConfirmedServiceIds(ids);
+    };
+    fetchOnce();
+    const t = setInterval(fetchOnce, 4000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [requestId]);
+
   // Scripted line dwell timer — only used when there's no live request
   // yet (notifications haven't been written). Once `requestId` is set
   // and the first row lands, the activity status replaces the script.
@@ -326,6 +355,14 @@ export function ResultsScreen() {
   // you right now — best paid matches" instead of the generic copy.
   const [friendOwnerIds, setFriendOwnerIds] = useState(new Set());
   const [isConnector, setIsConnector]       = useState(false);
+  // CERGIO-GUARD (2026-06-03): "ONLY show Accepted requests" per Tarik —
+  // MARKETPLACE_SPEC § 3.2. When there's a live request_id, we filter the
+  // results list to ONLY services whose provider has offered / countered /
+  // accepted that request. confirmedServiceIds is the Set of service_ids
+  // that have a non-declined row in request_responses for this request.
+  // While null → not yet known (results still loading-gated). Empty Set
+  // with a real requestId → no provider has responded yet (loading).
+  const [confirmedServiceIds, setConfirmedServiceIds] = useState(null);
   useEffect(() => {
     if (!supabaseReady) return;
     let cancelled = false;
@@ -510,8 +547,18 @@ export function ResultsScreen() {
   // Friend-ranked sort: services owned by people the user follows surface
   // above strangers. The "Reco'd by friends" label then matches the
   // ordering so the social-proof story is consistent end-to-end.
-  const providersRaw = (services && services.length > 0)
-    ? services.map((s, i) => {
+  // CERGIO-GUARD (2026-06-03): when a request_id exists, restrict to
+  // services that have a confirmed (offered / countered / accepted)
+  // response row. No requestId → legacy / pre-broadcast browse path,
+  // show all matches. Spec § 3.2.
+  const servicesFiltered = (() => {
+    if (!services || services.length === 0) return services;
+    if (!requestId) return services;
+    if (confirmedServiceIds === null) return null; // still loading the response set
+    return services.filter(s => confirmedServiceIds.has(s.id));
+  })();
+  const providersRaw = (servicesFiltered && servicesFiltered.length > 0)
+    ? servicesFiltered.map((s, i) => {
         const isFriend = s.owner_id && friendOwnerIds.has(s.owner_id);
         // We don't have the friend's display name yet (not joined in the
         // query); use "a friend" as a placeholder until we add a profile
@@ -524,7 +571,13 @@ export function ResultsScreen() {
   // the minimum-narration-time gate. While isLoading is true we show the
   // narrated status line + animated leaf; results only render once BOTH
   // the data has landed AND the minimum loading time has elapsed.
-  const isLoading = services === null || !loadingMinElapsed;
+  // CERGIO-GUARD (2026-06-03): also hold loading until the confirmed-
+  // response set has been fetched for the active request. Without this,
+  // the screen briefly renders "0 matches" while waiting for the
+  // request_responses query to land — looks like a real empty state.
+  const isLoading = services === null
+                 || !loadingMinElapsed
+                 || (!!requestId && servicesFiltered === null);
   // CERGIO-GUARD (2026-06-02): ranking now lives in src/lib/rankResults.js
   // per Tarik's spec. Six-tier hierarchy:
   //   T1: friend recos + within budget
