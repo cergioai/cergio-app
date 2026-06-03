@@ -6,10 +6,22 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 
 export function ServiceListWelcomeScreen() {
   const navigate = useNavigate();
-  const { auth } = useOutletContext() || {};
+  const { auth, resetListingDraft } = useOutletContext() || {};
   const u           = auth?.user;
   const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || 'there';
   const firstName   = displayName.split(/[\s@.]/)[0];
+
+  // CERGIO-GUARD (2026-06-01): Tarik (2026-06-01) — "registered as a
+  // new service and saw a default address (5700 collins). should be
+  // blank for new users." The listingDraft state in App.jsx lives for
+  // the whole session, so a prior in-progress listing (or stale chat
+  // state) leaks into the form. Welcome IS the "start fresh" entry,
+  // so wipe the draft here. Resumed flows would route directly to
+  // /list-service/about without passing through Welcome.
+  const handleStart = () => {
+    resetListingDraft?.();
+    navigate('/list-service/about');
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-white">
@@ -57,7 +69,7 @@ export function ServiceListWelcomeScreen() {
       {/* CTA */}
       <div className="px-5 pt-6 pb-6">
         <button
-          onClick={() => navigate('/list-service/about')}
+          onClick={handleStart}
           className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
