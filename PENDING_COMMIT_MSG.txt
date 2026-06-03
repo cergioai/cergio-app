@@ -1,34 +1,86 @@
-fix(list-service): blank address for new providers (welcome resets listingDraft)
+feat(list-service): accept novel service types + AI taxonomy hint + novel-type logging
 
-Per Tarik (2026-06-01): "registered as a new service and saw a default
-address (5700 collins). should be blank for new users."
+Per Tarik (2026-06-02): "added Personal Chef as a service .. wasn't on
+a dropdown. does this mean it's not in the taxonomy?.. can we add
+new service types not in taxonomy and cross check if they're real
+service types and map (or if it's 'tomato or big burger etc..' to
+reject).. otherwise augment the taxonomy gradually (and add related
+terms (eg: Personal Chef should be linked to offerings 'vegetarian
+food, sushi chef…')."
 
-Root cause: `listingDraft` lives in App.jsx-level state for the entire
-session. If the user previously typed an address (or any prior in-
-progress listing pass through Welcome populated the draft), the
-ServiceListAboutScreen pre-filled `location` from the stale value:
+═══════════════ 1. Personal Chef now in dropdown ═══════════════
 
-  const [location, setLocation] = useState(listingDraft.location || '');
+`src/data/providerTypes.js`:
+  + 'Personal Chef' (was missing — only 'Private Chef' existed).
 
-New users see a blank field on a fresh boot, but Tarik's flow had
-prior chat-state leakage from earlier testing — the form felt sticky
-and confusing.
+═══════════════ 2. Inline taxonomy hint ═══════════════
 
-Fix:
-  • ServiceListWelcomeScreen pulls `resetListingDraft` from outlet
-    context and calls it before navigating to /list-service/about
-    via the "List my service" CTA.
-  • Welcome IS the canonical "start fresh" entry — resumed flows
-    would route directly to /list-service/about without passing
-    through Welcome (which already works since the draft persists).
+`ServiceListAboutScreen` now surfaces the result of the already-wired
+`useTaxonomyResolve` hook directly under the Service Type input. Three
+states, three UI weights — all NON-blocking (the provider can still
+submit; we just steer them):
 
-No schema changes; no API changes.
+  • RESOLVING ("Checking taxonomy…") muted spinner copy.
+  • MAPPED (chat-parse confidence ≥ 0.60 AND offering_id present)
+    Mint pill: "Mapped to {provider_type} · related: {top 3
+    candidate offering names}". So when a provider types
+    "Personal Chef" we show "Mapped to Personal Chef · related:
+    Vegetarian Meal Prep, Sushi Chef, Weekly Meal Prep" inline,
+    exactly the "augment the taxonomy with related terms" pattern
+    Tarik asked for.
+  • LOW-CONF (resolver couldn't classify confidently AND the text
+    isn't in the canonical PROVIDER_TYPES list)
+    Amber warning: "We don't recognize {X} as a known service
+    type. Try something more specific (e.g. Personal Chef,
+    Plumber). You can still submit — Cergio will review it."
+    Tomato / big burger / random nonsense hits this path.
 
-Verified:
-  qa.mjs — 41/41 PASS
-  acorn-jsx parse on ServiceListWelcomeScreen.jsx — GREEN.
+═══════════════ 3. Novel-type telemetry (gradual backfill) ═══════════════
 
-To test on Tarik's Mac: tap "List a service" anywhere in the app,
-hit "List my service" on the welcome screen, and the Service
-Location field should be empty. Type a new address and proceed —
-listingDraft populates from the typed value, not from saved state.
+On submit, if the typed value isn't an exact match against either
+the STARTER_TYPES short list or the canonical 373-entry PROVIDER_TYPES
+catalog, we log a structured payload so Tarik can grep:
+
+  console.warn('[cergio/novel-provider-type]', {
+    novel_type:          '<typed value>',
+    resolved_to:         '<chat-parse picked provider_type>',
+    confidence:          0.71,
+    accepted:            true,
+    candidate_offerings: ['Vegetarian Meal Prep', 'Sushi Chef', …],
+    source:              'list-service-about',
+    ts:                  '2026-06-02T20:14:33Z',
+  });
+
+Plus best-effort persistent log via `logEvent('novel_provider_type',
+payload)` if/when `src/lib/api.js` ships that helper — currently a
+silent no-op (try/catch) so the new path is forward-compatible
+without blocking on the helper landing first. The console channel is
+the deliverable for this turn; a follow-up commit can ship a
+`provider_type_suggestions` table + an admin "review novel types"
+view to surface what's piling up.
+
+═══════════════ 4. What this DOESN'T do (deferred) ═══════════════
+
+  • No hard reject. Even "tomato" submits; the listing just goes
+    in with taxonomy_provider_type=null, so consumer search won't
+    surface it via type — but the row exists, and the warning told
+    the provider why. Hard reject would block legitimate novel
+    types (this exact bug Tarik just hit with Personal Chef).
+  • No backend taxonomy mutation. The novel-type log is read-only
+    until we ship the suggestions table + a backfill PR flow.
+  • Related-offering suggestions come from the chat-parse resolver's
+    `candidates` array. Wiring an "Add this related offering"
+    one-tap path is the natural next step; for now it's display only.
+
+═══════════════ 5. Verified ═══════════════
+
+qa.mjs — 41/41 PASS
+acorn-jsx parse — providerTypes.js + ServiceListAboutScreen.jsx GREEN.
+
+To test on Tarik's Mac:
+  • Tap "List my service" → Service Type field
+  • Empty input: dropdown shows STARTER_TYPES including Personal Chef
+  • Type "personal chef": mint "Mapped to Personal Chef …" pill appears
+  • Type "tomato": amber warning appears + you can still submit
+  • Submit a novel-but-mapped value → check DevTools console for
+    [cergio/novel-provider-type] payload

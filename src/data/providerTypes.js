@@ -275,6 +275,7 @@ export const PROVIDER_TYPES = [
   'Prenatal Massage Therapist',
   'Prenatal Yoga Instructor',
   'Presentation Designer',
+  'Personal Chef',
   'Private Chef',
   'Private Driver',
   'Product Photographer',

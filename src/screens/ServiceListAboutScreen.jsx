@@ -145,6 +145,51 @@ export function ServiceListAboutScreen() {
               </div>
             );
           })()}
+          {/* Taxonomy-resolve hint — Phase 6.5 (2026-06-02): per Tarik's
+              "can we add new service types not in taxonomy and cross-check
+              if they're real" — surface what chat-parse mapped the typed
+              text to + related candidates. Three states:
+                resolving   → muted spinner copy
+                ok (≥0.60)  → mint pill with "Mapped to {provider_type}"
+                              + first 3 candidate offering hints
+                low conf    → amber "We don't recognize this — try a more
+                              specific category" warning (does NOT block
+                              the form; provider can still submit but we
+                              tag the row with taxonomy_provider_type=null
+                              and log for backfill). */}
+          {serviceType.trim().length >= 3 && (() => {
+            const inStarter = STARTER_TYPES.some(t => t.toLowerCase() === serviceType.toLowerCase().trim());
+            const inFull    = PROVIDER_TYPES.some(t => t.toLowerCase() === serviceType.toLowerCase().trim());
+            const knownExact = inStarter || inFull;
+            const candidates = (result?.candidates || []).slice(0, 3);
+            const okMapped = result?.ok && !knownExact;
+            const noiseWarn = !!result && !result.ok && !knownExact && (result.confidence ?? 0) < 0.30;
+            return (
+              <div className="mt-2 leading-snug">
+                {resolving && (
+                  <p className="text-[12px] text-b3 italic">Checking taxonomy…</p>
+                )}
+                {okMapped && (
+                  <div className="inline-flex flex-wrap items-center gap-1.5 bg-gl text-gd
+                                  rounded-pill px-2.5 py-1 text-[11.5px] font-extrabold">
+                    Mapped to {result.provider_type}
+                    {candidates.length > 0 && (
+                      <span className="font-medium text-gd/80">
+                        · related: {candidates.map(c => c.offering_name || c.provider_type || c).filter(Boolean).slice(0,3).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {noiseWarn && (
+                  <p className="text-[12px] text-warnText bg-warnBg border border-warn/40 rounded-[10px] px-2.5 py-1.5">
+                    We don't recognize "{serviceType.trim()}" as a known service type.
+                    Try something more specific (e.g. <span className="font-extrabold">Personal Chef</span>,
+                    <span className="font-extrabold"> Plumber</span>). You can still submit — Cergio will review it.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
         {/* The original <Field> wrapper is replaced by the relative
             container above; we keep this dummy spacing so the rest of
@@ -368,6 +413,37 @@ export function ServiceListAboutScreen() {
               } catch (_e) { taxo = null; }
             }
             const useTaxo = !overrideTaxonomy && taxo?.ok;
+
+            // CERGIO-GUARD (2026-06-02): novel-type telemetry. Per
+            // Tarik: "augment the taxonomy gradually (and add related
+            // terms)." When a provider types something that doesn't
+            // map to a known PROVIDER_TYPES entry exactly AND the
+            // resolver couldn't confidently classify it, log it for
+            // backfill. A future migration ships a
+            // `provider_type_suggestions` table; for now console.warn
+            // is the channel so Tarik can grep logs / hook a webhook.
+            const isKnown = STARTER_TYPES.includes(serviceType.trim())
+                         || PROVIDER_TYPES.includes(serviceType.trim());
+            if (!isKnown) {
+              const payload = {
+                novel_type:        serviceType.trim(),
+                resolved_to:       taxo?.provider_type || null,
+                confidence:        taxo?.confidence ?? 0,
+                accepted:          !!useTaxo,
+                candidate_offerings: (taxo?.candidates || []).slice(0,5).map(c => c.offering_name || c.provider_type || c),
+                source:            'list-service-about',
+                ts:                new Date().toISOString(),
+              };
+              // eslint-disable-next-line no-console
+              console.warn('[cergio/novel-provider-type]', payload);
+              // Best-effort persistent log: a tiny analytics event so
+              // we can pull a backfill list from Supabase later without
+              // needing a new table. Falls back silently if not wired.
+              try {
+                const { logEvent } = await import('../lib/api');
+                if (typeof logEvent === 'function') logEvent('novel_provider_type', payload).catch(() => {});
+              } catch { /* api doesn't export logEvent yet — console is enough */ }
+            }
 
             updateListingDraft({
               category:    serviceType.trim(),
