@@ -39,16 +39,12 @@ import { rankResults, applyPickFlag } from '../lib/rankResults';
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
 // data lands (or the 6s timeout falls through to the empty state).
 //
-// CERGIO-GUARD (2026-05-29): slowed pace + named friends/providers so
-// the loading sequence narrates what Cergio is actually doing. Tarik:
-// "simulate pinging, finding, contacting Jessica's recommended Maria,
-// negotiating with Maria and Henry." Once we wire real recos and real
-// provider-negotiation pings, swap the SAMPLE_* arrays for real names
-// pulled from the recommendations + bids tables.
-// CERGIO-GUARD (2026-05-30): per-step dwell shortened so the richer
-// 9-line narration plays through in the same ~10s window. Each "action"
-// dwells ~1.4s — fast enough to feel live, slow enough to read.
-const STATUS_STEP_MS = 1400;
+// CERGIO-GUARD (2026-06-03): per Tarik — make the headline a calm,
+// roaming experience. Each stage describes a real action Cergio is
+// taking, in a "roaming for services" tone. After the scripted stages
+// the lines CYCLE through a persistent "still roaming" pool so the
+// screen stays alive even if confirmation takes hours.
+const STATUS_STEP_MS = 3200;
 // Minimum total loading time — even if Supabase returns in 200ms, hold
 // the loading state so the narration plays through enough of the
 // activity script (now 9 steps × 1.4s ≈ 12.6s, but 9s is plenty to
@@ -91,34 +87,158 @@ function buildShareMessage({ lead, when, where, budget, details, inviterUrl }) {
   return parts.join('\n');
 }
 
-function buildStatusSteps(providerType, opts = {}) {
-  // opts.friend = display_name of a real recommender if we have one
-  // opts.provider = display_name of the recommended service title
-  // CERGIO-GUARD (2026-05-30): narration now plays as a sequence of
-  // DIFFERENT actions — ping → ask → suggest → schedule → reco →
-  // negotiate → offer → confirm. Each line is a distinct "event"
-  // rather than four flavors of "still searching". Tarik: "add
-  // different animated actions in this stream (pinging Jessica's
-  // friend...)". Drives perceived activity even when DB is mid-write.
-  const plural = providerType ? `${providerType.toLowerCase()}s` : 'providers';
-  const f1     = opts.friend || SAMPLE_FRIEND_NAMES[0];
-  const f2     = SAMPLE_FRIEND_NAMES[1];
-  const pA     = opts.provider || SAMPLE_PROVIDER_NAMES[0];
-  const pB     = SAMPLE_PROVIDER_NAMES[1];
-  return [
-    `Pinging your network`,
-    `Asking ${f1} if she knows a ${providerType ? providerType.toLowerCase() : 'pro'}`,
-    `${f1} suggested ${pA} — pinging ${pA}`,
-    `${pA} checking her schedule`,
-    `${f2} recommended ${pB} — pinging ${pB}`,
-    `${pB} reviewing your request`,
-    `Negotiating with ${pA} and ${pB}`,
-    `${pA} sent an offer`,
-    `Confirming offers`,
+function buildStatusSteps(providerType /* , opts = {} */) {
+  // CERGIO-GUARD (2026-06-03): elegant roaming narration per Tarik
+  // 2026-06-03 — calm, "we're roaming for services" tone, sequence
+  // through specific actions, then cycle a persistent pool so the
+  // screen never reads as "stuck". Names removed in favor of generic
+  // "friends" / "Connectors" so we don't fake personality. When live
+  // notify counts land, useRequestActivity replaces these lines.
+  const plural = providerType ? `${providerType.toLowerCase()}s` : 'services';
+  const scripted = [
+    `We're roaming for ${plural}`,
+    `Asking friends for their reco's`,
+    `Pinging Connectors in your area`,
+    `Reaching nearby ${plural}`,
+    `Expanding the search`,
   ];
+  const persistent = [
+    `Still roaming for ${plural}`,
+    `Checking who's available`,
+    `Reaching a little further`,
+    `Keeping the line open`,
+  ];
+  // Return the combined list — the ticker will index into it and
+  // CYCLE the persistent tail forever.
+  return { scripted, persistent };
 }
 
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
+
+// CERGIO-GUARD (2026-06-03): three calmly cycling dots beside the
+// roaming headline per Tarik — never reads as "stuck." Pure CSS via
+// inline keyframes so we don't need a Tailwind config change.
+function RoamingDots() {
+  return (
+    <>
+      <style>{`
+        @keyframes cergRoamDot {
+          0%, 80%, 100% { opacity: 0.15; transform: translateY(0); }
+          40% { opacity: 1; transform: translateY(-2px); }
+        }
+        .cerg-roam-dot {
+          display: inline-block;
+          width: 0.28em;
+          height: 0.28em;
+          margin-left: 0.12em;
+          background: currentColor;
+          border-radius: 9999px;
+          animation: cergRoamDot 1.4s infinite ease-in-out both;
+        }
+      `}</style>
+      <span aria-hidden="true" className="inline-flex items-baseline ml-1">
+        <span className="cerg-roam-dot" style={{ animationDelay: '0s' }} />
+        <span className="cerg-roam-dot" style={{ animationDelay: '0.18s' }} />
+        <span className="cerg-roam-dot" style={{ animationDelay: '0.36s' }} />
+      </span>
+    </>
+  );
+}
+
+// CERGIO-GUARD (2026-06-03): elegant share-row replacing the loud
+// "Forward to friends" card. Shows only the lead noun of the
+// request, an inline Edit affordance (toggles a textarea so the
+// user can customize what gets forwarded), and two quiet green
+// hyperlinks for Forward / Copy. No headline, no earnings copy,
+// no bottom promo card.
+function ShareRequestRow({ previewLead, shareMsg, onForward, onCopy }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(previewLead);
+  // Keep draft synced if the parent recomputes previewLead.
+  useEffect(() => { setDraft(previewLead); }, [previewLead]);
+  return (
+    <div className="mx-5 my-3">
+      <div className="flex items-center gap-1.5 flex-wrap text-meta text-b2 leading-snug">
+        <span className="text-b3 font-medium">Forward your request:</span>
+        {editing ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === 'Escape') setEditing(false);
+            }}
+            className="flex-1 min-w-[8rem] border-b border-g/40 bg-transparent outline-none
+                       text-meta text-black font-bold py-0.5"
+          />
+        ) : (
+          <>
+            <span className="font-bold text-black truncate max-w-[16rem]">{draft}</span>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-meta-sm text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+            >
+              Edit
+            </button>
+          </>
+        )}
+      </div>
+      <div className="mt-1 flex items-center gap-3 text-meta">
+        <button
+          type="button"
+          onClick={onForward}
+          className="text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+        >
+          Forward to friends →
+        </button>
+        <button
+          type="button"
+          onClick={() => { onCopy?.(); /* uses shareMsg for full clipboard */ void shareMsg; }}
+          className="text-b3 font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+        >
+          Copy
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// CERGIO-GUARD (2026-06-03): tiny green hyperlink that cancels the
+// active request. Updates the row server-side AND triggers the
+// parent's onCancelled (toast + navigate home).
+function CancelRequestLink({ requestId, onCancelled }) {
+  const [pending, setPending] = useState(false);
+  const cancel = async () => {
+    if (pending) return;
+    if (!window.confirm('Stop roaming for this request?')) return;
+    setPending(true);
+    try {
+      const { supabase } = await import('../lib/supabase');
+      const { error } = await supabase
+        .from('requests')
+        .update({ status: 'cancelled' })
+        .eq('id', requestId);
+      if (error) throw error;
+      onCancelled?.();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[cancel-request]', e);
+      setPending(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={cancel}
+      disabled={pending}
+      className="mt-0.5 text-meta-sm text-gd font-bold underline-offset-2 hover:underline disabled:opacity-60 bg-transparent border-none p-0 cursor-pointer"
+    >
+      {pending ? 'Cancelling…' : 'Cancel request'}
+    </button>
+  );
+}
 
 // Map a Supabase service row → the shape ProviderCard expects.
 // `friendDisplayName` is the legacy "owner is your friend" hint (kept
@@ -127,7 +247,7 @@ const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 // `friendOwnerIds` is the signed-in user's followed-owner set so we
 // can bucket recommenders into "friend" (in network) vs "Connector"
 // (cc_verified_at) vs "other".
-function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, friendOwnerIds = null) {
+function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, friendOwnerIds = null, responseDetail = null) {
   // pick the default offering (or first) for headline price
   const offering = svc.offerings?.find(o => o.is_default) || svc.offerings?.[0];
   const cents    = offering?.price_cents ?? 0;
@@ -150,15 +270,38 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     ? allNames
     : (friendDisplayName ? [friendDisplayName] : []);
 
+  // CERGIO-GUARD (2026-06-03): when this service has a confirmed
+  // counter from the responder, ProviderCard renders the counter
+  // price + a strike-through on the official, plus a line like
+  // "Maria countered with $5". Counter status is one of
+  // offered / countered / accepted — see ResultsScreen poll.
+  const counterCents = (responseDetail?.status === 'countered'
+                        && Number.isFinite(+responseDetail?.offeredPriceCents))
+    ? +responseDetail.offeredPriceCents
+    : null;
+  // Recompute savings to reflect the COUNTER price so the photo
+  // overlay reads correctly ("Saves $35" instead of relying on the
+  // original).
+  const effectivePriceCents = counterCents != null ? counterCents : cents;
+  const effectivePrice      = Math.round(effectivePriceCents / 100);
+  const counterSavings = budgetCents && budgetCents > 0
+    ? Math.round((budgetCents - effectivePriceCents) / 100)
+    : savings;
+
   return {
     id:          svc.id,
     ownerId:     svc.owner_id,
     offeringId:  offering?.id || null,
     priceCents:  cents,
+    officialPriceCents: cents,
+    counterPriceCents:  counterCents,
+    counterStatus:      responseDetail?.status || null,
+    responderFirstName: responseDetail?.responderFirstName || null,
     name:        svc.title || 'Untitled',
     category:    svc.category || 'Service',
     bio:         svc.description || '',
-    price:       price || 0,
+    price:       counterCents != null ? effectivePrice : (price || 0),
+    officialPrice: price || 0,
     recos:       (svc.recommenders?.length) || svc.rating_count || 0,
     // Counts that drive the "X other friends and Y Connectors" copy.
     friendCount:    friendsRaw.length,
@@ -172,7 +315,7 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     // ResultsScreen card uses `friends` (just names); PDP uses this richer
     // shape to render the avatar stack + blurb quotes.
     recommendersRaw: Array.isArray(svc.recommenders) ? svc.recommenders : [],
-    savings:     savings,
+    savings:     counterCents != null ? counterSavings : savings,
     pick:        idx === 0,        // first real listing gets the Cergio Pick badge
     photoClass:  svc.photo_class || PHOTO_FALLBACKS[idx % 3],
     coverUrl:    svc.cover_url || null,
@@ -258,7 +401,11 @@ export function ResultsScreen() {
   // Otherwise fall back to the user's own noun.
   const safeProviderType = isGenericProviderType(provider_type) ? null : provider_type;
 
-  const statusSteps = buildStatusSteps(safeProviderType || userNoun);
+  const { scripted: roamScripted, persistent: roamPersistent } = buildStatusSteps(safeProviderType || userNoun);
+  // CERGIO-GUARD (2026-06-03): combined list — scripted plays once,
+  // persistent cycles forever. The ticker steps through this list
+  // using modulo so the screen never reads as "stuck".
+  const statusSteps = [...roamScripted, ...roamPersistent];
 
   // services === null  → still searching (leaf rotates, status line ticks)
   // services === []    → search completed, zero matches (EmptyState)
@@ -318,15 +465,23 @@ export function ResultsScreen() {
       const { data } = await listResponsesForRequest(requestId, { limit: 100 });
       if (cancelled) return;
       const ids = new Set();
+      const details = {};
       for (const row of (data || [])) {
         // Filter to actually-confirmed: offered / countered / accepted.
-        // (listResponsesForRequest already filters declined / withdrawn
-        // / expired, but defensive anyway.)
-        if (['offered', 'countered', 'accepted'].includes(row.status) && row.service_id) {
-          ids.add(row.service_id);
-        }
+        if (!['offered', 'countered', 'accepted'].includes(row.status)) continue;
+        if (!row.service_id) continue;
+        ids.add(row.service_id);
+        const responderName = row.responder?.display_name || '';
+        const firstName = responderName.split(/\s+/)[0] || null;
+        details[row.service_id] = {
+          status: row.status,
+          offeredPriceCents: row.offered_price_cents,
+          responderFirstName: firstName,
+          responderName,
+        };
       }
       setConfirmedServiceIds(ids);
+      setConfirmedDetails(details);
     };
     fetchOnce();
     const t = setInterval(fetchOnce, 4000);
@@ -338,13 +493,24 @@ export function ResultsScreen() {
   // and the first row lands, the activity status replaces the script.
   const [statusStep, setStatusStep] = useState(0);
   useEffect(() => {
-    if (services !== null) return;
     if (requestId && (liveNotified > 0 || liveReplied > 0)) return;
+    // CERGIO-GUARD (2026-06-03): the ticker now CYCLES forever
+    // through the combined scripted + persistent list. After the
+    // scripted phase plays once, the persistent tail keeps
+    // rotating so even a multi-hour wait feels alive.
+    const scriptedLen = roamScripted.length;
+    const persistentLen = Math.max(1, roamPersistent.length);
     const t = setInterval(() => {
-      setStatusStep(s => Math.min(s + 1, statusSteps.length - 1));
+      setStatusStep(s => {
+        const next = s + 1;
+        if (next < scriptedLen) return next;
+        // Cycle through persistent indices: [scriptedLen .. scriptedLen + persistentLen - 1]
+        const intoPersistent = (next - scriptedLen) % persistentLen;
+        return scriptedLen + intoPersistent;
+      });
     }, STATUS_STEP_MS);
     return () => clearInterval(t);
-  }, [services, statusSteps.length, requestId, liveNotified, liveReplied]);
+  }, [requestId, liveNotified, liveReplied, roamScripted.length, roamPersistent.length]);
 
   // Friends graph — owner_ids the signed-in user follows. Loaded once,
   // then used to tag each provider card with friend recos. Empty list
@@ -363,6 +529,11 @@ export function ResultsScreen() {
   // While null → not yet known (results still loading-gated). Empty Set
   // with a real requestId → no provider has responded yet (loading).
   const [confirmedServiceIds, setConfirmedServiceIds] = useState(null);
+  // CERGIO-GUARD (2026-06-03): full response details by service_id so
+  // ProviderCard can render the counter price + strike-through on the
+  // official rate + the "{firstName} countered with $X" line.
+  // Shape: { [serviceId]: { status, offeredPriceCents, responderFirstName } }
+  const [confirmedDetails, setConfirmedDetails] = useState({});
   useEffect(() => {
     if (!supabaseReady) return;
     let cancelled = false;
@@ -563,7 +734,12 @@ export function ResultsScreen() {
         // We don't have the friend's display name yet (not joined in the
         // query); use "a friend" as a placeholder until we add a profile
         // join — better than empty.
-        return serviceToProvider(s, i, budgetCents, isFriend ? 'a friend' : null, friendOwnerIds);
+        return serviceToProvider(
+          s, i, budgetCents,
+          isFriend ? 'a friend' : null,
+          friendOwnerIds,
+          confirmedDetails[s.id] || null,
+        );
       })
     : [];
 
@@ -690,14 +866,20 @@ export function ResultsScreen() {
     return 'Here are your matches';
   })();
 
-  // Pills — keep them short so a long when/where doesn't bleed across
-  // the row. Trim anything > 36 chars with an ellipsis.
-  const trimPill = (s) => {
-    if (!s) return s;
-    const t = String(s).trim();
-    return t.length > 36 ? `${t.slice(0, 34)}…` : t;
+  // CERGIO-GUARD (2026-06-03): pills are intentionally MINIMAL per
+  // Tarik — don't spell out the full street address; show only the
+  // neighborhood / city tail. "5700 Collins Ave, Miami Beach, FL
+  // 33140, USA" → "Miami Beach". Falls through to the first short
+  // token if the locale parse fails.
+  const shortLocation = (s) => {
+    if (!s) return null;
+    const parts = String(s).split(',').map(t => t.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    // Prefer the city (typically second part). Strip ZIP / state.
+    if (parts.length >= 2) return parts[1].replace(/\s*\d{5}.*$/, '').trim() || parts[0];
+    return parts[0];
   };
-  const pills = [trimPill(when), trimPill(where), budget && `Budget ${budget}`].filter(Boolean);
+  const pills = [when, shortLocation(where), budget && `Budget ${budget}`].filter(Boolean);
 
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cr">
@@ -755,7 +937,30 @@ export function ResultsScreen() {
         </button>
       </div>
 
-      <h2 className="px-5 text-heading-1 font-extrabold text-black leading-tight mb-3">{titleText}</h2>
+      {/* CERGIO-GUARD (2026-06-03): per Tarik — H2 headline is the
+          live roaming status when no confirmed providers yet, with
+          animated trailing dots. When confirmed offers land, switch
+          to the count headline. */}
+      {(() => {
+        const showCount = !isLoading && providers.length > 0;
+        if (showCount) {
+          return (
+            <h2 className="px-5 text-heading-1 font-extrabold text-black leading-tight mb-3">
+              {titleText}
+            </h2>
+          );
+        }
+        const line = hasLiveActivity
+          ? liveStatus.line
+          : statusSteps[Math.min(statusStep, statusSteps.length - 1)];
+        return (
+          <h2 className="px-5 text-heading-1 font-extrabold text-black leading-tight mb-3"
+              aria-live="polite">
+            {line}
+            <RoamingDots />
+          </h2>
+        );
+      })()}
 
       {/* CERGIO-GUARD (2026-06-02): the category-nav rail (Housekeeper
           / Pet Sitter / Handyman / Trainer / Driver) and the filter
@@ -777,32 +982,29 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* Loading status — single line, leaf rotates beside it.
-          CERGIO-GUARD (2026-05-28): when the request is live in DB and
-          at least one notification or bid row has landed, the line is
-          driven by REAL counts via useRequestActivity. Otherwise we
-          fall back to the canonical scripted lines so the first ~3
-          seconds aren't dead air. */}
-      {/* Loading status — leaf logo NOW sits beside the status copy as
-          a large 56px mark so the animation is unmistakable. The eye
-          lands on the breathing leaf, then reads the narrated step.
-          Header above is intentionally bare so this block owns the
-          brand presence during search. */}
-      {isLoading && (
+      {/* CERGIO-GUARD (2026-06-03): leaf brand mark stays as a
+          calm visual anchor next to the dynamic status line above.
+          Headline carries the message now; this block just gives the
+          eye something gentle to land on + a Cancel affordance. */}
+      {(isLoading || providers.length === 0) && (
         <div className="mx-5 mb-5" aria-live="polite">
           <div className="flex items-center gap-3">
-            <LeafLogo working={true} size={56} intensity={liveStatus.intensity} />
+            <LeafLogo working={true} size={48} intensity={liveStatus.intensity} />
             <div className="flex-1 min-w-0">
-              <p className="text-body text-gd font-bold leading-snug">
-                {hasLiveActivity
-                  ? liveStatus.line
-                  : statusSteps[Math.min(statusStep, statusSteps.length - 1)]}…
-              </p>
-              <p className="text-meta-sm text-b3 font-normal leading-snug mt-1">
+              <p className="text-meta-sm text-b3 font-normal leading-snug">
                 {liveReplied > 0
                   ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
-                  : "We'll keep scanning and notify you when offers land."}
+                  : "We'll let you know when offers land."}
               </p>
+              {requestId && (
+                <CancelRequestLink
+                  requestId={requestId}
+                  onCancelled={() => {
+                    showToast('Request cancelled');
+                    navigate('/home');
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -1016,108 +1218,37 @@ export function ResultsScreen() {
           state: { prefilledMessage: shareMsg, what: nounSingular, when, where, budget },
         });
 
-        const headline = noMatch
-          ? `No ${nounPlural} yet — ask friends to find one`
-          : `Want better picks? Ask friends for a ${nounSingular} reco`;
-
-        // CERGIO-GUARD (2026-05-28): softened to match the Home house
-        // ads. Was loud-green (bg-gl + border-g/25 + text-gd headline)
-        // which felt sales-y at the bottom of every result page. Now
-        // bg-cr2 + border-bdr + black headline + b3 sub-copy, half the
-        // padding. Primary CTA stays green so the action remains clear.
+        // CERGIO-GUARD (2026-06-03): per Tarik — strip this card down.
+        //   - Drop the "No X yet" headline + earnings sub-copy.
+        //   - Preview shows ONLY the lead noun ("personal chef"), no
+        //     address, no link. Full message is forwarded server-side.
+        //   - Add a small Edit affordance so the user can customize
+        //     what gets forwarded.
+        //   - Replace the big green button with a quiet green hyperlink.
+        // The minimal lead = first ~8 words of the user's typed need.
+        const previewLead = (() => {
+          const raw = String(userQuery || nounSingular || '').trim();
+          const cleaned = raw
+            .replace(/^(i\s+)?(need|want|looking\s+for|find|book|hire|get)\s+(a|an|the)?\s*/i, '')
+            .replace(/\b(today|tomorrow|tonight|this|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|near|under|max|maximum|budget|\$\d+|\d{2,5})\b.*$/i, '')
+            .trim();
+          const words = (cleaned || nounSingular || 'a service').split(/\s+/).slice(0, 6).join(' ');
+          return words || nounSingular;
+        })();
         return (
-          <div className="mx-5 my-4 bg-cr2 border border-bdr rounded-[16px] px-4 py-3">
-            <p className="text-body-sm font-bold text-black leading-tight">{headline}</p>
-            <p className="text-meta-sm text-b3 mt-0.5 leading-snug font-normal">
-              We'll send them your request prefilled. You earn up to ${REWARDS.perFriendUser} when a friend joins + books.
-            </p>
-            <div className="mt-2.5 bg-white border border-bdr rounded-[10px] px-2.5 py-1.5 text-meta-sm text-b3 leading-snug">
-              {shareMsg}
-            </div>
-            <div className="mt-2.5 flex gap-2">
-              <button
-                onClick={goForwardRequest}
-                className="flex-1 bg-g text-white rounded-pill py-2 text-meta font-bold cg-cta"
-              >
-                Forward to friends →
-              </button>
-              <button
-                onClick={doNativeShare}
-                className="bg-white border border-bdr rounded-pill px-3.5 py-2 text-meta font-bold text-b3 cg-cta-ghost"
-              >
-                Copy
-              </button>
-            </div>
-          </div>
+          <ShareRequestRow
+            previewLead={previewLead}
+            shareMsg={shareMsg}
+            onForward={goForwardRequest}
+            onCopy={doNativeShare}
+          />
         );
       })()}
 
-      {/* Phase 3d (2026-05-31) — "Invite friends · Become a Connector"
-          promo card per DESIGN_AUDIT § 5.3 (Jennifer L SRP mockup).
-          Sits below the share card as the final block on the page.
-          Avatar cluster signals "your friends are already here" while
-          the orange CTA carries the Connector ask. Two affordances:
-          (1) Invite friends — earn per-friend when they join + book
-          (2) Become a Connector — apply at /rainmaker/apply.
-          The orange CTA (bg-warn) is the mockup's chosen visual
-          weight — it's the only orange surface on the page so it
-          reads as the platform-level upsell, not a transactional
-          button. */}
-      <div className="mx-5 mt-2 mb-5 bg-white border border-bdr rounded-[16px] p-4">
-        <div className="flex items-start gap-3">
-          {/* avatar cluster — top 3 recommenders from the first
-              card, falling back to abstract initials so the spot
-              isn't blank for new users with no graph yet */}
-          <div className="flex -space-x-1.5 flex-shrink-0">
-            {(providers[0]?.recommendersRaw?.slice(0, 3)
-              || [{ name: 'A' }, { name: 'M' }, { name: 'J' }]
-            ).map((r, i) => {
-              const colors = [
-                'bg-gradient-to-br from-[#b06090] to-[#703050]',
-                'bg-gradient-to-br from-[#4478aa] to-[#2a5070]',
-                'bg-gradient-to-br from-g to-gd',
-              ];
-              const initials = (r?.name || '?').slice(0, 2).toUpperCase();
-              return (
-                <div
-                  key={r?.id || i}
-                  className={`w-9 h-9 rounded-full border-2 border-white text-white
-                              text-meta-sm font-extrabold flex items-center justify-center ${colors[i]}`}
-                >
-                  {initials}
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-body font-extrabold text-black leading-tight">
-              Bring your people · earn together
-            </p>
-            <p className="text-meta text-b3 font-medium mt-0.5 leading-snug">
-              Invite friends and they help you find pros. Or apply to
-              be a Connector and spotlight free services to your audience.
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => navigate('/invite/friends')}
-            className="flex-1 bg-warn text-white rounded-pill py-2 text-meta font-extrabold
-                       hover:opacity-90 active:scale-[.98] transition-all"
-          >
-            Invite friends →
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/rainmaker/apply')}
-            className="flex-1 bg-white border border-bdr rounded-pill py-2 text-meta font-extrabold text-b2
-                       hover:border-warn/40 transition-colors"
-          >
-            Become a Connector
-          </button>
-        </div>
-      </div>
+      {/* CERGIO-GUARD (2026-06-03): the "Invite friends · Become a
+          Connector" promo card was removed per Tarik — too loud at
+          the bottom of the roaming experience. Invite + Connector
+          paths still reachable from Home + Profile. */}
     </div>
   );
 }

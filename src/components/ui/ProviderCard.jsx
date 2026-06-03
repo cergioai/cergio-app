@@ -76,7 +76,16 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
           friendCount = 0, connectorCount = 0, leadFriendName = null,
           // CERGIO-GUARD (2026-05-30): full recommender objects (id+name)
           // — used to render the FriendAvatars as Links to /u/{id}.
-          recommendersRaw = null } = provider;
+          recommendersRaw = null,
+          // CERGIO-GUARD (2026-06-03): counter-offer plumbing per Tarik.
+          // When a provider countered the user's request with a price,
+          // the card strikes through the official rate and shows the
+          // counter price in green, plus a line like "Maria countered
+          // with $5". officialPrice is the headline rate; price is now
+          // ALREADY the effective (counter) price when a counter exists.
+          officialPrice = null, counterPriceCents = null,
+          counterStatus = null, responderFirstName = null } = provider;
+  const hasCounter = counterStatus === 'countered' && counterPriceCents != null;
 
   // CERGIO-GUARD (2026-05-30): reco line format:
   //   "Reco'd by Jennifer Hu, 3 other friends and 21 Connectors"
@@ -204,11 +213,26 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
           <span className="text-body-sm font-bold text-black">{recos} Recos</span>
         </div>
 
-        {/* ROW 2 — Category · Price */}
+        {/* ROW 2 — Category · Price.
+            CERGIO-GUARD (2026-06-03): when the provider countered with
+            a price, strike through the official rate and show the
+            counter in green so the user sees the offer they got. */}
         <div className="flex justify-between items-baseline mb-1">
           <span className="text-body-sm text-b3 font-medium">{category}</span>
-          <span className="text-heading-2 font-extrabold text-black">${price}</span>
+          {hasCounter ? (
+            <span className="flex items-baseline gap-2">
+              <span className="text-body-sm text-b3 font-bold line-through">${officialPrice || price}</span>
+              <span className="text-heading-2 font-extrabold text-gd">${price}</span>
+            </span>
+          ) : (
+            <span className="text-heading-2 font-extrabold text-black">${price}</span>
+          )}
         </div>
+        {hasCounter && responderFirstName && (
+          <p className="text-meta-sm font-extrabold text-gd leading-snug mb-1">
+            {responderFirstName} countered with ${price}
+          </p>
+        )}
 
         {/* ROW 3 — Bio · Savings */}
         <div className="flex justify-between items-start mb-2">

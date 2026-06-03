@@ -110,6 +110,12 @@ export function JobsInboxScreen() {
   // Decline call respondToRequest with the corresponding status.
   const [inbound, setInbound] = useState(null);
   const [responding, setResponding] = useState({}); // { [requestId]: 'pending'|'done' }
+  // CERGIO-GUARD (2026-06-03): inline counter UI per Tarik — no
+  // window.prompt. counterOpenFor stores the id of the request
+  // whose counter input is expanded; counterDraft holds the typed
+  // dollar value.
+  const [counterOpenFor, setCounterOpenFor] = useState(null);
+  const [counterDraft, setCounterDraft] = useState('');
   useEffect(() => {
     if (!auth?.isSignedIn) { setInbound([]); return; }
     let cancelled = false;
@@ -295,7 +301,7 @@ export function JobsInboxScreen() {
                         {req.location_text}
                       </p>
                     )}
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-3 flex gap-2 flex-wrap">
                       <button
                         type="button"
                         disabled={state === 'pending'}
@@ -304,37 +310,20 @@ export function JobsInboxScreen() {
                       >
                         {state === 'pending' ? 'Sending…' : 'Accept'}
                       </button>
+                      {/* CERGIO-GUARD (2026-06-03): inline Counter input
+                          replaces window.prompt per Tarik. Click Counter
+                          → row expands with a $ input + Send / × controls.
+                          No popup. */}
                       <button
                         type="button"
                         disabled={state === 'pending'}
-                        onClick={async () => {
+                        onClick={() => {
                           if (!req.my_service_id) {
                             showToast('You need a listed service to respond.');
                             return;
                           }
-                          const raw = window.prompt('Counter offer in dollars (e.g. 75):');
-                          if (raw === null) return;
-                          const dollars = parseFloat(raw);
-                          if (!Number.isFinite(dollars) || dollars < 0) {
-                            showToast('Please enter a non-negative number.');
-                            return;
-                          }
-                          setResponding(prev => ({ ...prev, [req.id]: 'pending' }));
-                          const { error } = await respondToRequest(req.id, {
-                            status: 'countered',
-                            serviceId: req.my_service_id,
-                            offeredPriceCents: Math.round(dollars * 100),
-                            message: null,
-                            waveN: null,
-                          });
-                          if (error) {
-                            showToast('Could not send counter — try again.');
-                            setResponding(prev => ({ ...prev, [req.id]: undefined }));
-                            return;
-                          }
-                          setResponding(prev => ({ ...prev, [req.id]: 'done' }));
-                          setInbound(prev => (prev || []).filter(r => r.id !== req.id));
-                          showToast('Counter sent ✓');
+                          setCounterOpenFor(prev => prev === req.id ? null : req.id);
+                          setCounterDraft('');
                         }}
                         className="bg-white border border-bdr rounded-pill px-3 py-2 text-[12px] font-extrabold text-b2 cg-cta-ghost disabled:opacity-60"
                       >
@@ -349,6 +338,84 @@ export function JobsInboxScreen() {
                         Decline
                       </button>
                     </div>
+                    {counterOpenFor === req.id && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-[13px] font-bold text-b3">$</span>
+                        <input
+                          autoFocus
+                          inputMode="decimal"
+                          value={counterDraft}
+                          onChange={e => setCounterDraft(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Escape') { setCounterOpenFor(null); return; }
+                            if (e.key !== 'Enter') return;
+                            const dollars = parseFloat(counterDraft);
+                            if (!Number.isFinite(dollars) || dollars < 0) {
+                              showToast('Enter a non-negative number.');
+                              return;
+                            }
+                            setResponding(prev => ({ ...prev, [req.id]: 'pending' }));
+                            const { error } = await respondToRequest(req.id, {
+                              status: 'countered',
+                              serviceId: req.my_service_id,
+                              offeredPriceCents: Math.round(dollars * 100),
+                              message: null,
+                              waveN: null,
+                            });
+                            if (error) {
+                              showToast('Could not send counter — try again.');
+                              setResponding(prev => ({ ...prev, [req.id]: undefined }));
+                              return;
+                            }
+                            setResponding(prev => ({ ...prev, [req.id]: 'done' }));
+                            setInbound(prev => (prev || []).filter(r => r.id !== req.id));
+                            setCounterOpenFor(null);
+                            showToast('Counter sent ✓');
+                          }}
+                          placeholder="75"
+                          className="flex-1 border-b border-g/40 bg-transparent outline-none
+                                     text-[14px] font-bold text-black py-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const dollars = parseFloat(counterDraft);
+                            if (!Number.isFinite(dollars) || dollars < 0) {
+                              showToast('Enter a non-negative number.');
+                              return;
+                            }
+                            setResponding(prev => ({ ...prev, [req.id]: 'pending' }));
+                            const { error } = await respondToRequest(req.id, {
+                              status: 'countered',
+                              serviceId: req.my_service_id,
+                              offeredPriceCents: Math.round(dollars * 100),
+                              message: null,
+                              waveN: null,
+                            });
+                            if (error) {
+                              showToast('Could not send counter — try again.');
+                              setResponding(prev => ({ ...prev, [req.id]: undefined }));
+                              return;
+                            }
+                            setResponding(prev => ({ ...prev, [req.id]: 'done' }));
+                            setInbound(prev => (prev || []).filter(r => r.id !== req.id));
+                            setCounterOpenFor(null);
+                            showToast('Counter sent ✓');
+                          }}
+                          className="bg-g text-white rounded-pill px-3 py-1.5 text-[12px] font-extrabold cg-cta"
+                        >
+                          Send
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCounterOpenFor(null)}
+                          className="text-[14px] font-bold text-b3 bg-transparent border-none cursor-pointer px-1"
+                          aria-label="Cancel counter"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

@@ -177,6 +177,34 @@ export function BrowseConnectorsScreen() {
                 including those who counter with a paid offer — will
                 appear here as they respond.
               </p>
+              {/* CERGIO-GUARD (2026-06-03): Cancel link per Tarik —
+                  same affordance the consumer side has on the
+                  roaming-for-services state. */}
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm('Cancel your spotlight request?')) return;
+                  try {
+                    const { data: userRes } = await supabase.auth.getUser();
+                    if (!userRes?.user) return;
+                    const { error } = await supabase
+                      .from('spotlight_requests')
+                      .update({ status: 'cancelled' })
+                      .eq('provider_id', userRes.user.id)
+                      .eq('status', 'pending');
+                    if (error) throw error;
+                    showToast('Spotlight request cancelled');
+                    navigate('/home');
+                  } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.warn('[cancel-spotlight]', e);
+                    showToast('Could not cancel — try again.');
+                  }
+                }}
+                className="mt-3 text-[13px] text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+              >
+                Cancel request
+              </button>
             </div>
           );
         }

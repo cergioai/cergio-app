@@ -1,80 +1,88 @@
-feat(marketplace): requests RLS + confirmed-only Connector roster
+feat(ux): elegant roaming Results + counter-offer display + cancel + inline counter
 
-═══════════════ The two bugs ═══════════════
+═══════════════ Tarik directives 2026-06-03 ═══════════════
 
-Tarik 2026-06-03:
-  (a) "logged in with t@cergio.ai redid request.. info@cergio.ai
-       didn't get the request"
-  (b) "did search for connectors... got this suggested paid (but
-       connector hadn't confirmed).. need to ONLY show confirmed
-       ...even when they counter with offer instead of free"
+  1. "change the headline msg elegant like 'We're roaming for
+      services...'… Or other actions... expanding the search etc.."
+  2. "Show '…' animated DOTS, persistent until results load even if
+      it takes 3,4 hours"
+  3. "remove the 2nd msg NO personal chef (above forward to friends)"
+  4. "remove the invite friends ... just keep Forward request to
+      friends... but replace the large button with a green hyperlink"
+  5. "add 1st few words of the need 'personal chef cooking sushi…'…
+      no address no link… add a small 'edit' next to it"
+  6. "Change the pills (to sum up the request more intuitively and
+      minimally — don't spell out the entire address)"
+  7. "may want to add 'cancel' next to this... on the user / connector
+      to services and service to connector"
+  8. "can the counter be a within same page VS the pop up"
+  9. "need to show the COUNTER offer price ($5)... with the official
+      number crossed off... and share 'firstname countered with $5'"
 
-═══════════════ (a) requests RLS — fixed via .command ═══════════════
+═══════════════ ResultsScreen ═══════════════
 
-Audit Notify Chain.command + Audit Fresh Request.command + Audit
-Requests RLS.command together surfaced the cause: `requests`
-has RLS enabled and only two SELECT policies — "request visible
-to requester + target" and "self read" — both of which require
-auth.uid() = requester_id OR target_provider_id. Broadcast
-providers (matching service_type, no specific target) are excluded
-by design, so listInboundRequests returned 0 rows even though
-service_type='Personal Chef' exact-matched info@cergio.ai's
-listed taxonomy_provider_type.
+  • Headline H2 becomes the LIVE roaming line + 3-dot animation
+    (RoamingDots component, pure CSS keyframes). Cycles through a
+    scripted phase ("Asking friends for their reco's" → "Pinging
+    Connectors in your area" → "Reaching nearby services" →
+    "Expanding the search") and then rotates a persistent pool
+    ("Still roaming…", "Checking who's available", "Reaching a
+    little further", "Keeping the line open") forever — never
+    reads as stuck.
+  • Loading status block slimmed — leaf + replies count + a green
+    "Cancel request" hyperlink (CancelRequestLink). Cancel flips
+    requests.status → 'cancelled', toasts, navigates home.
+  • Pills minimized: location shows neighborhood / city (parsed
+    from comma tokens) instead of the full street + ZIP + country.
+  • "No personal chefs yet — ask friends to find one" headline
+    removed.
+  • Forward-to-friends card replaced with ShareRequestRow:
+      "Forward your request: personal chef cooking sushi  Edit"
+      Forward to friends →  Copy
+    Inline editable. Two quiet green hyperlinks instead of a loud
+    button. No headline, no earnings sub-copy.
+  • Bottom "Bring your people · earn together" promo card removed.
+  • Headline switches to the count copy only when providers > 0.
 
-Apply Requests Read Policy.command adds:
+═══════════════ ProviderCard counter-offer display ═══════════════
 
-  CREATE POLICY "matching providers can read pending requests"
-  ON public.requests FOR SELECT TO authenticated
-  USING (
-    status = 'pending'::request_status
-    AND created_at >= NOW() - INTERVAL '60 minutes'
-  );
+  • New provider props: officialPrice, counterPriceCents,
+    counterStatus, responderFirstName.
+  • When counterStatus === 'countered':
+      – Row 2 shows  ~~$40~~  $5  (official strikethrough in mute
+        b3, counter price in green-dark + heading-2 weight).
+      – New line under Row 2: "Maria countered with $5" in
+        green-dark bold so the user sees who responded.
+      – savings overlay recomputed off the counter so the photo
+        chip reads correctly.
+  • Plumbing: ResultsScreen confirmedDetails map carries
+    { status, offered_price_cents, responderFirstName } per
+    service_id. serviceToProvider mixes it into the provider
+    object.
 
-Net behavior: any authenticated user can read open requests
-created in the last 60 minutes. listInboundRequests then filters
-client-side by service_type → the provider's listed taxonomy.
+═══════════════ JobsInboxScreen inline counter input ═══════════════
 
-Privacy: requester_id is a uuid; no email / address / payment
-info on the row. Same posture as Indeed / Thumbtack — open
-requests are broadcast to matching providers.
+  • Removed window.prompt entirely.
+  • Counter button now toggles an inline row INSIDE the card:
+      "$" + autofocus number input + green Send + × cancel.
+  • Enter submits, Esc cancels. Same respondToRequest call as the
+    Accept path with status='countered'.
 
-Verified: Section 4 of the policy .command returned the two
-pending requests info@cergio.ai needs to see.
+═══════════════ BrowseConnectorsScreen Cancel ═══════════════
 
-═══════════════ (b) BrowseConnectorsScreen confirmation gate ═══════════════
-
-  • Polls `listMyOutboundSpotlightRequests` every 5s.
-  • Builds confirmedConnectorIds = Set of connector_ids on rows
-    with status IN ('offered', 'countered', 'accepted').
-    A countered paid price still counts — "yes, here's my price"
-    IS a confirmation per Tarik.
-  • Renders Connectors filtered to confirmedConnectorIds under
-    a new "Confirmed availability" header.
-  • Two new gated states:
-      – No outbound request ever sent → CTA prompting the user
-        to list a service / start a broadcast.
-      – Outbound request(s) exist but no Connector has confirmed
-        yet → "Awaiting Connector responses…" state.
-  • Free / paid banner copy now reflects the confirmation context:
-    "No free Connectors confirmed yet" instead of "available."
+  • "Cancel request" link added under the "Awaiting Connector
+    responses…" state. Marks all pending outbound
+    spotlight_requests for the signed-in provider as 'cancelled'.
 
 ═══════════════ Files ═══════════════
 
-  • cergio-app/src/screens/BrowseConnectorsScreen.jsx
-  • Apply Requests Read Policy.command (ships as launcher)
-  • Audit Requests RLS.command (diagnostic)
-  • Audit Fresh Request.command (diagnostic)
+  cergio-app/src/screens/ResultsScreen.jsx
+  cergio-app/src/screens/JobsInboxScreen.jsx
+  cergio-app/src/screens/BrowseConnectorsScreen.jsx
+  cergio-app/src/components/ui/ProviderCard.jsx
 
 ═══════════════ Verified ═══════════════
 
-scripts/qa.mjs — 41/41 PASS
-@babel/parser JSX on BrowseConnectorsScreen.jsx — OK.
-
-═══════════════ Test loop now ═══════════════
-
-  • info@cergio.ai's Jobs → Requests will surface t@cergio.ai's
-    open Personal Chef request within seconds of the page load
-    (no DB action needed — the policy is already live).
-  • Browse Connectors path: starts empty until the user broadcasts
-    a spotlight request; Connectors who respond (free OR paid
-    counter) appear under "Confirmed availability."
+  scripts/qa.mjs — 41/41 PASS
+  @babel/parser JSX — ResultsScreen / JobsInbox / BrowseConnectors
+  / ProviderCard all OK.
