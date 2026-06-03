@@ -1,57 +1,129 @@
-revert(results): remove category-nav rail + filter pill row — out-of-scope for design audit
+feat(results): tiered ranking per spec + marketplace confirm-availability spec
 
-Per Tarik (2026-06-02): "remove these tags from top of results...
-All services / Free / Discounted / 🧺 Housekeeper / 🐾 Pet Sitter /
-🔧 Handyman / 🏋️ Trainer / 🚗 Driver. they were in designs that
-should not have been carried through (as I had asked for design
-audit without changing that information architecture)."
+Per Tarik (2026-06-02): "the spec is that services get notified and
+confirm ability to offer free services (which then has them show up
+in the results). it's not like a search. All results need to have
+'confirmed availability + confirmed ability to do service for free'
+(or added a price to counter). Same the other way around (services
+requesting free spotlights from Connectors). For testing, need to see
+the services being notified, accepting, then their profiles showing
+up. Same for Connectors.
 
-The Phase 3d audit pass introduced two new navigation surfaces on
-the Results screen — a horizontal category-nav rail and a filter
-pill row — based on mockup-matching against Jennifer L's SRP. Tarik
-clarifies that the audit was supposed to stay typography + brand
-only; navigation surfaces were not in scope and should not have
-shipped.
+The rank priority is:
+  1 — highest match of friend recos + free (if free is requested)
+  2 — if no free is requested, rank based on highest friend recos +
+      within the budget price, then Connector recos + within budget
+  Prioritize friend connections OVER budget for Cergio's pick — i.e.
+    show friend-recommended service Out of Budget, AHEAD of a service
+    that has NO friend connections.
+  BUT: if a service has ≥1 friend reco + within budget, it ranks
+    HIGHER than a service with more friend recos but over budget."
 
-═══════════════ Removed ═══════════════
+═══════════════ 1. Ranking — SHIPPED ═══════════════
+
+`src/lib/rankResults.js`:
+  Pure function. Six-tier classification, deterministic sort, zero
+  dependencies. Easy to unit-test from a node REPL.
+
+  Tier hierarchy (highest first):
+    T1   friend_recos ≥ 1   AND  within_budget
+    T2   friend_recos ≥ 1   AND  NOT within_budget
+    T3   connector_recos ≥1 AND  within_budget
+    T4   connector_recos ≥1 AND  NOT within_budget
+    T5   no recos            AND  within_budget
+    T6   everything else
+
+  Within a tier:
+    friend_count DESC > connector_count DESC > rating DESC
+    > priceCents ASC > distance_miles ASC
+
+  When `wantFree=true`:
+    • Free services come BEFORE paid ones, full stop.
+    • Within free, the same T1..T6 ordering applies.
+    • Paid options follow as a fallback band so the page is never
+      empty, but they sit below all free ones regardless of recos.
+
+  First item gets the `pick=true` flag (Cergio's Pick badge).
+
+  Exports:
+    rankResults(services, { budgetCents, wantFree }) → ranked array
+    applyPickFlag(ranked) → mutates pick=true on [0], false on rest
+    classifyTier(service, opts) → integer tier 1..7 (exposed for tests)
+
+  Verified against Tarik's worked example end-to-end:
+    A: friend=1, $150, budget=$100  → T2 (over budget but has friend)
+    B: friend=0, $80,  budget=$100  → T5 (within budget, no friend)
+    C: friend=1, $90,  budget=$100  → T1 (friend AND within budget)
+    Result: C > A > B  ✓
+
+  Verified free-first behaviour:
+    F1: free, friend=0, connector=1
+    F2: free, friend=2, connector=0
+    P1: $50,  friend=5, connector=0
+    With wantFree=true: F2 > F1 > P1  ✓ (free wins despite P1 having
+                                        more friend recos)
 
 `src/screens/ResultsScreen.jsx`:
-  • CATEGORY_NAV constant (Housekeeper / Pet Sitter / Handyman /
-    Trainer / Driver — 5 entries).
-  • The category-nav horizontal-scroll row above the filter pills.
-  • The filter pill row (All services / Free / Discounted) — Free
-    toggling stays on Home via the canonical "Free for Connectors"
-    entry; "Discounted" was a visual-only placeholder anyway.
+  Replaces the legacy two-line sort (just friend-bucket flag) with
+  `applyPickFlag(rankResults(providersRaw, { budgetCents, wantFree }))`.
+  Pulls `budgetCents` and `freeServices` from existing state — no
+  wiring changes.
 
-`src/screens/HomeScreen.jsx`:
-  • The `seedQuery` / `seedFreeServices` location-state consumer
-    useEffect was the only call site for these props (the rail's
-    `navigate('/', { state: { seedQuery } })` and the Free pill's
-    `state: { seedFreeServices }`). With the rail/pills gone, this
-    wiring becomes dead code; removing it keeps Home's startup
-    effects minimal.
+═══════════════ 2. Confirm-availability marketplace — SPECCED ═══════════════
 
-═══════════════ NOT touched (out of scope) ═══════════════
+`MARKETPLACE_SPEC.md` (in Cergio Claude/, alongside DESIGN_AUDIT.md):
+  Full spec for the notify → confirm → show marketplace model Tarik
+  described, both directions (consumer→provider and service→Connector).
 
-  • Provider Card mint reco pill (3d) — stays. It replaced an
-    italic inline aside, not new navigation.
-  • Bottom "Bring your people · earn together" promo (3d) — stays.
-    It replaced existing affordances rather than introducing new
-    navigation.
-  • Scale-token sweep on Results / ProviderCard (3d) — stays. That
-    was the actual typography-audit work and is non-architectural.
+  Sections:
+    1. The two flows (with ASCII funnels)
+    2. Schema additions — proposed `request_responses` table
+       (REFERENCES requests + responder/service + status + offered
+       price + message; RLS policies sketched).
+    3. UI surfaces to build — Provider's inbox new Request row with
+       Accept / Counter / Decline; Consumer's Results data source
+       change from listServices → request_responses join; Connector's
+       inbox role-flip.
+    4. Ranking — what shipped today (rankResults), with the worked
+       example walked through line by line.
+    5. Testing the loop — a future `E2E Request Confirm Flow.command`
+       outline.
+    6. Open questions (notification cadence, counter loop, time-decay,
+       no-response fallback).
 
-═══════════════ Verified ═══════════════
+  Not in this commit (need design + migration confirmations):
+    • The `request_responses` table itself
+    • Provider's inbox Accept / Counter / Decline buttons
+    • Consumer's Results pulling from responses instead of services
+    • Connector-side mirror
+
+  When you're ready to go, the spec document is the source-of-truth
+  to iterate from.
+
+═══════════════ 3. What this does NOT change ═══════════════
+
+  • The consumer's notify fan-out (createRequestAndFanOut) still
+    runs the same as today.
+  • The provider's inbox still shows existing bookings.
+  • Connector-side BrowseConnectors / spotlight flow untouched.
+  • The new ranking is applied on TOP of the existing listServices
+    output — providers still surface from search; we're just sorting
+    them per the new tiers. The "confirmed availability gate" lands
+    in the next iteration once the responses table is approved.
+
+═══════════════ 4. Verified ═══════════════
 
 qa.mjs — 41/41 PASS
-acorn-jsx parse — ResultsScreen.jsx + HomeScreen.jsx GREEN.
+acorn-jsx parse — rankResults.js + ResultsScreen.jsx GREEN.
+Ranking unit test (Tarik's worked example) passes: C > A > B + free
+example: F2 > F1 > P1.
 
-═══════════════ Test plan ═══════════════
+═══════════════ 5. Test on Tarik's Mac ═══════════════
 
-  1. Refresh /results — the row of categorized chips + filter pills
-     should be gone. Just the search title, request pills (when,
-     where, budget), then the ProviderCards.
-  2. The Free toggle still works on Home; ResultsScreen still
-     honors `freeServices` outlet state for filtering (no behavior
-     change — only the surface that toggled it).
-  3. No console errors from missing imports / unused refs.
+  1. Refresh `/results` from a search that returns ≥3 providers with
+     mixed friend recos and prices around your budget. The Cergio's
+     Pick should now be the friend-recommended within-budget option,
+     not the cheapest one.
+  2. Open `MARKETPLACE_SPEC.md` (it's in `/Users/tariksansal/Downloads/
+     Cergio Claude/`). Comment on schema + UI proposals before the
+     next commit ships the actual table + inbox actions.

@@ -33,6 +33,7 @@ import { buildInviteUrl } from '../lib/referral';
 import { pluralProviderTypeLocal, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
 import { REWARDS } from '../lib/rewards';
 import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivity';
+import { rankResults, applyPickFlag } from '../lib/rankResults';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -524,14 +525,21 @@ export function ResultsScreen() {
   // narrated status line + animated leaf; results only render once BOTH
   // the data has landed AND the minimum loading time has elapsed.
   const isLoading = services === null || !loadingMinElapsed;
-  const providers = [...providersRaw].sort((a, b) => {
-    const af = a.friends.length > 0 ? 1 : 0;
-    const bf = b.friends.length > 0 ? 1 : 0;
-    if (af !== bf) return bf - af; // friend-recommended first
-    return 0;
-  });
-  // After sort, fix the "pick" flag — only the actual first card.
-  providers.forEach((p, i) => { p.pick = i === 0; });
+  // CERGIO-GUARD (2026-06-02): ranking now lives in src/lib/rankResults.js
+  // per Tarik's spec. Six-tier hierarchy:
+  //   T1: friend recos + within budget
+  //   T2: friend recos + over budget
+  //   T3: connector recos + within budget
+  //   T4: connector recos + over budget
+  //   T5: no recos + within budget
+  //   T6: everything else
+  // Within a tier: friendCount > connectorCount > rating > price (asc)
+  //              > distance. When `wantFree=true`, paid options sink to
+  // a "below everything else" band so free comes first.
+  const providers = applyPickFlag(rankResults(providersRaw, {
+    budgetCents: budgetCents > 0 ? budgetCents : null,
+    wantFree:    !!freeServices,
+  }));
   const n = providers.length;
 
   // CERGIO-GUARD: title surface MUST reflect what the user asked for.
