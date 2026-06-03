@@ -145,62 +145,25 @@ function RoamingDots() {
   );
 }
 
-// CERGIO-GUARD (2026-06-03): elegant share-row replacing the loud
-// "Forward to friends" card. Shows only the lead noun of the
-// request, an inline Edit affordance (toggles a textarea so the
-// user can customize what gets forwarded), and two quiet green
-// hyperlinks for Forward / Copy. No headline, no earnings copy,
-// no bottom promo card.
+// CERGIO-GUARD (2026-06-03 v2): minimal right-aligned share link
+// per Tarik — preview + Edit + Copy all dropped as redundant. Just
+// one quiet green hyperlink that opens the forward flow, with a
+// muted earnings hint inline so the incentive shows without
+// shouting. previewLead/shareMsg accepted for parent compatibility
+// but only `onForward` is used.
 function ShareRequestRow({ previewLead, shareMsg, onForward, onCopy }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(previewLead);
-  // Keep draft synced if the parent recomputes previewLead.
-  useEffect(() => { setDraft(previewLead); }, [previewLead]);
+  // eslint-disable-next-line no-unused-vars
+  void previewLead; void shareMsg; void onCopy;
   return (
-    <div className="mx-5 my-3">
-      <div className="flex items-center gap-1.5 flex-wrap text-meta text-b2 leading-snug">
-        <span className="text-b3 font-medium">Forward your request:</span>
-        {editing ? (
-          <input
-            autoFocus
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onBlur={() => setEditing(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === 'Escape') setEditing(false);
-            }}
-            className="flex-1 min-w-[8rem] border-b border-g/40 bg-transparent outline-none
-                       text-meta text-black font-bold py-0.5"
-          />
-        ) : (
-          <>
-            <span className="font-bold text-black truncate max-w-[16rem]">{draft}</span>
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="text-meta-sm text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
-            >
-              Edit
-            </button>
-          </>
-        )}
-      </div>
-      <div className="mt-1 flex items-center gap-3 text-meta">
-        <button
-          type="button"
-          onClick={onForward}
-          className="text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
-        >
-          Forward to friends →
-        </button>
-        <button
-          type="button"
-          onClick={() => { onCopy?.(); /* uses shareMsg for full clipboard */ void shareMsg; }}
-          className="text-b3 font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
-        >
-          Copy
-        </button>
-      </div>
+    <div className="mx-5 my-3 flex justify-end items-baseline gap-2 text-meta">
+      <button
+        type="button"
+        onClick={onForward}
+        className="text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+      >
+        Forward to friends →
+      </button>
+      <span className="text-b3 font-medium">· earn ${REWARDS.perFriendUser} per friend</span>
     </div>
   );
 }

@@ -1,88 +1,19 @@
-feat(ux): elegant roaming Results + counter-offer display + cancel + inline counter
+style(results): one quiet right-aligned forward link + earnings hint
 
-═══════════════ Tarik directives 2026-06-03 ═══════════════
+Tarik 2026-06-03:
+  "just keep the link and remove the 1st forward copy... redundant...
+   perhaps right align and add 'earn $250 per friend... make non
+   intrusive..."
 
-  1. "change the headline msg elegant like 'We're roaming for
-      services...'… Or other actions... expanding the search etc.."
-  2. "Show '…' animated DOTS, persistent until results load even if
-      it takes 3,4 hours"
-  3. "remove the 2nd msg NO personal chef (above forward to friends)"
-  4. "remove the invite friends ... just keep Forward request to
-      friends... but replace the large button with a green hyperlink"
-  5. "add 1st few words of the need 'personal chef cooking sushi…'…
-      no address no link… add a small 'edit' next to it"
-  6. "Change the pills (to sum up the request more intuitively and
-      minimally — don't spell out the entire address)"
-  7. "may want to add 'cancel' next to this... on the user / connector
-      to services and service to connector"
-  8. "can the counter be a within same page VS the pop up"
-  9. "need to show the COUNTER offer price ($5)... with the official
-      number crossed off... and share 'firstname countered with $5'"
+ShareRequestRow now renders a single line: a quiet green
+"Forward to friends →" hyperlink right-aligned to the gutter,
+followed by a muted "· earn $250 per friend" tail (reads
+straight from REWARDS.perFriendUser).
 
-═══════════════ ResultsScreen ═══════════════
+Removed:
+  • The inline preview ("Forward your request: personal chef")
+  • The Edit affordance
+  • The separate Copy link
+All three were redundant with the underlying forward flow.
 
-  • Headline H2 becomes the LIVE roaming line + 3-dot animation
-    (RoamingDots component, pure CSS keyframes). Cycles through a
-    scripted phase ("Asking friends for their reco's" → "Pinging
-    Connectors in your area" → "Reaching nearby services" →
-    "Expanding the search") and then rotates a persistent pool
-    ("Still roaming…", "Checking who's available", "Reaching a
-    little further", "Keeping the line open") forever — never
-    reads as stuck.
-  • Loading status block slimmed — leaf + replies count + a green
-    "Cancel request" hyperlink (CancelRequestLink). Cancel flips
-    requests.status → 'cancelled', toasts, navigates home.
-  • Pills minimized: location shows neighborhood / city (parsed
-    from comma tokens) instead of the full street + ZIP + country.
-  • "No personal chefs yet — ask friends to find one" headline
-    removed.
-  • Forward-to-friends card replaced with ShareRequestRow:
-      "Forward your request: personal chef cooking sushi  Edit"
-      Forward to friends →  Copy
-    Inline editable. Two quiet green hyperlinks instead of a loud
-    button. No headline, no earnings sub-copy.
-  • Bottom "Bring your people · earn together" promo card removed.
-  • Headline switches to the count copy only when providers > 0.
-
-═══════════════ ProviderCard counter-offer display ═══════════════
-
-  • New provider props: officialPrice, counterPriceCents,
-    counterStatus, responderFirstName.
-  • When counterStatus === 'countered':
-      – Row 2 shows  ~~$40~~  $5  (official strikethrough in mute
-        b3, counter price in green-dark + heading-2 weight).
-      – New line under Row 2: "Maria countered with $5" in
-        green-dark bold so the user sees who responded.
-      – savings overlay recomputed off the counter so the photo
-        chip reads correctly.
-  • Plumbing: ResultsScreen confirmedDetails map carries
-    { status, offered_price_cents, responderFirstName } per
-    service_id. serviceToProvider mixes it into the provider
-    object.
-
-═══════════════ JobsInboxScreen inline counter input ═══════════════
-
-  • Removed window.prompt entirely.
-  • Counter button now toggles an inline row INSIDE the card:
-      "$" + autofocus number input + green Send + × cancel.
-  • Enter submits, Esc cancels. Same respondToRequest call as the
-    Accept path with status='countered'.
-
-═══════════════ BrowseConnectorsScreen Cancel ═══════════════
-
-  • "Cancel request" link added under the "Awaiting Connector
-    responses…" state. Marks all pending outbound
-    spotlight_requests for the signed-in provider as 'cancelled'.
-
-═══════════════ Files ═══════════════
-
-  cergio-app/src/screens/ResultsScreen.jsx
-  cergio-app/src/screens/JobsInboxScreen.jsx
-  cergio-app/src/screens/BrowseConnectorsScreen.jsx
-  cergio-app/src/components/ui/ProviderCard.jsx
-
-═══════════════ Verified ═══════════════
-
-  scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX — ResultsScreen / JobsInbox / BrowseConnectors
-  / ProviderCard all OK.
+Verified: scripts/qa.mjs 41/41 PASS · @babel/parser JSX OK.
