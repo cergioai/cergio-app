@@ -995,22 +995,20 @@ export function HomeScreen() {
                     Same affordance covers both the consumer→service and
                     service→Connector intents — toggling intent just
                     relabels the dropdown options. */}
+                {/* CERGIO-GUARD (2026-06-03 v2): order is [text] (i) [chevron]
+                    per Tarik — (i) sits to the LEFT of the chevron arrow.
+                    Chevron is now its own sibling button so the (i) can
+                    slot between text + chevron without nesting buttons. */}
                 <div ref={modeBtnRef} className="relative flex items-center">
-                  {/* Free/Pay mode — flat text + chevron. No pill, no
-                      background. */}
                   <button
                     type="button"
                     onClick={() => setModeOpen(o => !o)}
                     aria-haspopup="listbox"
                     aria-expanded={modeOpen}
-                    className={`flex items-center gap-1 px-1 text-meta font-normal
-                                transition-colors
+                    className={`px-1 text-meta font-normal transition-colors
                                 ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
                   >
                     {freeServices ? 'Free for Connectors' : 'Pay full price'}
-                    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5 opacity-70">
-                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
                   </button>
                   {freeServices && (
                     <span className="relative group inline-flex items-center">
@@ -1024,9 +1022,6 @@ export function HomeScreen() {
                       >
                         i
                       </button>
-                      {/* Hover tooltip — appears above the icon. Hidden on
-                          touch where hover doesn't exist; the title attr +
-                          tap-to-details fall back gracefully. */}
                       <span
                         role="tooltip"
                         className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5
@@ -1039,6 +1034,17 @@ export function HomeScreen() {
                       </span>
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setModeOpen(o => !o)}
+                    aria-label="Toggle mode menu"
+                    className={`ml-1 p-0.5 transition-colors
+                                ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
+                  >
+                    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="opacity-70">
+                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                   {modeOpen && (
                     <div role="listbox" className="absolute top-full mt-1.5 left-0 z-10 bg-white border border-bdr rounded-[14px] shadow-card py-1 min-w-[220px]">
                       <ModeOption
@@ -1221,7 +1227,16 @@ export function HomeScreen() {
               divider above + IG/TT mini icons left so it reads as a
               "service-provider entry point" rather than "another bit
               of location metadata". Still slim — not intrusive. */}
-          <div className="mt-3 pt-2 border-t border-bdr/60 flex justify-center">
+          {/* CERGIO-GUARD (2026-06-03): the back-to-find link sits in
+              the RIGHT gutter when on spotlight intent (less central,
+              less loud) per Tarik. The "Have a service? Spotlight it
+              free" CTA still centers on the find intent since it's the
+              primary cross-sell direction. */}
+          <div
+            className={`mt-3 pt-2 border-t border-bdr/60 flex ${
+              intent === 'spotlight' ? 'justify-end pr-1' : 'justify-center'
+            }`}
+          >
             <button
               type="button"
               onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}

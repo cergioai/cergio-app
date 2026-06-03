@@ -1,52 +1,61 @@
-style: inline Connector "i" on Free toggle + rewrite apply intro copy
+style: right-align spotlight back link + (i) before chevron + referral test pack
 
-Tarik 2026-06-03:
-  (1) "make the i icon on free for connectors more centered and
-       perhaps alongside 'free for…' on the first line… rather
-       than on the 3rd line below the button… also show a brief
-       description when hovering over… same for connector to
-       service…"
-  (2) "make this copy elegant and succinct, explaining connectors
-       are creators, influencers, super-users with strong local
-       networks and interested in driving shared prosperity and
-       asset participation growth"
+═══════════════ Tarik directives 2026-06-03 ═══════════════
 
-═══════════════ (1) HomeScreen i-icon ═══════════════
+  (1) "move this link a little and right align ← Book a service instead"
+  (2) "make the I info icon to the left of the arrow (not to the right)"
+  (3) "how do i test the referral payments... share table showing
+       results and triggers (notifications sent) and logins to see
+       the payments per user"
 
-The (i) was wrapping below the Free-for-Connectors toggle because
-the parent <div ref={modeBtnRef}> had no flex; two block-level
-buttons stacked vertically. Wrapping it as `flex items-center`
-pulls them onto a single row.
+═══════════════ (1) Spotlight back link ═══════════════
 
-  • Toggle + (i) now sit inline + vertically aligned on the same
-    row.
-  • Hover tooltip — pure CSS via `group` + `group-hover`. Black/85
-    bubble above the icon: "Creators, influencers, super-users
-    with strong local networks. Tap for details."
-  • `title` attribute carries the same string as a touch fallback
-    (hover doesn't exist on phones).
-  • Click still routes to /rainmaker/apply for the full pitch.
-  • One icon serves both intents — find (consumer→service) AND
-    spotlight (service→connector) — because freeServices toggles
-    on both flows. No parallel surface needed.
+  HomeScreen intent strip — when intent === 'spotlight' the
+  "← Book a service instead" link aligns to the right gutter
+  (`justify-end pr-1`). When intent === 'find', the "Have a
+  service? Spotlight it free…" CTA stays centered because that's
+  the primary cross-sell direction.
 
-═══════════════ (2) Become a Connector intro copy ═══════════════
+═══════════════ (2) (i) icon to the LEFT of the chevron ═══════════════
 
-  Before:
-    Influencers and super-users with strong local networks.
-    Drive growth for your community — share in the upside.
+  Restructured the mode toggle so it renders as
+      [Free for Connectors] · (i) · ▼
+  instead of
+      [Free for Connectors ▼] · (i)
 
-  After:
-    Creators, influencers, and super-users with strong local
-    networks — driving shared prosperity and asset-participation
-    growth in the communities they already shape.
+  The chevron is now its own sibling button — both the text and
+  the chevron toggle the dropdown. (i) sits between them and
+  keeps its hover tooltip + click-to-/rainmaker/apply.
+
+═══════════════ (3) Referral payments test pack ═══════════════
+
+  Test Referral Payments.command (sibling of Unlock and Push) —
+  read-only audit, no writes. Five sections:
+
+    1. Invite chains (who invited whom + status + reward_cents)
+    2. Earnings rows by kind ('referral' direct $25,
+       'referral_chain' friend-of-friend $12.50) + status
+    3. Per-user totals — what each recipient will see on
+       Earnings → Referrals (direct/chain counts + cents,
+       cleared vs pending)
+    4. Notifications log — every referral-related notification
+    5. 3-hop chain visualization — inviter → friend → friend-of-friend
+
+  Also includes a login cheat sheet:
+    • Password for all seeded users: cergio-test-2026
+      (re-run ./Set Seed Passwords.command if missing).
+    • Step-by-step: pick a user with direct_cents > 0 from
+      section 3, sign in, go to bottom-nav Earnings → Referrals,
+      verify the row count + amounts match.
+    • To fire a fresh payment end-to-end: sign in as a pending
+      invitee, book any service, re-run the audit.
 
 ═══════════════ Files ═══════════════
 
   cergio-app/src/screens/HomeScreen.jsx
-  cergio-app/src/screens/RainmakerApplyScreen.jsx
+  Test Referral Payments.command (new launcher)
 
 ═══════════════ Verified ═══════════════
 
   scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX — both files OK.
+  @babel/parser JSX on HomeScreen.jsx — OK.
