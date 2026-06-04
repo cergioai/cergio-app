@@ -1,125 +1,24 @@
-feat(launch-prep): earnings cleanup + exquisite Auth + go-live docs
+fix(vercel): SPA rewrite so /auth /home /u/:id etc. resolve on cergio.ai
 
-Tarik 2026-06-04 batch — two messages bundled:
+Direct routes (e.g. https://cergio.ai/auth) were returning Vercel's
+default 404 because the build output is a single-page React app and
+there was no rewrite rule. Every non-index URL needs to be sent back
+to /index.html so React Router can take over.
 
-  (a) "the earnings are all wrong… clean up! the total of 838 is wrong
-       (as we only have one invitee). the 250 should be 0 if user
-       bookings are maxed out. show counts all services reco'd
-       invited friends..joined etc.. should lead to invite reco
-       more.. and friends tracking naturally. the reco form from the
-       invite is wrong — the link should take the reco form from
-       where to plug your contacts (/invite/recommend), not the
-       current one which lists all users."
+Add vercel.json at the project root with the standard SPA fallback:
 
-  (b) "clean the homepage top headline tab (keep on one line)..
-       height is weird.."
+  {
+    "rewrites": [
+      { "source": "/(.*)", "destination": "/index.html" }
+    ]
+  }
 
-  (c) "introduce an exquisite simple login page (current one is too
-       busy)… let's now submit to instagram for review… let's enable
-       going live to cergio.ai (even with IG not wired)… let's fix
-       all logins (google tiktok)."
+This is the recommended Vercel config for any Vite + react-router app
+and is what's referenced in GO_LIVE_CHECKLIST.md §1 implicitly.
 
-══════════════════ (a) Earnings cleanup ═══════════════════════════════
+Unblocks: Continue-with-Google round trip (OAuth returns to
+/home which previously 404'd), Forgot-password reset link (/auth?reset),
+Friend invite reco link (/u/:id), and every other deep link.
 
-  1.  $838 inflation killed. ReferralsSummary now sums *capped*
-      buckets ($250 per direct friend, $12.50 per chain path) instead
-      of the raw ledger total. Seeded test data above the cap stops
-      leaking into the headline.
-
-  2.  Per-row "$250 → $0 left" math. Walks referralRows oldest-first,
-      accumulates per bucket, stamps each row with capLeftCents +
-      capReachedBefore. FriendTallyPill renders "$X left" (not the
-      old "$X/$Y" lifetime-total). If the cap was already reached in
-      a previous row, the pill reads "$0 left ✓" and the row caption
-      says "cap was already maxed — $0 paid on this booking".
-
-  3.  Top-3 leaderboard now uses the same per-friend capped sums so
-      it reconciles with the hero total. No more "Sam: $838" when
-      the cap is $250.
-
-  4.  Top counts strip — 5 tappable tiles between the hero card and
-      the tabs:
-          Invited  Joined  Booked  Reco'd  Services
-      Each tile is a real count (inviteCounts / recsCount /
-      servicesCount). Tap = jump to the next-best action:
-          Invited/Joined/Booked → /earnings/invites (filtered)
-          Reco'd                → /invite/recommend
-          Services              → /profile (if has service) else /list-service
-      The strip itself nudges users toward more invites + recos
-      without the user needing to know how to find those flows.
-
-  5.  Reco link routing fix. "Or, recommend a service" on
-      InviteFriendsScreen used to send the user to
-      /invite/friends?mode=reco — a generic contact-list picker that
-      didn't ask which service to recommend. Now routes directly to
-      /invite/recommend (RecommendServiceFormScreen) which asks for
-      service + contact in one place. Matches Tarik's spec verbatim.
-
-══════════════════ (b) Home tab single-line fix ═══════════════════════
-
-  HomeScreen folder-style intent tabs were wrapping "Spotlight my
-  service" + IG + TikTok glyphs to two lines on narrow viewports —
-  Tarik: "height is weird". Tightened:
-        whitespace-nowrap on both buttons
-        px-3       → px-2
-        gap-1.5    → gap-1
-        text-[13]  → text-[12.5]
-        icons 14px → 12px
-        label "Spotlight my service" → "Spotlight service"
-  Now fits one line on 320px-wide screens.
-
-══════════════════ (c) AuthScreen redesign — exquisite simple ═════════
-
-  Before: brand logo + 2-paragraph "Hi I'm Cergio…" prose + invited
-          banner + signin/signup tab pill + 3 social buttons in a
-          grid + email divider + 4 fields + Continue-as-guest +
-          footer. Felt heavy.
-
-  After:  one calm column.
-            • Logo (84px) + single headline "Welcome to Cergio."
-            • One-line context: "Create your account in seconds." /
-              "Sign in to keep going."
-            • Primary: big "Continue with Google" pill (the 95%
-              path; Supabase Auth native).
-            • Secondary: quiet "Continue with email" button.
-            • Tertiary: "— More sign-in options —" reveal that
-              shows TikTok + IG side-by-side. IG renders with a
-              soft-disabled "IG · soon" label until
-              VITE_INSTAGRAM_ENABLED=true (see launch docs).
-            • Continue as guest stays as a quiet underline.
-          The email/password form lives behind a single click — same
-          fields, same logic (signUp, signIn, forgot, reset), just
-          not occupying landing-screen weight by default.
-
-══════════════════ Launch prep documents ══════════════════════════════
-
-  ../GO_LIVE_INSTAGRAM_REVIEW.md — full Meta App Review submission
-       packet: pre-flight checklist, scope justifications,
-       step-by-step demo script, test credentials, privacy/terms
-       anchors, post-approval env flips, what's needed from Tarik.
-
-  ../GO_LIVE_CHECKLIST.md — end-to-end cergio.ai launch runbook:
-       DNS records, Supabase Auth redirect URLs, Google Cloud
-       OAuth client setup, TikTok status, Instagram deferral
-       (which lets us launch without IG), Resend, Stripe live
-       flip, Vercel env vars, email-confirmation decision, smoke
-       tests, and a clear ⚠️ list of steps only Tarik can do.
-
-  cergio-app/.env.local — added VITE_INSTAGRAM_ENABLED flag with
-       explanatory comment. Defaults to false so AuthScreen renders
-       IG button in soft-disabled "soon" mode.
-
-══════════════════ Verified ══════════════════════════════════════════
-
-  scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX on AuthScreen / EarningsScreen / HomeScreen /
-                       InviteFriendsScreen — OK
-
-══════════════════ Out of scope this commit ═══════════════════════════
-
-  • Meta App Review submission itself — Tarik clicks Submit
-    (see GO_LIVE_INSTAGRAM_REVIEW.md §8).
-  • DNS + Vercel domain config — Tarik clicks through
-    (see GO_LIVE_CHECKLIST.md §1, §2, §8).
-  • Stripe test→live flip — staged for after the first $1
-    booking on the live domain (§7).
+Verified: cergio.ai/auth returned 404 before; after deploy it should
+render the AuthScreen we shipped in commit 329bc50.
