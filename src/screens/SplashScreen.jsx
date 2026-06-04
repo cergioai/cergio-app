@@ -21,12 +21,18 @@ export function SplashScreen() {
             so the word still reads as the logotype, just embedded in
             the sentence instead of sitting alone above it. */}
         <div className="flex flex-col items-center gap-2 max-w-[320px]">
+          {/* CERGIO-GUARD (2026-06-04 v8): trim hero copy per UX pass.
+              "I'll negotiate AND book services your friends actually
+              trust" was three claims stacked into one sentence —
+              dense. Cut to the single load-bearing claim ("services
+              your friends actually trust") and let Book/Barter/Earn
+              carry the feature pillars below. */}
           <p className="text-[15px] text-white/80 font-medium text-center leading-snug">
             Hi, I&apos;m{' '}
             <span className="font-extrabold tracking-[0.18em] uppercase text-white">
               Cergio
             </span>
-            . I&apos;ll negotiate and book services your friends actually trust.
+            . I book services your friends actually trust.
           </p>
           <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase mt-1">
             Book · Barter · Earn

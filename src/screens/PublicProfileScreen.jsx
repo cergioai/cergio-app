@@ -538,6 +538,30 @@ export function PublicProfileScreen() {
           network impact. Tappable on the SELF view (routes the user
           to /earnings/invites + /earnings) so the numbers turn into
           action. Hides silently when zero across the board. */}
+      {/* CERGIO-GUARD (2026-06-04 v8): self-view nudge when all
+          stats are zero. Other people's profiles still hide cleanly
+          when there's nothing to show. Self-view shows a "Just
+          getting started" card pointing to invite — turns a hollow
+          profile into a hook for first action. */}
+      {(() => {
+        const isSelf = auth?.user?.id === profileId;
+        if (stats && (stats.invited + stats.joined + stats.booked + stats.recommended + stats.listedServices) === 0) {
+          if (!isSelf) return null;
+          return (
+            <Link
+              to="/invite/friends-popup"
+              className="mx-5 mt-6 block bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 hover:from-gl/80 hover:to-gl/40 transition-colors"
+            >
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">By the numbers</p>
+              <p className="text-[15px] font-extrabold text-black leading-snug mt-1">Just getting started.</p>
+              <p className="text-[12px] text-b3 font-medium mt-1 leading-snug">
+                Invite your first friend to start building your network. <span className="text-gd font-extrabold">Send invite →</span>
+              </p>
+            </Link>
+          );
+        }
+        return null;
+      })()}
       {stats && (stats.invited + stats.joined + stats.booked + stats.recommended + stats.listedServices) > 0 && (() => {
         const isSelf = auth?.user?.id === profileId;
         const cells = [

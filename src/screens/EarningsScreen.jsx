@@ -338,27 +338,55 @@ export function EarningsScreen() {
           tracking naturally." Five tappable cells, each routes to
           the next-best action so the strip itself is the funnel
           accelerator. Uses REAL counts pulled from invites /
-          recommendations / services. */}
-      <div className="mx-5 mb-5 grid grid-cols-5 gap-1.5">
-        {[
-          { n: inviteCounts.invited, label: 'Invited', path: '/earnings/invites' },
-          { n: inviteCounts.joined,  label: 'Joined',  path: '/earnings/invites?filter=joined' },
-          { n: inviteCounts.booked,  label: 'Booked',  path: '/earnings/invites?filter=booked' },
-          { n: recsCount,            label: "Reco'd",  path: '/invite/recommend' },
-          { n: servicesCount,        label: 'Services', path: servicesCount > 0 ? '/profile' : '/list-service' },
-        ].map((c) => (
-          <button
-            key={c.label}
-            type="button"
-            onClick={() => navigate(c.path)}
-            className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
-            title={`${c.n} ${c.label} — tap to open`}
-          >
-            <p className="text-[18px] font-extrabold text-black leading-none">{c.n}</p>
-            <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">{c.label}</p>
-          </button>
-        ))}
-      </div>
+          recommendations / services.
+
+          CERGIO-GUARD (2026-06-04 v4): when ALL counts are zero, the
+          strip would render five hollow "0 0 0 0 0" tiles — that's
+          worse than nothing. Replace with a single tall CTA card
+          that nudges first invite. Once any count > 0, the strip
+          renders in full again. */}
+      {(() => {
+        const totalCount = inviteCounts.invited + inviteCounts.joined + inviteCounts.booked + recsCount + servicesCount;
+        if (totalCount === 0) {
+          return (
+            <button
+              type="button"
+              onClick={() => navigate('/invite/friends-popup')}
+              className="mx-5 mb-5 w-[calc(100%-2.5rem)] bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 text-left hover:from-gl/80 hover:to-gl/40 transition-colors"
+            >
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">Start earning</p>
+              <p className="text-[15px] font-extrabold text-black leading-snug mt-1">
+                Invite your first friend — earn ${REWARDS.perFriendUser} when they book.
+              </p>
+              <p className="text-[12px] text-b3 font-medium mt-1.5 leading-snug">
+                Plus ${REWARDS.friendOfFriendBonus} chain bonus when their friends book too. <span className="text-gd font-extrabold">Send invite →</span>
+              </p>
+            </button>
+          );
+        }
+        return (
+          <div className="mx-5 mb-5 grid grid-cols-5 gap-1.5">
+            {[
+              { n: inviteCounts.invited, label: 'Invited', path: '/earnings/invites' },
+              { n: inviteCounts.joined,  label: 'Joined',  path: '/earnings/invites?filter=joined' },
+              { n: inviteCounts.booked,  label: 'Booked',  path: '/earnings/invites?filter=booked' },
+              { n: recsCount,            label: "Reco'd",  path: '/invite/recommend' },
+              { n: servicesCount,        label: 'Services', path: servicesCount > 0 ? '/profile' : '/list-service' },
+            ].map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={() => navigate(c.path)}
+                className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
+                title={`${c.n} ${c.label} — tap to open`}
+              >
+                <p className="text-[18px] font-extrabold text-black leading-none">{c.n}</p>
+                <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">{c.label}</p>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── Real earnings ledger ─────────────────────────────────────────
           CERGIO-GUARD (2026-05-29): split into two tabs.

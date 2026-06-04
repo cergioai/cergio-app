@@ -545,7 +545,43 @@ export function ActivityScreen() {
           }
           return false;
         });
-        if (visibleFeed.length === 0) return null;
+        // CERGIO-GUARD (2026-06-04 v8): when the viewer follows
+        // nobody yet, the feed silently disappeared — empty state
+        // felt broken. Replace with a single Follow-Connectors CTA
+        // card that opens BrowseConnectors so the feed has a clear
+        // first action. Signed-out users get the standard "Sign in
+        // to follow" cue.
+        if (visibleFeed.length === 0) {
+          if (followedIds.size === 0) {
+            return (
+              <div className="mt-2 pb-4 border-b border-bdr">
+                <div className="px-5 mb-3">
+                  <h2 className="text-[17px] font-extrabold text-black leading-tight">
+                    What&apos;s happening on Cergio
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(isSignedIn ? '/connectors' : '/auth')}
+                  className="mx-5 w-[calc(100%-2.5rem)] bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 text-left hover:from-gl/80 hover:to-gl/40 transition-colors"
+                >
+                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">Your feed</p>
+                  <p className="text-[15px] font-extrabold text-black leading-snug mt-1">
+                    {isSignedIn
+                      ? 'Follow Connectors to see their picks here.'
+                      : 'Sign in + follow Connectors to see their picks here.'}
+                  </p>
+                  <p className="text-[12px] text-b3 font-medium mt-1.5 leading-snug">
+                    {isSignedIn
+                      ? <>Connectors are the locals who spotlight services worth booking. <span className="text-gd font-extrabold">Browse Connectors →</span></>
+                      : <>Connectors are the locals who spotlight services worth booking. <span className="text-gd font-extrabold">Sign in →</span></>}
+                  </p>
+                </button>
+              </div>
+            );
+          }
+          return null;
+        }
         return (
         <div className="mt-2 pb-4 border-b border-bdr">
           <div className="px-5 mb-3">
