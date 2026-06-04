@@ -1,0 +1,69 @@
+feat(graph): Follow buttons + graph-aware Activity feed gating
+
+Tarik 2026-06-03:
+  "Connector Connie (not your connector).. also show connection to
+   sofia (users see only friends and friends-of-friends or Connectors
+   they follow (add ability to follow a service or a connector which
+   then makes them equivalent of friend in the system..."
+
+═══════════════ API (lib/api.js) ═══════════════
+
+  Four new helpers — all idempotent, all return { data, error }:
+
+    followProfile(targetId)
+      INSERTs (follower_id = me, followed_id = target). Duplicate
+      keys treated as success — repeated follows don't error.
+
+    unfollowProfile(targetId)
+      DELETE on the same composite key.
+
+    amIFollowing(targetId)
+      Quick boolean lookup — used by PublicProfileScreen to label
+      the Follow / Following button on mount.
+
+    getMyFollowedIds()
+      Returns the array of profile_ids the viewer follows. Used by
+      ActivityScreen to filter the social feed.
+
+═══════════════ PublicProfileScreen Follow button ═══════════════
+
+  • Top bar: × stays on the left, Follow / Following pill on the
+    right.
+  • Hidden on own profile and for signed-out viewers.
+  • Green-fill "Follow" → white "Following" toggle. Disabled while
+    the network INSERT/DELETE is in flight.
+  • Toast confirms ("Now following Connie" / "Unfollowed Connie").
+  • Same affordance covers BOTH service providers and Connectors —
+    a follow makes them equivalent to a friend in downstream
+    feed / reco filters.
+
+═══════════════ ActivityScreen feed gating ═══════════════
+
+  • On mount: getMyFollowedIds() → followedIds Set.
+  • visibleFeed predicate flipped from `is_connector || is_friend`
+    to `followedIds.has(actor.id)`. Events whose primary actor the
+    viewer doesn't follow are HIDDEN — no more "your Connector"
+    prefix from Connectors the user has no relationship with.
+  • Each surviving event has its actor stamped with `is_friend =
+    true` so the existing prefix logic (GoatShareCard, JoinedCard,
+    ListingCard, SpotlightCard) reads the relationship correctly
+    without further changes.
+
+═══════════════ Prefix priority flipped ═══════════════
+
+  GoatShareCard relation prefix priority is now Connector > Friend
+  (was Friend > Connector). Per Tarik's phrasing "your Connector
+  Connie Connect spotlighted Maria..." — when a followed actor IS
+  a Connector, the Connector label is the salient signal. Plain
+  followed users still read as "your friend".
+
+═══════════════ Files ═══════════════
+
+  cergio-app/src/lib/api.js
+  cergio-app/src/screens/PublicProfileScreen.jsx
+  cergio-app/src/screens/ActivityScreen.jsx
+
+═══════════════ Verified ═══════════════
+
+  scripts/qa.mjs — 41/41 PASS
+  @babel/parser JSX on all three files — OK

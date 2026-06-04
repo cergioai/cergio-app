@@ -24,8 +24,9 @@
 // to /u/{their-id}, so the graph is fully navigable.
 
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
+import { followProfile, unfollowProfile, amIFollowing } from '../lib/api';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -173,8 +174,15 @@ function ServiceTile({ svc, recoSummary, onOpen }) {
 export function PublicProfileScreen() {
   const navigate = useNavigate();
   const { profileId } = useParams();
+  // CERGIO-GUARD (2026-06-03): viewer's auth context — needed for Follow.
+  const outlet = useOutletContext() || {};
+  const auth = outlet.auth;
+  const showToast = outlet.showToast || ((m) => { /* eslint-disable-next-line no-console */ console.log('[toast]', m); });
 
   const [profile, setProfile] = useState(null);
+  // Follow state — null = unknown, true/false = known.
+  const [following, setFollowing] = useState(null);
+  const [followPending, setFollowPending] = useState(false);
   const [services, setServices] = useState([]);
   // svcId → { total, friends, connectors }
   const [svcRecoSummary, setSvcRecoSummary] = useState({});
@@ -193,6 +201,18 @@ export function PublicProfileScreen() {
   const [showAllServices, setShowAllServices] = useState(false);
   const [showAllReviews,  setShowAllReviews]  = useState(false);
   const [showAllGoTos,    setShowAllGoTos]    = useState(false);
+
+  // CERGIO-GUARD (2026-06-03): probe whether the signed-in viewer
+  // already follows this profile. Used to gate the Follow / Following
+  // button.
+  useEffect(() => {
+    if (!auth?.isSignedIn || !profileId) { setFollowing(null); return; }
+    let cancelled = false;
+    amIFollowing(profileId).then(({ data }) => {
+      if (!cancelled) setFollowing(!!data);
+    });
+    return () => { cancelled = true; };
+  }, [auth?.isSignedIn, profileId]);
 
   useEffect(() => {
     if (!supabaseReady || !profileId) { setLoading(false); return; }
@@ -437,8 +457,13 @@ export function PublicProfileScreen() {
 
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
-      {/* Top bar — close button (back) */}
-      <div className="px-5 pt-7">
+      {/* Top bar — close (×) + Follow button (right-aligned).
+          CERGIO-GUARD (2026-06-03): Follow is the canonical way the
+          viewer adds someone to their graph. Following a service
+          provider OR a Connector counts as "friend equivalent" in
+          downstream feed/recommendation filters per Tarik. Own
+          profile + signed-out viewers see no Follow button. */}
+      <div className="px-5 pt-7 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
           aria-label="Close"
@@ -446,6 +471,32 @@ export function PublicProfileScreen() {
         >
           ×
         </button>
+        {auth?.isSignedIn && profileId !== auth?.user?.id && following !== null && (
+          <button
+            type="button"
+            disabled={followPending}
+            onClick={async () => {
+              if (followPending) return;
+              setFollowPending(true);
+              if (following) {
+                const { error } = await unfollowProfile(profileId);
+                if (error) showToast('Could not unfollow — try again.');
+                else { setFollowing(false); showToast(`Unfollowed ${(profile?.display_name || 'them').split(' ')[0]}`); }
+              } else {
+                const { error } = await followProfile(profileId);
+                if (error) showToast('Could not follow — try again.');
+                else { setFollowing(true); showToast(`Now following ${(profile?.display_name || 'them').split(' ')[0]}`); }
+              }
+              setFollowPending(false);
+            }}
+            className={`rounded-pill px-4 py-1.5 text-meta font-extrabold transition-colors disabled:opacity-60
+                        ${following
+                          ? 'bg-white border border-bdr text-b2 hover:border-g/40'
+                          : 'bg-g text-white cg-cta'}`}
+          >
+            {followPending ? '…' : following ? 'Following' : 'Follow'}
+          </button>
+        )}
       </div>
 
       {/* Header — avatar + big name + role/Connector badge row.

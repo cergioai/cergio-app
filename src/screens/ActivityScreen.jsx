@@ -13,7 +13,7 @@
 // is the consumer's view only.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
-import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed } from '../lib/api';
+import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed, getMyFollowedIds } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 // FEED + REWARDS imports removed along with the fake "Friends
 // recently booked" section — see CERGIO-GUARD in the JSX below.
@@ -193,14 +193,16 @@ function GoatShareCard({ row, onClick }) {
   const cover        = svc.cover_url;
   const gradient     = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
 
-  // Relation prefix logic: priority Friend > Connector > nothing.
-  // "your friend Connector Connie" reads weird, so when someone is
-  // both, we anchor on "your friend" and let the Connector chip carry
-  // the cc_verified context.
-  const relation = goatIsFriend
-    ? 'your friend'
-    : goatIsConn
-      ? 'your Connector'
+  // CERGIO-GUARD (2026-06-03 v2): priority flipped to Connector >
+  // Friend per Tarik — "your Connector Connie Connect spotlighted
+  // Maria...". A Connector's role is the salient signal (and only
+  // appears here when the viewer FOLLOWS them), so it wins the
+  // prefix. Plain followed users (no Connector status) fall back
+  // to "your friend".
+  const relation = goatIsConn
+    ? 'your Connector'
+    : goatIsFriend
+      ? 'your friend'
       : null;
 
   // Both avatars (owner + recommender pill) are Links to public
@@ -463,11 +465,17 @@ export function ActivityScreen() {
   // Tarik: "need to see all recommendations from friends, bookings,
   // joining, spotlights... friend announced a service, friend joined".
   const [feed, setFeed] = useState(null);
+  // CERGIO-GUARD (2026-06-03): viewer's followed set drives which
+  // events surface AND which carry the "your Connector / your friend"
+  // prefix. Following a Connector OR a service provider counts as
+  // "friend equivalent" per Tarik 2026-06-03.
+  const [followedIds, setFollowedIds] = useState(new Set());
   useEffect(() => {
-    if (!isSignedIn) { setBookings([]); setSpotlights([]); }
+    if (!isSignedIn) { setBookings([]); setSpotlights([]); setFollowedIds(new Set()); }
     else {
       listConsumerBookings().then(({ data }) => setBookings(data || []));
       listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => setSpotlights(data || []));
+      getMyFollowedIds().then(({ data }) => setFollowedIds(new Set(data || [])));
     }
     listSocialFeed({ limit: 40, days: 60 }).then(({ data }) => setFeed(data || []));
   }, [isSignedIn]);
@@ -501,11 +509,40 @@ export function ActivityScreen() {
           to Connector-driven events only. When the graph lands,
           extend the predicate to include is_friend / is_fof. */}
       {(() => {
+        // CERGIO-GUARD (2026-06-03): filter to events whose primary
+        // actor the viewer FOLLOWS. Tarik: "users see only friends and
+        // friends-of-friends or Connectors they follow". Following IS
+        // the friend-equivalent signal — Connector status alone no
+        // longer earns a slot in the feed.
+        const isFollowed = (id) => !!id && followedIds.has(id);
+        // Stamp is_friend on the relevant actor profile so each card's
+        // existing "your friend / your Connector" logic reads true
+        // for followed actors. Mutating the row in-place is safe here
+        // because we re-build visibleFeed every render.
         const visibleFeed = (feed || []).filter(ev => {
-          if (ev.kind === 'reco')      return !!ev.recommender?.is_connector || !!ev.recommender?.is_friend;
-          if (ev.kind === 'spotlight') return true; // spotlights are by definition Connector-driven
-          if (ev.kind === 'listing')   return !!ev.owner?.is_connector || !!ev.owner?.is_friend;
-          if (ev.kind === 'join')      return !!ev.profile?.is_connector || !!ev.profile?.is_friend;
+          if (ev.kind === 'reco') {
+            if (!isFollowed(ev.recommender?.id)) return false;
+            ev.recommender.is_friend = true;
+            return true;
+          }
+          if (ev.kind === 'spotlight') {
+            const cFollowed = isFollowed(ev.connector?.id);
+            const rFollowed = isFollowed(ev.requester?.id);
+            if (!cFollowed && !rFollowed) return false;
+            if (cFollowed && ev.connector) ev.connector.is_friend = true;
+            if (rFollowed && ev.requester) ev.requester.is_friend = true;
+            return true;
+          }
+          if (ev.kind === 'listing') {
+            if (!isFollowed(ev.owner?.id)) return false;
+            if (ev.owner) ev.owner.is_friend = true;
+            return true;
+          }
+          if (ev.kind === 'join') {
+            if (!isFollowed(ev.profile?.id)) return false;
+            if (ev.profile) ev.profile.is_friend = true;
+            return true;
+          }
           return false;
         });
         if (visibleFeed.length === 0) return null;

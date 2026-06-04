@@ -1379,6 +1379,75 @@ export async function acceptRequestResponse(responseId) {
  * — `my_service_id` is the provider's matching service so the inbox
  * card knows what to attach when respondToRequest fires.
  */
+/**
+ * CERGIO-GUARD (2026-06-03): Follow / unfollow + relationship lookup.
+ * The `network` table is the canonical graph (follower_id, followed_id).
+ * Per Tarik 2026-06-03 a "follow" makes the target the equivalent of
+ * a friend in downstream feed filters + reco surfaces — regardless of
+ * whether they're a Connector, a service provider, or a regular user.
+ */
+export async function followProfile(targetId) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  if (!targetId) return { data: null, error: { message: 'targetId required' } };
+  if (targetId === userRes.user.id) {
+    return { data: null, error: { message: "Can't follow yourself" } };
+  }
+  const { data, error } = await supabase
+    .from('network')
+    .insert({ follower_id: userRes.user.id, followed_id: targetId })
+    .select()
+    .maybeSingle();
+  // Treat duplicate-key as success — idempotent follow.
+  if (error && /duplicate|unique/i.test(error.message)) {
+    return { data: { follower_id: userRes.user.id, followed_id: targetId }, error: null };
+  }
+  return { data, error };
+}
+
+export async function unfollowProfile(targetId) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  if (!targetId) return { data: null, error: { message: 'targetId required' } };
+  return await supabase
+    .from('network')
+    .delete()
+    .eq('follower_id', userRes.user.id)
+    .eq('followed_id', targetId);
+}
+
+export async function amIFollowing(targetId) {
+  if (!supabaseReady) return { data: false, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: false, error: null };
+  if (!targetId || targetId === userRes.user.id) return { data: false, error: null };
+  const { data, error } = await supabase
+    .from('network')
+    .select('follower_id', { head: false })
+    .eq('follower_id', userRes.user.id)
+    .eq('followed_id', targetId)
+    .limit(1);
+  return { data: !!(data && data.length > 0), error };
+}
+
+/**
+ * Return the set of profile ids the signed-in user follows. Used to
+ * compute is_friend on the social feed + reco surfaces.
+ */
+export async function getMyFollowedIds() {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('network')
+    .select('followed_id')
+    .eq('follower_id', userRes.user.id);
+  if (error) return { data: [], error };
+  return { data: (data || []).map(r => r.followed_id), error: null };
+}
+
 export async function listInboundRequests({ limit = 20 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
   const { data: userRes } = await supabase.auth.getUser();
