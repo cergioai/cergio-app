@@ -835,14 +835,21 @@ export function HomeScreen() {
               content below (no shadow gap). Inactive tab sits muted
               + slightly recessed. Pre-submit only. */}
           {!submitted && (
+            // CERGIO-GUARD (2026-06-04 v3): single-line folder tabs.
+            // Tarik: "keep on one line… height is weird". v2 wrapped
+            // on narrow viewports because "Spotlight my service" +
+            // two icons + px-3 padding overflowed. Fix: tighter px,
+            // smaller text/icons, `whitespace-nowrap` on the labels,
+            // shorter spotlight label ("Spotlight service"). Both
+            // tabs now fit on one line on ≥320px viewports.
             <div className="px-5 pt-4 -mb-px relative z-10">
-              <div role="tablist" aria-label="What do you need?" className="flex items-end gap-1.5">
+              <div role="tablist" aria-label="What do you need?" className="flex items-end gap-1">
                 <button
                   role="tab"
                   aria-selected={intent === 'find'}
                   onClick={() => setIntent('find')}
                   type="button"
-                  className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 pt-2.5 pb-3 text-[13px] font-extrabold
+                  className={`flex-1 inline-flex items-center justify-center gap-1 px-2 pt-2 pb-2.5 text-[12.5px] font-extrabold whitespace-nowrap
                               border border-bdr transition-colors
                               ${intent === 'find'
                                 ? 'bg-white text-black rounded-t-[14px] border-b-white -mb-px'
@@ -855,23 +862,25 @@ export function HomeScreen() {
                   aria-selected={intent === 'spotlight'}
                   onClick={() => setIntent('spotlight')}
                   type="button"
-                  className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 pt-2.5 pb-3 text-[13px] font-extrabold
+                  className={`flex-1 inline-flex items-center justify-center gap-1 px-2 pt-2 pb-2.5 text-[12.5px] font-extrabold whitespace-nowrap
                               border border-bdr transition-colors
                               ${intent === 'spotlight'
                                 ? 'bg-white text-black rounded-t-[14px] border-b-white -mb-px'
                                 : 'bg-bg5/60 text-b3 hover:text-b2 rounded-t-[12px] border-b-bdr'}`}
                 >
-                  {/* IG + TikTok glyphs front-load the value prop. */}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  {/* IG + TikTok glyphs front-load the value prop.
+                      Icons shrunk to 12px so the whole tab fits one
+                      line at 320px wide. */}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="3" y="3" width="18" height="18" rx="5"/>
                     <circle cx="12" cy="12" r="4"/>
                     <circle cx="17.5" cy="6.5" r="1" fill="currentColor"/>
                   </svg>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M16.5 3a5 5 0 0 0 4 4v3a8 8 0 0 1-4-1v7a6 6 0 1 1-6-6v3a3 3 0 1 0 3 3V3h3z"/>
                   </svg>
-                  Spotlight my service
+                  Spotlight service
                 </button>
               </div>
               {/* Connecting band so the active tab visually merges

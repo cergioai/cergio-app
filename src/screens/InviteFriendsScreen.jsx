@@ -98,7 +98,16 @@ export function InviteFriendsScreen() {
 
   const headerTitle = mode === 'reco' ? 'Recommend a service' : 'Invite a friend';
   const altLink     = mode === 'reco' ? 'Or, invite a friend' : 'Or, recommend a service';
-  const altPath     = mode === 'reco' ? '/invite/friends' : '/invite/friends?mode=reco';
+  // CERGIO-GUARD (2026-06-04): "Or, recommend a service" used to send
+  // users to /invite/friends?mode=reco — which just re-listed the
+  // same contacts as a generic picker without asking which service
+  // they're recommending. Tarik: "the reco form from the invite is
+  // wrong … the link should take the reco form from where to plug
+  // your contacts (here /invite/recommend), not the current one
+  // which lists all users." Route directly to the proper reco form
+  // (RecommendServiceFormScreen at /invite/recommend) which asks the
+  // user to pick a service first, then a contact.
+  const altPath     = mode === 'reco' ? '/invite/friends' : '/invite/recommend';
 
   return (
     // CERGIO-GUARD: outer is flex-col with no overflow-hidden so the

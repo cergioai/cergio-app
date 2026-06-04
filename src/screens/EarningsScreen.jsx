@@ -77,6 +77,11 @@ export function EarningsScreen() {
   // schema issues so the UI stays honest, never lies with mock counts.
   const [invitesCount, setInvitesCount] = useState(0);
   const [recsCount,    setRecsCount]    = useState(0);
+  // CERGIO-GUARD (2026-06-04): listed-services count for the top
+  // counts strip — Tarik: "show counts all services reco'd invited
+  // friends..joined etc.. should lead to invite reco more.. and
+  // friends tracking naturally."
+  const [servicesCount, setServicesCount] = useState(0);
   // CERGIO-GUARD (2026-06-04): full invite funnel — Invited / Joined /
   // Booked. Replaces the bare invitesCount on the summary block.
   const [inviteCounts, setInviteCounts] = useState({ invited: 0, joined: 0, booked: 0 });
@@ -88,7 +93,11 @@ export function EarningsScreen() {
       return;
     }
     getMyEarnings({ limit: 50 }).then(({ data }) => setEarnings(data || []));
-    listMyServices().then(({ data }) => setHasService((data || []).length > 0));
+    listMyServices().then(({ data }) => {
+      const rows = data || [];
+      setHasService(rows.length > 0);
+      setServicesCount(rows.length);
+    });
     getMyInviteCounts().then(({ data }) => setInviteCounts(data || { invited: 0, joined: 0, booked: 0 }));
     // Pull real counts — head:true so we don't pay for row payload.
     import('../lib/supabase').then(async ({ supabase, supabaseReady }) => {
@@ -198,6 +207,50 @@ export function EarningsScreen() {
   // pulls from the new bucket maps.
   void perFriend;
 
+  // CERGIO-GUARD (2026-06-04 v3): per-row remaining cap.
+  // Tarik: "the 250 at far right should really be 0 if credit was
+  // reached prior to this transaction." Walk referralRows oldest-
+  // first, accumulating per-bucket; stamp each row with how much
+  // cap is left AFTER this row's contribution. The pill on the row
+  // then reads honestly: $0 left when capped earlier, $X left when
+  // partway, or "maxed by this booking" when this row tips it over.
+  const perFriendCapCentsAll = REWARDS.perFriend * 100;
+  const chainBonusCentsAll   = Math.round(REWARDS.friendOfFriendBonus * 100);
+  const rowCapState = (() => {
+    const out = {};
+    const directRun = {};
+    const chainRun  = {};
+    // Oldest first so the running totals match real chronology.
+    const chronological = [...referralRows].sort((a, b) => {
+      const ta = new Date(a.created_at || 0).getTime();
+      const tb = new Date(b.created_at || 0).getTime();
+      return ta - tb;
+    });
+    for (const e of chronological) {
+      const t = earningTier(e);
+      const cents = e.amount_cents || 0;
+      let bucketKey, cap, run;
+      if (t === 'direct') {
+        const name = e.meta?.friend ? String(e.meta.friend).split('->')[0] : `direct_${e.id}`;
+        bucketKey = name; cap = perFriendCapCentsAll; run = directRun;
+      } else if (t === 'chain') {
+        bucketKey = e.meta?.friend || `chain_${e.id}`;
+        cap = chainBonusCentsAll; run = chainRun;
+      } else {
+        out[e.id] = { capLeftCents: null, capCents: null, capReachedBefore: false };
+        continue;
+      }
+      const before = run[bucketKey] || 0;
+      const after  = before + cents;
+      run[bucketKey] = after;
+      const capLeftCents     = Math.max(0, cap - after);
+      const capReachedBefore = before >= cap;
+      const capReachedByThis = !capReachedBefore && after >= cap;
+      out[e.id] = { capLeftCents, capCents: cap, capReachedBefore, capReachedByThis };
+    }
+    return out;
+  })();
+
   // CERGIO-GUARD (2026-06-03): sort control on Referrals tab.
   // 'recent' = chronological (current behavior).
   // 'top'    = highest payout first — surfaces which friends are
@@ -277,6 +330,34 @@ export function EarningsScreen() {
             You're eligible to cash out — your balance is over ${REWARDS.perFriend}.
           </p>
         )}
+      </div>
+
+      {/* CERGIO-GUARD (2026-06-04): top counts strip — Tarik:
+          "show counts all services reco'd invited friends..joined
+          etc.. should lead to invite reco more.. and friends
+          tracking naturally." Five tappable cells, each routes to
+          the next-best action so the strip itself is the funnel
+          accelerator. Uses REAL counts pulled from invites /
+          recommendations / services. */}
+      <div className="mx-5 mb-5 grid grid-cols-5 gap-1.5">
+        {[
+          { n: inviteCounts.invited, label: 'Invited', path: '/earnings/invites' },
+          { n: inviteCounts.joined,  label: 'Joined',  path: '/earnings/invites?filter=joined' },
+          { n: inviteCounts.booked,  label: 'Booked',  path: '/earnings/invites?filter=booked' },
+          { n: recsCount,            label: "Reco'd",  path: '/invite/recommend' },
+          { n: servicesCount,        label: 'Services', path: servicesCount > 0 ? '/profile' : '/list-service' },
+        ].map((c) => (
+          <button
+            key={c.label}
+            type="button"
+            onClick={() => navigate(c.path)}
+            className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
+            title={`${c.n} ${c.label} — tap to open`}
+          >
+            <p className="text-[18px] font-extrabold text-black leading-none">{c.n}</p>
+            <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">{c.label}</p>
+          </button>
+        ))}
       </div>
 
       {/* ── Real earnings ledger ─────────────────────────────────────────
@@ -433,9 +514,18 @@ export function EarningsScreen() {
                         // cap that doesn't apply to the chain bucket.
                         const isChain = tier === 'chain';
                         const chainPathKey = isChain ? friend : null;
+                        // CERGIO-GUARD (2026-06-04 v3): pill now reports
+                        // *remaining* cap as of this row (not lifetime
+                        // total). Tarik: "the 250 at far right should
+                        // really be 0 if credit was reached prior to
+                        // this transaction." rowCapState[e.id] tracks
+                        // before/after caps walked oldest→newest.
+                        const rs = rowCapState[e.id] || null;
                         const friendTotalCents = !isChain
                           ? (directByFriend[friendShort]?.total || 0)
                           : (chainByPath[chainPathKey]?.total || 0);
+                        const capLeftCents    = rs ? rs.capLeftCents : null;
+                        const capReachedBefore = !!(rs && rs.capReachedBefore);
                         const tallyCapCents   = isChain ? tier2Cap : tier1Cap;
                         const tallyLabel      = isChain
                           ? (fofShort || friendShort || 'Chain')
@@ -460,6 +550,8 @@ export function EarningsScreen() {
                                   name={tallyLabel}
                                   friendTotalCents={friendTotalCents}
                                   capCents={tallyCapCents}
+                                  capLeftCents={capLeftCents}
+                                  capReachedBefore={capReachedBefore}
                                 />
                               )}
                             </div>
@@ -473,7 +565,11 @@ export function EarningsScreen() {
                                 transaction. */}
                             {e.kind === 'invite' && (
                               <p className="text-[11px] text-b3 mt-0.5 leading-snug">
-                                {atTier1Cap
+                                {capReachedBefore && tier === 'direct'
+                                  ? <>${REWARDS.perFriend} Tier 1 cap from {friendShort || 'this friend'} was already maxed — $0 paid on this booking</>
+                                  : capReachedBefore && tier === 'chain'
+                                  ? <>${REWARDS.friendOfFriendBonus} Tier 2 chain cap via {friendShort || 'this friend'} was already maxed — $0 paid on this booking</>
+                                  : atTier1Cap
                                   ? <>${REWARDS.perFriend} Tier 1 cap maxed out by this booking — no further Tier 1 credit from {friendShort || 'this friend'}</>
                                   : atTier2Cap
                                   ? <>${REWARDS.friendOfFriendBonus} Tier 2 chain cap maxed out by this booking — no further chain credit from {fofShort || 'this friend-of-friend'}</>
@@ -690,26 +786,44 @@ export function EarningsScreen() {
 // number stays in sync with the legal/payments docs.
 function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onSortChange, onReinvite, onOpenTracking }) {
   void recsCount;
-  const totalCents = referralRows.reduce((s, e) => s + (e.amount_cents || 0), 0);
-  // CERGIO-GUARD (2026-06-04 v2): NO hardcoded #s per Tarik —
-  // "$12.5k potential implied 50 have been invited and or reco'd
-  //  but we're only showing 1 invited 1 joined etc. correct and
-  //  remove all hard coded #s with real stuff."
+  // CERGIO-GUARD (2026-06-04 v3): TRUTHFUL totals — Tarik:
+  // "the total of 838 is wrong (as we only have one invitee)…"
   //
-  // Potential is computed from REAL invites + observed chain rows:
-  //   directPotential = perFriend × inviteCounts.invited
-  //   chainPotential  = friendOfFriendBonus × distinctChainFriends
-  // The chain count is the number of distinct chain paths the user
-  // has actually accrued earnings from (each FoF can contribute up
-  // to $12.50 once). When the user has zero invites we fall through
-  // to actual earnings so the progress bar doesn't divide by zero.
+  // The raw sum of referralRows can exceed what's actually possible
+  // under the cap rules when seeded test data piles up. Display the
+  // *capped* earned amount instead:
+  //   capped(direct) = min($250, sum of payouts for that friend)
+  //   capped(chain)  = min($12.50, sum of payouts for that chain path)
+  // Potential = perFriend × actual invites + chainBonus × actual chain paths.
+  // Both numerator and denominator now reflect the real network only.
   const perFriendCapCents     = REWARDS.perFriend * 100;
   const chainBonusCents       = Math.round(REWARDS.friendOfFriendBonus * 100);
-  const distinctChainPaths    = new Set(
-    referralRows
-      .filter(e => earningTier(e) === 'chain')
-      .map(e => e.meta?.friend || `chain_${e.id}`)
-  ).size;
+
+  // Group payouts by source (direct: friend name; chain: full path).
+  const directBuckets = {};
+  const chainBuckets  = {};
+  for (const e of referralRows) {
+    const t = earningTier(e);
+    const raw = e.meta?.friend;
+    const cents = e.amount_cents || 0;
+    if (t === 'direct') {
+      const name = raw ? String(raw).split('->')[0] : `direct_${e.id}`;
+      directBuckets[name] = (directBuckets[name] || 0) + cents;
+    } else if (t === 'chain') {
+      const key = raw || `chain_${e.id}`;
+      chainBuckets[key] = (chainBuckets[key] || 0) + cents;
+    }
+  }
+  // Sum each bucket clamped to its cap — this is the legally-payable
+  // total under our rules. Anything above is excess seed/test noise.
+  const cappedDirectCents = Object.values(directBuckets)
+    .reduce((s, v) => s + Math.min(v, perFriendCapCents), 0);
+  const cappedChainCents  = Object.values(chainBuckets)
+    .reduce((s, v) => s + Math.min(v, chainBonusCents),  0);
+  const totalCents = cappedDirectCents + cappedChainCents;
+
+  // Potential — based on REAL invited counts (not the seeded earnings ledger).
+  const distinctChainPaths    = Object.keys(chainBuckets).length;
   const directPotentialCents  = perFriendCapCents * Math.max(inviteCounts.invited, 0);
   const chainPotentialCents   = chainBonusCents * distinctChainPaths;
   const potentialCents        = Math.max(
@@ -721,16 +835,22 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
     : 0;
   const stalled = Math.max(0, inviteCounts.invited - inviteCounts.joined);
 
-  // Per-friend totals — surface top 3 driving earnings.
-  const friendMap = {};
-  for (const e of referralRows) {
-    const raw = e.meta?.friend;
-    if (!raw) continue;
-    const name = String(raw).split('->')[0];
-    if (!friendMap[name]) friendMap[name] = { name, total: 0 };
-    friendMap[name].total += (e.amount_cents || 0);
+  // CERGIO-GUARD (2026-06-04 v3): Top-3 sums respect the per-friend
+  // caps so the leaderboard reconciles with the capped hero total.
+  // Per friend: direct contribution + every chain bucket routed
+  // through them, each clamped at its respective cap.
+  const friendCapped = {};
+  for (const [name, cents] of Object.entries(directBuckets)) {
+    friendCapped[name] = (friendCapped[name] || 0) + Math.min(cents, perFriendCapCents);
   }
-  const friends = Object.values(friendMap).sort((a, b) => b.total - a.total);
+  for (const [path, cents] of Object.entries(chainBuckets)) {
+    const root = String(path).split('->')[0];
+    if (!root) continue;
+    friendCapped[root] = (friendCapped[root] || 0) + Math.min(cents, chainBonusCents);
+  }
+  const friends = Object.entries(friendCapped)
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total);
   const top3 = friends.slice(0, 3);
   const top3Share = totalCents > 0
     ? Math.round((top3.reduce((s, f) => s + f.total, 0) / totalCents) * 100)
@@ -852,28 +972,40 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
   );
 }
 
-// CERGIO-GUARD (2026-06-03): per-friend running tally pill rendered on
-// each referral row. Shows lifetime $earned / $cap (from REWARDS) so the
-// user knows how much room is left on each friend slot.
-function FriendTallyPill({ name, friendTotalCents, capCents = REWARDS.perFriend * 100 }) {
-  const pct       = Math.min(100, Math.round((friendTotalCents / capCents) * 100));
-  const maxedOut  = pct >= 100;
-  // CERGIO-GUARD (2026-06-04): cap accepts whole-dollar OR fractional
-  // ($12.50) values. Format both sides with two decimals only when
-  // the underlying cents aren't whole-dollar.
+// CERGIO-GUARD (2026-06-04 v3): row pill now reads REMAINING cap at
+// this row, not lifetime total. Tarik: "the 250 at far right should
+// really be 0 if credit was reached prior to this transaction."
+// capLeftCents is the room left AFTER this row's payout; if a prior
+// row already maxed the bucket, capLeftCents is 0 and capReachedBefore
+// is true — pill renders "$0 left ✓".
+function FriendTallyPill({
+  name,
+  friendTotalCents,
+  capCents = REWARDS.perFriend * 100,
+  capLeftCents = null,
+  capReachedBefore = false,
+}) {
+  const usingLeft = capLeftCents !== null;
+  const left      = usingLeft ? capLeftCents : Math.max(0, capCents - friendTotalCents);
+  const maxedOut  = left <= 0;
   const cap$  = (capCents % 100 === 0)
     ? (capCents / 100).toFixed(0)
     : (capCents / 100).toFixed(2);
-  const have$ = (friendTotalCents % 100 === 0)
-    ? (friendTotalCents / 100).toFixed(0)
-    : (friendTotalCents / 100).toFixed(2);
+  const left$ = (left % 100 === 0)
+    ? (left / 100).toFixed(0)
+    : (left / 100).toFixed(2);
+  const titleSuffix = capReachedBefore
+    ? '(cap already reached before this booking)'
+    : maxedOut
+      ? '(cap reached this booking)'
+      : `($${cap$} cap)`;
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold rounded-pill px-1.5 py-0.5
                   ${maxedOut ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}
-      title={`${name}: $${have$} of $${cap$} cap`}
+      title={`${name}: $${left$} left ${titleSuffix}`}
     >
-      ${have$}/${cap$}
+      ${left$} left
       {maxedOut && <span aria-hidden="true">✓</span>}
     </span>
   );

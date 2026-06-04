@@ -1,144 +1,125 @@
-feat(invites+profile): tracking dashboard + WhatsApp resend + profile stats
+feat(launch-prep): earnings cleanup + exquisite Auth + go-live docs
 
-Tarik 2026-06-04 batch (carries forward earlier staged changes):
+Tarik 2026-06-04 batch — two messages bundled:
 
-  (a) "we need a friend invite tracking dashboard, clickable from
-       the earnings dashboard… need a time stamp next to the
-       original invite… resend (invite or nudge)… filter (joined,
-       pending, invited)."
-  (b) "Need to add an option to invite via WhatsApp (far more
-       effective for users, keep text as well — just route if text
-       doesn't convert)."
-  (c) "Also need # of friends invited (or services reco'd) and
-       joined and services on users profiles prominently so they
-       track their networks… perhaps share the aggregate $$ booked
-       and the % cut… engaging numbers."
+  (a) "the earnings are all wrong… clean up! the total of 838 is wrong
+       (as we only have one invitee). the 250 should be 0 if user
+       bookings are maxed out. show counts all services reco'd
+       invited friends..joined etc.. should lead to invite reco
+       more.. and friends tracking naturally. the reco form from the
+       invite is wrong — the link should take the reco form from
+       where to plug your contacts (/invite/recommend), not the
+       current one which lists all users."
 
-Carries over from the earlier staged batch: real-data potential,
-tier bucket split, cap copy, Home toggle 2-line, ModeOption hover,
-commission-cap + deferral constants, NOTIFICATIONS_AUDIT updates.
+  (b) "clean the homepage top headline tab (keep on one line)..
+       height is weird.."
 
-═══════════════ (a) Invite tracking dashboard — /earnings/invites ═══════════════
+  (c) "introduce an exquisite simple login page (current one is too
+       busy)… let's now submit to instagram for review… let's enable
+       going live to cergio.ai (even with IG not wired)… let's fix
+       all logins (google tiktok)."
 
-New screen: InviteTrackingScreen.jsx
+══════════════════ (a) Earnings cleanup ═══════════════════════════════
 
-  • Lists every invite with:
-      – avatar + name (display_name → phone → email fallback)
-      – status pill (Pending / Joined / Booked)
-      – timestamps: "Invited 4d ago · Joined 2d ago · Booked 1h ago"
-  • Filter chips: All / Pending / Joined / Booked with counts.
-  • Resend row (hidden on Booked rows — no need to nudge):
-      [WhatsApp] [SMS] [Copy link]
-    Each button:
-      1. calls bumpInvite() → re-stamps invited_at so the row
-         floats to the top of the list (treated as a fresh
-         outreach by downstream cron / surfaces).
-      2. opens the share intent for the channel.
-  • Empty / loading / zero states handled.
-  • + Invite button top-right routes to /invite/friends for new
-    invites.
+  1.  $838 inflation killed. ReferralsSummary now sums *capped*
+      buckets ($250 per direct friend, $12.50 per chain path) instead
+      of the raw ledger total. Seeded test data above the cap stops
+      leaking into the headline.
 
-═══════════════ (b) WhatsApp nudge channel ═══════════════
+  2.  Per-row "$250 → $0 left" math. Walks referralRows oldest-first,
+      accumulates per bucket, stamps each row with capLeftCents +
+      capReachedBefore. FriendTallyPill renders "$X left" (not the
+      old "$X/$Y" lifetime-total). If the cap was already reached in
+      a previous row, the pill reads "$0 left ✓" and the row caption
+      says "cap was already maxed — $0 paid on this booking".
 
-  WhatsApp deep-link: https://wa.me/{e164}?text={msg}
-  SMS deep-link:      sms:{phone}?body={msg}
+  3.  Top-3 leaderboard now uses the same per-friend capped sums so
+      it reconciles with the hero total. No more "Sam: $838" when
+      the cap is $250.
 
-  Both pre-fill the canonical nudge copy:
+  4.  Top counts strip — 5 tappable tiles between the hero card and
+      the tabs:
+          Invited  Joined  Booked  Reco'd  Services
+      Each tile is a real count (inviteCounts / recsCount /
+      servicesCount). Tap = jump to the next-best action:
+          Invited/Joined/Booked → /earnings/invites (filtered)
+          Reco'd                → /invite/recommend
+          Services              → /profile (if has service) else /list-service
+      The strip itself nudges users toward more invites + recos
+      without the user needing to know how to find those flows.
 
-    "Hi {first} — I'm on Cergio. Each friend who joins + books
-     earns me $250. Want to try? {tracked-invite-url}"
+  5.  Reco link routing fix. "Or, recommend a service" on
+      InviteFriendsScreen used to send the user to
+      /invite/friends?mode=reco — a generic contact-list picker that
+      didn't ask which service to recommend. Now routes directly to
+      /invite/recommend (RecommendServiceFormScreen) which asks for
+      service + contact in one place. Matches Tarik's spec verbatim.
 
-  The tracked URL is buildInviteUrl(my-id) so the friend's eventual
-  signup + first booking credit the inviter (Tarik 2026-06-04: "once
-  they convert we'll notify via the converting medium — sms or wasp —
-  in addition to notifications").
+══════════════════ (b) Home tab single-line fix ═══════════════════════
 
-  WhatsApp is the PRIMARY button (Tarik: "far more effective for
-  users"). SMS stays as the fallback in the same row.
+  HomeScreen folder-style intent tabs were wrapping "Spotlight my
+  service" + IG + TikTok glyphs to two lines on narrow viewports —
+  Tarik: "height is weird". Tightened:
+        whitespace-nowrap on both buttons
+        px-3       → px-2
+        gap-1.5    → gap-1
+        text-[13]  → text-[12.5]
+        icons 14px → 12px
+        label "Spotlight my service" → "Spotlight service"
+  Now fits one line on 320px-wide screens.
 
-═══════════════ (c) PublicProfileScreen "By the numbers" block ═══════════════
+══════════════════ (c) AuthScreen redesign — exquisite simple ═════════
 
-  New stats card under the role + Connector badges:
+  Before: brand logo + 2-paragraph "Hi I'm Cergio…" prose + invited
+          banner + signin/signup tab pill + 3 social buttons in a
+          grid + email divider + 4 fields + Continue-as-guest +
+          footer. Felt heavy.
 
-    [Invited 23]  [Joined 12]  [Booked 6]
-    [Reco'd 18]   [Services 3]
+  After:  one calm column.
+            • Logo (84px) + single headline "Welcome to Cergio."
+            • One-line context: "Create your account in seconds." /
+              "Sign in to keep going."
+            • Primary: big "Continue with Google" pill (the 95%
+              path; Supabase Auth native).
+            • Secondary: quiet "Continue with email" button.
+            • Tertiary: "— More sign-in options —" reveal that
+              shows TikTok + IG side-by-side. IG renders with a
+              soft-disabled "IG · soon" label until
+              VITE_INSTAGRAM_ENABLED=true (see launch docs).
+            • Continue as guest stays as a quiet underline.
+          The email/password form lives behind a single click — same
+          fields, same logic (signUp, signIn, forgot, reset), just
+          not occupying landing-screen weight by default.
 
-  Cells render only when value > 0. On the SELF view, the Invited /
-  Joined cells link to /earnings/invites and Booked links to
-  /earnings — turning the numbers into action.
+══════════════════ Launch prep documents ══════════════════════════════
 
-  Sub-line spells the cut:
-    "You earn 7% of every friend's booking up to $250 per friend,
-     plus $12.50 chain bonus per friend-of-friend."
+  ../GO_LIVE_INSTAGRAM_REVIEW.md — full Meta App Review submission
+       packet: pre-flight checklist, scope justifications,
+       step-by-step demo script, test credentials, privacy/terms
+       anchors, post-approval env flips, what's needed from Tarik.
 
-  Block hides silently when all five counts = 0 so empty profiles
-  don't look broken.
+  ../GO_LIVE_CHECKLIST.md — end-to-end cergio.ai launch runbook:
+       DNS records, Supabase Auth redirect URLs, Google Cloud
+       OAuth client setup, TikTok status, Instagram deferral
+       (which lets us launch without IG), Resend, Stripe live
+       flip, Vercel env vars, email-confirmation decision, smoke
+       tests, and a clear ⚠️ list of steps only Tarik can do.
 
-  New API: getPublicProfileStats(profileId) — invited / joined /
-  booked / recommended / listedServices counts. $ amounts stay
-  private to the self-view (EarningsScreen).
+  cergio-app/.env.local — added VITE_INSTAGRAM_ENABLED flag with
+       explanatory comment. Defaults to false so AuthScreen renders
+       IG button in soft-disabled "soon" mode.
 
-═══════════════ HomeScreen — folder-style intent TABS above greeting ═══════════════
-
-  Tarik 2026-06-04: "try a TAB approach to switch users between
-  user looking for service AND service looking for spotlight…
-  place above the Hi Tarik tell me message (label intuitively).
-  this may be cleaner."
-  Tarik 2026-06-04 v2: "make a tab more like a folder less like a
-  button… add tiktok IG to the header on the spotlight my service
-  side."
-
-  Folder-style tab strip above the "Hi Tarik" greeting:
-
-      ┌────────────────┐ ┌─────────────────────────┐
-      │ Book a service │ │ ▣ ♪ Spotlight my service │
-      └────────────────┘ └─────────────────────────┘
-      ─────────────────────────────────────────────
-
-  • Rounded top corners only (active tab pops up).
-  • Active tab fills white + erases the bottom border so it
-    visually merges with the panel below.
-  • Inactive tab sits muted on bg5/60 with a full-width bottom line
-    underneath — the folder illusion.
-  • Spotlight tab leads with the Instagram + TikTok glyphs so the
-    value prop reads at a glance.
-  • Pre-submit only (collapses after the user submits so the chat
-    thread has full focus).
-
-  Bottom "Have a service? Spotlight it free on IG / TikTok →" link
-  REMOVED — the tabs replace it.
-
-═══════════════ EarningsScreen — funnel "View all →" link ═══════════════
-
-  The Friends funnel header on ReferralsSummary now has a "View
-  all →" link routing to /earnings/invites, so users can drill from
-  the 3-card funnel into the per-row tracking dashboard.
-
-═══════════════ Files ═══════════════
-
-  cergio-app/src/screens/InviteTrackingScreen.jsx (new)
-  cergio-app/src/screens/PublicProfileScreen.jsx
-  cergio-app/src/screens/EarningsScreen.jsx
-  cergio-app/src/screens/HomeScreen.jsx
-  cergio-app/src/App.jsx
-  cergio-app/src/lib/api.js
-  cergio-app/src/lib/rewards.js
-  cergio-app/scripts/qa.mjs
-  NOTIFICATIONS_AUDIT.md (workspace root)
-
-═══════════════ Verified ═══════════════
+══════════════════ Verified ══════════════════════════════════════════
 
   scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX on every edited file — OK
+  @babel/parser JSX on AuthScreen / EarningsScreen / HomeScreen /
+                       InviteFriendsScreen — OK
 
-═══════════════ Not in this commit ═══════════════
+══════════════════ Out of scope this commit ═══════════════════════════
 
-  • Recommendation flow one-at-a-time rework (Tarik flagged the
-    current mass-recommend flow as wrong — needs its own pass).
-  • Server-side enforcement of perBookingTotalCapPercent + the
-    90-day deferral window. Constants are in REWARDS now; the
-    stripe webhook + earnings credit dispatcher land next.
-  • Notification kinds 3–22 from NOTIFICATIONS_AUDIT.md — copy is
-    in the doc; dispatch wiring is a separate batch per kind.
-
-Those land next.
+  • Meta App Review submission itself — Tarik clicks Submit
+    (see GO_LIVE_INSTAGRAM_REVIEW.md §8).
+  • DNS + Vercel domain config — Tarik clicks through
+    (see GO_LIVE_CHECKLIST.md §1, §2, §8).
+  • Stripe test→live flip — staged for after the first $1
+    booking on the live domain (§7).
