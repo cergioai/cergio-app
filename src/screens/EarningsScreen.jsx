@@ -141,15 +141,47 @@ export function EarningsScreen() {
   const visibleRows  = activeTab === 'bookings' ? bookingRows : referralRows;
   const visibleTotal = activeTab === 'bookings' ? totals.bookings : totals.referrals;
 
-  // CERGIO-GUARD (2026-06-03): per-friend totals — used by
-  // ReferralsSummary's "top contributors" block AND by each row's
-  // running tally pill. Aggregates across direct + chain payouts
-  // keyed on meta.friend (first token before "->" for chain rows).
+  // CERGIO-GUARD (2026-06-04): per-friend totals SPLIT into direct
+  // and chain buckets. Previously we summed both buckets under one
+  // friend name, which made a chain row from "Sam->FriendA" show as
+  // "Sam: $88/$250" — but the $250 cap is for Sam's DIRECT bookings,
+  // while the $12.50 chain cap is for FriendA. Now we key direct
+  // rows on the friend name and chain rows on the FULL chain path
+  // ("Sam->FriendA") so each cap pill reads honestly.
   const friendName = (e) => {
     const raw = e.meta?.friend;
     if (!raw) return null;
     return String(raw).split('->')[0];
   };
+  const directByFriend = (() => {
+    const map = {};
+    for (const e of referralRows) {
+      const t = earningTier(e);
+      if (t !== 'direct') continue;
+      const name = friendName(e);
+      if (!name) continue;
+      if (!map[name]) map[name] = { name, total: 0, count: 0 };
+      map[name].total += e.amount_cents;
+      map[name].count += 1;
+    }
+    return map;
+  })();
+  const chainByPath = (() => {
+    const map = {};
+    for (const e of referralRows) {
+      const t = earningTier(e);
+      if (t !== 'chain') continue;
+      const raw = e.meta?.friend;
+      if (!raw) continue;
+      if (!map[raw]) map[raw] = { path: raw, total: 0, count: 0 };
+      map[raw].total += e.amount_cents;
+      map[raw].count += 1;
+    }
+    return map;
+  })();
+  // perFriend (combined) — kept for the Top 3 leaderboard which
+  // ranks by overall driver, not per-cap. Each friend's "total" =
+  // direct + every chain bucket they routed.
   const perFriend = (() => {
     const map = {};
     for (const e of referralRows) {
@@ -161,6 +193,10 @@ export function EarningsScreen() {
     }
     return Object.values(map).sort((a, b) => b.total - a.total);
   })();
+  // Suppress unused-warning — perFriend is still referenced below in
+  // the row render for completeness even though direct/chain split
+  // pulls from the new bucket maps.
+  void perFriend;
 
   // CERGIO-GUARD (2026-06-03): sort control on Referrals tab.
   // 'recent' = chronological (current behavior).
@@ -296,6 +332,7 @@ export function EarningsScreen() {
                   sortMode={sortMode}
                   onSortChange={setSortMode}
                   onReinvite={() => navigate('/invite/friends')}
+                  onOpenTracking={() => navigate('/earnings/invites')}
                 />
               )}
               <div className="flex items-center justify-between px-5 mb-2">
@@ -385,10 +422,24 @@ export function EarningsScreen() {
                         const tierLabel  = tier === 'direct' ? 'Tier 1' : tier === 'chain' ? 'Tier 2' : null;
                         const tierRate   = tier === 'direct' ? tier1Rate : tier2Rate;
                         const tierCapStr = tier === 'direct' ? `${REWARDS.perFriend}` : `${REWARDS.friendOfFriendBonus}`;
-                        // Per-friend running total — drives the tally pill.
-                        const friendTotal = friendShort
-                          ? (perFriend.find(p => p.name === friendShort)?.total || 0)
-                          : 0;
+                        // CERGIO-GUARD (2026-06-04): pull the running
+                        // total from the CORRECT bucket per tier.
+                        // Direct row → directByFriend[friend].total
+                        //              vs $250 cap.
+                        // Chain row  → chainByPath[fullChainPath].total
+                        //              vs $12.50 cap.
+                        // Fixes the audit confusion where a chain row
+                        // showed Sam's $88 mixed total against a $250
+                        // cap that doesn't apply to the chain bucket.
+                        const isChain = tier === 'chain';
+                        const chainPathKey = isChain ? friend : null;
+                        const friendTotalCents = !isChain
+                          ? (directByFriend[friendShort]?.total || 0)
+                          : (chainByPath[chainPathKey]?.total || 0);
+                        const tallyCapCents   = isChain ? tier2Cap : tier1Cap;
+                        const tallyLabel      = isChain
+                          ? (fofShort || friendShort || 'Chain')
+                          : (friendShort || 'Friend');
                         return (
                           <>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -405,16 +456,27 @@ export function EarningsScreen() {
                                 </span>
                               )}
                               {friendShort && (
-                                <FriendTallyPill name={friendShort} friendTotalCents={friendTotal} />
+                                <FriendTallyPill
+                                  name={tallyLabel}
+                                  friendTotalCents={friendTotalCents}
+                                  capCents={tallyCapCents}
+                                />
                               )}
                             </div>
-                            {/* Sub-line: the calculation OR the cap message. */}
+                            {/* CERGIO-GUARD (2026-06-04): clearer cap copy
+                                per Tarik — "the 250 at far right should
+                                really be 0 if credit was reached prior
+                                to this transaction." The cap is reached
+                                BY this booking; the +$250 IS the credit
+                                from this row. Spell it out so users
+                                don't think there's a prior unseen
+                                transaction. */}
                             {e.kind === 'invite' && (
                               <p className="text-[11px] text-b3 mt-0.5 leading-snug">
                                 {atTier1Cap
-                                  ? <>Tier 1 cap reached — {tier1Rate}% of every booking until ${REWARDS.perFriend} per friend</>
+                                  ? <>${REWARDS.perFriend} Tier 1 cap maxed out by this booking — no further Tier 1 credit from {friendShort || 'this friend'}</>
                                   : atTier2Cap
-                                  ? <>Tier 2 cap reached — {tier2Rate}% chain bonus until ${REWARDS.friendOfFriendBonus} per chain friend</>
+                                  ? <>${REWARDS.friendOfFriendBonus} Tier 2 chain cap maxed out by this booking — no further chain credit from {fofShort || 'this friend-of-friend'}</>
                                   : tier === 'direct' && inferredBookingCents
                                   ? <>{tier1Rate}% of {friendShort || 'their'} ${(inferredBookingCents / 100).toFixed(0)} booking</>
                                   : tier === 'chain' && inferredBookingCents
@@ -626,20 +688,34 @@ export function EarningsScreen() {
 //   3. Sort control — Most recent / Top earners.
 // Pulls REWARDS.referrerSharePercent for the calculation copy so the
 // number stays in sync with the legal/payments docs.
-function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onSortChange, onReinvite }) {
+function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onSortChange, onReinvite, onOpenTracking }) {
   void recsCount;
   const totalCents = referralRows.reduce((s, e) => s + (e.amount_cents || 0), 0);
-  // CERGIO-GUARD (2026-06-04): potential math fixed per Tarik —
-  // "should be of perhaps 12k potential (or total # of friends and
-  // foff)". Each invited friend caps at perFriend ($250) PLUS the
-  // chain bonus they enable ($12.50). Use REWARDS.exampleTotal
-  // ($12,500 — Jamie's 50-friend example) as the FLOOR so new users
-  // see what's achievable; scale up only when actual invites push
-  // higher.
-  const perFriendCapCents = (REWARDS.perFriend + REWARDS.friendOfFriendBonus) * 100;
-  const inviteBasedCents  = perFriendCapCents * Math.max(inviteCounts.invited, 0);
-  const aspirationalCents = REWARDS.exampleTotal * 100;
-  const potentialCents    = Math.max(inviteBasedCents, aspirationalCents);
+  // CERGIO-GUARD (2026-06-04 v2): NO hardcoded #s per Tarik —
+  // "$12.5k potential implied 50 have been invited and or reco'd
+  //  but we're only showing 1 invited 1 joined etc. correct and
+  //  remove all hard coded #s with real stuff."
+  //
+  // Potential is computed from REAL invites + observed chain rows:
+  //   directPotential = perFriend × inviteCounts.invited
+  //   chainPotential  = friendOfFriendBonus × distinctChainFriends
+  // The chain count is the number of distinct chain paths the user
+  // has actually accrued earnings from (each FoF can contribute up
+  // to $12.50 once). When the user has zero invites we fall through
+  // to actual earnings so the progress bar doesn't divide by zero.
+  const perFriendCapCents     = REWARDS.perFriend * 100;
+  const chainBonusCents       = Math.round(REWARDS.friendOfFriendBonus * 100);
+  const distinctChainPaths    = new Set(
+    referralRows
+      .filter(e => earningTier(e) === 'chain')
+      .map(e => e.meta?.friend || `chain_${e.id}`)
+  ).size;
+  const directPotentialCents  = perFriendCapCents * Math.max(inviteCounts.invited, 0);
+  const chainPotentialCents   = chainBonusCents * distinctChainPaths;
+  const potentialCents        = Math.max(
+    directPotentialCents + chainPotentialCents,
+    totalCents  // never less than what we've already earned
+  );
   const pct = potentialCents > 0
     ? Math.min(100, Math.round((totalCents / potentialCents) * 100))
     : 0;
@@ -691,9 +767,18 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
 
       {/* 2. Funnel — Invited → Joined → Booked */}
       <div className="mt-4 pt-3 border-t border-bdr">
-        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-2">
-          Friends funnel
-        </p>
+        <div className="flex items-baseline justify-between mb-2">
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3">
+            Friends funnel
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenTracking?.()}
+            className="text-meta-sm text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+          >
+            View all →
+          </button>
+        </div>
         <div className="flex items-center justify-between gap-1.5 text-center">
           {[
             { label: 'Invited', n: inviteCounts.invited },
@@ -770,17 +855,25 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
 // CERGIO-GUARD (2026-06-03): per-friend running tally pill rendered on
 // each referral row. Shows lifetime $earned / $cap (from REWARDS) so the
 // user knows how much room is left on each friend slot.
-function FriendTallyPill({ name, friendTotalCents }) {
-  const capCents  = REWARDS.perFriend * 100;
+function FriendTallyPill({ name, friendTotalCents, capCents = REWARDS.perFriend * 100 }) {
   const pct       = Math.min(100, Math.round((friendTotalCents / capCents) * 100));
   const maxedOut  = pct >= 100;
+  // CERGIO-GUARD (2026-06-04): cap accepts whole-dollar OR fractional
+  // ($12.50) values. Format both sides with two decimals only when
+  // the underlying cents aren't whole-dollar.
+  const cap$  = (capCents % 100 === 0)
+    ? (capCents / 100).toFixed(0)
+    : (capCents / 100).toFixed(2);
+  const have$ = (friendTotalCents % 100 === 0)
+    ? (friendTotalCents / 100).toFixed(0)
+    : (friendTotalCents / 100).toFixed(2);
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold rounded-pill px-1.5 py-0.5
                   ${maxedOut ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}
-      title={`${name}: $${(friendTotalCents/100).toFixed(0)} of ${REWARDS.perFriend} cap`}
+      title={`${name}: $${have$} of $${cap$} cap`}
     >
-      ${(friendTotalCents/100).toFixed(0)}/${REWARDS.perFriend}
+      ${have$}/${cap$}
       {maxedOut && <span aria-hidden="true">✓</span>}
     </span>
   );

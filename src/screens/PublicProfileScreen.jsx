@@ -26,7 +26,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing } from '../lib/api';
+import { followProfile, unfollowProfile, amIFollowing, getPublicProfileStats } from '../lib/api';
+import { REWARDS } from '../lib/rewards';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -183,6 +184,10 @@ export function PublicProfileScreen() {
   // Follow state — null = unknown, true/false = known.
   const [following, setFollowing] = useState(null);
   const [followPending, setFollowPending] = useState(false);
+  // CERGIO-GUARD (2026-06-04): network-impact stats — Invited / Joined
+  // / Booked / Reco'd / Services. Counts only; $ amounts stay private
+  // to the self-view via EarningsScreen.
+  const [stats, setStats] = useState(null);
   const [services, setServices] = useState([]);
   // svcId → { total, friends, connectors }
   const [svcRecoSummary, setSvcRecoSummary] = useState({});
@@ -213,6 +218,16 @@ export function PublicProfileScreen() {
     });
     return () => { cancelled = true; };
   }, [auth?.isSignedIn, profileId]);
+
+  // Network-impact stats — public, no $ amounts.
+  useEffect(() => {
+    if (!profileId) { setStats(null); return; }
+    let cancelled = false;
+    getPublicProfileStats(profileId).then(({ data }) => {
+      if (!cancelled) setStats(data);
+    });
+    return () => { cancelled = true; };
+  }, [profileId]);
 
   useEffect(() => {
     if (!supabaseReady || !profileId) { setLoading(false); return; }
@@ -515,6 +530,59 @@ export function PublicProfileScreen() {
           </div>
         )}
       </div>
+
+      {/* CERGIO-GUARD (2026-06-04): By-the-numbers block per Tarik —
+          "need # of friends invited (or services reco'd) and joined
+          and services on users profiles prominently so they track
+          their networks". Public counts only — engaging signal of
+          network impact. Tappable on the SELF view (routes the user
+          to /earnings/invites + /earnings) so the numbers turn into
+          action. Hides silently when zero across the board. */}
+      {stats && (stats.invited + stats.joined + stats.booked + stats.recommended + stats.listedServices) > 0 && (() => {
+        const isSelf = auth?.user?.id === profileId;
+        const cells = [
+          { key: 'invited',         label: 'Invited',     value: stats.invited,        to: isSelf ? '/earnings/invites' : null },
+          { key: 'joined',          label: 'Joined',      value: stats.joined,         to: isSelf ? '/earnings/invites' : null },
+          { key: 'booked',          label: 'Booked',      value: stats.booked,         to: isSelf ? '/earnings' : null },
+          { key: 'recommended',     label: 'Reco’d',       value: stats.recommended,   to: null },
+          { key: 'listedServices',  label: 'Services',    value: stats.listedServices, to: null },
+        ].filter(c => c.value > 0);
+        return (
+          <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-4">
+            <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-2">
+              By the numbers
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {cells.map(c => {
+                const inner = (
+                  <>
+                    <p className="text-[20px] font-extrabold text-black leading-none">{c.value}</p>
+                    <p className="text-[10.5px] font-extrabold uppercase tracking-wide text-b3 mt-1">{c.label}</p>
+                  </>
+                );
+                return c.to ? (
+                  <Link
+                    key={c.key}
+                    to={c.to}
+                    className="bg-bg5/60 rounded-[10px] py-2 px-1 text-center hover:bg-bg5 transition-colors"
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <div key={c.key} className="bg-bg5/60 rounded-[10px] py-2 px-1 text-center">
+                    {inner}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-b3 font-medium leading-snug mt-3">
+              {isSelf
+                ? <>You earn ${REWARDS.referrerSharePercent}% of every friend’s booking up to ${REWARDS.perFriend} per friend, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>
+                : <>{firstName}’s network drives ${REWARDS.referrerSharePercent}% per friend booking + ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>}
+            </p>
+          </div>
+        );
+      })()}
 
       {/* About */}
       <div className="px-5 mt-7">

@@ -1,86 +1,144 @@
-feat(ux): Earnings funnel + correct potential math + Home toggle 2-line + ModeOption hover
+feat(invites+profile): tracking dashboard + WhatsApp resend + profile stats
 
-Tarik 2026-06-04:
-  (1) "$838 of $250 potential" was wrong — should be ~$12k.
-  (2) "Where's the friend count and services invited VS Join (and
-       re-invite notification)"
-  (3) "earnings still very confusing"
-  (4) "submit green button outside the search box… try to do 2 lines
-       for free for connectors… or place the i for info above…
-       introduce a hover over which shows info (currently visible
-       under each item) when you click the arrow"
-  (5) "add notifications (your friend B recommended you as a personal
-       chef etc).. share the spreadsheet of notifications and msgs
-       to audit"
+Tarik 2026-06-04 batch (carries forward earlier staged changes):
 
-═══════════════ (1) Earnings potential math fixed ═══════════════
+  (a) "we need a friend invite tracking dashboard, clickable from
+       the earnings dashboard… need a time stamp next to the
+       original invite… resend (invite or nudge)… filter (joined,
+       pending, invited)."
+  (b) "Need to add an option to invite via WhatsApp (far more
+       effective for users, keep text as well — just route if text
+       doesn't convert)."
+  (c) "Also need # of friends invited (or services reco'd) and
+       joined and services on users profiles prominently so they
+       track their networks… perhaps share the aggregate $$ booked
+       and the % cut… engaging numbers."
 
-  • Per friend potential = perFriend + friendOfFriendBonus = $262.50
-    (one direct cap + one chain bonus they unlock).
-  • potential = max(perFriend × invitesCount, REWARDS.exampleTotal)
-    so new users see Jamie's $12,500 example as the floor, scaling
-    higher when actual invites push past it.
-  • Hero text: "$838 of $12,500 potential" with progress bar.
+Carries over from the earlier staged batch: real-data potential,
+tier bucket split, cap copy, Home toggle 2-line, ModeOption hover,
+commission-cap + deferral constants, NOTIFICATIONS_AUDIT updates.
 
-═══════════════ (2) Invite funnel — Invited → Joined → Booked ═══════════════
+═══════════════ (a) Invite tracking dashboard — /earnings/invites ═══════════════
 
-  • New getMyInviteCounts() API helper reads invites lifecycle
-    timestamps (invited_at always set; joined_at on signup;
-    first_booking_at on first paid booking) and returns
-    { invited, joined, booked }.
-  • ReferralsSummary renders the three counts as side-by-side
-    cards with arrows between, matching the typical funnel UI.
-  • Stalled = invited − joined. When > 0, an inline green
-    "Re-invite N friends who haven't joined →" link routes
-    to /invite/friends so the user can nudge them back.
+New screen: InviteTrackingScreen.jsx
 
-═══════════════ (3) ReferralsSummary copy simplified ═══════════════
+  • Lists every invite with:
+      – avatar + name (display_name → phone → email fallback)
+      – status pill (Pending / Joined / Booked)
+      – timestamps: "Invited 4d ago · Joined 2d ago · Booked 1h ago"
+  • Filter chips: All / Pending / Joined / Booked with counts.
+  • Resend row (hidden on Booked rows — no need to nudge):
+      [WhatsApp] [SMS] [Copy link]
+    Each button:
+      1. calls bumpInvite() → re-stamps invited_at so the row
+         floats to the top of the list (treated as a fresh
+         outreach by downstream cron / surfaces).
+      2. opens the share intent for the channel.
+  • Empty / loading / zero states handled.
+  • + Invite button top-right routes to /invite/friends for new
+    invites.
 
-  • Headline: "Earned to date" (was "Your referral pool" — too jargony).
-  • Hero stat moved to 26px / 800 so it's the dominant signal.
-  • Rate copy moved BELOW the stat, soft b3, full sentence:
-    "7% per friend booking up to $250, plus $12.50 chain bonus
-     per friend-of-friend."
-  • Old "1 friends invited · 2 reco'd" counter row REMOVED — the
-    funnel block below carries that information richer.
+═══════════════ (b) WhatsApp nudge channel ═══════════════
 
-═══════════════ (4) HomeScreen toggle: 2-line + (i) above + hover dropdown ═══════════════
+  WhatsApp deep-link: https://wa.me/{e164}?text={msg}
+  SMS deep-link:      sms:{phone}?body={msg}
 
-  • "Free for Connectors" now stacks on TWO lines + the (i) lives
-    ABOVE the text (top-left of the toggle column). The button is
-    narrower so the green submit pill stays inside the search box
-    at phone widths.
-  • ModeOption sub-text moved from always-visible inline body copy
-    to a HOVER tooltip (dark bubble) — title attribute is the
-    touch fallback. The dropdown row now reads cleanly as
-    "✓ Free for Connectors" with the explanation appearing on
-    hover only.
+  Both pre-fill the canonical nudge copy:
 
-═══════════════ (5) NOTIFICATIONS_AUDIT.md at workspace root ═══════════════
+    "Hi {first} — I'm on Cergio. Each friend who joins + books
+     earns me $250. Want to try? {tracked-invite-url}"
 
-  Self-contained audit / planning doc for every Cergio notification:
-    § 1. Currently implemented (2 kinds — `new_request` +
-         legacy `invite_credit`)
-    § 2. Proposed referral / network kinds (12 candidates inc.
-         `friend_joined`, `friend_first_booking`,
-         `chain_first_booking`, `reco_received`,
-         `service_listed_by_friend`, `follow_received`)
-    § 3. Proposed marketplace / requests kinds (5 candidates)
-    § 4. Proposed onboarding / reactivation kinds (3 candidates)
-    § 5. Schema notes — kind is free-text today (no enum
-         migration needed to add kinds)
-    § 6. Render rules — quiet hours, push vs in-app
-    § 7. Backend dispatch points
-    § 8. Open questions for Tarik
+  The tracked URL is buildInviteUrl(my-id) so the friend's eventual
+  signup + first booking credit the inviter (Tarik 2026-06-04: "once
+  they convert we'll notify via the converting medium — sms or wasp —
+  in addition to notifications").
+
+  WhatsApp is the PRIMARY button (Tarik: "far more effective for
+  users"). SMS stays as the fallback in the same row.
+
+═══════════════ (c) PublicProfileScreen "By the numbers" block ═══════════════
+
+  New stats card under the role + Connector badges:
+
+    [Invited 23]  [Joined 12]  [Booked 6]
+    [Reco'd 18]   [Services 3]
+
+  Cells render only when value > 0. On the SELF view, the Invited /
+  Joined cells link to /earnings/invites and Booked links to
+  /earnings — turning the numbers into action.
+
+  Sub-line spells the cut:
+    "You earn 7% of every friend's booking up to $250 per friend,
+     plus $12.50 chain bonus per friend-of-friend."
+
+  Block hides silently when all five counts = 0 so empty profiles
+  don't look broken.
+
+  New API: getPublicProfileStats(profileId) — invited / joined /
+  booked / recommended / listedServices counts. $ amounts stay
+  private to the self-view (EarningsScreen).
+
+═══════════════ HomeScreen — folder-style intent TABS above greeting ═══════════════
+
+  Tarik 2026-06-04: "try a TAB approach to switch users between
+  user looking for service AND service looking for spotlight…
+  place above the Hi Tarik tell me message (label intuitively).
+  this may be cleaner."
+  Tarik 2026-06-04 v2: "make a tab more like a folder less like a
+  button… add tiktok IG to the header on the spotlight my service
+  side."
+
+  Folder-style tab strip above the "Hi Tarik" greeting:
+
+      ┌────────────────┐ ┌─────────────────────────┐
+      │ Book a service │ │ ▣ ♪ Spotlight my service │
+      └────────────────┘ └─────────────────────────┘
+      ─────────────────────────────────────────────
+
+  • Rounded top corners only (active tab pops up).
+  • Active tab fills white + erases the bottom border so it
+    visually merges with the panel below.
+  • Inactive tab sits muted on bg5/60 with a full-width bottom line
+    underneath — the folder illusion.
+  • Spotlight tab leads with the Instagram + TikTok glyphs so the
+    value prop reads at a glance.
+  • Pre-submit only (collapses after the user submits so the chat
+    thread has full focus).
+
+  Bottom "Have a service? Spotlight it free on IG / TikTok →" link
+  REMOVED — the tabs replace it.
+
+═══════════════ EarningsScreen — funnel "View all →" link ═══════════════
+
+  The Friends funnel header on ReferralsSummary now has a "View
+  all →" link routing to /earnings/invites, so users can drill from
+  the 3-card funnel into the per-row tracking dashboard.
 
 ═══════════════ Files ═══════════════
 
-  cergio-app/src/lib/api.js
+  cergio-app/src/screens/InviteTrackingScreen.jsx (new)
+  cergio-app/src/screens/PublicProfileScreen.jsx
   cergio-app/src/screens/EarningsScreen.jsx
   cergio-app/src/screens/HomeScreen.jsx
+  cergio-app/src/App.jsx
+  cergio-app/src/lib/api.js
+  cergio-app/src/lib/rewards.js
+  cergio-app/scripts/qa.mjs
   NOTIFICATIONS_AUDIT.md (workspace root)
 
 ═══════════════ Verified ═══════════════
 
   scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX on HomeScreen / EarningsScreen / api.js — OK
+  @babel/parser JSX on every edited file — OK
+
+═══════════════ Not in this commit ═══════════════
+
+  • Recommendation flow one-at-a-time rework (Tarik flagged the
+    current mass-recommend flow as wrong — needs its own pass).
+  • Server-side enforcement of perBookingTotalCapPercent + the
+    90-day deferral window. Constants are in REWARDS now; the
+    stripe webhook + earnings credit dispatcher land next.
+  • Notification kinds 3–22 from NOTIFICATIONS_AUDIT.md — copy is
+    in the doc; dispatch wiring is a separate batch per kind.
+
+Those land next.

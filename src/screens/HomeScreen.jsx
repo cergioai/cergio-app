@@ -826,6 +826,61 @@ export function HomeScreen() {
           : `${greetingName}, tell me the Connector you need.`;
 
         return (
+          <>
+          {/* CERGIO-GUARD (2026-06-04 v2): folder-style intent tabs
+              per Tarik — "make a tab more like a folder less like a
+              button… add tiktok IG to the header on the spotlight my
+              service side". Active tab pops up with rounded top
+              corners + white fill that visually merges with the
+              content below (no shadow gap). Inactive tab sits muted
+              + slightly recessed. Pre-submit only. */}
+          {!submitted && (
+            <div className="px-5 pt-4 -mb-px relative z-10">
+              <div role="tablist" aria-label="What do you need?" className="flex items-end gap-1.5">
+                <button
+                  role="tab"
+                  aria-selected={intent === 'find'}
+                  onClick={() => setIntent('find')}
+                  type="button"
+                  className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 pt-2.5 pb-3 text-[13px] font-extrabold
+                              border border-bdr transition-colors
+                              ${intent === 'find'
+                                ? 'bg-white text-black rounded-t-[14px] border-b-white -mb-px'
+                                : 'bg-bg5/60 text-b3 hover:text-b2 rounded-t-[12px] border-b-bdr'}`}
+                >
+                  Book a service
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={intent === 'spotlight'}
+                  onClick={() => setIntent('spotlight')}
+                  type="button"
+                  className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 pt-2.5 pb-3 text-[13px] font-extrabold
+                              border border-bdr transition-colors
+                              ${intent === 'spotlight'
+                                ? 'bg-white text-black rounded-t-[14px] border-b-white -mb-px'
+                                : 'bg-bg5/60 text-b3 hover:text-b2 rounded-t-[12px] border-b-bdr'}`}
+                >
+                  {/* IG + TikTok glyphs front-load the value prop. */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="5"/>
+                    <circle cx="12" cy="12" r="4"/>
+                    <circle cx="17.5" cy="6.5" r="1" fill="currentColor"/>
+                  </svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M16.5 3a5 5 0 0 0 4 4v3a8 8 0 0 1-4-1v7a6 6 0 1 1-6-6v3a3 3 0 1 0 3 3V3h3z"/>
+                  </svg>
+                  Spotlight my service
+                </button>
+              </div>
+              {/* Connecting band so the active tab visually merges
+                  with the greeting/search panel below. The full-width
+                  border line under inactive tabs creates the folder
+                  illusion. */}
+              <div className="h-px bg-bdr" />
+            </div>
+          )}
           <div className="px-5 pt-5 pb-0.5 flex items-center gap-2.5">
             {/* CERGIO-GUARD (2026-05-30 v6): logo back inline with the
                 greeting (Tarik: "move logo to next to 'hi tarik' on
@@ -884,6 +939,7 @@ export function HomeScreen() {
               )}
             </div>
           </div>
+          </>
         );
       })()}
 
@@ -1250,34 +1306,10 @@ export function HomeScreen() {
               divider above + IG/TT mini icons left so it reads as a
               "service-provider entry point" rather than "another bit
               of location metadata". Still slim — not intrusive. */}
-          {/* CERGIO-GUARD (2026-06-03): the back-to-find link sits in
-              the RIGHT gutter when on spotlight intent (less central,
-              less loud) per Tarik. The "Have a service? Spotlight it
-              free" CTA still centers on the find intent since it's the
-              primary cross-sell direction. */}
-          <div
-            className={`mt-3 pt-2 border-t border-bdr/60 flex ${
-              intent === 'spotlight' ? 'justify-end pr-1' : 'justify-center'
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => setIntent(prev => prev === 'find' ? 'spotlight' : 'find')}
-              className="inline-flex items-center gap-1.5 text-meta-sm font-extrabold text-g hover:text-gd transition-colors"
-              aria-pressed={intent === 'spotlight'}
-            >
-              {intent === 'find' ? (
-                <>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/>
-                  </svg>
-                  Have a service? Spotlight it free on IG / TikTok →
-                </>
-              ) : (
-                <>← Book a service instead</>
-              )}
-            </button>
-          </div>
+          {/* CERGIO-GUARD (2026-06-04): bottom intent switcher REMOVED.
+              The pre-greeting tab strip (Book a service / Spotlight my
+              service) is now the canonical switcher. Old link was hard
+              to discover; tabs at the top read at a glance. */}
 
           {/* Example pills removed — examples now rotate INSIDE the
               search box as a toast-style overlay (see ROTATING_*_EXAMPLES

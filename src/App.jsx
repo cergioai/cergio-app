@@ -77,6 +77,7 @@ import { TrackInvitesScreen }               from './screens/TrackInvitesScreen';
 import { InviteFriendPopupScreen }          from './screens/InviteFriendPopupScreen';
 import { RecommendServicePopupScreen }      from './screens/RecommendServicePopupScreen';
 import { InviteFriendsScreen }              from './screens/InviteFriendsScreen';
+import { InviteTrackingScreen }             from './screens/InviteTrackingScreen';
 import { InviteSelectedReviewScreen }       from './screens/InviteSelectedReviewScreen';
 import { RecommendServiceFormScreen }       from './screens/RecommendServiceFormScreen';
 import { CalendarScreen }                   from './screens/CalendarScreen';
@@ -438,6 +439,7 @@ export default function App() {
               already shows real invite earnings. EarningsBreakdownScreen
               link still works because it lands on a real page. */}
           <Route path="/earnings/track"        element={<Navigate to="/earnings" replace />} />
+          <Route path="/earnings/invites"      element={<InviteTrackingScreen />} />
           <Route path="/invite/friends-popup"  element={<InviteFriendPopupScreen />} />
           <Route path="/invite/recommend-popup" element={<RecommendServicePopupScreen />} />
           <Route path="/invite/friends"        element={<InviteFriendsScreen />} />

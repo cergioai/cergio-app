@@ -1455,6 +1455,104 @@ export async function getMyInviteCounts() {
 }
 
 /**
+ * CERGIO-GUARD (2026-06-04): list every invite the signed-in user
+ * has sent, with the joined invitee profile (when present) hydrated.
+ * Used by the InviteTrackingScreen / Earnings → Invites surface.
+ * Returns rows shaped:
+ *   {
+ *     id, invitee_phone, invitee_email, invitee_id,
+ *     invited_at, joined_at, first_booking_at, reward_cents,
+ *     invitee: { id, display_name } | null
+ *   }
+ */
+export async function getMyInvitesDetailed({ limit = 100 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('invites')
+    .select(`
+      id, invitee_phone, invitee_email, invitee_id,
+      invited_at, joined_at, first_booking_at, reward_cents,
+      invitee:profiles!invites_invitee_id_fkey ( id, display_name )
+    `)
+    .eq('inviter_id', userRes.user.id)
+    .order('invited_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    // If the join syntax errors out (older PG schema), fall through to a
+    // bare select so the screen still renders names from the lookup.
+    const bare = await supabase
+      .from('invites')
+      .select('id, invitee_phone, invitee_email, invitee_id, invited_at, joined_at, first_booking_at, reward_cents')
+      .eq('inviter_id', userRes.user.id)
+      .order('invited_at', { ascending: false })
+      .limit(limit);
+    return { data: bare.data || [], error: bare.error };
+  }
+  return { data: data || [], error: null };
+}
+
+/**
+ * CERGIO-GUARD (2026-06-04): public network-impact stats for any
+ * profile (not just self). Used by PublicProfileScreen's "By the
+ * numbers" block — Tarik 2026-06-04: "need # of friends invited
+ * (or services reco'd) and joined and services on users profiles
+ * prominently so they track their networks". Returns counts only
+ * (no $ amounts — those stay on the self-view via getMyEarnings).
+ *
+ * Falls back to 0 on RLS errors so the UI stays honest.
+ */
+export async function getPublicProfileStats(profileId) {
+  const empty = { invited: 0, joined: 0, booked: 0, recommended: 0, listedServices: 0 };
+  if (!supabaseReady || !profileId) return { data: empty, error: null };
+  const [invitesRes, recosRes, svcsRes] = await Promise.all([
+    supabase
+      .from('invites')
+      .select('id, joined_at, first_booking_at')
+      .eq('inviter_id', profileId),
+    supabase
+      .from('recommendations')
+      .select('id', { count: 'exact', head: true })
+      .eq('recommender_id', profileId),
+    supabase
+      .from('services')
+      .select('id', { count: 'exact', head: true })
+      .eq('owner_id', profileId)
+      .eq('status', 'listed'),
+  ]);
+  const invites = invitesRes.data || [];
+  return {
+    data: {
+      invited:         invites.length,
+      joined:          invites.filter(r => r.joined_at).length,
+      booked:          invites.filter(r => r.first_booking_at).length,
+      recommended:     recosRes.error ? 0 : (recosRes.count || 0),
+      listedServices:  svcsRes.error  ? 0 : (svcsRes.count  || 0),
+    },
+    error: null,
+  };
+}
+
+/**
+ * Re-stamp an invite so it bumps to the top of the tracking screen
+ * and (via a server cron, in a follow-up) re-fires the SMS/WhatsApp
+ * nudge to the invitee. Today this is a UI-only re-send marker —
+ * the actual outbound message is sent client-side via the
+ * WhatsApp / SMS share intent on the row.
+ */
+export async function bumpInvite(inviteId) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  return await supabase
+    .from('invites')
+    .update({ invited_at: new Date().toISOString() })
+    .eq('id', inviteId)
+    .eq('inviter_id', userRes.user.id);
+}
+
+/**
  * Return the set of profile ids the signed-in user follows. Used to
  * compute is_friend on the social feed + reco surfaces.
  */

@@ -73,6 +73,18 @@ export const REWARDS = {
   // friendOfFriendBonus so the math stays consistent everywhere.
   chainSharePercent:       0.5,
   friendCapWindowMonths:   6,
+  // CERGIO-GUARD (2026-06-04): per-booking commission CAP. When both
+  // an invited friend AND a recommended service apply to the same
+  // booking, naïve math is 7% (referrer) + 7% (recommender) = 14%,
+  // which loses the platform money. Cap total credit to 7% per
+  // booking; pay the referrer (closer relationship) first and DEFER
+  // the recommender's credit to future rounds. Tarik 2026-06-04:
+  // "cap to 7% total… 7% for the user and just postpone the credit
+  //  for the service to future rounds and grant a time extension
+  //  of 90 days beyond the initial 6-months time limit to complete
+  //  those deferred credits."
+  perBookingTotalCapPercent: 7,
+  deferralExtensionDays:     90,
 };
 
 // ─── Hero one-liners (every CTA pulls from here) ───────────────────────────
