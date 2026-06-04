@@ -66,6 +66,12 @@ export const REWARDS = {
   // animation. Source of truth, full stop.
   platformFeePercent:      10,
   referrerSharePercent:    7,
+  // CERGIO-GUARD (2026-06-03): chain (friend-of-friend) per-booking
+  // share, expressed as a % of the FoF booking. 0.5% per booking until
+  // friendOfFriendBonus ($12.50) is reached per chain friend. Keep in
+  // sync with friendOfFriendPercent (chain share as % of perFriend) +
+  // friendOfFriendBonus so the math stays consistent everywhere.
+  chainSharePercent:       0.5,
   friendCapWindowMonths:   6,
 };
 

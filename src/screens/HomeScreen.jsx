@@ -69,6 +69,11 @@ function buildSpotlightPlan() {
   ];
 }
 
+// CERGIO-GUARD (2026-06-04): ModeOption sub-text is now a HOVER
+// tooltip instead of always-visible body copy per Tarik. The
+// dropdown rows become single-line; the description shows in a
+// dark bubble on hover (mouse) and via the title attribute (touch
+// fallback). Less visual weight, same explanation when needed.
 function ModeOption({ active, label, sub, onClick }) {
   return (
     <button
@@ -76,14 +81,23 @@ function ModeOption({ active, label, sub, onClick }) {
       role="option"
       aria-selected={active}
       onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 flex items-start gap-2 hover:bg-bg5/40 transition-colors
+      title={sub}
+      className={`group relative w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-bg5/40 transition-colors
                   ${active ? 'bg-gl/30' : ''}`}
     >
-      <span className={`mt-1 text-meta flex-shrink-0 ${active ? 'text-g' : 'text-transparent'}`}>✓</span>
-      <span className="flex-1">
-        <span className="block text-body-sm font-extrabold text-black leading-tight">{label}</span>
-        <span className="block text-meta-sm text-b3 mt-0.5 leading-snug">{sub}</span>
-      </span>
+      <span className={`text-meta flex-shrink-0 ${active ? 'text-g' : 'text-transparent'}`}>✓</span>
+      <span className="block text-body-sm font-extrabold text-black leading-tight flex-1">{label}</span>
+      {sub && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1
+                     opacity-0 group-hover:opacity-100 transition-opacity z-30
+                     bg-black/85 text-white text-[11px] font-medium leading-snug
+                     rounded-lg px-2.5 py-1.5 w-[220px] text-center shadow-card"
+        >
+          {sub}
+        </span>
+      )}
     </button>
   );
 }
@@ -1003,37 +1017,52 @@ export function HomeScreen() {
                     /rainmaker/apply instead of toggling the dropdown.
                     Order: [Free for Connectors] (i) ▼ — all flush
                     right of the attach icon, never wraps. */}
-                <div ref={modeBtnRef} className="relative flex items-center flex-shrink-0">
+                {/* CERGIO-GUARD (2026-06-04 v4): toggle now stacks the
+                    (i) ABOVE a two-line "Free for / Connectors" label
+                    + chevron per Tarik — "this is also pushed submit
+                    green button outside the search box... try to do 2
+                    lines for free for connectors... or place the i for
+                    info above". Vertical stack keeps the toggle narrow
+                    so the green submit button stays inside the search
+                    box at any phone width. */}
+                <div ref={modeBtnRef} className="relative flex items-start flex-shrink-0 min-w-0">
+                  {freeServices && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); navigate('/rainmaker/apply'); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          navigate('/rainmaker/apply');
+                        }
+                      }}
+                      aria-label="What's a Connector?"
+                      title="Creators, influencers, super-users with strong local networks. Tap for details."
+                      className="w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold
+                                 inline-flex items-center justify-center hover:bg-gl transition-colors
+                                 flex-shrink-0 cursor-pointer mt-0.5 mr-1"
+                    >
+                      i
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => setModeOpen(o => !o)}
                     aria-haspopup="listbox"
                     aria-expanded={modeOpen}
                     className={`group/mode inline-flex items-center gap-1 px-1 text-meta font-normal
-                                whitespace-nowrap transition-colors
+                                leading-[1.1] text-left transition-colors
                                 ${freeServices ? 'text-gd' : 'text-b3 hover:text-b2'}`}
                   >
-                    {freeServices ? 'Free for Connectors' : 'Pay full price'}
-                    {freeServices && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); navigate('/rainmaker/apply'); }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            navigate('/rainmaker/apply');
-                          }
-                        }}
-                        aria-label="What's a Connector?"
-                        title="Creators, influencers, super-users with strong local networks. Tap for details."
-                        className="w-4 h-4 rounded-full border border-gd/60 text-gd text-[9px] font-extrabold
-                                   inline-flex items-center justify-center hover:bg-gl transition-colors
-                                   flex-shrink-0 cursor-pointer"
-                      >
-                        i
+                    {freeServices ? (
+                      <span className="flex flex-col leading-[1.1]">
+                        <span>Free for</span>
+                        <span>Connectors</span>
                       </span>
+                    ) : (
+                      <span>Pay full price</span>
                     )}
                     <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="opacity-70 flex-shrink-0">
                       <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />

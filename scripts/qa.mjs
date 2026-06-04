@@ -1455,9 +1455,12 @@ test('earnings-tier', 'EarningsScreen surfaces direct vs friend-of-friend tier p
   // The render path must call earningTier and pill it.
   assert(/earningTier\(e\)/.test(code),
     'EarningsScreen render must call earningTier(e) per row.');
-  // User-visible labels.
-  assert(/Direct/.test(code) && /Chain \+5%/.test(code),
-    'Tier pill labels "Direct" and "Chain +5%" must be present.');
+  // User-visible labels. CERGIO-GUARD (2026-06-03): updated from
+  // "Direct" / "Chain +5%" to "Tier 1" / "Tier 2" per Tarik —
+  // "instead of direct and chain, classify as tier one 250 (7% at
+  // time), and tier 2 $12.5 (0.5% at a time)".
+  assert(/Tier 1/.test(code) && /Tier 2/.test(code),
+    'Tier pill labels "Tier 1" and "Tier 2" must be present.');
 });
 
 // ─── INVARIANT #41: urgency words satisfy the WHEN chat gate ────────────

@@ -3,7 +3,7 @@
 // REWARDS canonical $250-per-friend across every CTA.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { getMyEarnings, listMyServices } from '../lib/api';
+import { getMyEarnings, listMyServices, getMyInviteCounts } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 import { REWARDS } from '../lib/rewards';
 
@@ -77,14 +77,19 @@ export function EarningsScreen() {
   // schema issues so the UI stays honest, never lies with mock counts.
   const [invitesCount, setInvitesCount] = useState(0);
   const [recsCount,    setRecsCount]    = useState(0);
+  // CERGIO-GUARD (2026-06-04): full invite funnel — Invited / Joined /
+  // Booked. Replaces the bare invitesCount on the summary block.
+  const [inviteCounts, setInviteCounts] = useState({ invited: 0, joined: 0, booked: 0 });
   useEffect(() => {
     if (!auth?.isSignedIn) {
       setEarnings([]); setHasService(false);
       setInvitesCount(0); setRecsCount(0);
+      setInviteCounts({ invited: 0, joined: 0, booked: 0 });
       return;
     }
     getMyEarnings({ limit: 50 }).then(({ data }) => setEarnings(data || []));
     listMyServices().then(({ data }) => setHasService((data || []).length > 0));
+    getMyInviteCounts().then(({ data }) => setInviteCounts(data || { invited: 0, joined: 0, booked: 0 }));
     // Pull real counts — head:true so we don't pay for row payload.
     import('../lib/supabase').then(async ({ supabase, supabaseReady }) => {
       if (!supabaseReady) return;
@@ -286,10 +291,11 @@ export function EarningsScreen() {
               {activeTab === 'referrals' && (
                 <ReferralsSummary
                   referralRows={referralRows}
-                  invitesCount={invitesCount}
+                  inviteCounts={inviteCounts}
                   recsCount={recsCount}
                   sortMode={sortMode}
                   onSortChange={setSortMode}
+                  onReinvite={() => navigate('/invite/friends')}
                 />
               )}
               <div className="flex items-center justify-between px-5 mb-2">
@@ -335,19 +341,51 @@ export function EarningsScreen() {
                         const tier   = earningTier(e);
                         const friend = e.meta?.friend;
                         const friendShort = friend ? String(friend).split('->')[0] : null;
+                        const fofShort    = friend && friend.includes('->')
+                          ? friend.split('->')[1]
+                          : null;
+                        const tier1Rate = REWARDS.referrerSharePercent;    // 7
+                        const tier2Rate = REWARDS.chainSharePercent;       // 0.5
+                        const tier1Cap  = REWARDS.perFriend * 100;         // 25000 cents
+                        const tier2Cap  = Math.round(REWARDS.friendOfFriendBonus * 100); // 1250 cents
+                        // CERGIO-GUARD (2026-06-03): per Tarik — reframe
+                        // headline as "{Friend} booked {someone}" so the
+                        // user sees both parties. Service title isn't in
+                        // earnings.meta today; a follow-up commit can
+                        // join via source_id → invites → bookings →
+                        // services.title. For now the second name reads
+                        // as "a service".
                         let headline = 'Friend referral';
                         if (e.kind === 'spotlight') {
                           headline = `${e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram'} spotlight`;
                         } else if (e.kind === 'booking') {
                           headline = 'Service booking';
                         } else if (friendShort && tier === 'direct') {
-                          headline = `${friendShort} booked`;
+                          headline = `${friendShort} (friend) booked a service`;
+                        } else if (fofShort && tier === 'chain') {
+                          headline = `${fofShort} (friend-of-friend via ${friendShort}) booked a service`;
                         } else if (friendShort && tier === 'chain') {
-                          headline = `Chain payout via ${friendShort}`;
+                          headline = `Friend-of-friend (via ${friendShort}) booked a service`;
                         } else if (tier === 'chain') {
-                          headline = 'Chain payout';
+                          headline = 'Friend-of-friend booked a service';
                         }
-                        // Per-friend running total — used by the tally pill.
+                        // CERGIO-GUARD (2026-06-03): infer the booking
+                        // amount from the payout when we're not at the
+                        // cap. Tier 1: payout / 0.07. Tier 2: payout
+                        // / 0.005. At-cap rows skip the inferred number
+                        // and read "Tier X cap reached" instead.
+                        const cents     = e.amount_cents || 0;
+                        const atTier1Cap = tier === 'direct' && cents >= tier1Cap;
+                        const atTier2Cap = tier === 'chain'  && cents >= tier2Cap;
+                        const inferredBookingCents = tier === 'direct'
+                          ? Math.round(cents / (tier1Rate / 100))
+                          : tier === 'chain'
+                            ? Math.round(cents / (tier2Rate / 100))
+                            : null;
+                        const tierLabel  = tier === 'direct' ? 'Tier 1' : tier === 'chain' ? 'Tier 2' : null;
+                        const tierRate   = tier === 'direct' ? tier1Rate : tier2Rate;
+                        const tierCapStr = tier === 'direct' ? `${REWARDS.perFriend}` : `${REWARDS.friendOfFriendBonus}`;
+                        // Per-friend running total — drives the tally pill.
                         const friendTotal = friendShort
                           ? (perFriend.find(p => p.name === friendShort)?.total || 0)
                           : 0;
@@ -357,26 +395,33 @@ export function EarningsScreen() {
                               <p className="text-[14px] font-extrabold text-black leading-tight">
                                 {headline}
                               </p>
-                              {tier && (
-                                <span className={`text-[9.5px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-pill
-                                  ${tier === 'direct' ? 'bg-gl text-gd' : 'bg-warnBg text-warnText'}`}>
-                                  {tier === 'direct' ? 'Direct' : 'Chain +5%'}
+                              {tierLabel && (
+                                <span
+                                  className={`text-[9.5px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-pill
+                                    ${tier === 'direct' ? 'bg-gl text-gd' : 'bg-warnBg text-warnText'}`}
+                                  title={`${tierLabel}: ${tierRate}% per booking, up to ${tierCapStr} cap per friend`}
+                                >
+                                  {tierLabel} · {tierRate}% · ${tierCapStr} cap
                                 </span>
                               )}
                               {friendShort && (
                                 <FriendTallyPill name={friendShort} friendTotalCents={friendTotal} />
                               )}
                             </div>
-                            {/* Sub-line: calculation + chain origin + date + status */}
+                            {/* Sub-line: the calculation OR the cap message. */}
                             {e.kind === 'invite' && (
                               <p className="text-[11px] text-b3 mt-0.5 leading-snug">
-                                {tier === 'direct' && friendShort
-                                  ? <>{REWARDS.referrerSharePercent}% of {friendShort}&apos;s bookings · up to ${REWARDS.perFriend} cap</>
-                                  : tier === 'chain' && friend && friend.includes('->')
-                                  ? <>Friend-of-friend ({friend.split('->')[1]}) booked · {REWARDS.friendOfFriendPercent}% chain bonus</>
-                                  : tier === 'chain'
-                                  ? <>Friend-of-friend booked · {REWARDS.friendOfFriendPercent}% chain bonus</>
-                                  : <>{REWARDS.referrerSharePercent}% of friend&apos;s bookings</>}
+                                {atTier1Cap
+                                  ? <>Tier 1 cap reached — {tier1Rate}% of every booking until ${REWARDS.perFriend} per friend</>
+                                  : atTier2Cap
+                                  ? <>Tier 2 cap reached — {tier2Rate}% chain bonus until ${REWARDS.friendOfFriendBonus} per chain friend</>
+                                  : tier === 'direct' && inferredBookingCents
+                                  ? <>{tier1Rate}% of {friendShort || 'their'} ${(inferredBookingCents / 100).toFixed(0)} booking</>
+                                  : tier === 'chain' && inferredBookingCents
+                                  ? <>{tier2Rate}% of {fofShort || 'a friend-of-friend'}&apos;s ${(inferredBookingCents / 100).toFixed(0)} booking</>
+                                  : tier === 'direct'
+                                  ? <>Tier 1 — {tier1Rate}% per booking up to ${REWARDS.perFriend}</>
+                                  : <>Tier 2 — {tier2Rate}% per booking up to ${REWARDS.friendOfFriendBonus}</>}
                               </p>
                             )}
                             <p className="text-[11px] text-b3 mt-0.5 leading-snug">
@@ -581,16 +626,24 @@ export function EarningsScreen() {
 //   3. Sort control — Most recent / Top earners.
 // Pulls REWARDS.referrerSharePercent for the calculation copy so the
 // number stays in sync with the legal/payments docs.
-function ReferralsSummary({ referralRows, invitesCount, recsCount, sortMode, onSortChange }) {
+function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onSortChange, onReinvite }) {
+  void recsCount;
   const totalCents = referralRows.reduce((s, e) => s + (e.amount_cents || 0), 0);
-  // Potential cap = perFriend × number of invites (one slot per invited
-  // friend). $250 × 23 = $5,750 if Tarik has 23 invites. This is the
-  // "energizing" number — what's left on the table.
-  const perFriendCents = REWARDS.perFriend * 100;
-  const potentialCents = perFriendCents * Math.max(invitesCount, 1);
+  // CERGIO-GUARD (2026-06-04): potential math fixed per Tarik —
+  // "should be of perhaps 12k potential (or total # of friends and
+  // foff)". Each invited friend caps at perFriend ($250) PLUS the
+  // chain bonus they enable ($12.50). Use REWARDS.exampleTotal
+  // ($12,500 — Jamie's 50-friend example) as the FLOOR so new users
+  // see what's achievable; scale up only when actual invites push
+  // higher.
+  const perFriendCapCents = (REWARDS.perFriend + REWARDS.friendOfFriendBonus) * 100;
+  const inviteBasedCents  = perFriendCapCents * Math.max(inviteCounts.invited, 0);
+  const aspirationalCents = REWARDS.exampleTotal * 100;
+  const potentialCents    = Math.max(inviteBasedCents, aspirationalCents);
   const pct = potentialCents > 0
     ? Math.min(100, Math.round((totalCents / potentialCents) * 100))
     : 0;
+  const stalled = Math.max(0, inviteCounts.invited - inviteCounts.joined);
 
   // Per-friend totals — surface top 3 driving earnings.
   const friendMap = {};
@@ -609,38 +662,65 @@ function ReferralsSummary({ referralRows, invitesCount, recsCount, sortMode, onS
 
   return (
     <div className="mx-5 mb-4 bg-white border border-bdr rounded-[16px] p-4">
-      {/* Aggregates */}
-      <div className="flex items-baseline justify-between mb-1">
-        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3">
-          Your referral pool
-        </p>
-        <p className="text-[11px] text-b3 font-medium">
-          {REWARDS.referrerSharePercent}% per booking · up to ${REWARDS.perFriend}/friend
-        </p>
-      </div>
-      <p className="text-[18px] font-extrabold text-black leading-tight">
+      {/* CERGIO-GUARD (2026-06-04): redesigned per Tarik —
+          "earnings still very confusing". Three calm blocks:
+            1. Earned-to-date hero ($X of $Y) + progress bar
+            2. Funnel — Invited → Joined → Booked
+            3. Re-invite CTA when there's a stall gap
+            4. Top 3 leaderboard
+            5. Sort */}
+      {/* 1. Hero */}
+      <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3">
+        Earned to date
+      </p>
+      <p className="text-[26px] font-extrabold text-black leading-none mt-1">
         ${(totalCents / 100).toFixed(0)}
-        <span className="text-b3 font-bold text-[14px]">
-          {' '}of ${(potentialCents / 100).toLocaleString()} potential
+        <span className="text-b3 font-bold text-[14px] ml-1.5">
+          of ${(potentialCents / 100).toLocaleString()} potential
         </span>
       </p>
-      {/* Progress bar — green to mint */}
       <div className="mt-2 h-1.5 rounded-full bg-bg5 overflow-hidden">
         <div
           className="h-full bg-gradient-to-r from-g to-gd rounded-full"
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="mt-2 flex items-baseline justify-between text-[12px] text-b3">
-        <span>
-          <span className="font-extrabold text-b2">{invitesCount}</span> friends invited
-          {' · '}
-          <span className="font-extrabold text-b2">{recsCount}</span> reco&apos;d
-        </span>
-        <span className="text-gd font-extrabold">{pct}%</span>
+      <p className="text-[11px] text-b3 font-medium mt-1.5 leading-snug">
+        {REWARDS.referrerSharePercent}% per friend booking up to ${REWARDS.perFriend}, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.
+      </p>
+
+      {/* 2. Funnel — Invited → Joined → Booked */}
+      <div className="mt-4 pt-3 border-t border-bdr">
+        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-2">
+          Friends funnel
+        </p>
+        <div className="flex items-center justify-between gap-1.5 text-center">
+          {[
+            { label: 'Invited', n: inviteCounts.invited },
+            { label: 'Joined',  n: inviteCounts.joined },
+            { label: 'Booked',  n: inviteCounts.booked },
+          ].map((stage, i) => (
+            <div key={stage.label} className="flex-1 flex items-center gap-1.5">
+              <div className="flex-1 bg-bg5 rounded-[10px] py-1.5">
+                <p className="text-[18px] font-extrabold text-black leading-none">{stage.n}</p>
+                <p className="text-[10.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">{stage.label}</p>
+              </div>
+              {i < 2 && <span className="text-b3 text-[11px] font-extrabold">→</span>}
+            </div>
+          ))}
+        </div>
+        {stalled > 0 && (
+          <button
+            type="button"
+            onClick={onReinvite}
+            className="mt-2.5 text-meta-sm text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+          >
+            Re-invite {stalled} {stalled === 1 ? 'friend who hasn’t joined' : 'friends who haven’t joined'} →
+          </button>
+        )}
       </div>
 
-      {/* Top contributors */}
+      {/* 3. Top contributors */}
       {top3.length > 0 && (
         <div className="mt-4 pt-3 border-t border-bdr">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-1.5">
@@ -663,7 +743,7 @@ function ReferralsSummary({ referralRows, invitesCount, recsCount, sortMode, onS
         </div>
       )}
 
-      {/* Sort */}
+      {/* 4. Sort */}
       <div className="mt-4 pt-3 border-t border-bdr flex items-center gap-2">
         <span className="text-[11px] font-extrabold uppercase tracking-widest text-b3">Sort</span>
         <button
@@ -698,7 +778,7 @@ function FriendTallyPill({ name, friendTotalCents }) {
     <span
       className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold rounded-pill px-1.5 py-0.5
                   ${maxedOut ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}
-      title={`${name}: $${(friendTotalCents/100).toFixed(0)} of $${REWARDS.perFriend} cap`}
+      title={`${name}: $${(friendTotalCents/100).toFixed(0)} of ${REWARDS.perFriend} cap`}
     >
       ${(friendTotalCents/100).toFixed(0)}/${REWARDS.perFriend}
       {maxedOut && <span aria-hidden="true">✓</span>}

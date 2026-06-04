@@ -1433,6 +1433,28 @@ export async function amIFollowing(targetId) {
 }
 
 /**
+ * CERGIO-GUARD (2026-06-04): invite lifecycle counters per Tarik —
+ * "where's the friend count and services invited VS Join". Returns
+ * { invited, joined, booked } pulled from invites table timestamps.
+ * Used by the EarningsScreen ReferralsSummary header.
+ */
+export async function getMyInviteCounts() {
+  if (!supabaseReady) return { data: { invited: 0, joined: 0, booked: 0 }, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: { invited: 0, joined: 0, booked: 0 }, error: null };
+  const { data, error } = await supabase
+    .from('invites')
+    .select('id, joined_at, first_booking_at')
+    .eq('inviter_id', userRes.user.id);
+  if (error) return { data: { invited: 0, joined: 0, booked: 0 }, error };
+  const rows = data || [];
+  const invited = rows.length;
+  const joined  = rows.filter(r => r.joined_at).length;
+  const booked  = rows.filter(r => r.first_booking_at).length;
+  return { data: { invited, joined, booked }, error: null };
+}
+
+/**
  * Return the set of profile ids the signed-in user follows. Used to
  * compute is_friend on the social feed + reco surfaces.
  */
