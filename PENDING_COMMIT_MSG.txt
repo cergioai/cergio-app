@@ -1,44 +1,69 @@
-feat(profile): user headline + bio, rendered on Profile + PublicProfile
+bundle(profile-ia + spotlight-cards + headline-bio)
 
-Tarik 2026-06-05: "add ability for users to add a headline and a bio."
+Three Tarik items shipped together so the Profile + Inbox surfaces
+update in one Vercel deploy.
 
-Schema:
-  • New profiles.headline (text, ≤120c) via idempotent migration
-    db/migrations/2026-06-05-profile-headline.sql.
-  • profiles.bio already exists (in schema-v1.sql) — no schema change.
+1. Profile headline + bio (was queued, now in this commit)
+   • profiles.headline column via idempotent migration
+     db/migrations/2026-06-05-profile-headline.sql + Apply Profile
+     Headline Migration.command runner. profiles.bio already existed.
+   • EditProfileModal: Headline (120c) + Bio (500c) fields w/ char
+     counters. Saves to profiles via RLS-safe UPDATE. Defensive: if
+     the headline column hasn't been migrated, error message includes
+     "run Apply Profile Headline Migration.command" and the typed copy
+     stays in the form for retry.
+   • ProfileScreen hero shows headline below greeting.
+   • PublicProfileScreen renders headline beside display name; Bio
+     keeps its existing About-section slot.
 
-Migration runner:
-  • Apply Profile Headline Migration.command
-    Loads DATABASE_URL from cergio-app/.env.local and runs psql -f.
-    Idempotent — safe to re-run.
+2. Profile IA — global header counts + per-section counts
+   Tarik: "for each header need to include related #'s (earnings,
+   friend invites, reco's etc.) and global above by name (followers,
+   friends reco's…)."
+   • New 4-tile stats strip below the Switch CTA: Followers · Friends
+     · Reco'd · Earned ($). Each tile routes into the matching tracker
+     (PublicProfileScreen / InviteTracking / RecoTracking / Earnings).
+     Hidden for guests.
+   • Per-section summaries now lead with the user's own numbers:
+       Earn & grow → "N invited · M reco'd · $250/friend"
+       Connector   → "IG · TikTok rate card live — spotlight requests welcome"
+       Services    → "N listed · M booked · manage + payouts"
+       Account     → "Profile · headline · bio · payments · privacy"
+   • Hero value cell on Earn shows real $earned, not the placeholder $0.
+   • Stats fetched in a single Promise.all on mount via the existing
+     getPublicProfileStats + getMyEarnings helpers — no new endpoints.
 
-EditProfileModal (used by ProfileScreen → Account & settings →
-View and edit profile):
-  • Two new fields: Headline (120c cap, single line, char counter)
-    and Bio (500c cap, 4-row textarea, char counter).
-  • Saves to profiles via supabase.from('profiles').update — RLS
-    already pins UPDATE to auth.uid() = id.
-  • If the headline column hasn't been migrated, the error message
-    is surfaced verbatim with a "run the migration" hint so Tarik
-    knows to run Apply Profile Headline Migration.command. The
-    user's typed copy stays in the form for a retry.
-  • Display name + phone continue to save via auth.updateUser.
+3. Spotlight inbox restructure
+   Tarik: "this needs to click to profile of the service asking for
+   free spotlight ... bio added by provider.. and msg Jane is
+   requesting to offer you a free personal training session in return
+   to IG post." Also: "this shouldn't be under sent with ability to
+   accept (since it's the one I sent to counter)."
 
-ProfileScreen hero:
-  • Pulls profiles.headline on mount; renders it as a one-line
-    subtitle between "Hi {firstName}!" and the Connector/Member pill.
-  • Defensive fetch — column-missing errors are swallowed.
+   InboundCard (Connector view of incoming spotlight asks):
+   • Whole header is now a button → /u/{provider.id}. Tap drills into
+     the provider's PublicProfileScreen with their headline + bio.
+   • Dense "For service / Rate card / You earn" block collapsed into
+     ONE human sentence keyed on free-vs-paid:
+       free → "Jane is offering you a free Personal Trainer session
+              in return for an IG post."
+       paid → "Jane wants an IG post for their Personal Trainer
+              listing — $500 ($450 to you, after 10% fee)."
+   • Provider's headline (when set) renders as a small subtitle so the
+     viewer's eye lands on a person first, price last.
+   • listMyInboundSpotlightRequests now joins services.owner_id +
+     taxonomy_provider_type and hydrates the provider profile in a
+     second pass so display_name + headline are available client-side.
 
-PublicProfileScreen:
-  • Profile SELECT now includes headline.
-  • Headline renders beside the display name (below it on mobile,
-    above the role/Connector pill row) so viewers see the user's
-    own positioning before the platform-derived badges.
-  • Bio continues to render in the existing About section.
+   OutboundCard (Provider's Sent tab):
+   • Action set fix: Accept never appears on your own counter.
+     - Connector countered (their offer on the table) → Decline/Counter/
+       Accept stays (you respond as provider).
+     - Provider countered last OR last_counter_by is null → "Waiting on
+       Connector…" + Withdraw counter button.
+   • Removed the latent "accept your own $3 counter" bug Tarik flagged.
 
-Verified: scripts/qa.mjs 41/41 PASS · JSX parses clean on all 3 files.
+Verified: scripts/qa.mjs 41/41 PASS · JSX parses clean on all touched files.
 
-Next iteration (queued, not in this commit):
-  • Profile IA — per-section counts + global header (#196).
-  • Spotlight request rows — route to service profile, cleaner msg,
-    Sent-side action-set fix (#194, #195).
+Migration to run AFTER push lands:
+  Apply Profile Headline Migration.command

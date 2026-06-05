@@ -170,48 +170,108 @@ export function ConnectorRequestsScreen() {
   );
 }
 
+// CERGIO-GUARD (2026-06-05): InboundCard restructured per Tarik —
+// "this needs to click to profile of the service asking for free
+// spotlight ... bio added by provider.. and msg Jane is requestiong to
+// offer you a free personal training session in return to IG post ..
+// make succinct and solid". Three shifts:
+//   1. The whole card body (above the action row) is a Link to
+//      /u/{provider.id} so a tap drills into the provider's profile
+//      (where the viewer can see their headline + bio + services).
+//   2. The dense "For service / Rate card / You earn" block collapses
+//      into ONE succinct sentence keyed on free-vs-paid:
+//        free  → "Jane is offering you a free Personal Trainer session
+//                 in return for an IG post."
+//        paid  → "Jane is asking for an IG post — rate card $500
+//                 ($450 to you after 10% Cergio fee)."
+//   3. Provider headline (when set) renders as a small subtitle so
+//      the viewer's eye lands on a person, not a price.
+//
+// Action row sits below the Link so taps on Accept/Counter/Decline don't
+// accidentally trigger the profile drill.
 function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted }) {
+  const navigate = useNavigate();
   const pill = STATUS_PILL[r.status] || STATUS_PILL.pending;
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
-  const effective = r.offered_price_cents ?? r.official_price_cents;
+  const effective = r.offered_price_cents ?? r.official_price_cents ?? 0;
   // Connector's turn to act: pending (initial request) OR provider just countered.
   // If Connector themselves countered (last_counter_by='connector'), waiting on Provider.
   const isMyTurn =
     r.status === 'pending' ||
     (r.status === 'countered' && r.last_counter_by === 'provider');
+
+  // Provider context for the headline + drill-to-profile.
+  const providerName = r.provider?.display_name || r.service?.title || 'A provider';
+  const providerFirst = providerName.split(' ')[0];
+  const providerHeadline = r.provider?.headline || null;
+  // Service-type label — prefer the formal taxonomy (Personal Trainer,
+  // Plumber), fall back to the listing title (Trainer at Beach Park).
+  const serviceLabel =
+    r.service?.taxonomy_provider_type ||
+    r.service?.title ||
+    'service';
+  const isFree = effective === 0;
+
+  // Tappable profile target — service.owner_id when present, else
+  // spotlight_requests.provider_id. If neither resolves we silently
+  // disable the drill so the card never dead-ends.
+  const profileTarget = r.provider?.id || r.service?.owner_id || null;
+  const onCardTap = () => {
+    if (profileTarget) navigate(`/u/${profileTarget}`);
+  };
+
   return (
     <div className="bg-white border border-bdr rounded-[18px] p-4">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1">
-          <p className="text-[15px] font-extrabold text-black leading-tight">
-            {platformLabel} spotlight request
-          </p>
-          <p className="text-[11px] text-b3 mt-0.5">{timeAgo(r.created_at)}</p>
+      {/* Tappable header — drills into provider profile */}
+      <button
+        type="button"
+        onClick={onCardTap}
+        disabled={!profileTarget}
+        className="w-full text-left -m-1 p-1 rounded-[14px] hover:bg-bg5/30 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
+      >
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-extrabold text-black leading-tight">
+              {providerName}
+            </p>
+            {providerHeadline && (
+              <p className="text-[11.5px] text-b3 mt-0.5 leading-snug truncate">
+                {providerHeadline}
+              </p>
+            )}
+            <p className="text-[11px] text-b3 mt-0.5">
+              {platformLabel} spotlight · {timeAgo(r.created_at)}
+            </p>
+          </div>
+          <span className={`${pill.bg} ${pill.text} rounded-pill px-2.5 py-0.5 text-[11px] font-extrabold whitespace-nowrap`}>
+            {pill.label}
+          </span>
         </div>
-        <span className={`${pill.bg} ${pill.text} rounded-pill px-2.5 py-0.5 text-[11px] font-extrabold whitespace-nowrap`}>
-          {pill.label}
-        </span>
-      </div>
-      {r.service?.title && (
-        <p className="text-[12px] text-b3 mb-2">
-          For service: <strong className="text-black">{r.service.title}</strong>
+
+        {/* Succinct, human offer line — free vs paid */}
+        <p className="text-[13.5px] text-black leading-snug mb-2">
+          {isFree ? (
+            <>
+              <strong>{providerFirst}</strong> is offering you a <strong>free {serviceLabel}</strong> session in return for {platformLabel === 'TikTok' ? 'a TikTok' : 'an IG'} post.
+            </>
+          ) : (
+            <>
+              <strong>{providerFirst}</strong> wants {platformLabel === 'TikTok' ? 'a TikTok' : 'an Instagram'} post for their <strong>{serviceLabel}</strong> listing —{' '}
+              <span className="font-extrabold">{fmtDollars(effective)}</span>{' '}
+              <span className="text-b3">({fmtDollars(sellerEarningsCents(effective))} to you, after {Math.round(PLATFORM_FEE_RATE * 100)}% fee)</span>.
+            </>
+          )}
         </p>
-      )}
-      {r.message && (
-        <p className="text-[13px] text-b2 leading-relaxed mb-3 line-clamp-3">"{r.message}"</p>
-      )}
-      <div className="bg-bg5/60 rounded-[12px] px-3 py-2 mb-3">
-        <div className="flex items-center justify-between text-[12px]">
-          <span className="text-b2">{r.status === 'countered' ? 'Your counter' : 'Rate card'}</span>
-          <span className="font-extrabold text-black">{fmtDollars(effective)}</span>
-        </div>
-        <div className="flex items-center justify-between text-[11px] text-b3 mt-0.5">
-          <span>You earn</span>
-          <span>{fmtDollars(sellerEarningsCents(effective))} (after {Math.round(PLATFORM_FEE_RATE * 100)}% fee)</span>
-        </div>
-      </div>
+
+        {r.message && (
+          <p className="text-[12.5px] text-b2 leading-snug mb-2 line-clamp-3 italic">
+            &ldquo;{r.message}&rdquo;
+          </p>
+        )}
+      </button>
+
       {isMyTurn && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-2">
           <button onClick={onDecline}
             className="flex-1 bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
             Decline
@@ -294,7 +354,19 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
         </div>
       </div>
 
-      {/* Connector countered → Provider's turn (Accept · Counter back · Decline) */}
+      {/* CERGIO-GUARD (2026-06-05): Sent-side action set fix.
+          Tarik: "this shouldn't be under sent with ability to accept
+          (since it's the one I sent to counter)". The original code
+          gated Accept on last_counter_by === 'connector', but if that
+          stamp was null/missing the row still rendered Decline/Counter/
+          Accept — letting the provider Accept their own counter, which
+          is nonsense.
+          Resolution:
+            • Connector countered (their offer on the table) → Accept/
+              Counter back/Decline (this is YOUR turn as provider).
+            • Provider countered last → wait + Cancel/Withdraw option.
+            • Status unknown / last_counter_by missing → wait + Cancel.
+          The result: Accept never appears on YOUR own counter. */}
       {r.status === 'countered' && r.last_counter_by === 'connector' && (
         <div className="flex gap-2">
           <button onClick={onDecline}
@@ -311,11 +383,19 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
           </button>
         </div>
       )}
-      {/* Provider countered → waiting on Connector */}
-      {r.status === 'countered' && r.last_counter_by === 'provider' && (
-        <p className="text-[12px] text-b3 text-center font-medium">
-          Waiting on Connector to respond to your counter of {fmtDollars(r.offered_price_cents)}…
-        </p>
+      {/* Provider countered last → waiting on Connector. Show the
+          waiting note + a Cancel action so the user can withdraw their
+          counter if they change their mind. */}
+      {r.status === 'countered' && r.last_counter_by !== 'connector' && (
+        <>
+          <p className="text-[12px] text-b3 text-center font-medium mb-2">
+            Waiting on Connector to respond to your counter of {fmtDollars(r.offered_price_cents)}…
+          </p>
+          <button onClick={onCancel}
+            className="w-full bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
+            Withdraw counter
+          </button>
+        </>
       )}
       {r.status === 'pending' && (
         <button onClick={onCancel}

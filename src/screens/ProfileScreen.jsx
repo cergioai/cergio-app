@@ -26,6 +26,7 @@ import { PROFILE } from '../data/mock';
 import {
   getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok,
   getMySpotlightPrices, listMyServices,
+  getPublicProfileStats, getMyEarnings,
 } from '../lib/api';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { useProviderReady } from '../hooks/useProviderReady';
@@ -191,12 +192,24 @@ export function ProfileScreen() {
   // hero only shows the headline (the longer bio belongs on the public
   // surface where viewers are deciding whether to engage).
   const [headline, setHeadline] = useState('');
+  const [followerCount, setFollowerCount] = useState(0);
+  // CERGIO-GUARD (2026-06-05): per-section counts + global stats strip
+  // per Tarik: "for each header need to include related #'s (earnings,
+  // friend invites, reco's etc.) and global above by name (followers,
+  // friends reco's…)". One Promise.all on mount keeps the screen snappy
+  // and avoids cascading skeleton states.
+  const [stats, setStats] = useState({
+    invited: 0, joined: 0, booked: 0, recommended: 0, listedServices: 0,
+  });
+  const [earningsTotalCents, setEarningsTotalCents] = useState(0);
 
   useEffect(() => {
     if (!isSignedIn) {
       setIg(null); setTt(null); setSpotlightPrices(null);
       setHasService(false); setServiceCount(0);
-      setHeadline('');
+      setHeadline(''); setFollowerCount(0);
+      setStats({ invited: 0, joined: 0, booked: 0, recommended: 0, listedServices: 0 });
+      setEarningsTotalCents(0);
       return;
     }
     getMyInstagram().then(({ data }) => setIg(data || null));
@@ -207,18 +220,32 @@ export function ProfileScreen() {
       setHasService(n > 0);
       setServiceCount(n);
     });
-    // Pull the user's headline — defensive: column may not exist if the
-    // migration hasn't been applied yet, in which case the hero just
-    // shows the Member/Connector pill row with no subtitle.
+    // Stats — invites/joined/booked/recommended/listedServices counts
+    // for the user's own profile id, plus a follower count from
+    // profiles.follower_count (column already used across api.js).
+    if (u?.id) {
+      getPublicProfileStats(u.id).then(({ data }) => {
+        if (data) setStats(data);
+      });
+      getMyEarnings({ limit: 500 }).then(({ data }) => {
+        const cents = (data || []).reduce((sum, e) => sum + (e.amount_cents || 0), 0);
+        setEarningsTotalCents(cents);
+      });
+    }
+    // Pull the user's headline + follower_count — defensive: column
+    // may not exist if the migration hasn't been applied yet, in which
+    // case the hero just shows the Member/Connector pill row with no
+    // subtitle and follower count stays 0.
     if (supabaseReady && u?.id) {
       supabase
         .from('profiles')
-        .select('headline')
+        .select('headline, follower_count')
         .eq('id', u.id)
         .maybeSingle()
         .then(({ data, error }) => {
           if (error) return;
           if (data?.headline) setHeadline(data.headline);
+          if (data?.follower_count != null) setFollowerCount(data.follower_count);
         });
     }
   }, [isSignedIn, u?.id]);
@@ -314,7 +341,7 @@ export function ProfileScreen() {
       </div>
 
       {/* ── Switch view CTA — primary action, kept at top ──────────────── */}
-      <div className="px-5 mt-3 mb-5">
+      <div className="px-5 mt-3 mb-3">
         <button
           onClick={() => {
             setServiceMode(!serviceMode);
@@ -327,13 +354,72 @@ export function ProfileScreen() {
         </button>
       </div>
 
+      {/* ── Global stats strip ─────────────────────────────────────────────
+          CERGIO-GUARD (2026-06-05): four-tile bar Tarik asked for —
+          "global above by name (followers, friends reco's…)". Mirrors
+          the by-the-numbers block on PublicProfileScreen so the user's
+          own view + their public view agree at a glance. Tiles route
+          straight into the relevant tracking screen. Hidden for
+          guests. */}
+      {isSignedIn && (
+        <div className="mx-5 mb-5 grid grid-cols-4 gap-1.5">
+          <button
+            type="button"
+            onClick={() => navigate(`/u/${u.id}`)}
+            className="bg-white border border-bdr rounded-[12px] py-2 px-1 text-center hover:bg-bg5/40 transition-colors"
+            title="Your follower count — tap to view your public profile"
+          >
+            <p className="text-[16px] font-extrabold text-black leading-none">{fmtFollowers(followerCount)}</p>
+            <p className="text-[9px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Followers</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/earnings/invites')}
+            className="bg-white border border-bdr rounded-[12px] py-2 px-1 text-center hover:bg-bg5/40 transition-colors"
+            title={`${stats.invited} friends invited — tap to track`}
+          >
+            <p className="text-[16px] font-extrabold text-black leading-none">{stats.invited}</p>
+            <p className="text-[9px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Friends</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(stats.recommended > 0 ? '/earnings/recos' : '/invite/recommend')}
+            className="bg-white border border-bdr rounded-[12px] py-2 px-1 text-center hover:bg-bg5/40 transition-colors"
+            title={`${stats.recommended} reco'd — tap to review`}
+          >
+            <p className="text-[16px] font-extrabold text-black leading-none">{stats.recommended}</p>
+            <p className="text-[9px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Reco&apos;d</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/earnings')}
+            className="bg-gl/60 border border-g/25 rounded-[12px] py-2 px-1 text-center hover:bg-gl transition-colors"
+            title="Lifetime earnings — tap to view ledger"
+          >
+            <p className="text-[16px] font-extrabold text-gd leading-none">${Math.round(earningsTotalCents / 100)}</p>
+            <p className="text-[9px] font-extrabold uppercase tracking-wide text-gd mt-0.5">Earned</p>
+          </button>
+        </div>
+      )}
+
       {/* ── Grouped cards ──────────────────────────────────────────────── */}
       <div className="px-5">
+        {/* CERGIO-GUARD (2026-06-05): each section header now includes
+            related counts per Tarik — "for each header need to include
+            related #'s (earnings, friend invites, reco's etc.)". The
+            summaries lead with the user's actual numbers so the section
+            reads as "here's where my N invites + M recos live", not a
+            generic feature blurb. Hero value cell still shows the
+            primary number (earnings $ for Earn, listing count for
+            Services). */}
+
         {/* Card 1 — Earn & grow */}
         <GroupCard
           title="Earn & grow"
-          summary={`Invite, recommend, see earnings — $${REWARDS.perFriend} per friend who joins + books`}
-          value="$0"
+          summary={isSignedIn
+            ? `${stats.invited} invited · ${stats.recommended} reco'd · $${REWARDS.perFriend}/friend who books`
+            : `Invite, recommend, see earnings — $${REWARDS.perFriend} per friend who joins + books`}
+          value={isSignedIn ? `$${Math.round(earningsTotalCents / 100)}` : '$0'}
           valueLabel="USD"
           accent
           onClick={() => setOpenDrawer('earn')}
@@ -344,7 +430,7 @@ export function ProfileScreen() {
           <GroupCard
             title="Connector"
             summary={hasRateCard
-              ? 'Spotlight rate card · IG · TikTok · requests'
+              ? `IG · TikTok rate card live — spotlight requests welcome`
               : `$${REWARDS.perFriendConnector} cash + free services + Growth Participation Income`}
             pill={connectorStatusPill}
             value={hasRateCard ? '✓' : 'Apply'}
@@ -358,7 +444,7 @@ export function ProfileScreen() {
           <GroupCard
             title="Services"
             summary={hasService
-              ? 'List, manage, payouts — your service listings'
+              ? `${serviceCount} listed · ${stats.booked} booked · manage + payouts`
               : 'List a new service and start receiving bookings'}
             value={hasService ? String(serviceCount) : 'New'}
             valueLabel={hasService ? (serviceCount === 1 ? 'listed' : 'listed') : ''}
@@ -369,7 +455,7 @@ export function ProfileScreen() {
         {/* Card 4 — Account & settings */}
         <GroupCard
           title="Account & settings"
-          summary="Profile · payments · privacy · about"
+          summary="Profile · headline · bio · payments · privacy"
           onClick={() => setOpenDrawer('account')}
         />
       </div>

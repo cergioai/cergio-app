@@ -1891,17 +1891,42 @@ export async function listMyOutboundSpotlightRequests({ limit = 50 } = {}) {
 }
 
 /** List requests addressed to the signed-in user (their inbound, as Connector).
- *  Joins service so the InboundCard can show "spotlight for {service title}". */
+ *  Joins service + provider profile so the InboundCard can:
+ *   • show "spotlight for {service title}" + provider taxonomy_provider_type
+ *     (for the friendly "Jane is offering you a free Personal Trainer
+ *     session in return for an IG post" rewrite — CERGIO-GUARD 2026-06-05).
+ *   • route the row to /u/{provider_id} on tap (Tarik 2026-06-05: each
+ *     spotlight row should drill into the service provider's profile,
+ *     not stay locked on the dense rate-card row).
+ *
+ *  Provider lookup happens in two passes so the join doesn't tie the
+ *  whole query to a single foreign key (spotlight_requests.provider_id
+ *  may or may not have a strict FK on every environment).
+ */
 export async function listMyInboundSpotlightRequests({ limit = 50 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
   const { data: userRes } = await supabase.auth.getUser();
   if (!userRes?.user) return { data: [], error: null };
-  return await supabase
+  const { data: rows, error } = await supabase
     .from('spotlight_requests')
-    .select('*, service:services(id, title, category)')
+    .select('*, service:services(id, title, category, taxonomy_provider_type, owner_id)')
     .eq('connector_id', userRes.user.id)
     .order('created_at', { ascending: false })
     .limit(limit);
+  if (error || !rows?.length) return { data: rows || [], error };
+
+  const providerIds = [...new Set(rows.map(r => r.provider_id).filter(Boolean))];
+  if (providerIds.length === 0) return { data: rows, error: null };
+  const { data: provProfs } = await supabase
+    .from('profiles')
+    .select('id, display_name, headline')
+    .in('id', providerIds);
+  const provMap = Object.fromEntries((provProfs || []).map(p => [p.id, p]));
+  const hydrated = rows.map(r => ({
+    ...r,
+    provider: provMap[r.provider_id] || null,
+  }));
+  return { data: hydrated, error: null };
 }
 
 /** Counter with a lower price. Either party (Connector or Provider) can
