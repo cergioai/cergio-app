@@ -22,7 +22,6 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { PROFILE } from '../data/mock';
 import {
   getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok,
   getMySpotlightPrices, listMyServices,
@@ -169,8 +168,9 @@ export function ProfileScreen() {
 
   const isSignedIn  = !!auth?.isSignedIn;
   const u           = auth?.user;
-  const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || PROFILE.name;
-  const initials    = (displayName[0] || 'T').toUpperCase();
+  // CERGIO-GUARD: no mock fallback name — signed-out shows a neutral label.
+  const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || 'Guest';
+  const initials    = (displayName[0] || '?').toUpperCase();
   const firstName   = displayName.split(/[\s@.]/)[0];
 
   // Drawers + modals

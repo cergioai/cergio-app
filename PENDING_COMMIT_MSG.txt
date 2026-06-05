@@ -1,49 +1,30 @@
-bundle(help-to-footer + cc-identity-gate-on-submit)
+Spotlight audit fixes + mock-data purge + 20-user simulated test (12/12 green)
 
-Two Tarik items shipped together.
+MOCK DATA REMOVED (no fake data on real screens):
+- CalendarScreen: dropped CALENDAR_BOOKINGS mock for signed-out viewers
+- ManageServicesScreen: signed-out gets real empty state, not Jamie/John/Steve
+- ServiceDetailProviderScreen: non-UUID ids -> not-found state, never a mock listing
+- ProfileScreen: dropped PROFILE mock fallback name
+- RainmakerRequestScreen: rewritten generic explainer (was fake "Reyna"/6,974
+  followers on a LIVE route); CTA now routes to /connectors/browse
 
-1. Remove Help from BottomNav, add to footer links
-   Tarik 2026-06-05: "remove help from nav bar and place alongside
-   company etc in the search". BottomNav back to 5 tabs (Search · Inbox ·
-   Earnings · Activity · Profile / Home · Inbox · Calendar · Earnings ·
-   Profile). Help now lives in the footer link strip alongside
-   About · Contact · Terms on Splash, Auth, and Home — same destination
-   (/contact?subject=support so the Bug-report subject is pre-selected
-   if the user picks it). Bug-pic upload affordance on Contact stays.
+SPOTLIGHT FLOW FIXES (free-swap path was deadlocked end-to-end):
+- BrowseConnectorsScreen: roster filter required a RATE CARD, silently excluding
+  every free/swap Connector -> now filters on connected social handle
+- RequestSpotlightModal: free/swap Connectors are now requestable ($0 swap);
+  service pick required so the Connector sees what they get
+- ConnectorRequestsScreen: free accepted requests no longer demand "Pay $0";
+  Mark posted no longer gated on paid_at for free swaps; Counter hidden on $0
+  asks (mathematically impossible); free-aware confirm/release copy
+- CounterSpotlightModal: role-aware breakdown ("You earn" only for Connectors;
+  providers see "You save / Connector earns")
+- notify-spotlight: free-aware email copy (no "$0 rate card" / "funds released")
+- NEW migration 20260605120000: expire sweep exempts free swaps (they are never
+  "paid" by design — old sweep auto-expired every accepted free spotlight after
+  24h) + rescues wrongly-expired rows
 
-2. CC identity gate on request + service-listing submission
-   Tarik 2026-06-05: "gate the user and services request with a Credit
-   Card addition after submission, to verify identity (your card won't
-   be charged. We need to verify your identity before connecting you
-   with our services and or connectors) to avoid bad content spam etc."
-
-   CcGateModal upgrade:
-   • New `reason` prop ('request' | 'listing' | 'photos') keys the
-     headline + body copy so the gate reads naturally from each
-     surface. Body always leads with "Your card won't be charged."
-   • photos remains the legacy default for HomeScreen (already wired).
-   • Implementation re-uses the existing Stripe SetupIntent path
-     (createSetupIntent + markCcVerified) — no new backend work.
-
-   ConfirmSubmitScreen (Step 2 — user request submit):
-   • On mount, probes profiles.cc_verified_at via getMyCcStatus.
-   • Submit button: signed-out → /auth (unchanged); unverified → opens
-     CcGateModal with reason="request"; verified → continues to
-     /roaming immediately.
-   • On successful verification, re-fires finishSubmit() so the
-     submit→search round-trip stays seamless.
-
-   ServiceListSetupScreen (final step of the list-service flow):
-   • Was: createService fired immediately on mount.
-   • Now: probe verification first → if unverified, open CcGateModal
-     with reason="listing" → on close-without-verify, bounce back so
-     no half-published draft sits behind a spam gate. On verify,
-     createService runs and the screen advances to /verify as before.
-
-Verified: scripts/qa.mjs 41/41 PASS · JSX parses clean on all 7 touched files.
-
-Note: cc_verified_at also drives is_connector inference in api.js
-helpers. Card-verified users will be treated as Connector candidates
-in those code paths. If we want to split those concerns later (a new
-identity_verified_at column), it's a contained migration — for now
-keeping a single source of truth is the smaller surface.
+TESTING:
+- New "Simulate 20 User Network.command": 20 users (10 Connectors — 5 free/swap
+  + 5 paid — 10 Providers/services), dense friend graph, tier-1+2 invite chains,
+  full free + paid spotlight lifecycles. 12/12 assertions PASS on live DB.
+- qa.mjs: 41/41 invariants pass.

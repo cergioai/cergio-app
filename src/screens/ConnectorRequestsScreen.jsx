@@ -43,7 +43,7 @@ export function ConnectorRequestsScreen() {
   const [inbound, setInbound] = useState([]);
   const [outbound, setOutbound] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [counterTarget, setCounterTarget] = useState(null);  // request open in counter modal
+  const [counterTarget, setCounterTarget] = useState(null);  // { request, role } open in counter modal
   const [payTarget,     setPayTarget]     = useState(null);  // request open in payment modal
   const [postedTarget,  setPostedTarget]  = useState(null);  // request open in "mark posted" modal
 
@@ -81,7 +81,8 @@ export function ConnectorRequestsScreen() {
   const handleConfirmPost = async (r) => {
     const { error } = await confirmSpotlightPost(r.id);
     if (error) { showToast(error.message); return; }
-    showToast('Confirmed — funds released ✓');
+    const free = (r.offered_price_cents ?? r.official_price_cents ?? 0) === 0;
+    showToast(free ? 'Post confirmed ✓' : 'Confirmed — funds released ✓');
     refresh();
   };
 
@@ -128,12 +129,12 @@ export function ConnectorRequestsScreen() {
           {list.map(r => tab === 'inbound'
             ? <InboundCard key={r.id} request={r}
                 onAccept={() => handleAccept(r)}
-                onCounter={() => setCounterTarget(r)}
+                onCounter={() => setCounterTarget({ request: r, role: 'connector' })}
                 onDecline={() => handleDecline(r)}
                 onMarkPosted={() => setPostedTarget(r)} />
             : <OutboundCard key={r.id} request={r}
                 onAccept={() => handleAccept(r)}
-                onCounter={() => setCounterTarget(r)}
+                onCounter={() => setCounterTarget({ request: r, role: 'provider' })}
                 onDecline={() => handleDecline(r)}
                 onPay={() => setPayTarget(r)}
                 onConfirmPost={() => handleConfirmPost(r)}
@@ -144,7 +145,8 @@ export function ConnectorRequestsScreen() {
 
       {counterTarget && (
         <CounterSpotlightModal
-          request={counterTarget}
+          request={counterTarget.request}
+          role={counterTarget.role}
           onClose={() => setCounterTarget(null)}
           onCountered={() => { showToast('Counter sent ✓'); refresh(); }}
         />
@@ -276,10 +278,15 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
             className="flex-1 bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
             Decline
           </button>
-          <button onClick={onCounter}
-            className="flex-1 bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
-            Counter
-          </button>
+          {/* CERGIO-GUARD: countering a $0 free-swap ask is impossible
+              (counters must be LOWER than the current ask) — hide the
+              dead button on free requests. */}
+          {!isFree && (
+            <button onClick={onCounter}
+              className="flex-1 bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-[13px] font-extrabold hover:bg-bg5/40">
+              Counter
+            </button>
+          )}
           <button onClick={onAccept}
             className="flex-1 bg-g text-white rounded-[14px] py-2.5 text-[13px] font-extrabold hover:opacity-90">
             Accept
@@ -293,12 +300,21 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
         </p>
       )}
 
-      {/* Accepted + paid → time to post (Connector action) */}
-      {r.status === 'accepted' && r.paid_at && !r.posted_at && (
+      {/* Accepted → time to post (Connector action).
+          CERGIO-GUARD (2026-06-05): the old gate required r.paid_at —
+          but FREE swaps never get paid, so the Connector could never
+          mark a free spotlight as posted and the flow deadlocked
+          forever. Free requests skip payment entirely. */}
+      {r.status === 'accepted' && !r.posted_at && (r.paid_at || isFree) && (
         <button onClick={onMarkPosted}
           className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all mt-1">
           Mark posted
         </button>
+      )}
+      {r.status === 'accepted' && !r.posted_at && !r.paid_at && !isFree && (
+        <div className="bg-bg5 text-b2 rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center mt-1">
+          Accepted · awaiting provider payment
+        </div>
       )}
       {r.status === 'accepted' && r.posted_at && !r.confirmed_at && (
         <div className="bg-warnBg border border-warn/40 text-warnText rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center mt-1">
@@ -307,7 +323,7 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
       )}
       {r.confirmed_at && (
         <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center mt-1">
-          Funds released
+          {isFree ? 'Confirmed ✓' : 'Funds released'}
         </div>
       )}
     </div>
@@ -319,6 +335,10 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
   const isCountered = r.status === 'countered' && r.offered_price_cents != null;
   const savings = isCountered ? Math.max(0, r.official_price_cents - r.offered_price_cents) : 0;
+  // CERGIO-GUARD (2026-06-05): free swap = $0 effective price. No payment
+  // step, no fees, no "Pay $0" dead-end (Stripe rejects $0 intents).
+  const effective = r.offered_price_cents ?? r.official_price_cents ?? 0;
+  const isFree = effective === 0;
   return (
     <div className="bg-white border border-bdr rounded-[18px] p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -335,12 +355,12 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
 
       <div className="bg-bg5/60 rounded-[12px] px-3 py-2 mb-3">
         <div className="flex items-center justify-between text-[12px]">
-          <span className="text-b2">{isCountered ? 'Counter-offer' : 'Asking price'}</span>
+          <span className="text-b2">{isFree ? 'Free swap' : isCountered ? 'Counter-offer' : 'Asking price'}</span>
           <span className="font-extrabold text-black">
-            {fmtDollars(isCountered ? r.offered_price_cents : r.official_price_cents)}
+            {isFree ? 'Service for post' : fmtDollars(isCountered ? r.offered_price_cents : r.official_price_cents)}
           </span>
         </div>
-        {isCountered && (
+        {isCountered && !isFree && (
           <div className="flex items-center justify-between text-[11px] mt-1">
             <span className="text-gd font-bold">Save vs official</span>
             <span className="text-gd font-extrabold">
@@ -348,10 +368,12 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between text-[11px] text-b3 mt-0.5">
-          <span>Includes {Math.round(PLATFORM_FEE_RATE * 100)}% Cergio fee</span>
-          <span>{fmtDollars(platformFeeCents(isCountered ? r.offered_price_cents : r.official_price_cents))}</span>
-        </div>
+        {!isFree && (
+          <div className="flex items-center justify-between text-[11px] text-b3 mt-0.5">
+            <span>Includes {Math.round(PLATFORM_FEE_RATE * 100)}% Cergio fee</span>
+            <span>{fmtDollars(platformFeeCents(isCountered ? r.offered_price_cents : r.official_price_cents))}</span>
+          </div>
+        )}
       </div>
 
       {/* CERGIO-GUARD (2026-06-05): Sent-side action set fix.
@@ -403,16 +425,17 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
           Cancel request
         </button>
       )}
-      {/* Pay button appears once the request is accepted but not yet paid */}
-      {r.status === 'accepted' && !r.paid_at && (
+      {/* Pay button appears once the request is accepted but not yet
+          paid. FREE swaps skip payment entirely — no $0 PaymentIntent. */}
+      {r.status === 'accepted' && !r.paid_at && !isFree && (
         <button onClick={onPay}
           className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all">
-          Pay {fmtDollars(r.offered_price_cents ?? r.official_price_cents)} to confirm
+          Pay {fmtDollars(effective)} to confirm
         </button>
       )}
-      {r.status === 'accepted' && r.paid_at && !r.posted_at && (
+      {r.status === 'accepted' && !r.posted_at && (r.paid_at || isFree) && (
         <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center">
-          Paid · awaiting post
+          {isFree ? 'Free swap accepted · awaiting post' : 'Paid · awaiting post'}
         </div>
       )}
       {/* Connector posted → Provider needs to confirm */}
@@ -426,13 +449,13 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
           )}
           <button onClick={onConfirmPost}
             className="w-full bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all">
-            Confirm · release funds
+            {isFree ? 'Confirm post' : 'Confirm · release funds'}
           </button>
         </div>
       )}
       {r.confirmed_at && (
         <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-[12px] font-extrabold text-center mt-1">
-          Confirmed · released
+          {isFree ? 'Confirmed ✓' : 'Confirmed · released'}
         </div>
       )}
     </div>

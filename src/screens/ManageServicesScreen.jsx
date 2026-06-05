@@ -1,8 +1,7 @@
 // Per design-spec.md — provider manages their listed services.
-// Pulls real data from Supabase when signed in; falls back to mock otherwise.
+// Real Supabase data only — no mock fallback (CERGIO-GUARD: no fake data).
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { MANAGED_SERVICES } from '../data/mock';
 import { listMyServices } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 
@@ -29,8 +28,10 @@ export function ManageServicesScreen() {
   };
 
   useEffect(() => {
+    // CERGIO-GUARD: signed-out viewers get the real empty state, never
+    // the Jamie/John/Steve mock listings (no fake data on real screens).
     if (!auth?.isSignedIn) {
-      setServices('mock');
+      setServices([]);
       return;
     }
     let cancelled = false;
@@ -60,9 +61,8 @@ export function ManageServicesScreen() {
     );
   }
 
-  const useMock = services === 'mock';
-  const listed  = useMock ? MANAGED_SERVICES.listed      : services.filter(s => s.status === 'listed');
-  const drafts  = useMock ? MANAGED_SERVICES.unpublished : services.filter(s => s.status === 'draft');
+  const listed = services.filter(s => s.status === 'listed');
+  const drafts = services.filter(s => s.status === 'draft');
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
@@ -77,7 +77,7 @@ export function ManageServicesScreen() {
         <h1 className="text-[18px] font-extrabold text-white">Manage Services</h1>
       </div>
 
-      {!useMock && listed.length === 0 && drafts.length === 0 && (
+      {listed.length === 0 && drafts.length === 0 && (
         <div className="px-5 pt-10 text-center">
           <p className="text-[18px] font-extrabold text-black">No services yet</p>
           <p className="text-[14px] text-b3 mt-2 mb-6">List your first service to start receiving bookings.</p>

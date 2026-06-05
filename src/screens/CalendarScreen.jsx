@@ -1,9 +1,8 @@
 // Per design-spec.md — provider Calendar: date strip + hourly day view.
-// Fetches real bookings when signed in; falls back to mock data otherwise.
+// Real bookings only — no mock fallback (CERGIO-GUARD: no fake data).
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
-import { CALENDAR_DAYS, CALENDAR_BOOKINGS } from '../data/mock';
 import { listProviderBookings } from '../lib/api';
 
 const STATUS = {
@@ -91,12 +90,9 @@ export function CalendarScreen() {
   const status   = STATUS[day.status];
   const todays   = bucketed[day.id] || [];
 
-  // Only use mock blocks for signed-out demo viewers. Signed-in users with
-  // zero bookings get a real empty state below.
-  const usingMock = !auth?.isSignedIn;
-  const blocks    = usingMock
-    ? CALENDAR_BOOKINGS
-    : todays.map(b => {
+  // CERGIO-GUARD: no mock blocks for anyone — signed-out viewers and
+  // signed-in users with zero bookings both get the real empty state.
+  const blocks = todays.map(b => {
         const dt   = new Date(b.scheduled_at);
         const hour = dt.getHours();
         // Prefer the offering's session length; fall back to 60 min for hourly bookings.
@@ -167,7 +163,7 @@ export function CalendarScreen() {
       </button>
 
       {/* empty state when this day has nothing */}
-      {!usingMock && blocks.length === 0 && (
+      {blocks.length === 0 && (
         <div className="px-5 py-10 text-center">
           <p className="text-[14px] text-b3 leading-relaxed">
             No bookings on this day.<br />

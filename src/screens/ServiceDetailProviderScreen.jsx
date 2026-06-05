@@ -1,17 +1,12 @@
 // Per design-spec.md — Provider's view of a service they offer.
-// Pulls real data from Supabase when the id is a UUID; falls back to mock
-// for non-UUID ids (e.g. `svc-u1`, `svc-l1` from MANAGED_SERVICES mock).
+// Real Supabase data only. Non-UUID ids (old mock ids like `svc-u1`)
+// render the not-found state — CERGIO-GUARD: no fake data.
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
-import { MANAGED_SERVICES } from '../data/mock';
 import { getService, unlistService, relistService, deleteService, updateService } from '../lib/api';
 import { uploadAndPersistServiceCover } from '../lib/storage';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function findMockService(id) {
-  return [...MANAGED_SERVICES.unpublished, ...MANAGED_SERVICES.listed].find(s => s.id === id);
-}
 
 function centsToPrice(cents) {
   if (cents == null) return '—';
@@ -107,7 +102,9 @@ export function ServiceDetailProviderScreen() {
         }
       });
     } else {
-      setSvc(findMockService(id) || MANAGED_SERVICES.listed[0]);
+      // Non-UUID id — nothing real to show. Never fall back to a mock
+      // listing the provider doesn't own.
+      setSvc({ id, real: false, notFound: true });
       setLoading(false);
     }
 

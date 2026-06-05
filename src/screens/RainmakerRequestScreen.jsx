@@ -1,27 +1,22 @@
 // Per design-spec.md — uses tokens only.
-// Provider-facing: a Connector is asking to feature this provider's service.
-import { useNavigate, useOutletContext } from 'react-router-dom';
+// Provider-facing explainer: what working with a Connector gets you.
+// CERGIO-GUARD: rewritten to remove fake-user data (was "Reyna",
+// "Gervon", 6,974 followers). This screen is reached as a generic
+// "Learn more" from listing-verify / social-posts, so it must not
+// impersonate a specific Connector. CTA routes to the real Connector
+// browse screen instead of a dead-end toast.
+import { useNavigate } from 'react-router-dom';
 
-const REQUEST = {
-  rainmakerName: 'Reyna',
-  instagramHandle: 'ReynaReynolds',
-  followerCount: 6974,
-  instagramBenefitText: "Gervon's network on Instagram",
-  verificationBenefitText: "Your profile will be public on Cergio's search",
-};
-
-function getInitials(name) {
-  return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
-}
-
-function RainmakerAvatar({ name }) {
+function HeroBadge() {
   return (
     <div className="relative w-32 h-32">
-      {/* main avatar — gradient circle with initials */}
-      <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050]
-                      flex items-center justify-center text-white text-[36px] font-extrabold
-                      shadow-card">
-        {getInitials(name)}
+      {/* brand circle with megaphone glyph */}
+      <div className="w-32 h-32 rounded-full bg-gl flex items-center justify-center shadow-card">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none"
+             stroke="#3D8B00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 11l18-7v16L3 13v-2z" fill="rgba(61,139,0,0.12)" />
+          <path d="M7 13v5a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3" />
+        </svg>
       </div>
       {/* brand-shield badge bottom-right */}
       <div className="absolute -bottom-1 -right-1 w-11 h-11 rounded-full bg-g
@@ -58,8 +53,6 @@ function BenefitRow({ title, subtitle }) {
 
 export function RainmakerRequestScreen() {
   const navigate = useNavigate();
-  const { showToast } = useOutletContext();
-  const { rainmakerName, followerCount, instagramBenefitText, verificationBenefitText } = REQUEST;
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-20 overflow-y-auto">
@@ -75,48 +68,43 @@ export function RainmakerRequestScreen() {
         </button>
       </div>
 
-      {/* hero avatar */}
+      {/* hero badge */}
       <div className="flex flex-col items-center pt-6 pb-8">
-        <RainmakerAvatar name={rainmakerName} />
+        <HeroBadge />
       </div>
 
       {/* headline */}
       <h1 className="text-[26px] font-extrabold text-black text-center leading-tight px-7 mb-3">
-        {rainmakerName} wants to market your services
+        Get spotlighted by a Connector
       </h1>
 
       {/* sub */}
       <p className="text-[15px] text-b3 text-center leading-relaxed px-7 mb-9">
-        {rainmakerName} is a <span className="text-g font-extrabold">Cergio Connector</span>.
-        Offer a free service in exchange for the following benefits:
+        <span className="text-g font-extrabold">Cergio Connectors</span> have
+        large Instagram and TikTok audiences. Offer a free service in
+        exchange for the following benefits:
       </p>
 
       {/* benefits */}
       <div className="px-7 flex flex-col gap-7 flex-1">
         <BenefitRow
-          title={`Instagram post to ${followerCount.toLocaleString()} followers`}
-          subtitle={instagramBenefitText}
+          title="A post to their followers"
+          subtitle="Your service featured on the Connector's Instagram or TikTok"
         />
         <BenefitRow
           title="Instant verification"
-          subtitle={verificationBenefitText}
+          subtitle="Your profile will be public on Cergio's search"
         />
       </div>
 
-      {/* CTA + secondary */}
+      {/* CTA */}
       <div className="px-5 pt-8 pb-6">
         <button
-          onClick={() => { showToast('Accepted! Send a message to confirm.'); }}
+          onClick={() => navigate('/connectors/browse')}
           className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
-          Let's do it
-        </button>
-        <button
-          onClick={() => showToast('Recent posts — coming next batch')}
-          className="w-full text-center text-[14px] font-extrabold text-g pt-4"
-        >
-          See recent posts by Connectors
+          Browse Connectors
         </button>
       </div>
     </div>

@@ -10,13 +10,20 @@ import { PLATFORM_FEE_RATE, platformFeeCents, sellerEarningsCents, fmtDollars } 
 const fmtPrice = fmtDollars;
 
 export function RequestSpotlightModal({ connector, onClose, onSent }) {
-  // Available platforms = the ones the Connector priced. Default to the
-  // cheaper one (more likely they'll accept).
+  // Available platforms. A priced platform uses the rate card; a connected
+  // handle with NO price is a free/swap platform (cents = 0).
+  // CERGIO-GUARD (2026-06-05): the old code only listed PRICED platforms,
+  // so a free/swap Connector (both rates NULL) produced platforms=[] and
+  // the modal dead-ended with "no rate card — send a friend invite".
+  // That made requesting a FREE spotlight impossible, contradicting the
+  // free-first marketplace. NULL rate + connected handle = free swap.
   const igPrice = connector.spotlight_price_instagram_cents;
   const ttPrice = connector.spotlight_price_tiktok_cents;
   const platforms = [];
-  if (igPrice != null) platforms.push({ id: 'instagram', label: 'Instagram', cents: igPrice });
-  if (ttPrice != null) platforms.push({ id: 'tiktok',    label: 'TikTok',    cents: ttPrice });
+  if (igPrice != null)                                  platforms.push({ id: 'instagram', label: 'Instagram', cents: igPrice });
+  else if (connector.instagram_handle)                  platforms.push({ id: 'instagram', label: 'Instagram', cents: 0, free: true });
+  if (ttPrice != null)                                  platforms.push({ id: 'tiktok',    label: 'TikTok',    cents: ttPrice });
+  else if (connector.tiktok_handle)                     platforms.push({ id: 'tiktok',    label: 'TikTok',    cents: 0, free: true });
   const [platform, setPlatform] = useState(platforms[0]?.id || 'instagram');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,6 +45,7 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
   const submit = async (e) => {
     e?.preventDefault?.();
     if (!picked || busy) return;
+    if (myServices.length > 0 && !serviceId) return;
     setBusy(true);
     setErr(null);
     const { error } = await createSpotlightRequest({
@@ -75,8 +83,8 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
 
         {platforms.length === 0 ? (
           <p className="text-[13px] text-b3 mb-4">
-            This Connector hasn't set a rate card yet. Send them a friend invite
-            instead.
+            This Connector hasn't connected a social account yet. Send them a
+            friend invite instead.
           </p>
         ) : (
           <>
@@ -93,14 +101,27 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
                         : 'bg-bg5 text-b2 border-2 border-transparent hover:border-g/30'}`}
                   >
                     {p.label}
-                    <span className="block text-[11px] font-bold mt-0.5">{fmtPrice(p.cents)} / post</span>
+                    <span className="block text-[11px] font-bold mt-0.5">
+                      {p.free ? 'Free / swap' : `${fmtPrice(p.cents)} / post`}
+                    </span>
                   </button>
                 ))}
               </div>
             )}
 
+            {/* Free swap — explain the barter; no money moves. */}
+            {picked?.free && (
+              <div className="bg-gl border border-g/30 rounded-[14px] px-3.5 py-3 mb-3">
+                <p className="text-[13px] font-extrabold text-gd mb-0.5">Free swap</p>
+                <p className="text-[12px] text-gd/80 leading-snug">
+                  You offer your service free of charge; they post your spotlight.
+                  No payment, no fees.
+                </p>
+              </div>
+            )}
+
             {/* Fee breakdown — transparent so providers know where their money goes. */}
-            {picked && (
+            {picked && !picked.free && (
               <div className="bg-bg5/60 border border-bdr rounded-[14px] px-3.5 py-3 mb-3">
                 <div className="flex items-center justify-between text-[13px] mb-1">
                   <span className="text-b2">You pay</span>
@@ -120,7 +141,9 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
         )}
 
         <form onSubmit={submit} className="flex flex-col gap-3">
-          {/* Service picker — only if Provider has services listed */}
+          {/* Service picker — required when the Provider has listings, so
+              the Connector always sees what they're promoting (and, on a
+              free swap, what they receive in exchange). */}
           {myServices.length > 0 && (
             <div>
               <label className="block text-[12px] font-extrabold text-black mb-1">Which service?</label>
@@ -155,13 +178,14 @@ export function RequestSpotlightModal({ connector, onClose, onSent }) {
 
           <button
             type="submit"
-            disabled={!picked || busy}
+            disabled={!picked || busy || (myServices.length > 0 && !serviceId)}
             className={`w-full rounded-[24px] py-3.5 text-[15px] font-extrabold transition-all
-              ${picked && !busy
+              ${picked && !busy && !(myServices.length > 0 && !serviceId)
                 ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
                 : 'bg-bg5 text-b3 cursor-not-allowed'}`}
           >
-            {busy ? 'Sending…' : `Send request${picked ? ` · ${fmtPrice(picked.cents)}` : ''}`}
+            {busy ? 'Sending…'
+              : `Send request${picked ? ` · ${picked.free ? 'Free swap' : fmtPrice(picked.cents)}` : ''}`}
           </button>
           <button
             type="button"

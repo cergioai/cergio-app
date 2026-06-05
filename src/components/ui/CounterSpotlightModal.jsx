@@ -5,7 +5,12 @@ import { useState } from 'react';
 import { counterSpotlightRequest } from '../../lib/api';
 import { PLATFORM_FEE_RATE, platformFeeCents, sellerEarningsCents, fmtDollars } from '../../lib/fees';
 
-export function CounterSpotlightModal({ request, onClose, onCountered }) {
+// `role` — who is countering: 'connector' (they earn the price) or
+// 'provider' (they pay it). CERGIO-GUARD (2026-06-05): the breakdown
+// card used to hardcode Connector-perspective labels ("You earn") even
+// when the PROVIDER was countering back from the Sent tab — telling a
+// buyer they'd "earn" money they were about to spend.
+export function CounterSpotlightModal({ request, role = 'connector', onClose, onCountered }) {
   // The "current" price is whatever the OTHER party last asked. If
   // Connector hasn't countered yet, that's the official rate card. If they
   // have countered, that's the offered price. Either way, the new counter
@@ -73,11 +78,11 @@ export function CounterSpotlightModal({ request, onClose, onCountered }) {
           {valid && (
             <div className="bg-gl border border-g/30 rounded-[14px] px-3.5 py-3">
               <div className="flex items-center justify-between text-[13px] mb-1">
-                <span className="text-gd font-bold">They save</span>
+                <span className="text-gd font-bold">{role === 'connector' ? 'They save' : 'You save'}</span>
                 <span className="font-extrabold text-gd">{fmtDollars(savingsCents)}</span>
               </div>
               <div className="flex items-center justify-between text-[12px] text-gd/80">
-                <span>You earn</span>
+                <span>{role === 'connector' ? 'You earn' : 'Connector earns'}</span>
                 <span>{fmtDollars(sellerEarningsCents(offerCents))}</span>
               </div>
               <div className="flex items-center justify-between text-[12px] text-gd/80">

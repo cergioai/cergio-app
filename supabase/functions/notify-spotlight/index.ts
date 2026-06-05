@@ -86,6 +86,10 @@ serve(async (req: Request) => {
     const connectorName = r.connector?.display_name || `@${r.connector?.instagram_handle || r.connector?.tiktok_handle}`;
     const official = fmt(r.official_price_cents);
     const offered  = fmt(r.offered_price_cents);
+    // CERGIO-GUARD (2026-06-05): free swap = $0 effective price (service
+    // in exchange for the post). Money copy ("$0", "funds released",
+    // price tables) must not appear on free-swap emails.
+    const isFree = ((r.offered_price_cents ?? r.official_price_cents ?? 0) as number) === 0;
 
     let subject = '';
     let heading = '';
@@ -93,15 +97,19 @@ serve(async (req: Request) => {
     let cta_label = 'Open Cergio';
     switch (event) {
       case 'created':
-        subject = `${providerName} wants a ${platformLabel} spotlight — ${official}`;
+        subject = isFree
+          ? `${providerName} is offering you a free service for a ${platformLabel} post`
+          : `${providerName} wants a ${platformLabel} spotlight — ${official}`;
         heading = `New spotlight request 🌟`;
         body_html = `
           <p style="font-size:15px;color:#3A3A3A;margin:0 0 18px;">
-            <strong>${escapeHtml(providerName)}</strong> asked you for a ${platformLabel} spotlight at your rate-card price.
+            <strong>${escapeHtml(providerName)}</strong> ${isFree
+              ? `is offering you their service free of charge in exchange for a ${platformLabel} post.`
+              : `asked you for a ${platformLabel} spotlight at your rate-card price.`}
           </p>
-          ${priceTable(r.official_price_cents)}
+          ${isFree ? '' : priceTable(r.official_price_cents)}
           ${r.message ? `<p style="font-size:14px;color:#3A3A3A;margin:16px 0 0;line-height:1.5;font-style:italic;">"${escapeHtml(r.message)}"</p>` : ''}`;
-        cta_label = 'Accept · Counter · Decline →';
+        cta_label = isFree ? 'Accept · Decline →' : 'Accept · Counter · Decline →';
         break;
       case 'countered': {
         const counterer = r.last_counter_by === 'provider' ? providerName : connectorName;
@@ -116,14 +124,16 @@ serve(async (req: Request) => {
         break;
       }
       case 'accepted':
-        subject = `${connectorName} accepted your ${platformLabel} spotlight (${offered || official})`;
+        subject = isFree
+          ? `${connectorName} accepted your free-swap ${platformLabel} spotlight`
+          : `${connectorName} accepted your ${platformLabel} spotlight (${offered || official})`;
         heading = `Spotlight accepted ✓`;
         body_html = `
           <p style="font-size:15px;color:#3A3A3A;margin:0 0 18px;">
             <strong>${escapeHtml(connectorName)}</strong> accepted your ${platformLabel} spotlight request.
-            They'll coordinate posting details next.
+            ${isFree ? 'Coordinate the free service with them — they post once it\'s done.' : 'They\'ll coordinate posting details next.'}
           </p>
-          ${priceTable(r.offered_price_cents || r.official_price_cents)}`;
+          ${isFree ? '' : priceTable(r.offered_price_cents || r.official_price_cents)}`;
         cta_label = 'View request →';
         break;
       case 'declined':
@@ -181,15 +191,23 @@ serve(async (req: Request) => {
       case 'confirmed': {
         const paidCents = r.offered_price_cents || r.official_price_cents;
         const earn = paidCents - feeCents(paidCents);
-        subject = `Provider confirmed — ${fmt(earn)} released to your account`;
-        heading = `Funds released ✓`;
-        body_html = `
+        subject = isFree
+          ? `Provider confirmed your ${platformLabel} spotlight ✓`
+          : `Provider confirmed — ${fmt(earn)} released to your account`;
+        heading = isFree ? `Spotlight confirmed ✓` : `Funds released ✓`;
+        body_html = isFree
+          ? `
+          <p style="font-size:15px;color:#3A3A3A;margin:0 0 18px;">
+            <strong>${escapeHtml(providerName)}</strong> confirmed your ${platformLabel} spotlight is live.
+            Free swap complete — thanks for spotlighting!
+          </p>`
+          : `
           <p style="font-size:15px;color:#3A3A3A;margin:0 0 18px;">
             <strong>${escapeHtml(providerName)}</strong> confirmed your ${platformLabel} spotlight is live.
             <strong>${fmt(earn)}</strong> has been released to your Stripe Connect balance — payout per your usual schedule.
           </p>
           ${priceTable(paidCents)}`;
-        cta_label = 'View earnings →';
+        cta_label = isFree ? 'Open Cergio →' : 'View earnings →';
         break;
       }
       default:

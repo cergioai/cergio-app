@@ -116,8 +116,14 @@ export function BrowseConnectorsScreen() {
   useEffect(() => {
     if (!supabaseReady) { setLoading(false); return; }
     (async () => {
-      // Fetch any profile that has at least one social connected + a rate
-      // set. Ordered by total reach (IG + TT followers) descending.
+      // Fetch any profile that has at least one social connected.
+      // CERGIO-GUARD (2026-06-05): the old filter required a RATE to be
+      // set (spotlight_price_*.not.is.null) — which silently excluded
+      // every free/swap Connector (both rates NULL). That contradicted
+      // the "free Connectors first" priority: a free Connector could
+      // confirm a request and still never appear in this roster, and
+      // hasFreeConnector below could never be true. Filter on social
+      // handle instead — NULL rates mean "free / swap only".
       // RLS: profiles table is publicly readable for these columns.
       const { data, error } = await supabase
         .from('profiles')
@@ -128,7 +134,7 @@ export function BrowseConnectorsScreen() {
           spotlight_price_instagram_cents,
           spotlight_price_tiktok_cents
         `)
-        .or('spotlight_price_instagram_cents.not.is.null,spotlight_price_tiktok_cents.not.is.null')
+        .or('instagram_handle.not.is.null,tiktok_handle.not.is.null')
         .limit(50);
       if (error) {
         // RLS or missing columns (v9 not run yet) → soft-fall to empty list.
