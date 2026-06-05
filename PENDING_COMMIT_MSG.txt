@@ -1,89 +1,99 @@
-feat(ux): queued UX bundle v2 — reco wizard + barter pill + gated nav
+feat(ux): v3 bundle — Activity red-dot + earnings hardcoded sweep + scene copy
 
-Tarik 2026-06-04 directive: "run with the above q'd suggestions...
-implement without waiting." Five-item queue, three shipped in this
-bundle; two deferred with notes below.
+Tarik 2026-06-04 v3 directive: "include the deferred items... add the
+hard coded (earnings) items and tweaks." Three concerns ship together.
 
-══════════════════ (1) RECO WIZARD — one decision at a time ═══════════
+══════════════════ (1) Activity red-dot — unread cue ═══════════════════
 
-  RecommendServiceFormScreen rewritten as a three-step wizard. Same
-  three inputs as before (service type → recipient → blurb), but now
-  surfaced one step at a time with a progress bar at top and an
-  accruing pill summary so the user feels context build.
+  New hook: src/hooks/useActivityUnread.js
 
-  Step 1 — What service?
-      Datalist input + chip shortcuts (Plumber, Cleaner, Tutor,
-      Trainer, …). Tap a chip → auto-advance to step 2.
+    • localStorage `cergio:lastActivitySeenAt` stamped on every
+      ActivityScreen mount.
+    • Hook fetches listSocialFeed once + polls every 90s. Compares
+      each event's `created_at` to the lastSeen timestamp.
+    • Returns true if any fresh event landed since the user's last
+      visit. Auto-suppresses while the user is on /activity.
 
-  Step 2 — Who?
-      Contacts connect card (only on first entry), auto-suggest name
-      with phone/email autofill. Service is now in a pill at top —
-      tap to go back.
+  BottomNav:
+    • Reads useActivityUnread when signed in.
+    • Renders a small red dot (with white ring) on the Activity icon
+      when fresh events exist AND the user isn't already on /activity.
+    • Hidden for signed-out users (gated-tab lock takes precedence).
 
-  Step 3 — Why?
-      Blurb textarea pre-templated. Headline reads:
-      "Why would {firstName} book {serviceType}?" so the message has
-      explicit context. Confirmation hint: "We'll send {firstName}
-      this blurb + a one-tap link to book."
+  Cheap, cookie-free, no read_state table — server-friendly.
 
-  Sticky bottom CTA progresses: "Next" → "Next" → "Send to {firstName}".
-  Step 1 back-arrow exits the wizard; steps 2 + 3 go back one step.
+══════════════════ (2) Hardcoded earnings sweep ════════════════════════
 
-  Tarik 2026-06-04: "the reco form from the invite is wrong... services
-  can only be recommended one at a time." Same three inputs, but the
-  user never sees a long form.
+  Audited every JSX + JS file for `$250`, `$12.5`, `$12,500`, `$838`,
+  and raw cent literals (25000, 1250). Replaced user-visible
+  hardcoded amounts + control flags with REWARDS lookups. Comments
+  retain the original numbers as inline documentation.
 
-══════════════════ (2) RESULTS — Free-flow barter pill ════════════════
+  Changes:
 
-  On the Free-for-Connectors path (freeServices === true), the
-  waiting state now leads with an explicit context pill before the
-  roaming leaf:
+    EarningsScreen.jsx
+      CASH_OUT_THRESHOLD_CENTS = 250 * 100
+        → REWARDS.perFriend * 100
 
-      "Sent to Connectors near you · they barter for $250 in free
-       spotlights"
+    components/ui/RewardFlowAnimation.jsx
+      SVG text "$250 service"
+        → `${REWARDS.perFriend} service`
 
-  Sub-line: "Connectors are locals who get free services in exchange
-            for spotlighting them on IG/TikTok. The first one to
-            claim wins the barter."
+    screens/RainmakersScreen.jsx
+      connectors: { amount: '$12.50', type: 'cash' }
+        → connectors: { amount: `$${REWARDS.friendOfFriendBonus}`, type: 'cash' }
 
-  Was: the user submitted free, saw the roaming leaf, no hint that
-       the request was specifically targeting Connectors.
+    lib/referral.js
+      const REWARD_CENTS = 25000
+        → REWARDS.perFriend * 100
+      const FOF_BONUS_CENTS = 1250
+        → Math.round(REWARDS.friendOfFriendBonus * 100)
+      (now imports REWARDS from './rewards')
 
-══════════════════ (3) BOTTOM NAV — guest-mode lock dot ════════════════
+  Net effect: bumping any reward in REWARDS now updates every screen
+  + every persistence path with a single change. No more "must match
+  REWARDS.perFriend" comments warning future-Claude to update two
+  places at once.
 
-  Inbox / Earnings / Activity / Profile now render with a small lock
-  dot on top of the icon when the user is signed out. Tap still
-  navigates (each destination has its own "Sign in" cue card), but
-  the brand signals "this unlocks with sign-in" rather than promising
-  empty content.
+══════════════════ (3) Scene copy tightening ══════════════════════════
 
-  Wire: BottomNav now accepts `isSignedIn` prop, App.jsx passes
-        `auth.isSignedIn`. GUEST_GATED set inside BottomNav drives
-        the dot. Profile stays gated even though the route renders
-        for guests — Profile expects an auth identity.
+  RewardFlowAnimation STEPS body texts collapsed from 2-3 sentence
+  paragraphs to single load-bearing claims per scene:
 
-══════════════════ Deferred from the queue ═══════════════════════════
+    Scene 01 — Invite. Reco. Earn.
+      Old: "Bring friends in, recommend the services you already
+            trust, and earn $250 per friend. 7% of every booking
+            flows back to you, up to the 250-dollar cap." (38 words)
+      New: "Invite friends — earn 7% of every booking they make, up
+            to $250 each." (16 words)
 
-  • Activity-tab red-dot for unread feed events.
-    Needs a persistence layer (localStorage last-seen timestamp or
-    a server-side read_state table). Skipped to keep this bundle
-    focused; will land in a follow-up.
+    Scene 02 — Free service → Free spotlight.
+      Old: 3-sentence paragraph covering swap, cash alt, value cap.
+      New: "Providers swap free service for an IG / TikTok spotlight.
+            Connectors stack 10+ free services a month — thousands in
+            value." (24 words)
 
-  • Earnings scenes copy tightening.
-    EarnExplainerScreen.jsx is already 114 lines with calm copy.
-    The 3-scene mission (APGI scenes 1/2/3 in RewardFlowAnimation)
-    is where the dense paragraphs live — that's localized to the
-    animation component, and Tarik's APGI thesis copy was just
-    rewritten 2026-05-31 (commit f0...). Holding for a separate
-    pass focused only on that animation.
+    Scene 03 — Asset Participation Growth Income.
+      Old: 4-clause paragraph layering APGI definition + scaling
+            + compounding + recursion.
+      New: "Every dollar you earn becomes a share of Cergio's growth
+            (APGI). Show up early, your share compounds with the
+            network you helped build." (24 words)
 
-══════════════════ Verified ══════════════════════════════════════════
+  Numbers still REWARDS-derived. Headlines + visuals unchanged.
+
+══════════════════ Verified ═══════════════════════════════════════════
 
   scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX — Reco wizard / Results / BottomNav / App OK
+  @babel/parser JSX — Earnings / Activity / Rainmakers / BottomNav /
+                      RewardFlowAnimation / useActivityUnread /
+                      referral — OK
 
 ══════════════════ Notes ══════════════════════════════════════════════
 
-  Per "i'll reverse from the list if necessary" — any of these is
-  reversible by reverting the relevant file. The reco wizard is the
-  largest delta; rest are localized.
+  Per "i'll reverse from the list if necessary":
+    • Activity dot is purely visual — reversible by deleting the
+      red-dot block from BottomNav.
+    • Scene copy is reversible by restoring previous STEPS strings.
+    • Hardcoded sweep is mechanical and structural; reverting would
+      reintroduce "must match REWARDS" landmines.

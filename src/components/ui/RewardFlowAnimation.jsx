@@ -15,24 +15,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { REWARDS } from '../../lib/rewards';
 
+// CERGIO-GUARD (2026-06-05 v3): scene bodies tightened to one
+// short sentence each. v8 had 3-sentence paragraphs that buried
+// the punchline; users skimmed and missed the value. Single load-
+// bearing claim per scene now, numbers still REWARDS-derived.
 const STEPS = [
   {
     num: '01',
     title: 'Invite. Reco. Earn.',
     body: () =>
-      `Bring friends in, recommend the services you already trust, and earn $${REWARDS.perFriend} per friend. ${REWARDS.referrerSharePercent}% of every booking flows back to you, up to the ${REWARDS.perFriend}-dollar cap.`,
+      `Invite friends — earn ${REWARDS.referrerSharePercent}% of every booking they make, up to $${REWARDS.perFriend} each.`,
   },
   {
     num: '02',
     title: 'Free service → Free spotlight.',
     body: () =>
-      `Connectors swap reach for service: the provider gives you a free service; you post one IG / TikTok spotlight back. Prefer cash? Pay the spotlight fee instead — same flow, your pick. 10+ services a month, thousands in value, all free or mixed.`,
+      `Providers swap free service for an IG / TikTok spotlight. Connectors stack 10+ free services a month — thousands in value.`,
   },
   {
     num: '03',
     title: 'Asset Participation Growth Income.',
     body: () =>
-      `Human-powered AI · Shared prosperity via Asset Participation Growth Income (APGI). Every dollar you earn becomes a share of Cergio's growth, scaled to your participation. The earlier you join, the more your share compounds — regular income tied to how much the network you helped grow keeps growing.`,
+      `Every dollar you earn becomes a share of Cergio's growth (APGI). Show up early, your share compounds with the network you helped build.`,
   },
 ];
 
@@ -136,7 +140,7 @@ function Scene2() {
         {/* Provider tile */}
         <rect x={28} y={80} width={130} height={54} rx={10} fill="#FFFFFF" stroke="#E5E5E3" strokeWidth={1} />
         <text x={93} y={100} textAnchor="middle" fontSize="10" fontWeight="800" fill="#5F5E5A" fontFamily="system-ui">PROVIDER</text>
-        <text x={93} y={120} textAnchor="middle" fontSize="14" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">$250 service</text>
+        <text x={93} y={120} textAnchor="middle" fontSize="14" fontWeight="900" fill="#1A1A1A" fontFamily="system-ui">${REWARDS.perFriend} service</text>
 
         {/* Arrow with label */}
         <path d="M 162 107 L 230 107" stroke="#2F6E00" strokeWidth="2" fill="none" strokeLinecap="round" />

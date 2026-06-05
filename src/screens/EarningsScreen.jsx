@@ -17,7 +17,10 @@ function timeAgo(iso) {
 }
 
 const BALANCE_UNIT = 'USD';
-const CASH_OUT_THRESHOLD_CENTS = 250 * 100; // $250 to cash out (matches reward ceiling)
+// CERGIO-GUARD (2026-06-05): pulled from REWARDS so the cash-out
+// threshold tracks the canonical per-friend cap. Previously a raw
+// `250 * 100` literal — Tarik's hardcoded-number sweep.
+const CASH_OUT_THRESHOLD_CENTS = REWARDS.perFriend * 100;
 
 function getInitials(name) {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();

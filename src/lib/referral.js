@@ -8,6 +8,7 @@
 // Free-text URLs with hand-typed refs will not attribute correctly.
 
 import { supabase, supabaseReady } from './supabase';
+import { REWARDS } from './rewards';
 
 const REF_STORAGE_KEY = 'cergio.ref';
 const REF_TTL_DAYS    = 30;
@@ -147,7 +148,9 @@ export async function creditInviterOnFirstBooking(consumerId, bookingId) {
   if (findErr || !invite) return { error: findErr };
 
   // Stamp first_booking_at + record reward amount on the invite row.
-  const REWARD_CENTS = 25000; // $250 — must match REWARDS.perFriend
+  // CERGIO-GUARD (2026-06-05): pulled from REWARDS so reward stays
+  // canonical. Was a hardcoded `25000` cents with a "must match" comment.
+  const REWARD_CENTS = REWARDS.perFriend * 100;
   await supabase
     .from('invites')
     .update({ first_booking_at: new Date().toISOString(), reward_cents: REWARD_CENTS })
@@ -241,7 +244,9 @@ export async function creditChainOnFirstBooking({ invite, consumerId, bookingId 
     return { error: null };
   }
 
-  const FOF_BONUS_CENTS = 1250; // $12.50 — must match REWARDS.friendOfFriendBonus
+  // CERGIO-GUARD (2026-06-05): pull from REWARDS so the chain bonus
+  // tracks canonical (was a hardcoded 1250 with "must match" comment).
+  const FOF_BONUS_CENTS = Math.round(REWARDS.friendOfFriendBonus * 100);
 
   const { error: earnErr } = await supabase
     .from('earnings')

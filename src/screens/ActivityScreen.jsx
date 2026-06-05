@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed, getMyFollowedIds } from '../lib/api';
+import { stampActivitySeen } from '../hooks/useActivityUnread';
 import { fmtDollars } from '../lib/fees';
 // FEED + REWARDS imports removed along with the fake "Friends
 // recently booked" section — see CERGIO-GUARD in the JSX below.
@@ -478,6 +479,10 @@ export function ActivityScreen() {
       getMyFollowedIds().then(({ data }) => setFollowedIds(new Set(data || [])));
     }
     listSocialFeed({ limit: 40, days: 60 }).then(({ data }) => setFeed(data || []));
+    // CERGIO-GUARD (2026-06-05 v3): stamp lastActivitySeenAt so the
+    // BottomNav red-dot clears once the user lands here. See
+    // useActivityUnread hook for the read-side.
+    stampActivitySeen();
   }, [isSignedIn]);
 
   // Active = anything that isn't in a terminal state — those are what

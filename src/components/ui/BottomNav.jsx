@@ -9,6 +9,7 @@
 // "sign in unlocks this" rather than promising content that's gated.
 // Tarik: rigorous UX testing, queued recommendations.
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useActivityUnread } from '../../hooks/useActivityUnread';
 
 // Tabs that need a real account to be useful — guest sees a small
 // lock dot so the brand doesn't promise content it can't show.
@@ -79,6 +80,12 @@ export function BottomNav({ serviceMode = false, isSignedIn = true }) {
   const location = useLocation();
   const active = resolveActive(location.pathname);
   const nav = serviceMode ? NAV_PROVIDER : NAV_CONSUMER;
+  // CERGIO-GUARD (2026-06-05 v3): unread Activity badge for signed-in
+  // users. Hook polls listSocialFeed every 90s and compares the most
+  // recent event's `created_at` against the localStorage stamp set
+  // by ActivityScreen on mount. Hidden when signed out, when the
+  // Activity tab is gated, or when the user is already on /activity.
+  const activityUnread = useActivityUnread({ enabled: isSignedIn });
 
   return (
     <nav
@@ -92,13 +99,14 @@ export function BottomNav({ serviceMode = false, isSignedIn = true }) {
         // with a tiny lock dot — promise calibrated to what they'll
         // see when they tap (sign-in cue card on the destination).
         const isGated = !isSignedIn && GUEST_GATED.has(item.id);
+        const showUnread = item.id === 'activity' && !isGated && !isActive && activityUnread;
         return (
           <button
             key={item.id}
             onClick={() => navigate(item.path)}
             className={`relative flex-1 flex flex-col items-center gap-1 py-1
                         ${isActive ? 'text-black' : isGated ? 'text-b3/55' : 'text-b3'}`}
-            title={isGated ? 'Sign in to unlock' : undefined}
+            title={isGated ? 'Sign in to unlock' : (showUnread ? 'New activity' : undefined)}
           >
             <Icon />
             {isGated && (
@@ -111,6 +119,12 @@ export function BottomNav({ serviceMode = false, isSignedIn = true }) {
                   <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
                 </svg>
               </span>
+            )}
+            {showUnread && (
+              <span
+                aria-hidden="true"
+                className="absolute top-0.5 right-1/2 translate-x-3.5 w-2.5 h-2.5 rounded-full bg-danger ring-2 ring-white"
+              />
             )}
             <span className={`text-[10px] tracking-wide ${isActive ? 'font-extrabold' : 'font-medium'}`}>
               {item.label}
