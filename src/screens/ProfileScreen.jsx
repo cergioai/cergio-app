@@ -27,6 +27,7 @@ import {
   getStripeOnboardingUrl, getMyInstagram, saveInstagram, getMyTikTok, saveTikTok,
   getMySpotlightPrices, listMyServices,
 } from '../lib/api';
+import { supabase, supabaseReady } from '../lib/supabase';
 import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
@@ -184,11 +185,18 @@ export function ProfileScreen() {
   const [spotlightPrices, setSpotlightPrices] = useState(null);
   const [hasService, setHasService] = useState(false);
   const [serviceCount, setServiceCount] = useState(0);
+  // CERGIO-GUARD (2026-06-05): headline pulled from profiles row so the
+  // hero subtitle reflects what the user typed in EditProfileModal. Bio
+  // is loaded here too but rendered on PublicProfileScreen; ProfileScreen
+  // hero only shows the headline (the longer bio belongs on the public
+  // surface where viewers are deciding whether to engage).
+  const [headline, setHeadline] = useState('');
 
   useEffect(() => {
     if (!isSignedIn) {
       setIg(null); setTt(null); setSpotlightPrices(null);
       setHasService(false); setServiceCount(0);
+      setHeadline('');
       return;
     }
     getMyInstagram().then(({ data }) => setIg(data || null));
@@ -199,7 +207,21 @@ export function ProfileScreen() {
       setHasService(n > 0);
       setServiceCount(n);
     });
-  }, [isSignedIn]);
+    // Pull the user's headline — defensive: column may not exist if the
+    // migration hasn't been applied yet, in which case the hero just
+    // shows the Member/Connector pill row with no subtitle.
+    if (supabaseReady && u?.id) {
+      supabase
+        .from('profiles')
+        .select('headline')
+        .eq('id', u.id)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) return;
+          if (data?.headline) setHeadline(data.headline);
+        });
+    }
+  }, [isSignedIn, u?.id]);
 
   const hasRateCard = !!(
     spotlightPrices?.spotlight_price_instagram_cents != null ||
@@ -268,6 +290,14 @@ export function ProfileScreen() {
           <h1 className="text-[24px] font-extrabold text-black leading-tight">
             Hi {firstName}!
           </h1>
+          {/* CERGIO-GUARD (2026-06-05): user-typed headline. Sits between
+              the greeting and the Connector/Member pill so the hero
+              reflects the user's own positioning the moment they land. */}
+          {headline && (
+            <p className="text-[12.5px] text-b2 leading-snug mt-1 font-medium">
+              {headline}
+            </p>
+          )}
           <div className="flex items-center gap-2 mt-1.5">
             {isSignedIn ? (
               hasRateCard

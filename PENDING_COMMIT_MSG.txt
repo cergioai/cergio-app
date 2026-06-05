@@ -1,51 +1,44 @@
-bundle(reco-list+nav-help+auth-tagline+bug-pic+invite-svctype)
+feat(profile): user headline + bio, rendered on Profile + PublicProfile
 
-Six related UX fixes Tarik queued 2026-06-05.
+Tarik 2026-06-05: "add ability for users to add a headline and a bio."
 
-1. SplashScreen — two-line hero
-   "Hi, I'm CERGIO." gets line 1 alone; value prop "I book services
-   your friends actually trust." moves to a softer line 2.
+Schema:
+  • New profiles.headline (text, ≤120c) via idempotent migration
+    db/migrations/2026-06-05-profile-headline.sql.
+  • profiles.bio already exists (in schema-v1.sql) — no schema change.
 
-2. Reco'd tile → list of recos made + edit
-   - New RecoTrackingScreen at /earnings/recos.
-     - Each row: recipient + "as {ServiceType}" pill (parsed from the
-       persisted `[Type] blurb` prefix) + blurb body + sent-time.
-     - Edit (inline textarea) patches recommendations.message.
-     - Nudge (WhatsApp / SMS / Copy) rebuilds the canonical SMS the
-       notify-user edge function uses, so client + server messaging
-       stay in sync.
-     - Inline armed-delete (no window.confirm) — matches the rule we
-       already enforced on ResultsScreen + ServiceDetailProvider.
-   - EarningsScreen Reco'd counts-strip tile now routes to
-     /earnings/recos when count > 0 (vs the new-reco form). Tile title
-     reads "tap to review, edit, or nudge" so the action is unambiguous.
-   - api.js adds listMyRecommendations / updateRecommendation /
-     deleteRecommendation + a split/join helper that round-trips the
-     "[ServiceType] body" persisted shape cleanly.
+Migration runner:
+  • Apply Profile Headline Migration.command
+    Loads DATABASE_URL from cergio-app/.env.local and runs psql -f.
+    Idempotent — safe to re-run.
 
-3. Invite tracking — service-type pill + nudge clarity
-   - InviteTrackingScreen joins each invite to my recommendations
-     rows (digit-matched phone OR invitee_id), via the new
-     getInviteServiceContexts helper, and renders a green "as Plumber"
-     pill beside the Pending/Joined/Booked status pill. Hidden when
-     no matching reco was sent.
+EditProfileModal (used by ProfileScreen → Account & settings →
+View and edit profile):
+  • Two new fields: Headline (120c cap, single line, char counter)
+    and Bio (500c cap, 4-row textarea, char counter).
+  • Saves to profiles via supabase.from('profiles').update — RLS
+    already pins UPDATE to auth.uid() = id.
+  • If the headline column hasn't been migrated, the error message
+    is surfaced verbatim with a "run the migration" hint so Tarik
+    knows to run Apply Profile Headline Migration.command. The
+    user's typed copy stays in the form for a retry.
+  • Display name + phone continue to save via auth.updateUser.
 
-4. AuthScreen — Book · Barter · Earn tagline
-   The pillar line from Splash now mirrors on the sign-in surface so
-   the brand pillars present at every entry point, not just splash.
+ProfileScreen hero:
+  • Pulls profiles.headline on mount; renders it as a one-line
+    subtitle between "Hi {firstName}!" and the Connector/Member pill.
+  • Defensive fetch — column-missing errors are swallowed.
 
-5. BottomNav — Help tab (6 tabs)
-   - Consumer: Search · Inbox · Earnings · Help · Activity · Profile
-   - Provider: Home · Inbox · Calendar · Earnings · Help · Profile
-   - Routes to /contact, the unified support/feedback inbox.
-   - Life-ring icon. ACTIVE_MAP updated so /contact lights the Help tab.
+PublicProfileScreen:
+  • Profile SELECT now includes headline.
+  • Headline renders beside the display name (below it on mobile,
+    above the role/Connector pill row) so viewers see the user's
+    own positioning before the platform-derived badges.
+  • Bio continues to render in the existing About section.
 
-6. ContactScreen — bug-report subject + screenshot upload
-   - New "Bug report — something broke" subject option.
-   - When subject = bug, an inline file picker reveals (PNG/JPG, 5MB cap).
-   - On submit: uploads to the `contact-attachments` storage bucket
-     and stamps attachment_url on the contact_messages row. If the
-     bucket isn't provisioned, the message still goes through with a
-     note in the body so support can ask for a re-send.
+Verified: scripts/qa.mjs 41/41 PASS · JSX parses clean on all 3 files.
 
-Verified: scripts/qa.mjs 41/41 PASS · JSX parses clean on all 8 files.
+Next iteration (queued, not in this commit):
+  • Profile IA — per-section counts + global header (#196).
+  • Spotlight request rows — route to service profile, cleaner msg,
+    Sent-side action-set fix (#194, #195).

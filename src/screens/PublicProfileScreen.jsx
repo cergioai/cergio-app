@@ -244,7 +244,7 @@ export function PublicProfileScreen() {
       // ask for what's verified across api.js.
       const { data: prof, error: profErr } = await supabase
         .from('profiles')
-        .select('id, display_name, bio, cc_verified_at, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, follower_count')
+        .select('id, display_name, headline, bio, cc_verified_at, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, follower_count')
         .eq('id', profileId)
         .maybeSingle();
       if (cancelled) return;
@@ -521,7 +521,17 @@ export function PublicProfileScreen() {
       <div className="px-5 pt-4">
         <div className="flex items-center gap-3.5">
           <AvatarLink id={profile?.id} name={name} size={72} clickable={false} className="ring-2 ring-white shadow-sm" />
-          <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">{name}</h1>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">{name}</h1>
+            {/* CERGIO-GUARD (2026-06-05): user-authored headline —
+                appears beside the name when set. One short line that
+                gives context before the role/Connector pills. */}
+            {profile?.headline && (
+              <p className="mt-1 text-[13px] text-b2 leading-snug font-medium">
+                {profile.headline}
+              </p>
+            )}
+          </div>
         </div>
         {(role || isConnector) && (
           <div className="flex items-center gap-3 mt-3 flex-wrap">
