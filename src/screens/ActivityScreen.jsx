@@ -13,8 +13,10 @@
 // is the consumer's view only.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
-import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed, getMyFollowedIds } from '../lib/api';
+import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed, getMyFollowedIds, getMyInviteCounts, getMyInvitesDetailed, followProfile, unfollowProfile } from '../lib/api';
 import { stampActivitySeen } from '../hooks/useActivityUnread';
+import { supabase, supabaseReady } from '../lib/supabase';
+import { REWARDS } from '../lib/rewards';
 import { fmtDollars } from '../lib/fees';
 // FEED + REWARDS imports removed along with the fake "Friends
 // recently booked" section — see CERGIO-GUARD in the JSX below.
@@ -456,9 +458,19 @@ export function ActivityScreen() {
   const { auth } = useOutletContext() || {};
   const isSignedIn = !!auth?.isSignedIn;
 
+  // CERGIO-GUARD (2026-06-05 v7): network tabs per Tarik's video
+  // (timer 6:36-6:42 + 2:48-3:11). Four discrete views over the same
+  // social graph: Summary (aggregates + recent), Friends (invites
+  // I sent w/ status), Connectors (ambassadors w/ follow + reco
+  // count), Feed (existing social feed).
+  const [activeTab, setActiveTab] = useState('feed');
+
   // Real data — loaded lazily on auth flip.
   const [bookings, setBookings]     = useState(null); // null = loading
   const [spotlights, setSpotlights] = useState(null);
+  const [inviteCounts, setInviteCounts]   = useState({ invited: 0, joined: 0, booked: 0 });
+  const [invitesDetailed, setInvitesDetailed] = useState(null);
+  const [connectors, setConnectors] = useState(null);
   // CERGIO-GUARD (2026-05-30): unified social feed. Replaces the old
   // Connector-only goatShares list. Includes friend recos, Connector
   // shares, new sign-ups ("X joined Cergio"), new service listings,
@@ -472,11 +484,28 @@ export function ActivityScreen() {
   // "friend equivalent" per Tarik 2026-06-03.
   const [followedIds, setFollowedIds] = useState(new Set());
   useEffect(() => {
-    if (!isSignedIn) { setBookings([]); setSpotlights([]); setFollowedIds(new Set()); }
-    else {
+    if (!isSignedIn) {
+      setBookings([]); setSpotlights([]); setFollowedIds(new Set());
+      setInviteCounts({ invited: 0, joined: 0, booked: 0 });
+      setInvitesDetailed([]); setConnectors([]);
+    } else {
       listConsumerBookings().then(({ data }) => setBookings(data || []));
       listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => setSpotlights(data || []));
       getMyFollowedIds().then(({ data }) => setFollowedIds(new Set(data || [])));
+      getMyInviteCounts().then(({ data }) => setInviteCounts(data || { invited: 0, joined: 0, booked: 0 }));
+      getMyInvitesDetailed({ limit: 100 }).then(({ data }) => setInvitesDetailed(data || []));
+      // Connectors = profiles with cc_verified_at set. Pull the top
+      // 50 ordered by verified date; tab UI surfaces follow state +
+      // recos count derived from the row.
+      if (supabaseReady) {
+        supabase
+          .from('profiles')
+          .select('id, display_name, avatar_url, instagram_handle, tiktok_handle, instagram_followers, tiktok_followers, cc_verified_at')
+          .not('cc_verified_at', 'is', null)
+          .order('cc_verified_at', { ascending: false })
+          .limit(50)
+          .then(({ data }) => setConnectors(data || []));
+      }
     }
     listSocialFeed({ limit: 40, days: 60 }).then(({ data }) => setFeed(data || []));
     // CERGIO-GUARD (2026-06-05 v3): stamp lastActivitySeenAt so the
@@ -492,14 +521,138 @@ export function ActivityScreen() {
   const openSpotlights = (spotlights || []).filter(s => !TERMINAL.includes(s.status));
   const hasOpen        = openBookings.length > 0 || openSpotlights.length > 0;
 
+  // Friend graph aggregates for Summary tab.
+  const recsAuthored = (invitesDetailed || []).filter(i => !!i.recipient_phone_for_reco || i.kind === 'reco').length;
+  const totalActivities = (feed || []).length;
+
   return (
     <div className="flex-1 flex flex-col bg-cream pb-24 overflow-y-auto">
       <div className="px-5 pt-8 pb-2">
         <h1 className="text-[24px] font-extrabold text-black leading-tight">Activity</h1>
         <p className="text-[13px] text-b3 font-medium mt-1.5 leading-snug">
-          What's happening on Cergio + your open requests.
+          Your network at a glance.
         </p>
       </div>
+
+      {/* CERGIO-GUARD (2026-06-05 v7): network tabs per Tarik's video
+          (6:36-6:42) — Summary / Friends / Connectors / Feed. Compact
+          pill bar; keyboard accessible. Active tab = bold + filled. */}
+      <div className="px-5 mb-3" role="tablist" aria-label="Network">
+        <div className="flex bg-bg5 rounded-pill p-1">
+          {[
+            { id: 'summary',    label: 'Summary' },
+            { id: 'friends',    label: 'Friends' },
+            { id: 'connectors', label: 'Connectors' },
+            { id: 'feed',       label: 'Feed' },
+          ].map(t => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex-1 rounded-pill py-1.5 text-[12px] font-extrabold transition-colors
+                ${activeTab === t.id ? 'bg-white text-black shadow-sm' : 'text-b3 hover:text-b2'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Summary tab ─────────────────────────────────────────────── */}
+      {activeTab === 'summary' && (
+        <div className="px-5 mb-3 flex flex-col gap-3">
+          {/* Count tiles — friends + services + activity */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { n: inviteCounts.invited, label: 'friends invited', onClick: () => setActiveTab('friends') },
+              { n: inviteCounts.joined,  label: 'friends joined',  onClick: () => setActiveTab('friends') },
+              { n: inviteCounts.booked,  label: 'friends booked',  onClick: () => setActiveTab('friends') },
+            ].map(c => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={c.onClick}
+                className="bg-white border border-bdr rounded-[12px] py-2.5 px-2 text-left hover:bg-bg5/40 transition-colors"
+              >
+                <p className="text-[20px] font-extrabold text-black leading-none">{c.n}</p>
+                <p className="text-[10.5px] text-b3 font-extrabold uppercase tracking-wide mt-0.5">{c.label}</p>
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { n: recsAuthored,   label: 'recos sent',  onClick: () => navigate('/invite/recommend') },
+              { n: connectors?.length || 0, label: 'connectors', onClick: () => setActiveTab('connectors') },
+              { n: totalActivities, label: 'activities', onClick: () => setActiveTab('feed') },
+            ].map(c => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={c.onClick}
+                className="bg-white border border-bdr rounded-[12px] py-2.5 px-2 text-left hover:bg-bg5/40 transition-colors"
+              >
+                <p className="text-[20px] font-extrabold text-black leading-none">{c.n}</p>
+                <p className="text-[10.5px] text-b3 font-extrabold uppercase tracking-wide mt-0.5">{c.label}</p>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 mt-1">
+            <button
+              type="button"
+              onClick={() => navigate('/invite/friends-popup')}
+              className="flex-1 bg-g text-white rounded-pill py-2.5 text-[12.5px] font-extrabold"
+            >
+              Invite a friend
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/invite/recommend')}
+              className="flex-1 bg-white border border-bdr text-b2 rounded-pill py-2.5 text-[12.5px] font-extrabold"
+            >
+              Reco a provider
+            </button>
+          </div>
+
+          <p className="text-[11.5px] text-b3 leading-snug mt-1">
+            Every friend who joins + books earns you {' '}
+            <span className="font-extrabold text-black">${REWARDS.perFriendUser} credit</span>{' '}
+            (up to ${REWARDS.perFriend}) — plus {' '}
+            <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonus}</span>{' '}
+            per friend-of-friend signup.
+          </p>
+        </div>
+      )}
+
+      {/* ── Friends tab ─────────────────────────────────────────────── */}
+      {activeTab === 'friends' && (
+        <NetworkFriendsTab invitesDetailed={invitesDetailed} navigate={navigate} />
+      )}
+
+      {/* ── Connectors tab ──────────────────────────────────────────── */}
+      {activeTab === 'connectors' && (
+        <NetworkConnectorsTab
+          connectors={connectors}
+          followedIds={followedIds}
+          onToggleFollow={async (id, isFollowing) => {
+            if (isFollowing) {
+              await unfollowProfile(id);
+              setFollowedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+            } else {
+              await followProfile(id);
+              setFollowedIds(prev => new Set(prev).add(id));
+            }
+          }}
+          navigate={navigate}
+        />
+      )}
+
+      {/* Feed tab — wraps the existing feed IIFE + open requests
+          below. CERGIO-GUARD (2026-06-05 v7): kept the original
+          block intact; just gated rendering by activeTab. */}
+      {activeTab === 'feed' && <>
 
       {/* ─── Social feed — real data only. Hidden when zero. ──────────
           CERGIO-GUARD (2026-05-30): unified feed mixing four event
@@ -688,6 +841,143 @@ export function ActivityScreen() {
           ))}
         </div>
       )}
+
+      </>}
+    </div>
+  );
+}
+
+// CERGIO-GUARD (2026-06-05 v7): network sub-tabs from Tarik's video.
+// Friends tab — list of invites I sent with their join/book status.
+// Each row taps into the invitee's public profile if they joined.
+function NetworkFriendsTab({ invitesDetailed, navigate }) {
+  if (invitesDetailed === null) {
+    return <p className="px-5 mt-4 text-[13px] text-b3">Loading friends…</p>;
+  }
+  if (invitesDetailed.length === 0) {
+    return (
+      <div className="mx-5 mt-4 bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4">
+        <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">Friends</p>
+        <p className="text-[15px] font-extrabold text-black leading-snug mt-1">No friends yet.</p>
+        <p className="text-[12px] text-b3 font-medium mt-1.5 leading-snug">
+          Invite friends to start building your network.{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/invite/friends-popup')}
+            className="text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+          >
+            Send invite →
+          </button>
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col">
+      {invitesDetailed.map(inv => {
+        const name = inv.invitee?.display_name
+          || inv.invitee_phone
+          || inv.invitee_email
+          || 'Friend';
+        const joined = !!inv.invitee?.id;
+        const booked = !!inv.first_booking_at;
+        const status = booked ? 'Booked' : joined ? 'Joined' : 'Pending';
+        const statusClass = booked
+          ? 'bg-gl text-gd'
+          : joined
+            ? 'bg-bg5 text-b2'
+            : 'bg-warnBg text-warnText';
+        const initials = String(name)
+          .split(/\s+/).map(s => s[0] || '').slice(0, 2).join('').toUpperCase() || '?';
+        return (
+          <button
+            key={inv.id}
+            type="button"
+            onClick={() => {
+              if (joined) navigate(`/u/${inv.invitee.id}`);
+              else navigate('/earnings/invites');
+            }}
+            className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-bg5/30 border-b border-bdr"
+          >
+            <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-[14px] font-extrabold flex-shrink-0">
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-extrabold text-black truncate">{name}</p>
+              <p className="text-[11.5px] text-b3 mt-0.5">
+                Invited {inv.invited_at ? new Date(inv.invited_at).toLocaleDateString() : '—'}
+              </p>
+            </div>
+            <span className={`text-[10.5px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-pill ${statusClass}`}>
+              {status}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Connectors tab — verified Connectors with follow + recos count.
+function NetworkConnectorsTab({ connectors, followedIds, onToggleFollow, navigate }) {
+  if (connectors === null) {
+    return <p className="px-5 mt-4 text-[13px] text-b3">Loading Connectors…</p>;
+  }
+  if (connectors.length === 0) {
+    return (
+      <div className="mx-5 mt-4 bg-white border border-bdr rounded-[16px] p-4">
+        <p className="text-[13px] font-extrabold text-black mb-1">No Connectors yet</p>
+        <p className="text-[11.5px] text-b3 leading-snug">
+          Connectors are locals with reach who spotlight services on IG + TikTok.
+          They show up here as they verify.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col">
+      {connectors.map(c => {
+        const isFollowing = followedIds.has(c.id);
+        const name = c.display_name || c.instagram_handle || c.tiktok_handle || 'Connector';
+        const initials = String(name)
+          .split(/\s+/).map(s => s[0] || '').slice(0, 2).join('').toUpperCase() || '?';
+        const reach = (c.instagram_followers || 0) + (c.tiktok_followers || 0);
+        return (
+          <div
+            key={c.id}
+            className="w-full px-5 py-3 flex items-center gap-3 border-b border-bdr hover:bg-bg5/30"
+          >
+            <button
+              type="button"
+              onClick={() => navigate(`/u/${c.id}`)}
+              className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-[14px] font-extrabold flex-shrink-0 cursor-pointer border-none"
+              aria-label={`Open ${name}`}
+            >
+              {initials}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/u/${c.id}`)}
+              className="flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer"
+            >
+              <p className="text-[14px] font-extrabold text-black truncate">{name}</p>
+              <p className="text-[11.5px] text-b3 mt-0.5 truncate">
+                {c.instagram_handle && <>IG @{c.instagram_handle}</>}
+                {c.instagram_handle && c.tiktok_handle && ' · '}
+                {c.tiktok_handle && <>TT @{c.tiktok_handle}</>}
+                {reach > 0 && <> · {reach >= 1000 ? `${(reach/1000).toFixed(1).replace(/\.0$/,'')}K` : reach} reach</>}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleFollow(c.id, isFollowing)}
+              className={`rounded-pill px-3 py-1 text-[11.5px] font-extrabold whitespace-nowrap ${isFollowing ? 'bg-bg5 text-b2' : 'bg-g text-white'}`}
+            >
+              {isFollowing ? 'Following' : 'Follow'}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

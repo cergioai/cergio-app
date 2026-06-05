@@ -1,39 +1,100 @@
-feat(brand): elegant BETA tag + AuthScreen copy split
+feat(activity): 4-tab Network view — Summary / Friends / Connectors / Feed
 
-Tarik 2026-06-05: "add elegant beta sign next to logo, and clean up
-copy look on initial sign in (too busy.. move to several lines)."
+Tarik 2026-06-05 referenced the original UX video — timer 6:36-6:42
+shows the network tab with four sub-tabs; 2:48-3:11 shows the
+Summary aggregates + reco'd-services tracking. This commit adds
+that structure to ActivityScreen.
 
-══════════════════ BETA tag ══════════════════════════════════════════
+══════════════════ Tabs ════════════════════════════════════════════════
 
-  Subtle pill rendered next to the wordmark on:
+  Compact pill bar near the top of Activity. Four views:
 
-    AuthScreen.jsx — gradient green-tinted (bg-gl, border g/30, text gd)
-                     sits superscript-style top-right of "CERGIO".
-    SplashScreen.jsx — translucent white pill (bg-white/12, border
-                     white/25) so it floats over the dark hero
-                     without competing with the leaf glow.
+  SUMMARY (counts + actions)
+    Two rows of three tappable count tiles:
+      • friends invited / friends joined / friends booked
+        → all route to Friends tab
+      • recos sent / connectors / activities
+        → route to /invite/recommend, Connectors tab, Feed tab
+    Action row: "Invite a friend" + "Reco a provider"
+    Sub-line: rewards math from REWARDS ($X credit per friend up to
+              $250, plus $12.50 chain bonus per friend-of-friend).
 
-  Same uppercase + 0.18em tracking + 6px corners on both → the BETA
-  marker reads consistently across surfaces.
+  FRIENDS (invites I sent + their status)
+    NetworkFriendsTab — calls getMyInvitesDetailed.
+    Each row: avatar + name + invited-on date + status pill
+      (Pending / Joined / Booked).
+    Tap row → invitee's public profile (if joined) or invite tracker.
+    Empty state: gradient CTA card → /invite/friends-popup.
 
-══════════════════ AuthScreen copy — split + breathing ═════════════════
+  CONNECTORS (verified ambassadors + follow)
+    NetworkConnectorsTab — loads top 50 profiles where
+    cc_verified_at IS NOT NULL, ordered by verified date.
+    Each row: avatar + name + IG/TT handles + total reach + Follow
+              button.
+    Follow button reuses followProfile / unfollowProfile from api.js;
+    local followedIds set updates immediately so the UI feels live.
+    Tap avatar or name → /u/:id public profile.
 
-  Before (dense):
-    [Logo]
-    Welcome to CERGIO
-    Create your account in seconds.
+  FEED (existing social feed + open requests)
+    Unchanged behaviour — the existing feed IIFE + "Your open
+    requests" block now render only when activeTab === 'feed'.
 
-  After (split + calmer):
-    [Logo]
-    Welcome to                          ← muted preface line
-    CERGIO  [BETA]                      ← wordmark + tag, bigger
-    Create your account.                ← primary action sub
-    Takes seconds.                      ← supporting micro
+══════════════════ Data sources ═══════════════════════════════════════
 
-  Sign-in variant:
-    Welcome to / CERGIO BETA / Sign in to keep going. / One tap with Google.
+  • Counts: getMyInviteCounts (already used by EarningsScreen)
+  • Friends list: getMyInvitesDetailed (already used by
+    InviteTrackingScreen)
+  • Connectors: direct supabase query on profiles, filter
+    cc_verified_at IS NOT NULL — same gate BrowseConnectors uses
+    server-side
+  • Follow state: getMyFollowedIds + follow/unfollow API
+  • Feed: listSocialFeed (existing)
+
+  No new edge functions, no new RLS policies — pure frontend
+  composition over existing helpers.
+
+══════════════════ UX notes ═══════════════════════════════════════════
+
+  • Default tab is Feed so existing users see no change on first
+    paint; they discover the new tabs as a calm bar above.
+  • Each Summary tile routes to the matching sub-tab so the page
+    self-navigates without a hub-and-spoke trip.
+  • Connectors tab follow button mirrors the same pill style used
+    on PublicProfileScreen — consistent affordance everywhere.
+
+══════════════════ Earnings IA cleanup (same bundle) ══════════════════
+
+  Tarik 2026-06-05 on the live earnings page: "differentiate
+  Services reco'd VS Services offered. The earnings table is
+  confusing. Just keep invited + joined. No need for # booked
+  (they can see the numbers below). Break these notes apart
+  (which service was booked for how much)."
+
+  Counts strip — 5 tiles → 4:
+    Drop: "Booked" (visible in row ledger below already)
+    Split visually: Reco'd (services I recommended) stays plain;
+    Offered (services I list myself) renders with italic + green-
+    tinted tile (bg-gl/60, text-gd) so the two categories read as
+    distinct at a glance.
+
+    Now: Invited · Joined · Reco'd · Offered
+
+  Row IA — broken onto stacked lines instead of one cramped row:
+    L1: Headline including booking $ when known
+        Was: "Alex (friend) booked a service"
+        Now: "Alex booked a $900 service"  (price inferred from
+              payout / tier-rate; hidden when at-cap so we don't
+              spread "$3571 service" everywhere)
+    L2: Tier pill + cap-left pill (separate from headline)
+    L3: Status caption (cap-maxed / partial — unchanged)
+    L4: Time + status
+
+  Caveat surfaced: seed data shows multiple "$250 cap maxed" rows
+  even though only 1 friend is invited. Cap math is correct; seed
+  fixtures need a rerun to align row counts with realistic invite
+  tree (deferred — needs a new pass in Seed Dense Network.command).
 
 ══════════════════ Verified ══════════════════════════════════════════
 
   scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX — AuthScreen / SplashScreen / EarningsScreen OK
+  @babel/parser JSX — ActivityScreen + EarningsScreen OK

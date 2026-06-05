@@ -418,26 +418,51 @@ export function EarningsScreen() {
             </button>
           );
         }
+        // CERGIO-GUARD (2026-06-05 v7): Tarik — "no need for # booked
+        // (they can see numbers below)" and "differentiate services
+        // reco'd VS services offered." 5-tile → 4-tile strip:
+        //   Invited · Joined · Reco'd · Offered
+        // The "Offered" tile renders with a distinct font weight + italic
+        // so it reads as a different category (services I personally list,
+        // not services I've recommended).
         return (
-          <div className="mx-5 mb-5 grid grid-cols-5 gap-1.5">
-            {[
-              { n: inviteCounts.invited, label: 'Invited', path: '/earnings/invites' },
-              { n: inviteCounts.joined,  label: 'Joined',  path: '/earnings/invites?filter=joined' },
-              { n: inviteCounts.booked,  label: 'Booked',  path: '/earnings/invites?filter=booked' },
-              { n: recsCount,            label: "Reco'd",  path: '/invite/recommend' },
-              { n: servicesCount,        label: 'Services', path: servicesCount > 0 ? '/profile' : '/list-service' },
-            ].map((c) => (
-              <button
-                key={c.label}
-                type="button"
-                onClick={() => navigate(c.path)}
-                className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
-                title={`${c.n} ${c.label} — tap to open`}
-              >
-                <p className="text-[18px] font-extrabold text-black leading-none">{c.n}</p>
-                <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">{c.label}</p>
-              </button>
-            ))}
+          <div className="mx-5 mb-5 grid grid-cols-4 gap-1.5">
+            <button
+              type="button"
+              onClick={() => navigate('/earnings/invites')}
+              className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
+              title={`${inviteCounts.invited} invited — tap to open`}
+            >
+              <p className="text-[18px] font-extrabold text-black leading-none">{inviteCounts.invited}</p>
+              <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Invited</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/earnings/invites?filter=joined')}
+              className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
+              title={`${inviteCounts.joined} joined — tap to open`}
+            >
+              <p className="text-[18px] font-extrabold text-black leading-none">{inviteCounts.joined}</p>
+              <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Joined</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/invite/recommend')}
+              className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
+              title={`${recsCount} services you've recommended — tap to send another reco`}
+            >
+              <p className="text-[18px] font-extrabold text-black leading-none">{recsCount}</p>
+              <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Reco&apos;d</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(servicesCount > 0 ? '/profile' : '/list-service')}
+              className="bg-gl/60 border border-g/25 rounded-[12px] py-2 px-1.5 text-center hover:bg-gl transition-colors"
+              title={`${servicesCount} services you offer — tap to manage`}
+            >
+              <p className="text-[18px] font-extrabold text-gd leading-none italic">{servicesCount}</p>
+              <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-gd mt-0.5">Offered</p>
+            </button>
           </div>
         );
       })()}
@@ -555,20 +580,6 @@ export function EarningsScreen() {
                         // join via source_id → invites → bookings →
                         // services.title. For now the second name reads
                         // as "a service".
-                        let headline = 'Friend referral';
-                        if (e.kind === 'spotlight') {
-                          headline = `${e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram'} spotlight`;
-                        } else if (e.kind === 'booking') {
-                          headline = 'Service booking';
-                        } else if (friendShort && tier === 'direct') {
-                          headline = `${friendShort} (friend) booked a service`;
-                        } else if (fofShort && tier === 'chain') {
-                          headline = `${fofShort} (friend-of-friend via ${friendShort}) booked a service`;
-                        } else if (friendShort && tier === 'chain') {
-                          headline = `Friend-of-friend (via ${friendShort}) booked a service`;
-                        } else if (tier === 'chain') {
-                          headline = 'Friend-of-friend booked a service';
-                        }
                         // CERGIO-GUARD (2026-06-03): infer the booking
                         // amount from the payout when we're not at the
                         // cap. Tier 1: payout / 0.07. Tier 2: payout
@@ -582,6 +593,30 @@ export function EarningsScreen() {
                           : tier === 'chain'
                             ? Math.round(cents / (tier2Rate / 100))
                             : null;
+                        const bookingPriceTag = inferredBookingCents && !atTier1Cap && !atTier2Cap
+                          ? ` $${(inferredBookingCents / 100).toFixed(0)}`
+                          : '';
+                        // CERGIO-GUARD (2026-06-05 v7): per Tarik —
+                        // "break these types of notes (which service
+                        // was booked for how much)". Surface the
+                        // inferred booking $ in the headline so the row
+                        // reads as a real transaction, not abstract
+                        // credit. Service name itself still pending the
+                        // earnings → bookings → services.title join.
+                        let headline = 'Friend referral';
+                        if (e.kind === 'spotlight') {
+                          headline = `${e.meta?.platform === 'tiktok' ? 'TikTok' : 'Instagram'} spotlight`;
+                        } else if (e.kind === 'booking') {
+                          headline = 'Service booking';
+                        } else if (friendShort && tier === 'direct') {
+                          headline = `${friendShort} booked a${bookingPriceTag} service`;
+                        } else if (fofShort && tier === 'chain') {
+                          headline = `${fofShort} booked a${bookingPriceTag} service`;
+                        } else if (friendShort && tier === 'chain') {
+                          headline = `Friend-of-friend booked a${bookingPriceTag} service`;
+                        } else if (tier === 'chain') {
+                          headline = `Friend-of-friend booked a${bookingPriceTag} service`;
+                        }
                         const tierLabel  = tier === 'direct' ? 'Tier 1' : tier === 'chain' ? 'Tier 2' : null;
                         const tierRate   = tier === 'direct' ? tier1Rate : tier2Rate;
                         const tierCapStr = tier === 'direct' ? `${REWARDS.perFriend}` : `${REWARDS.friendOfFriendBonus}`;
@@ -614,10 +649,19 @@ export function EarningsScreen() {
                           : (friendShort || 'Friend');
                         return (
                           <>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="text-[14px] font-extrabold text-black leading-tight">
-                                {headline}
-                              </p>
+                            {/* CERGIO-GUARD (2026-06-05 v7): row IA
+                                broken onto separate lines per Tarik —
+                                "need to break these types of notes"
+                                (headline + tier + cap state were
+                                cramped on one line). Now:
+                                  L1: headline (Alex booked a $900 service)
+                                  L2: tier pill + cap-left pill
+                                  L3: status caption (only if relevant)
+                                  L4: time + status (rendered below) */}
+                            <p className="text-[14px] font-extrabold text-black leading-tight">
+                              {headline}
+                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
                               {tierLabel && (
                                 <span
                                   className={`text-[9.5px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-pill
