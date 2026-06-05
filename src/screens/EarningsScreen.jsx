@@ -445,11 +445,19 @@ export function EarningsScreen() {
               <p className="text-[18px] font-extrabold text-black leading-none">{inviteCounts.joined}</p>
               <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Joined</p>
             </button>
+            {/* CERGIO-GUARD (2026-06-05): Reco'd tile now opens the
+                reco tracking dashboard (list of who you've reco'd +
+                edit/nudge per row), not the new-reco form. Tarik:
+                "clicking on # of reco's should show the reco's made and
+                ability to edit them". The + Reco button inside the
+                tracking screen is the entry point for new recos. */}
             <button
               type="button"
-              onClick={() => navigate('/invite/recommend')}
+              onClick={() => navigate(recsCount > 0 ? '/earnings/recos' : '/invite/recommend')}
               className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
-              title={`${recsCount} services you've recommended — tap to send another reco`}
+              title={recsCount > 0
+                ? `${recsCount} reco'd — tap to review, edit, or nudge`
+                : 'Reco someone you know — tap to start'}
             >
               <p className="text-[18px] font-extrabold text-black leading-none">{recsCount}</p>
               <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Reco&apos;d</p>

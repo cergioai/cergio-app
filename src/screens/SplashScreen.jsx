@@ -30,6 +30,10 @@ export function SplashScreen() {
               CERGIO-GUARD (2026-06-05 v6): elegant BETA tag tucked
               against the wordmark per Tarik. Same style on Auth +
               Splash so the marker is consistent. */}
+          {/* CERGIO-GUARD (2026-06-05 v7): two-line hero per Tarik —
+              "Hi, I'm CERGIO" gets its own line on the login/landing
+              splash; the value-prop "I book services your friends
+              actually trust" moves to a second softer line below. */}
           <p className="text-[15px] text-white/80 font-medium text-center leading-snug">
             Hi, I&apos;m{' '}
             <span className="font-extrabold tracking-[0.18em] uppercase text-white">
@@ -41,7 +45,10 @@ export function SplashScreen() {
             >
               beta
             </span>
-            . I book services your friends actually trust.
+            .
+          </p>
+          <p className="text-[14px] text-white/65 font-medium text-center leading-snug mt-1">
+            I book services your friends actually trust.
           </p>
           <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase mt-1">
             Book · Barter · Earn

@@ -233,6 +233,14 @@ export function AuthScreen() {
             beta
           </span>
         </h1>
+        {/* CERGIO-GUARD (2026-06-05): mirror the Book · Barter · Earn
+            pillar line from SplashScreen onto AuthScreen too. Tarik:
+            "add book barter earn on login too". Sits between the
+            wordmark and the action prompt so the brand pillars are
+            present at every entry point — not just the splash. */}
+        <p className="mt-3 text-[10.5px] text-b3 font-extrabold tracking-[0.18em] uppercase">
+          Book · Barter · Earn
+        </p>
         <p className="mt-4 text-[13.5px] text-b2 leading-snug max-w-[260px]">
           {isSignup ? 'Create your account.' : 'Sign in to keep going.'}
         </p>

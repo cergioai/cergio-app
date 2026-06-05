@@ -20,6 +20,10 @@ import { supabase, supabaseReady } from '../lib/supabase';
 const SUBJECTS = [
   { value: 'general',       label: 'General' },
   { value: 'support',       label: 'Support — I need help' },
+  // CERGIO-GUARD (2026-06-05): explicit bug-report option per Tarik
+  // ("ability to add a pic (if a bug…)"). When this subject is chosen
+  // the form reveals an image picker for a screenshot of the issue.
+  { value: 'bug',           label: 'Bug report — something broke' },
   { value: 'press',         label: 'Press / media inquiry' },
   { value: 'investors',     label: 'Investors / fundraising' },
   { value: 'partnerships',  label: 'Partnerships' },
@@ -43,6 +47,15 @@ export function ContactScreen() {
   const [body,    setBody]    = useState('');
   const [busy,    setBusy]    = useState(false);
   const [sent,    setSent]    = useState(false);
+  // CERGIO-GUARD (2026-06-05): screenshot attachment for bug reports.
+  // File is held in component state (max 5MB), previewed inline, and
+  // uploaded to the `contact-attachments` storage bucket on submit.
+  // If the bucket isn't provisioned the upload error is swallowed and
+  // we note "attachment was selected but couldn't upload" in the body
+  // so support can ask for a re-send rather than losing context.
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [attachmentError, setAttachmentError] = useState(null);
 
   // Keep subject in sync if user navigates with a new ?subject= param.
   useEffect(() => { setSubject(initialSubject); }, [initialSubject]);
@@ -53,22 +66,72 @@ export function ContactScreen() {
     body.trim().length >= 5 &&
     !busy;
 
+  const onPickAttachment = (file) => {
+    setAttachmentError(null);
+    if (!file) {
+      setAttachment(null);
+      setAttachmentPreview(null);
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setAttachmentError('Please pick an image (PNG / JPG / GIF).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAttachmentError('Max 5 MB — please attach a smaller image.');
+      return;
+    }
+    setAttachment(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setAttachmentPreview(ev.target?.result || null);
+    reader.readAsDataURL(file);
+  };
+
   const submit = async (e) => {
     e?.preventDefault?.();
     if (!canSubmit) return;
     setBusy(true);
     try {
-      // Best-effort persistence — table is optional. On any error we
-      // still consider the form "sent" so the demo flow works.
+      // Step 1: upload attachment when present. Best-effort — if the
+      // bucket isn't provisioned we still send the message and note
+      // the failed attempt so support can follow up.
+      let attachmentUrl = null;
+      let attachmentNote = '';
+      if (attachment && supabaseReady) {
+        const ext = (attachment.name.split('.').pop() || 'png').toLowerCase();
+        const path = `bug-reports/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from('contact-attachments')
+          .upload(path, attachment, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: attachment.type,
+          });
+        if (!upErr) {
+          const { data: urlRes } = supabase.storage
+            .from('contact-attachments')
+            .getPublicUrl(path);
+          attachmentUrl = urlRes?.publicUrl || null;
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn('[contact] attachment upload failed:', upErr.message);
+          attachmentNote = `\n\n[ATTACHMENT: user selected ${attachment.name} (${Math.round(attachment.size / 1024)}kb) but upload failed — please ask them to re-send.]`;
+        }
+      }
+
+      // Step 2: persist the message. Table is optional. On any error
+      // we still consider the form "sent" so the demo flow works.
       if (supabaseReady) {
+        const row = {
+          subject,
+          name:  name.trim(),
+          email: email.trim(),
+          body:  body.trim() + attachmentNote,
+        };
+        if (attachmentUrl) row.attachment_url = attachmentUrl;
         const { error } = await supabase
           .from('contact_messages')
-          .insert({
-            subject,
-            name:  name.trim(),
-            email: email.trim(),
-            body:  body.trim(),
-          });
+          .insert(row);
         if (error) {
           // eslint-disable-next-line no-console
           console.warn('[contact] insert failed (table may not exist yet):', error.message);
@@ -167,11 +230,56 @@ export function ContactScreen() {
               value={body}
               onChange={e => setBody(e.target.value)}
               rows={6}
-              placeholder="Tell us what's up."
+              placeholder={subject === 'bug'
+                ? 'What did you try? What did you expect? What actually happened?'
+                : "Tell us what's up."}
               className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
                          placeholder:text-b3 focus:outline-none focus:border-g/60 resize-none"
             />
           </Field>
+
+          {/* CERGIO-GUARD (2026-06-05): screenshot picker — bug-report
+              only. Tarik 2026-06-05: "ability to add a pic (if a bug)".
+              Keeping it scoped to the bug subject so other use cases
+              don't accidentally drop in 5MB images. */}
+          {subject === 'bug' && (
+            <Field label="Screenshot (optional)">
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 bg-white border border-bdr rounded-[12px] px-3.5 py-3 cursor-pointer hover:border-g/40 transition-colors">
+                  <span className="text-[13px] font-extrabold text-b2">
+                    {attachment ? 'Change screenshot' : '＋ Add a screenshot'}
+                  </span>
+                  <span className="text-[11px] text-b3 ml-auto">PNG / JPG, max 5MB</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => onPickAttachment(e.target.files?.[0] || null)}
+                  />
+                </label>
+                {attachmentError && (
+                  <p className="text-[11.5px] text-danger font-extrabold">{attachmentError}</p>
+                )}
+                {attachmentPreview && (
+                  <div className="relative inline-block">
+                    <img
+                      src={attachmentPreview}
+                      alt="Screenshot preview"
+                      className="max-h-48 rounded-[10px] border border-bdr"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onPickAttachment(null)}
+                      className="absolute -top-2 -right-2 bg-white border border-bdr rounded-full w-6 h-6 text-[11px] font-extrabold text-b2 shadow-sm"
+                      aria-label="Remove screenshot"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+            </Field>
+          )}
 
           <button
             type="submit"

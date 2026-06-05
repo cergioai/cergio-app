@@ -1,63 +1,51 @@
-fix(referral): credit 7% slice per booking (not lump $250 cap)
+bundle(reco-list+nav-help+auth-tagline+bug-pic+invite-svctype)
 
-Tarik 2026-06-05 on the live earnings page: "data is hardcoded — can't
-have $250 max reached for several rows when only 1 user invited."
+Six related UX fixes Tarik queued 2026-06-05.
 
-The symptom traced to `creditInviterOnFirstBooking` in
-src/lib/referral.js. The old implementation wrote a SINGLE earnings
-row of `REWARDS.perFriend * 100` cents ($250) per invitee's first
-booking — ignoring the actual booking total + the 7% share. Result:
-every new invitee's first booking inflated the inviter's earnings by
-$250, regardless of whether the booking was $5 or $5000.
+1. SplashScreen — two-line hero
+   "Hi, I'm CERGIO." gets line 1 alone; value prop "I book services
+   your friends actually trust." moves to a softer line 2.
 
-That collided with the v6 cap-walk logic (EarningsScreen rowCapState)
-which buckets rows by friend → showing "$250 cap maxed" on EACH
-friend's row even though the actual booking economics never produced
-that much.
+2. Reco'd tile → list of recos made + edit
+   - New RecoTrackingScreen at /earnings/recos.
+     - Each row: recipient + "as {ServiceType}" pill (parsed from the
+       persisted `[Type] blurb` prefix) + blurb body + sent-time.
+     - Edit (inline textarea) patches recommendations.message.
+     - Nudge (WhatsApp / SMS / Copy) rebuilds the canonical SMS the
+       notify-user edge function uses, so client + server messaging
+       stay in sync.
+     - Inline armed-delete (no window.confirm) — matches the rule we
+       already enforced on ResultsScreen + ServiceDetailProvider.
+   - EarningsScreen Reco'd counts-strip tile now routes to
+     /earnings/recos when count > 0 (vs the new-reco form). Tile title
+     reads "tap to review, edit, or nudge" so the action is unambiguous.
+   - api.js adds listMyRecommendations / updateRecommendation /
+     deleteRecommendation + a split/join helper that round-trips the
+     "[ServiceType] body" persisted shape cleanly.
 
-══════════════════ Fix ════════════════════════════════════════════════
+3. Invite tracking — service-type pill + nudge clarity
+   - InviteTrackingScreen joins each invite to my recommendations
+     rows (digit-matched phone OR invitee_id), via the new
+     getInviteServiceContexts helper, and renders a green "as Plumber"
+     pill beside the Pending/Joined/Booked status pill. Hidden when
+     no matching reco was sent.
 
-  src/lib/referral.js — creditInviterOnFirstBooking now:
+4. AuthScreen — Book · Barter · Earn tagline
+   The pillar line from Splash now mirrors on the sign-in surface so
+   the brand pillars present at every entry point, not just splash.
 
-  1. Looks up the actual booking total_cents from the bookings table.
-  2. Sums prior direct earnings for this (inviter, invitee) pair so
-     the cap-room calc is correct on re-fires.
-  3. Computes the credit as:
-        credit = min(7% × bookingTotal, $250 - prior)
-  4. Resolves the invitee's display_name and stamps it on the
-     earnings row's meta.friend — so EarningsScreen's cap-walk
-     (rowCapState) groups rows by friend name correctly.
-  5. Skips the earnings insert when credit = 0 (booking $0 or cap
-     already reached prior), but still stamps first_booking_at so we
-     don't re-fire endlessly.
+5. BottomNav — Help tab (6 tabs)
+   - Consumer: Search · Inbox · Earnings · Help · Activity · Profile
+   - Provider: Home · Inbox · Calendar · Earnings · Help · Profile
+   - Routes to /contact, the unified support/feedback inbox.
+   - Life-ring icon. ACTIVE_MAP updated so /contact lights the Help tab.
 
-  Net effect: a single $95 booking from Daniela now produces a
-  $6.65 earnings row for Camilo (the inviter) — not a $250 lump.
-  Multiple bookings accumulate up to the $250 cap as designed.
+6. ContactScreen — bug-report subject + screenshot upload
+   - New "Bug report — something broke" subject option.
+   - When subject = bug, an inline file picker reveals (PNG/JPG, 5MB cap).
+   - On submit: uploads to the `contact-attachments` storage bucket
+     and stamps attachment_url on the contact_messages row. If the
+     bucket isn't provisioned, the message still goes through with a
+     note in the body so support can ask for a re-send.
 
-══════════════════ Seed fixture cleanup ═══════════════════════════════
-
-  Seed Dense Network.command — DELETE phase extended to:
-
-  • Wipe earnings rows whose source_id IS IN the dense invites
-    (clears the stale $250 lumps the old code wrote).
-  • Reset first_booking_at + reward_cents on dense invites so the
-    next booking event re-fires the credit through the new logic.
-
-  Tarik to re-run Seed Dense Network.command after this pushes; then
-  the existing demo bookings will re-trigger creditInviterOnFirstBooking
-  with the correct 7%-slice economics.
-
-══════════════════ Notes ══════════════════════════════════════════════
-
-  • Does NOT touch creditChainOnFirstBooking ($12.50 chain bonus).
-    That contract is a fixed bonus, not a percentage — unchanged.
-  • Re-running on existing booked invites is safe; the prior-cents
-    lookup prevents over-credit. The reset of first_booking_at in the
-    seed is what makes the demo data refresh.
-
-══════════════════ Verified ══════════════════════════════════════════
-
-  Code-level review: amounts come from REWARDS, no hardcoded cents.
-  scripts/qa.mjs to be run on the consolidated bundle in the next
-  commit (this fix is one part of an in-progress chain).
+Verified: scripts/qa.mjs 41/41 PASS · JSX parses clean on all 8 files.

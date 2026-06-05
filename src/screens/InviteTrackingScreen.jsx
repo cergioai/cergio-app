@@ -18,7 +18,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { getMyInvitesDetailed, bumpInvite } from '../lib/api';
+import { getMyInvitesDetailed, bumpInvite, getInviteServiceContexts } from '../lib/api';
 import { buildInviteUrl } from '../lib/referral';
 import { REWARDS } from '../lib/rewards';
 
@@ -61,6 +61,12 @@ export function InviteTrackingScreen() {
   // pending-action map so a row's buttons can show a spinner during
   // the bump call without locking the whole screen.
   const [pending, setPending] = useState({});
+  // CERGIO-GUARD (2026-06-05): per-invite service-type pill. Sourced
+  // from recommendations rows the user wrote against the same recipient
+  // (digit-matched phone or invitee_id). Lets the user see at a glance
+  // which invites were Reco'd as e.g. a Plumber. Tarik 2026-06-05:
+  // "don't see how to track invite with type of service added".
+  const [recoCtx, setRecoCtx] = useState({});
 
   // Inviter's tracked URL — every share message embeds this so the
   // converting friend's signup + first booking credit Tarik.
@@ -69,9 +75,13 @@ export function InviteTrackingScreen() {
   useEffect(() => {
     if (!auth?.isSignedIn) { setRows([]); return; }
     let cancelled = false;
-    getMyInvitesDetailed({ limit: 200 }).then(({ data }) => {
+    getMyInvitesDetailed({ limit: 200 }).then(async ({ data }) => {
       if (cancelled) return;
-      setRows(data || []);
+      const invites = data || [];
+      setRows(invites);
+      // Best-effort enrichment — failures fall back to a label-less row.
+      const { data: ctxMap } = await getInviteServiceContexts(invites);
+      if (!cancelled) setRecoCtx(ctxMap || {});
     });
     return () => { cancelled = true; };
   }, [auth?.isSignedIn]);
@@ -230,6 +240,14 @@ export function InviteTrackingScreen() {
                     <span className={`text-[10px] font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 ${meta.cls}`}>
                       {meta.label}
                     </span>
+                    {/* CERGIO-GUARD (2026-06-05): service-type pill —
+                        sourced from a matching recommendations row.
+                        Hidden when no reco was sent (plain invite). */}
+                    {recoCtx[r.id]?.service_type_label && (
+                      <span className="text-[10px] font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-gl text-gd">
+                        as {recoCtx[r.id].service_type_label}
+                      </span>
+                    )}
                   </div>
                   {sub && <p className="text-[11px] text-b3 mt-0.5 truncate">{sub}</p>}
                   <p className="text-[11px] text-b3 mt-0.5">

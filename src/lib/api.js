@@ -1493,6 +1493,218 @@ export async function getMyInvitesDetailed({ limit = 100 } = {}) {
   return { data: data || [], error: null };
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// CERGIO-GUARD (2026-06-05): Reco tracking + invite context.
+// Tarik: "clicking on # of reco's should show the reco's made and ability
+// to edit them" + "don't see how to track invite with type of service
+// added and nudge — per UX video at 2:32".
+//
+// The recommendations table stores rows shaped:
+//   id, recommender_id, recipient_id|recipient_phone, service_id, message, sent_at
+//
+// When the user reco'd a NEW service-provider (no service_id), the
+// RecommendServiceFormScreen submit path persists message as
+//   `[ServiceType] blurb`
+// so we can parse the service-type label back out for display. When a
+// service_id IS set, the joined service row carries title +
+// taxonomy_provider_type and we use that directly.
+//
+// Three helpers below are tightly scoped to this UX surface:
+//   listMyRecommendations  → rows for the user's Recos tracking screen
+//   updateRecommendation   → patch message (rebuild [Type] prefix)
+//   deleteRecommendation   → remove a row
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Parses "[ServiceType] free-form blurb" → { service_type_label, body }.
+ * When the prefix isn't present the body is returned verbatim and
+ * service_type_label is null.
+ */
+function splitRecoMessage(raw) {
+  const s = String(raw || '').trim();
+  const m = s.match(/^\[([^\]]+)\]\s*(.*)$/s);
+  if (m) return { service_type_label: m[1].trim(), body: m[2].trim() };
+  return { service_type_label: null, body: s };
+}
+
+/**
+ * Builds the persisted message string from a label + body, matching the
+ * shape RecommendServiceFormScreen.submit() writes.
+ */
+function joinRecoMessage(label, body) {
+  const lbl = String(label || '').trim();
+  const txt = String(body || '').trim();
+  if (!lbl) return txt;
+  return `[${lbl}] ${txt}`;
+}
+
+/**
+ * List recommendations sent by the current user, hydrated with the
+ * recipient profile (when invitee_id is set) and service title +
+ * provider taxonomy (when service_id is set). Falls back gracefully to
+ * just the raw row when joins fail so the screen still renders.
+ *
+ * Each returned row is shaped:
+ *   {
+ *     id, sent_at, raw_message,
+ *     service_type_label,   // "[Plumber]" prefix or service.taxonomy
+ *     body,                 // blurb without the prefix
+ *     recipient: { id?, display_name?, phone? },
+ *     service:   { id, title, taxonomy_provider_type, category } | null,
+ *   }
+ */
+export async function listMyRecommendations({ limit = 100 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+
+  // Step 1: pull recommendation rows authored by me.
+  const { data: recs, error } = await supabase
+    .from('recommendations')
+    .select('id, recipient_id, recipient_phone, service_id, message, sent_at')
+    .eq('recommender_id', userRes.user.id)
+    .order('sent_at', { ascending: false })
+    .limit(limit);
+  if (error || !recs?.length) return { data: [], error: error || null };
+
+  // Step 2: hydrate recipient profiles (when we have ids).
+  const rIds = [...new Set(recs.map(r => r.recipient_id).filter(Boolean))];
+  let recipientMap = {};
+  if (rIds.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', rIds);
+    recipientMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+  }
+
+  // Step 3: hydrate referenced services (when we have ids).
+  const sIds = [...new Set(recs.map(r => r.service_id).filter(Boolean))];
+  let svcMap = {};
+  if (sIds.length > 0) {
+    const { data: svcs } = await supabase
+      .from('services')
+      .select('id, title, category, taxonomy_provider_type')
+      .in('id', sIds);
+    svcMap = Object.fromEntries((svcs || []).map(s => [s.id, s]));
+  }
+
+  // Step 4: shape rows.
+  const rows = recs.map(r => {
+    const parsed = splitRecoMessage(r.message);
+    const svc = r.service_id ? svcMap[r.service_id] : null;
+    // Service-type label resolution priority: explicit service taxonomy →
+    // service title → parsed [Type] prefix from the persisted message.
+    const labelFromService =
+      svc?.taxonomy_provider_type || svc?.title || null;
+    return {
+      id:                 r.id,
+      sent_at:            r.sent_at,
+      raw_message:        r.message || '',
+      service_type_label: labelFromService || parsed.service_type_label,
+      body:               parsed.body,
+      recipient: {
+        id:           r.recipient_id || null,
+        display_name: recipientMap[r.recipient_id]?.display_name || null,
+        phone:        r.recipient_phone || null,
+      },
+      service: svc ? {
+        id:                     svc.id,
+        title:                  svc.title,
+        taxonomy_provider_type: svc.taxonomy_provider_type || null,
+        category:               svc.category || null,
+      } : null,
+    };
+  });
+  return { data: rows, error: null };
+}
+
+/**
+ * Patch the message on a recommendation owned by the current user.
+ * If `service_type_label` is provided, the persisted message is rebuilt
+ * as `[Label] body`; otherwise body is written as-is. RLS already pins
+ * updates to recommender_id = auth.uid().
+ */
+export async function updateRecommendation(id, { body, service_type_label } = {}) {
+  if (!supabaseReady || !id) return { error: new Error('not ready') };
+  const message = joinRecoMessage(service_type_label, body);
+  const { error } = await supabase
+    .from('recommendations')
+    .update({ message })
+    .eq('id', id);
+  return { error: error || null };
+}
+
+/**
+ * Hard-delete a recommendation row. Confirmation is handled inline in
+ * the UI (armed → confirm pattern, no window.confirm) — this helper
+ * just removes the row. RLS pins delete to recommender_id = auth.uid().
+ */
+export async function deleteRecommendation(id) {
+  if (!supabaseReady || !id) return { error: new Error('not ready') };
+  const { error } = await supabase
+    .from('recommendations')
+    .delete()
+    .eq('id', id);
+  return { error: error || null };
+}
+
+/**
+ * CERGIO-GUARD (2026-06-05): invite → reco service-type bridge.
+ *
+ * The `invites` table has no service_type column (pure referral
+ * tracking), but when a user invited a friend through the Reco flow we
+ * wrote a row to `recommendations` for the same inviter+recipient. This
+ * helper joins the two so the InviteTrackingScreen can render
+ * "Reco'd as Plumber" alongside each invite row.
+ *
+ * Matching is done by:
+ *   1. recommendations.recipient_id   = invites.invitee_id
+ *   2. recommendations.recipient_phone = invites.invitee_phone (digits)
+ *
+ * Returns a map keyed by invite id → { service_type_label } so callers
+ * can lookup in O(1) while rendering rows.
+ */
+export async function getInviteServiceContexts(invites) {
+  if (!supabaseReady || !Array.isArray(invites) || invites.length === 0) {
+    return { data: {}, error: null };
+  }
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: {}, error: null };
+
+  // Pull all my recos once and lookup locally — far fewer than N
+  // round-trips and easier to keep in sync with listMyRecommendations.
+  const { data: myRecos } = await listMyRecommendations({ limit: 500 });
+  const byPhone = {};
+  const byProfile = {};
+  for (const r of (myRecos || [])) {
+    const label = r.service_type_label;
+    if (!label) continue;
+    if (r.recipient.phone) {
+      const digits = String(r.recipient.phone).replace(/[^\d]/g, '');
+      if (digits) byPhone[digits] = byPhone[digits] || label;
+    }
+    if (r.recipient.id) {
+      byProfile[r.recipient.id] = byProfile[r.recipient.id] || label;
+    }
+  }
+
+  const out = {};
+  for (const inv of invites) {
+    if (inv.invitee_id && byProfile[inv.invitee_id]) {
+      out[inv.id] = { service_type_label: byProfile[inv.invitee_id] };
+      continue;
+    }
+    if (inv.invitee_phone) {
+      const digits = String(inv.invitee_phone).replace(/[^\d]/g, '');
+      if (digits && byPhone[digits]) {
+        out[inv.id] = { service_type_label: byPhone[digits] };
+      }
+    }
+  }
+  return { data: out, error: null };
+}
+
 /**
  * CERGIO-GUARD (2026-06-04): public network-impact stats for any
  * profile (not just self). Used by PublicProfileScreen's "By the

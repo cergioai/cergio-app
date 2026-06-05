@@ -80,6 +80,7 @@ import { InviteFriendsScreen }              from './screens/InviteFriendsScreen'
 import { InviteTrackingScreen }             from './screens/InviteTrackingScreen';
 import { InviteSelectedReviewScreen }       from './screens/InviteSelectedReviewScreen';
 import { RecommendServiceFormScreen }       from './screens/RecommendServiceFormScreen';
+import { RecoTrackingScreen }               from './screens/RecoTrackingScreen';
 import { CalendarScreen }                   from './screens/CalendarScreen';
 import { AvailabilityScreen }               from './screens/AvailabilityScreen';
 import { ManageServicesScreen }             from './screens/ManageServicesScreen';
@@ -440,6 +441,7 @@ export default function App() {
               link still works because it lands on a real page. */}
           <Route path="/earnings/track"        element={<Navigate to="/earnings" replace />} />
           <Route path="/earnings/invites"      element={<InviteTrackingScreen />} />
+          <Route path="/earnings/recos"        element={<RecoTrackingScreen />} />
           <Route path="/invite/friends-popup"  element={<InviteFriendPopupScreen />} />
           <Route path="/invite/recommend-popup" element={<RecommendServicePopupScreen />} />
           <Route path="/invite/friends"        element={<InviteFriendsScreen />} />
