@@ -1,100 +1,63 @@
-feat(activity): 4-tab Network view — Summary / Friends / Connectors / Feed
+fix(referral): credit 7% slice per booking (not lump $250 cap)
 
-Tarik 2026-06-05 referenced the original UX video — timer 6:36-6:42
-shows the network tab with four sub-tabs; 2:48-3:11 shows the
-Summary aggregates + reco'd-services tracking. This commit adds
-that structure to ActivityScreen.
+Tarik 2026-06-05 on the live earnings page: "data is hardcoded — can't
+have $250 max reached for several rows when only 1 user invited."
 
-══════════════════ Tabs ════════════════════════════════════════════════
+The symptom traced to `creditInviterOnFirstBooking` in
+src/lib/referral.js. The old implementation wrote a SINGLE earnings
+row of `REWARDS.perFriend * 100` cents ($250) per invitee's first
+booking — ignoring the actual booking total + the 7% share. Result:
+every new invitee's first booking inflated the inviter's earnings by
+$250, regardless of whether the booking was $5 or $5000.
 
-  Compact pill bar near the top of Activity. Four views:
+That collided with the v6 cap-walk logic (EarningsScreen rowCapState)
+which buckets rows by friend → showing "$250 cap maxed" on EACH
+friend's row even though the actual booking economics never produced
+that much.
 
-  SUMMARY (counts + actions)
-    Two rows of three tappable count tiles:
-      • friends invited / friends joined / friends booked
-        → all route to Friends tab
-      • recos sent / connectors / activities
-        → route to /invite/recommend, Connectors tab, Feed tab
-    Action row: "Invite a friend" + "Reco a provider"
-    Sub-line: rewards math from REWARDS ($X credit per friend up to
-              $250, plus $12.50 chain bonus per friend-of-friend).
+══════════════════ Fix ════════════════════════════════════════════════
 
-  FRIENDS (invites I sent + their status)
-    NetworkFriendsTab — calls getMyInvitesDetailed.
-    Each row: avatar + name + invited-on date + status pill
-      (Pending / Joined / Booked).
-    Tap row → invitee's public profile (if joined) or invite tracker.
-    Empty state: gradient CTA card → /invite/friends-popup.
+  src/lib/referral.js — creditInviterOnFirstBooking now:
 
-  CONNECTORS (verified ambassadors + follow)
-    NetworkConnectorsTab — loads top 50 profiles where
-    cc_verified_at IS NOT NULL, ordered by verified date.
-    Each row: avatar + name + IG/TT handles + total reach + Follow
-              button.
-    Follow button reuses followProfile / unfollowProfile from api.js;
-    local followedIds set updates immediately so the UI feels live.
-    Tap avatar or name → /u/:id public profile.
+  1. Looks up the actual booking total_cents from the bookings table.
+  2. Sums prior direct earnings for this (inviter, invitee) pair so
+     the cap-room calc is correct on re-fires.
+  3. Computes the credit as:
+        credit = min(7% × bookingTotal, $250 - prior)
+  4. Resolves the invitee's display_name and stamps it on the
+     earnings row's meta.friend — so EarningsScreen's cap-walk
+     (rowCapState) groups rows by friend name correctly.
+  5. Skips the earnings insert when credit = 0 (booking $0 or cap
+     already reached prior), but still stamps first_booking_at so we
+     don't re-fire endlessly.
 
-  FEED (existing social feed + open requests)
-    Unchanged behaviour — the existing feed IIFE + "Your open
-    requests" block now render only when activeTab === 'feed'.
+  Net effect: a single $95 booking from Daniela now produces a
+  $6.65 earnings row for Camilo (the inviter) — not a $250 lump.
+  Multiple bookings accumulate up to the $250 cap as designed.
 
-══════════════════ Data sources ═══════════════════════════════════════
+══════════════════ Seed fixture cleanup ═══════════════════════════════
 
-  • Counts: getMyInviteCounts (already used by EarningsScreen)
-  • Friends list: getMyInvitesDetailed (already used by
-    InviteTrackingScreen)
-  • Connectors: direct supabase query on profiles, filter
-    cc_verified_at IS NOT NULL — same gate BrowseConnectors uses
-    server-side
-  • Follow state: getMyFollowedIds + follow/unfollow API
-  • Feed: listSocialFeed (existing)
+  Seed Dense Network.command — DELETE phase extended to:
 
-  No new edge functions, no new RLS policies — pure frontend
-  composition over existing helpers.
+  • Wipe earnings rows whose source_id IS IN the dense invites
+    (clears the stale $250 lumps the old code wrote).
+  • Reset first_booking_at + reward_cents on dense invites so the
+    next booking event re-fires the credit through the new logic.
 
-══════════════════ UX notes ═══════════════════════════════════════════
+  Tarik to re-run Seed Dense Network.command after this pushes; then
+  the existing demo bookings will re-trigger creditInviterOnFirstBooking
+  with the correct 7%-slice economics.
 
-  • Default tab is Feed so existing users see no change on first
-    paint; they discover the new tabs as a calm bar above.
-  • Each Summary tile routes to the matching sub-tab so the page
-    self-navigates without a hub-and-spoke trip.
-  • Connectors tab follow button mirrors the same pill style used
-    on PublicProfileScreen — consistent affordance everywhere.
+══════════════════ Notes ══════════════════════════════════════════════
 
-══════════════════ Earnings IA cleanup (same bundle) ══════════════════
-
-  Tarik 2026-06-05 on the live earnings page: "differentiate
-  Services reco'd VS Services offered. The earnings table is
-  confusing. Just keep invited + joined. No need for # booked
-  (they can see the numbers below). Break these notes apart
-  (which service was booked for how much)."
-
-  Counts strip — 5 tiles → 4:
-    Drop: "Booked" (visible in row ledger below already)
-    Split visually: Reco'd (services I recommended) stays plain;
-    Offered (services I list myself) renders with italic + green-
-    tinted tile (bg-gl/60, text-gd) so the two categories read as
-    distinct at a glance.
-
-    Now: Invited · Joined · Reco'd · Offered
-
-  Row IA — broken onto stacked lines instead of one cramped row:
-    L1: Headline including booking $ when known
-        Was: "Alex (friend) booked a service"
-        Now: "Alex booked a $900 service"  (price inferred from
-              payout / tier-rate; hidden when at-cap so we don't
-              spread "$3571 service" everywhere)
-    L2: Tier pill + cap-left pill (separate from headline)
-    L3: Status caption (cap-maxed / partial — unchanged)
-    L4: Time + status
-
-  Caveat surfaced: seed data shows multiple "$250 cap maxed" rows
-  even though only 1 friend is invited. Cap math is correct; seed
-  fixtures need a rerun to align row counts with realistic invite
-  tree (deferred — needs a new pass in Seed Dense Network.command).
+  • Does NOT touch creditChainOnFirstBooking ($12.50 chain bonus).
+    That contract is a fixed bonus, not a percentage — unchanged.
+  • Re-running on existing booked invites is safe; the prior-cents
+    lookup prevents over-credit. The reset of first_booking_at in the
+    seed is what makes the demo data refresh.
 
 ══════════════════ Verified ══════════════════════════════════════════
 
-  scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX — ActivityScreen + EarningsScreen OK
+  Code-level review: amounts come from REWARDS, no hardcoded cents.
+  scripts/qa.mjs to be run on the consolidated bundle in the next
+  commit (this fix is one part of an in-progress chain).

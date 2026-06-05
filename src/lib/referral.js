@@ -147,26 +147,92 @@ export async function creditInviterOnFirstBooking(consumerId, bookingId) {
     .maybeSingle();
   if (findErr || !invite) return { error: findErr };
 
-  // Stamp first_booking_at + record reward amount on the invite row.
-  // CERGIO-GUARD (2026-06-05): pulled from REWARDS so reward stays
-  // canonical. Was a hardcoded `25000` cents with a "must match" comment.
-  const REWARD_CENTS = REWARDS.perFriend * 100;
+  // CERGIO-GUARD (2026-06-05 v7): credit a REAL 7% slice of the
+  // booking, capped at $250 per friend — not the lump $250-on-first-
+  // booking that the previous implementation used. Tarik:
+  //   "data is hardcoded — can't have $250 max reached for several
+  //    rows when only one user invited."
+  // That symptom came from this function writing a single $250 row
+  // for every new invitee's first booking, ignoring the actual
+  // booking total.
+  //
+  // New behaviour:
+  //   1. Look up the booking total.
+  //   2. Sum prior direct earnings for this (inviter, invitee) pair.
+  //   3. Credit min(7% × total, $250 - prior).
+  //   4. Also resolve the invitee's display name so the cap-walk
+  //      logic in EarningsScreen buckets the rows correctly.
+  const SHARE_PERCENT = REWARDS.referrerSharePercent; // 7
+  const PER_FRIEND_CAP_CENTS = REWARDS.perFriend * 100;
+
+  // 1. Booking total.
+  let bookingTotalCents = 0;
+  if (bookingId) {
+    const { data: bkRow } = await supabase
+      .from('bookings')
+      .select('total_cents')
+      .eq('id', bookingId)
+      .maybeSingle();
+    bookingTotalCents = bkRow?.total_cents || 0;
+  }
+
+  // 2. Prior credit toward this friend's cap (sum existing tier='direct'
+  //    earnings rows for the same invitee_id).
+  let priorCents = 0;
+  const { data: priorRows } = await supabase
+    .from('earnings')
+    .select('amount_cents')
+    .eq('profile_id', invite.inviter_id)
+    .eq('kind', 'invite')
+    .contains('meta', { invitee_id: consumerId, tier: 'direct' });
+  if (Array.isArray(priorRows)) {
+    priorCents = priorRows.reduce((s, r) => s + (r.amount_cents || 0), 0);
+  }
+
+  // 3. Compute this row's actual credit.
+  const grossCents  = Math.round(bookingTotalCents * (SHARE_PERCENT / 100));
+  const roomCents   = Math.max(0, PER_FRIEND_CAP_CENTS - priorCents);
+  const creditCents = Math.min(grossCents, roomCents);
+
+  // 4. Invitee display name (so EarningsScreen's cap-walk groups by
+  //    friend name — see rowCapState in EarningsScreen.jsx).
+  let inviteeName = null;
+  const { data: invteePr } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', consumerId)
+    .maybeSingle();
+  inviteeName = invteePr?.display_name || null;
+
+  // Stamp first_booking_at + the ACTUAL credit (not the cap).
   await supabase
     .from('invites')
-    .update({ first_booking_at: new Date().toISOString(), reward_cents: REWARD_CENTS })
+    .update({ first_booking_at: new Date().toISOString(), reward_cents: creditCents })
     .eq('id', invite.id);
 
-  // Write the earnings row crediting the inviter.
-  const { error: earnErr } = await supabase
-    .from('earnings')
-    .insert({
-      profile_id:   invite.inviter_id,
-      kind:         'invite',
-      source_id:    invite.id,
-      amount_cents: REWARD_CENTS,
-      status:       'pending',
-      meta:         { booking_id: bookingId || null, invitee_id: consumerId, tier: 'direct' },
-    });
+  // Skip the insert when there's no credit to write (booking $0 or
+  // cap already reached). We still stamped first_booking_at above so
+  // we don't re-fire endlessly.
+  let earnErr = null;
+  if (creditCents > 0) {
+    const result = await supabase
+      .from('earnings')
+      .insert({
+        profile_id:   invite.inviter_id,
+        kind:         'invite',
+        source_id:    invite.id,
+        amount_cents: creditCents,
+        status:       'pending',
+        meta:         {
+          booking_id:        bookingId || null,
+          booking_total_cents: bookingTotalCents,
+          invitee_id:        consumerId,
+          tier:              'direct',
+          friend:            inviteeName,
+        },
+      });
+    earnErr = result.error;
+  }
   if (earnErr) {
     // eslint-disable-next-line no-console
     console.warn('[referral] could not write earnings:', earnErr.message);
