@@ -30,6 +30,15 @@ export function ServiceDetailProviderScreen() {
   // gates concurrent uploads + shows the spinner.
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  // CERGIO-GUARD (2026-06-05 v6): inline-confirm armed state for the
+  // destructive "Delete service" button. Tarik: "cancel request should
+  // be in line (not a pop up from browser)." Auto-disarms after 5s.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const t = setTimeout(() => setDeleteArmed(false), 5000);
+    return () => clearTimeout(t);
+  }, [deleteArmed]);
 
   const handleCoverPick = async (e) => {
     const file = e.target.files?.[0];
@@ -274,22 +283,41 @@ export function ServiceDetailProviderScreen() {
         >
           {svc.status === 'listed' ? 'Unlist this service' : 'Relist this service'}
         </button>
-        <button
-          onClick={async () => {
-            if (!svc.real) { showToast('Demo service — sign up to manage your own.'); return; }
-            const ok = typeof window !== 'undefined' && window.confirm(
-              `Delete "${svc.title}"?\n\nThis permanently removes the service, its offerings, and any pending bookings. This can't be undone.`
-            );
-            if (!ok) return;
-            const { error } = await deleteService(svc.id);
-            if (error) { showToast(`Couldn't delete: ${error.message}`); return; }
-            showToast('Service deleted ✓');
-            navigate('/account/services');
-          }}
-          className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-danger"
-        >
-          Delete service
-        </button>
+        {deleteArmed ? (
+          <div className="bg-white border border-danger/40 rounded-[14px] py-3 px-4 flex flex-col gap-2">
+            <p className="text-[12.5px] text-b2 leading-snug">
+              Permanently remove <span className="font-extrabold">&ldquo;{svc.title}&rdquo;</span> + all offerings + pending bookings? This can&apos;t be undone.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  if (!svc.real) { showToast('Demo service — sign up to manage your own.'); setDeleteArmed(false); return; }
+                  const { error } = await deleteService(svc.id);
+                  if (error) { showToast(`Couldn't delete: ${error.message}`); setDeleteArmed(false); return; }
+                  showToast('Service deleted ✓');
+                  navigate('/account/services');
+                }}
+                className="text-[13px] font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
+              >
+                Confirm delete
+              </button>
+              <span className="text-b3 text-[13px]">·</span>
+              <button
+                onClick={() => setDeleteArmed(false)}
+                className="text-[13px] font-bold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
+              >
+                Keep service
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setDeleteArmed(true)}
+            className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-danger"
+          >
+            Delete service
+          </button>
+        )}
       </div>
     </div>
   );

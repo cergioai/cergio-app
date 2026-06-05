@@ -59,10 +59,14 @@ function buildFindPlan() {
   ];
 }
 function buildSpotlightPlan() {
-  // Stage durations doubled to match the find plan's pacing.
+  // CERGIO-GUARD (2026-06-05 v6): no fabricated counts. Tarik:
+  // "one of the messages said 6 Connectors fit profile, was that
+  // an error... we don't have 6 connectors in pets, clean up."
+  // Removed the hardcoded "Found 6 Connectors" + "Pets · Fitness..."
+  // detail. Pacing kept; copy is now honest (no count promised
+  // we can't deliver against real DB rows).
   return [
     { label: 'Matching Connectors who fit your audience',    ms: 2200 },
-    { label: 'Found 6 Connectors in your area',              ms: 1800, detail: 'Pets · Fitness · Fashion · Food · Local · Lifestyle' },
     { label: 'Checking follower overlap',                    ms: 2200 },
     { label: 'Sending your pitch',                           ms: 2200 },
     { label: 'Awaiting Connector responses',                 ms: 1800 },

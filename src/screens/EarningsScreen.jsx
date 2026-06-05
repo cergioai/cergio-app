@@ -135,12 +135,54 @@ export function EarningsScreen() {
       setActiveTab('referrals');
     }
   }, [isProvider, tabSetByUser, _bookingRowCount, _referralRowCount]);
+  // CERGIO-GUARD (2026-06-05 v5): compute rowCapState BEFORE totals so
+  // hero balance reflects EFFECTIVE credit (post-cap) for referral
+  // rows, not raw ledger. Tarik: the activity tape IS the balance.
+  // Pre-compute a referralRowCaps map keyed by row id → effectiveCents.
+  const referralRowsAll = earnings.filter(e => isReferralKind(e.kind));
+  const perFriendCapCentsForBal = REWARDS.perFriend * 100;
+  const chainBonusCentsForBal   = Math.round(REWARDS.friendOfFriendBonus * 100);
+  const referralRowCaps = (() => {
+    const out = {};
+    const dRun = {};
+    const cRun = {};
+    const sorted = [...referralRowsAll].sort((a, b) => {
+      const ta = new Date(a.created_at || 0).getTime();
+      const tb = new Date(b.created_at || 0).getTime();
+      return ta - tb;
+    });
+    for (const e of sorted) {
+      const t = earningTier(e);
+      const cents = e.amount_cents || 0;
+      if (t === 'direct') {
+        const name = e.meta?.friend ? String(e.meta.friend).split('->')[0] : `direct_${e.id}`;
+        const before = dRun[name] || 0;
+        const room   = Math.max(0, perFriendCapCentsForBal - before);
+        const eff    = Math.min(cents, room);
+        dRun[name]   = before + cents;
+        out[e.id]    = eff;
+      } else if (t === 'chain') {
+        const key    = e.meta?.friend || `chain_${e.id}`;
+        const before = cRun[key] || 0;
+        const room   = Math.max(0, chainBonusCentsForBal - before);
+        const eff    = Math.min(cents, room);
+        cRun[key]    = before + cents;
+        out[e.id]    = eff;
+      } else {
+        out[e.id] = cents;
+      }
+    }
+    return out;
+  })();
   const totals = earnings.reduce((acc, e) => {
     if (e.status !== 'cleared') return acc;
-    acc.all       += e.amount_cents;
-    acc[e.kind]   = (acc[e.kind] || 0) + e.amount_cents;
-    if (isReferralKind(e.kind)) acc.referrals += e.amount_cents;
-    if (isBookingKind(e.kind))  acc.bookings  += e.amount_cents;
+    const amt = isReferralKind(e.kind)
+      ? (referralRowCaps[e.id] ?? e.amount_cents)
+      : e.amount_cents;
+    acc.all       += amt;
+    acc[e.kind]   = (acc[e.kind] || 0) + amt;
+    if (isReferralKind(e.kind)) acc.referrals += amt;
+    if (isBookingKind(e.kind))  acc.bookings  += amt;
     return acc;
   }, { all: 0, referrals: 0, bookings: 0 });
   const balanceCents = totals.all;
@@ -243,13 +285,22 @@ export function EarningsScreen() {
         out[e.id] = { capLeftCents: null, capCents: null, capReachedBefore: false };
         continue;
       }
-      const before = run[bucketKey] || 0;
-      const after  = before + cents;
-      run[bucketKey] = after;
+      // CERGIO-GUARD (2026-06-05 v5): per-row EFFECTIVE credit.
+      // Tarik: "activity is a running tape of individual payments
+      // hitting your balance. 250 was already earned in sessions
+      // before — should be +0." We were showing raw amount_cents
+      // even when the cap was already maxed. Compute the actual
+      // delta-to-balance for THIS row (= min of this payout and
+      // the cap room remaining BEFORE this row).
+      const before     = run[bucketKey] || 0;
+      const room       = Math.max(0, cap - before);
+      const effectiveCents = Math.min(cents, room);
+      const after      = before + cents;
+      run[bucketKey]   = after;
       const capLeftCents     = Math.max(0, cap - after);
       const capReachedBefore = before >= cap;
       const capReachedByThis = !capReachedBefore && after >= cap;
-      out[e.id] = { capLeftCents, capCents: cap, capReachedBefore, capReachedByThis };
+      out[e.id] = { capLeftCents, capCents: cap, capReachedBefore, capReachedByThis, effectiveCents, rawCents: cents };
     }
     return out;
   })();
@@ -620,9 +671,34 @@ export function EarningsScreen() {
                         );
                       })()}
                     </div>
-                    <span className="text-[15px] font-extrabold text-black">
-                      +{fmtDollars(e.amount_cents)}
-                    </span>
+                    {/* CERGIO-GUARD (2026-06-05 v5): show the EFFECTIVE
+                        amount that hit balance for this transaction,
+                        not the raw ledger entry. If the friend's cap
+                        was already maxed in a prior row, this row's
+                        balance impact is $0 — Tarik: "63 earned that
+                        session... but 250 was already earned in
+                        sessions before so it should be +0." Cap-tipping
+                        rows show the partial amount that fit. The pill
+                        below labels capped/partial state explicitly. */}
+                    {(() => {
+                      const rs = rowCapState[e.id];
+                      const effCents = rs ? rs.effectiveCents : (e.amount_cents || 0);
+                      const rawCents = e.amount_cents || 0;
+                      const cappedOut = effCents === 0 && rawCents > 0;
+                      const partial   = effCents > 0 && effCents < rawCents;
+                      return (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={`text-[15px] font-extrabold ${cappedOut ? 'text-b3' : 'text-black'}`}>
+                            +{fmtDollars(effCents)}
+                          </span>
+                          {(cappedOut || partial) && (
+                            <span className="text-[9.5px] text-b3 font-extrabold uppercase tracking-wide">
+                              {cappedOut ? 'cap maxed' : `partial · raw +${fmtDollars(rawCents)}`}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -644,48 +720,58 @@ export function EarningsScreen() {
         // the Home invite house ad. CERGIO-GUARD: don't reintroduce
         // hardcoded mock totals here — counts come from earnings (real).
         <div className="mx-5 mb-6 bg-white border border-bdr rounded-[18px] p-4">
-          {/* Real counters — live from invites + recommendations tables.
-              CERGIO-GUARD (2026-05-28): NEVER hardcode "0" here. The
-              counts must reflect actual rows the user authored. qa #27
-              statically enforces these counts come from real tables. */}
-          <div className="flex items-center gap-4 mb-3">
-            <div className="flex-1">
+          {/* CERGIO-GUARD (2026-06-05 v6): stat tiles are now TAPPABLE.
+              Tarik: "these should take to actual profiles reco'd etc.
+              it doesn't." Each tile routes to the matching ledger:
+                friends invited → /earnings/invites (invite tracker)
+                services reco'd → /earnings/invites (same surface for
+                                  the recommendations the user authored)
+                earned         → /earnings/breakdown (ledger view)
+              Visual: hover affordance + chevron so the tap target reads. */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => navigate('/earnings/invites')}
+              className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
+            >
               <p className="text-[18px] font-extrabold text-black leading-none">{invitesCount}</p>
-              <p className="text-[11px] text-b3 mt-0.5 leading-snug">friends invited</p>
-            </div>
-            <div className="flex-1">
+              <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">friends invited <span className="text-gd font-extrabold">›</span></p>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/earnings/invites')}
+              className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
+            >
               <p className="text-[18px] font-extrabold text-black leading-none">{recsCount}</p>
-              <p className="text-[11px] text-b3 mt-0.5 leading-snug">services reco'd</p>
-            </div>
-            <div className="flex-1">
+              <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">services reco&apos;d <span className="text-gd font-extrabold">›</span></p>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/earnings/breakdown')}
+              className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
+            >
               <p className="text-[18px] font-extrabold text-black leading-none">{balanceStr}</p>
-              <p className="text-[11px] text-b3 mt-0.5 leading-snug">earned</p>
-            </div>
+              <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">earned <span className="text-gd font-extrabold">›</span></p>
+            </button>
           </div>
 
-          {/* CERGIO-GUARD (2026-05-28): de-cluttered per user audit.
-              The two stat rows (top 3 + bottom 3) overlapped (both
-              had "earned" + "invited"). Collapsed to one row: invites
-              count + recs count + earned, with Invite + Reco buttons
-              inline on the right. The lower duplicate row was removed. */}
+          {/* Action row: Invite + Reco buttons + a small "see all
+              recos sent" link. CERGIO-GUARD (2026-06-05): dropped the
+              duplicate "Recs sent" stat (already shown above as
+              "services reco'd"); the action row stays focused on
+              actions, not stats. */}
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-[16px] font-extrabold text-black leading-none">{recsCount}</p>
-              <p className="text-[10px] text-b3 mt-0.5 leading-snug uppercase tracking-wide">
-                Recs sent
-              </p>
-            </div>
             <button
               onClick={() => navigate('/find-friends')}
-              className="bg-g text-white rounded-pill px-3 py-1.5 text-[11px] font-bold whitespace-nowrap"
+              className="flex-1 bg-g text-white rounded-pill px-3 py-2 text-[12px] font-extrabold whitespace-nowrap"
             >
-              Invite
+              Invite a friend
             </button>
             <button
               onClick={() => navigate('/invite/recommend')}
-              className="bg-white border border-bdr rounded-pill px-3 py-1.5 text-[11px] font-bold text-b2 whitespace-nowrap"
+              className="flex-1 bg-white border border-bdr rounded-pill px-3 py-2 text-[12px] font-extrabold text-b2 whitespace-nowrap"
             >
-              Reco
+              Reco a provider
             </button>
           </div>
 

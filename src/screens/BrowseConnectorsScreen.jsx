@@ -28,6 +28,70 @@ function fmtPriceCents(cents) {
   return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
+// CERGIO-GUARD (2026-06-05 v6): inline cancel link for the outbound
+// spotlight request. Tarik: "cancel request should be in line (not a
+// pop up from browser)." Mirrors CancelRequestLink in ResultsScreen.
+function CancelSpotlightLink({ onCancelled }) {
+  const [armed,   setArmed]   = useState(false);
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const cancel = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      if (!userRes?.user) return;
+      const { error } = await supabase
+        .from('spotlight_requests')
+        .update({ status: 'cancelled' })
+        .eq('provider_id', userRes.user.id)
+        .eq('status', 'pending');
+      if (error) throw error;
+      onCancelled?.();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[cancel-spotlight]', e);
+      setPending(false);
+      setArmed(false);
+    }
+  };
+  if (pending) return <span className="mt-3 inline-block text-[13px] text-b3 font-bold">Cancelling…</span>;
+  if (armed) {
+    return (
+      <span className="mt-3 inline-flex items-center gap-2">
+        <button
+          type="button"
+          onClick={cancel}
+          className="text-[13px] font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
+        >
+          Confirm cancel
+        </button>
+        <span className="text-b3 text-[13px]">·</span>
+        <button
+          type="button"
+          onClick={() => setArmed(false)}
+          className="text-[13px] font-bold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
+        >
+          Keep waiting
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setArmed(true)}
+      className="mt-3 text-[13px] text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+    >
+      Cancel request
+    </button>
+  );
+}
+
 export function BrowseConnectorsScreen() {
   const navigate = useNavigate();
   const { showToast } = useOutletContext();
@@ -119,9 +183,14 @@ export function BrowseConnectorsScreen() {
           ✕
         </button>
       </div>
-      <p className="px-5 text-[14px] text-b3 mt-1 leading-relaxed">
-        Connectors set a rate card per post. You can also ask any Connector
-        for a lower price — they're often willing for the right service.
+      {/* CERGIO-GUARD (2026-06-05 v6): lead with the free-barter
+          path per Tarik — "free Connectors is the priority. If none,
+          keep the current msg but more succinct." Free posts come
+          first; the rate-card line moves to a quieter sub. */}
+      <p className="px-5 text-[14px] text-b2 mt-1 leading-relaxed">
+        <span className="font-extrabold text-black">Free posts first</span> —
+        a Connector spotlights you on IG/TikTok in exchange for the service.
+        No free fit? Some accept paid posts at their rate card (negotiable).
       </p>
 
       {loading || confirmedConnectorIds === null ? (
@@ -173,38 +242,18 @@ export function BrowseConnectorsScreen() {
                 Awaiting Connector responses…
               </p>
               <p className="text-[13px] text-b3 leading-snug">
-                Your spotlight request is out. Confirmed Connectors —
-                including those who counter with a paid offer — will
-                appear here as they respond.
+                Free fits surface first. Paid counters show up here too.
               </p>
               {/* CERGIO-GUARD (2026-06-03): Cancel link per Tarik —
                   same affordance the consumer side has on the
                   roaming-for-services state. */}
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!window.confirm('Cancel your spotlight request?')) return;
-                  try {
-                    const { data: userRes } = await supabase.auth.getUser();
-                    if (!userRes?.user) return;
-                    const { error } = await supabase
-                      .from('spotlight_requests')
-                      .update({ status: 'cancelled' })
-                      .eq('provider_id', userRes.user.id)
-                      .eq('status', 'pending');
-                    if (error) throw error;
-                    showToast('Spotlight request cancelled');
-                    navigate('/home');
-                  } catch (e) {
-                    // eslint-disable-next-line no-console
-                    console.warn('[cancel-spotlight]', e);
-                    showToast('Could not cancel — try again.');
-                  }
+              <CancelSpotlightLink
+                onCancelled={() => {
+                  showToast('Spotlight request cancelled');
+                  navigate('/home');
                 }}
-                className="mt-3 text-[13px] text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
-              >
-                Cancel request
-              </button>
+              />
+
             </div>
           );
         }
@@ -217,25 +266,41 @@ export function BrowseConnectorsScreen() {
                   No free Connectors confirmed yet
                 </p>
                 <p className="text-[12.5px] text-warnText leading-snug">
-                  The Connectors below confirmed with a paid offer —
-                  it&apos;s often still negotiable. Ask for a lower price
-                  (or a free post in exchange for your service) inside
-                  the counter.
+                  Paid offers below — usually still negotiable. Counter with
+                  a free-post swap or a lower price.
                 </p>
               </div>
             )}
-            <p className="px-5 mt-5 mb-2 text-[12px] font-extrabold text-b3 uppercase tracking-wide">
-              Confirmed availability
-            </p>
-            <div className="flex flex-col">
-              {confirmedOnly.map(c => (
-                <ConnectorRow
-                  key={c.id}
-                  connector={c}
-                  onClick={() => setRequestTarget(c)}
-                />
-              ))}
-            </div>
+            {/* CERGIO-GUARD (2026-06-05 v6): sort free-first per Tarik —
+                "free Connectors is the priority." Connectors without
+                a posted rate (both IG + TT cents null) bubble to top
+                so the user sees barter options before paid offers. */}
+            {(() => {
+              const isFree = (c) =>
+                c.spotlight_price_instagram_cents == null &&
+                c.spotlight_price_tiktok_cents == null;
+              const sorted = [...confirmedOnly].sort((a, b) => {
+                const af = isFree(a) ? 0 : 1;
+                const bf = isFree(b) ? 0 : 1;
+                return af - bf;
+              });
+              return (
+                <>
+                  <p className="px-5 mt-5 mb-2 text-[12px] font-extrabold text-b3 uppercase tracking-wide">
+                    Available {hasFreeConnector ? '· free first' : ''}
+                  </p>
+                  <div className="flex flex-col">
+                    {sorted.map(c => (
+                      <ConnectorRow
+                        key={c.id}
+                        connector={c}
+                        onClick={() => setRequestTarget(c)}
+                      />
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </>
         );
       })()}

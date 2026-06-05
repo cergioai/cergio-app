@@ -173,21 +173,49 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
     };
   },
 
+  // CERGIO-GUARD (2026-06-05 v4): "service_recommended" is now a
+  // PROVIDER NOMINATION, not a customer pitch. Tarik 2026-06-05:
+  // "the reco logic is wrong... recommending a service should not
+  // be sent to the recommended party. The recommended party should
+  // receive a msg saying 'James, your friend reco'd you' — click
+  // to view + add your photos + offer free services to Connectors
+  // who'll spotlight you on IG/TikTok and their networks. Turn
+  // social network into referral network + cash."
+  //
+  // The recipient is the future service provider. Subject line, SMS,
+  // and body all address them in second person + sell the provider
+  // benefit (free spotlights from Connectors, referral earnings).
+  // The blurb the recommender wrote becomes a pull-quote endorsement.
   service_recommended: ({ recipient, data, appBase }) => {
     const recommender  = data.recommender_name || 'A friend';
-    const serviceTitle = data.service_title    || 'a service';
+    const serviceTitle = data.service_title    || 'service provider';
+    const blurb        = data.blurb            || '';
     const link         = data.deep_link || `${appBase}/?ref=${encodeURIComponent(data.recommender_id || '')}`;
+    const firstName    = (recipient.name || '').split(/\s+/)[0] || 'there';
+    const safeSvc      = escapeHtml(serviceTitle.toLowerCase());
+    const safeRec      = escapeHtml(recommender);
+    const safeBlurb    = escapeHtml(blurb);
     return {
-      subject: `${recommender} recommended ${serviceTitle} for you on Cergio`,
+      subject: `${recommender} reco’d you on Cergio`,
       body_html: `
         <p style="font-size:15px;color:#3A3A3A;margin:0 0 12px;">
-          <strong>${escapeHtml(recommender)}</strong> recommended <strong>${escapeHtml(serviceTitle)}</strong> for you on Cergio — your friends-of-friends marketplace.
+          Hi ${escapeHtml(firstName)} — <strong>${safeRec}</strong> reco’d you on Cergio as a great <strong>${safeSvc}</strong>.
         </p>
-        <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Open the listing and book if it looks like a fit. First booking earns ${escapeHtml(recommender)} a $100 credit.</p>`,
-      cta_label: 'See the service →',
+        <p style="font-size:14px;color:#3A3A3A;margin:0 0 12px;">
+          Cergio is friend-powered service discovery. Claim your profile in one tap and you can:
+        </p>
+        <ul style="font-size:14px;color:#3A3A3A;line-height:1.7;padding-left:18px;margin:0 0 14px;">
+          <li>Add your photos + a short story about what you do.</li>
+          <li>Offer free services to <strong>Connectors</strong> — locals with reach who spotlight you on Instagram + TikTok to their followers’ networks.</li>
+          <li>Turn every booking into cash <strong>+</strong> recurring referrals from your own social graph.</li>
+        </ul>
+        ${safeBlurb ? `<p style="font-size:14px;color:#1A1A1A;background:#F3FFEA;border-left:3px solid #3D8B00;padding:10px 14px;margin:0 0 14px;border-radius:6px;font-style:italic;">“${safeBlurb}” <span style="color:#7A7A7A;font-style:normal;">— ${safeRec}</span></p>` : ''}
+        <p style="font-size:13px;color:#5F5E5A;margin:0 0 4px;">AI-driven service discovery that expands your earnings + clients. Human impact, shared prosperity.</p>`,
+      cta_label: 'Claim your profile →',
       cta_link:  link,
-      sms: `${recommender} recommends ${serviceTitle} on Cergio: ${link}`,
-      text: `${recommender} recommended ${serviceTitle}.`,
+      // SMS — short + captivating per Tarik. Single line, under 160 chars.
+      sms: `${firstName} — ${recommender} reco’d you on Cergio as a great ${serviceTitle.toLowerCase()}. Claim your profile + earn from your network: ${link}`,
+      text: `${recommender} reco’d you on Cergio as a great ${serviceTitle.toLowerCase()}.`,
     };
   },
 

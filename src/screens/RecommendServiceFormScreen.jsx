@@ -184,7 +184,7 @@ export function RecommendServiceFormScreen() {
           console.warn('[reco] could not write recommendations row:', recoErr.message);
         }
       }
-      showToast(`Sent to ${recipient.name} ✓`);
+      showToast(`Reco’d ${firstName} ✓ — they got the invite.`);
       navigate('/earnings');
     } finally {
       setBusy(false);
@@ -212,7 +212,7 @@ export function RecommendServiceFormScreen() {
 
   // CTA label per step. Step 3 is the final submit.
   const ctaLabel = step === 3
-    ? (busy ? 'Sending…' : step3Valid ? `Send to ${firstName}` : 'Write a quick blurb to send')
+    ? (busy ? 'Sending…' : step3Valid ? `Reco ${firstName} →` : 'Write a quick endorsement to reco them')
     : step === 2
       ? (step2Valid ? 'Next' : 'Pick or type a friend')
       : (step1Valid ? 'Next' : 'Pick a service type to continue');
@@ -242,16 +242,21 @@ export function RecommendServiceFormScreen() {
 
       <div className="px-5 pt-2 pb-3">
         <h1 className="text-[22px] font-extrabold text-black leading-tight">
-          Recommend a service
+          Reco a service provider
         </h1>
-        <p className="text-[12px] text-gd font-extrabold mt-1.5">
-          Earn up to ${REWARDS.perFriend} per friend who books from your recommendation.
+        <p className="text-[12.5px] text-b2 font-medium leading-snug mt-1.5">
+          Help someone you know turn their craft into a referral network + cash.
+          We message them to claim their profile.
+        </p>
+        <p className="text-[11.5px] text-gd font-extrabold mt-2 leading-snug">
+          AI-driven service expanding their earnings + clients. Human impact, shared prosperity.
         </p>
       </div>
 
       {/* Completed-step pill summary (live so the user feels the wizard
           accruing context). Service shows from step 2; recipient shows
-          from step 3. */}
+          from step 3. Labels read "{Service} · They are: {firstName}"
+          so the wizard doesn't confuse reco SUBJECT and recipient. */}
       {step >= 2 && (
         <div className="px-5 mb-4 flex flex-wrap gap-2">
           <button
@@ -269,7 +274,7 @@ export function RecommendServiceFormScreen() {
               onClick={() => setStep(2)}
               className="inline-flex items-center gap-1.5 bg-white border border-bdr rounded-pill px-3 py-1.5 text-[12px] font-extrabold text-black hover:bg-bg5/40 transition-colors"
             >
-              <span className="text-b3 uppercase tracking-wide text-[9.5px]">To</span>
+              <span className="text-b3 uppercase tracking-wide text-[9.5px]">They are</span>
               <span>{firstName}</span>
               <span className="text-gd">›</span>
             </button>
@@ -281,7 +286,7 @@ export function RecommendServiceFormScreen() {
       {step === 1 && (
         <div className="px-5 flex-1 flex flex-col">
           <p className="text-[15px] text-b2 leading-snug mb-4">
-            What service are you recommending?
+            What do they do?
           </p>
           <input
             type="text"
@@ -322,8 +327,11 @@ export function RecommendServiceFormScreen() {
       {/* ── Step 2 — recipient ──────────────────────────────────────── */}
       {step === 2 && (
         <div className="px-5 flex-1 flex flex-col">
-          <p className="text-[15px] text-b2 leading-snug mb-4">
-            Who are you recommending {serviceType} to?
+          <p className="text-[15px] text-b2 leading-snug mb-1">
+            Who&apos;s the {serviceType.toLowerCase()} you want to reco?
+          </p>
+          <p className="text-[12px] text-b3 leading-snug mb-4">
+            They get a message inviting them to claim their profile on Cergio.
           </p>
 
           {/* Connect contacts (only on initial entry to step 2). */}
@@ -433,25 +441,28 @@ export function RecommendServiceFormScreen() {
         </div>
       )}
 
-      {/* ── Step 3 — blurb ──────────────────────────────────────────── */}
+      {/* ── Step 3 — endorsement blurb ─────────────────────────────── */}
       {step === 3 && (
         <div className="px-5 flex-1 flex flex-col">
-          <p className="text-[15px] text-b2 leading-snug mb-4">
-            Why would <span className="font-extrabold text-black">{firstName}</span> book {serviceType.toLowerCase()}?
+          <p className="text-[15px] text-b2 leading-snug mb-1">
+            Why <span className="font-extrabold text-black">{firstName}</span>’s a great {serviceType.toLowerCase()}.
+          </p>
+          <p className="text-[12px] text-b3 leading-snug mb-4">
+            We&apos;ll pull this into the message they get.
           </p>
           <textarea
             autoFocus
             value={blurb}
             onChange={e => setBlurb(e.target.value)}
             maxLength={280}
-            placeholder={`Try: "Maria did our deep clean before move-out — fast, friendly, fair price."`}
+            placeholder={`Try: "${firstName} did our deep clean before move-out — fast, friendly, fair price."`}
             className="w-full h-[200px] bg-white border border-bdr rounded-[18px] p-4 text-[15px] text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans leading-relaxed"
           />
           <p className="text-[11px] text-b3 mt-2 text-right">{remaining} characters left</p>
           {step3Valid && (
             <p className="text-[11.5px] text-b3 leading-snug mt-3">
-              We'll send {firstName} this blurb + a one-tap link to book. You earn when they book.
+              {firstName} gets an SMS + email asking them to claim their Cergio profile + offer free services to Connectors who&apos;ll spotlight them on IG/TikTok. <span className="text-gd font-extrabold">Friend referred.</span>
             </p>
           )}
         </div>

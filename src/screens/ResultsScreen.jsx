@@ -171,11 +171,26 @@ function ShareRequestRow({ previewLead, shareMsg, onForward, onCopy }) {
 // CERGIO-GUARD (2026-06-03): tiny green hyperlink that cancels the
 // active request. Updates the row server-side AND triggers the
 // parent's onCancelled (toast + navigate home).
+//
+// CERGIO-GUARD (2026-06-05 v6): inline confirm per Tarik — "cancel
+// request should be in line (not a pop up from browser)." Was
+// window.confirm; now two-state inline:
+//   default → "Cancel request" (calm green)
+//   armed   → "Confirm cancel  ·  Keep roaming" (red + neutral pair)
+// Auto-disarms after 4 seconds so a stale armed state doesn't trigger
+// an accidental cancel later.
 function CancelRequestLink({ requestId, onCancelled }) {
   const [pending, setPending] = useState(false);
+  const [armed,   setArmed]   = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+
   const cancel = async () => {
     if (pending) return;
-    if (!window.confirm('Stop roaming for this request?')) return;
     setPending(true);
     try {
       const { supabase } = await import('../lib/supabase');
@@ -189,16 +204,45 @@ function CancelRequestLink({ requestId, onCancelled }) {
       // eslint-disable-next-line no-console
       console.warn('[cancel-request]', e);
       setPending(false);
+      setArmed(false);
     }
   };
+
+  if (pending) {
+    return (
+      <span className="mt-0.5 text-meta-sm text-b3 font-bold">Cancelling…</span>
+    );
+  }
+
+  if (armed) {
+    return (
+      <span className="mt-0.5 inline-flex items-center gap-2">
+        <button
+          type="button"
+          onClick={cancel}
+          className="text-meta-sm font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
+        >
+          Confirm cancel
+        </button>
+        <span className="text-b3 text-meta-sm">·</span>
+        <button
+          type="button"
+          onClick={() => setArmed(false)}
+          className="text-meta-sm font-bold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
+        >
+          Keep roaming
+        </button>
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
-      onClick={cancel}
-      disabled={pending}
-      className="mt-0.5 text-meta-sm text-gd font-bold underline-offset-2 hover:underline disabled:opacity-60 bg-transparent border-none p-0 cursor-pointer"
+      onClick={() => setArmed(true)}
+      className="mt-0.5 text-meta-sm text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
     >
-      {pending ? 'Cancelling…' : 'Cancel request'}
+      Cancel request
     </button>
   );
 }
