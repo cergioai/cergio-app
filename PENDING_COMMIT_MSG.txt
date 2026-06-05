@@ -1,224 +1,39 @@
-fix(reco+earnings): flip reco recipient to PROVIDER + per-row effective $
+feat(brand): elegant BETA tag + AuthScreen copy split
 
-Two Tarik 2026-06-05 catches bundled together.
+Tarik 2026-06-05: "add elegant beta sign next to logo, and clean up
+copy look on initial sign in (too busy.. move to several lines)."
 
-══════════════════ (1) Reco recipient flip ════════════════════════════
+══════════════════ BETA tag ══════════════════════════════════════════
 
-  Tarik: "the reco logic is wrong... recommending a service should
-  not be sent to the recommended party. The recommended party should
-  receive a msg saying 'James, your friend reco'd you' — click to
-  view + add your photos + offer free services to Connectors who'll
-  spotlight you on IG/TikTok and their networks. Turn social network
-  into referral network + cash. Make SMS succinct + captivating;
-  email longer but succinct. Add tagline: AI-driven service expanding
-  your earnings + clients. Human impact, shared prosperity. Friend
-  referred."
+  Subtle pill rendered next to the wordmark on:
 
-  WIZARD COPY (RecommendServiceFormScreen.jsx)
+    AuthScreen.jsx — gradient green-tinted (bg-gl, border g/30, text gd)
+                     sits superscript-style top-right of "CERGIO".
+    SplashScreen.jsx — translucent white pill (bg-white/12, border
+                     white/25) so it floats over the dark hero
+                     without competing with the leaf glow.
 
-    Title:    "Recommend a service" → "Reco a service provider"
-    Hero:     "Help someone you know turn their craft into a referral
-               network + cash. We message them to claim their profile."
-    Sub:      "AI-driven service expanding their earnings + clients.
-               Human impact, shared prosperity."
+  Same uppercase + 0.18em tracking + 6px corners on both → the BETA
+  marker reads consistently across surfaces.
 
-    Pill 2 label: "To · Jackie ›" → "They are · Jackie ›"
-                  (the recipient IS the babysitter being reco'd, not
-                  the customer being pitched a service)
+══════════════════ AuthScreen copy — split + breathing ═════════════════
 
-    Step 1: "What service are you recommending?" → "What do they do?"
-    Step 2: "Who are you recommending Babysitter to?"
-            → "Who's the babysitter you want to reco?"
-              sub: "They get a message inviting them to claim their
-                    profile on Cergio."
-    Step 3: "Why would Jackie book babysitter?"  (nonsensical)
-            → "Why Jackie's a great babysitter."
-              sub: "We'll pull this into the message they get."
+  Before (dense):
+    [Logo]
+    Welcome to CERGIO
+    Create your account in seconds.
 
-    Step 3 hint: was customer-facing "we send Jackie a one-tap link
-                 to book." Now provider-facing:
-                 "Jackie gets an SMS + email asking them to claim
-                  their Cergio profile + offer free services to
-                  Connectors who'll spotlight them on IG/TikTok.
-                  Friend referred."
+  After (split + calmer):
+    [Logo]
+    Welcome to                          ← muted preface line
+    CERGIO  [BETA]                      ← wordmark + tag, bigger
+    Create your account.                ← primary action sub
+    Takes seconds.                      ← supporting micro
 
-    Sticky CTA Step 3: "Send to Jackie" → "Reco Jackie →"
-    Submit toast: "Sent to Jackie ✓" → "Reco'd Jackie ✓ — they got
-                   the invite."
-
-  NOTIFICATION TEMPLATE (supabase/functions/notify-user/index.ts)
-
-    Handler `service_recommended` rewritten end-to-end. Same event
-    name (no migration), new semantics.
-
-    SMS (short + captivating):
-      Before: "Tarik recommends babysitter on Cergio: <link>"
-      After:  "Jackie — Tarik reco'd you on Cergio as a great
-               babysitter. Claim your profile + earn from your
-               network: <link>"
-
-    Email subject:
-      Before: "Tarik recommended babysitter for you on Cergio"
-      After:  "Tarik reco'd you on Cergio"
-
-    Email body (longer but succinct):
-      • Personal greeting addressing the recipient (Jackie)
-      • Three benefits bulleted:
-          - Add your photos + a short story about what you do.
-          - Offer free services to Connectors — locals with reach
-            who spotlight you on Instagram + TikTok to their
-            followers' networks.
-          - Turn every booking into cash + recurring referrals.
-      • Pull-quote of the recommender's blurb (italic, green left rule).
-      • Tagline footer per Tarik: "AI-driven service discovery that
-        expands your earnings + clients. Human impact, shared
-        prosperity."
-
-    CTA button: "See the service →" → "Claim your profile →"
-
-  Note: edge function deploys on next `Deploy Edge Functions.command`.
-  Frontend ships on next Vercel build.
-
-══════════════════ (2) Earnings IA — running tape per transaction ═══
-
-  Tarik: "the architecture of information isn't consistent in the
-  earnings activity. eg: $63 earned that session (7% of 900 booking)
-  but $250 was already earned in sessions before — so it should be
-  +$0. The activity is a running tape of individual payments hitting
-  your balance from individual transactions, with aggregates to
-  pump up users."
-
-  EarningsScreen.jsx — per-row effective credit:
-
-    rowCapState now exposes:
-      effectiveCents — the actual dollar amount that hit balance for
-                       THIS transaction, after applying the per-friend
-                       cap walked oldest→newest.
-      rawCents       — the raw ledger amount (so the row caption can
-                       still say "$X over the cap" when partial).
-
-    Computation:
-      before = sum of prior rows in same bucket (friend or chain path)
-      room   = max(0, cap - before)
-      eff    = min(this row's amount, room)
-
-    Row display (right side):
-      Before: "+$250" with a contradictory "$0 left ✓" pill
-              (raw ledger amount even when cap was maxed earlier).
-      After:  "+$0  CAP MAXED"  — when the friend's cap was already
-                                  reached in a prior session.
-      Or:     "+$187  PARTIAL · raw +$250" — when this row tipped
-                                  the cap over and only $187 fit.
-      Or:     "+$63"  — normal, full payout.
-
-    Hero balance card:
-      Was: sum of raw ledger amount_cents (could exceed real cap).
-      Now: sum of effectiveCents per row + booking rows raw.
-      So the user's headline balance matches what they could actually
-      cash out — no more "$838 of $250 potential" feel.
-
-══════════════════ Notes ══════════════════════════════════════════════
-
-  Deferred:
-    • Show the actual service NAME per row (e.g. "Sam's $900 plumbing
-      booking" instead of "Sam booked a service"). Needs an earnings
-      → invites → bookings → services.title join. Tarik flagged this
-      in the same message — comes in a follow-up.
-
-══════════════════ (3) Inline cancel-request confirm ══════════════════
-
-  Tarik: "cancel request should be in line (not a pop up from
-  browser)." Three window.confirm() popups replaced with a two-state
-  inline pattern (default → armed → confirm/keep) that auto-disarms
-  after 4-5s so a stale armed click can't trigger a destructive
-  action later.
-
-  ResultsScreen.jsx — CancelRequestLink
-    "Cancel request" → "Confirm cancel · Keep roaming"
-    Was: window.confirm('Stop roaming for this request?')
-
-  BrowseConnectorsScreen.jsx — new CancelSpotlightLink helper
-    "Cancel request" → "Confirm cancel · Keep waiting"
-    Was: window.confirm('Cancel your spotlight request?')
-
-  ServiceDetailProviderScreen.jsx — Delete service
-    Default: button reads "Delete service" (red text)
-    Armed:   "Permanently remove "{title}" + all offerings + pending
-              bookings? This can't be undone."
-              "Confirm delete · Keep service"
-    Was: window.confirm(`Delete "${svc.title}"?\n\nThis permanently...`)
-
-  Net effect: zero modal popups left in the codebase for routine
-  destructive actions. The only remaining `window.confirm` reference
-  is a comment.
-
-══════════════════ (5) Earnings hub stat tiles — now tappable ═══════
-
-  Tarik on the live earnings page: "these should take to actual
-  profiles reco'd etc.. it doesn't."
-
-  EarningsScreen.jsx — empty-state referral hub: the three stat tiles
-  ("0 friends invited", "0 services reco'd", "$0 earned") were inert
-  divs. Now each is a button:
-
-    friends invited  →  /earnings/invites   (invite tracker)
-    services reco'd  →  /earnings/invites   (same surface for now;
-                                              will split when we
-                                              build /earnings/recos)
-    earned           →  /earnings/breakdown (ledger view)
-
-  Visual: bg-bg5/40 hover + green chevron so the tap target reads.
-
-  Action row tightened:
-    Drop the duplicate "Recs sent" stat row (already shown above as
-    services reco'd).
-    Buttons: "Invite" → "Invite a friend"; "Reco" → "Reco a provider".
-
-══════════════════ (4) BrowseConnectors — free-first priority ════════
-
-  Tarik: "tweak this copy leading with 'free Connectors is the
-  priority'. If none, keep the current msg currently there but make
-  more succinct. One of the messages said 6 Connectors fit profile —
-  was that an error... we don't have 6 connectors in pets, clean up."
-
-  HomeScreen.jsx — spotlight submit-flow status lines:
-    Removed the hardcoded "Found 6 Connectors in your area · Pets ·
-    Fitness · Fashion · Food · Local · Lifestyle" stage. Pure
-    fabrication. Pacing kept; the remaining stages stay honest about
-    the real backend work (matching, follower overlap, sending pitch,
-    awaiting responses).
-
-  BrowseConnectorsScreen.jsx — header copy:
-    Before: "Connectors set a rate card per post. You can also ask
-             any Connector for a lower price — they're often willing
-             for the right service."
-    After:  "Free posts first — a Connector spotlights you on
-             IG/TikTok in exchange for the service. No free fit?
-             Some accept paid posts at their rate card (negotiable)."
-
-  Awaiting state — succinct version:
-    Before: "Your spotlight request is out. Confirmed Connectors —
-             including those who counter with a paid offer — will
-             appear here as they respond."
-    After:  "Free fits surface first. Paid counters show up here too."
-
-  No-free-Connector banner — tightened:
-    Before: "The Connectors below confirmed with a paid offer — it's
-             often still negotiable. Ask for a lower price (or a free
-             post in exchange for your service) inside the counter."
-    After:  "Paid offers below — usually still negotiable. Counter
-             with a free-post swap or a lower price."
-
-  Confirmed roster:
-    Now sorts free Connectors to the top (cents IG + TT both null).
-    Section label flips to "Available · free first" when free options
-    exist; just "Available" when all responders are paid.
+  Sign-in variant:
+    Welcome to / CERGIO BETA / Sign in to keep going. / One tap with Google.
 
 ══════════════════ Verified ══════════════════════════════════════════
 
   scripts/qa.mjs — 41/41 PASS
-  @babel/parser JSX — EarningsScreen / RecommendServiceFormScreen /
-                      ResultsScreen / BrowseConnectorsScreen /
-                      ServiceDetailProviderScreen / HomeScreen — OK
-  @babel/parser TS  — notify-user/index.ts OK
-  grep window.confirm src/**/*.jsx — only comment matches
+  @babel/parser JSX — AuthScreen / SplashScreen / EarningsScreen OK

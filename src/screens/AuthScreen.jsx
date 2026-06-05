@@ -216,12 +216,28 @@ export function AuthScreen() {
           Single calm hero. Logo + one-line welcome. No tagline noise. */}
       <div className="flex flex-col items-center pt-20 pb-10 px-7 text-center">
         <LeafLogo variant="splash" size={84} />
-        <h1 className="mt-7 text-[26px] font-extrabold text-black leading-tight">
-          Welcome to{' '}
+        {/* CERGIO-GUARD (2026-06-05 v6): broken into separate lines
+            per Tarik — "clean up copy look on initial sign in (too
+            busy.. move to several lines)." Welcome is its own line;
+            wordmark sits below with an elegant superscript BETA tag.
+            Sub-line moves down a level so the eye lands cleanly. */}
+        <p className="mt-7 text-[15px] text-b3 font-medium tracking-wide">
+          Welcome to
+        </p>
+        <h1 className="mt-1.5 text-[30px] font-extrabold text-black leading-tight flex items-start justify-center gap-1">
           <span className="tracking-[0.18em] uppercase">Cergio</span>
+          <span
+            aria-label="beta"
+            className="mt-0.5 inline-block bg-gl text-gd border border-g/30 rounded-[6px] px-1.5 py-px text-[8.5px] font-extrabold uppercase tracking-[0.18em]"
+          >
+            beta
+          </span>
         </h1>
-        <p className="mt-2 text-[13.5px] text-b2 leading-snug max-w-[280px]">
-          {isSignup ? 'Create your account in seconds.' : 'Sign in to keep going.'}
+        <p className="mt-4 text-[13.5px] text-b2 leading-snug max-w-[260px]">
+          {isSignup ? 'Create your account.' : 'Sign in to keep going.'}
+        </p>
+        <p className="mt-1 text-[12px] text-b3 leading-snug max-w-[260px]">
+          {isSignup ? 'Takes seconds.' : 'One tap with Google.'}
         </p>
 
         {/* Invited-by-a-friend ribbon — only when ?ref captured. */}

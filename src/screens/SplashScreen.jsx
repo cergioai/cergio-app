@@ -26,11 +26,20 @@ export function SplashScreen() {
               trust" was three claims stacked into one sentence —
               dense. Cut to the single load-bearing claim ("services
               your friends actually trust") and let Book/Barter/Earn
-              carry the feature pillars below. */}
+              carry the feature pillars below.
+              CERGIO-GUARD (2026-06-05 v6): elegant BETA tag tucked
+              against the wordmark per Tarik. Same style on Auth +
+              Splash so the marker is consistent. */}
           <p className="text-[15px] text-white/80 font-medium text-center leading-snug">
             Hi, I&apos;m{' '}
             <span className="font-extrabold tracking-[0.18em] uppercase text-white">
               Cergio
+            </span>
+            <span
+              aria-label="beta"
+              className="ml-1.5 align-top inline-block bg-white/12 text-white/85 border border-white/25 rounded-[5px] px-1.5 py-px text-[8px] font-extrabold uppercase tracking-[0.18em]"
+            >
+              beta
             </span>
             . I book services your friends actually trust.
           </p>
