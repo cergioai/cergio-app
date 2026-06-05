@@ -492,6 +492,8 @@ export function AuthScreen() {
           <span>·</span>
           <Link to="/contact" className="hover:text-gd transition-colors">Contact</Link>
           <span>·</span>
+          <Link to="/contact?subject=support" className="hover:text-gd transition-colors">Help</Link>
+          <span>·</span>
           <Link to="/terms"   className="hover:text-gd transition-colors">Terms</Link>
         </div>
       </div>

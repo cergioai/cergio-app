@@ -1,11 +1,12 @@
-// 6-tab unified nav. Consumer view: Search · Inbox · Earnings · Help · Activity · Profile.
-// Provider view: Home · Inbox · Calendar · Earnings · Help · Profile (their outgoing
+// 5-tab unified nav. Consumer view: Search · Inbox · Earnings · Activity · Profile.
+// Provider view: Home · Inbox · Calendar · Earnings · Profile (their outgoing
 // spotlight requests live INSIDE Inbox as a second tab, see JobsInboxScreen).
 //
-// CERGIO-GUARD (2026-06-05): Help added per Tarik — "add help at a 4th
-// tab at the bottom". Help routes to /contact which doubles as the bug
-// report + general feedback inbox. Available to guests too (it's an
-// outbound channel, no account state required).
+// CERGIO-GUARD (2026-06-05 v2): Help removed from the tab bar per Tarik
+// ("remove help from nav bar and place alongside company etc in the
+// search"). Help now lives as a footer link alongside About · Contact ·
+// Terms on Splash/Auth/Home — same destination (/contact), just less
+// real estate.
 //
 // CERGIO-GUARD (2026-06-04 v8): guest-mode teaser. Inbox / Earnings /
 // Activity / Profile have nothing to show for a logged-out guest, but
@@ -24,7 +25,6 @@ const NAV_CONSUMER = [
   { id: 'search',   label: 'Search',   path: '/home' },
   { id: 'inbox',    label: 'Inbox',    path: '/inbox' },
   { id: 'earnings', label: 'Earnings', path: '/earnings' },
-  { id: 'help',     label: 'Help',     path: '/contact' },
   { id: 'activity', label: 'Activity', path: '/activity' },
   { id: 'profile',  label: 'Profile',  path: '/profile' },
 ];
@@ -34,7 +34,6 @@ const NAV_PROVIDER = [
   { id: 'inbox',    label: 'Inbox',    path: '/inbox' },
   { id: 'calendar', label: 'Calendar', path: '/calendar' },
   { id: 'earnings', label: 'Earnings', path: '/earnings' },
-  { id: 'help',     label: 'Help',     path: '/contact' },
   { id: 'profile',  label: 'Profile',  path: '/profile' },
 ];
 
@@ -53,7 +52,6 @@ const ACTIVE_MAP = {
   '/social-posts':      'inbox',
   '/rainmaker-request': 'inbox',
   '/earnings':          'earnings',
-  '/contact':           'help',
   '/activity':          'activity',
   '/profile':           'profile',
   '/rainmakers':        'profile',
@@ -79,11 +77,6 @@ const ICONS = {
   inbox:    () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7"/><path d="M3 7l3-4h12l3 4"/><path d="M3 13h6l1 2h4l1-2h6"/></svg>,
   earnings: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4" strokeLinecap="round"/></svg>,
   activity: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M5 21c0-3 3-5 7-5s7 2 7 5"/></svg>,
-  // CERGIO-GUARD (2026-06-05): Help icon — life ring outline. Sits
-  // between Earnings and Activity (consumer) / Earnings and Profile
-  // (provider) so commercial actions stay grouped before support
-  // surfaces appear.
-  help:     () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M5.5 5.5l2.8 2.8M15.7 15.7l2.8 2.8M5.5 18.5l2.8-2.8M15.7 8.3l2.8-2.8"/></svg>,
   calendar: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>,
   profile:  () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>,
 };

@@ -80,6 +80,8 @@ export function SplashScreen() {
         <span>·</span>
         <Link to="/contact" className="hover:text-white/70 transition-colors">Contact</Link>
         <span>·</span>
+        <Link to="/contact?subject=support" className="hover:text-white/70 transition-colors">Help</Link>
+        <span>·</span>
         <Link to="/terms"   className="hover:text-white/70 transition-colors">Terms</Link>
       </div>
     </div>

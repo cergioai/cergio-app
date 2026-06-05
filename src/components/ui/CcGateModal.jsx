@@ -78,10 +78,36 @@ function SaveForm({ onVerified, onCancel }) {
   );
 }
 
-export function CcGateModal({ onClose, onVerified }) {
+// CERGIO-GUARD (2026-06-05 v2): reason-aware identity gate. Tarik —
+// "gate the user and services request with a Credit Card addition
+// after submission, to verify identity (your card won't be charged.
+// We need to verify your identity before connecting you with our
+// services and or connectors) to avoid bad content spam etc."
+//
+// reason values:
+//   'request'  — surfaced after submitting a user service request
+//   'listing'  — surfaced after submitting a service listing
+//   'photos'   — legacy: photo upload on Home (kept for backwards compat)
+const REASON_COPY = {
+  request: {
+    title: 'Quick identity check',
+    body:  "We need to verify your identity before connecting you with our services and Connectors. It helps us keep spam and bad content off Cergio.",
+  },
+  listing: {
+    title: 'Quick identity check',
+    body:  "We need to verify your identity before publishing your listing and connecting you with users. It helps us keep spam and bad content off Cergio.",
+  },
+  photos: {
+    title: 'Verify your identity to add photos',
+    body:  "A quick card check keeps fakes, spam, and inappropriate content off Cergio.",
+  },
+};
+
+export function CcGateModal({ onClose, onVerified, reason = 'photos' }) {
   const [clientSecret, setClientSecret] = useState(null);
   const [bootErr,      setBootErr]      = useState(null);
   const stripePromise = useMemo(() => getStripe(), []);
+  const copy = REASON_COPY[reason] || REASON_COPY.photos;
 
   useEffect(() => {
     let cancelled = false;
@@ -110,12 +136,15 @@ export function CcGateModal({ onClose, onVerified }) {
           </svg>
         </div>
         <h2 className="text-[20px] font-extrabold text-black text-center leading-tight mb-2">
-          Verify your identity to add photos
+          {copy.title}
         </h2>
-        <p className="text-[13px] text-b3 text-center leading-relaxed mb-5">
-          We do a quick card check to keep fakes, spam, and inappropriate
-          content off Cergio. <strong className="text-black">You won't be charged.</strong>{' '}
-          We save the card on file for future bookings if you want — you can remove it anytime.
+        <p className="text-[13px] text-b3 text-center leading-relaxed mb-2">
+          <strong className="text-black">Your card won&apos;t be charged.</strong>{' '}
+          {copy.body}
+        </p>
+        <p className="text-[11.5px] text-b3 text-center leading-snug mb-5">
+          The card stays on file for future bookings if you want — remove it
+          anytime in Profile.
         </p>
 
         {bootErr && (

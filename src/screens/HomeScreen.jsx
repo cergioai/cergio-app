@@ -1591,6 +1591,8 @@ export function HomeScreen() {
           <span>·</span>
           <a href="/contact" className="hover:text-gd transition-colors">Contact</a>
           <span>·</span>
+          <a href="/contact?subject=support" className="hover:text-gd transition-colors">Help</a>
+          <span>·</span>
           <a href="/terms"   className="hover:text-gd transition-colors">Terms</a>
         </div>
       </div>

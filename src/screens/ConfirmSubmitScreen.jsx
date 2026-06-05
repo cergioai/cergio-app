@@ -2,7 +2,16 @@
 // Wired to real chat.state (no hardcoded "Housekeeper" / "VISA *5329" /
 // fake photo blocks). When a field is missing, we render an "Add" affordance
 // instead of a placeholder string the user would mistake for a real value.
+//
+// CERGIO-GUARD (2026-06-05 v2): identity gate per Tarik — "gate the
+// user and services request with a Credit Card addition after submission,
+// to verify identity ... to avoid bad content spam etc." Submit button
+// now opens CcGateModal first if the user isn't verified; on success it
+// continues to /roaming. Verified users skip the modal.
+import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { CcGateModal } from '../components/ui/CcGateModal';
+import { getMyCcStatus } from '../lib/api';
 
 export function ConfirmSubmitScreen() {
   const navigate = useNavigate();
@@ -12,6 +21,39 @@ export function ConfirmSubmitScreen() {
   // Real attached photos (if chat captured any). The old static `PHOTOS`
   // grid is gone — empty array = the photo block doesn't render at all.
   const realPhotos = Array.isArray(photos) ? photos : [];
+
+  // Identity-verification state. Pulled from profiles.cc_verified_at on
+  // mount; null while loading, boolean once resolved. While unresolved
+  // the gate stays armed (worst case we show the modal once unnecessarily,
+  // never the reverse).
+  const [verified,   setVerified]   = useState(null);
+  const [showCcGate, setShowCcGate] = useState(false);
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setVerified(false); return; }
+    let cancelled = false;
+    getMyCcStatus().then(({ data }) => {
+      if (cancelled) return;
+      setVerified(!!data?.cc_verified_at);
+    });
+    return () => { cancelled = true; };
+  }, [auth?.isSignedIn]);
+
+  const finishSubmit = () => {
+    navigate('/roaming', { state: { what, when, where, notes } });
+  };
+
+  const onSubmit = () => {
+    if (!auth?.isSignedIn) {
+      showToast('Sign in to submit your request');
+      navigate('/auth');
+      return;
+    }
+    if (verified === false) {
+      setShowCcGate(true);
+      return;
+    }
+    finishSubmit();
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-cream">
@@ -145,14 +187,7 @@ export function ConfirmSubmitScreen() {
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px]
                       bg-white px-5 py-5 border-t border-bdr">
         <button
-          onClick={() => {
-            if (!auth?.isSignedIn) {
-              showToast('Sign in to submit your request');
-              navigate('/auth');
-              return;
-            }
-            navigate('/roaming', { state: { what, when, where, notes } });
-          }}
+          onClick={onSubmit}
           disabled={!what || !when || !where}
           className={`w-full rounded-[24px] py-4 text-[16px] font-extrabold transition-all
             ${(what && when && where)
@@ -162,6 +197,22 @@ export function ConfirmSubmitScreen() {
           Submit request
         </button>
       </div>
+
+      {/* Identity gate — surfaced after Submit when the user hasn't yet
+          verified. On success continues to /roaming so the submit-->
+          search round-trip stays seamless. */}
+      {showCcGate && (
+        <CcGateModal
+          reason="request"
+          onClose={() => setShowCcGate(false)}
+          onVerified={() => {
+            setVerified(true);
+            setShowCcGate(false);
+            showToast('Verified ✓ — submitting your request');
+            setTimeout(() => finishSubmit(), 0);
+          }}
+        />
+      )}
     </div>
   );
 }

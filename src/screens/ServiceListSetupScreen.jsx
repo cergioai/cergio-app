@@ -1,15 +1,42 @@
 // Per design-spec.md — full-bleed loading screen while we actually persist
 // the listing draft into Supabase, then advance to /verify.
+//
+// CERGIO-GUARD (2026-06-05 v2): identity gate per Tarik — "gate the
+// user and services request with a Credit Card addition after
+// submission, to verify identity". The createService call now waits
+// behind CcGateModal when the provider hasn't yet verified, so spam
+// listings never reach the marketplace. Already-verified providers
+// proceed immediately as before.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { createService } from '../lib/api';
+import { createService, getMyCcStatus } from '../lib/api';
+import { CcGateModal } from '../components/ui/CcGateModal';
 
 export function ServiceListSetupScreen() {
   const navigate = useNavigate();
   const { listingDraft, resetListingDraft, showToast } = useOutletContext();
   const [errorMessage, setErrorMessage] = useState(null);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [verified, setVerified] = useState(null); // null = loading, bool once resolved
 
+  // Step 1: probe verification state on mount. Don't call createService
+  // until we know whether to show the gate.
   useEffect(() => {
+    let cancelled = false;
+    getMyCcStatus().then(({ data }) => {
+      if (cancelled) return;
+      const ok = !!data?.cc_verified_at;
+      setVerified(ok);
+      if (!ok) setGateOpen(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Step 2: once verified, persist the listing. Runs both when the
+  // initial probe finds the user already verified AND after the gate
+  // closes with onVerified.
+  useEffect(() => {
+    if (verified !== true) return;
     let cancelled = false;
 
     (async () => {
@@ -26,9 +53,9 @@ export function ServiceListSetupScreen() {
     })();
 
     return () => { cancelled = true; };
-    // We deliberately want this to run once on mount.
+    // We deliberately want this to run once after verification.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [verified]);
 
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-gm to-g relative overflow-hidden">
@@ -39,6 +66,24 @@ export function ServiceListSetupScreen() {
       <div className="absolute top-[42%] left-[28%] w-3 h-px bg-white/70" />
       <div className="absolute top-[40%] left-[48%] text-white/70 text-xs">+</div>
       <div className="absolute top-[46%] right-[26%] w-3 h-3 rounded-full border border-white/70" />
+
+      {gateOpen && (
+        <CcGateModal
+          reason="listing"
+          onClose={() => {
+            // User dismissed without verifying — bounce back so they can
+            // resume later. We don't silently persist an un-verified
+            // listing.
+            setGateOpen(false);
+            navigate(-1);
+          }}
+          onVerified={() => {
+            setGateOpen(false);
+            setVerified(true);
+            showToast('Verified ✓ — publishing your listing');
+          }}
+        />
+      )}
 
       <div className="flex-1 flex flex-col items-center justify-center -mt-12 px-7 text-center">
         {errorMessage ? (
