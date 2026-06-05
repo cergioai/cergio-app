@@ -324,7 +324,7 @@ function Layout() {
           }}
         />
 
-        {showNav && <BottomNav serviceMode={serviceMode} />}
+        {showNav && <BottomNav serviceMode={serviceMode} isSignedIn={auth.isSignedIn} />}
         <Toast msg={toast.msg} show={toast.show} sticky={toast.sticky} onDismiss={dismissToast} />
         {/* CERGIO-GUARD: build version pill — shows current short SHA
             so HMR-stale-closure bugs are immediately observable. */}

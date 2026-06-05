@@ -1,0 +1,89 @@
+feat(ux): queued UX bundle v2 — reco wizard + barter pill + gated nav
+
+Tarik 2026-06-04 directive: "run with the above q'd suggestions...
+implement without waiting." Five-item queue, three shipped in this
+bundle; two deferred with notes below.
+
+══════════════════ (1) RECO WIZARD — one decision at a time ═══════════
+
+  RecommendServiceFormScreen rewritten as a three-step wizard. Same
+  three inputs as before (service type → recipient → blurb), but now
+  surfaced one step at a time with a progress bar at top and an
+  accruing pill summary so the user feels context build.
+
+  Step 1 — What service?
+      Datalist input + chip shortcuts (Plumber, Cleaner, Tutor,
+      Trainer, …). Tap a chip → auto-advance to step 2.
+
+  Step 2 — Who?
+      Contacts connect card (only on first entry), auto-suggest name
+      with phone/email autofill. Service is now in a pill at top —
+      tap to go back.
+
+  Step 3 — Why?
+      Blurb textarea pre-templated. Headline reads:
+      "Why would {firstName} book {serviceType}?" so the message has
+      explicit context. Confirmation hint: "We'll send {firstName}
+      this blurb + a one-tap link to book."
+
+  Sticky bottom CTA progresses: "Next" → "Next" → "Send to {firstName}".
+  Step 1 back-arrow exits the wizard; steps 2 + 3 go back one step.
+
+  Tarik 2026-06-04: "the reco form from the invite is wrong... services
+  can only be recommended one at a time." Same three inputs, but the
+  user never sees a long form.
+
+══════════════════ (2) RESULTS — Free-flow barter pill ════════════════
+
+  On the Free-for-Connectors path (freeServices === true), the
+  waiting state now leads with an explicit context pill before the
+  roaming leaf:
+
+      "Sent to Connectors near you · they barter for $250 in free
+       spotlights"
+
+  Sub-line: "Connectors are locals who get free services in exchange
+            for spotlighting them on IG/TikTok. The first one to
+            claim wins the barter."
+
+  Was: the user submitted free, saw the roaming leaf, no hint that
+       the request was specifically targeting Connectors.
+
+══════════════════ (3) BOTTOM NAV — guest-mode lock dot ════════════════
+
+  Inbox / Earnings / Activity / Profile now render with a small lock
+  dot on top of the icon when the user is signed out. Tap still
+  navigates (each destination has its own "Sign in" cue card), but
+  the brand signals "this unlocks with sign-in" rather than promising
+  empty content.
+
+  Wire: BottomNav now accepts `isSignedIn` prop, App.jsx passes
+        `auth.isSignedIn`. GUEST_GATED set inside BottomNav drives
+        the dot. Profile stays gated even though the route renders
+        for guests — Profile expects an auth identity.
+
+══════════════════ Deferred from the queue ═══════════════════════════
+
+  • Activity-tab red-dot for unread feed events.
+    Needs a persistence layer (localStorage last-seen timestamp or
+    a server-side read_state table). Skipped to keep this bundle
+    focused; will land in a follow-up.
+
+  • Earnings scenes copy tightening.
+    EarnExplainerScreen.jsx is already 114 lines with calm copy.
+    The 3-scene mission (APGI scenes 1/2/3 in RewardFlowAnimation)
+    is where the dense paragraphs live — that's localized to the
+    animation component, and Tarik's APGI thesis copy was just
+    rewritten 2026-05-31 (commit f0...). Holding for a separate
+    pass focused only on that animation.
+
+══════════════════ Verified ══════════════════════════════════════════
+
+  scripts/qa.mjs — 41/41 PASS
+  @babel/parser JSX — Reco wizard / Results / BottomNav / App OK
+
+══════════════════ Notes ══════════════════════════════════════════════
+
+  Per "i'll reverse from the list if necessary" — any of these is
+  reversible by reverting the relevant file. The reco wizard is the
+  largest delta; rest are localized.

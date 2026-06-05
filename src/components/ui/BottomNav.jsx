@@ -1,7 +1,18 @@
 // 5-tab unified nav. Consumer view: Search · Inbox · Earnings · Requests · Profile.
 // Provider view: Home · Inbox · Calendar · Earnings · Profile (their outgoing
 // spotlight requests live INSIDE Inbox as a second tab, see JobsInboxScreen).
+//
+// CERGIO-GUARD (2026-06-04 v8): guest-mode teaser. Inbox / Earnings /
+// Activity / Profile have nothing to show for a logged-out guest, but
+// they still navigate (and the screens have their own "Sign in" cards).
+// Adding a tiny lock dot on guest-restricted tabs so the brand signals
+// "sign in unlocks this" rather than promising content that's gated.
+// Tarik: rigorous UX testing, queued recommendations.
 import { useNavigate, useLocation } from 'react-router-dom';
+
+// Tabs that need a real account to be useful — guest sees a small
+// lock dot so the brand doesn't promise content it can't show.
+const GUEST_GATED = new Set(['inbox', 'earnings', 'activity', 'profile']);
 
 const NAV_CONSUMER = [
   { id: 'search',   label: 'Search',   path: '/home' },
@@ -63,7 +74,7 @@ const ICONS = {
   profile:  () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>,
 };
 
-export function BottomNav({ serviceMode = false }) {
+export function BottomNav({ serviceMode = false, isSignedIn = true }) {
   const navigate = useNavigate();
   const location = useLocation();
   const active = resolveActive(location.pathname);
@@ -77,14 +88,30 @@ export function BottomNav({ serviceMode = false }) {
       {nav.map(item => {
         const Icon = ICONS[item.id];
         const isActive = active === item.id;
+        // CERGIO-GUARD (2026-06-04 v8): guest sees gated tabs dimmed
+        // with a tiny lock dot — promise calibrated to what they'll
+        // see when they tap (sign-in cue card on the destination).
+        const isGated = !isSignedIn && GUEST_GATED.has(item.id);
         return (
           <button
             key={item.id}
             onClick={() => navigate(item.path)}
-            className={`flex-1 flex flex-col items-center gap-1 py-1
-                        ${isActive ? 'text-black' : 'text-b3'}`}
+            className={`relative flex-1 flex flex-col items-center gap-1 py-1
+                        ${isActive ? 'text-black' : isGated ? 'text-b3/55' : 'text-b3'}`}
+            title={isGated ? 'Sign in to unlock' : undefined}
           >
             <Icon />
+            {isGated && (
+              <span
+                aria-hidden="true"
+                className="absolute top-0.5 right-1/2 translate-x-3.5 w-3 h-3 rounded-full bg-bg5 border border-bdr flex items-center justify-center"
+              >
+                <svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                  <rect x="5" y="11" width="14" height="10" rx="2"/>
+                  <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+                </svg>
+              </span>
+            )}
             <span className={`text-[10px] tracking-wide ${isActive ? 'font-extrabold' : 'font-medium'}`}>
               {item.label}
             </span>
