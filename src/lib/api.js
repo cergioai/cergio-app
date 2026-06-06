@@ -3036,3 +3036,66 @@ export async function getService(id) {
 
   return { data: { ...svc, offerings: offerings || [] }, error: null };
 }
+
+// ─── Cross-post / free profile distribution ─────────────────────────────────
+// One-click push of a service's profile/offer to Google Business, Instagram,
+// TikTok; Craigslist returns a copy-paste post + steps (no API). Backed by the
+// `crosspost` edge function + service_channel_connections / crosspost_jobs.
+
+const CROSSPOST_CHANNELS = ['google', 'instagram', 'tiktok', 'craigslist'];
+
+/** Read all channel connection rows for a service (owner-scoped via RLS). */
+export async function getChannelConnections(serviceId) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('service_channel_connections')
+    .select('channel, status, external_handle, external_id, connected_at, last_error')
+    .eq('service_id', serviceId);
+  if (error) return { data: [], error };
+  const byChannel = Object.fromEntries((data || []).map((r) => [r.channel, r]));
+  const rows = CROSSPOST_CHANNELS.map(
+    (ch) => byChannel[ch] || { channel: ch, status: 'disconnected' },
+  );
+  return { data: rows, error: null };
+}
+
+/**
+ * Record/refresh a channel connection for a service. Phase-1 manual entry of
+ * the public handle/listing; flips status to 'connected' (API channels) or
+ * 'manual' (Craigslist). Real OAuth swaps this for the edge-function token
+ * exchange later — same row, status stays the source of truth.
+ */
+export async function connectServiceChannel(serviceId, channel, { handle, externalId, status } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!CROSSPOST_CHANNELS.includes(channel)) {
+    return { data: null, error: { message: 'Unknown channel.' } };
+  }
+  const row = {
+    service_id:      serviceId,
+    channel,
+    status:          status || (channel === 'craigslist' ? 'manual' : 'connected'),
+    external_handle: handle ? String(handle).replace(/^@/, '').trim().slice(0, 120) : null,
+    external_id:     externalId || null,
+    connected_at:    new Date().toISOString(),
+  };
+  return await supabase
+    .from('service_channel_connections')
+    .upsert(row, { onConflict: 'service_id,channel' })
+    .select()
+    .single();
+}
+
+/**
+ * Cross-post to one channel. Returns the edge function's result:
+ *   { status: 'posted' | 'manual' | 'needs_connection' | 'pending_review' | 'error', ... }
+ * For Craigslist, result.post + result.steps carry the copy-paste content.
+ */
+export async function crosspost({ serviceId, channel, asset = {} } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data, error } = await supabase.functions.invoke('crosspost', {
+    body: { service_id: serviceId, channel, asset },
+  });
+  if (error) return { data: null, error };
+  if (data?.error && data?.status !== 'error') return { data: null, error: { message: data.error } };
+  return { data, error: null };
+}

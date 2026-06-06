@@ -28,6 +28,7 @@ import { IntakeScreen }     from './screens/IntakeScreen';
 import { IntakeFormScreen } from './screens/IntakeFormScreen';
 import { ResultsScreen }    from './screens/ResultsScreen';
 import { ServiceDetailScreen } from './screens/ServiceDetailScreen';
+import { CrossPostScreen }  from './screens/CrossPostScreen';
 import { BookingScreen }    from './screens/BookingScreen';
 import { RainmakersScreen } from './screens/RainmakersScreen';
 import { BrowseConnectorsScreen } from './screens/BrowseConnectorsScreen';
@@ -360,6 +361,9 @@ export default function App() {
           <Route path="/intake-form" element={<IntakeFormScreen />} />
           <Route path="/results"     element={<ResultsScreen />} />
           <Route path="/service/:serviceId" element={<ServiceDetailScreen />} />
+          {/* Free profile / cross-post: one-click push of a listing to Google
+              Business, Instagram, TikTok + a copy-paste Craigslist post. */}
+          <Route path="/crosspost/:serviceId" element={<CrossPostScreen />} />
           <Route path="/booking"     element={<BookingScreen />} />
           <Route path="/rainmakers"  element={<RainmakersScreen />} />
           {/* Service-side: providers browse Connectors who set a spotlight

@@ -130,18 +130,28 @@ export function ManageServicesScreen() {
           <p className="px-5 pt-2 pb-3 text-[22px] font-extrabold text-black">Listed</p>
           <div className="px-5 flex flex-col gap-3 mb-5">
             {listed.map((s, i) => (
-              <button
-                key={s.id}
-                onClick={() => navigate(`/services/${s.id}`)}
-                className="bg-white border border-bdr rounded-[18px] p-3 text-left flex items-center gap-3"
-              >
-                <div className={`w-16 h-16 rounded-[12px] flex-shrink-0 ${s.photo_class || s.photoClass || PHOTO_FALLBACKS[i % 3]}`} />
-                <div className="flex-1">
-                  <p className="text-[15px] font-extrabold text-black leading-tight">{s.title}</p>
-                  <p className="text-[12px] text-b3 mt-0.5">{s.sub || s.category || s.description}</p>
-                </div>
-                <span className="text-b3 text-lg">›</span>
-              </button>
+              <div key={s.id} className="bg-white border border-bdr rounded-[18px] overflow-hidden">
+                <button
+                  onClick={() => navigate(`/services/${s.id}`)}
+                  className="w-full p-3 text-left flex items-center gap-3"
+                >
+                  <div className={`w-16 h-16 rounded-[12px] flex-shrink-0 ${s.photo_class || s.photoClass || PHOTO_FALLBACKS[i % 3]}`} />
+                  <div className="flex-1">
+                    <p className="text-[15px] font-extrabold text-black leading-tight">{s.title}</p>
+                    <p className="text-[12px] text-b3 mt-0.5">{s.sub || s.category || s.description}</p>
+                  </div>
+                  <span className="text-b3 text-lg">›</span>
+                </button>
+                {/* Free profile / cross-post entry */}
+                <button
+                  onClick={() => navigate(`/crosspost/${s.id}`)}
+                  className="w-full px-3 py-2.5 border-t border-line text-left text-[13px] font-bold text-gd
+                             bg-gl/40 hover:bg-gl transition-colors flex items-center justify-between"
+                >
+                  <span>📣 Post your free profile everywhere</span>
+                  <span className="text-gd">›</span>
+                </button>
+              </div>
             ))}
           </div>
         </>
