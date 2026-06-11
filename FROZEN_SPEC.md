@@ -105,9 +105,11 @@ qa.mjs #46 enforces this.
 
 ## DATA QUALITY — INFLUENCER CRAWLER
 
-### SPEC-CQ1 · Micro-influencer follower band
-**Status:** FROZEN — 2026-06-11  
-**Rule:** Only profiles with **10,000–50,000 followers** are inserted into `influencers.db` and counted toward the city target. Accounts outside this band are silently skipped (`quality-skip` log line), never inserted, never counted.
+### SPEC-CQ1 · Influencer follower band
+**Status:** FROZEN — 2026-06-11 (updated 2026-06-11)  
+**Rule:** Only profiles with **5,000–150,000 followers** are inserted into `influencers.db` and counted toward the city target. Accounts outside this band are silently skipped (`quality-skip` log line), never inserted, never counted.
+
+Phone/email contact is stored when found but is **NOT** required for counting — the IG handle is the contact method for outreach (DM).
 
 Enforced in `influencer_crawler.py` via `MIN_FOLLOWERS` / `MAX_FOLLOWERS` constants, overrideable via `APIFY_TUNING.json`. Changing the band requires explicit approval from Tarik.
 
