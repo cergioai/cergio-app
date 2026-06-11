@@ -11,13 +11,13 @@ function SavingsLabel({ savings }) {
   if (!savings || savings === 0) return null;
   if (savings < 0) {
     return (
-      <span className="text-meta-sm font-bold text-danger">
+      <span className="text-meta-sm font-extrabold text-danger">
         ${Math.abs(savings)} over budget
       </span>
     );
   }
   return (
-    <span className="text-meta-sm font-bold text-gd">
+    <span className="text-meta-sm font-extrabold text-gd">
       Saves ${savings}
     </span>
   );
@@ -34,7 +34,7 @@ function FriendAvatars({ friends, recommenders }) {
   ];
   const initialsOf = (s) => (s || '?').slice(0, 2).toUpperCase();
   const cls = (i) =>
-    `w-[22px] h-[22px] rounded-full border-2 border-cr text-white text-[8px] font-bold
+    `w-[22px] h-[22px] rounded-full border-2 border-cr text-white text-[8px] font-extrabold
      ${colors[i]} ${i > 0 ? '-ml-1.5' : ''} flex items-center justify-center`;
 
   if (recommenders && recommenders.length > 0) {
@@ -178,7 +178,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
         {/* pick badge */}
         {pick && (
           <span className="absolute top-2.5 right-2.5 bg-g text-white
-                           text-caps font-bold uppercase tracking-wide
+                           text-caps font-extrabold uppercase tracking-wide
                            px-2.5 py-1 rounded-pill z-10">
             Cergio Pick
           </span>
@@ -187,7 +187,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
         {/* over/save on photo for non-pick cards */}
         {!pick && savings !== 0 && (
           <span
-            className={`absolute top-2.5 right-2.5 text-meta-sm font-bold
+            className={`absolute top-2.5 right-2.5 text-meta-sm font-extrabold
                         px-2.5 py-1 rounded-pill z-10
                         ${savings < 0
                           ? 'bg-red-50/95 text-danger'
@@ -210,7 +210,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
         {/* ROW 1 — Name · Recos */}
         <div className="flex justify-between items-baseline mb-1">
           <span className="text-heading-2 font-extrabold text-black">{name}</span>
-          <span className="text-body-sm font-bold text-black">{recos} Recos</span>
+          <span className="text-body-sm font-extrabold text-black">{recos} Recos</span>
         </div>
 
         {/* ROW 2 — Category · Price.
@@ -221,7 +221,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
           <span className="text-body-sm text-b3 font-medium">{category}</span>
           {hasCounter ? (
             <span className="flex items-baseline gap-2">
-              <span className="text-body-sm text-b3 font-bold line-through">${officialPrice || price}</span>
+              <span className="text-body-sm text-b3 font-extrabold line-through">${officialPrice || price}</span>
               <span className="text-heading-2 font-extrabold text-gd">${price}</span>
             </span>
           ) : (

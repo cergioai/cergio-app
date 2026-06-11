@@ -123,7 +123,7 @@ export function IntakeFormScreen() {
         >
           ←
         </button>
-        <p className="text-[14px] font-extrabold text-black">Tell us about your request</p>
+        <p className="text-body font-extrabold text-black">Tell us about your request</p>
         <div className="w-8" />
       </div>
 
@@ -134,7 +134,7 @@ export function IntakeFormScreen() {
             value={what}
             onChange={e => setWhat(e.target.value)}
             placeholder="e.g. Cleaning"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
           <datalist id="cergio-categories">
@@ -147,10 +147,10 @@ export function IntakeFormScreen() {
             value={when}
             onChange={e => setWhen(e.target.value)}
             placeholder="e.g. Monday 2pm, or 'any evening next week'"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
-          <label className="inline-flex items-center gap-2 mt-2 text-[12px] text-b2 font-medium">
+          <label className="inline-flex items-center gap-2 mt-2 text-meta text-b2 font-medium">
             <input
               type="checkbox"
               checked={flexible}
@@ -176,7 +176,7 @@ export function IntakeFormScreen() {
             <button
               type="button"
               onClick={() => setWhere(defaultAddress.formatted_address)}
-              className="text-[11px] text-g font-extrabold underline underline-offset-2 mt-1.5"
+              className="text-meta-sm text-g font-extrabold underline underline-offset-2 mt-1.5"
             >
               📍 Use {defaultAddress.label || 'saved address'}
             </button>
@@ -188,7 +188,7 @@ export function IntakeFormScreen() {
             value={budget}
             onChange={e => setBudget(e.target.value)}
             placeholder="e.g. $200"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
         </Field>
@@ -199,7 +199,7 @@ export function IntakeFormScreen() {
             onChange={e => setDetails(e.target.value)}
             rows={3}
             placeholder="e.g. 2 bedroom apartment, post-party, have pets"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans"
           />
         </Field>
@@ -241,10 +241,10 @@ export function IntakeFormScreen() {
 function Field({ label, hint, required, children }) {
   return (
     <div>
-      <label className="block text-[14px] font-extrabold text-black mb-1.5">
+      <label className="block text-body font-extrabold text-black mb-1.5">
         {label}{required && <span className="text-danger ml-1">*</span>}
       </label>
-      {hint && <p className="text-[11px] text-b3 mb-2">{hint}</p>}
+      {hint && <p className="text-meta-sm text-b3 mb-2">{hint}</p>}
       {children}
     </div>
   );

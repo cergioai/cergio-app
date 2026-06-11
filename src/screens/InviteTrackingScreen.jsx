@@ -170,8 +170,8 @@ export function InviteTrackingScreen() {
         </button>
       </div>
 
-      <h1 className="px-5 pt-3 text-[28px] font-extrabold text-black leading-tight">Invites</h1>
-      <p className="px-5 text-[13px] text-b3 mt-1 leading-snug">
+      <h1 className="px-5 pt-3 text-display-2 font-extrabold text-black leading-tight">Invites</h1>
+      <p className="px-5 text-body-sm text-b3 mt-1 leading-snug">
         Track every friend you've invited. Tap Resend to nudge them on WhatsApp, SMS, or copy the link.
       </p>
 
@@ -187,7 +187,7 @@ export function InviteTrackingScreen() {
             key={f.id}
             type="button"
             onClick={() => setFilter(f.id)}
-            className={`rounded-pill px-3 py-1 text-[12px] font-extrabold transition-colors
+            className={`rounded-pill px-3 py-1 text-meta font-extrabold transition-colors
                         ${filter === f.id
                           ? 'bg-g text-white'
                           : 'bg-white border border-bdr text-b2 hover:border-g/40'}`}
@@ -200,20 +200,20 @@ export function InviteTrackingScreen() {
       {/* List */}
       <div className="px-5 mt-4 flex flex-col gap-2.5">
         {rows === null && (
-          <p className="text-[13px] text-b3 py-4">Loading invites…</p>
+          <p className="text-body-sm text-b3 py-4">Loading invites…</p>
         )}
         {rows !== null && filtered.length === 0 && (
           <div className="bg-white border border-bdr rounded-[14px] p-5 text-center">
-            <p className="text-[14px] font-extrabold text-black">
+            <p className="text-body font-extrabold text-black">
               {filter === 'all' ? 'No invites yet.' : 'No invites in this status.'}
             </p>
-            <p className="text-[12px] text-b3 mt-1 leading-snug">
+            <p className="text-meta text-b3 mt-1 leading-snug">
               Send your first invite — every friend who joins + books earns you ${REWARDS.perFriendUser}.
             </p>
             <button
               type="button"
               onClick={() => navigate('/invite/friends')}
-              className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-[12px] font-extrabold cg-cta"
+              className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-meta font-extrabold cg-cta"
             >
               Invite friends →
             </button>
@@ -231,26 +231,26 @@ export function InviteTrackingScreen() {
             <div key={r.id} className="bg-white border border-bdr rounded-[14px] p-3.5">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050]
-                                text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0">
+                                text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0">
                   {(name[0] || '?').toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <p className="text-[14px] font-extrabold text-black leading-tight truncate">{name}</p>
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 ${meta.cls}`}>
+                    <p className="text-body font-extrabold text-black leading-tight truncate">{name}</p>
+                    <span className={`text-caps font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 ${meta.cls}`}>
                       {meta.label}
                     </span>
                     {/* CERGIO-GUARD (2026-06-05): service-type pill —
                         sourced from a matching recommendations row.
                         Hidden when no reco was sent (plain invite). */}
                     {recoCtx[r.id]?.service_type_label && (
-                      <span className="text-[10px] font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-gl text-gd">
+                      <span className="text-caps font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-gl text-gd">
                         as {recoCtx[r.id].service_type_label}
                       </span>
                     )}
                   </div>
-                  {sub && <p className="text-[11px] text-b3 mt-0.5 truncate">{sub}</p>}
-                  <p className="text-[11px] text-b3 mt-0.5">
+                  {sub && <p className="text-meta-sm text-b3 mt-0.5 truncate">{sub}</p>}
+                  <p className="text-meta-sm text-b3 mt-0.5">
                     Invited {fmtAgo(r.invited_at)}
                     {r.joined_at        && <> · Joined {fmtAgo(r.joined_at)}</>}
                     {r.first_booking_at && <> · Booked {fmtAgo(r.first_booking_at)}</>}
@@ -260,14 +260,14 @@ export function InviteTrackingScreen() {
               {/* Resend row — hide when already booked (no need to nudge). */}
               {status !== 'booked' && (
                 <div className="mt-3 flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-b3">
+                  <span className="text-meta-sm font-extrabold uppercase tracking-wide text-b3">
                     Nudge
                   </span>
                   <button
                     type="button"
                     disabled={!!busy}
                     onClick={() => onResend(r, 'whatsapp')}
-                    className="bg-[#25D366] text-white rounded-pill px-3 py-1 text-[12px] font-extrabold disabled:opacity-60"
+                    className="bg-[#25D366] text-white rounded-pill px-3 py-1 text-meta font-extrabold disabled:opacity-60"
                   >
                     {busy === 'whatsapp' ? '…' : 'WhatsApp'}
                   </button>
@@ -275,7 +275,7 @@ export function InviteTrackingScreen() {
                     type="button"
                     disabled={!!busy}
                     onClick={() => onResend(r, 'sms')}
-                    className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-[12px] font-extrabold disabled:opacity-60"
+                    className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-meta font-extrabold disabled:opacity-60"
                   >
                     {busy === 'sms' ? '…' : 'SMS'}
                   </button>
@@ -283,7 +283,7 @@ export function InviteTrackingScreen() {
                     type="button"
                     disabled={!!busy}
                     onClick={() => onResend(r, 'copy')}
-                    className="text-gd font-extrabold text-[12px] underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer disabled:opacity-60"
+                    className="text-gd font-extrabold text-meta underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer disabled:opacity-60"
                   >
                     {busy === 'copy' ? '…' : 'Copy link'}
                   </button>

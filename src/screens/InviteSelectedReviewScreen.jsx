@@ -100,17 +100,17 @@ export function InviteSelectedReviewScreen() {
       <div className="px-5 pt-5">
         <button
           onClick={() => navigate(-1)}
-          className="text-2xl text-black font-bold w-9 h-9 flex items-center justify-center"
+          className="text-2xl text-black font-extrabold w-9 h-9 flex items-center justify-center"
         >
           ‹
         </button>
       </div>
 
       <div className="px-5 pt-2 pb-4">
-        <h1 className="text-[22px] font-extrabold text-black">
+        <h1 className="text-heading-1 font-extrabold text-black">
           {mode === 'reco' ? `Recommend a ${noun}` : 'Add a personal note'}
         </h1>
-        <p className="text-[13px] text-b3 leading-relaxed mt-1.5">
+        <p className="text-body-sm text-b3 leading-relaxed mt-1.5">
           {mode === 'reco'
             ? 'Pick the service type, write a quick review. Friends see this when they tap your link.'
             : 'These friends will receive your invite with the note below.'}
@@ -124,10 +124,10 @@ export function InviteSelectedReviewScreen() {
             {picked.map(c => (
               <div key={c.id} className="flex items-center gap-2 bg-soft rounded-pill pl-1 pr-3 py-1">
                 <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${c.avatarBg}
-                                 flex items-center justify-center text-white text-[10px] font-extrabold`}>
+                                 flex items-center justify-center text-white text-caps font-extrabold`}>
                   {getInitials(c.name)}
                 </div>
-                <span className="text-[13px] font-extrabold text-black">{c.name.split(' ')[0]}</span>
+                <span className="text-body-sm font-extrabold text-black">{c.name.split(' ')[0]}</span>
               </div>
             ))}
           </div>
@@ -138,7 +138,7 @@ export function InviteSelectedReviewScreen() {
       {mode === 'reco' && (
         <>
           <div className="px-5 mb-4 relative">
-            <label className="block text-[11px] font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
+            <label className="block text-meta-sm font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
               Service type
             </label>
             <input
@@ -149,7 +149,7 @@ export function InviteSelectedReviewScreen() {
               onBlur={() => setTimeout(() => setStFocused(false), 150)}
               placeholder="e.g. Plumber, Cleaner, Personal Chef"
               autoComplete="off"
-              className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3 text-[14px]
+              className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3 text-body
                          text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
             />
             {stFocused && stMatches.length > 0 && (
@@ -161,7 +161,7 @@ export function InviteSelectedReviewScreen() {
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => { setServiceType(t); setStFocused(false); }}
-                    className="w-full text-left px-4 py-2 text-[14px] text-b2 hover:bg-bg5 transition-colors"
+                    className="w-full text-left px-4 py-2 text-body text-b2 hover:bg-bg5 transition-colors"
                   >
                     {t}
                   </button>
@@ -171,7 +171,7 @@ export function InviteSelectedReviewScreen() {
           </div>
 
           <div className="px-5 flex-1">
-            <label className="block text-[11px] font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
+            <label className="block text-meta-sm font-extrabold text-b2 mb-1.5 uppercase tracking-wide">
               Your review
             </label>
             <textarea
@@ -180,10 +180,10 @@ export function InviteSelectedReviewScreen() {
               maxLength={240}
               rows={5}
               placeholder={`Try: "${noun === 'this service' ? 'Maria' : 'Great ' + noun.toLowerCase()} — fast, friendly, fair price."`}
-              className="w-full border border-bdr rounded-[18px] p-4 text-[14px] text-black
+              className="w-full border border-bdr rounded-[18px] p-4 text-body text-black
                          placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans leading-relaxed"
             />
-            <p className="text-[11px] text-b3 mt-1.5 text-right">{remaining} characters left</p>
+            <p className="text-meta-sm text-b3 mt-1.5 text-right">{remaining} characters left</p>
           </div>
         </>
       )}
@@ -195,7 +195,7 @@ export function InviteSelectedReviewScreen() {
             value={review}
             onChange={e => setReview(e.target.value)}
             rows={6}
-            className="w-full border border-bdr rounded-[18px] p-4 text-[14px] text-black
+            className="w-full border border-bdr rounded-[18px] p-4 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans"
           />
         </div>

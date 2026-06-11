@@ -57,33 +57,33 @@ export function JobDetailsScreen() {
         <div className="absolute bottom-4 left-4 inline-flex items-center gap-2 bg-g
                         rounded-pill px-3 py-1.5">
           <span className="w-4 h-4 rounded-full bg-white text-g flex items-center justify-center
-                           text-[10px] font-extrabold">$</span>
-          <span className="text-[13px] font-extrabold text-white">Booked</span>
+                           text-caps font-extrabold">$</span>
+          <span className="text-body-sm font-extrabold text-white">Booked</span>
         </div>
       </div>
 
       {/* sheet */}
       <div className="bg-cr rounded-t-[24px] -mt-4 px-5 pt-4 pb-6">
         <div className="w-9 h-1 bg-bdr rounded-full mx-auto mb-4" />
-        <h1 className="text-[22px] font-extrabold text-black mb-4">{jobType}</h1>
+        <h1 className="text-heading-1 font-extrabold text-black mb-4">{jobType}</h1>
 
         {/* provider row */}
         <div className="flex items-center justify-between py-4 border-b border-bdr">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-g to-gd
-                            flex items-center justify-center text-white font-extrabold text-[14px]">
+                            flex items-center justify-center text-white font-extrabold text-body">
               {getInitials(provider.name)}
             </div>
             <div>
               <p className="text-[15px] font-extrabold text-black">{provider.name}</p>
-              <p className="text-[12px] text-g font-bold">{provider.category}</p>
+              <p className="text-meta text-g font-extrabold">{provider.category}</p>
             </div>
           </div>
           <button
             onClick={() => bookingId
               ? navigate(`/messages/${bookingId}`)
               : showToast(`Calling ${provider.clientName}…`)}
-            className="text-[14px] font-extrabold text-g"
+            className="text-body font-extrabold text-g"
           >
             {bookingId ? 'Message' : `Call ${provider.clientName}`}
           </button>
@@ -95,12 +95,12 @@ export function JobDetailsScreen() {
             <div className="flex-1 pr-3">
               <p className="text-[15px] font-extrabold text-black mb-1">{row.label}</p>
               {row.sub.split('\n').map((line, j) => (
-                <p key={j} className="text-[13px] text-b3">{line}</p>
+                <p key={j} className="text-body-sm text-b3">{line}</p>
               ))}
             </div>
             <button
               onClick={() => row.to ? navigate(row.to) : showToast(row.toast)}
-              className="text-[14px] font-extrabold text-g whitespace-nowrap pt-1"
+              className="text-body font-extrabold text-g whitespace-nowrap pt-1"
             >
               {row.action}
             </button>
@@ -110,19 +110,19 @@ export function JobDetailsScreen() {
         {/* request details */}
         <div className="pt-5">
           <p className="text-[15px] font-extrabold text-black mb-2">Request Details</p>
-          <p className="text-[13px] text-b3 mb-2">{requestDetails.type}</p>
+          <p className="text-body-sm text-b3 mb-2">{requestDetails.type}</p>
           <div className="flex flex-col gap-1.5 mb-4">
             {requestDetails.items.map((item, i) => (
               <div key={i} className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-black" />
-                <span className="text-[13px] text-black">{item}</span>
+                <span className="text-body-sm text-black">{item}</span>
               </div>
             ))}
           </div>
-          <p className="text-[13px] text-b3 mb-2">Extras</p>
+          <p className="text-body-sm text-b3 mb-2">Extras</p>
           <div className="flex flex-col gap-1.5">
             {requestDetails.extras.map((e, i) => (
-              <span key={i} className="text-[13px] text-black">{e}</span>
+              <span key={i} className="text-body-sm text-black">{e}</span>
             ))}
           </div>
         </div>

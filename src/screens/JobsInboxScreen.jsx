@@ -62,7 +62,7 @@ function Avatar({ name, idx }) {
   return (
     <div
       className={`w-12 h-12 rounded-full flex items-center justify-center
-                  text-white text-[14px] font-extrabold flex-shrink-0
+                  text-white text-body font-extrabold flex-shrink-0
                   ${AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]}`}
     >
       {getInitials(name)}
@@ -177,7 +177,7 @@ export function JobsInboxScreen() {
 
       {/* header — title + search */}
       <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-        <h1 className="text-[28px] font-extrabold text-black tracking-tight leading-none flex-shrink-0">
+        <h1 className="text-display-2 font-extrabold text-black tracking-tight leading-none flex-shrink-0">
           Jobs
         </h1>
         {searchOpen ? (
@@ -192,13 +192,13 @@ export function JobsInboxScreen() {
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
               placeholder="Search by name, service, date…"
-              className="flex-1 bg-transparent outline-none text-[13px] text-black placeholder-b3 py-1"
+              className="flex-1 bg-transparent outline-none text-body-sm text-black placeholder-b3 py-1"
             />
             <button
               type="button"
               onClick={() => { setSearchOpen(false); setSearchQ(''); }}
               aria-label="Close search"
-              className="text-[14px] text-b3 font-bold px-1"
+              className="text-body text-b3 font-extrabold px-1"
             >×</button>
           </div>
         ) : (
@@ -212,7 +212,7 @@ export function JobsInboxScreen() {
               <circle cx="11" cy="11" r="7" />
               <path d="M21 21l-4-4" />
             </svg>
-            <span className="text-[13px] text-b3 font-medium">Search jobs and requests</span>
+            <span className="text-body-sm text-b3 font-medium">Search jobs and requests</span>
           </button>
         )}
       </div>
@@ -227,11 +227,11 @@ export function JobsInboxScreen() {
               onClick={() => setActiveTab(tab)}
               className="relative pb-3 flex items-center gap-1.5 cursor-pointer"
             >
-              <span className={`text-[14px] ${active ? 'font-extrabold text-black' : 'font-medium text-b3'}`}>
+              <span className={`text-body ${active ? 'font-extrabold text-black' : 'font-medium text-b3'}`}>
                 {tab}
               </span>
               {active && tab === 'Requests' && badgeCount > 0 && (
-                <div className="bg-g text-white text-[10px] font-extrabold rounded-full
+                <div className="bg-g text-white text-caps font-extrabold rounded-full
                                 min-w-[18px] h-[18px] flex items-center justify-center px-1.5">
                   {badgeCount}
                 </div>
@@ -254,7 +254,7 @@ export function JobsInboxScreen() {
             (MARKETPLACE_SPEC § 4). */}
         {activeTab === 'Requests' && inbound && inbound.length > 0 && (
           <>
-            <p className="text-[12px] font-extrabold text-b3 uppercase tracking-wide pt-1">
+            <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
               New requests near you
             </p>
             {inbound.filter(req => {
@@ -284,20 +284,20 @@ export function JobsInboxScreen() {
                       <span className="text-[15px] font-extrabold text-black truncate">
                         {senderName}
                       </span>
-                      <span className="text-[12px] text-b3 font-medium flex-shrink-0 ml-2">
+                      <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">
                         {minutesAgo === 0 ? 'just now' : `${minutesAgo}m ago`}
                       </span>
                     </div>
-                    <p className="text-[13px] font-extrabold text-black leading-snug mb-1 truncate">
+                    <p className="text-body-sm font-extrabold text-black leading-snug mb-1 truncate">
                       Needs a {req.service_type}
                     </p>
                     {req.description && (
-                      <p className="text-[12px] text-b3 font-medium leading-snug mb-2 line-clamp-2">
+                      <p className="text-meta text-b3 font-medium leading-snug mb-2 line-clamp-2">
                         "{req.description}"
                       </p>
                     )}
                     {req.location_text && (
-                      <p className="text-[12px] text-b3 font-medium leading-snug">
+                      <p className="text-meta text-b3 font-medium leading-snug">
                         {req.location_text}
                       </p>
                     )}
@@ -306,7 +306,7 @@ export function JobsInboxScreen() {
                         type="button"
                         disabled={state === 'pending'}
                         onClick={() => handleInboundResponse(req, 'offered')}
-                        className="flex-1 bg-g text-white rounded-pill py-2 text-[12px] font-extrabold cg-cta disabled:opacity-60"
+                        className="flex-1 bg-g text-white rounded-pill py-2 text-meta font-extrabold cg-cta disabled:opacity-60"
                       >
                         {state === 'pending' ? 'Sending…' : 'Accept'}
                       </button>
@@ -325,7 +325,7 @@ export function JobsInboxScreen() {
                           setCounterOpenFor(prev => prev === req.id ? null : req.id);
                           setCounterDraft('');
                         }}
-                        className="bg-white border border-bdr rounded-pill px-3 py-2 text-[12px] font-extrabold text-b2 cg-cta-ghost disabled:opacity-60"
+                        className="bg-white border border-bdr rounded-pill px-3 py-2 text-meta font-extrabold text-b2 cg-cta-ghost disabled:opacity-60"
                       >
                         Counter
                       </button>
@@ -333,14 +333,14 @@ export function JobsInboxScreen() {
                         type="button"
                         disabled={state === 'pending'}
                         onClick={() => handleInboundResponse(req, 'declined')}
-                        className="bg-white border border-bdr rounded-pill px-3 py-2 text-[12px] font-extrabold text-b3 cg-cta-ghost disabled:opacity-60"
+                        className="bg-white border border-bdr rounded-pill px-3 py-2 text-meta font-extrabold text-b3 cg-cta-ghost disabled:opacity-60"
                       >
                         Decline
                       </button>
                     </div>
                     {counterOpenFor === req.id && (
                       <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[13px] font-bold text-b3">$</span>
+                        <span className="text-body-sm font-extrabold text-b3">$</span>
                         <input
                           autoFocus
                           inputMode="decimal"
@@ -374,7 +374,7 @@ export function JobsInboxScreen() {
                           }}
                           placeholder="75"
                           className="flex-1 border-b border-g/40 bg-transparent outline-none
-                                     text-[14px] font-bold text-black py-1"
+                                     text-body font-extrabold text-black py-1"
                         />
                         <button
                           type="button"
@@ -402,14 +402,14 @@ export function JobsInboxScreen() {
                             setCounterOpenFor(null);
                             showToast('Counter sent ✓');
                           }}
-                          className="bg-g text-white rounded-pill px-3 py-1.5 text-[12px] font-extrabold cg-cta"
+                          className="bg-g text-white rounded-pill px-3 py-1.5 text-meta font-extrabold cg-cta"
                         >
                           Send
                         </button>
                         <button
                           type="button"
                           onClick={() => setCounterOpenFor(null)}
-                          className="text-[14px] font-bold text-b3 bg-transparent border-none cursor-pointer px-1"
+                          className="text-body font-extrabold text-b3 bg-transparent border-none cursor-pointer px-1"
                           aria-label="Cancel counter"
                         >
                           ×
@@ -421,7 +421,7 @@ export function JobsInboxScreen() {
               );
             })}
             {requests.length > 0 && (
-              <p className="text-[12px] font-extrabold text-b3 uppercase tracking-wide pt-3">
+              <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-3">
                 Bookings
               </p>
             )}
@@ -430,13 +430,13 @@ export function JobsInboxScreen() {
 
         {activeTab === 'Requests' && requests.length === 0 && (
           <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
-            <p className="text-[14px] font-extrabold text-black">No requests yet</p>
-            <p className="text-[12px] text-b3 font-medium mt-1 leading-snug">
+            <p className="text-body font-extrabold text-black">No requests yet</p>
+            <p className="text-meta text-b3 font-medium mt-1 leading-snug">
               Booking requests from Cergio users show up here. List a service to get found.
             </p>
             <button
               onClick={() => navigate('/list-service')}
-              className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-[14px] font-extrabold"
+              className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-body font-extrabold"
             >
               List a service →
             </button>
@@ -461,24 +461,24 @@ export function JobsInboxScreen() {
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline mb-1">
                 <span className="text-[15px] font-extrabold text-black truncate">{req.sender}</span>
-                <span className="text-[12px] text-b3 font-medium flex-shrink-0 ml-2">{req.date}</span>
+                <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">{req.date}</span>
               </div>
 
-              <p className={`text-[13px] font-extrabold leading-snug mb-1 truncate
+              <p className={`text-body-sm font-extrabold leading-snug mb-1 truncate
                               ${req.isFreeForRainmakers ? 'text-gd' : 'text-black'}`}>
                 {req.preview}
               </p>
               {req.note && (
-                <p className="text-[12px] text-b3 font-medium leading-snug mb-2 line-clamp-2">
+                <p className="text-meta text-b3 font-medium leading-snug mb-2 line-clamp-2">
                   "{req.note}"
                 </p>
               )}
 
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[12px] text-b3 font-medium">{req.appointmentTime}</span>
+                <span className="text-meta text-b3 font-medium">{req.appointmentTime}</span>
                 {req.isFreeForRainmakers && (
                   <span className="inline-flex items-center gap-1 bg-gl text-gd
-                                   text-[11px] font-bold px-2 py-0.5 rounded-pill">
+                                   text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" />
                     </svg>
@@ -489,7 +489,7 @@ export function JobsInboxScreen() {
 
               {req.needsResponse && (
                 <div className="mt-3 inline-flex items-center gap-1.5 bg-g text-white
-                                text-[11px] font-bold px-2.5 py-1 rounded-pill">
+                                text-meta-sm font-extrabold px-2.5 py-1 rounded-pill">
                   <span className="w-3.5 h-3.5 rounded-full bg-white text-g
                                    flex items-center justify-center text-[9px] font-extrabold">
                     !
@@ -506,13 +506,13 @@ export function JobsInboxScreen() {
             inbox where they can manage / counter / pay. */}
         {activeTab === 'Sent' && sent !== null && sent.length === 0 && (
           <div className="bg-white border border-bdr rounded-[20px] p-6 text-center">
-            <p className="text-[14px] font-extrabold text-black">No spotlight requests sent yet</p>
-            <p className="text-[12px] text-b3 font-medium mt-1 leading-snug">
+            <p className="text-body font-extrabold text-black">No spotlight requests sent yet</p>
+            <p className="text-meta text-b3 font-medium mt-1 leading-snug">
               Ask a Connector to spotlight your service on Instagram or TikTok.
             </p>
             <button
               onClick={() => navigate('/connectors/browse')}
-              className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-[13px] font-extrabold"
+              className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-body-sm font-extrabold"
             >
               Browse Connectors →
             </button>
@@ -544,10 +544,10 @@ export function JobsInboxScreen() {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-extrabold text-black leading-tight truncate">
+                <p className="text-body font-extrabold text-black leading-tight truncate">
                   {platform} spotlight request
                 </p>
-                <p className="text-[12px] text-b3 mt-0.5 leading-snug">
+                <p className="text-meta text-b3 mt-0.5 leading-snug">
                   {created} · {s.status}
                   {price ? ` · $${(price / 100).toFixed(0)}` : ''}
                 </p>
@@ -560,7 +560,7 @@ export function JobsInboxScreen() {
         {/* Empty states for Upcoming / Past */}
         {(activeTab === 'Upcoming' || activeTab === 'Past') && (
           <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
-            <p className="text-[14px] text-b3 font-medium">
+            <p className="text-body text-b3 font-medium">
               No {activeTab.toLowerCase()} jobs yet.
             </p>
           </div>

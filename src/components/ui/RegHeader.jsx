@@ -20,7 +20,7 @@ export function RegHeader({ title, sub, showBack = true, minHeight = 220 }) {
       )}
       <div className="mt-auto">
         <h1 className="text-[26px] font-extrabold text-white leading-tight">{title}</h1>
-        {sub && <p className="text-[14px] text-white/85 mt-2 leading-relaxed">{sub}</p>}
+        {sub && <p className="text-body text-white/85 mt-2 leading-relaxed">{sub}</p>}
       </div>
     </div>
   );

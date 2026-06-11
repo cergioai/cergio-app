@@ -37,7 +37,7 @@ export function SocialPostsScreen() {
         <h1 className="text-[20px] font-extrabold text-black leading-tight mb-2">
           Connectors have shared their go-to services on Cergio to 2M+ followers.
         </h1>
-        <p className="text-[14px] font-extrabold text-g">#cergiorainmakers</p>
+        <p className="text-body font-extrabold text-g">#cergiorainmakers</p>
       </div>
 
       {/* posts */}
@@ -46,14 +46,14 @@ export function SocialPostsScreen() {
           {/* header */}
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#4478aa] to-[#2a5070]
-                            flex items-center justify-center text-white font-extrabold text-[13px]">
+                            flex items-center justify-center text-white font-extrabold text-body-sm">
               {getInitials(post.providerName)}
             </div>
             <div>
-              <p className="text-[14px] text-black leading-tight">
+              <p className="text-body text-black leading-tight">
                 <span className="font-extrabold">{post.providerName}</span> was shared to {post.followerCount.toLocaleString()} followers
               </p>
-              <p className="text-[12px] text-g font-bold mt-0.5">
+              <p className="text-meta text-g font-extrabold mt-0.5">
                 {post.category} <span className="text-b3 font-medium">· {post.location}</span>
               </p>
             </div>
@@ -71,7 +71,7 @@ export function SocialPostsScreen() {
           )}
 
           {/* shared by */}
-          <p className="text-[12px] text-g font-bold mt-3">Shared by {post.sharedBy}, Connector</p>
+          <p className="text-meta text-g font-extrabold mt-3">Shared by {post.sharedBy}, Connector</p>
         </div>
       ))}
 

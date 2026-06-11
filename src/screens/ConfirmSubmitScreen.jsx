@@ -66,7 +66,7 @@ export function ConfirmSubmitScreen() {
         >
           ‹
         </button>
-        <p className="text-[13px] font-bold text-b3">Step 2 — Submit Request</p>
+        <p className="text-body-sm font-extrabold text-b3">Step 2 — Submit Request</p>
         <div className="w-10" />
       </div>
 
@@ -86,8 +86,8 @@ export function ConfirmSubmitScreen() {
                 <path d="M9 6V4h6v2" />
               </svg>
               {what
-                ? <span className="text-[16px] font-extrabold text-black">{what}</span>
-                : <span className="text-[14px] font-bold text-danger">Add service</span>}
+                ? <span className="text-body-lg font-extrabold text-black">{what}</span>
+                : <span className="text-body font-extrabold text-danger">Add service</span>}
             </div>
             <span className="text-b3 text-lg">›</span>
           </button>
@@ -96,7 +96,7 @@ export function ConfirmSubmitScreen() {
           {(notes || realPhotos.length > 0) && (
             <div className="pl-9 mb-4">
               {notes && (
-                <p className="text-[13px] text-black leading-relaxed mb-3">{notes}</p>
+                <p className="text-body-sm text-black leading-relaxed mb-3">{notes}</p>
               )}
               {realPhotos.length > 0 && (
                 <div className="grid grid-cols-4 gap-2">
@@ -125,7 +125,7 @@ export function ConfirmSubmitScreen() {
               </svg>
               {where
                 ? <span className="text-[15px] text-black truncate max-w-[260px]">{where}</span>
-                : <span className="text-[14px] font-bold text-danger">Add address</span>}
+                : <span className="text-body font-extrabold text-danger">Add address</span>}
             </div>
             <span className="text-b3 text-lg">›</span>
           </button>
@@ -142,7 +142,7 @@ export function ConfirmSubmitScreen() {
               </svg>
               {when
                 ? <span className="text-[15px] text-black">{when}</span>
-                : <span className="text-[14px] font-bold text-danger">Add date / time</span>}
+                : <span className="text-body font-extrabold text-danger">Add date / time</span>}
             </div>
             <span className="text-b3 text-lg">›</span>
           </button>
@@ -157,17 +157,17 @@ export function ConfirmSubmitScreen() {
             Removed the lying 'Card on file — coming soon' toast; the
             sub-text now explains the real flow. */}
         <div className="bg-white mt-3 px-5 py-5">
-          <p className="text-[14px] font-extrabold uppercase tracking-widest text-b3 mb-3">Payment</p>
+          <p className="text-body font-extrabold uppercase tracking-widest text-b3 mb-3">Payment</p>
           <div className="w-full flex items-center justify-between py-2 text-left">
             <div className="flex items-center gap-3">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="1.8">
                 <rect x="2" y="5" width="20" height="14" rx="2" />
                 <path d="M2 10h20" />
               </svg>
-              <span className="text-[14px] font-bold text-b2">Card collected at booking</span>
+              <span className="text-body font-extrabold text-b2">Card collected at booking</span>
             </div>
           </div>
-          <p className="text-[11px] text-b3 mt-1 leading-snug">
+          <p className="text-meta-sm text-b3 mt-1 leading-snug">
             You only pay when you confirm a provider's offer — we'll ask
             for a card then. No charge for submitting the request.
           </p>
@@ -176,7 +176,7 @@ export function ConfirmSubmitScreen() {
               <circle cx="12" cy="12" r="10" />
               <path d="M12 8v5M12 16h.01" />
             </svg>
-            <span className="text-[12px] text-g font-bold leading-relaxed">
+            <span className="text-meta text-g font-extrabold leading-relaxed">
               You won't be charged until your booking is confirmed.
             </span>
           </div>
@@ -189,7 +189,7 @@ export function ConfirmSubmitScreen() {
         <button
           onClick={onSubmit}
           disabled={!what || !when || !where}
-          className={`w-full rounded-[24px] py-4 text-[16px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-body-lg font-extrabold transition-all
             ${(what && when && where)
               ? 'bg-black text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}

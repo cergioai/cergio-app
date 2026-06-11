@@ -8,7 +8,7 @@ import { listProviderBookings } from '../lib/api';
 const STATUS = {
   available:    { dot: 'bg-g',         label: 'Available',           copy: 'Bookings on this date will automatically be accepted' },
   request_only: { dot: 'bg-warn',      label: 'Request only',        copy: 'Customers can only send you requests — you accept or decline.' },
-  unavailable:  { dot: 'bg-[#E05A3A]', label: "I'm not available",   copy: "Customers will not be able to book or request you at this time." },
+  unavailable:  { dot: 'bg-danger', label: "I'm not available",   copy: "Customers will not be able to book or request you at this time." },
 };
 
 const HOURS  = Array.from({ length: 24 }, (_, i) => i);
@@ -111,7 +111,7 @@ export function CalendarScreen() {
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
       {/* header */}
       <div className="flex items-center justify-between px-5 pt-6 pb-3">
-        <h1 className="text-[28px] font-extrabold text-black tracking-tight">Calendar</h1>
+        <h1 className="text-display-2 font-extrabold text-black tracking-tight">Calendar</h1>
         <button
           onClick={() => navigate('/calendar/availability', { state: { dateIso: day.date.toISOString() } })}
           className="w-10 h-10 rounded-full bg-white border border-bdr flex items-center justify-center text-black"
@@ -136,7 +136,7 @@ export function CalendarScreen() {
                           border-l border-bdr first:border-l-0
                           ${active ? 'bg-g rounded-[14px]' : 'bg-transparent'}`}
             >
-              <span className={`text-[12px] ${active ? 'text-white/85 font-medium' : 'text-b3 font-medium'}`}>{d.month}</span>
+              <span className={`text-meta ${active ? 'text-white/85 font-medium' : 'text-b3 font-medium'}`}>{d.month}</span>
               <span className={`text-[20px] font-extrabold ${active ? 'text-white' : 'text-black'}`}>{d.day}</span>
               {d.bookings > 0 && (
                 <span className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full
@@ -154,10 +154,10 @@ export function CalendarScreen() {
       >
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <p className="text-[16px] font-extrabold text-black">{status.label}</p>
+            <p className="text-body-lg font-extrabold text-black">{status.label}</p>
             <span className={`w-2.5 h-2.5 rounded-full ${status.dot}`} />
           </div>
-          <p className="text-[13px] text-b3 mt-0.5 leading-relaxed">{status.copy}</p>
+          <p className="text-body-sm text-b3 mt-0.5 leading-relaxed">{status.copy}</p>
         </div>
         <span className="text-b3 text-lg">›</span>
       </button>
@@ -165,7 +165,7 @@ export function CalendarScreen() {
       {/* empty state when this day has nothing */}
       {blocks.length === 0 && (
         <div className="px-5 py-10 text-center">
-          <p className="text-[14px] text-b3 leading-relaxed">
+          <p className="text-body text-b3 leading-relaxed">
             No bookings on this day.<br />
             Tap another date in the strip above.
           </p>
@@ -178,7 +178,7 @@ export function CalendarScreen() {
           const booking = blocks.find(b => b.hour === h);
           return (
             <div key={h} className="relative flex items-start gap-3 px-5 pt-3 min-h-[60px]">
-              <span className="text-[12px] text-b3 font-medium w-12 flex-shrink-0 pt-0.5">{formatHour(h)}</span>
+              <span className="text-meta text-b3 font-medium w-12 flex-shrink-0 pt-0.5">{formatHour(h)}</span>
               <div className="flex-1 border-t border-bdr relative">
                 {booking && (
                   <button
@@ -187,8 +187,8 @@ export function CalendarScreen() {
                                 ${booking.color === 'g' ? 'bg-g' : 'bg-gd'}`}
                     style={{ height: `${booking.duration * 60 - 8}px` }}
                   >
-                    <p className="text-[13px] font-extrabold leading-tight">{booking.title}</p>
-                    <p className="text-[11px] text-white/85 mt-0.5">
+                    <p className="text-body-sm font-extrabold leading-tight">{booking.title}</p>
+                    <p className="text-meta-sm text-white/85 mt-0.5">
                       {formatHour(booking.hour)} – {formatHour(booking.hour + booking.duration)}
                     </p>
                   </button>

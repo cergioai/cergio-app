@@ -151,21 +151,21 @@ export function LocationEditModal({
       >
         <div className="flex justify-between items-start mb-3">
           <div>
-            <h3 className="text-[18px] font-extrabold text-black leading-tight">Your location</h3>
-            <p className="text-[12px] text-b3 mt-0.5 leading-snug">
+            <h3 className="text-heading-2 font-extrabold text-black leading-tight">Your location</h3>
+            <p className="text-meta text-b3 mt-0.5 leading-snug">
               This is where providers come — saved as your default for future requests.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-[20px] text-b3 font-bold px-2 -mt-1"
+            className="text-[20px] text-b3 font-extrabold px-2 -mt-1"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-3">
+        <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-3">
           Address
         </label>
         <div ref={inputWrapRef}>
@@ -174,7 +174,7 @@ export function LocationEditModal({
             onChange={setText}
             onSelect={handleSelect}
             placeholder="Start typing your address…"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+            className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
         </div>
 
@@ -184,14 +184,14 @@ export function LocationEditModal({
             full remediation when they're ready to fix GCP. */}
         {broken && googleHint && (
           <details className="mt-3 bg-warnBg/60 border border-warnText/20 rounded-[12px] px-3 py-2 group">
-            <summary className="text-[11px] text-warnText leading-snug cursor-pointer flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
+            <summary className="text-meta-sm text-warnText leading-snug cursor-pointer flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
               <span aria-hidden="true">ℹ️</span>
               <span className="flex-1">Using OpenStreetMap — addresses save fine. Tap for Google fix.</span>
-              <span className="text-warnText/60 text-[10px] group-open:rotate-180 transition-transform">▾</span>
+              <span className="text-warnText/60 text-caps group-open:rotate-180 transition-transform">▾</span>
             </summary>
             <div className="mt-2 pt-2 border-t border-warnText/15">
-              <p className="text-[11px] font-extrabold text-warnText leading-snug">{googleHint.title}</p>
-              <p className="text-[11px] text-warnText/90 mt-1 leading-snug font-normal">{googleHint.detail}</p>
+              <p className="text-meta-sm font-extrabold text-warnText leading-snug">{googleHint.title}</p>
+              <p className="text-meta-sm text-warnText/90 mt-1 leading-snug font-normal">{googleHint.detail}</p>
             </div>
           </details>
         )}
@@ -199,7 +199,7 @@ export function LocationEditModal({
         {/* Status / save feedback — persistent. */}
         {statusMsg && (
           <div
-            className={`mt-3 rounded-[12px] p-3 border text-[12px] leading-snug ${
+            className={`mt-3 rounded-[12px] p-3 border text-meta leading-snug ${
               statusMsg.kind === 'error'
                 ? 'bg-warnBg border-warnText/30 text-warnText font-extrabold'
                 : statusMsg.kind === 'warn'
@@ -212,10 +212,10 @@ export function LocationEditModal({
         )}
 
         {verified === 'google' && !statusMsg && (
-          <p className="text-[11px] text-gd mt-3 font-medium">✓ Google-verified address</p>
+          <p className="text-meta-sm text-gd mt-3 font-medium">✓ Google-verified address</p>
         )}
         {verified === 'osm' && !statusMsg && (
-          <p className="text-[11px] text-b2 mt-3 font-medium">Verified via OpenStreetMap</p>
+          <p className="text-meta-sm text-b2 mt-3 font-medium">Verified via OpenStreetMap</p>
         )}
 
         <button
@@ -231,13 +231,13 @@ export function LocationEditModal({
 
         <button
           onClick={onClose}
-          className="w-full rounded-[14px] py-2.5 text-[13px] font-bold mt-2 text-b3 hover:bg-bg5 transition-colors"
+          className="w-full rounded-[14px] py-2.5 text-body-sm font-extrabold mt-2 text-b3 hover:bg-bg5 transition-colors"
         >
           Cancel
         </button>
 
         {!getGoogleMapsKey() && (
-          <p className="text-[10px] text-b3 mt-3 text-center leading-snug">
+          <p className="text-caps text-b3 mt-3 text-center leading-snug">
             VITE_GOOGLE_MAPS_KEY is not set — using OpenStreetMap. Addresses save fine but aren't Google-canonical.
           </p>
         )}

@@ -57,7 +57,7 @@ function PayForm({ bookingId, onSuccess, onCancel, totalCents, providerName }) {
       <PaymentElement options={{ layout: 'tabs' }} />
 
       {error && (
-        <p className="text-[13px] text-danger font-bold leading-relaxed">{error}</p>
+        <p className="text-body-sm text-danger font-extrabold leading-relaxed">{error}</p>
       )}
 
       <button
@@ -74,7 +74,7 @@ function PayForm({ bookingId, onSuccess, onCancel, totalCents, providerName }) {
         type="button"
         onClick={onCancel}
         disabled={busy}
-        className="text-center text-[14px] font-extrabold text-b3 disabled:opacity-50"
+        className="text-center text-body font-extrabold text-b3 disabled:opacity-50"
       >
         Cancel
       </button>
@@ -106,12 +106,12 @@ export function PaymentSheet({ clientSecret, bookingId, totalCents, providerName
       >
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-4" />
         <h2 className="text-[20px] font-extrabold text-black mb-1">Confirm your booking</h2>
-        <p className="text-[13px] text-b3 mb-5">
+        <p className="text-body-sm text-b3 mb-5">
           {providerName} · ${(totalCents / 100).toFixed(2)} total
         </p>
 
         {!stripeLoaded ? (
-          <p className="text-[13px] text-b3 text-center py-6">Loading payment form…</p>
+          <p className="text-body-sm text-b3 text-center py-6">Loading payment form…</p>
         ) : (
           <Elements
             stripe={stripePromise}

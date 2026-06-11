@@ -114,7 +114,7 @@ export function ServiceDetailProviderScreen() {
   if (loading || !svc) {
     return (
       <div className="flex-1 flex items-center justify-center bg-cr">
-        <p className="text-[14px] text-b3">Loading service…</p>
+        <p className="text-body text-b3">Loading service…</p>
       </div>
     );
   }
@@ -125,14 +125,14 @@ export function ServiceDetailProviderScreen() {
   if (svc.notFound) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-cr px-7">
-        <p className="text-[18px] font-extrabold text-black text-center mb-2">Service not found</p>
-        <p className="text-[14px] text-b3 text-center leading-relaxed mb-6">
+        <p className="text-heading-2 font-extrabold text-black text-center mb-2">Service not found</p>
+        <p className="text-body text-b3 text-center leading-relaxed mb-6">
           We couldn't load this service. It may have been removed,
           or you may not have permission to view it.
         </p>
         <button
           onClick={() => navigate('/profile/services')}
-          className="bg-black text-white rounded-pill px-5 py-2.5 text-[14px] font-extrabold"
+          className="bg-black text-white rounded-pill px-5 py-2.5 text-body font-extrabold"
         >
           Back to my services
         </button>
@@ -178,28 +178,28 @@ export function ServiceDetailProviderScreen() {
             fileInputRef.current?.click();
           }}
           disabled={uploading}
-          className="absolute top-4 right-4 bg-white/95 rounded-pill px-3 py-1.5 text-[12px] font-extrabold text-black
+          className="absolute top-4 right-4 bg-white/95 rounded-pill px-3 py-1.5 text-meta font-extrabold text-black
                      disabled:opacity-60 disabled:cursor-wait"
         >
           {uploading ? 'Uploading…' : (svc.coverUrl ? 'Change photo' : 'Add photo')}
         </button>
-        <span className="absolute bottom-3 left-4 bg-white/95 rounded-pill px-3 py-1 text-[11px] font-extrabold text-black">
+        <span className="absolute bottom-3 left-4 bg-white/95 rounded-pill px-3 py-1 text-meta-sm font-extrabold text-black">
           Cover media
         </span>
       </div>
 
       {/* title + status */}
       <div className="px-5 pt-5 pb-3">
-        <p className="text-[12px] font-extrabold text-g uppercase tracking-widest mb-1">{svc.sub || 'Service'}</p>
+        <p className="text-meta font-extrabold text-g uppercase tracking-widest mb-1">{svc.sub || 'Service'}</p>
         <h1 className="text-[24px] font-extrabold text-black leading-tight">{svc.title}</h1>
         <div className="flex items-center gap-3 mt-2">
-          <span className={`inline-flex items-center gap-1.5 text-[12px] font-extrabold px-2.5 py-1 rounded-pill
+          <span className={`inline-flex items-center gap-1.5 text-meta font-extrabold px-2.5 py-1 rounded-pill
             ${svc.status === 'draft' ? 'bg-bg5 text-b2' : 'bg-gl text-gd'}`}>
             <span className={`w-2 h-2 rounded-full ${svc.status === 'draft' ? 'bg-b3' : 'bg-g'}`} />
             {svc.status === 'draft' ? 'Draft' : 'Listed'}
           </span>
           {svc.rating != null && (
-            <span className="text-[13px] text-b2 font-medium">★ {Number(svc.rating).toFixed(1)} · {svc.bookings} bookings</span>
+            <span className="text-body-sm text-b2 font-medium">★ {Number(svc.rating).toFixed(1)} · {svc.bookings} bookings</span>
           )}
         </div>
       </div>
@@ -212,13 +212,13 @@ export function ServiceDetailProviderScreen() {
           { label: 'Pricing',  value: svc.hourly || '—' },
         ].map(s => (
           <div key={s.label} className="bg-soft rounded-[14px] p-3 text-center">
-            <p className="text-[14px] font-extrabold text-black">{s.value}</p>
-            <p className="text-[11px] text-b3 mt-0.5">{s.label}</p>
+            <p className="text-body font-extrabold text-black">{s.value}</p>
+            <p className="text-meta-sm text-b3 mt-0.5">{s.label}</p>
           </div>
         ))}
       </div>
 
-      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">
+      <p className="px-5 text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-3">
         Service details
       </p>
       <div className="mx-5 bg-white border border-bdr rounded-[16px] mb-5 overflow-hidden">
@@ -248,15 +248,15 @@ export function ServiceDetailProviderScreen() {
                         ${i < arr.length - 1 ? 'border-b border-bdr' : ''}`}
           >
             <div className="flex-1 pr-3">
-              <p className="text-[14px] font-extrabold text-black">{row.label}</p>
-              <p className="text-[12px] text-b3 mt-0.5">{row.sub}</p>
+              <p className="text-body font-extrabold text-black">{row.label}</p>
+              <p className="text-meta text-b3 mt-0.5">{row.sub}</p>
             </div>
             <span className="text-b3 text-lg">›</span>
           </button>
         ))}
       </div>
 
-      <p className="px-5 text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">
+      <p className="px-5 text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-3">
         Visibility
       </p>
       <div className="mx-5 flex flex-col gap-2 mb-5">
@@ -276,7 +276,7 @@ export function ServiceDetailProviderScreen() {
               ? 'Service unlisted — only you can see it now'
               : 'Service relisted — visible in search again ✓');
           }}
-          className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-black"
+          className="bg-white border border-bdr rounded-[14px] py-3.5 text-body font-extrabold text-black"
         >
           {svc.status === 'listed' ? 'Unlist this service' : 'Relist this service'}
         </button>
@@ -294,14 +294,14 @@ export function ServiceDetailProviderScreen() {
                   showToast('Service deleted ✓');
                   navigate('/account/services');
                 }}
-                className="text-[13px] font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
+                className="text-body-sm font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
               >
                 Confirm delete
               </button>
-              <span className="text-b3 text-[13px]">·</span>
+              <span className="text-b3 text-body-sm">·</span>
               <button
                 onClick={() => setDeleteArmed(false)}
-                className="text-[13px] font-bold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
+                className="text-body-sm font-extrabold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
               >
                 Keep service
               </button>
@@ -310,7 +310,7 @@ export function ServiceDetailProviderScreen() {
         ) : (
           <button
             onClick={() => setDeleteArmed(true)}
-            className="bg-white border border-bdr rounded-[14px] py-3.5 text-[14px] font-extrabold text-danger"
+            className="bg-white border border-bdr rounded-[14px] py-3.5 text-body font-extrabold text-danger"
           >
             Delete service
           </button>

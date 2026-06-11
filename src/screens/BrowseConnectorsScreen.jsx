@@ -59,22 +59,22 @@ function CancelSpotlightLink({ onCancelled }) {
       setArmed(false);
     }
   };
-  if (pending) return <span className="mt-3 inline-block text-[13px] text-b3 font-bold">Cancelling…</span>;
+  if (pending) return <span className="mt-3 inline-block text-body-sm text-b3 font-extrabold">Cancelling…</span>;
   if (armed) {
     return (
       <span className="mt-3 inline-flex items-center gap-2">
         <button
           type="button"
           onClick={cancel}
-          className="text-[13px] font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
+          className="text-body-sm font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
         >
           Confirm cancel
         </button>
-        <span className="text-b3 text-[13px]">·</span>
+        <span className="text-b3 text-body-sm">·</span>
         <button
           type="button"
           onClick={() => setArmed(false)}
-          className="text-[13px] font-bold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
+          className="text-body-sm font-extrabold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
         >
           Keep waiting
         </button>
@@ -85,7 +85,7 @@ function CancelSpotlightLink({ onCancelled }) {
     <button
       type="button"
       onClick={() => setArmed(true)}
-      className="mt-3 text-[13px] text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+      className="mt-3 text-body-sm text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
     >
       Cancel request
     </button>
@@ -178,7 +178,7 @@ export function BrowseConnectorsScreen() {
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
       {/* header */}
       <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
-        <h1 className="text-[28px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           Find a Connector<br />to spotlight you
         </h1>
         <button
@@ -193,14 +193,14 @@ export function BrowseConnectorsScreen() {
           path per Tarik — "free Connectors is the priority. If none,
           keep the current msg but more succinct." Free posts come
           first; the rate-card line moves to a quieter sub. */}
-      <p className="px-5 text-[14px] text-b2 mt-1 leading-relaxed">
+      <p className="px-5 text-body text-b2 mt-1 leading-relaxed">
         <span className="font-extrabold text-black">Free posts first</span> —
         a Connector spotlights you on IG/TikTok in exchange for the service.
         No free fit? Some accept paid posts at their rate card (negotiable).
       </p>
 
       {loading || confirmedConnectorIds === null ? (
-        <p className="px-5 mt-10 text-[14px] text-b3">Loading Connectors…</p>
+        <p className="px-5 mt-10 text-body text-b3">Loading Connectors…</p>
       ) : connectors.length === 0 ? (
         <EmptyState />
       ) : (() => {
@@ -224,7 +224,7 @@ export function BrowseConnectorsScreen() {
               <p className="text-[15px] font-extrabold text-black mb-1">
                 Send a spotlight request first
               </p>
-              <p className="text-[13px] text-b3 leading-snug mb-4">
+              <p className="text-body-sm text-b3 leading-snug mb-4">
                 Cergio asks matching Connectors if they can take your
                 request — when they confirm (free or with a paid offer),
                 they show up here.
@@ -232,7 +232,7 @@ export function BrowseConnectorsScreen() {
               <button
                 type="button"
                 onClick={() => navigate('/list-service')}
-                className="bg-g text-white rounded-pill px-5 py-2.5 text-[13px] font-extrabold cg-cta"
+                className="bg-g text-white rounded-pill px-5 py-2.5 text-body-sm font-extrabold cg-cta"
               >
                 List a service to start →
               </button>
@@ -247,7 +247,7 @@ export function BrowseConnectorsScreen() {
               <p className="text-[15px] font-extrabold text-black mb-1">
                 Awaiting Connector responses…
               </p>
-              <p className="text-[13px] text-b3 leading-snug">
+              <p className="text-body-sm text-b3 leading-snug">
                 Free fits surface first. Paid counters show up here too.
               </p>
               {/* CERGIO-GUARD (2026-06-03): Cancel link per Tarik —
@@ -268,7 +268,7 @@ export function BrowseConnectorsScreen() {
           <>
             {!hasFreeConnector && (
               <div className="mx-5 mt-5 bg-warnBg border border-warn/40 rounded-[14px] p-3.5">
-                <p className="text-[13px] font-extrabold text-warnText leading-tight mb-1">
+                <p className="text-body-sm font-extrabold text-warnText leading-tight mb-1">
                   No free Connectors confirmed yet
                 </p>
                 <p className="text-[12.5px] text-warnText leading-snug">
@@ -292,7 +292,7 @@ export function BrowseConnectorsScreen() {
               });
               return (
                 <>
-                  <p className="px-5 mt-5 mb-2 text-[12px] font-extrabold text-b3 uppercase tracking-wide">
+                  <p className="px-5 mt-5 mb-2 text-meta font-extrabold text-b3 uppercase tracking-wide">
                     Available {hasFreeConnector ? '· free first' : ''}
                   </p>
                   <div className="flex flex-col">
@@ -336,14 +336,14 @@ function ConnectorRow({ connector: c, onClick }) {
       onClick={onClick}
       className="w-full px-5 py-4 flex items-start gap-3 text-left hover:bg-bg5/30 transition-colors border-b border-bdr"
     >
-      <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-[16px] font-extrabold flex-shrink-0">
+      <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-body-lg font-extrabold flex-shrink-0">
         {initials}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[16px] font-extrabold text-black leading-tight truncate">
+        <p className="text-body-lg font-extrabold text-black leading-tight truncate">
           {c.display_name || `@${c.instagram_handle || c.tiktok_handle}`}
         </p>
-        <p className="text-[13px] text-b3 mt-0.5 truncate">
+        <p className="text-body-sm text-b3 mt-0.5 truncate">
           {c.instagram_handle && <>IG @{c.instagram_handle}</>}
           {c.instagram_handle && c.tiktok_handle && ' · '}
           {c.tiktok_handle && <>TT @{c.tiktok_handle}</>}
@@ -356,7 +356,7 @@ function ConnectorRow({ connector: c, onClick }) {
               "Paid Connector" pill whenever any rate is set so the user
               sees the cost commitment BEFORE the individual rate pills. */}
           {(igPrice || ttPrice) && (
-            <span className="bg-warnBg text-warnText border border-warn/40 rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold inline-flex items-center gap-1">
+            <span className="bg-warnBg text-warnText border border-warn/40 rounded-pill px-2.5 py-0.5 text-meta font-extrabold inline-flex items-center gap-1">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/>
               </svg>
@@ -364,17 +364,17 @@ function ConnectorRow({ connector: c, onClick }) {
             </span>
           )}
           {igPrice && (
-            <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold">
+            <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta font-extrabold">
               IG · {igPrice}/post
             </span>
           )}
           {ttPrice && (
-            <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold">
+            <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta font-extrabold">
               TT · {ttPrice}/post
             </span>
           )}
           {!igPrice && !ttPrice && (
-            <span className="bg-gl text-gd border border-g/40 rounded-pill px-2.5 py-0.5 text-[12px] font-extrabold inline-flex items-center gap-1">
+            <span className="bg-gl text-gd border border-g/40 rounded-pill px-2.5 py-0.5 text-meta font-extrabold inline-flex items-center gap-1">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
               </svg>
@@ -401,7 +401,7 @@ function EmptyState() {
         </svg>
       </div>
       <h2 className="text-[20px] font-extrabold text-black mb-2">No Connectors with rates yet</h2>
-      <p className="text-[14px] text-b3 leading-relaxed">
+      <p className="text-body text-b3 leading-relaxed">
         Connectors are setting their spotlight rates over the next few days.
         Check back soon — or invite Connectors you already know.
       </p>

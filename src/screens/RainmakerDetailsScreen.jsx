@@ -40,7 +40,7 @@ function Field({ name, value, onChange, onAddressSelect, hint }) {
 
   return (
     <div className="mb-6">
-      <label className="block text-[16px] font-extrabold text-black mb-2">
+      <label className="block text-body-lg font-extrabold text-black mb-2">
         {meta.label}
       </label>
       {meta.type === 'textarea' ? (
@@ -49,7 +49,7 @@ function Field({ name, value, onChange, onAddressSelect, hint }) {
           onChange={e => onChange(name, e.target.value)}
           placeholder={placeholder}
           rows={4}
-          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                      placeholder-b3 outline-none focus:ring-2 focus:ring-g/30
                      resize-none font-sans"
         />
@@ -72,7 +72,7 @@ function Field({ name, value, onChange, onAddressSelect, hint }) {
           value={value}
           onChange={e => onChange(name, e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                      placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
         />
       )}
@@ -113,7 +113,7 @@ export function RainmakerDetailsScreen() {
     <div className="flex-1 flex flex-col bg-cr">
       {/* green header */}
       <div className="bg-gradient-to-b from-gm to-g px-7 pt-12 pb-14 flex flex-col justify-end min-h-[260px]">
-        <h1 className="text-[28px] font-extrabold text-white leading-tight">
+        <h1 className="text-display-2 font-extrabold text-white leading-tight">
           {config.title}
         </h1>
       </div>

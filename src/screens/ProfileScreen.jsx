@@ -58,7 +58,7 @@ function MintPill({ children, tone = 'mint' }) {
             : tone === 'amber' ? 'bg-warnBg text-warnText'
             : 'bg-bg5 text-b2';
   return (
-    <span className={`${cls} rounded-pill px-2.5 py-0.5 text-[11px] font-extrabold whitespace-nowrap`}>
+    <span className={`${cls} rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap`}>
       {children}
     </span>
   );
@@ -88,7 +88,7 @@ function GroupCard({ title, summary, value, valueLabel, pill, onClick, accent = 
         {value && (
           <div className="text-right">
             <div className="text-[15px] font-extrabold text-gd leading-tight">{value}</div>
-            {valueLabel && <div className="text-[10px] text-b3 leading-tight mt-0.5">{valueLabel}</div>}
+            {valueLabel && <div className="text-caps text-b3 leading-tight mt-0.5">{valueLabel}</div>}
           </div>
         )}
         <Chevron />
@@ -115,7 +115,7 @@ function ActionDrawer({ open, title, onClose, children }) {
           <h3 className="text-[20px] font-extrabold text-black leading-tight">{title}</h3>
           <button
             onClick={onClose}
-            className="text-[22px] text-b3 font-bold px-2 -mt-1"
+            className="text-heading-1 text-b3 font-extrabold px-2 -mt-1"
             aria-label="Close"
           >
             ×
@@ -146,7 +146,7 @@ function DrawerAction({ title, subtitle, pill, onClick, disabled = false, icon =
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[14px] font-bold text-black leading-tight">{title}</span>
+            <span className="text-body font-extrabold text-black leading-tight">{title}</span>
             {pill}
           </div>
           {subtitle && (
@@ -329,13 +329,13 @@ export function ProfileScreen() {
             {isSignedIn ? (
               hasRateCard
                 ? <MintPill>Connector ✓</MintPill>
-                : <span className="text-[11.5px] text-b3 font-bold uppercase tracking-wide">Member</span>
+                : <span className="text-[11.5px] text-b3 font-extrabold uppercase tracking-wide">Member</span>
             ) : (
-              <span className="text-[11.5px] text-b3 font-bold uppercase tracking-wide">Not signed in</span>
+              <span className="text-[11.5px] text-b3 font-extrabold uppercase tracking-wide">Not signed in</span>
             )}
           </div>
         </div>
-        <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-[16px] font-extrabold flex-shrink-0 overflow-hidden">
+        <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-body-lg font-extrabold flex-shrink-0 overflow-hidden">
           {initials}
         </div>
       </div>
@@ -347,7 +347,7 @@ export function ProfileScreen() {
             setServiceMode(!serviceMode);
             showToast(serviceMode ? 'Back to user view' : "You're now in Service view");
           }}
-          className="w-full bg-g text-white rounded-[24px] py-3.5 text-[16px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-3.5 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.98] transition-all"
         >
           {serviceMode ? 'Switch to User View' : 'Switch to Service View'}
@@ -369,7 +369,7 @@ export function ProfileScreen() {
             className="bg-white border border-bdr rounded-[12px] py-2 px-1 text-center hover:bg-bg5/40 transition-colors"
             title="Your follower count — tap to view your public profile"
           >
-            <p className="text-[16px] font-extrabold text-black leading-none">{fmtFollowers(followerCount)}</p>
+            <p className="text-body-lg font-extrabold text-black leading-none">{fmtFollowers(followerCount)}</p>
             <p className="text-[9px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Followers</p>
           </button>
           <button
@@ -378,7 +378,7 @@ export function ProfileScreen() {
             className="bg-white border border-bdr rounded-[12px] py-2 px-1 text-center hover:bg-bg5/40 transition-colors"
             title={`${stats.invited} friends invited — tap to track`}
           >
-            <p className="text-[16px] font-extrabold text-black leading-none">{stats.invited}</p>
+            <p className="text-body-lg font-extrabold text-black leading-none">{stats.invited}</p>
             <p className="text-[9px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Friends</p>
           </button>
           <button
@@ -387,7 +387,7 @@ export function ProfileScreen() {
             className="bg-white border border-bdr rounded-[12px] py-2 px-1 text-center hover:bg-bg5/40 transition-colors"
             title={`${stats.recommended} reco'd — tap to review`}
           >
-            <p className="text-[16px] font-extrabold text-black leading-none">{stats.recommended}</p>
+            <p className="text-body-lg font-extrabold text-black leading-none">{stats.recommended}</p>
             <p className="text-[9px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Reco&apos;d</p>
           </button>
           <button
@@ -396,7 +396,7 @@ export function ProfileScreen() {
             className="bg-gl/60 border border-g/25 rounded-[12px] py-2 px-1 text-center hover:bg-gl transition-colors"
             title="Lifetime earnings — tap to view ledger"
           >
-            <p className="text-[16px] font-extrabold text-gd leading-none">${Math.round(earningsTotalCents / 100)}</p>
+            <p className="text-body-lg font-extrabold text-gd leading-none">${Math.round(earningsTotalCents / 100)}</p>
             <p className="text-[9px] font-extrabold uppercase tracking-wide text-gd mt-0.5">Earned</p>
           </button>
         </div>
@@ -482,7 +482,7 @@ export function ProfileScreen() {
       </div>
       <button
         onClick={() => navigate('/home')}
-        className="text-center text-[14px] font-bold text-b3 py-3 mx-auto underline underline-offset-2"
+        className="text-center text-body font-extrabold text-b3 py-3 mx-auto underline underline-offset-2"
       >
         I'll do this later
       </button>
@@ -684,49 +684,49 @@ export function ProfileScreen() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-3">
-              <h3 className="text-[18px] font-extrabold text-black leading-tight">
+              <h3 className="text-heading-2 font-extrabold text-black leading-tight">
                 What's a Connector?
               </h3>
               <button
                 onClick={() => setShowConnectorInfo(false)}
-                className="text-[20px] text-b3 font-bold px-2 -mt-1"
+                className="text-[20px] text-b3 font-extrabold px-2 -mt-1"
                 aria-label="Close"
               >
                 ×
               </button>
             </div>
-            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+            <p className="text-body-sm text-b2 leading-relaxed mb-3">
               A Connector is someone who can drive real users to great services in
               their community. It's broader than "influencer" — these are the
               kinds of people who become Connectors:
             </p>
-            <ul className="text-[13px] text-b2 leading-relaxed mb-3 space-y-1.5 pl-1">
-              <li>• <span className="font-bold text-black">Local influencers</span> (5K+ on IG/TikTok)</li>
-              <li>• <span className="font-bold text-black">Super users</span> — {REWARDS.superUserFriendsPerMonth}+ friends booking per month, social graph compounding</li>
-              <li>• <span className="font-bold text-black">Service providers</span> with a base of existing clients</li>
-              <li>• <span className="font-bold text-black">Small businesses</span> — stores, salons, gyms, real-estate agents</li>
+            <ul className="text-body-sm text-b2 leading-relaxed mb-3 space-y-1.5 pl-1">
+              <li>• <span className="font-extrabold text-black">Local influencers</span> (5K+ on IG/TikTok)</li>
+              <li>• <span className="font-extrabold text-black">Super users</span> — {REWARDS.superUserFriendsPerMonth}+ friends booking per month, social graph compounding</li>
+              <li>• <span className="font-extrabold text-black">Service providers</span> with a base of existing clients</li>
+              <li>• <span className="font-extrabold text-black">Small businesses</span> — stores, salons, gyms, real-estate agents</li>
             </ul>
-            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+            <p className="text-body-sm text-b2 leading-relaxed mb-3">
               The thing in common: a network you can drive toward services worth
               booking. You become a partner in the marketplace — you grow it, it
               grows you.
             </p>
             <div className="bg-gl border border-g/25 rounded-[14px] p-3 mb-4">
-              <p className="text-[12px] font-bold text-gd leading-snug mb-1.5">As a Connector you earn:</p>
-              <ul className="text-[12px] text-gd/90 leading-snug space-y-1">
-                <li>• ${REWARDS.perFriendConnector} <span className="font-bold">cash</span> per friend who joins + books</li>
-                <li>• <span className="font-bold">{REWARDS.friendOfFriendPercent}% = ${REWARDS.friendOfFriendBonus}</span> when your friends bring in friends</li>
+              <p className="text-meta font-extrabold text-gd leading-snug mb-1.5">As a Connector you earn:</p>
+              <ul className="text-meta text-gd/90 leading-snug space-y-1">
+                <li>• ${REWARDS.perFriendConnector} <span className="font-extrabold">cash</span> per friend who joins + books</li>
+                <li>• <span className="font-extrabold">{REWARDS.friendOfFriendPercent}% = ${REWARDS.friendOfFriendBonus}</span> when your friends bring in friends</li>
                 <li>• Free services from providers who pay you in spotlights</li>
                 <li>• Growth Participation Income — your earnings drive a bigger bonus as Cergio grows</li>
               </ul>
             </div>
-            <p className="text-[12px] text-b3 leading-snug mb-4 italic">
+            <p className="text-meta text-b3 leading-snug mb-4 italic">
               {REWARD_COPY.missionLine}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => { setShowConnectorInfo(false); navigate('/rainmaker/apply'); }}
-                className="flex-1 bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold
+                className="flex-1 bg-g text-white rounded-[14px] py-3 text-body font-extrabold
                            hover:opacity-90 active:scale-[.98] transition-all"
               >
                 I want in →
@@ -734,7 +734,7 @@ export function ProfileScreen() {
               <button
                 onClick={() => setShowConnectorInfo(false)}
                 className="bg-white border border-bdr text-b3 rounded-[14px] px-4 py-3
-                           text-[13px] font-bold hover:text-b2 transition-colors"
+                           text-body-sm font-extrabold hover:text-b2 transition-colors"
               >
                 Maybe later
               </button>

@@ -22,12 +22,12 @@ export function ServiceListPhotosArrangeScreen() {
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <button
           onClick={() => navigate(-1)}
-          className="text-2xl text-black font-bold w-9 h-9 flex items-center justify-center"
+          className="text-2xl text-black font-extrabold w-9 h-9 flex items-center justify-center"
         >
           ‹
         </button>
         <button className="border border-black rounded-[20px] px-5 py-2 flex items-center gap-2
-                           text-[14px] font-extrabold text-black">
+                           text-body font-extrabold text-black">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 19V5M5 12l7-7 7 7" />
           </svg>
@@ -37,15 +37,15 @@ export function ServiceListPhotosArrangeScreen() {
 
       {/* labels */}
       <div className="px-5 pb-3">
-        <p className="text-[18px] font-extrabold text-black">Looking good!</p>
-        <p className="text-[14px] text-b3">Drag to re-order</p>
+        <p className="text-heading-2 font-extrabold text-black">Looking good!</p>
+        <p className="text-body text-b3">Drag to re-order</p>
       </div>
 
       {/* gallery */}
       <div className="px-4 pt-2 flex-1 overflow-y-auto">
         {/* cover — first selected tile */}
         <div className={`relative aspect-square rounded-[14px] overflow-hidden mb-3 ${cover}`}>
-          <span className="absolute top-3 left-3 bg-white text-black text-[12px] font-extrabold px-3 py-1.5 rounded">
+          <span className="absolute top-3 left-3 bg-white text-black text-meta font-extrabold px-3 py-1.5 rounded">
             Cover media
           </span>
           <button className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90

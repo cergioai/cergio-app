@@ -44,16 +44,16 @@ export function AddressLabelPrompt({
       >
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-4" />
 
-        <h2 className="text-[18px] font-extrabold text-black mb-1">Save this address?</h2>
-        <p className="text-[13px] text-b3 mb-1 leading-relaxed">
+        <h2 className="text-heading-2 font-extrabold text-black mb-1">Save this address?</h2>
+        <p className="text-body-sm text-b3 mb-1 leading-relaxed">
           We'll default to it next time — you won't have to retype it.
         </p>
-        <p className="text-[13px] text-black font-bold mb-4 leading-snug">
+        <p className="text-body-sm text-black font-extrabold mb-4 leading-snug">
           {formattedAddress}
         </p>
 
         {/* label chips */}
-        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-2">
+        <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-2">
           Label
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
@@ -64,7 +64,7 @@ export function AddressLabelPrompt({
                 key={s.label}
                 type="button"
                 onClick={() => setPicked(s.label)}
-                className={`flex items-center gap-1.5 rounded-pill px-3.5 py-2 text-[13px] font-extrabold transition-colors
+                className={`flex items-center gap-1.5 rounded-pill px-3.5 py-2 text-body-sm font-extrabold transition-colors
                   ${active
                     ? 'bg-gl border-2 border-g text-gd'
                     : 'bg-white border border-bdr text-b2 hover:border-g/40'}`}
@@ -82,7 +82,7 @@ export function AddressLabelPrompt({
             value={custom}
             onChange={e => setCustom(e.target.value)}
             placeholder="Custom label (e.g. Mom's place)"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 mb-3"
             maxLength={40}
             autoFocus
@@ -104,7 +104,7 @@ export function AddressLabelPrompt({
             type="button"
             onClick={onSkip}
             disabled={busy}
-            className="w-full text-[13px] font-extrabold text-b3 py-2 disabled:opacity-50"
+            className="w-full text-body-sm font-extrabold text-b3 py-2 disabled:opacity-50"
           >
             Skip — just use it once
           </button>

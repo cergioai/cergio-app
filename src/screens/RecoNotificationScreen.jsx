@@ -20,15 +20,15 @@ export function RecoNotificationScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cr pb-20 overflow-y-auto">
       <div className="px-5 pt-16 text-center">
-        <p className="text-[18px] font-extrabold text-black mb-2">
+        <p className="text-heading-2 font-extrabold text-black mb-2">
           You're all caught up
         </p>
-        <p className="text-[14px] text-b3 leading-relaxed mb-6">
+        <p className="text-body text-b3 leading-relaxed mb-6">
           New Connector requests show up in your inbox.
         </p>
         <button
           onClick={() => navigate('/inbox')}
-          className="bg-black text-white rounded-pill px-5 py-2.5 text-[14px] font-extrabold"
+          className="bg-black text-white rounded-pill px-5 py-2.5 text-body font-extrabold"
         >
           Open inbox
         </button>

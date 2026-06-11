@@ -325,11 +325,11 @@ export function EarningsScreen() {
       <div className="mx-5 rounded-[20px] bg-gradient-to-br from-gm to-g p-3 mb-5 shadow-card">
         <div className="bg-white rounded-[14px] p-4 flex items-center justify-between">
           <div>
-            <p className="text-[28px] font-extrabold text-black leading-none">
-              {balanceStr}<span className="text-[14px] text-b3 font-bold ml-1">{BALANCE_UNIT}</span>
+            <p className="text-display-2 font-extrabold text-black leading-none">
+              {balanceStr}<span className="text-body text-b3 font-extrabold ml-1">{BALANCE_UNIT}</span>
             </p>
             {!canCashOut && balanceCents > 0 && (
-              <p className="text-[11px] text-b3 mt-1">
+              <p className="text-meta-sm text-b3 mt-1">
                 ${(CASH_OUT_THRESHOLD_CENTS - balanceCents) / 100} more to cash out
               </p>
             )}
@@ -373,14 +373,14 @@ export function EarningsScreen() {
           <button
             onClick={() => navigate('/earnings/breakdown')}
             className="w-full bg-white rounded-[14px] py-3 mt-2 flex items-center justify-between px-4
-                       text-[14px] font-extrabold text-black"
+                       text-body font-extrabold text-black"
           >
             See Earnings Breakdown
             <span className="text-b3 text-base">›</span>
           </button>
         )}
         {canCashOut && (
-          <p className="text-center text-[12px] text-white font-medium mt-3 px-2">
+          <p className="text-center text-meta text-white font-medium mt-3 px-2">
             You're eligible to cash out — your balance is over ${REWARDS.perFriend}.
           </p>
         )}
@@ -408,11 +408,11 @@ export function EarningsScreen() {
               onClick={() => navigate('/invite/friends-popup')}
               className="mx-5 mb-5 w-[calc(100%-2.5rem)] bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 text-left hover:from-gl/80 hover:to-gl/40 transition-colors"
             >
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">Start earning</p>
+              <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">Start earning</p>
               <p className="text-[15px] font-extrabold text-black leading-snug mt-1">
                 Invite your first friend — earn ${REWARDS.perFriendUser} when they book.
               </p>
-              <p className="text-[12px] text-b3 font-medium mt-1.5 leading-snug">
+              <p className="text-meta text-b3 font-medium mt-1.5 leading-snug">
                 Plus ${REWARDS.friendOfFriendBonus} chain bonus when their friends book too. <span className="text-gd font-extrabold">Send invite →</span>
               </p>
             </button>
@@ -433,7 +433,7 @@ export function EarningsScreen() {
               className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
               title={`${inviteCounts.invited} invited — tap to open`}
             >
-              <p className="text-[18px] font-extrabold text-black leading-none">{inviteCounts.invited}</p>
+              <p className="text-heading-2 font-extrabold text-black leading-none">{inviteCounts.invited}</p>
               <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Invited</p>
             </button>
             <button
@@ -442,7 +442,7 @@ export function EarningsScreen() {
               className="bg-white border border-bdr rounded-[12px] py-2 px-1.5 text-center hover:bg-bg5/40 transition-colors"
               title={`${inviteCounts.joined} joined — tap to open`}
             >
-              <p className="text-[18px] font-extrabold text-black leading-none">{inviteCounts.joined}</p>
+              <p className="text-heading-2 font-extrabold text-black leading-none">{inviteCounts.joined}</p>
               <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Joined</p>
             </button>
             {/* CERGIO-GUARD (2026-06-05): Reco'd tile now opens the
@@ -459,7 +459,7 @@ export function EarningsScreen() {
                 ? `${recsCount} reco'd — tap to review, edit, or nudge`
                 : 'Reco someone you know — tap to start'}
             >
-              <p className="text-[18px] font-extrabold text-black leading-none">{recsCount}</p>
+              <p className="text-heading-2 font-extrabold text-black leading-none">{recsCount}</p>
               <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Reco&apos;d</p>
             </button>
             <button
@@ -468,7 +468,7 @@ export function EarningsScreen() {
               className="bg-gl/60 border border-g/25 rounded-[12px] py-2 px-1.5 text-center hover:bg-gl transition-colors"
               title={`${servicesCount} services you offer — tap to manage`}
             >
-              <p className="text-[18px] font-extrabold text-gd leading-none italic">{servicesCount}</p>
+              <p className="text-heading-2 font-extrabold text-gd leading-none italic">{servicesCount}</p>
               <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-gd mt-0.5">Offered</p>
             </button>
           </div>
@@ -491,22 +491,22 @@ export function EarningsScreen() {
             <button
               data-tab="referrals"
               onClick={() => { setActiveTab('referrals'); setTabSetByUser(true); }}
-              className={`flex-1 rounded-pill py-2 text-[13px] font-extrabold transition-colors
+              className={`flex-1 rounded-pill py-2 text-body-sm font-extrabold transition-colors
                           ${activeTab === 'referrals' ? 'bg-white text-black shadow-sm' : 'text-b3'}`}
             >
               Referrals
-              <span className="ml-1.5 text-[11px] font-bold opacity-70">
+              <span className="ml-1.5 text-meta-sm font-extrabold opacity-70">
                 {fmtDollars(totals.referrals)}
               </span>
             </button>
             <button
               data-tab="bookings"
               onClick={() => { setActiveTab('bookings'); setTabSetByUser(true); }}
-              className={`flex-1 rounded-pill py-2 text-[13px] font-extrabold transition-colors
+              className={`flex-1 rounded-pill py-2 text-body-sm font-extrabold transition-colors
                           ${activeTab === 'bookings' ? 'bg-white text-black shadow-sm' : 'text-b3'}`}
             >
               Client bookings
-              <span className="ml-1.5 text-[11px] font-bold opacity-70">
+              <span className="ml-1.5 text-meta-sm font-extrabold opacity-70">
                 {fmtDollars(totals.bookings)}
               </span>
             </button>
@@ -532,10 +532,10 @@ export function EarningsScreen() {
                 />
               )}
               <div className="flex items-center justify-between px-5 mb-2">
-                <p className="text-[14px] font-extrabold uppercase tracking-widest text-b3">
+                <p className="text-body font-extrabold uppercase tracking-widest text-b3">
                   {activeTab === 'bookings' ? 'Service bookings' : 'Referrals & spotlights'}
                 </p>
-                <p className="text-[14px] font-extrabold text-g">{fmtDollars(visibleTotal)}</p>
+                <p className="text-body font-extrabold text-g">{fmtDollars(visibleTotal)}</p>
               </div>
               <div className="px-5 flex flex-col gap-2 mb-6">
                 {sortedVisibleRows.map(e => (
@@ -666,7 +666,7 @@ export function EarningsScreen() {
                                   L2: tier pill + cap-left pill
                                   L3: status caption (only if relevant)
                                   L4: time + status (rendered below) */}
-                            <p className="text-[14px] font-extrabold text-black leading-tight">
+                            <p className="text-body font-extrabold text-black leading-tight">
                               {headline}
                             </p>
                             <div className="flex items-center gap-1.5 flex-wrap mt-1">
@@ -698,7 +698,7 @@ export function EarningsScreen() {
                                 don't think there's a prior unseen
                                 transaction. */}
                             {e.kind === 'invite' && (
-                              <p className="text-[11px] text-b3 mt-0.5 leading-snug">
+                              <p className="text-meta-sm text-b3 mt-0.5 leading-snug">
                                 {capReachedBefore && tier === 'direct'
                                   ? <>${REWARDS.perFriend} Tier 1 cap from {friendShort || 'this friend'} was already maxed — $0 paid on this booking</>
                                   : capReachedBefore && tier === 'chain'
@@ -716,7 +716,7 @@ export function EarningsScreen() {
                                   : <>Tier 2 — {tier2Rate}% per booking up to ${REWARDS.friendOfFriendBonus}</>}
                               </p>
                             )}
-                            <p className="text-[11px] text-b3 mt-0.5 leading-snug">
+                            <p className="text-meta-sm text-b3 mt-0.5 leading-snug">
                               {timeAgo(e.created_at)} · {e.status === 'cleared' ? 'cleared' : e.status}
                             </p>
                           </>
@@ -758,10 +758,10 @@ export function EarningsScreen() {
           ) : (
             // Tab has no rows yet — show a tiny tab-aware empty state.
             <div className="mx-5 mb-6 bg-white border border-bdr rounded-[14px] p-4 text-center">
-              <p className="text-[13px] text-b3 leading-snug">
+              <p className="text-body-sm text-b3 leading-snug">
                 {activeTab === 'bookings'
-                  ? <>No service bookings yet. <button onClick={() => navigate('/list-service')} className="text-gd font-bold underline">List a service</button> to start earning from your own work.</>
-                  : <>No referral earnings yet. <button onClick={() => navigate('/invite/friends-popup')} className="text-gd font-bold underline">Invite a friend</button> to start earning ${REWARDS.perFriend}/friend.</>}
+                  ? <>No service bookings yet. <button onClick={() => navigate('/list-service')} className="text-gd font-extrabold underline">List a service</button> to start earning from your own work.</>
+                  : <>No referral earnings yet. <button onClick={() => navigate('/invite/friends-popup')} className="text-gd font-extrabold underline">Invite a friend</button> to start earning ${REWARDS.perFriend}/friend.</>}
               </p>
             </div>
           )}
@@ -786,7 +786,7 @@ export function EarningsScreen() {
               onClick={() => navigate('/earnings/invites')}
               className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
             >
-              <p className="text-[18px] font-extrabold text-black leading-none">{invitesCount}</p>
+              <p className="text-heading-2 font-extrabold text-black leading-none">{invitesCount}</p>
               <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">friends invited <span className="text-gd font-extrabold">›</span></p>
             </button>
             <button
@@ -794,7 +794,7 @@ export function EarningsScreen() {
               onClick={() => navigate('/earnings/invites')}
               className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
             >
-              <p className="text-[18px] font-extrabold text-black leading-none">{recsCount}</p>
+              <p className="text-heading-2 font-extrabold text-black leading-none">{recsCount}</p>
               <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">services reco&apos;d <span className="text-gd font-extrabold">›</span></p>
             </button>
             <button
@@ -802,7 +802,7 @@ export function EarningsScreen() {
               onClick={() => navigate('/earnings/breakdown')}
               className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
             >
-              <p className="text-[18px] font-extrabold text-black leading-none">{balanceStr}</p>
+              <p className="text-heading-2 font-extrabold text-black leading-none">{balanceStr}</p>
               <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">earned <span className="text-gd font-extrabold">›</span></p>
             </button>
           </div>
@@ -815,13 +815,13 @@ export function EarningsScreen() {
           <div className="flex items-center gap-3 mb-3">
             <button
               onClick={() => navigate('/find-friends')}
-              className="flex-1 bg-g text-white rounded-pill px-3 py-2 text-[12px] font-extrabold whitespace-nowrap"
+              className="flex-1 bg-g text-white rounded-pill px-3 py-2 text-meta font-extrabold whitespace-nowrap"
             >
               Invite a friend
             </button>
             <button
               onClick={() => navigate('/invite/recommend')}
-              className="flex-1 bg-white border border-bdr rounded-pill px-3 py-2 text-[12px] font-extrabold text-b2 whitespace-nowrap"
+              className="flex-1 bg-white border border-bdr rounded-pill px-3 py-2 text-meta font-extrabold text-b2 whitespace-nowrap"
             >
               Reco a provider
             </button>
@@ -831,18 +831,18 @@ export function EarningsScreen() {
               different audiences. CERGIO-GUARD: do NOT use 'invite
               clients' copy in consumer mode and vice versa. Pull from
               REWARD_COPY so this stays in sync with the Connector page. */}
-          <p className="text-[12px] text-b3 leading-snug">
+          <p className="text-meta text-b3 leading-snug">
             {isProvider
-              ? <>Turn your client list into your referral network. Every client who joins + books earns you <span className="font-bold text-black">${REWARDS.perFriendConnector} cash</span> + Growth Participation Income.{' '}
-                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-bold">ⓘ</button>
+              ? <>Turn your client list into your referral network. Every client who joins + books earns you <span className="font-extrabold text-black">${REWARDS.perFriendConnector} cash</span> + Growth Participation Income.{' '}
+                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-extrabold">ⓘ</button>
                 </>
-              : <>Help friends, earn <span className="font-bold text-black">${REWARDS.perFriendUser} credit</span> per friend who joins + books + free services + Growth Participation Income.{' '}
-                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-bold">ⓘ</button>
+              : <>Help friends, earn <span className="font-extrabold text-black">${REWARDS.perFriendUser} credit</span> per friend who joins + books + free services + Growth Participation Income.{' '}
+                  <button type="button" onClick={() => setShowGrowthInfo(true)} className="text-gd underline underline-offset-2 font-extrabold">ⓘ</button>
                 </>}
           </p>
           {/* Friend-of-friend kicker — a calm extra line, not a card. */}
-          <p className="text-[11px] text-b3 mt-1.5 leading-snug">
-            <span className="font-bold text-black">+{REWARDS.friendOfFriendPercent}%</span> when your friends invite their friends — <span className="font-bold text-black">${REWARDS.friendOfFriendBonus}</span> per second-tier signup.
+          <p className="text-meta-sm text-b3 mt-1.5 leading-snug">
+            <span className="font-extrabold text-black">+{REWARDS.friendOfFriendPercent}%</span> when your friends invite their friends — <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonus}</span> per second-tier signup.
           </p>
 
           {/* Connector upsell — visible to users (not providers, who are
@@ -855,8 +855,8 @@ export function EarningsScreen() {
               className="mt-3 w-full bg-gl border border-g/25 rounded-[12px] px-3 py-2.5 flex items-center justify-between
                          text-left hover:bg-gl/80 active:scale-[.99] transition-all"
             >
-              <span className="text-[12px] font-extrabold text-gd leading-snug">
-                Become a Connector → earn ${REWARDS.perFriendConnector} <span className="font-bold">cash</span> instead of credit
+              <span className="text-meta font-extrabold text-gd leading-snug">
+                Become a Connector → earn ${REWARDS.perFriendConnector} <span className="font-extrabold">cash</span> instead of credit
               </span>
               <span className="text-gd text-base flex-shrink-0">›</span>
             </button>
@@ -875,7 +875,7 @@ export function EarningsScreen() {
           className="w-full bg-soft rounded-[14px] py-3 px-4 flex items-center justify-between
                      text-left hover:bg-bg5 transition-colors"
         >
-          <span className="text-[13px] font-extrabold text-black">How earnings work</span>
+          <span className="text-body-sm font-extrabold text-black">How earnings work</span>
           <span className="text-b3 text-base">›</span>
         </button>
       </div>
@@ -891,45 +891,45 @@ export function EarningsScreen() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-3">
-              <h3 className="text-[18px] font-extrabold text-black leading-tight">
+              <h3 className="text-heading-2 font-extrabold text-black leading-tight">
                 Growth Participation Income
               </h3>
               <button
                 onClick={() => setShowGrowthInfo(false)}
-                className="text-[20px] text-b3 font-bold px-2 -mt-1"
+                className="text-[20px] text-b3 font-extrabold px-2 -mt-1"
                 aria-label="Close"
               >
                 ×
               </button>
             </div>
-            <p className="text-[13px] text-b2 leading-relaxed mb-3">
+            <p className="text-body-sm text-b2 leading-relaxed mb-3">
               Like airmiles — but tied to Cergio's growth instead of flights.
               The more you make on Cergio, the higher your participation score, the bigger your bonus.
             </p>
-            <p className="text-[13px] text-b2 leading-relaxed mb-3">
-              <span className="font-bold">How it works:</span> every dollar of cash income you earn
+            <p className="text-body-sm text-b2 leading-relaxed mb-3">
+              <span className="font-extrabold">How it works:</span> every dollar of cash income you earn
               also accrues a Growth Participation Score. We track it from day one.
             </p>
-            <p className="text-[13px] text-b2 leading-relaxed mb-3">
-              <span className="font-bold">When it activates:</span> if Cergio goes public (IPO).
+            <p className="text-body-sm text-b2 leading-relaxed mb-3">
+              <span className="font-extrabold">When it activates:</span> if Cergio goes public (IPO).
               IPO isn't guaranteed — community participation in our growth helps accelerate it.
             </p>
             <div className="bg-gl border border-g/25 rounded-[14px] p-3 mt-4">
-              <p className="text-[12px] text-gd font-extrabold leading-snug">
+              <p className="text-meta text-gd font-extrabold leading-snug">
                 Cergio's mission
               </p>
-              <p className="text-[12px] text-gd/85 mt-1 leading-snug font-normal">
+              <p className="text-meta text-gd/85 mt-1 leading-snug font-normal">
                 Build friend-powered AI so we all prosper together. Your bonus is directly
                 tied to your participation in that growth.
               </p>
             </div>
-            <p className="text-[10px] text-b3 mt-4 leading-relaxed">
+            <p className="text-caps text-b3 mt-4 leading-relaxed">
               Growth Participation Income is a loyalty-style bonus, not a security.
               No guaranteed payout. Final terms set at activation.
             </p>
             <button
               onClick={() => setShowGrowthInfo(false)}
-              className="w-full mt-5 bg-g text-white rounded-[14px] py-3 text-[14px] font-extrabold"
+              className="w-full mt-5 bg-g text-white rounded-[14px] py-3 text-body font-extrabold"
             >
               Got it
             </button>
@@ -1035,12 +1035,12 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
             4. Top 3 leaderboard
             5. Sort */}
       {/* 1. Hero */}
-      <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3">
+      <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3">
         Earned to date
       </p>
       <p className="text-[26px] font-extrabold text-black leading-none mt-1">
         ${(totalCents / 100).toFixed(0)}
-        <span className="text-b3 font-bold text-[14px] ml-1.5">
+        <span className="text-b3 font-extrabold text-body ml-1.5">
           of ${(potentialCents / 100).toLocaleString()} potential
         </span>
       </p>
@@ -1050,14 +1050,14 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-[11px] text-b3 font-medium mt-1.5 leading-snug">
+      <p className="text-meta-sm text-b3 font-medium mt-1.5 leading-snug">
         {REWARDS.referrerSharePercent}% per friend booking up to ${REWARDS.perFriend}, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.
       </p>
 
       {/* 2. Funnel — Invited → Joined → Booked */}
       <div className="mt-4 pt-3 border-t border-bdr">
         <div className="flex items-baseline justify-between mb-2">
-          <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3">
+          <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3">
             Friends funnel
           </p>
           <button
@@ -1076,10 +1076,10 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
           ].map((stage, i) => (
             <div key={stage.label} className="flex-1 flex items-center gap-1.5">
               <div className="flex-1 bg-bg5 rounded-[10px] py-1.5">
-                <p className="text-[18px] font-extrabold text-black leading-none">{stage.n}</p>
+                <p className="text-heading-2 font-extrabold text-black leading-none">{stage.n}</p>
                 <p className="text-[10.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">{stage.label}</p>
               </div>
-              {i < 2 && <span className="text-b3 text-[11px] font-extrabold">→</span>}
+              {i < 2 && <span className="text-b3 text-meta-sm font-extrabold">→</span>}
             </div>
           ))}
         </div>
@@ -1097,16 +1097,16 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
       {/* 3. Top contributors */}
       {top3.length > 0 && (
         <div className="mt-4 pt-3 border-t border-bdr">
-          <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-1.5">
+          <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-1.5">
             Top 3 · {top3Share}% of your earnings
           </p>
           <div className="flex flex-col gap-1.5">
             {top3.map((f) => {
               const share = totalCents > 0 ? Math.round((f.total / totalCents) * 100) : 0;
               return (
-                <div key={f.name} className="flex items-center justify-between text-[13px]">
+                <div key={f.name} className="flex items-center justify-between text-body-sm">
                   <span className="font-extrabold text-black truncate pr-2">{f.name}</span>
-                  <span className="text-b3 font-bold flex-shrink-0">
+                  <span className="text-b3 font-extrabold flex-shrink-0">
                     ${(f.total / 100).toFixed(0)}
                     <span className="ml-1.5 text-gd">{share}%</span>
                   </span>
@@ -1119,11 +1119,11 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
 
       {/* 4. Sort */}
       <div className="mt-4 pt-3 border-t border-bdr flex items-center gap-2">
-        <span className="text-[11px] font-extrabold uppercase tracking-widest text-b3">Sort</span>
+        <span className="text-meta-sm font-extrabold uppercase tracking-widest text-b3">Sort</span>
         <button
           type="button"
           onClick={() => onSortChange('recent')}
-          className={`text-[12px] font-extrabold rounded-pill px-2.5 py-0.5 transition-colors
+          className={`text-meta font-extrabold rounded-pill px-2.5 py-0.5 transition-colors
                       ${sortMode === 'recent' ? 'bg-gl text-gd' : 'bg-bg5 text-b3 hover:text-b2'}`}
         >
           Most recent
@@ -1131,7 +1131,7 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
         <button
           type="button"
           onClick={() => onSortChange('top')}
-          className={`text-[12px] font-extrabold rounded-pill px-2.5 py-0.5 transition-colors
+          className={`text-meta font-extrabold rounded-pill px-2.5 py-0.5 transition-colors
                       ${sortMode === 'top' ? 'bg-gl text-gd' : 'bg-bg5 text-b3 hover:text-b2'}`}
         >
           Top earners

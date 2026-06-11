@@ -94,19 +94,19 @@ export function MessagesScreen() {
           ←
         </button>
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4478aa] to-[#2a5070]
-                        flex items-center justify-center text-white text-[12px] font-extrabold">
+                        flex items-center justify-center text-white text-meta font-extrabold">
           {getInitials(otherName)}
         </div>
         <div className="flex-1">
           <p className="text-[15px] font-extrabold text-black leading-tight">{otherName}</p>
-          <p className="text-[12px] text-b3 truncate">{subtitle}</p>
+          <p className="text-meta text-b3 truncate">{subtitle}</p>
         </div>
       </div>
 
       {/* thread */}
       <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-2.5">
         {messages.length === 0 && (
-          <p className="text-center text-[13px] text-b3 py-10">
+          <p className="text-center text-body-sm text-b3 py-10">
             No messages yet. Say hi.
           </p>
         )}
@@ -120,8 +120,8 @@ export function MessagesScreen() {
                             ? 'bg-g text-white rounded-[18px_4px_18px_18px] self-end'
                             : 'bg-soft text-black rounded-[4px_18px_18px_18px] self-start'}`}
             >
-              <p className="text-[14px] font-medium" style={{ whiteSpace: 'pre-wrap' }}>{m.body}</p>
-              <p className={`text-[10px] mt-1 ${mine ? 'text-white/75' : 'text-b3'}`}>
+              <p className="text-body font-medium" style={{ whiteSpace: 'pre-wrap' }}>{m.body}</p>
+              <p className={`text-caps mt-1 ${mine ? 'text-white/75' : 'text-b3'}`}>
                 {formatTime(m.created_at)}{m._pending ? ' · sending…' : ''}
               </p>
             </div>
@@ -140,7 +140,7 @@ export function MessagesScreen() {
           }}
           rows={1}
           placeholder="Type a message…"
-          className="flex-1 bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black
+          className="flex-1 bg-bg5 rounded-[14px] px-4 py-3 text-body text-black
                      placeholder-b3 outline-none focus:ring-2 focus:ring-g/30
                      resize-none font-sans min-h-[42px] max-h-[120px]"
         />

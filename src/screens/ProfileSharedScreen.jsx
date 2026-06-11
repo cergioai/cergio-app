@@ -32,7 +32,7 @@ export function ProfileSharedScreen() {
         <h1 className="text-[24px] font-extrabold text-black leading-tight mb-2">
           {s.rainmakerName} shared your profile!
         </h1>
-        <p className="text-[14px] text-b3 leading-relaxed">
+        <p className="text-body text-b3 leading-relaxed">
           Your profile has been shared to {s.followersOnFeed} followers on {s.authorFirstName}'s Instagram feed!
         </p>
       </div>
@@ -48,12 +48,12 @@ export function ProfileSharedScreen() {
               <circle cx="17.5" cy="6.5" r="1" fill="#111114" stroke="none" />
             </svg>
             <div>
-              <p className="text-[14px] font-extrabold text-black">{s.instagramHandle}</p>
-              <p className="text-[12px] text-b3">{s.followerCount.toLocaleString()} followers</p>
+              <p className="text-body font-extrabold text-black">{s.instagramHandle}</p>
+              <p className="text-meta text-b3">{s.followerCount.toLocaleString()} followers</p>
             </div>
           </div>
           <div className="w-11 h-11 rounded-full bg-gradient-to-br from-g to-gd
-                          flex items-center justify-center text-white font-extrabold text-[12px]">
+                          flex items-center justify-center text-white font-extrabold text-meta">
             {s.rainmakerName[0]}
           </div>
         </div>
@@ -62,7 +62,7 @@ export function ProfileSharedScreen() {
         <div className="fv-jamie h-[260px] relative">
           <button
             onClick={() => showToast('Open Instagram — coming later')}
-            className="absolute bottom-3 right-3 bg-black text-white text-[12px]
+            className="absolute bottom-3 right-3 bg-black text-white text-meta
                        font-extrabold px-3 py-2 rounded-pill"
           >
             See Instagram
@@ -81,7 +81,7 @@ export function ProfileSharedScreen() {
         </button>
         <button
           onClick={() => { showToast('Reported. We\'ll look into it.'); navigate(-1); }}
-          className="text-[14px] font-extrabold text-b3"
+          className="text-body font-extrabold text-b3"
         >
           Something's wrong
         </button>

@@ -48,7 +48,7 @@ function PayForm({ onSuccess, onCancel, amountCents, connectorName }) {
       <PaymentElement options={{ layout: 'tabs' }} />
 
       {error && (
-        <p className="text-[13px] text-danger font-bold leading-relaxed">{error}</p>
+        <p className="text-body-sm text-danger font-extrabold leading-relaxed">{error}</p>
       )}
 
       <button
@@ -65,7 +65,7 @@ function PayForm({ onSuccess, onCancel, amountCents, connectorName }) {
         type="button"
         onClick={onCancel}
         disabled={busy}
-        className="w-full text-[13px] font-extrabold text-b3 py-2 disabled:opacity-50"
+        className="w-full text-body-sm font-extrabold text-b3 py-2 disabled:opacity-50"
       >
         Cancel
       </button>
@@ -106,7 +106,7 @@ export function SpotlightPaymentModal({ spotlightRequestId, connectorName, onClo
           Pay {connectorName || 'Connector'}
         </h2>
         {amountCents && (
-          <p className="text-[12px] text-b3 mb-4 leading-relaxed">
+          <p className="text-meta text-b3 mb-4 leading-relaxed">
             <strong className="text-black">{fmtDollars(amountCents)}</strong> total ·{' '}
             includes <strong className="text-black">{fmtDollars(feeCents || 0)}</strong> Cergio fee.
             Funds release to {connectorName || 'the Connector'} once the spotlight is posted.
@@ -114,10 +114,10 @@ export function SpotlightPaymentModal({ spotlightRequestId, connectorName, onClo
         )}
 
         {bootErr && (
-          <p className="text-[13px] text-danger font-bold mb-3">{bootErr}</p>
+          <p className="text-body-sm text-danger font-extrabold mb-3">{bootErr}</p>
         )}
         {!bootErr && !clientSecret && (
-          <p className="text-[13px] text-b3 mb-3">Loading payment…</p>
+          <p className="text-body-sm text-b3 mb-3">Loading payment…</p>
         )}
         {clientSecret && (
           <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>

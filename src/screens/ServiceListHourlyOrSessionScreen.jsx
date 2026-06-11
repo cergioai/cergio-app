@@ -28,8 +28,8 @@ export function ServiceListHourlyOrSessionScreen() {
                 className={`w-full text-left p-5 rounded-[18px] border-2 transition-colors
                   ${active ? 'bg-gl border-g' : 'bg-white border-bdr hover:border-g/40'}`}
               >
-                <p className="text-[16px] font-extrabold text-black mb-1">{o.title}</p>
-                <p className="text-[13px] text-b3 leading-relaxed">{o.desc}</p>
+                <p className="text-body-lg font-extrabold text-black mb-1">{o.title}</p>
+                <p className="text-body-sm text-b3 leading-relaxed">{o.desc}</p>
               </button>
             );
           })}

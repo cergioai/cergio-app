@@ -47,7 +47,7 @@ export function SplashScreen() {
             </span>
             .
           </p>
-          <p className="text-[14px] text-white/65 font-medium text-center leading-snug mt-1">
+          <p className="text-body text-white/65 font-medium text-center leading-snug mt-1">
             I book services your friends actually trust.
           </p>
           <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase mt-1">
@@ -67,7 +67,7 @@ export function SplashScreen() {
         <button
           onClick={() => navigate('/home')}
           className="bg-transparent text-white/70 border border-white/25 rounded-[24px]
-                     py-4 text-[15px] font-bold transition-colors hover:border-white/50"
+                     py-4 text-[15px] font-extrabold transition-colors hover:border-white/50"
         >
           Continue as guest
         </button>

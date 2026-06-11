@@ -18,8 +18,8 @@ function RateRow({ icon, label, value, onChange, onBlur, ariaLabel }) {
     <div className="bg-white border border-bdr rounded-[14px] px-3.5 py-3">
       <div className="flex items-center gap-3">
         {icon}
-        <span className="text-[14px] font-extrabold text-black flex-1">{label}</span>
-        <span className="text-[14px] text-b3">$</span>
+        <span className="text-body font-extrabold text-black flex-1">{label}</span>
+        <span className="text-body text-b3">$</span>
         <input
           type="text"
           inputMode="decimal"
@@ -27,14 +27,14 @@ function RateRow({ icon, label, value, onChange, onBlur, ariaLabel }) {
           onChange={e => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
           onBlur={onBlur}
           placeholder="0"
-          className="w-20 bg-bg5 rounded-[10px] px-3 py-2 text-[14px] text-black text-right
+          className="w-20 bg-bg5 rounded-[10px] px-3 py-2 text-body text-black text-right
                      placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           aria-label={ariaLabel}
         />
-        <span className="text-[12px] font-bold text-b3">/post</span>
+        <span className="text-meta font-extrabold text-b3">/post</span>
       </div>
       {earn && (
-        <p className="text-[11px] text-b3 mt-2 pl-8">
+        <p className="text-meta-sm text-b3 mt-2 pl-8">
           You earn <strong className="text-g">{earn}</strong> per post (after {Math.round(PLATFORM_FEE_RATE * 100)}% Cergio fee)
         </p>
       )}
@@ -139,10 +139,10 @@ export function RainmakerInstagramScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cr">
       <div className="bg-gradient-to-b from-gm to-g px-7 pt-12 pb-14 flex flex-col justify-end min-h-[440px]">
-        <h1 className="text-[28px] font-extrabold text-white leading-tight mb-2">
+        <h1 className="text-display-2 font-extrabold text-white leading-tight mb-2">
           Connect your<br />socials
         </h1>
-        <p className="text-[14px] text-white/85">
+        <p className="text-body text-white/85">
           Instagram is required. TikTok is optional but boosts your spotlight reach — providers see your total audience across both platforms.
         </p>
       </div>
@@ -162,12 +162,12 @@ export function RainmakerInstagramScreen() {
               <p className="text-[15px] font-extrabold text-black leading-tight">
                 @{handle}
                 {verifiedAt && (
-                  <span className="ml-1.5 inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold align-middle">
+                  <span className="ml-1.5 inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-caps font-extrabold align-middle">
                     ✓ Verified
                   </span>
                 )}
               </p>
-              <p className="text-[12px] text-b3 mt-0.5">
+              <p className="text-meta text-b3 mt-0.5">
                 {followers != null
                   ? `${fmtFollowers(followers)} followers · reach providers can count on`
                   : 'Add your follower count for better offers'}
@@ -176,7 +176,7 @@ export function RainmakerInstagramScreen() {
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="text-[12px] font-extrabold text-g underline underline-offset-2"
+              className="text-meta font-extrabold text-g underline underline-offset-2"
             >
               Edit
             </button>
@@ -210,12 +210,12 @@ export function RainmakerInstagramScreen() {
               <p className="text-[15px] font-extrabold text-black leading-tight">
                 @{ttHandle}
                 {ttVerifiedAt && (
-                  <span className="ml-1.5 inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold align-middle">
+                  <span className="ml-1.5 inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-caps font-extrabold align-middle">
                     ✓ Verified
                   </span>
                 )}
               </p>
-              <p className="text-[12px] text-b3 mt-0.5">
+              <p className="text-meta text-b3 mt-0.5">
                 {ttFollowers != null
                   ? `${fmtFollowers(ttFollowers)} audience · boosts your spotlight reach`
                   : 'Add your audience size for better matches'}
@@ -224,7 +224,7 @@ export function RainmakerInstagramScreen() {
             <button
               type="button"
               onClick={() => setShowTtModal(true)}
-              className="text-[12px] font-extrabold text-g underline underline-offset-2"
+              className="text-meta font-extrabold text-g underline underline-offset-2"
             >
               Edit
             </button>
@@ -247,10 +247,10 @@ export function RainmakerInstagramScreen() {
             Cergio takes a flat 10% fee on the agreed price. Connector sets
             what the provider PAYS; we show what they receive after fee. */}
         <div className="mt-6 mb-2">
-          <h3 className="text-[18px] font-extrabold text-black mb-1">
-            Add your rate <span className="text-[14px] font-bold text-b3">(or get free services in exchange for spotlights)</span>
+          <h3 className="text-heading-2 font-extrabold text-black mb-1">
+            Add your rate <span className="text-body font-extrabold text-b3">(or get free services in exchange for spotlights)</span>
           </h3>
-          <p className="text-[12px] text-b3 leading-relaxed mb-3">
+          <p className="text-meta text-b3 leading-relaxed mb-3">
             What providers pay you per platform — Cergio takes a flat{' '}
             <strong className="text-black">{Math.round(PLATFORM_FEE_RATE * 100)}% fee</strong>;
             you keep the rest. Leave blank if you only want to swap your spotlights
@@ -288,13 +288,13 @@ export function RainmakerInstagramScreen() {
             />
           </div>
           {priceMsg && (
-            <p className={`text-[11px] mt-1.5 font-bold ${priceMsg.startsWith('Saved') ? 'text-g' : 'text-danger'}`}>
+            <p className={`text-meta-sm mt-1.5 font-extrabold ${priceMsg.startsWith('Saved') ? 'text-g' : 'text-danger'}`}>
               {priceMsg}{priceBusy ? '…' : ''}
             </p>
           )}
         </div>
 
-        <p className="text-[12px] text-b3 leading-relaxed mt-2">
+        <p className="text-meta text-b3 leading-relaxed mt-2">
           Your audience size helps providers price the free service exchange. Once OAuth ships
           for both platforms, we'll auto-verify — until then, your entries are confirmed in the
           background when you start posting spotlights.

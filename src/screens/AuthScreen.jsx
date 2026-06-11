@@ -244,15 +244,15 @@ export function AuthScreen() {
         <p className="mt-4 text-[13.5px] text-b2 leading-snug max-w-[260px]">
           {isSignup ? 'Create your account.' : 'Sign in to keep going.'}
         </p>
-        <p className="mt-1 text-[12px] text-b3 leading-snug max-w-[260px]">
+        <p className="mt-1 text-meta text-b3 leading-snug max-w-[260px]">
           {isSignup ? 'Takes seconds.' : 'One tap with Google.'}
         </p>
 
         {/* Invited-by-a-friend ribbon — only when ?ref captured. */}
         {activeRef && (
           <div className="mt-5 bg-gl border border-g/25 rounded-pill px-3.5 py-1.5 inline-flex items-center gap-2">
-            <span className="text-[12px]">🌱</span>
-            <p className="text-[11.5px] text-gd font-bold leading-snug">
+            <span className="text-meta">🌱</span>
+            <p className="text-[11.5px] text-gd font-extrabold leading-snug">
               Invited by a friend · ${REWARDS.perFriendUser} credit each when you book
             </p>
           </div>
@@ -286,7 +286,7 @@ export function AuthScreen() {
             <button
               onClick={() => setStage('email')}
               className="w-full mt-3 flex items-center justify-center gap-2 bg-bg5/60 border border-bdr rounded-[16px] py-3.5
-                         text-[14px] font-extrabold text-b2 hover:bg-bg5 transition-colors"
+                         text-body font-extrabold text-b2 hover:bg-bg5 transition-colors"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -311,7 +311,7 @@ export function AuthScreen() {
                   onClick={() => startSocial('tiktok')}
                   disabled={!!socialBusy}
                   className="flex items-center justify-center gap-1.5 bg-white border border-bdr rounded-[12px] py-2.5
-                             text-[12px] font-bold text-black hover:bg-bg5/40 transition-colors
+                             text-meta font-extrabold text-black hover:bg-bg5/40 transition-colors
                              disabled:opacity-60 disabled:cursor-wait"
                   title={TIKTOK_CLIENT_KEY ? 'Sign in with TikTok' : 'TikTok sign-in launching soon'}
                 >
@@ -325,7 +325,7 @@ export function AuthScreen() {
                   onClick={() => startSocial('instagram')}
                   disabled={!!socialBusy}
                   className={`flex items-center justify-center gap-1.5 bg-white border border-bdr rounded-[12px] py-2.5
-                              text-[12px] font-bold text-black hover:bg-bg5/40 transition-colors
+                              text-meta font-extrabold text-black hover:bg-bg5/40 transition-colors
                               disabled:cursor-wait
                               ${!INSTAGRAM_ENABLED ? 'opacity-55' : ''}`}
                   title={INSTAGRAM_ENABLED ? 'Sign in with Instagram' : 'Instagram sign-in: in review with Meta'}
@@ -344,7 +344,7 @@ export function AuthScreen() {
             {/* Guest path stays available for browsing */}
             <button
               onClick={() => navigate('/home')}
-              className="w-full mt-6 text-[13px] font-extrabold text-b3 underline underline-offset-2"
+              className="w-full mt-6 text-body-sm font-extrabold text-b3 underline underline-offset-2"
             >
               Continue as guest
             </button>
@@ -368,7 +368,7 @@ export function AuthScreen() {
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className={`flex-1 rounded-pill py-2 text-[13px] font-extrabold transition-all
+                  className={`flex-1 rounded-pill py-2 text-body-sm font-extrabold transition-all
                     ${mode === m ? 'bg-white text-black shadow-card' : 'text-black/60'}`}
                 >
                   {m === 'signin' ? 'Sign in' : 'Sign up'}
@@ -378,20 +378,20 @@ export function AuthScreen() {
 
             {isSignup && (
               <div className="mb-3.5">
-                <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b3 mb-1.5">Your name</label>
+                <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b3 mb-1.5">Your name</label>
                 <input
                   type="text"
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
                   placeholder="Tarik"
-                  className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[14px] text-black
+                  className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
                              placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
                 />
               </div>
             )}
 
             <div className="mb-3.5">
-              <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b3 mb-1.5">Email</label>
+              <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b3 mb-1.5">Email</label>
               <input
                 type="email"
                 autoCapitalize="none"
@@ -399,14 +399,14 @@ export function AuthScreen() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[14px] text-black
+                className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
                            placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
               />
             </div>
 
             {isSignup && (
               <div className="mb-3.5">
-                <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b3 mb-1.5">
+                <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b3 mb-1.5">
                   Mobile <span className="text-danger ml-0.5">*</span>
                 </label>
                 <input
@@ -415,14 +415,14 @@ export function AuthScreen() {
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   placeholder="+1 555 555 5555"
-                  className={`w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-[14px] text-black
+                  className={`w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
                               placeholder-b3 outline-none focus:ring-2 focus:ring-g/30
                               ${phone && !phoneValid(phone) ? 'ring-2 ring-danger/40' : ''}`}
                 />
                 {phone && !phoneValid(phone) ? (
-                  <p className="text-[11px] text-danger mt-1.5">Enter 7–15 digits (include country code).</p>
+                  <p className="text-meta-sm text-danger mt-1.5">Enter 7–15 digits (include country code).</p>
                 ) : (
-                  <p className="text-[11px] text-b3 mt-1.5 leading-snug">
+                  <p className="text-meta-sm text-b3 mt-1.5 leading-snug">
                     We text only booking + invite alerts — never marketing.
                   </p>
                 )}
@@ -430,7 +430,7 @@ export function AuthScreen() {
             )}
 
             <div className="mb-2">
-              <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b3 mb-1.5">Password</label>
+              <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b3 mb-1.5">Password</label>
               <div className="relative">
                 <input
                   type={showPwd ? 'text' : 'password'}
@@ -438,7 +438,7 @@ export function AuthScreen() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Min. 6 characters"
-                  className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 pr-14 text-[14px] text-black
+                  className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 pr-14 text-body text-black
                              placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
                   onKeyDown={e => e.key === 'Enter' && submit()}
                 />
@@ -446,7 +446,7 @@ export function AuthScreen() {
                   type="button"
                   onClick={() => setShowPwd(v => !v)}
                   aria-label={showPwd ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-extrabold text-b3
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-meta-sm font-extrabold text-b3
                              px-2 py-1 rounded-[8px] hover:bg-bg5"
                 >
                   {showPwd ? 'Hide' : 'Show'}
@@ -459,7 +459,7 @@ export function AuthScreen() {
                 <button
                   type="button"
                   onClick={() => { setForgotOpen(true); setForgotEmail(email); }}
-                  className="text-[12px] font-extrabold text-g underline underline-offset-2"
+                  className="text-meta font-extrabold text-g underline underline-offset-2"
                 >
                   Forgot password?
                 </button>
@@ -470,7 +470,7 @@ export function AuthScreen() {
             <button
               onClick={submit}
               disabled={!valid || busy}
-              className={`w-full rounded-[20px] py-4 text-[16px] font-extrabold cg-cta
+              className={`w-full rounded-[20px] py-4 text-body-lg font-extrabold cg-cta
                 ${valid && !busy
                   ? 'bg-g text-white'
                   : 'bg-bg5 text-b3 cursor-not-allowed'}`}
@@ -478,9 +478,9 @@ export function AuthScreen() {
               {busy ? 'Please wait…' : (isSignup ? 'Create account' : 'Sign in')}
             </button>
             {isSignup && (
-              <p className="text-[11px] text-b3 mt-3 leading-snug text-center">
+              <p className="text-meta-sm text-b3 mt-3 leading-snug text-center">
                 By creating an account you agree to our{' '}
-                <a href="/privacy" className="text-g font-bold underline underline-offset-2">privacy policy</a>.
+                <a href="/privacy" className="text-g font-extrabold underline underline-offset-2">privacy policy</a>.
               </p>
             )}
           </>
@@ -505,11 +505,11 @@ export function AuthScreen() {
           <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6"
                onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-3">
-              <h3 className="text-[18px] font-extrabold text-black leading-tight">Reset your password</h3>
+              <h3 className="text-heading-2 font-extrabold text-black leading-tight">Reset your password</h3>
               <button onClick={() => setForgotOpen(false)}
-                className="text-[20px] text-b3 font-bold px-2 -mt-1" aria-label="Close">×</button>
+                className="text-[20px] text-b3 font-extrabold px-2 -mt-1" aria-label="Close">×</button>
             </div>
-            <p className="text-[12px] text-b3 leading-snug mb-3">
+            <p className="text-meta text-b3 leading-snug mb-3">
               We'll email you a link to set a new password.
             </p>
             <input
@@ -518,7 +518,7 @@ export function AuthScreen() {
               onChange={e => setForgotEmail(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
-              className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black
+              className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black
                          placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 mb-4"
               onKeyDown={e => e.key === 'Enter' && sendReset()}
             />
@@ -540,8 +540,8 @@ export function AuthScreen() {
       {isReset && (
         <div className="fixed inset-0 z-[80] bg-black/40 flex items-end justify-center">
           <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6">
-            <h3 className="text-[18px] font-extrabold text-black leading-tight mb-1">Set a new password</h3>
-            <p className="text-[12px] text-b3 leading-snug mb-3">
+            <h3 className="text-heading-2 font-extrabold text-black leading-tight mb-1">Set a new password</h3>
+            <p className="text-meta text-b3 leading-snug mb-3">
               Choose a strong password (6+ characters). You'll stay signed in.
             </p>
             <input
@@ -550,14 +550,14 @@ export function AuthScreen() {
               onChange={e => setResetPwd(e.target.value)}
               autoComplete="new-password"
               placeholder="New password"
-              className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black
+              className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black
                          placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 mb-2"
               onKeyDown={e => e.key === 'Enter' && completeReset()}
             />
             <button
               type="button"
               onClick={() => setShowPwd(v => !v)}
-              className="text-[12px] font-bold text-b3 mb-3"
+              className="text-meta font-extrabold text-b3 mb-3"
             >
               {showPwd ? 'Hide password' : 'Show password'}
             </button>

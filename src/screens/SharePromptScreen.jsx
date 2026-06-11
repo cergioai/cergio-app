@@ -43,7 +43,7 @@ export function SharePromptScreen() {
 
         {/* reach pill */}
         <div className="bg-g rounded-pill px-4 py-1.5 relative z-10">
-          <span className="text-[13px] font-extrabold text-white">
+          <span className="text-body-sm font-extrabold text-white">
             Reaches {followerCount.toLocaleString()} followers
           </span>
         </div>

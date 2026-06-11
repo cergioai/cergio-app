@@ -168,9 +168,9 @@ export function InstagramConnectModal({
               <circle cx="17.5" cy="6.5" r="1.2" fill="white" stroke="none" />
             </svg>
           </div>
-          <h2 className="text-[18px] font-extrabold text-black">{title}</h2>
+          <h2 className="text-heading-2 font-extrabold text-black">{title}</h2>
         </div>
-        <p className="text-[13px] text-b3 mb-4 leading-relaxed">{subtitle}</p>
+        <p className="text-body-sm text-b3 mb-4 leading-relaxed">{subtitle}</p>
 
         {/* "Connect with Instagram" — opens Meta OAuth popup when configured;
             falls back to focusing the manual field when VITE_META_APP_ID isn't set. */}
@@ -178,7 +178,7 @@ export function InstagramConnectModal({
           type="button"
           onClick={startInstagramOauth}
           disabled={oauthBusy || busy}
-          className="w-full mb-3 bg-black text-white rounded-[24px] py-3 text-[14px] font-extrabold
+          className="w-full mb-3 bg-black text-white rounded-[24px] py-3 text-body font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all flex items-center justify-center gap-2
                      disabled:opacity-60 disabled:cursor-wait"
         >
@@ -190,7 +190,7 @@ export function InstagramConnectModal({
           </svg>
           {oauthBusy ? 'Waiting for Instagram…' : 'Connect with Instagram'}
         </button>
-        <p className="text-[11px] text-b3 mb-4 leading-snug text-center">
+        <p className="text-meta-sm text-b3 mb-4 leading-snug text-center">
           {META_APP_ID
             ? 'Sign in to Instagram in the popup — we\'ll pull your handle + follower count.'
             : 'One-tap Instagram login is rolling out — until then, fill the fields below.'}
@@ -198,9 +198,9 @@ export function InstagramConnectModal({
 
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div>
-            <label className="block text-[12px] font-extrabold text-black mb-1">Handle</label>
+            <label className="block text-meta font-extrabold text-black mb-1">Handle</label>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] text-b3">@</span>
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-body text-b3">@</span>
               <input
                 id="ig-handle"
                 type="text"
@@ -209,32 +209,32 @@ export function InstagramConnectModal({
                 placeholder="yourname"
                 autoCapitalize="none"
                 autoCorrect="off"
-                className="w-full bg-bg5 rounded-[12px] pl-8 pr-4 py-3 text-[14px] text-black
+                className="w-full bg-bg5 rounded-[12px] pl-8 pr-4 py-3 text-body text-black
                            placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[12px] font-extrabold text-black mb-1">Follower count</label>
+            <label className="block text-meta font-extrabold text-black mb-1">Follower count</label>
             <input
               type="text"
               inputMode="numeric"
               value={followers}
               onChange={e => setFollowers(e.target.value.replace(/[^0-9]/g, ''))}
               placeholder="e.g. 6974"
-              className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-[14px] text-black
+              className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-body text-black
                          placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
             />
             {previewFollowers && (
-              <p className="text-[11px] text-b3 mt-1">≈ <strong className="text-black">{previewFollowers}</strong> followers</p>
+              <p className="text-meta-sm text-b3 mt-1">≈ <strong className="text-black">{previewFollowers}</strong> followers</p>
             )}
             {!followersOk && (
-              <p className="text-[11px] text-danger mt-1">Numbers only, please.</p>
+              <p className="text-meta-sm text-danger mt-1">Numbers only, please.</p>
             )}
           </div>
 
-          {err && <p className="text-[12px] text-danger font-bold">{err}</p>}
+          {err && <p className="text-meta text-danger font-extrabold">{err}</p>}
 
           <button
             type="submit"
@@ -250,7 +250,7 @@ export function InstagramConnectModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="w-full text-[13px] font-extrabold text-b3 py-2 disabled:opacity-50"
+            className="w-full text-body-sm font-extrabold text-b3 py-2 disabled:opacity-50"
           >
             Cancel
           </button>

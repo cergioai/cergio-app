@@ -527,7 +527,7 @@ export function PublicProfileScreen() {
                 appears beside the name when set. One short line that
                 gives context before the role/Connector pills. */}
             {profile?.headline && (
-              <p className="mt-1 text-[13px] text-b2 leading-snug font-medium">
+              <p className="mt-1 text-body-sm text-b2 leading-snug font-medium">
                 {profile.headline}
               </p>
             )}
@@ -562,9 +562,9 @@ export function PublicProfileScreen() {
               to="/invite/friends-popup"
               className="mx-5 mt-6 block bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 hover:from-gl/80 hover:to-gl/40 transition-colors"
             >
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">By the numbers</p>
+              <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">By the numbers</p>
               <p className="text-[15px] font-extrabold text-black leading-snug mt-1">Just getting started.</p>
-              <p className="text-[12px] text-b3 font-medium mt-1 leading-snug">
+              <p className="text-meta text-b3 font-medium mt-1 leading-snug">
                 Invite your first friend to start building your network. <span className="text-gd font-extrabold">Send invite →</span>
               </p>
             </Link>
@@ -583,7 +583,7 @@ export function PublicProfileScreen() {
         ].filter(c => c.value > 0);
         return (
           <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-4">
-            <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-2">
+            <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-2">
               By the numbers
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -609,7 +609,7 @@ export function PublicProfileScreen() {
                 );
               })}
             </div>
-            <p className="text-[11px] text-b3 font-medium leading-snug mt-3">
+            <p className="text-meta-sm text-b3 font-medium leading-snug mt-3">
               {isSelf
                 ? <>You earn ${REWARDS.referrerSharePercent}% of every friend’s booking up to ${REWARDS.perFriend} per friend, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>
                 : <>{firstName}’s network drives ${REWARDS.referrerSharePercent}% per friend booking + ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>}

@@ -53,7 +53,7 @@ function SaveForm({ onVerified, onCancel }) {
       <PaymentElement options={{ layout: 'tabs' }} />
 
       {error && (
-        <p className="text-[13px] text-danger font-bold leading-relaxed">{error}</p>
+        <p className="text-body-sm text-danger font-extrabold leading-relaxed">{error}</p>
       )}
 
       <button
@@ -70,7 +70,7 @@ function SaveForm({ onVerified, onCancel }) {
         type="button"
         onClick={onCancel}
         disabled={busy}
-        className="w-full text-[13px] font-extrabold text-b3 py-2 disabled:opacity-50"
+        className="w-full text-body-sm font-extrabold text-b3 py-2 disabled:opacity-50"
       >
         Maybe later
       </button>
@@ -138,7 +138,7 @@ export function CcGateModal({ onClose, onVerified, reason = 'photos' }) {
         <h2 className="text-[20px] font-extrabold text-black text-center leading-tight mb-2">
           {copy.title}
         </h2>
-        <p className="text-[13px] text-b3 text-center leading-relaxed mb-2">
+        <p className="text-body-sm text-b3 text-center leading-relaxed mb-2">
           <strong className="text-black">Your card won&apos;t be charged.</strong>{' '}
           {copy.body}
         </p>
@@ -148,10 +148,10 @@ export function CcGateModal({ onClose, onVerified, reason = 'photos' }) {
         </p>
 
         {bootErr && (
-          <p className="text-[13px] text-danger font-bold mb-3">{bootErr}</p>
+          <p className="text-body-sm text-danger font-extrabold mb-3">{bootErr}</p>
         )}
         {!bootErr && !clientSecret && (
-          <p className="text-[13px] text-b3 mb-3">Loading…</p>
+          <p className="text-body-sm text-b3 mb-3">Loading…</p>
         )}
         {clientSecret && (
           <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>

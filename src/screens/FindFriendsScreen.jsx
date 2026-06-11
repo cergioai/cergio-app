@@ -179,13 +179,13 @@ export function FindFriendsScreen() {
           ✕
         </button>
       </div>
-      <p className="px-5 text-[14px] text-b3 leading-relaxed mt-1">
+      <p className="px-5 text-body text-b3 leading-relaxed mt-1">
         Pull from your contacts to see who's already here — and invite the rest.
         Friends-of-friends recommendations get better the more of your network you bring in.
       </p>
 
       {/* ── Connect sources ───────────────────────────────────────────────── */}
-      <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">Connect</h2>
+      <h2 className="px-5 mt-8 mb-3 text-heading-1 font-extrabold text-black leading-tight">Connect</h2>
       <SourceRow
         icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>}
         title="Sync phone contacts"
@@ -209,7 +209,7 @@ export function FindFriendsScreen() {
       />
 
       {/* ── Manual search ─────────────────────────────────────────────────── */}
-      <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">Find by handle</h2>
+      <h2 className="px-5 mt-8 mb-3 text-heading-1 font-extrabold text-black leading-tight">Find by handle</h2>
       <div className="px-5">
         <div className="flex items-center gap-2">
           <input
@@ -218,14 +218,14 @@ export function FindFriendsScreen() {
             onChange={e => { setSearchQ(e.target.value); if (searchState !== 'idle') setSearchState('idle'); }}
             onKeyDown={e => { if (e.key === 'Enter') runSearch(searchQ); }}
             placeholder="@handle, name, or email"
-            className="flex-1 bg-white border border-bdr rounded-[14px] px-4 py-3 text-[14px]
+            className="flex-1 bg-white border border-bdr rounded-[14px] px-4 py-3 text-body
                        text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
           <button
             type="button"
             onClick={() => runSearch(searchQ)}
             disabled={!searchQ.trim() || searchState === 'searching'}
-            className={`rounded-[14px] px-5 py-3 text-[13px] font-extrabold transition-all
+            className={`rounded-[14px] px-5 py-3 text-body-sm font-extrabold transition-all
               ${searchQ.trim() && searchState !== 'searching'
                 ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
                 : 'bg-bg5 text-b3 cursor-not-allowed'}`}
@@ -234,7 +234,7 @@ export function FindFriendsScreen() {
           </button>
         </div>
         {searchState === 'empty' && (
-          <p className="text-[12px] text-b3 mt-3 leading-snug">
+          <p className="text-meta text-b3 mt-3 leading-snug">
             No matches for "<span className="font-extrabold text-b2">{searchQ}</span>".
             They might not be on Cergio yet — copy your invite link below to bring them in.
           </p>
@@ -243,12 +243,12 @@ export function FindFriendsScreen() {
           <div className="mt-3 flex flex-col gap-2">
             {searchHits.map(p => (
               <div key={p.id} className="bg-white border border-bdr rounded-[14px] p-3 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-[14px] font-extrabold">
+                <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-body font-extrabold">
                   {(p.display_name || p.instagram_handle || '?')[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-extrabold text-black truncate">{p.display_name || `@${p.instagram_handle || p.tiktok_handle}`}</p>
-                  <p className="text-[12px] text-b3 truncate">
+                  <p className="text-body font-extrabold text-black truncate">{p.display_name || `@${p.instagram_handle || p.tiktok_handle}`}</p>
+                  <p className="text-meta text-b3 truncate">
                     {p.instagram_handle && <>IG @{p.instagram_handle}</>}
                     {p.instagram_handle && p.tiktok_handle && ' · '}
                     {p.tiktok_handle && <>TT @{p.tiktok_handle}</>}
@@ -256,7 +256,7 @@ export function FindFriendsScreen() {
                 </div>
                 <button
                   onClick={() => addToNetwork(p.id, p.display_name || `@${p.instagram_handle || p.tiktok_handle}` || 'them')}
-                  className="bg-g text-white rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold hover:opacity-90 active:scale-[.97]"
+                  className="bg-g text-white rounded-pill px-3.5 py-1.5 text-meta font-extrabold hover:opacity-90 active:scale-[.97]"
                 >
                   Add
                 </button>
@@ -267,12 +267,12 @@ export function FindFriendsScreen() {
       </div>
 
       {/* ── Share invite ──────────────────────────────────────────────────── */}
-      <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">Or just share your link</h2>
+      <h2 className="px-5 mt-8 mb-3 text-heading-1 font-extrabold text-black leading-tight">Or just share your link</h2>
       <div className="px-5">
         <div className="bg-white border border-bdr rounded-[14px] p-3 flex items-center gap-2">
-          <code className="flex-1 text-[12px] text-b2 font-mono truncate">{inviteUrl.replace(/^https?:\/\//, '')}</code>
+          <code className="flex-1 text-meta text-b2 font-mono truncate">{inviteUrl.replace(/^https?:\/\//, '')}</code>
           <button onClick={copyInvite}
-            className="bg-bg5 text-black rounded-pill px-3 py-1.5 text-[12px] font-extrabold hover:bg-bdr">
+            className="bg-bg5 text-black rounded-pill px-3 py-1.5 text-meta font-extrabold hover:bg-bdr">
             Copy
           </button>
         </div>
@@ -282,7 +282,7 @@ export function FindFriendsScreen() {
         >
           Share invite
         </button>
-        <p className="text-[11px] text-b3 mt-2 leading-snug text-center">
+        <p className="text-meta-sm text-b3 mt-2 leading-snug text-center">
           Earn <strong className="text-g">${REWARDS.perFriend} per friend</strong> who joins + books.
         </p>
       </div>
@@ -290,41 +290,41 @@ export function FindFriendsScreen() {
       {/* ── Imported matches (after contact sync) ─────────────────────────── */}
       {(matches.found.length > 0 || matches.invitable.length > 0) && (
         <>
-          <h2 className="px-5 mt-8 mb-3 text-[22px] font-extrabold text-black leading-tight">
+          <h2 className="px-5 mt-8 mb-3 text-heading-1 font-extrabold text-black leading-tight">
             From your contacts
           </h2>
           {matches.found.length > 0 && (
-            <p className="px-5 text-[12px] font-extrabold text-gd uppercase tracking-wide mb-2">
+            <p className="px-5 text-meta font-extrabold text-gd uppercase tracking-wide mb-2">
               Already on Cergio ({matches.found.length})
             </p>
           )}
           {matches.found.map(p => (
             <div key={p.id} className="mx-5 mb-2 bg-white border border-bdr rounded-[14px] p-3 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-[14px] font-extrabold">
+              <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-body font-extrabold">
                 {(p.display_name || '?')[0].toUpperCase()}
               </div>
-              <p className="flex-1 text-[14px] font-extrabold text-black truncate">{p.display_name}</p>
+              <p className="flex-1 text-body font-extrabold text-black truncate">{p.display_name}</p>
               <button
                 onClick={() => addToNetwork(p.id, p.display_name || 'them')}
-                className="bg-g text-white rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold hover:opacity-90 active:scale-[.97]"
+                className="bg-g text-white rounded-pill px-3.5 py-1.5 text-meta font-extrabold hover:opacity-90 active:scale-[.97]"
               >
                 Add
               </button>
             </div>
           ))}
           {matches.invitable.length > 0 && (
-            <p className="px-5 mt-3 text-[12px] font-extrabold text-b3 uppercase tracking-wide mb-2">
+            <p className="px-5 mt-3 text-meta font-extrabold text-b3 uppercase tracking-wide mb-2">
               Not yet on Cergio ({matches.invitable.length})
             </p>
           )}
           {matches.invitable.slice(0, 20).map((c, i) => (
             <div key={i} className="mx-5 mb-2 bg-white border border-bdr rounded-[14px] p-3 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-[14px] font-extrabold">
+              <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-body font-extrabold">
                 {(c.name || c.email || '?')[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-extrabold text-black truncate">{c.name}</p>
-                <p className="text-[11px] text-b3 truncate">{c.email || c.phone}</p>
+                <p className="text-body font-extrabold text-black truncate">{c.name}</p>
+                <p className="text-meta-sm text-b3 truncate">{c.email || c.phone}</p>
               </div>
               <button
                 onClick={async () => {
@@ -348,7 +348,7 @@ export function FindFriendsScreen() {
                   });
                   showToast(error ? `Send failed: ${error.message}` : `Invite sent to ${c.name} ✓`);
                 }}
-                className="bg-white border border-bdr text-black rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold hover:border-g/40">
+                className="bg-white border border-bdr text-black rounded-pill px-3.5 py-1.5 text-meta font-extrabold hover:border-g/40">
                 Invite
               </button>
             </div>
@@ -372,8 +372,8 @@ function SourceRow({ icon, title, sub, onClick, busy }) {
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-extrabold text-black leading-tight">{title}</p>
-        <p className="text-[12px] text-b3 mt-0.5 leading-snug">{sub}</p>
+        <p className="text-body font-extrabold text-black leading-tight">{title}</p>
+        <p className="text-meta text-b3 mt-0.5 leading-snug">{sub}</p>
       </div>
       <svg width="9" height="14" viewBox="0 0 11 18" fill="none" className="flex-shrink-0">
         <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor"

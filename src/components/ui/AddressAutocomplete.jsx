@@ -137,7 +137,7 @@ export function AddressAutocomplete({
         onBlur={() => setTimeout(() => setFbOpen(false), 150)}
         placeholder={placeholder}
         autoComplete="off"
-        className={className || 'w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30'}
+        className={className || 'w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30'}
       />
       {/* Fallback dropdown — only renders when Google key is missing
           and Nominatim returned results. */}
@@ -174,7 +174,7 @@ export function AddressAutocomplete({
                 onSelect?.(payload);
                 setFbOpen(false);
               }}
-              className="w-full text-left px-4 py-2 text-[13px] text-b2 hover:bg-bg5 transition-colors leading-snug"
+              className="w-full text-left px-4 py-2 text-body-sm text-b2 hover:bg-bg5 transition-colors leading-snug"
             >
               {r.address}
             </button>

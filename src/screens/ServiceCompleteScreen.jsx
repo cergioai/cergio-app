@@ -24,8 +24,8 @@ function BenefitRow({ title, subtitle }) {
         </svg>
       </div>
       <div className="flex-1">
-        <p className="text-[16px] font-extrabold text-black leading-tight mb-1">{title}</p>
-        <p className="text-[14px] text-g font-medium leading-relaxed">{subtitle}</p>
+        <p className="text-body-lg font-extrabold text-black leading-tight mb-1">{title}</p>
+        <p className="text-body text-g font-medium leading-relaxed">{subtitle}</p>
       </div>
     </div>
   );
@@ -54,7 +54,7 @@ export function ServiceCompleteScreen() {
       </div>
 
       {/* "You just received:" sub-header per Tarik feedback */}
-      <p className="px-7 text-[14px] font-extrabold text-b3 uppercase tracking-wide mb-5">
+      <p className="px-7 text-body font-extrabold text-b3 uppercase tracking-wide mb-5">
         You just received:
       </p>
 

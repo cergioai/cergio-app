@@ -56,7 +56,7 @@ export function ManageServicesScreen() {
   if (services === null) {
     return (
       <div className="flex-1 flex items-center justify-center bg-cr">
-        <p className="text-[14px] text-b3">Loading your services…</p>
+        <p className="text-body text-b3">Loading your services…</p>
       </div>
     );
   }
@@ -74,13 +74,13 @@ export function ManageServicesScreen() {
         >
           ‹
         </button>
-        <h1 className="text-[18px] font-extrabold text-white">Manage Services</h1>
+        <h1 className="text-heading-2 font-extrabold text-white">Manage Services</h1>
       </div>
 
       {listed.length === 0 && drafts.length === 0 && (
         <div className="px-5 pt-10 text-center">
-          <p className="text-[18px] font-extrabold text-black">No services yet</p>
-          <p className="text-[14px] text-b3 mt-2 mb-6">List your first service to start receiving bookings.</p>
+          <p className="text-heading-2 font-extrabold text-black">No services yet</p>
+          <p className="text-body text-b3 mt-2 mb-6">List your first service to start receiving bookings.</p>
           <button
             onClick={handleListClick}
             className="bg-g text-white rounded-[24px] px-8 py-3 text-[15px] font-extrabold"
@@ -92,7 +92,7 @@ export function ManageServicesScreen() {
 
       {drafts.length > 0 && (
         <>
-          <p className="px-5 pt-6 pb-3 text-[22px] font-extrabold text-black">Unpublished</p>
+          <p className="px-5 pt-6 pb-3 text-heading-1 font-extrabold text-black">Unpublished</p>
           <div className="px-5 flex flex-col gap-3 mb-5">
             {drafts.map(s => (
               <button
@@ -107,12 +107,12 @@ export function ManageServicesScreen() {
                       <circle cx="12" cy="9" r="2.5" />
                     </svg>
                   </div>
-                  <p className="text-[16px] font-extrabold text-black leading-tight flex-1">{s.title}</p>
+                  <p className="text-body-lg font-extrabold text-black leading-tight flex-1">{s.title}</p>
                 </div>
                 <div className="border-t border-bdr -mx-4 px-4 pt-3 flex items-center gap-2">
                   <div className="flex-1">
-                    <p className="text-[13px] font-extrabold text-black">{s.progressLabel || 'Finish your listing'}</p>
-                    <p className="text-[11px] text-b3 mt-0.5">{s.progressSub || 'Service profile is incomplete'}</p>
+                    <p className="text-body-sm font-extrabold text-black">{s.progressLabel || 'Finish your listing'}</p>
+                    <p className="text-meta-sm text-b3 mt-0.5">{s.progressSub || 'Service profile is incomplete'}</p>
                   </div>
                   <span className="text-b3 text-lg">›</span>
                 </div>
@@ -127,7 +127,7 @@ export function ManageServicesScreen() {
 
       {listed.length > 0 && (
         <>
-          <p className="px-5 pt-2 pb-3 text-[22px] font-extrabold text-black">Listed</p>
+          <p className="px-5 pt-2 pb-3 text-heading-1 font-extrabold text-black">Listed</p>
           <div className="px-5 flex flex-col gap-3 mb-5">
             {listed.map((s, i) => (
               <div key={s.id} className="bg-white border border-bdr rounded-[18px] overflow-hidden">
@@ -138,14 +138,14 @@ export function ManageServicesScreen() {
                   <div className={`w-16 h-16 rounded-[12px] flex-shrink-0 ${s.photo_class || s.photoClass || PHOTO_FALLBACKS[i % 3]}`} />
                   <div className="flex-1">
                     <p className="text-[15px] font-extrabold text-black leading-tight">{s.title}</p>
-                    <p className="text-[12px] text-b3 mt-0.5">{s.sub || s.category || s.description}</p>
+                    <p className="text-meta text-b3 mt-0.5">{s.sub || s.category || s.description}</p>
                   </div>
                   <span className="text-b3 text-lg">›</span>
                 </button>
                 {/* Free profile / cross-post entry */}
                 <button
                   onClick={() => navigate(`/crosspost/${s.id}`)}
-                  className="w-full px-3 py-2.5 border-t border-line text-left text-[13px] font-bold text-gd
+                  className="w-full px-3 py-2.5 border-t border-line text-left text-body-sm font-extrabold text-gd
                              bg-gl/40 hover:bg-gl transition-colors flex items-center justify-between"
                 >
                   <span>📣 Post your free profile everywhere</span>
@@ -162,7 +162,7 @@ export function ManageServicesScreen() {
         <button
           onClick={handleListClick}
           className="w-full border-2 border-dashed border-g bg-gl/40 rounded-[18px] py-4
-                     text-[14px] font-extrabold text-g flex items-center justify-center gap-2"
+                     text-body font-extrabold text-g flex items-center justify-center gap-2"
         >
           <span className="text-xl leading-none">+</span> List another service
         </button>

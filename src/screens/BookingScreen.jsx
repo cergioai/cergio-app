@@ -38,7 +38,7 @@ export function BookingScreen() {
         ✓
       </div>
       <h2 className="text-[26px] font-extrabold text-black text-center mb-2.5">Booking confirmed!</h2>
-      <p className="text-[14px] text-b3 text-center leading-relaxed mb-8">
+      <p className="text-body text-b3 text-center leading-relaxed mb-8">
         {name
           ? <>You've booked {name}. We've sent the confirmation to your email.</>
           : <>We've sent the confirmation to your email.</>}
@@ -52,8 +52,8 @@ export function BookingScreen() {
               key={label}
               className="flex justify-between items-center py-1.5 border-b border-bg5 last:border-0"
             >
-              <span className="text-[12px] text-b3 font-medium">{label}</span>
-              <span className={`text-[13px] font-bold text-black ${extra ?? ''}`}>{value}</span>
+              <span className="text-meta text-b3 font-medium">{label}</span>
+              <span className={`text-body-sm font-extrabold text-black ${extra ?? ''}`}>{value}</span>
             </div>
           ))}
         </div>
@@ -69,7 +69,7 @@ export function BookingScreen() {
       <button
         onClick={() => navigate('/invite/friends-popup')}
         className="w-full bg-transparent border border-bdr text-b3 rounded-[24px] py-4
-                   text-[15px] font-bold hover:bg-bg5 transition-colors"
+                   text-[15px] font-extrabold hover:bg-bg5 transition-colors"
       >
         Share with friends
       </button>

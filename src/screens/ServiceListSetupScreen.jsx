@@ -60,7 +60,7 @@ export function ServiceListSetupScreen() {
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-gm to-g relative overflow-hidden">
       <div className="px-5 pt-6">
-        <button onClick={() => navigate(-1)} className="text-white text-2xl font-bold">‹</button>
+        <button onClick={() => navigate(-1)} className="text-white text-2xl font-extrabold">‹</button>
       </div>
 
       <div className="absolute top-[42%] left-[28%] w-3 h-px bg-white/70" />
@@ -89,7 +89,7 @@ export function ServiceListSetupScreen() {
         {errorMessage ? (
           <>
             <p className="text-[20px] font-extrabold text-white mb-2">We couldn't save your listing</p>
-            <p className="text-[14px] text-white/85 mb-6 max-w-[300px]">{errorMessage}</p>
+            <p className="text-body text-white/85 mb-6 max-w-[300px]">{errorMessage}</p>
             <button
               onClick={() => navigate(-1)}
               className="bg-white text-g rounded-[24px] px-8 py-3 text-[15px] font-extrabold"
@@ -102,7 +102,7 @@ export function ServiceListSetupScreen() {
             <svg width="68" height="68" viewBox="0 0 68 68" fill="none" className="animate-spin-slow mb-6">
               <path d="M 34 6 A 28 28 0 1 0 6 34" stroke="white" strokeWidth="3" strokeLinecap="round" />
             </svg>
-            <p className="text-[18px] font-extrabold text-white">Setting up your profile</p>
+            <p className="text-heading-2 font-extrabold text-white">Setting up your profile</p>
           </>
         )}
       </div>

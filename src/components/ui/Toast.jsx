@@ -8,7 +8,7 @@ export function Toast({ msg, show, sticky = false, onDismiss }) {
   return (
     <div
       className={`fixed bottom-[90px] left-1/2 -translate-x-1/2 z-[9999]
-                  bg-black text-white text-[13px] font-semibold px-5 py-3 rounded-pill
+                  bg-black text-white text-body-sm font-semibold px-5 py-3 rounded-pill
                   max-w-[92vw] transition-all duration-300
                   ${sticky ? 'pointer-events-auto whitespace-normal text-center' : 'pointer-events-none whitespace-nowrap'}
                   ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
@@ -20,7 +20,7 @@ export function Toast({ msg, show, sticky = false, onDismiss }) {
           <button
             type="button"
             onClick={onDismiss}
-            className="text-white/80 hover:text-white text-[16px] font-bold leading-none px-1"
+            className="text-white/80 hover:text-white text-body-lg font-extrabold leading-none px-1"
             aria-label="Dismiss"
           >
             ×

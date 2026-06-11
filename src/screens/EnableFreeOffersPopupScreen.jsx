@@ -41,7 +41,7 @@ export function EnableFreeOffersPopupScreen() {
         <h1 className="text-[24px] font-extrabold text-black leading-tight mb-3">
           You're defaulted to<br />free services
         </h1>
-        <p className="text-[14px] text-b3 leading-relaxed mb-6">
+        <p className="text-body text-b3 leading-relaxed mb-6">
           You're currently defaulted to receiving free services in return for an Instagram post.
           This is a one-time pop up — after this you'll see a small toggle just above the
           search submit button.
@@ -58,10 +58,10 @@ export function EnableFreeOffersPopupScreen() {
           </svg>
         </div>
         <div className="flex-1">
-          <p className="text-[14px] font-extrabold text-black leading-tight">
+          <p className="text-body font-extrabold text-black leading-tight">
             Free service for Instagram post
           </p>
-          <p className="text-[12px] text-b3 mt-0.5">
+          <p className="text-meta text-b3 mt-0.5">
             {freeServices ? 'On — you\'ll receive free offers' : 'Off — you\'ll pay normally'}
           </p>
         </div>

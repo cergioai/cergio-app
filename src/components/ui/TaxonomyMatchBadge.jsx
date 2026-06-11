@@ -12,7 +12,7 @@
 export function TaxonomyMatchBadge({ resolving, result, overridden, onOverride, onUndoOverride }) {
   if (resolving && !result) {
     return (
-      <p className="text-[11px] text-b3 mt-1.5 leading-snug">
+      <p className="text-meta-sm text-b3 mt-1.5 leading-snug">
         <span className="inline-block w-2 h-2 bg-bdr rounded-full mr-1.5 animate-pulse" />
         Checking our catalog…
       </p>
@@ -26,18 +26,18 @@ export function TaxonomyMatchBadge({ resolving, result, overridden, onOverride, 
   if (showMatched) {
     return (
       <div className="flex items-center gap-2 mt-1.5 bg-gl rounded-pill px-3 py-1.5 w-fit">
-        <span className="text-[11px] font-extrabold text-gd flex items-center gap-1">
-          <span className="text-[14px]">✓</span>
+        <span className="text-meta-sm font-extrabold text-gd flex items-center gap-1">
+          <span className="text-body">✓</span>
           Maps to <span className="font-extrabold">{result.offering_name}</span>
           {result.provider_type && (
-            <span className="text-gd/70 font-bold">· {result.provider_type}</span>
+            <span className="text-gd/70 font-extrabold">· {result.provider_type}</span>
           )}
         </span>
         {onOverride && (
           <button
             type="button"
             onClick={onOverride}
-            className="text-[10px] text-gd/70 font-bold underline underline-offset-2 ml-1"
+            className="text-caps text-gd/70 font-extrabold underline underline-offset-2 ml-1"
             aria-label="Override — this is something different"
           >
             Not this
@@ -50,10 +50,10 @@ export function TaxonomyMatchBadge({ resolving, result, overridden, onOverride, 
   if (showNew) {
     return (
       <div className="mt-1.5 bg-warnBg border border-warn/40 rounded-[10px] px-3 py-2 leading-snug">
-        <p className="text-[11px] font-extrabold text-warnText">
+        <p className="text-meta-sm font-extrabold text-warnText">
           🆕 New offering — we'll review &amp; add it to our catalog
         </p>
-        <p className="text-[10px] text-warnText/85 mt-0.5">
+        <p className="text-caps text-warnText/85 mt-0.5">
           Your listing goes live now. We'll fine-tune the matching so future
           searches find you faster.
         </p>
@@ -61,7 +61,7 @@ export function TaxonomyMatchBadge({ resolving, result, overridden, onOverride, 
           <button
             type="button"
             onClick={onUndoOverride}
-            className="text-[10px] text-warnText font-bold underline underline-offset-2 mt-1"
+            className="text-caps text-warnText font-extrabold underline underline-offset-2 mt-1"
           >
             Undo — use the suggested match
           </button>

@@ -322,7 +322,7 @@ export function ServiceAreaMapPicker({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="w-9 h-9 rounded-full bg-white border border-bdr text-b2 text-[18px] flex items-center justify-center"
+            className="w-9 h-9 rounded-full bg-white border border-bdr text-b2 text-heading-2 flex items-center justify-center"
           >
             ×
           </button>
@@ -332,18 +332,18 @@ export function ServiceAreaMapPicker({
         <div className="flex-1 relative" style={{ touchAction: 'none' }}>
           {!loaded && !error && (
             <div className="absolute inset-0 flex items-center justify-center bg-bg5">
-              <p className="text-[13px] text-b3 font-medium">Loading map…</p>
+              <p className="text-body-sm text-b3 font-medium">Loading map…</p>
             </div>
           )}
           {error && (
             <div className="absolute inset-0 flex items-center justify-center bg-bg5 p-5 text-center">
-              <p className="text-[13px] text-warnText font-medium">{error}</p>
+              <p className="text-body-sm text-warnText font-medium">{error}</p>
             </div>
           )}
           <div ref={mapRef} className="absolute inset-0" />
           {loaded && !hasShape && (
             <div className="absolute top-3 left-3 right-3 bg-white/95 backdrop-blur-sm
-                            rounded-pill px-4 py-2 text-[12px] text-b2 font-medium text-center
+                            rounded-pill px-4 py-2 text-meta text-b2 font-medium text-center
                             shadow-sm pointer-events-none">
               ✏️ Hold and drag to draw your area
             </div>
@@ -362,7 +362,7 @@ export function ServiceAreaMapPicker({
           <button
             onClick={onClose}
             aria-label="Cancel and close map"
-            className="px-4 py-3 rounded-pill text-[13px] font-extrabold border bg-white text-b2 border-bdr
+            className="px-4 py-3 rounded-pill text-body-sm font-extrabold border bg-white text-b2 border-bdr
                        hover:border-b3 transition-colors"
           >
             Cancel
@@ -370,7 +370,7 @@ export function ServiceAreaMapPicker({
           {hasShape && (
             <button
               onClick={clearShape}
-              className="px-4 py-3 rounded-pill text-[13px] font-extrabold border bg-white text-b2 border-bdr
+              className="px-4 py-3 rounded-pill text-body-sm font-extrabold border bg-white text-b2 border-bdr
                          hover:border-warn/50 transition-colors"
             >
               Clear
@@ -379,7 +379,7 @@ export function ServiceAreaMapPicker({
           <button
             onClick={onClose}
             disabled={!hasShape}
-            className={`flex-1 py-3 rounded-pill text-[14px] font-extrabold transition-colors
+            className={`flex-1 py-3 rounded-pill text-body font-extrabold transition-colors
                         ${hasShape
                           ? 'bg-g text-white hover:opacity-90'
                           : 'bg-bg5 text-b3 opacity-60 cursor-not-allowed'}`}

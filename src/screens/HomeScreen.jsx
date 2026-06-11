@@ -96,7 +96,7 @@ function ModeOption({ active, label, sub, onClick }) {
           role="tooltip"
           className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1
                      opacity-0 group-hover:opacity-100 transition-opacity z-30
-                     bg-black/85 text-white text-[11px] font-medium leading-snug
+                     bg-black/85 text-white text-meta-sm font-medium leading-snug
                      rounded-lg px-2.5 py-1.5 w-[220px] text-center shadow-card"
         >
           {sub}
@@ -228,7 +228,7 @@ function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, onSav
         </button>
       </div>
       {status && (
-        <p className={`text-[10px] leading-snug pl-1 ${status.kind === 'warn' ? 'text-warnText' : status.kind === 'ok' ? 'text-gd' : 'text-b3'}`}>
+        <p className={`text-caps leading-snug pl-1 ${status.kind === 'warn' ? 'text-warnText' : status.kind === 'ok' ? 'text-gd' : 'text-b3'}`}>
           {status.text}
         </p>
       )}
@@ -1037,7 +1037,7 @@ export function HomeScreen() {
                         type="button"
                         onClick={() => removeImage(i)}
                         aria-label="Remove image"
-                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-meta font-bold flex items-center justify-center"
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-meta font-extrabold flex items-center justify-center"
                       >
                         ×
                       </button>
@@ -1186,7 +1186,7 @@ export function HomeScreen() {
                         <path d="M12 22s7-7 7-13a7 7 0 0 0-14 0c0 6 7 13 7 13z" />
                         <circle cx="12" cy="9" r="2.5" />
                       </svg>
-                      <span className="truncate font-bold text-b2">{abbr}</span>
+                      <span className="truncate font-extrabold text-b2">{abbr}</span>
                       <svg width="9" height="6" viewBox="0 0 10 6" fill="none" className="ml-0.5 opacity-70 flex-shrink-0">
                         <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
@@ -1224,7 +1224,7 @@ export function HomeScreen() {
                 <button
                   type="button"
                   onClick={() => setLocEditing(true)}
-                  className="flex items-center gap-1.5 text-meta-sm text-gd font-bold underline underline-offset-2"
+                  className="flex items-center gap-1.5 text-meta-sm text-gd font-extrabold underline underline-offset-2"
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -1287,7 +1287,7 @@ export function HomeScreen() {
                         role="button"
                         tabIndex={0}
                         onClick={(e) => { e.stopPropagation(); setServiceAreaGeoJson(null); }}
-                        className="text-[10px] font-medium underline cursor-pointer ml-1"
+                        className="text-caps font-medium underline cursor-pointer ml-1"
                       >
                         Clear
                       </span>
@@ -1413,7 +1413,7 @@ export function HomeScreen() {
                       : 0}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-body text-gd font-bold leading-snug">
+                    <p className="text-body text-gd font-extrabold leading-snug">
                       {planDone ? "We'll notify you when offers come in" : `${activeStage?.label || ''}…`}
                     </p>
                     {!planDone && activeStage?.detail && (
@@ -1557,7 +1557,7 @@ export function HomeScreen() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-body-sm font-bold text-black leading-tight">
+              <p className="text-body-sm font-extrabold text-black leading-tight">
                 Invite your clients → become a Connector
               </p>
               <p className="text-meta-sm text-b3 mt-0.5 leading-snug font-normal">

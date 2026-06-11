@@ -182,7 +182,7 @@ function Cell({ label, dominance, Mark }) {
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-[15px] font-extrabold text-black">{label}</p>
-          <p className="text-[12px] text-b3 mt-0.5">{dominance}</p>
+          <p className="text-meta text-b3 mt-0.5">{dominance}</p>
         </div>
       </div>
       <div className="flex items-center justify-around gap-4">
@@ -191,14 +191,14 @@ function Cell({ label, dominance, Mark }) {
                style={{ background: PAL.cream }}>
             <Mark working={false} size={88} />
           </div>
-          <p className="text-[11px] text-b3 font-bold uppercase tracking-wide">Fixed</p>
+          <p className="text-meta-sm text-b3 font-extrabold uppercase tracking-wide">Fixed</p>
         </div>
         <div className="flex flex-col items-center gap-2">
           <div className="w-24 h-24 rounded-full flex items-center justify-center"
                style={{ background: PAL.cream }}>
             <Mark working={true} size={88} />
           </div>
-          <p className="text-[11px] text-b3 font-bold uppercase tracking-wide">Pulsating</p>
+          <p className="text-meta-sm text-b3 font-extrabold uppercase tracking-wide">Pulsating</p>
         </div>
       </div>
     </div>
@@ -217,9 +217,9 @@ export function LogoLabScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cream pb-16 overflow-y-auto">
       <div className="px-5 pt-5 pb-3">
-        <Link to="/home" className="text-[13px] text-g font-bold underline">‹ Home</Link>
-        <h1 className="text-[28px] font-extrabold text-black leading-tight mt-2">Logo lab</h1>
-        <p className="text-[13px] text-b3 font-medium mt-1.5 leading-snug">
+        <Link to="/home" className="text-body-sm text-g font-extrabold underline">‹ Home</Link>
+        <h1 className="text-display-2 font-extrabold text-black leading-tight mt-2">Logo lab</h1>
+        <p className="text-body-sm text-b3 font-medium mt-1.5 leading-snug">
           Six candidates skinned with the mascot palette (peach + Romio green + cream),
           each at a different color dominance. Pick a winner and tell me — I'll port it
           back into LeafLogo and flip LOGO_VARIANT.
@@ -231,7 +231,7 @@ export function LogoLabScreen() {
         ))}
       </div>
       <div className="px-5 mt-2">
-        <p className="text-[11px] text-b3 leading-snug">
+        <p className="text-meta-sm text-b3 leading-snug">
           Palette sampled from the Jennifer Leighton mockup mascot
           (orange goat on bright green disc, cream backdrop).
         </p>

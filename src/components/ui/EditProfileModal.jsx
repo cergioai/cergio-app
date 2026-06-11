@@ -151,31 +151,31 @@ export function EditProfileModal({ user, onClose, onSaved }) {
       >
         <div className="flex justify-between items-start mb-3">
           <div>
-            <h3 className="text-[18px] font-extrabold text-black leading-tight">Edit profile</h3>
-            <p className="text-[12px] text-b3 mt-0.5">Your public-facing details on Cergio.</p>
+            <h3 className="text-heading-2 font-extrabold text-black leading-tight">Edit profile</h3>
+            <p className="text-meta text-b3 mt-0.5">Your public-facing details on Cergio.</p>
           </div>
-          <button onClick={onClose} className="text-[20px] text-b3 font-bold px-2 -mt-1" aria-label="Close">×</button>
+          <button onClick={onClose} className="text-[20px] text-b3 font-extrabold px-2 -mt-1" aria-label="Close">×</button>
         </div>
 
-        <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
+        <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
           Name
         </label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Your full name"
-          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           autoComplete="name"
         />
 
-        <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
+        <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
           Phone (optional)
         </label>
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+1 555 …"
-          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           inputMode="tel"
           autoComplete="tel"
         />
@@ -183,7 +183,7 @@ export function EditProfileModal({ user, onClose, onSaved }) {
         {/* CERGIO-GUARD (2026-06-05): public headline — appears beside
             the display name on PublicProfileScreen. Keep it short and
             scannable: ≤120 chars, ideally one phrase. */}
-        <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
+        <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
           Headline
         </label>
         <input
@@ -191,13 +191,13 @@ export function EditProfileModal({ user, onClose, onSaved }) {
           onChange={(e) => setHeadline(e.target.value.slice(0, HEADLINE_MAX))}
           placeholder="e.g. Personal trainer · Miami Beach"
           maxLength={HEADLINE_MAX}
-          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
         />
         <p className="text-[10.5px] text-b3 mt-1 text-right">{headline.length}/{HEADLINE_MAX}</p>
 
         {/* Bio — longer free-form summary. Renders on PublicProfileScreen
             below the stats block. */}
-        <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-3">
+        <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-3">
           Bio
         </label>
         <textarea
@@ -206,24 +206,24 @@ export function EditProfileModal({ user, onClose, onSaved }) {
           placeholder="What you do, who you help, what you love."
           rows={4}
           maxLength={BIO_MAX}
-          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none"
+          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none"
         />
         <p className="text-[10.5px] text-b3 mt-1 text-right">{bio.length}/{BIO_MAX}</p>
 
-        <label className="block text-[11px] font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
+        <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
           Email
         </label>
         <input
           value={initial.email}
           disabled
-          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-[14px] text-b3 outline-none opacity-70"
+          className="w-full bg-bg5 rounded-[14px] px-4 py-3 text-body text-b3 outline-none opacity-70"
         />
-        <p className="text-[11px] text-b3 mt-1.5 leading-snug">
+        <p className="text-meta-sm text-b3 mt-1.5 leading-snug">
           Email changes require re-verification — contact support for now.
         </p>
 
         {err && (
-          <p className="text-[12px] text-danger mt-3 leading-snug">{err}</p>
+          <p className="text-meta text-danger mt-3 leading-snug">{err}</p>
         )}
 
         <button

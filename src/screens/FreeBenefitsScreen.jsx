@@ -33,7 +33,7 @@ export function FreeBenefitsScreen() {
       </div>
 
       {/* headline */}
-      <h1 className="text-[28px] font-extrabold text-black text-center leading-tight px-7 mb-8">
+      <h1 className="text-display-2 font-extrabold text-black text-center leading-tight px-7 mb-8">
         Free Service Benefits
       </h1>
 
@@ -49,16 +49,16 @@ export function FreeBenefitsScreen() {
                 />
               </svg>
             </div>
-            <p className="text-[16px] font-extrabold text-black leading-tight pt-1.5">
+            <p className="text-body-lg font-extrabold text-black leading-tight pt-1.5">
               Mega-exposure on social media
             </p>
           </div>
           <div className="ml-15 pl-1">
-            <p className="text-[14px] text-b3 leading-relaxed mb-3" style={{ marginLeft: 60 }}>
+            <p className="text-body text-b3 leading-relaxed mb-3" style={{ marginLeft: 60 }}>
               Connectors that book a free service are required to share positive booking experiences
               with their social network and add to their Reco list.
             </p>
-            <p className="text-[14px] text-b3 leading-relaxed" style={{ marginLeft: 60 }}>
+            <p className="text-body text-b3 leading-relaxed" style={{ marginLeft: 60 }}>
               Get your Cergio profile seen by thousands of potential clients on social apps
               like Instagram.
             </p>
@@ -75,16 +75,16 @@ export function FreeBenefitsScreen() {
                 />
               </svg>
             </div>
-            <p className="text-[16px] font-extrabold text-black leading-tight pt-1.5">
+            <p className="text-body-lg font-extrabold text-black leading-tight pt-1.5">
               Instant verification
             </p>
           </div>
           <div className="ml-15 pl-1">
-            <p className="text-[14px] text-b3 leading-relaxed mb-3" style={{ marginLeft: 60 }}>
+            <p className="text-body text-b3 leading-relaxed mb-3" style={{ marginLeft: 60 }}>
               Complete a free service with a Cergio expert and become instantly verified
               when you are rated 4+ stars.
             </p>
-            <p className="text-[14px] text-b3 leading-relaxed" style={{ marginLeft: 60 }}>
+            <p className="text-body text-b3 leading-relaxed" style={{ marginLeft: 60 }}>
               Your verified service will be visible to users browsing through search.
               Verified services get more business and earn more money.
             </p>

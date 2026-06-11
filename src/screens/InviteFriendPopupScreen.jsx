@@ -70,12 +70,12 @@ export function InviteFriendPopupScreen() {
             <h1 className="text-[24px] font-extrabold text-black leading-tight tracking-tight">
               Invite friends — ${REWARDS.perFriendUser} credit each
             </h1>
-            <p className="text-[13px] text-b3 font-medium mt-2 leading-snug">
+            <p className="text-body-sm text-b3 font-medium mt-2 leading-snug">
               Both of you get ${REWARDS.perFriendUser} credit when they join + book.{' '}
               <button
                 type="button"
                 onClick={() => navigate('/rainmaker/apply')}
-                className="text-g underline underline-offset-2 font-bold"
+                className="text-g underline underline-offset-2 font-extrabold"
               >
                 Become a Connector → cash
               </button>
@@ -91,7 +91,7 @@ export function InviteFriendPopupScreen() {
 
         <button
           onClick={() => navigate('/earnings/how')}
-          className="text-[12px] font-bold text-g underline underline-offset-2 mb-5"
+          className="text-meta font-extrabold text-g underline underline-offset-2 mb-5"
         >
           How earnings work →
         </button>
@@ -121,7 +121,7 @@ function ActionRow({ icon, label, sub, onClick }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-[15px] font-extrabold text-black leading-tight">{label}</p>
-        {sub && <p className="text-[12px] text-b3 mt-0.5 leading-snug">{sub}</p>}
+        {sub && <p className="text-meta text-b3 mt-0.5 leading-snug">{sub}</p>}
       </div>
       <span className="text-b3 text-lg">›</span>
     </button>

@@ -49,17 +49,17 @@ export function EarningsBreakdownScreen() {
 
       <div className="px-5 pt-5 flex items-start justify-between">
         <div>
-          <p className="text-[13px] font-extrabold text-b3 uppercase tracking-widest mb-1">Balance</p>
+          <p className="text-body-sm font-extrabold text-b3 uppercase tracking-widest mb-1">Balance</p>
           <p className="text-[44px] font-extrabold text-black leading-none">
-            {fmtDollars(balanceCents)}<span className="text-[15px] text-b3 font-bold ml-1">USD</span>
+            {fmtDollars(balanceCents)}<span className="text-[15px] text-b3 font-extrabold ml-1">USD</span>
           </p>
         </div>
         <div className="w-14 h-14 rounded-full bg-gl border border-g/25 flex items-center justify-center">
-          <span className="text-gd text-[22px] font-extrabold">★</span>
+          <span className="text-gd text-heading-1 font-extrabold">★</span>
         </div>
       </div>
 
-      <p className="px-5 pt-8 pb-4 text-[13px] font-extrabold text-b3 uppercase tracking-widest">Breakdown</p>
+      <p className="px-5 pt-8 pb-4 text-body-sm font-extrabold text-b3 uppercase tracking-widest">Breakdown</p>
       <div className="px-5 flex flex-col gap-4 mb-8">
         {rows.map((r, i) => (
           <div key={i} className="flex items-center justify-between">
@@ -71,7 +71,7 @@ export function EarningsBreakdownScreen() {
 
       {balanceCents === 0 && (
         <div className="mx-5 mb-6 bg-soft rounded-[14px] p-4">
-          <p className="text-[13px] text-b3 leading-snug">
+          <p className="text-body-sm text-b3 leading-snug">
             No earnings yet. Invite a friend or recommend a service to start your balance.
           </p>
         </div>
@@ -84,13 +84,13 @@ export function EarningsBreakdownScreen() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 21c0-3 3-5 6-5s6 2 6 5"/><path d="M16 12c3 0 5 2 5 5"/></svg>
             </div>
             <div>
-              <p className="text-[14px] font-medium text-white/90">Friends invited</p>
-              <p className="text-[22px] font-extrabold text-white leading-tight">{friendsInvited}</p>
+              <p className="text-body font-medium text-white/90">Friends invited</p>
+              <p className="text-heading-1 font-extrabold text-white leading-tight">{friendsInvited}</p>
             </div>
           </div>
           <button
             onClick={() => navigate('/invite/friends-popup')}
-            className="bg-transparent border border-white/80 rounded-[24px] px-4 py-2.5 text-[13px] font-extrabold text-white"
+            className="bg-transparent border border-white/80 rounded-[24px] px-4 py-2.5 text-body-sm font-extrabold text-white"
           >
             Invite more
           </button>
@@ -101,13 +101,13 @@ export function EarningsBreakdownScreen() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M9 6V4h6v2"/></svg>
             </div>
             <div>
-              <p className="text-[14px] font-medium text-white/90">Services reco'd</p>
-              <p className="text-[22px] font-extrabold text-white leading-tight">{servicesRecoed}</p>
+              <p className="text-body font-medium text-white/90">Services reco'd</p>
+              <p className="text-heading-1 font-extrabold text-white leading-tight">{servicesRecoed}</p>
             </div>
           </div>
           <button
             onClick={() => navigate('/invite/recommend')}
-            className="bg-transparent border border-white/80 rounded-[24px] px-4 py-2.5 text-[13px] font-extrabold text-white"
+            className="bg-transparent border border-white/80 rounded-[24px] px-4 py-2.5 text-body-sm font-extrabold text-white"
           >
             Reco more
           </button>
@@ -119,7 +119,7 @@ export function EarningsBreakdownScreen() {
             updated to match the destination. */}
         <button
           onClick={() => navigate('/earnings')}
-          className="w-full text-center text-[13px] font-bold text-white mt-4 underline underline-offset-2"
+          className="w-full text-center text-body-sm font-extrabold text-white mt-4 underline underline-offset-2"
         >
           See invite earnings ›
         </button>

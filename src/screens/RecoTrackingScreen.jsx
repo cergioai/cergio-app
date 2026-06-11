@@ -188,8 +188,8 @@ export function RecoTrackingScreen() {
         </button>
       </div>
 
-      <h1 className="px-5 pt-3 text-[28px] font-extrabold text-black leading-tight">Recos</h1>
-      <p className="px-5 text-[13px] text-b3 mt-1 leading-snug">
+      <h1 className="px-5 pt-3 text-display-2 font-extrabold text-black leading-tight">Recos</h1>
+      <p className="px-5 text-body-sm text-b3 mt-1 leading-snug">
         Every service provider you&apos;ve reco&apos;d. Tap Edit to refine
         your note, Nudge to resend, or × to remove.
       </p>
@@ -197,11 +197,11 @@ export function RecoTrackingScreen() {
       {/* Stats strip — total reco'd + how many have claimed a profile */}
       <div className="px-5 mt-4 flex gap-2">
         <div className="flex-1 bg-white border border-bdr rounded-[12px] px-3 py-2 text-center">
-          <p className="text-[18px] font-extrabold text-black leading-none">{counts.total}</p>
+          <p className="text-heading-2 font-extrabold text-black leading-none">{counts.total}</p>
           <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">Reco&apos;d</p>
         </div>
         <div className="flex-1 bg-gl/60 border border-g/25 rounded-[12px] px-3 py-2 text-center">
-          <p className="text-[18px] font-extrabold text-gd leading-none">{counts.claimed}</p>
+          <p className="text-heading-2 font-extrabold text-gd leading-none">{counts.claimed}</p>
           <p className="text-[9.5px] font-extrabold uppercase tracking-wide text-gd mt-0.5">Claimed</p>
         </div>
       </div>
@@ -209,19 +209,19 @@ export function RecoTrackingScreen() {
       {/* List */}
       <div className="px-5 mt-4 flex flex-col gap-2.5">
         {rows === null && (
-          <p className="text-[13px] text-b3 py-4">Loading recos…</p>
+          <p className="text-body-sm text-b3 py-4">Loading recos…</p>
         )}
         {rows !== null && rows.length === 0 && (
           <div className="bg-white border border-bdr rounded-[14px] p-5 text-center">
-            <p className="text-[14px] font-extrabold text-black">No recos yet.</p>
-            <p className="text-[12px] text-b3 mt-1 leading-snug">
+            <p className="text-body font-extrabold text-black">No recos yet.</p>
+            <p className="text-meta text-b3 mt-1 leading-snug">
               Reco a service provider you know — when they claim their
               profile + earn, you earn ${REWARDS.perFriendUser}.
             </p>
             <button
               type="button"
               onClick={() => navigate('/invite/recommend')}
-              className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-[12px] font-extrabold cg-cta"
+              className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-meta font-extrabold cg-cta"
             >
               Reco someone →
             </button>
@@ -236,27 +236,27 @@ export function RecoTrackingScreen() {
             <div key={r.id} className="bg-white border border-bdr rounded-[14px] p-3.5">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#6090b0] to-[#305070]
-                                text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0">
+                                text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0">
                   {(name[0] || '?').toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <p className="text-[14px] font-extrabold text-black leading-tight truncate">{name}</p>
+                    <p className="text-body font-extrabold text-black leading-tight truncate">{name}</p>
                     {r.service_type_label && (
-                      <span className="text-[10px] font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-gl text-gd">
+                      <span className="text-caps font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-gl text-gd">
                         as {r.service_type_label}
                       </span>
                     )}
                     {r.recipient.id && (
-                      <span className="text-[10px] font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-warnBg text-warnText">
+                      <span className="text-caps font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-warnBg text-warnText">
                         Claimed
                       </span>
                     )}
                   </div>
                   {r.recipient.phone && r.recipient.display_name && (
-                    <p className="text-[11px] text-b3 mt-0.5 truncate">{r.recipient.phone}</p>
+                    <p className="text-meta-sm text-b3 mt-0.5 truncate">{r.recipient.phone}</p>
                   )}
-                  <p className="text-[11px] text-b3 mt-0.5">Sent {fmtAgo(r.sent_at)}</p>
+                  <p className="text-meta-sm text-b3 mt-0.5">Sent {fmtAgo(r.sent_at)}</p>
                 </div>
                 {/* Per-row × armed-state delete control — top-right so
                     it's reachable without scrolling into action affordances. */}
@@ -264,7 +264,7 @@ export function RecoTrackingScreen() {
                   type="button"
                   disabled={busy === 'delete'}
                   onClick={() => onDelete(r)}
-                  className={`text-[12px] font-extrabold rounded-pill px-2 py-1 transition-colors
+                  className={`text-meta font-extrabold rounded-pill px-2 py-1 transition-colors
                               ${isArmed
                                 ? 'bg-red-600 text-white'
                                 : 'bg-bg5 text-b3 hover:text-black'}`}
@@ -281,7 +281,7 @@ export function RecoTrackingScreen() {
                     value={draft}
                     onChange={e => setDraft(e.target.value)}
                     rows={3}
-                    className="w-full bg-bg5 border border-bdr rounded-[10px] p-2 text-[13px] text-black leading-snug
+                    className="w-full bg-bg5 border border-bdr rounded-[10px] p-2 text-body-sm text-black leading-snug
                                focus:outline-none focus:ring-2 focus:ring-g/40"
                     placeholder={r.service_type_label ? `Why they're a great ${r.service_type_label}` : 'Why you reco this person'}
                   />
@@ -290,14 +290,14 @@ export function RecoTrackingScreen() {
                       type="button"
                       disabled={busy === 'save'}
                       onClick={() => saveEdit(r)}
-                      className="bg-g text-white rounded-pill px-3 py-1 text-[12px] font-extrabold disabled:opacity-60"
+                      className="bg-g text-white rounded-pill px-3 py-1 text-meta font-extrabold disabled:opacity-60"
                     >
                       {busy === 'save' ? 'Saving…' : 'Save'}
                     </button>
                     <button
                       type="button"
                       onClick={cancelEdit}
-                      className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-[12px] font-extrabold"
+                      className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-meta font-extrabold"
                     >
                       Cancel
                     </button>
@@ -318,18 +318,18 @@ export function RecoTrackingScreen() {
                   <button
                     type="button"
                     onClick={() => startEdit(r)}
-                    className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-[12px] font-extrabold hover:border-g/40"
+                    className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-meta font-extrabold hover:border-g/40"
                   >
                     Edit
                   </button>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-b3 ml-1">
+                  <span className="text-meta-sm font-extrabold uppercase tracking-wide text-b3 ml-1">
                     Nudge
                   </span>
                   <button
                     type="button"
                     disabled={!!busy}
                     onClick={() => onResend(r, 'whatsapp')}
-                    className="bg-[#25D366] text-white rounded-pill px-3 py-1 text-[12px] font-extrabold disabled:opacity-60"
+                    className="bg-[#25D366] text-white rounded-pill px-3 py-1 text-meta font-extrabold disabled:opacity-60"
                   >
                     {busy === 'whatsapp' ? '…' : 'WhatsApp'}
                   </button>
@@ -337,7 +337,7 @@ export function RecoTrackingScreen() {
                     type="button"
                     disabled={!!busy}
                     onClick={() => onResend(r, 'sms')}
-                    className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-[12px] font-extrabold disabled:opacity-60"
+                    className="bg-white border border-bdr text-b2 rounded-pill px-3 py-1 text-meta font-extrabold disabled:opacity-60"
                   >
                     {busy === 'sms' ? '…' : 'SMS'}
                   </button>
@@ -345,7 +345,7 @@ export function RecoTrackingScreen() {
                     type="button"
                     disabled={!!busy}
                     onClick={() => onResend(r, 'copy')}
-                    className="text-gd font-extrabold text-[12px] underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer disabled:opacity-60"
+                    className="text-gd font-extrabold text-meta underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer disabled:opacity-60"
                   >
                     {busy === 'copy' ? '…' : 'Copy link'}
                   </button>

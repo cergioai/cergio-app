@@ -14,7 +14,7 @@ import { supabase } from '../lib/supabase';
 const OPTIONS = [
   { id: 'available',    label: 'Available',           dot: 'bg-g',         copy: 'Bookings on this date will automatically be accepted' },
   { id: 'request_only', label: 'Request only',        dot: 'bg-warn',      copy: 'Customers can only send you requests that you can manually accept or decline.' },
-  { id: 'unavailable',  label: "I'm not available",   dot: 'bg-[#E05A3A]', copy: 'Customers will not be able to book or request you at this time. This setting should only be on when you cannot work.' },
+  { id: 'unavailable',  label: "I'm not available",   dot: 'bg-danger', copy: 'Customers will not be able to book or request you at this time. This setting should only be on when you cannot work.' },
 ];
 
 function formatHour(h) {
@@ -107,8 +107,8 @@ export function AvailabilityScreen() {
 
       {/* heading */}
       <div className="px-5 pt-2 pb-5">
-        <h1 className="text-[28px] font-extrabold text-black tracking-tight">Availability</h1>
-        <p className="text-[14px] text-b3 mt-1">{dateLabel}</p>
+        <h1 className="text-display-2 font-extrabold text-black tracking-tight">Availability</h1>
+        <p className="text-body text-b3 mt-1">{dateLabel}</p>
       </div>
 
       {/* options */}
@@ -123,10 +123,10 @@ export function AvailabilityScreen() {
             >
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-[16px] font-extrabold text-black">{o.label}</p>
+                  <p className="text-body-lg font-extrabold text-black">{o.label}</p>
                   <span className={`w-2.5 h-2.5 rounded-full ${o.dot}`} />
                 </div>
-                <p className="text-[13px] text-b3 mt-1 leading-relaxed">{o.copy}</p>
+                <p className="text-body-sm text-b3 mt-1 leading-relaxed">{o.copy}</p>
               </div>
               <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center
                               ${active ? 'bg-g border-2 border-g' : 'bg-white border-2 border-bdr'}`}>
@@ -145,23 +145,23 @@ export function AvailabilityScreen() {
       {status !== 'unavailable' && (
         <div className="px-5 pt-6 pb-2">
           <p className="text-[20px] font-extrabold text-black mb-1">Service hours</p>
-          <p className="text-[14px] text-b3 leading-relaxed mb-5">
+          <p className="text-body text-b3 leading-relaxed mb-5">
             What is the earliest and latest time you'll accept reservations on this date?
           </p>
 
           <div className="flex items-center justify-between mb-5">
             <div className="bg-bg5 rounded-[14px] px-5 py-3 min-w-[110px] text-center">
-              <p className="text-[18px] font-extrabold text-black">{formatHour(startHr)}</p>
+              <p className="text-heading-2 font-extrabold text-black">{formatHour(startHr)}</p>
             </div>
-            <span className="text-[14px] text-b3 font-medium">and</span>
+            <span className="text-body text-b3 font-medium">and</span>
             <div className="bg-bg5 rounded-[14px] px-5 py-3 min-w-[110px] text-center">
-              <p className="text-[18px] font-extrabold text-black">{formatHour(endHr)}</p>
+              <p className="text-heading-2 font-extrabold text-black">{formatHour(endHr)}</p>
             </div>
           </div>
 
           {/* range slider — start */}
           <div className="px-1 mb-3">
-            <label className="block text-[12px] font-bold text-b3 uppercase tracking-wide mb-1">Start</label>
+            <label className="block text-meta font-extrabold text-b3 uppercase tracking-wide mb-1">Start</label>
             <input
               type="range" min="0" max="23" value={startHr}
               onChange={e => setStartHr(Math.min(parseInt(e.target.value, 10), endHr - 1))}
@@ -169,7 +169,7 @@ export function AvailabilityScreen() {
             />
           </div>
           <div className="px-1">
-            <label className="block text-[12px] font-bold text-b3 uppercase tracking-wide mb-1">End</label>
+            <label className="block text-meta font-extrabold text-b3 uppercase tracking-wide mb-1">End</label>
             <input
               type="range" min="1" max="23" value={endHr}
               onChange={e => setEndHr(Math.max(parseInt(e.target.value, 10), startHr + 1))}
@@ -189,7 +189,7 @@ export function AvailabilityScreen() {
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
-        <p className="text-[11px] text-b3 mt-3 leading-snug text-center">
+        <p className="text-meta-sm text-b3 mt-3 leading-snug text-center">
           Your choice is saved to your account. Auto-blocking of
           bookings on unavailable dates launches with full scheduling
           — please still manually decline requests on blocked dates

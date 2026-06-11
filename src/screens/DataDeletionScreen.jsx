@@ -19,7 +19,7 @@ export function DataDeletionScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-12">
       <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
-        <h1 className="text-[28px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           Delete your<br />Cergio data
         </h1>
         <button
@@ -31,14 +31,14 @@ export function DataDeletionScreen() {
         </button>
       </div>
 
-      <div className="px-5 mt-6 flex flex-col gap-5 text-[14px] text-black leading-relaxed">
+      <div className="px-5 mt-6 flex flex-col gap-5 text-body text-black leading-relaxed">
         <p>
           You can delete your Cergio account and all associated data at any
           time. We process deletions within <strong>30 days</strong>.
         </p>
 
         <div>
-          <h2 className="text-[18px] font-extrabold text-black mb-2">What gets deleted</h2>
+          <h2 className="text-heading-2 font-extrabold text-black mb-2">What gets deleted</h2>
           <ul className="list-disc pl-5 space-y-1.5 text-b2">
             <li>Your profile, name, mobile, email.</li>
             <li>Connected social handles (Instagram, TikTok) and any cached follower counts.</li>
@@ -51,7 +51,7 @@ export function DataDeletionScreen() {
         </div>
 
         <div>
-          <h2 className="text-[18px] font-extrabold text-black mb-2">Option 1 — delete from the app</h2>
+          <h2 className="text-heading-2 font-extrabold text-black mb-2">Option 1 — delete from the app</h2>
           {/* CERGIO-GUARD: the in-app "Delete my account" button used to
               toast "Account deletion request received…" without actually
               firing anything (the delete-account edge function was a
@@ -88,7 +88,7 @@ export function DataDeletionScreen() {
         </div>
 
         <div>
-          <h2 className="text-[18px] font-extrabold text-black mb-2">Option 2 — email us</h2>
+          <h2 className="text-heading-2 font-extrabold text-black mb-2">Option 2 — email us</h2>
           <p className="text-b2 mb-2">
             Email <strong className="text-black">privacy@cergio.ai</strong>{' '}
             from the address on your Cergio account. Subject: "Delete my data".
@@ -97,7 +97,7 @@ export function DataDeletionScreen() {
         </div>
 
         <div>
-          <h2 className="text-[18px] font-extrabold text-black mb-2">Revoking Instagram / TikTok access</h2>
+          <h2 className="text-heading-2 font-extrabold text-black mb-2">Revoking Instagram / TikTok access</h2>
           <p className="text-b2">
             If you only want to disconnect a social account (not delete your
             Cergio account), open the app you want to disconnect:

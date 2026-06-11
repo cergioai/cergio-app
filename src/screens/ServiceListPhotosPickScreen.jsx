@@ -32,7 +32,7 @@ export function ServiceListPhotosPickScreen() {
       <div className="flex items-center justify-between px-5 pt-5 pb-4">
         <button
           onClick={() => navigate(-1)}
-          className="text-2xl text-black font-bold w-9 h-9 flex items-center justify-center"
+          className="text-2xl text-black font-extrabold w-9 h-9 flex items-center justify-center"
         >
           ✕
         </button>
@@ -71,7 +71,7 @@ export function ServiceListPhotosPickScreen() {
       {/* footer */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px]
                       bg-white border-t border-bdr px-5 py-4 flex items-center justify-between">
-        <span className="text-[13px] text-b3">Choose at least 5</span>
+        <span className="text-body-sm text-b3">Choose at least 5</span>
         <button
           onClick={() => {
             if (!enough) return;

@@ -61,7 +61,7 @@ export function ServiceListWelcomeScreen() {
           <Step n="2" body="Add a few photos and your verification info" />
           <Step n="3" body="Invite your clients + friends to find you here" />
         </div>
-        <p className="text-[14px] text-b3 leading-relaxed font-medium">
+        <p className="text-body text-b3 leading-relaxed font-medium">
           Takes about 5 minutes. Ready?
         </p>
       </div>
@@ -83,11 +83,11 @@ export function ServiceListWelcomeScreen() {
 function Step({ n, body }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-6 h-6 rounded-full bg-gl text-gd text-[11px] font-extrabold
+      <span className="w-6 h-6 rounded-full bg-gl text-gd text-meta-sm font-extrabold
                        flex items-center justify-center flex-shrink-0">
         {n}
       </span>
-      <p className="text-[14px] text-b2 font-medium leading-snug">{body}</p>
+      <p className="text-body text-b2 font-medium leading-snug">{body}</p>
     </div>
   );
 }

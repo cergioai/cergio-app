@@ -51,7 +51,7 @@ export function CounterSpotlightModal({ request, role = 'connector', onClose, on
         <h2 className="text-[20px] font-extrabold text-black leading-tight mb-1">
           {request.offered_price_cents != null ? 'Counter back' : 'Offer a lower price'}
         </h2>
-        <p className="text-[12px] text-b3 mb-4 leading-relaxed">
+        <p className="text-meta text-b3 mb-4 leading-relaxed">
           Current ask is <strong className="text-black">{fmtDollars(currentCents)}</strong>{' '}
           for {request.platform === 'instagram' ? 'an Instagram' : 'a TikTok'} post
           {request.offered_price_cents != null && (
@@ -61,7 +61,7 @@ export function CounterSpotlightModal({ request, role = 'connector', onClose, on
 
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div className="bg-white border-2 border-bdr rounded-[14px] px-3.5 py-3 flex items-center gap-2 focus-within:border-g">
-            <span className="text-[16px] font-extrabold text-b3">$</span>
+            <span className="text-body-lg font-extrabold text-b3">$</span>
             <input
               type="text"
               inputMode="decimal"
@@ -71,32 +71,32 @@ export function CounterSpotlightModal({ request, role = 'connector', onClose, on
               className="flex-1 bg-transparent text-[20px] font-extrabold text-black outline-none"
               autoFocus
             />
-            <span className="text-[12px] font-bold text-b3">/post</span>
+            <span className="text-meta font-extrabold text-b3">/post</span>
           </div>
 
           {/* Breakdown card */}
           {valid && (
             <div className="bg-gl border border-g/30 rounded-[14px] px-3.5 py-3">
-              <div className="flex items-center justify-between text-[13px] mb-1">
-                <span className="text-gd font-bold">{role === 'connector' ? 'They save' : 'You save'}</span>
+              <div className="flex items-center justify-between text-body-sm mb-1">
+                <span className="text-gd font-extrabold">{role === 'connector' ? 'They save' : 'You save'}</span>
                 <span className="font-extrabold text-gd">{fmtDollars(savingsCents)}</span>
               </div>
-              <div className="flex items-center justify-between text-[12px] text-gd/80">
+              <div className="flex items-center justify-between text-meta text-gd/80">
                 <span>{role === 'connector' ? 'You earn' : 'Connector earns'}</span>
                 <span>{fmtDollars(sellerEarningsCents(offerCents))}</span>
               </div>
-              <div className="flex items-center justify-between text-[12px] text-gd/80">
+              <div className="flex items-center justify-between text-meta text-gd/80">
                 <span>Cergio fee ({Math.round(PLATFORM_FEE_RATE * 100)}%)</span>
                 <span>{fmtDollars(platformFeeCents(offerCents))}</span>
               </div>
             </div>
           )}
           {offerCents != null && offerCents >= currentCents && (
-            <p className="text-[12px] text-danger font-bold">
+            <p className="text-meta text-danger font-extrabold">
               Counter must be less than the current ask ({fmtDollars(currentCents)}).
             </p>
           )}
-          {err && <p className="text-[12px] text-danger font-bold">{err}</p>}
+          {err && <p className="text-meta text-danger font-extrabold">{err}</p>}
 
           <button
             type="submit"
@@ -112,7 +112,7 @@ export function CounterSpotlightModal({ request, role = 'connector', onClose, on
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="w-full text-[13px] font-extrabold text-b3 py-2 disabled:opacity-50"
+            className="w-full text-body-sm font-extrabold text-b3 py-2 disabled:opacity-50"
           >
             Cancel
           </button>

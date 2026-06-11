@@ -37,8 +37,8 @@ export function ServiceListAddNewOfferingScreen() {
     <div className="flex-1 flex flex-col bg-cr">
       {/* header — no back chevron, just title + sub */}
       <div className="bg-gradient-to-b from-gm to-g px-7 pt-12 pb-12 flex flex-col justify-end min-h-[260px]">
-        <h1 className="text-[28px] font-extrabold text-white leading-tight">Add new offering</h1>
-        <p className="text-[14px] text-white/85 mt-2">List an hourly or session-based offering</p>
+        <h1 className="text-display-2 font-extrabold text-white leading-tight">Add new offering</h1>
+        <p className="text-body text-white/85 mt-2">List an hourly or session-based offering</p>
       </div>
 
       {/* sheet */}
@@ -73,19 +73,19 @@ export function ServiceListAddNewOfferingScreen() {
             <Field label="Session price" placeholder="$ USD"
                    value={sessionPrice} onChange={setSP} />
             <div className="mb-6">
-              <label className="block text-[18px] font-extrabold text-black mb-2.5">Duration</label>
+              <label className="block text-heading-2 font-extrabold text-black mb-2.5">Duration</label>
               <div className="flex gap-3">
                 <input
                   type="number" inputMode="numeric"
                   value={duration} onChange={e => setDur(e.target.value)}
                   placeholder="30"
-                  className="w-1/3 bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+                  className="w-1/3 bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                              placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
                 />
                 <div className="relative flex-1">
                   <select
                     value={unit} onChange={e => setUnit(e.target.value)}
-                    className="w-full appearance-none bg-bg5 rounded-[14px] px-4 py-4 pr-10 text-[14px]
+                    className="w-full appearance-none bg-bg5 rounded-[14px] px-4 py-4 pr-10 text-body
                                text-black outline-none focus:ring-2 focus:ring-g/30 font-sans"
                   >
                     {DURATION_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
@@ -98,11 +98,11 @@ export function ServiceListAddNewOfferingScreen() {
         )}
 
         <div className="mb-6">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Description</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Description</label>
           <textarea
             value={desc} onChange={e => setDesc(e.target.value)}
             placeholder="What can users expect from this offering?" rows={4}
-            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans"
           />
         </div>
@@ -156,11 +156,11 @@ export function ServiceListAddNewOfferingScreen() {
 function Field({ label, placeholder, value, onChange }) {
   return (
     <div className="mb-6">
-      <label className="block text-[18px] font-extrabold text-black mb-2.5">{label}</label>
+      <label className="block text-heading-2 font-extrabold text-black mb-2.5">{label}</label>
       <input
         type="text" value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+        className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                    placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
       />
     </div>

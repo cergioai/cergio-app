@@ -56,7 +56,7 @@ export function RainmakerApplyScreen() {
             who a Connector is + why it matters. Frames the role around
             shared prosperity and asset-participation growth rather than
             a generic "share in the upside." */}
-        <p className="text-[13px] text-white/90 leading-relaxed mt-2 font-medium">
+        <p className="text-body-sm text-white/90 leading-relaxed mt-2 font-medium">
           Creators, influencers, and super-users with strong local networks
           — driving shared prosperity and asset-participation growth in the
           communities they already shape.
@@ -66,48 +66,48 @@ export function RainmakerApplyScreen() {
       {/* sheet */}
       <div className="bg-cr rounded-t-[28px] -mt-7 px-5 pt-7 flex-1 pb-32 overflow-y-auto">
         {/* ── Benefits comparison: User vs Connector ─────────────────── */}
-        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">
+        <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-3">
           What you earn
         </p>
         <div className="grid grid-cols-2 gap-2 mb-6">
           {/* User column */}
           <div className="bg-white border border-bdr rounded-[16px] p-4">
-            <p className="text-[11px] font-extrabold uppercase tracking-wide text-b3 mb-1">User</p>
-            <p className="text-[14px] font-extrabold text-black leading-tight">${PER_FRIEND} credit</p>
-            <p className="text-[11px] text-b3 mt-0.5 leading-snug">per friend who joins + books</p>
-            <ul className="mt-3 space-y-1 text-[11px] text-b2 leading-snug">
+            <p className="text-meta-sm font-extrabold uppercase tracking-wide text-b3 mb-1">User</p>
+            <p className="text-body font-extrabold text-black leading-tight">${PER_FRIEND} credit</p>
+            <p className="text-meta-sm text-b3 mt-0.5 leading-snug">per friend who joins + books</p>
+            <ul className="mt-3 space-y-1 text-meta-sm text-b2 leading-snug">
               <li>• Free services credit</li>
-              <li>• <span className="font-bold">+{REWARDS.friendOfFriendPercent}% (${REWARDS.friendOfFriendBonus})</span> when friends bring friends</li>
+              <li>• <span className="font-extrabold">+{REWARDS.friendOfFriendPercent}% (${REWARDS.friendOfFriendBonus})</span> when friends bring friends</li>
               <li>• Growth Participation Income</li>
             </ul>
           </div>
           {/* Connector column */}
           <div className="bg-gl border border-g/30 rounded-[16px] p-4">
-            <p className="text-[11px] font-extrabold uppercase tracking-wide text-gd mb-1">Connector</p>
-            <p className="text-[14px] font-extrabold text-black leading-tight">${PER_FRIEND} cash</p>
-            <p className="text-[11px] text-gd/80 mt-0.5 leading-snug">per friend who joins + books</p>
-            <ul className="mt-3 space-y-1 text-[11px] text-b2 leading-snug">
-              <li>• <span className="font-bold">Free services</span> (providers pay in spotlights)</li>
-              <li>• <span className="font-bold">+{REWARDS.friendOfFriendPercent}% (${REWARDS.friendOfFriendBonus})</span> on second-tier signups</li>
-              <li>• <span className="font-bold">Growth Participation Income</span> — higher score</li>
-              <li>• <span className="font-bold">Spotlight rate card</span> — paid posts</li>
+            <p className="text-meta-sm font-extrabold uppercase tracking-wide text-gd mb-1">Connector</p>
+            <p className="text-body font-extrabold text-black leading-tight">${PER_FRIEND} cash</p>
+            <p className="text-meta-sm text-gd/80 mt-0.5 leading-snug">per friend who joins + books</p>
+            <ul className="mt-3 space-y-1 text-meta-sm text-b2 leading-snug">
+              <li>• <span className="font-extrabold">Free services</span> (providers pay in spotlights)</li>
+              <li>• <span className="font-extrabold">+{REWARDS.friendOfFriendPercent}% (${REWARDS.friendOfFriendBonus})</span> on second-tier signups</li>
+              <li>• <span className="font-extrabold">Growth Participation Income</span> — higher score</li>
+              <li>• <span className="font-extrabold">Spotlight rate card</span> — paid posts</li>
             </ul>
           </div>
         </div>
 
         {/* ── Compounding example ───────────────────────────────────── */}
         <div className="bg-white border border-bdr rounded-[18px] p-5 mb-6">
-          <p className="text-[12px] font-extrabold uppercase tracking-widest text-b3 mb-1">
+          <p className="text-meta font-extrabold uppercase tracking-widest text-b3 mb-1">
             The math
           </p>
           <p className="text-[20px] font-extrabold text-black leading-tight">
             {EXAMPLE_FRIENDS} friends → ${EXAMPLE_TOTAL.toLocaleString()}
           </p>
-          <p className="text-[12px] text-b3 mt-2 leading-snug">
+          <p className="text-meta text-b3 mt-2 leading-snug">
             Each friend who joins + books = ${PER_FRIEND} to you. Bring 50 and you're at
-            <span className="font-bold text-black"> ${EXAMPLE_TOTAL.toLocaleString()}</span>.
+            <span className="font-extrabold text-black"> ${EXAMPLE_TOTAL.toLocaleString()}</span>.
           </p>
-          <p className="text-[12px] text-b3 mt-2 leading-snug">
+          <p className="text-meta text-b3 mt-2 leading-snug">
             It compounds: when your friends recommend services that get booked,
             those bookings add to your pool too. Your network does the work — you
             earn the upside.
@@ -115,7 +115,7 @@ export function RainmakerApplyScreen() {
         </div>
 
         {/* ── Type selector ─────────────────────────────────────────── */}
-        <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mb-3">
+        <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-3">
           I am a…
         </p>
         <div className="flex flex-col gap-2">
@@ -128,14 +128,14 @@ export function RainmakerApplyScreen() {
                 className={`w-full text-left p-4 rounded-[16px] border transition-colors
                   ${active ? 'bg-gl border-g/60' : 'bg-white border-bdr hover:border-g/40'}`}
               >
-                <p className="text-[14px] font-extrabold text-black mb-0.5">{t.title}</p>
-                <p className="text-[12px] text-b3 leading-relaxed">{t.desc}</p>
+                <p className="text-body font-extrabold text-black mb-0.5">{t.title}</p>
+                <p className="text-meta text-b3 leading-relaxed">{t.desc}</p>
               </button>
             );
           })}
         </div>
 
-        <p className="text-[11px] text-gd/80 font-normal mt-6 leading-snug text-center">
+        <p className="text-meta-sm text-gd/80 font-normal mt-6 leading-snug text-center">
           Cergio's mission: friend-powered AI — built so we all prosper together.
         </p>
       </div>

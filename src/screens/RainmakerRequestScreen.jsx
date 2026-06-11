@@ -44,8 +44,8 @@ function BenefitRow({ title, subtitle }) {
         </svg>
       </div>
       <div className="flex-1">
-        <p className="text-[16px] font-extrabold text-black leading-tight mb-1">{title}</p>
-        <p className="text-[14px] text-g font-medium leading-relaxed">{subtitle}</p>
+        <p className="text-body-lg font-extrabold text-black leading-tight mb-1">{title}</p>
+        <p className="text-body text-g font-medium leading-relaxed">{subtitle}</p>
       </div>
     </div>
   );

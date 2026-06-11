@@ -118,7 +118,7 @@ export function CrossPostScreen() {
       <div className="px-5 pt-8 pb-2 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-extrabold text-black leading-tight">Your free profile,<br />everywhere</h1>
-          <p className="text-[13px] text-b3 mt-1">Push your Cergio listing to the places customers search — free.</p>
+          <p className="text-body-sm text-b3 mt-1">Push your Cergio listing to the places customers search — free.</p>
         </div>
         <button
           onClick={() => navigate(-1)}
@@ -128,17 +128,17 @@ export function CrossPostScreen() {
       </div>
 
       {loading ? (
-        <div className="px-5 mt-8 text-b3 text-[14px]">Loading…</div>
+        <div className="px-5 mt-8 text-b3 text-body">Loading…</div>
       ) : !serviceId || !service ? (
-        <div className="px-5 mt-8 text-b3 text-[14px]">
+        <div className="px-5 mt-8 text-b3 text-body">
           Open this from one of your listings to cross-post it.
         </div>
       ) : (
         <>
           <div className="px-5 mt-3">
             <div className="rounded-2xl bg-card border border-line p-4">
-              <p className="text-[12px] text-b3">Cross-posting</p>
-              <p className="text-[15px] font-bold text-black mt-0.5">{service.title}</p>
+              <p className="text-meta text-b3">Cross-posting</p>
+              <p className="text-[15px] font-extrabold text-black mt-0.5">{service.title}</p>
             </div>
           </div>
 
@@ -147,12 +147,12 @@ export function CrossPostScreen() {
             <button
               onClick={postAllConnected}
               disabled={!!busy}
-              className="w-full h-12 rounded-full bg-g text-white font-bold text-[15px]
+              className="w-full h-12 rounded-full bg-g text-white font-extrabold text-[15px]
                          shadow-card disabled:opacity-60 hover:bg-gd transition-colors"
             >
               {busy ? 'Posting…' : 'Post to all connected channels'}
             </button>
-            <p className="text-[11px] text-b3 mt-2 text-center">
+            <p className="text-meta-sm text-b3 mt-2 text-center">
               Posts to Google, Instagram &amp; TikTok where connected. Craigslist below.
             </p>
           </div>
@@ -167,13 +167,13 @@ export function CrossPostScreen() {
                 <div key={c.key} className="rounded-2xl bg-card border border-line p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-[22px] leading-none">{c.emoji}</span>
+                      <span className="text-heading-1 leading-none">{c.emoji}</span>
                       <div className="min-w-0">
-                        <p className="text-[15px] font-bold text-black truncate">{c.label}</p>
-                        <p className="text-[12px] text-b3 truncate">{c.blurb}</p>
+                        <p className="text-[15px] font-extrabold text-black truncate">{c.label}</p>
+                        <p className="text-meta text-b3 truncate">{c.blurb}</p>
                       </div>
                     </div>
-                    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${pill.cls}`}>
+                    <span className={`text-meta-sm font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${pill.cls}`}>
                       {pill.text}
                     </span>
                   </div>
@@ -183,7 +183,7 @@ export function CrossPostScreen() {
                       <button
                         onClick={() => doPost('craigslist')}
                         disabled={busy === 'craigslist'}
-                        className="flex-1 h-10 rounded-full border border-g text-gd font-bold text-[13px]
+                        className="flex-1 h-10 rounded-full border border-g text-gd font-extrabold text-body-sm
                                    hover:bg-gl transition-colors disabled:opacity-60"
                       >
                         {busy === 'craigslist' ? 'Preparing…' : 'Get my Craigslist post'}
@@ -192,7 +192,7 @@ export function CrossPostScreen() {
                       <button
                         onClick={() => doPost(c.key)}
                         disabled={busy === c.key}
-                        className="flex-1 h-10 rounded-full bg-g text-white font-bold text-[13px]
+                        className="flex-1 h-10 rounded-full bg-g text-white font-extrabold text-body-sm
                                    hover:bg-gd transition-colors disabled:opacity-60"
                       >
                         {busy === c.key ? 'Posting…' : `Post to ${c.label}`}
@@ -201,7 +201,7 @@ export function CrossPostScreen() {
                       <button
                         onClick={() => handleConnect(c.key)}
                         disabled={busy === c.key}
-                        className="flex-1 h-10 rounded-full border border-g text-gd font-bold text-[13px]
+                        className="flex-1 h-10 rounded-full border border-g text-gd font-extrabold text-body-sm
                                    hover:bg-gl transition-colors disabled:opacity-60"
                       >
                         {busy === c.key ? 'Connecting…' : `Connect ${c.label}`}
@@ -217,17 +217,17 @@ export function CrossPostScreen() {
           {cl && (
             <div className="px-5 mt-5">
               <div className="rounded-2xl bg-soft border border-line p-4">
-                <p className="text-[14px] font-extrabold text-black">Your Craigslist post</p>
-                <p className="text-[12px] text-b3 mt-0.5">Copy this, then follow the steps.</p>
+                <p className="text-body font-extrabold text-black">Your Craigslist post</p>
+                <p className="text-meta text-b3 mt-0.5">Copy this, then follow the steps.</p>
                 <div className="mt-3 rounded-xl bg-white border border-bdr p-3">
-                  <p className="text-[13px] font-bold text-black">{cl.post.title}</p>
-                  <p className="text-[13px] text-b2 mt-2 whitespace-pre-line">{cl.post.body}</p>
+                  <p className="text-body-sm font-extrabold text-black">{cl.post.title}</p>
+                  <p className="text-body-sm text-b2 mt-2 whitespace-pre-line">{cl.post.body}</p>
                 </div>
                 <button
                   onClick={copyCl}
-                  className="mt-3 w-full h-10 rounded-full bg-g text-white font-bold text-[13px] hover:bg-gd transition-colors"
+                  className="mt-3 w-full h-10 rounded-full bg-g text-white font-extrabold text-body-sm hover:bg-gd transition-colors"
                 >Copy post</button>
-                <ol className="mt-4 pl-5 list-decimal text-[13px] text-b2 space-y-1.5">
+                <ol className="mt-4 pl-5 list-decimal text-body-sm text-b2 space-y-1.5">
                   {cl.steps.map((s, i) => <li key={i}>{s}</li>)}
                 </ol>
               </div>

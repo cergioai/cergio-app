@@ -15,7 +15,7 @@ export function PrivacyPolicyScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-12">
       <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
-        <h1 className="text-[28px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           Privacy Policy
         </h1>
         <button
@@ -26,9 +26,9 @@ export function PrivacyPolicyScreen() {
           ✕
         </button>
       </div>
-      <p className="px-5 text-[13px] text-b3 mt-1">Last updated: June 10, 2026</p>
+      <p className="px-5 text-body-sm text-b3 mt-1">Last updated: June 10, 2026</p>
 
-      <div className="px-5 mt-6 flex flex-col gap-5 text-[14px] text-black leading-relaxed">
+      <div className="px-5 mt-6 flex flex-col gap-5 text-body text-black leading-relaxed">
 
         <Section title="1. Who we are">
           Cergio is a services marketplace operated by{' '}
@@ -147,7 +147,7 @@ export function PrivacyPolicyScreen() {
           delete your account at any time. See the{' '}
           <button
             onClick={() => navigate('/data-deletion')}
-            className="text-gd font-bold underline underline-offset-2"
+            className="text-gd font-extrabold underline underline-offset-2"
           >
             Data Deletion page
           </button>{' '}
@@ -208,8 +208,8 @@ export function PrivacyPolicyScreen() {
 function Section({ title, children }) {
   return (
     <div>
-      <h2 className="text-[18px] font-extrabold text-black mb-2">{title}</h2>
-      <div className="text-[14px] text-b2 leading-relaxed">{children}</div>
+      <h2 className="text-heading-2 font-extrabold text-black mb-2">{title}</h2>
+      <div className="text-body text-b2 leading-relaxed">{children}</div>
     </div>
   );
 }

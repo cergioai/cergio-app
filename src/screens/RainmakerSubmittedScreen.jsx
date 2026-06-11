@@ -17,7 +17,7 @@ export function RainmakerSubmittedScreen() {
       <div className="px-5 pt-6">
         <button
           onClick={() => navigate('/rainmakers')}
-          className="text-white text-2xl font-bold"
+          className="text-white text-2xl font-extrabold"
           aria-label="Back"
         >
           ‹

@@ -389,8 +389,8 @@ export function RewardFlowAnimation() {
 
       {/* Caption */}
       <div className="py-3 px-1">
-        <p className="text-[16px] font-extrabold text-black leading-tight">{s.title}</p>
-        <p className="text-[12px] text-b3 mt-1.5 leading-snug">{s.body()}</p>
+        <p className="text-body-lg font-extrabold text-black leading-tight">{s.title}</p>
+        <p className="text-meta text-b3 mt-1.5 leading-snug">{s.body()}</p>
       </div>
 
       {/* Controls */}
@@ -398,7 +398,7 @@ export function RewardFlowAnimation() {
         <button
           onClick={prev}
           aria-label="Previous scene"
-          className="text-[12px] font-bold text-b2 bg-white border border-bdr rounded-pill px-3 py-1.5 cg-cta-ghost"
+          className="text-meta font-extrabold text-b2 bg-white border border-bdr rounded-pill px-3 py-1.5 cg-cta-ghost"
         >
           Back
         </button>
@@ -411,7 +411,7 @@ export function RewardFlowAnimation() {
         <button
           onClick={step === STEPS.length - 1 ? replay : next}
           aria-label={step === STEPS.length - 1 ? 'Replay scenes' : 'Next scene'}
-          className="text-[12px] font-bold text-white bg-g rounded-pill px-3 py-1.5 cg-cta"
+          className="text-meta font-extrabold text-white bg-g rounded-pill px-3 py-1.5 cg-cta"
         >
           {step === STEPS.length - 1 ? 'Replay' : 'Next'}
         </button>

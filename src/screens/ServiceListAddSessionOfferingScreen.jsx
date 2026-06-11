@@ -26,39 +26,39 @@ export function ServiceListAddSessionOfferingScreen() {
 
       <div className="bg-cr rounded-t-[28px] -mt-7 px-7 pt-7 flex-1 pb-32 overflow-y-auto">
         <div className="mb-6">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Offering name</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Offering name</label>
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="Personal Training Session"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
         </div>
 
         <div className="mb-6">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Session price</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Session price</label>
           <input
             type="text" value={price} onChange={e => setPrice(e.target.value)}
             placeholder="$150"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
         </div>
 
         <div className="mb-6">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Session duration</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Session duration</label>
           <div className="flex gap-3">
             <input
               type="number" inputMode="numeric"
               value={duration} onChange={e => setDur(e.target.value)}
               placeholder="30"
-              className="w-1/3 bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+              className="w-1/3 bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                          placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
             />
             <div className="relative flex-1">
               <select
                 value={unit} onChange={e => setUnit(e.target.value)}
-                className="w-full appearance-none bg-bg5 rounded-[14px] px-4 py-4 pr-10 text-[14px]
+                className="w-full appearance-none bg-bg5 rounded-[14px] px-4 py-4 pr-10 text-body
                            text-black outline-none focus:ring-2 focus:ring-g/30 font-sans"
               >
                 {DURATION_UNITS.map(u => <option key={u} value={u}>{u}</option>)}

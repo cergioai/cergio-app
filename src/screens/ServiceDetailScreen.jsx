@@ -481,7 +481,7 @@ export function ServiceDetailScreen() {
         </button>
 
         {/* Caption — sits just above the ruler */}
-        <p className="absolute bottom-7 left-16 right-5 text-white text-meta font-bold drop-shadow">
+        <p className="absolute bottom-7 left-16 right-5 text-white text-meta font-extrabold drop-shadow">
           Running all the errands you need
         </p>
 
@@ -611,7 +611,7 @@ export function ServiceDetailScreen() {
           Book {firstName}
         </h2>
         <p className="text-meta text-b3 font-medium mt-1.5 flex items-center gap-1">
-          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-b3 text-b3 text-[9px] font-bold">i</span>
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-b3 text-b3 text-[9px] font-extrabold">i</span>
           Select a service offering below to book
         </p>
       </div>

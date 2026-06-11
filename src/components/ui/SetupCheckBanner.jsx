@@ -134,15 +134,15 @@ export function SetupCheckBanner() {
     <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] z-[70] px-3 pt-3">
       <div className="bg-warnBg border border-warnText/30 rounded-[14px] p-3 shadow-card">
         <div className="flex items-start gap-2">
-          <span className="text-[14px] flex-shrink-0">⚠️</span>
+          <span className="text-body flex-shrink-0">⚠️</span>
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-extrabold text-warnText leading-snug">
+            <p className="text-meta font-extrabold text-warnText leading-snug">
               {allProblems.length === 1 ? 'Setup needed' : `${allProblems.length} setup steps needed`}
             </p>
             <ul className="mt-1 space-y-1.5">
               {allProblems.map(p => (
-                <li key={p.key} className="text-[11px] text-warnText leading-snug">
-                  <span className="font-bold">{p.label}.</span>{' '}
+                <li key={p.key} className="text-meta-sm text-warnText leading-snug">
+                  <span className="font-extrabold">{p.label}.</span>{' '}
                   <span className="font-normal opacity-90">{p.fix}</span>
                 </li>
               ))}
@@ -151,7 +151,7 @@ export function SetupCheckBanner() {
           <button
             onClick={dismiss}
             aria-label="Dismiss"
-            className="text-warnText text-[14px] font-extrabold leading-none px-1"
+            className="text-warnText text-body font-extrabold leading-none px-1"
           >
             ×
           </button>

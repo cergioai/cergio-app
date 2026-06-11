@@ -56,7 +56,7 @@ function StatusPill({ status }) {
   };
   const m = map[status] || { bg: 'bg-bg5', tx: 'text-b2', label: status || '—' };
   return (
-    <span className={`inline-block rounded-pill px-2 py-0.5 text-[10px] font-extrabold ${m.bg} ${m.tx}`}>
+    <span className={`inline-block rounded-pill px-2 py-0.5 text-caps font-extrabold ${m.bg} ${m.tx}`}>
       {m.label}
     </span>
   );
@@ -85,11 +85,11 @@ function BookingRow({ booking, onClick }) {
         </svg>
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-[11px] font-extrabold leading-none mb-0.5 ${isFree ? 'text-gd' : 'text-b3'}`}>
+        <p className={`text-meta-sm font-extrabold leading-none mb-0.5 ${isFree ? 'text-gd' : 'text-b3'}`}>
           {purpose.toUpperCase()}
         </p>
-        <p className="text-[13px] font-extrabold text-black leading-tight truncate">{title}</p>
-        <p className="text-[11px] text-b3 mt-0.5 leading-snug">
+        <p className="text-body-sm font-extrabold text-black leading-tight truncate">{title}</p>
+        <p className="text-meta-sm text-b3 mt-0.5 leading-snug">
           {when} · <StatusPill status={booking.status || 'pending'} />
         </p>
       </div>
@@ -113,8 +113,8 @@ function SpotlightRow({ req, onClick }) {
         </svg>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-extrabold text-black leading-tight truncate">{platform} spotlight</p>
-        <p className="text-[11px] text-b3 mt-0.5 leading-snug">
+        <p className="text-body-sm font-extrabold text-black leading-tight truncate">{platform} spotlight</p>
+        <p className="text-meta-sm text-b3 mt-0.5 leading-snug">
           {timeAgo(req.created_at)} · <StatusPill status={req.status || 'pending'} />
           {price ? ` · ${fmtDollars(price)}` : ''}
         </p>
@@ -212,7 +212,7 @@ function GoatShareCard({ row, onClick }) {
   // profiles. The card itself is also clickable → service PDP, so the
   // avatar Links stopPropagation to avoid double-navigation.
   const ownerAvatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
-                          text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+                          text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
   const goatAvatarCls  = `w-5 h-5 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
                           text-white text-[9px] font-extrabold flex items-center justify-center`;
 
@@ -242,7 +242,7 @@ function GoatShareCard({ row, onClick }) {
         ) : (
           <div className={ownerAvatarCls}>{initials(goatName)}</div>
         )}
-        <p className="flex-1 min-w-0 text-[14px] leading-snug text-black">
+        <p className="flex-1 min-w-0 text-body leading-snug text-black">
           <span className="font-medium text-b2">
             {relation ? `${relation} ` : ''}
           </span>
@@ -309,7 +309,7 @@ function GoatShareCard({ row, onClick }) {
 function JoinedCard({ ev }) {
   const p = ev.profile;
   const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
-                     text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+                     text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
   return (
     <div className="flex items-center gap-2.5">
       {p.id ? (
@@ -320,7 +320,7 @@ function JoinedCard({ ev }) {
         <div className={avatarCls}>{initials(p.display_name)}</div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] leading-snug text-black">
+        <p className="text-body leading-snug text-black">
           {p.id ? (
             <Link to={`/u/${p.id}`} className="font-extrabold underline">{p.display_name}</Link>
           ) : (
@@ -348,7 +348,7 @@ function ListingCard({ ev, onClick }) {
   const gradient  = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
   const cover     = svc.cover_url;
   const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
-                     text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+                     text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
   // CERGIO-GUARD (2026-06-03): inline share for the listing announcement.
   const serviceTypeLabel = svc.taxonomy_provider_type || svc.category || 'Service';
   const shareUrl  = typeof window !== 'undefined'
@@ -372,7 +372,7 @@ function ListingCard({ ev, onClick }) {
             <div className={avatarCls}>{initials(ownerName)}</div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-[14px] leading-snug text-black">
+            <p className="text-body leading-snug text-black">
               {ownerId ? (
                 <Link to={`/u/${ownerId}`} onClick={(e) => e.stopPropagation()} className="font-extrabold underline">
                   {ownerName}
@@ -418,7 +418,7 @@ function SpotlightCard({ ev }) {
   const requester = ev.requester;
   const platform  = ev.platform === 'tiktok' ? 'TikTok' : 'Instagram';
   const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#8A6FD6] to-[#4F3DB0]
-                     text-white text-[12px] font-extrabold flex items-center justify-center flex-shrink-0`;
+                     text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
   const cName = connector?.display_name || 'A Connector';
   const rName = requester?.display_name || 'a provider';
   return (
@@ -431,7 +431,7 @@ function SpotlightCard({ ev }) {
         <div className={avatarCls}>{initials(cName)}</div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] leading-snug text-black">
+        <p className="text-body leading-snug text-black">
           {connector?.id ? (
             <Link to={`/u/${connector.id}`} className="font-extrabold underline">{cName}</Link>
           ) : (
@@ -529,7 +529,7 @@ export function ActivityScreen() {
     <div className="flex-1 flex flex-col bg-cream pb-24 overflow-y-auto">
       <div className="px-5 pt-8 pb-2">
         <h1 className="text-[24px] font-extrabold text-black leading-tight">Activity</h1>
-        <p className="text-[13px] text-b3 font-medium mt-1.5 leading-snug">
+        <p className="text-body-sm text-b3 font-medium mt-1.5 leading-snug">
           Your network at a glance.
         </p>
       </div>
@@ -551,7 +551,7 @@ export function ActivityScreen() {
               role="tab"
               aria-selected={activeTab === t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex-1 rounded-pill py-1.5 text-[12px] font-extrabold transition-colors
+              className={`flex-1 rounded-pill py-1.5 text-meta font-extrabold transition-colors
                 ${activeTab === t.id ? 'bg-white text-black shadow-sm' : 'text-b3 hover:text-b2'}`}
             >
               {t.label}
@@ -723,13 +723,13 @@ export function ActivityScreen() {
                   onClick={() => navigate(isSignedIn ? '/connectors' : '/auth')}
                   className="mx-5 w-[calc(100%-2.5rem)] bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 text-left hover:from-gl/80 hover:to-gl/40 transition-colors"
                 >
-                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">Your feed</p>
+                  <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">Your feed</p>
                   <p className="text-[15px] font-extrabold text-black leading-snug mt-1">
                     {isSignedIn
                       ? 'Follow Connectors to see their picks here.'
                       : 'Sign in + follow Connectors to see their picks here.'}
                   </p>
-                  <p className="text-[12px] text-b3 font-medium mt-1.5 leading-snug">
+                  <p className="text-meta text-b3 font-medium mt-1.5 leading-snug">
                     {isSignedIn
                       ? <>Connectors are the locals who spotlight services worth booking. <span className="text-gd font-extrabold">Browse Connectors →</span></>
                       : <>Connectors are the locals who spotlight services worth booking. <span className="text-gd font-extrabold">Sign in →</span></>}
@@ -746,7 +746,7 @@ export function ActivityScreen() {
             <h2 className="text-[17px] font-extrabold text-black leading-tight">
               What&apos;s happening on Cergio
             </h2>
-            <p className="text-[12px] text-gd font-extrabold mt-1">From your Connectors and network · #cergiofeed</p>
+            <p className="text-meta text-gd font-extrabold mt-1">From your Connectors and network · #cergiofeed</p>
           </div>
           <div className="px-5 flex flex-col gap-5">
             {visibleFeed.map(ev => {
@@ -792,7 +792,7 @@ export function ActivityScreen() {
           so it doesn't sit under a fake-friends header. */}
 
       {/* ─── Open requests — the user's own outgoing pile. ────────────── */}
-      <p className="px-5 mt-3 mb-2 text-[11px] font-extrabold uppercase tracking-widest text-b3 flex items-center justify-between">
+      <p className="px-5 mt-3 mb-2 text-meta-sm font-extrabold uppercase tracking-widest text-b3 flex items-center justify-between">
         <span>Your open requests</span>
         {hasOpen && (
           <span className="text-g normal-case tracking-normal">
@@ -803,13 +803,13 @@ export function ActivityScreen() {
 
       {!isSignedIn && (
         <div className="mx-5 bg-white border border-bdr rounded-[14px] p-4">
-          <p className="text-[13px] font-extrabold text-black">Sign in to see your requests</p>
-          <p className="text-[11px] text-b3 mt-1 leading-snug">
+          <p className="text-body-sm font-extrabold text-black">Sign in to see your requests</p>
+          <p className="text-meta-sm text-b3 mt-1 leading-snug">
             Your booking + spotlight requests show up here once you sign in.
           </p>
           <button
             onClick={() => navigate('/auth')}
-            className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-[12px] font-extrabold"
+            className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-meta font-extrabold"
           >
             Sign in
           </button>
@@ -818,13 +818,13 @@ export function ActivityScreen() {
 
       {isSignedIn && !hasOpen && bookings !== null && spotlights !== null && (
         <div className="mx-5 bg-white border border-bdr rounded-[14px] p-4">
-          <p className="text-[13px] font-extrabold text-black">No open requests right now</p>
-          <p className="text-[11px] text-b3 mt-1 leading-snug">
+          <p className="text-body-sm font-extrabold text-black">No open requests right now</p>
+          <p className="text-meta-sm text-b3 mt-1 leading-snug">
             Send a booking from Home — Cergio negotiates and books for you.
           </p>
           <button
             onClick={() => navigate('/home')}
-            className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-[12px] font-extrabold"
+            className="mt-3 bg-g text-white rounded-pill px-4 py-1.5 text-meta font-extrabold"
           >
             Find a service →
           </button>
@@ -852,14 +852,14 @@ export function ActivityScreen() {
 // Each row taps into the invitee's public profile if they joined.
 function NetworkFriendsTab({ invitesDetailed, navigate }) {
   if (invitesDetailed === null) {
-    return <p className="px-5 mt-4 text-[13px] text-b3">Loading friends…</p>;
+    return <p className="px-5 mt-4 text-body-sm text-b3">Loading friends…</p>;
   }
   if (invitesDetailed.length === 0) {
     return (
       <div className="mx-5 mt-4 bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4">
-        <p className="text-[11px] font-extrabold uppercase tracking-widest text-gd">Friends</p>
+        <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">Friends</p>
         <p className="text-[15px] font-extrabold text-black leading-snug mt-1">No friends yet.</p>
-        <p className="text-[12px] text-b3 font-medium mt-1.5 leading-snug">
+        <p className="text-meta text-b3 font-medium mt-1.5 leading-snug">
           Invite friends to start building your network.{' '}
           <button
             type="button"
@@ -899,11 +899,11 @@ function NetworkFriendsTab({ invitesDetailed, navigate }) {
             }}
             className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-bg5/30 border-b border-bdr"
           >
-            <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-[14px] font-extrabold flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-body font-extrabold flex-shrink-0">
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-extrabold text-black truncate">{name}</p>
+              <p className="text-body font-extrabold text-black truncate">{name}</p>
               <p className="text-[11.5px] text-b3 mt-0.5">
                 Invited {inv.invited_at ? new Date(inv.invited_at).toLocaleDateString() : '—'}
               </p>
@@ -921,12 +921,12 @@ function NetworkFriendsTab({ invitesDetailed, navigate }) {
 // Connectors tab — verified Connectors with follow + recos count.
 function NetworkConnectorsTab({ connectors, followedIds, onToggleFollow, navigate }) {
   if (connectors === null) {
-    return <p className="px-5 mt-4 text-[13px] text-b3">Loading Connectors…</p>;
+    return <p className="px-5 mt-4 text-body-sm text-b3">Loading Connectors…</p>;
   }
   if (connectors.length === 0) {
     return (
       <div className="mx-5 mt-4 bg-white border border-bdr rounded-[16px] p-4">
-        <p className="text-[13px] font-extrabold text-black mb-1">No Connectors yet</p>
+        <p className="text-body-sm font-extrabold text-black mb-1">No Connectors yet</p>
         <p className="text-[11.5px] text-b3 leading-snug">
           Connectors are locals with reach who spotlight services on IG + TikTok.
           They show up here as they verify.
@@ -950,7 +950,7 @@ function NetworkConnectorsTab({ connectors, followedIds, onToggleFollow, navigat
             <button
               type="button"
               onClick={() => navigate(`/u/${c.id}`)}
-              className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-[14px] font-extrabold flex-shrink-0 cursor-pointer border-none"
+              className="w-10 h-10 rounded-full bg-bg5 flex items-center justify-center text-black text-body font-extrabold flex-shrink-0 cursor-pointer border-none"
               aria-label={`Open ${name}`}
             >
               {initials}
@@ -960,7 +960,7 @@ function NetworkConnectorsTab({ connectors, followedIds, onToggleFollow, navigat
               onClick={() => navigate(`/u/${c.id}`)}
               className="flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer"
             >
-              <p className="text-[14px] font-extrabold text-black truncate">{name}</p>
+              <p className="text-body font-extrabold text-black truncate">{name}</p>
               <p className="text-[11.5px] text-b3 mt-0.5 truncate">
                 {c.instagram_handle && <>IG @{c.instagram_handle}</>}
                 {c.instagram_handle && c.tiktok_handle && ' · '}

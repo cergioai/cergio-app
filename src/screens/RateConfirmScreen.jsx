@@ -60,7 +60,7 @@ function StarRating({ value, onChange, size = 44 }) {
         ))}
       </div>
       {value > 0 && (
-        <p className="text-[14px] font-extrabold text-g">{RATING_LABELS[value]}</p>
+        <p className="text-body font-extrabold text-g">{RATING_LABELS[value]}</p>
       )}
     </div>
   );
@@ -113,12 +113,12 @@ export function RateConfirmScreen() {
       {/* provider */}
       <div className="px-5 pb-4 flex items-center gap-3">
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-g to-gd
-                        flex items-center justify-center text-white font-extrabold text-[14px]">
+                        flex items-center justify-center text-white font-extrabold text-body">
           {getInitials(provider.name)}
         </div>
         <div>
-          <p className="text-[16px] font-extrabold text-black">{provider.name}</p>
-          <p className="text-[12px] text-g font-bold">{provider.category}</p>
+          <p className="text-body-lg font-extrabold text-black">{provider.name}</p>
+          <p className="text-meta text-g font-extrabold">{provider.category}</p>
         </div>
       </div>
 
@@ -136,24 +136,24 @@ export function RateConfirmScreen() {
           {requestDetails.items.map((item, i) => (
             <div key={i} className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-b3" />
-              <span className="text-[13px] text-b3">{item}</span>
+              <span className="text-body-sm text-b3">{item}</span>
             </div>
           ))}
         </div>
         <p className="text-[15px] font-extrabold text-black mb-2">Extras</p>
         <div className="flex flex-col gap-1.5">
           {requestDetails.extras.map((e, i) => (
-            <span key={i} className="text-[13px] text-b3">{e}</span>
+            <span key={i} className="text-body-sm text-b3">{e}</span>
           ))}
         </div>
       </div>
 
       {/* confirm */}
       <div className="px-5 pt-6 pb-4 mt-auto">
-        <p className="text-[13px] font-extrabold text-black mb-1">
+        <p className="text-body-sm font-extrabold text-black mb-1">
           Marking a job complete is final
         </p>
-        <p className="text-[12px] text-b3 mb-4">This action cannot be reversed.</p>
+        <p className="text-meta text-b3 mb-4">This action cannot be reversed.</p>
         <button
           onClick={async () => {
             if (rating === 0) { showToast('Please rate before confirming'); return; }

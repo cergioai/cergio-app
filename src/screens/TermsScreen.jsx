@@ -25,7 +25,7 @@ export function TermsScreen() {
         <button
           onClick={() => navigate(-1)}
           aria-label="Back"
-          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-body-lg flex items-center justify-center shadow-sm"
         >
           ‹
         </button>
@@ -38,20 +38,20 @@ export function TermsScreen() {
       </div>
 
       <div className="px-5 pt-6">
-        <h1 className="text-[28px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           Terms of Use
         </h1>
-        <p className="text-[12px] text-b3 font-medium mt-2">
+        <p className="text-meta text-b3 font-medium mt-2">
           Effective {effective}. Subject to change.
         </p>
       </div>
 
       {/* Highlight: booking-platform character + no liability */}
       <div className="mx-5 mt-5 bg-warnBg border border-warn/40 rounded-[14px] p-4">
-        <p className="text-[13px] font-extrabold text-warnText leading-tight mb-1">
+        <p className="text-body-sm font-extrabold text-warnText leading-tight mb-1">
           Cergio is a booking + introduction platform.
         </p>
-        <p className="text-[12px] text-warnText leading-snug">
+        <p className="text-meta text-warnText leading-snug">
           We connect Users, Providers, and Connectors and facilitate
           payments — we do not deliver the underlying services, we are
           not your employer or theirs, and we accept no liability for
@@ -61,7 +61,7 @@ export function TermsScreen() {
         </p>
       </div>
 
-      <div className="mx-5 mt-6 flex flex-col gap-5 text-[13px] text-b2 leading-relaxed">
+      <div className="mx-5 mt-6 flex flex-col gap-5 text-body-sm text-b2 leading-relaxed">
 
         <Section title="1. Acceptance">
           By creating a Cergio account, using the Cergio app, or
@@ -217,7 +217,7 @@ export function TermsScreen() {
       </div>
 
       <div className="mt-10 px-5">
-        <p className="text-[11px] text-b3 font-medium text-center">
+        <p className="text-meta-sm text-b3 font-medium text-center">
           &copy; {new Date().getFullYear()} Cergio.
         </p>
       </div>

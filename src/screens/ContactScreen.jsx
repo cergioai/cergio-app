@@ -150,7 +150,7 @@ export function ContactScreen() {
         <button
           onClick={() => navigate(-1)}
           aria-label="Back"
-          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-[16px] flex items-center justify-center shadow-sm"
+          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-body-lg flex items-center justify-center shadow-sm"
         >
           ‹
         </button>
@@ -163,7 +163,7 @@ export function ContactScreen() {
       </div>
 
       <div className="px-5 pt-6">
-        <h1 className="text-[28px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           Contact us
         </h1>
         <p className="text-[13.5px] text-b2 leading-relaxed mt-2 max-w-[360px]">
@@ -177,16 +177,16 @@ export function ContactScreen() {
           <div className="w-12 h-12 rounded-full bg-gl text-gd flex items-center justify-center text-[20px] font-extrabold mx-auto">
             ✓
           </div>
-          <p className="text-[16px] font-extrabold text-black mt-4">
+          <p className="text-body-lg font-extrabold text-black mt-4">
             Message sent
           </p>
-          <p className="text-[13px] text-b2 leading-snug mt-2 max-w-[260px] mx-auto">
+          <p className="text-body-sm text-b2 leading-snug mt-2 max-w-[260px] mx-auto">
             We&apos;ll reply at <span className="font-extrabold">{email}</span> within
             a couple of business days.
           </p>
           <button
             onClick={() => navigate('/home')}
-            className="mt-6 bg-g text-white rounded-pill px-5 py-2.5 text-[13px] font-extrabold"
+            className="mt-6 bg-g text-white rounded-pill px-5 py-2.5 text-body-sm font-extrabold"
           >
             Back to Cergio
           </button>
@@ -197,7 +197,7 @@ export function ContactScreen() {
             <select
               value={subject}
               onChange={e => setSubject(e.target.value)}
-              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                          focus:outline-none focus:border-g/60"
             >
               {SUBJECTS.map(s => (
@@ -211,7 +211,7 @@ export function ContactScreen() {
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Jane Doe"
-              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                          placeholder:text-b3 focus:outline-none focus:border-g/60"
             />
           </Field>
@@ -221,7 +221,7 @@ export function ContactScreen() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                          placeholder:text-b3 focus:outline-none focus:border-g/60"
             />
           </Field>
@@ -233,7 +233,7 @@ export function ContactScreen() {
               placeholder={subject === 'bug'
                 ? 'What did you try? What did you expect? What actually happened?'
                 : "Tell us what's up."}
-              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+              className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                          placeholder:text-b3 focus:outline-none focus:border-g/60 resize-none"
             />
           </Field>
@@ -246,10 +246,10 @@ export function ContactScreen() {
             <Field label="Screenshot (optional)">
               <div className="space-y-2">
                 <label className="flex items-center gap-3 bg-white border border-bdr rounded-[12px] px-3.5 py-3 cursor-pointer hover:border-g/40 transition-colors">
-                  <span className="text-[13px] font-extrabold text-b2">
+                  <span className="text-body-sm font-extrabold text-b2">
                     {attachment ? 'Change screenshot' : '＋ Add a screenshot'}
                   </span>
-                  <span className="text-[11px] text-b3 ml-auto">PNG / JPG, max 5MB</span>
+                  <span className="text-meta-sm text-b3 ml-auto">PNG / JPG, max 5MB</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -270,7 +270,7 @@ export function ContactScreen() {
                     <button
                       type="button"
                       onClick={() => onPickAttachment(null)}
-                      className="absolute -top-2 -right-2 bg-white border border-bdr rounded-full w-6 h-6 text-[11px] font-extrabold text-b2 shadow-sm"
+                      className="absolute -top-2 -right-2 bg-white border border-bdr rounded-full w-6 h-6 text-meta-sm font-extrabold text-b2 shadow-sm"
                       aria-label="Remove screenshot"
                     >
                       ×
@@ -303,7 +303,7 @@ export function ContactScreen() {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="text-[11px] text-b2 font-extrabold uppercase tracking-[0.12em] block mb-1.5">
+      <span className="text-meta-sm text-b2 font-extrabold uppercase tracking-[0.12em] block mb-1.5">
         {label}
       </span>
       {children}

@@ -161,11 +161,11 @@ export function IntakeScreen() {
         </button>
         <div className="flex items-center gap-2">
           <LeafLogo size={22} />
-          <span className="text-[14px] font-bold text-black">Cergio AI</span>
+          <span className="text-body font-extrabold text-black">Cergio AI</span>
         </div>
         <button
           onClick={() => navigate('/intake-form', { state: { prefill: state } })}
-          className="text-[12px] font-extrabold text-g underline underline-offset-2 px-1"
+          className="text-meta font-extrabold text-g underline underline-offset-2 px-1"
           aria-label="Switch to structured form"
         >
           Use form
@@ -181,7 +181,7 @@ export function IntakeScreen() {
                         ${fields >= n ? 'bg-g' : 'bg-bdr'}`}
           />
         ))}
-        <span className={`text-[11px] font-bold ml-1 ${fields >= 3 ? 'text-g' : 'text-b3'}`}>
+        <span className={`text-meta-sm font-extrabold ml-1 ${fields >= 3 ? 'text-g' : 'text-b3'}`}>
           {fields >= 3 ? '3 / 3 ✓' : `${fields} / 3 required`}
         </span>
       </div>
@@ -191,7 +191,7 @@ export function IntakeScreen() {
         {messages.map(m => (
           <div
             key={m.id}
-            className={`max-w-[88%] px-3.5 py-2.5 text-[13px] font-medium leading-relaxed
+            className={`max-w-[88%] px-3.5 py-2.5 text-body-sm font-medium leading-relaxed
                         ${m.role === 'bot'
                           ? 'bg-crd rounded-[4px_18px_18px_18px] text-black self-start'
                           : 'bg-g rounded-[18px_4px_18px_18px] text-white font-semibold self-end'}`}
@@ -218,15 +218,15 @@ export function IntakeScreen() {
       {/* Claude bailed — offer to switch to the structured form */}
       {needsForm && (
         <div className="mx-4 mb-2 bg-warnBg border border-warn/40 rounded-[14px] p-3">
-          <p className="text-[13px] font-extrabold text-warnText mb-1">
+          <p className="text-body-sm font-extrabold text-warnText mb-1">
             Want to use a quick form instead?
           </p>
-          <p className="text-[12px] text-warnText mb-2 leading-relaxed">
+          <p className="text-meta text-warnText mb-2 leading-relaxed">
             We'll show you fields one screen at a time. No back-and-forth typing.
           </p>
           <button
             onClick={() => navigate('/intake-form', { state: { prefill: state } })}
-            className="bg-black text-white rounded-[12px] px-3.5 py-1.5 text-[12px] font-extrabold"
+            className="bg-black text-white rounded-[12px] px-3.5 py-1.5 text-meta font-extrabold"
           >
             Switch to form
           </button>
@@ -240,7 +240,7 @@ export function IntakeScreen() {
             <button
               key={r}
               onClick={() => send(r)}
-              className={`border rounded-pill px-3.5 py-1.5 text-[12px] font-bold cursor-pointer transition-colors
+              className={`border rounded-pill px-3.5 py-1.5 text-meta font-extrabold cursor-pointer transition-colors
                           ${r === 'Skip →' || /skip/i.test(r)
                             ? 'border-bdr text-b3 hover:bg-bg5'
                             : 'border-g text-gd hover:bg-gl'}`}
@@ -266,7 +266,7 @@ export function IntakeScreen() {
           </button>
           <button
             onClick={() => send('Add some photos / videos to my request')}
-            className="w-full bg-bg5 text-b2 rounded-pill py-3 text-[13px] font-bold"
+            className="w-full bg-bg5 text-b2 rounded-pill py-3 text-body-sm font-extrabold"
           >
             📷 Add photos / videos
           </button>
@@ -287,7 +287,7 @@ export function IntakeScreen() {
               }
               onKeyDown={handleKey}
               className="flex-1 bg-cr border border-bdr rounded-[14px] px-3.5 py-2.5
-                         text-[13px] text-black font-medium resize-none outline-none
+                         text-body-sm text-black font-medium resize-none outline-none
                          focus:border-g min-h-[42px] max-h-[120px] font-sans"
             />
             <button

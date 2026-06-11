@@ -71,7 +71,7 @@ export function OnboardScreen() {
         {!last && (
           <button
             onClick={() => navigate('/home')}
-            className="text-center text-[13px] text-b3 font-medium py-1"
+            className="text-center text-body-sm text-b3 font-medium py-1"
           >
             Skip
           </button>

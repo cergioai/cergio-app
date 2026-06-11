@@ -114,21 +114,21 @@ export function InviteFriendsScreen() {
       <div className="px-5 pt-5">
         <button
           onClick={() => navigate(-1)}
-          className="text-2xl text-black font-bold w-9 h-9 flex items-center justify-center"
+          className="text-2xl text-black font-extrabold w-9 h-9 flex items-center justify-center"
         >
           ‹
         </button>
       </div>
       <div className="px-5 pt-2 pb-4">
         <h1 className="text-[30px] font-extrabold text-black leading-tight">{headerTitle}</h1>
-        <p className="text-[13px] text-b3 font-medium mt-1.5 leading-snug">
+        <p className="text-body-sm text-b3 font-medium mt-1.5 leading-snug">
           {mode === 'reco'
             ? 'Pick contacts and we send them your recommendation — they tap one link to book.'
             : 'Pick contacts and we send a friendly invite — you earn when they join.'}
         </p>
         <button
           onClick={() => navigate(altPath)}
-          className="text-[13px] font-bold text-g underline underline-offset-2 mt-2"
+          className="text-body-sm font-extrabold text-g underline underline-offset-2 mt-2"
         >
           {altLink}
         </button>
@@ -143,7 +143,7 @@ export function InviteFriendsScreen() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search contacts"
-            className="flex-1 text-[14px] text-black placeholder-b3 outline-none bg-transparent"
+            className="flex-1 text-body text-black placeholder-b3 outline-none bg-transparent"
           />
         </div>
       </div>
@@ -153,11 +153,11 @@ export function InviteFriendsScreen() {
       <div className="flex-1 overflow-y-auto min-h-0">
         {contacts === null ? (
           <div className="px-5 py-8 text-center">
-            <p className="text-[13px] text-b3 font-medium">Loading contacts…</p>
+            <p className="text-body-sm text-b3 font-medium">Loading contacts…</p>
           </div>
         ) : list.length === 0 ? (
           <div className="px-5 py-8 text-center">
-            <p className="text-[14px] font-extrabold text-black">No one to invite yet</p>
+            <p className="text-body font-extrabold text-black">No one to invite yet</p>
             <p className="text-[12.5px] text-b3 font-medium mt-1 leading-snug">
               When friends sign up to Cergio, they&apos;ll appear here.
             </p>
@@ -165,14 +165,14 @@ export function InviteFriendsScreen() {
         ) : Object.keys(grouped).sort().map(letter => (
           <div key={letter}>
             <div className="bg-bg5 px-5 py-1">
-              <p className="text-[13px] font-extrabold text-b3 uppercase">{letter}</p>
+              <p className="text-body-sm font-extrabold text-b3 uppercase">{letter}</p>
             </div>
             {grouped[letter].map(c => {
               const isSel = selected.has(c.id);
               return (
                 <div key={c.id} className="px-5 py-3 flex items-center gap-3 border-b border-bdr">
                   <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${gradFor(c.avatar_seed)}
-                                   flex items-center justify-center text-white text-[14px] font-extrabold flex-shrink-0`}>
+                                   flex items-center justify-center text-white text-body font-extrabold flex-shrink-0`}>
                     {initialsOf(c.name)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -188,7 +188,7 @@ export function InviteFriendsScreen() {
                   </div>
                   <button
                     onClick={() => toggle(c.id)}
-                    className={`rounded-[24px] px-4 py-2 text-[13px] font-extrabold transition-colors flex-shrink-0
+                    className={`rounded-[24px] px-4 py-2 text-body-sm font-extrabold transition-colors flex-shrink-0
                                 ${isSel
                                   ? 'bg-g text-white'
                                   : 'bg-white border-2 border-g text-g'}`}
@@ -214,7 +214,7 @@ export function InviteFriendsScreen() {
         ) : (
           <>
             {summary && (
-              <p className="text-[12px] text-b3 mb-2 truncate">{summary}</p>
+              <p className="text-meta text-b3 mb-2 truncate">{summary}</p>
             )}
             <button
               onClick={() => navigate('/invite/review', { state: { mode, selectedIds: Array.from(selected), prefilledMessage } })}

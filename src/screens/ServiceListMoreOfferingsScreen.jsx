@@ -32,13 +32,13 @@ export function ServiceListMoreOfferingsScreen() {
       />
 
       <div className="bg-cr rounded-t-[28px] -mt-7 px-5 pt-7 flex-1 pb-32 overflow-y-auto">
-        <p className="text-[18px] font-extrabold text-black mb-4">Your offerings</p>
+        <p className="text-heading-2 font-extrabold text-black mb-4">Your offerings</p>
 
         <div className="flex flex-col gap-3 mb-4">
           {offerings.map(o => (
             <div key={o.id} className="bg-white border border-bdr rounded-[18px] p-4">
-              <p className="text-[16px] font-extrabold text-black mb-1">{o.name}</p>
-              <p className="text-[13px] text-b3 leading-relaxed mb-3">{o.desc}</p>
+              <p className="text-body-lg font-extrabold text-black mb-1">{o.name}</p>
+              <p className="text-body-sm text-b3 leading-relaxed mb-3">{o.desc}</p>
               <p className="text-[15px] font-extrabold text-black">{o.rate}</p>
             </div>
           ))}
@@ -47,7 +47,7 @@ export function ServiceListMoreOfferingsScreen() {
         <button
           onClick={() => navigate('/list-service/add-new-offering')}
           className="w-full border-2 border-dashed border-g bg-gl/40 rounded-[18px] py-5
-                     text-[14px] font-extrabold text-g"
+                     text-body font-extrabold text-g"
         >
           + Add another
         </button>

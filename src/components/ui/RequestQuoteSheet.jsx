@@ -25,7 +25,7 @@ import { createRequestToProvider, crossPostRequest } from '../../lib/api';
 function Field({ label, children }) {
   return (
     <label className="block mb-3">
-      <span className="text-[12px] text-b3 font-extrabold uppercase tracking-wide block mb-1">
+      <span className="text-meta text-b3 font-extrabold uppercase tracking-wide block mb-1">
         {label}
       </span>
       {children}
@@ -163,7 +163,7 @@ export function RequestQuoteSheet({
                   value={what}
                   onChange={(e) => setWhat(e.target.value)}
                   placeholder="e.g. deep cleaning"
-                  className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+                  className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                              placeholder:text-b3 focus:outline-none focus:border-g/60"
                 />
               </Field>
@@ -173,7 +173,7 @@ export function RequestQuoteSheet({
                   value={where_}
                   onChange={(e) => setWhere_(e.target.value)}
                   placeholder="Street, neighborhood, or city"
-                  className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+                  className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                              placeholder:text-b3 focus:outline-none focus:border-g/60"
                 />
               </Field>
@@ -184,7 +184,7 @@ export function RequestQuoteSheet({
                     value={when_}
                     onChange={(e) => setWhen_(e.target.value)}
                     placeholder="ASAP, Sat, May 31…"
-                    className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+                    className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                                placeholder:text-b3 focus:outline-none focus:border-g/60"
                   />
                 </Field>
@@ -194,7 +194,7 @@ export function RequestQuoteSheet({
                     value={budget}
                     onChange={(e) => setBudget(e.target.value)}
                     placeholder="$50"
-                    className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+                    className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                                placeholder:text-b3 focus:outline-none focus:border-g/60"
                   />
                 </Field>
@@ -205,7 +205,7 @@ export function RequestQuoteSheet({
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="2-bed apartment, allergic to bleach, prefer eco supplies…"
                   rows={3}
-                  className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-[14px] text-black
+                  className="w-full bg-white border border-bdr rounded-[12px] px-3.5 py-3 text-body text-black
                              placeholder:text-b3 focus:outline-none focus:border-g/60 resize-none"
                 />
               </Field>
@@ -222,7 +222,7 @@ export function RequestQuoteSheet({
               </button>
               <button
                 onClick={onClose}
-                className="w-full mt-2 text-center text-[13px] font-extrabold text-b3 py-1"
+                className="w-full mt-2 text-center text-body-sm font-extrabold text-b3 py-1"
               >
                 Cancel
               </button>
@@ -233,12 +233,12 @@ export function RequestQuoteSheet({
         {step === 'sent' && (
           <>
             <div className="px-5 pt-3 pb-2 flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-gl text-gd flex items-center justify-center text-[16px] font-extrabold">✓</div>
+              <div className="w-9 h-9 rounded-full bg-gl text-gd flex items-center justify-center text-body-lg font-extrabold">✓</div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-[18px] font-extrabold text-black leading-tight">
+                <h2 className="text-heading-2 font-extrabold text-black leading-tight">
                   Sent to {providerName?.split(' ')[0] || 'them'}
                 </h2>
-                <p className="text-[12px] text-b3 font-medium mt-0.5 leading-snug">
+                <p className="text-meta text-b3 font-medium mt-0.5 leading-snug">
                   They&apos;ll see it in their inbox right away.
                 </p>
               </div>
@@ -246,7 +246,7 @@ export function RequestQuoteSheet({
 
             <div className="flex-1 px-5 pt-4 pb-4 overflow-y-auto">
               <div className="bg-white border border-bdr rounded-[14px] p-4">
-                <p className="text-[14px] font-extrabold text-black">
+                <p className="text-body font-extrabold text-black">
                   Also notify other matching providers?
                 </p>
                 <p className="text-[12.5px] text-b3 font-medium mt-1 leading-snug">
@@ -255,7 +255,7 @@ export function RequestQuoteSheet({
                   every reply lands in this conversation.
                 </p>
                 {crossPosted && (
-                  <p className="text-[12px] text-gd font-extrabold mt-2">
+                  <p className="text-meta text-gd font-extrabold mt-2">
                     ✓ Other providers notified
                   </p>
                 )}
@@ -275,7 +275,7 @@ export function RequestQuoteSheet({
                   </button>
                   <button
                     onClick={onClose}
-                    className="w-full text-center text-[14px] font-extrabold text-b3 py-2"
+                    className="w-full text-center text-body font-extrabold text-b3 py-2"
                   >
                     No, just {providerName?.split(' ')[0] || 'them'}
                   </button>

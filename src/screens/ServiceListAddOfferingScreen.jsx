@@ -32,23 +32,23 @@ export function ServiceListAddOfferingScreen() {
 
       <div className="bg-cr rounded-t-[28px] -mt-7 px-7 pt-7 flex-1 pb-32 overflow-y-auto">
         <div className="mb-6">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Offering name</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Offering name</label>
           <input
             type="text" value={name}
             onChange={e => { setName(e.target.value); setOverride(false); }}
             placeholder="Personal Training"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
           {/* Match badge hidden — provider's typed offering name is the
               source of truth. Taxonomy resolves silently for routing. */}
         </div>
         <div className="mb-6">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Hourly rate</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Hourly rate</label>
           <input
             type="text" value={rate} onChange={e => setRate(e.target.value)}
             placeholder="$50 per hour"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
         </div>

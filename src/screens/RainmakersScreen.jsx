@@ -44,16 +44,16 @@ function CheckIcon({ ok }) {
 }
 
 function CashCell({ val }) {
-  if (!val) return <span className="text-[14px] font-bold text-b3">—</span>;
+  if (!val) return <span className="text-body font-extrabold text-b3">—</span>;
   if (val === 'no')  return <CheckIcon ok={false} />;
   if (val === 'yes') return <CheckIcon ok={true} />;
   return (
     <div className="text-center">
-      <div className={`text-[14px] font-extrabold ${val.highlight ? 'text-gd' : 'text-black'}`}>
+      <div className={`text-body font-extrabold ${val.highlight ? 'text-gd' : 'text-black'}`}>
         {val.amount}
       </div>
       <span
-        className={`text-[10px] font-bold px-2 py-0.5 rounded-pill inline-block mt-0.5
+        className={`text-caps font-extrabold px-2 py-0.5 rounded-pill inline-block mt-0.5
                     ${val.type === 'cash' ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}
       >
         {val.type === 'cash' ? 'Cash or credit' : 'Credit only'}
@@ -92,10 +92,10 @@ export function RainmakersScreen() {
             ⭐
           </div>
         </div>
-        <h2 className="text-[22px] font-extrabold text-black tracking-[.06em] uppercase mb-2.5">
+        <h2 className="text-heading-1 font-extrabold text-black tracking-[.06em] uppercase mb-2.5">
           CERGIO RAINMAKERS
         </h2>
-        <p className="text-[14px] text-b3 font-medium leading-relaxed max-w-[300px]">
+        <p className="text-body text-b3 font-medium leading-relaxed max-w-[300px]">
           Insiders &amp; influencers who spotlight the best services, driving real earnings to great providers — while earning with them and building stronger communities.
         </p>
       </div>
@@ -112,8 +112,8 @@ export function RainmakersScreen() {
               {b.icon}
             </div>
             <div>
-              <p className="text-[15px] font-bold text-black leading-snug">{b.text}</p>
-              {b.tag && <p className="text-[12px] font-bold text-g mt-0.5">{b.tag}</p>}
+              <p className="text-[15px] font-extrabold text-black leading-snug">{b.text}</p>
+              {b.tag && <p className="text-meta font-extrabold text-g mt-0.5">{b.tag}</p>}
             </div>
           </div>
         ))}
@@ -131,7 +131,7 @@ export function RainmakersScreen() {
           ⭐
         </div>
         <h3 className="text-[20px] font-extrabold text-white mb-2">How to earn Connector status</h3>
-        <p className="text-[14px] font-bold text-white/90 italic mb-3">
+        <p className="text-body font-extrabold text-white/90 italic mb-3">
           Invite 10 new friends every month to book on Cergio
         </p>
         <ul className="text-left flex flex-col gap-2">
@@ -140,7 +140,7 @@ export function RainmakersScreen() {
             'Must complete a booking within 30 days of joining',
             'All 10 friends must join within the same month',
           ].map(t => (
-            <li key={t} className="text-[13px] text-white/85 font-medium flex gap-2">
+            <li key={t} className="text-body-sm text-white/85 font-medium flex gap-2">
               <span className="text-white/50 flex-shrink-0 mt-0.5">•</span>{t}
             </li>
           ))}
@@ -155,14 +155,14 @@ export function RainmakersScreen() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-left pb-2.5 text-[13px] font-bold text-black">Benefits</th>
+              <th className="text-left pb-2.5 text-body-sm font-extrabold text-black">Benefits</th>
               <th className="pb-2.5 w-20">
-                <span className="inline-flex items-center gap-1 bg-bg5 text-b2 text-[12px] font-bold px-3 py-1.5 rounded-pill">
+                <span className="inline-flex items-center gap-1 bg-bg5 text-b2 text-meta font-extrabold px-3 py-1.5 rounded-pill">
                   All Users
                 </span>
               </th>
               <th className="pb-2.5 w-24">
-                <span className="inline-flex items-center gap-1 bg-g text-white text-[12px] font-bold px-3 py-1.5 rounded-pill">
+                <span className="inline-flex items-center gap-1 bg-g text-white text-meta font-extrabold px-3 py-1.5 rounded-pill">
                   ⭐ Connectors
                 </span>
               </th>
@@ -172,8 +172,8 @@ export function RainmakersScreen() {
             {TABLE_ROWS.map(row => (
               <tr key={row.label} className="border-t border-bdr">
                 <td className="py-3.5 pr-2">
-                  <p className="text-[13px] font-bold text-black mb-0.5">{row.label}</p>
-                  <p className="text-[11px] text-b3 font-medium leading-snug">{row.desc}</p>
+                  <p className="text-body-sm font-extrabold text-black mb-0.5">{row.label}</p>
+                  <p className="text-meta-sm text-b3 font-medium leading-snug">{row.desc}</p>
                 </td>
                 <td className="py-3.5 text-center"><CashCell val={row.users} /></td>
                 <td className="py-3.5 text-center"><CashCell val={row.connectors} /></td>
@@ -199,17 +199,17 @@ export function RainmakersScreen() {
                 key={i}
                 className={`w-11 h-11 rounded-full bg-gradient-to-br ${colors[i]}
                             border-[2.5px] border-white/40 flex items-center justify-center
-                            text-[11px] font-extrabold text-white ${i > 0 ? '-ml-2.5' : ''}`}
+                            text-meta-sm font-extrabold text-white ${i > 0 ? '-ml-2.5' : ''}`}
               >
                 {l}
               </div>
             );
           })}
         </div>
-        <h3 className="text-[22px] font-extrabold text-white leading-tight mb-2">
+        <h3 className="text-heading-1 font-extrabold text-white leading-tight mb-2">
           Invite friends.<br />Become a Connector
         </h3>
-        <p className="text-[13px] text-white/72 leading-relaxed mb-4">
+        <p className="text-body-sm text-white/72 leading-relaxed mb-4">
           Once ten (10) of them join and complete a booking, apply for Connector status.
         </p>
         <button
@@ -232,7 +232,7 @@ export function RainmakersScreen() {
         >
           Invite my friends
         </button>
-        <p className="text-center mt-3 text-[12px] text-white/55 font-semibold">
+        <p className="text-center mt-3 text-meta text-white/55 font-semibold">
           0/10 invites joined and completed booking
         </p>
       </div>

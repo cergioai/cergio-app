@@ -132,7 +132,7 @@ export function BottomNav({ serviceMode = false, isSignedIn = true }) {
                 className="absolute top-0.5 right-1/2 translate-x-3.5 w-2.5 h-2.5 rounded-full bg-danger ring-2 ring-white"
               />
             )}
-            <span className={`text-[10px] tracking-wide ${isActive ? 'font-extrabold' : 'font-medium'}`}>
+            <span className={`text-caps tracking-wide ${isActive ? 'font-extrabold' : 'font-medium'}`}>
               {item.label}
             </span>
           </button>

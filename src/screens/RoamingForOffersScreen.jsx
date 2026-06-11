@@ -77,16 +77,16 @@ export function RoamingForOffersScreen() {
 
       {/* headline + live status ticker */}
       <div className="px-7 text-center">
-        <h1 className="text-[22px] font-extrabold text-black mb-3 leading-tight">
+        <h1 className="text-heading-1 font-extrabold text-black mb-3 leading-tight">
           Cergio is on it
         </h1>
         <div className="flex items-center justify-center gap-2" aria-live="polite">
           <span className="w-1.5 h-1.5 rounded-full bg-g animate-pulse flex-shrink-0" />
-          <p className="text-[13px] text-gd font-bold leading-snug">
+          <p className="text-body-sm text-gd font-extrabold leading-snug">
             {STATUS_LINES[statusIdx]}…
           </p>
         </div>
-        <p className="text-[12px] text-b3 leading-relaxed font-medium mt-3">
+        <p className="text-meta text-b3 leading-relaxed font-medium mt-3">
           We'll notify you with a few options once offers come in.
         </p>
       </div>
@@ -98,10 +98,10 @@ export function RoamingForOffersScreen() {
         {when  && <Row icon="calendar" title={when} />}
         {where && <Row icon="pin"      title={where} />}
         {!what && !when && !where && (
-          <p className="text-[13px] text-b3 text-center font-medium leading-relaxed">
+          <p className="text-body-sm text-b3 text-center font-medium leading-relaxed">
             No request details on file. Start over from <button
               onClick={() => navigate('/home')}
-              className="text-g font-bold underline underline-offset-2"
+              className="text-g font-extrabold underline underline-offset-2"
             >Home</button> to send a new one.
           </p>
         )}
@@ -111,14 +111,14 @@ export function RoamingForOffersScreen() {
       <div className="px-5 pt-6 flex flex-col gap-3">
         <button
           onClick={() => navigate('/inbox')}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[16px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Go to inbox
         </button>
         <button
           onClick={() => navigate('/find-friends')}
-          className="w-full bg-white border border-bdr rounded-[24px] py-4 text-[14px] font-extrabold text-black"
+          className="w-full bg-white border border-bdr rounded-[24px] py-4 text-body font-extrabold text-black"
         >
           Share request with friends
         </button>
@@ -136,7 +136,7 @@ function Row({ icon, title, sub }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-[15px] font-extrabold text-black leading-tight">{title}</p>
-        {sub && <p className="text-[13px] text-b3 mt-0.5 leading-snug">{sub}</p>}
+        {sub && <p className="text-body-sm text-b3 mt-0.5 leading-snug">{sub}</p>}
       </div>
     </div>
   );

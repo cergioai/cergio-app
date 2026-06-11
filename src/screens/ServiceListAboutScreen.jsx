@@ -107,7 +107,7 @@ export function ServiceListAboutScreen() {
             up to 6 matches. CERGIO-GUARD: suggestions are provider-type
             level only (Plumber / Babysitter / …), never offering names. */}
         <div className="mb-6 relative">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Service type</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Service type</label>
           <input
             type="text"
             value={serviceType}
@@ -116,7 +116,7 @@ export function ServiceListAboutScreen() {
             onBlur={() => setTimeout(() => setServiceTypeFocused(false), 150)} /* delay so click lands */
             placeholder="e.g. Plumber, Cleaner, Babysitter"
             autoComplete="off"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+            className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
           />
           {serviceTypeFocused && (() => {
@@ -137,7 +137,7 @@ export function ServiceListAboutScreen() {
                       setOverrideTaxonomy(false);
                       setServiceTypeFocused(false);
                     }}
-                    className="w-full text-left px-4 py-2 text-[14px] text-b2 hover:bg-bg5 transition-colors"
+                    className="w-full text-left px-4 py-2 text-body text-b2 hover:bg-bg5 transition-colors"
                   >
                     {opt}
                   </button>
@@ -167,7 +167,7 @@ export function ServiceListAboutScreen() {
             return (
               <div className="mt-2 leading-snug">
                 {resolving && (
-                  <p className="text-[12px] text-b3 italic">Checking taxonomy…</p>
+                  <p className="text-meta text-b3 italic">Checking taxonomy…</p>
                 )}
                 {okMapped && (
                   <div className="inline-flex flex-wrap items-center gap-1.5 bg-gl text-gd
@@ -181,7 +181,7 @@ export function ServiceListAboutScreen() {
                   </div>
                 )}
                 {noiseWarn && (
-                  <p className="text-[12px] text-warnText bg-warnBg border border-warn/40 rounded-[10px] px-2.5 py-1.5">
+                  <p className="text-meta text-warnText bg-warnBg border border-warn/40 rounded-[10px] px-2.5 py-1.5">
                     We don't recognize "{serviceType.trim()}" as a known service type.
                     Try something more specific (e.g. <span className="font-extrabold">Personal Chef</span>,
                     <span className="font-extrabold"> Plumber</span>). You can still submit — Cergio will review it.
@@ -195,7 +195,7 @@ export function ServiceListAboutScreen() {
             container above; we keep this dummy spacing so the rest of
             the form lays out the same. */}
         <div className="mb-6 mt-6">
-          <label className="block text-[18px] font-extrabold text-black mb-2.5">Service location</label>
+          <label className="block text-heading-2 font-extrabold text-black mb-2.5">Service location</label>
           <AddressAutocomplete
             value={location}
             onChange={setLocation}
@@ -229,14 +229,14 @@ export function ServiceListAboutScreen() {
                 role="button"
                 tabIndex={0}
                 onClick={(e) => { e.stopPropagation(); setServiceAreaGeoJson(null); }}
-                className="ml-auto text-[11px] font-medium underline cursor-pointer"
+                className="ml-auto text-meta-sm font-medium underline cursor-pointer"
               >
                 Clear
               </span>
             )}
           </button>
           {!coords && !location.trim() && (
-            <p className="text-[11px] text-b3 mt-1">Pick a service location first to anchor the map.</p>
+            <p className="text-meta-sm text-b3 mt-1">Pick a service location first to anchor the map.</p>
           )}
         </div>
         <Field label="Service headline" placeholder="Add a quick bio about your service, your experience and what sets you apart."
@@ -245,10 +245,10 @@ export function ServiceListAboutScreen() {
         {/* Socials — optional. Boosts trust + lets the service appear in
             friend-of-friend social feeds when Connectors spotlight them. */}
         <div className="mb-2">
-          <label className="block text-[18px] font-extrabold text-black mb-1.5">
-            Socials <span className="text-[12px] font-bold text-b3 align-middle">(optional)</span>
+          <label className="block text-heading-2 font-extrabold text-black mb-1.5">
+            Socials <span className="text-meta font-extrabold text-b3 align-middle">(optional)</span>
           </label>
-          <p className="text-[12px] text-b3 mb-2.5 leading-relaxed">
+          <p className="text-meta text-b3 mb-2.5 leading-relaxed">
             Helps customers trust your work and lets Connectors tag you when they spotlight your service.
           </p>
 
@@ -264,15 +264,15 @@ export function ServiceListAboutScreen() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="text-[14px] font-extrabold text-black leading-tight">@{igHandle}</p>
+                <p className="text-body font-extrabold text-black leading-tight">@{igHandle}</p>
                 {igFollowers != null && (
-                  <p className="text-[11px] text-b3 mt-0.5">{fmtFollowers(igFollowers)} followers</p>
+                  <p className="text-meta-sm text-b3 mt-0.5">{fmtFollowers(igFollowers)} followers</p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => setShowIgModal(true)}
-                className="text-[12px] font-extrabold text-g underline underline-offset-2"
+                className="text-meta font-extrabold text-g underline underline-offset-2"
               >
                 Edit
               </button>
@@ -281,7 +281,7 @@ export function ServiceListAboutScreen() {
             <button
               type="button"
               onClick={() => setShowIgModal(true)}
-              className="w-full bg-white border border-bdr rounded-[14px] py-3 text-[13px] font-extrabold text-black
+              className="w-full bg-white border border-bdr rounded-[14px] py-3 text-body-sm font-extrabold text-black
                          flex items-center justify-center gap-2 hover:border-g hover:bg-gl/40 transition-colors mb-2"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -303,15 +303,15 @@ export function ServiceListAboutScreen() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="text-[14px] font-extrabold text-black leading-tight">@{ttHandle}</p>
+                <p className="text-body font-extrabold text-black leading-tight">@{ttHandle}</p>
                 {ttFollowers != null && (
-                  <p className="text-[11px] text-b3 mt-0.5">{fmtFollowers(ttFollowers)} audience</p>
+                  <p className="text-meta-sm text-b3 mt-0.5">{fmtFollowers(ttFollowers)} audience</p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => setShowTtModal(true)}
-                className="text-[12px] font-extrabold text-g underline underline-offset-2"
+                className="text-meta font-extrabold text-g underline underline-offset-2"
               >
                 Edit
               </button>
@@ -320,7 +320,7 @@ export function ServiceListAboutScreen() {
             <button
               type="button"
               onClick={() => setShowTtModal(true)}
-              className="w-full bg-white border border-bdr rounded-[14px] py-3 text-[13px] font-extrabold text-black
+              className="w-full bg-white border border-bdr rounded-[14px] py-3 text-body-sm font-extrabold text-black
                          flex items-center justify-center gap-2 hover:border-g hover:bg-gl/40 transition-colors"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="black">
@@ -535,18 +535,18 @@ export function ServiceListAboutScreen() {
 function Field({ label, placeholder, value, onChange, type = 'input' }) {
   return (
     <div className="mb-6">
-      <label className="block text-[18px] font-extrabold text-black mb-2.5">{label}</label>
+      <label className="block text-heading-2 font-extrabold text-black mb-2.5">{label}</label>
       {type === 'textarea' ? (
         <textarea
           value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={4}
-          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                      placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans"
         />
       ) : (
         <input
           type="text"
           value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-[14px] text-black
+          className="w-full bg-bg5 rounded-[14px] px-4 py-4 text-body text-black
                      placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
         />
       )}

@@ -210,7 +210,7 @@ function CancelRequestLink({ requestId, onCancelled }) {
 
   if (pending) {
     return (
-      <span className="mt-0.5 text-meta-sm text-b3 font-bold">Cancelling…</span>
+      <span className="mt-0.5 text-meta-sm text-b3 font-extrabold">Cancelling…</span>
     );
   }
 
@@ -228,7 +228,7 @@ function CancelRequestLink({ requestId, onCancelled }) {
         <button
           type="button"
           onClick={() => setArmed(false)}
-          className="text-meta-sm font-bold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
+          className="text-meta-sm font-extrabold text-b3 hover:text-b2 bg-transparent border-none p-0 cursor-pointer"
         >
           Keep roaming
         </button>
@@ -240,7 +240,7 @@ function CancelRequestLink({ requestId, onCancelled }) {
     <button
       type="button"
       onClick={() => setArmed(true)}
-      className="mt-0.5 text-meta-sm text-gd font-bold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+      className="mt-0.5 text-meta-sm text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
     >
       Cancel request
     </button>

@@ -220,7 +220,7 @@ export function RecommendServiceFormScreen() {
         <button
           onClick={goBack}
           aria-label="Back"
-          className="text-2xl text-black font-bold w-9 h-9 flex items-center justify-center"
+          className="text-2xl text-black font-extrabold w-9 h-9 flex items-center justify-center"
         >
           ‹
         </button>
@@ -236,7 +236,7 @@ export function RecommendServiceFormScreen() {
       </div>
 
       <div className="px-5 pt-2 pb-3">
-        <h1 className="text-[22px] font-extrabold text-black leading-tight">
+        <h1 className="text-heading-1 font-extrabold text-black leading-tight">
           Reco a service provider
         </h1>
         <p className="text-[12.5px] text-b2 font-medium leading-snug mt-1.5">
@@ -257,7 +257,7 @@ export function RecommendServiceFormScreen() {
           <button
             type="button"
             onClick={() => setStep(1)}
-            className="inline-flex items-center gap-1.5 bg-white border border-bdr rounded-pill px-3 py-1.5 text-[12px] font-extrabold text-black hover:bg-bg5/40 transition-colors"
+            className="inline-flex items-center gap-1.5 bg-white border border-bdr rounded-pill px-3 py-1.5 text-meta font-extrabold text-black hover:bg-bg5/40 transition-colors"
           >
             <span className="text-b3 uppercase tracking-wide text-[9.5px]">Service</span>
             <span>{serviceType}</span>
@@ -267,7 +267,7 @@ export function RecommendServiceFormScreen() {
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="inline-flex items-center gap-1.5 bg-white border border-bdr rounded-pill px-3 py-1.5 text-[12px] font-extrabold text-black hover:bg-bg5/40 transition-colors"
+              className="inline-flex items-center gap-1.5 bg-white border border-bdr rounded-pill px-3 py-1.5 text-meta font-extrabold text-black hover:bg-bg5/40 transition-colors"
             >
               <span className="text-b3 uppercase tracking-wide text-[9.5px]">They are</span>
               <span>{firstName}</span>
@@ -298,7 +298,7 @@ export function RecommendServiceFormScreen() {
             {COMMON_SERVICE_TYPES.map(t => <option key={t} value={t} />)}
           </datalist>
           {/* Chip shortcuts — tap to auto-fill + advance. */}
-          <p className="text-[11px] font-extrabold uppercase tracking-widest text-b3 mt-5 mb-2.5">
+          <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3 mt-5 mb-2.5">
             Common
           </p>
           <div className="flex flex-wrap gap-2">
@@ -325,7 +325,7 @@ export function RecommendServiceFormScreen() {
           <p className="text-[15px] text-b2 leading-snug mb-1">
             Who&apos;s the {serviceType.toLowerCase()} you want to reco?
           </p>
-          <p className="text-[12px] text-b3 leading-snug mb-4">
+          <p className="text-meta text-b3 leading-snug mb-4">
             They get a message inviting them to claim their profile on Cergio.
           </p>
 
@@ -350,7 +350,7 @@ export function RecommendServiceFormScreen() {
               <button
                 onClick={connectContacts}
                 disabled={syncing}
-                className="bg-g text-white rounded-pill px-3.5 py-1.5 text-[12px] font-extrabold disabled:opacity-60"
+                className="bg-g text-white rounded-pill px-3.5 py-1.5 text-meta font-extrabold disabled:opacity-60"
               >
                 {syncing ? '…' : 'Connect'}
               </button>
@@ -360,14 +360,14 @@ export function RecommendServiceFormScreen() {
           <div className="bg-white border border-bdr rounded-[18px] p-3.5 flex flex-col gap-2.5">
             {pickedId && (
               <div className="flex items-center gap-2 bg-gl border border-g/30 rounded-pill px-3 py-1 self-start">
-                <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-gd text-[10px] font-extrabold">
+                <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-gd text-caps font-extrabold">
                   {initials}
                 </div>
-                <span className="text-[11px] font-extrabold text-gd">From contacts</span>
+                <span className="text-meta-sm font-extrabold text-gd">From contacts</span>
                 <button
                   onClick={clearPick}
                   aria-label="Edit manually"
-                  className="text-gd text-[11px] font-bold ml-0.5"
+                  className="text-gd text-meta-sm font-extrabold ml-0.5"
                 >
                   ×
                 </button>
@@ -384,7 +384,7 @@ export function RecommendServiceFormScreen() {
                 onFocus={() => setFocused(true)}
                 onBlur={() => setTimeout(() => setFocused(false), 150)}
                 placeholder="Friend's name"
-                className="w-full bg-bg5/40 rounded-[10px] px-3 py-2.5 text-[14px] font-bold
+                className="w-full bg-bg5/40 rounded-[10px] px-3 py-2.5 text-body font-extrabold
                            text-black placeholder-b3 outline-none focus:bg-white focus:ring-2 focus:ring-g/30"
               />
               {focused && matches.length > 0 && (
@@ -398,12 +398,12 @@ export function RecommendServiceFormScreen() {
                       className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-bg5/40 text-left
                                  border-b border-bdr last:border-0"
                     >
-                      <div className="w-8 h-8 rounded-full bg-bg5 flex items-center justify-center text-black text-[12px] font-extrabold flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-bg5 flex items-center justify-center text-black text-meta font-extrabold flex-shrink-0">
                         {c.name.split(' ').map(s => s[0] || '').slice(0, 2).join('').toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-extrabold text-black truncate">{c.name}</p>
-                        <p className="text-[11px] text-b3 truncate">{c.email || c.phone || ''}</p>
+                        <p className="text-body-sm font-extrabold text-black truncate">{c.name}</p>
+                        <p className="text-meta-sm text-b3 truncate">{c.email || c.phone || ''}</p>
                       </div>
                     </button>
                   ))}
@@ -417,7 +417,7 @@ export function RecommendServiceFormScreen() {
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 placeholder="Phone"
-                className="flex-1 bg-bg5/40 rounded-[10px] px-3 py-2.5 text-[13px] font-bold
+                className="flex-1 bg-bg5/40 rounded-[10px] px-3 py-2.5 text-body-sm font-extrabold
                            text-black placeholder-b3 outline-none focus:bg-white focus:ring-2 focus:ring-g/30"
               />
               <input
@@ -425,11 +425,11 @@ export function RecommendServiceFormScreen() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="Email"
-                className="flex-1 bg-bg5/40 rounded-[10px] px-3 py-2.5 text-[13px] font-bold
+                className="flex-1 bg-bg5/40 rounded-[10px] px-3 py-2.5 text-body-sm font-extrabold
                            text-black placeholder-b3 outline-none focus:bg-white focus:ring-2 focus:ring-g/30"
               />
             </div>
-            <p className="text-[11px] text-b3 leading-snug">
+            <p className="text-meta-sm text-b3 leading-snug">
               Either phone or email is enough — that's how we send the recommendation.
             </p>
           </div>
@@ -442,7 +442,7 @@ export function RecommendServiceFormScreen() {
           <p className="text-[15px] text-b2 leading-snug mb-1">
             Why <span className="font-extrabold text-black">{firstName}</span>’s a great {serviceType.toLowerCase()}.
           </p>
-          <p className="text-[12px] text-b3 leading-snug mb-4">
+          <p className="text-meta text-b3 leading-snug mb-4">
             We&apos;ll pull this into the message they get.
           </p>
           <textarea
@@ -454,7 +454,7 @@ export function RecommendServiceFormScreen() {
             className="w-full h-[200px] bg-white border border-bdr rounded-[18px] p-4 text-[15px] text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans leading-relaxed"
           />
-          <p className="text-[11px] text-b3 mt-2 text-right">{remaining} characters left</p>
+          <p className="text-meta-sm text-b3 mt-2 text-right">{remaining} characters left</p>
           {step3Valid && (
             <p className="text-[11.5px] text-b3 leading-snug mt-3">
               {firstName} gets an SMS + email asking them to claim their Cergio profile + offer free services to Connectors who&apos;ll spotlight them on IG/TikTok. <span className="text-gd font-extrabold">Friend referred.</span>
@@ -468,7 +468,7 @@ export function RecommendServiceFormScreen() {
         <button
           onClick={step === 3 ? submit : goNext}
           disabled={!ctaReady}
-          className={`w-full rounded-[24px] py-4 text-[16px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-body-lg font-extrabold transition-all
             ${ctaReady
               ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}

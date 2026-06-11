@@ -32,14 +32,14 @@ export function MarkPostedModal({ request, onClose, onPosted }) {
         <h2 className="text-[20px] font-extrabold text-black leading-tight mb-1">
           Mark spotlight as posted
         </h2>
-        <p className="text-[12px] text-b3 mb-4 leading-relaxed">
+        <p className="text-meta text-b3 mb-4 leading-relaxed">
           Paste the public link to your {platformLabel} post. The provider
           will get an email to confirm and your funds release as soon as they do.
         </p>
 
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div>
-            <label className="block text-[12px] font-extrabold text-black mb-1">Post URL</label>
+            <label className="block text-meta font-extrabold text-black mb-1">Post URL</label>
             <input
               type="url"
               value={url}
@@ -47,12 +47,12 @@ export function MarkPostedModal({ request, onClose, onPosted }) {
               placeholder={placeholder}
               autoCapitalize="none"
               autoCorrect="off"
-              className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-[13px] text-black
+              className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-body-sm text-black
                          placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
             />
           </div>
 
-          {err && <p className="text-[12px] text-danger font-bold">{err}</p>}
+          {err && <p className="text-meta text-danger font-extrabold">{err}</p>}
 
           <button
             type="submit"
@@ -68,7 +68,7 @@ export function MarkPostedModal({ request, onClose, onPosted }) {
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="w-full text-[13px] font-extrabold text-b3 py-2 disabled:opacity-50"
+            className="w-full text-body-sm font-extrabold text-b3 py-2 disabled:opacity-50"
           >
             Cancel
           </button>
