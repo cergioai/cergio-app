@@ -90,7 +90,10 @@ export function TermsScreen() {
           You must be at least 18 years old to use Cergio. You are
           responsible for all activity under your account and for
           keeping your credentials secure. You agree to provide
-          accurate information.
+          accurate information. You may sign in using third-party
+          platform identities (Google, Instagram, TikTok); doing so
+          authorizes Cergio to access only the data described in our
+          Privacy Policy for that platform.
         </Section>
 
         <Section title="4. Bookings, payments, and cancellations">
@@ -194,6 +197,21 @@ export function TermsScreen() {
             Contact form
           </Link>. Pick the relevant subject so the right person
           replies.
+        </Section>
+
+        <Section title="16. Data processing">
+          Cergio (operated by Yogotoo Inc) acts as data controller. Our
+          data processors are Supabase and Vercel (infrastructure, US),
+          Stripe (payments, US), and Resend (email, US). We process
+          personal data only for the purposes described in the Privacy
+          Policy and only to the extent users have been informed of and
+          consented to. We do not grant governments standing access to
+          user data; we comply with lawful requests only and will
+          challenge overly broad demands. See our{' '}
+          <Link to="/privacy" className="text-gd font-extrabold underline">
+            Privacy Policy
+          </Link>{' '}
+          for full detail.
         </Section>
 
       </div>
