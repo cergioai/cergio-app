@@ -14,7 +14,7 @@ import { supabase } from '../lib/supabase';
 const OPTIONS = [
   { id: 'available',    label: 'Available',           dot: 'bg-g',         copy: 'Bookings on this date will automatically be accepted' },
   { id: 'request_only', label: 'Request only',        dot: 'bg-warn',      copy: 'Customers can only send you requests that you can manually accept or decline.' },
-  { id: 'unavailable',  label: "I'm not available",   dot: 'bg-danger', copy: 'Customers will not be able to book or request you at this time. This setting should only be on when you cannot work.' },
+  { id: 'unavailable',  label: "I'm not available",   dot: 'bg-[#E05A3A]', copy: 'Customers will not be able to book or request you at this time. This setting should only be on when you cannot work.' },
 ];
 
 function formatHour(h) {
