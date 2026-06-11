@@ -989,28 +989,10 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* CERGIO-GUARD (2026-06-04 v8): Free-flow context pill.
-          On the Free-for-Connectors path, the user submitted hoping
-          a nearby Connector picks it up — but the prior UI gave no
-          hint about that. Pill makes the barter targeting explicit
-          while the leaf roams. Tarik: rigorous UX testing, barter
-          referrals + direct bookings. */}
-      {freeServices && (isLoading || providers.length === 0) && (
-        <div className="mx-5 mb-3">
-          <div className="inline-flex items-center gap-2 bg-gl border border-g/30 rounded-pill px-3 py-1.5">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="9"/>
-              <path d="M12 7v5l3 2"/>
-            </svg>
-            <p className="text-[11.5px] font-extrabold text-gd leading-none">
-              Sent to Connectors near you · they barter for ${REWARDS.perFriend} in free spotlights
-            </p>
-          </div>
-          <p className="text-[11px] text-b3 mt-1.5 leading-snug">
-            Connectors are locals who get free services in exchange for spotlighting them on IG/TikTok. The first one to claim wins the barter.
-          </p>
-        </div>
-      )}
+      {/* CERGIO-GUARD: "Sent to Connectors" barter pill removed — it
+          showed wrong copy for Connector users and confused both paths.
+          The leaf + "We'll let you know when offers land." block below
+          is the canonical waiting state for all users. */}
 
       {/* CERGIO-GUARD (2026-06-03): leaf brand mark stays as a
           calm visual anchor next to the dynamic status line above.

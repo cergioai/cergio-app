@@ -2955,64 +2955,60 @@ export async function listSocialFeed({ limit = 40, days = 60 } = {}) {
 }
 
 /**
- * listInvitableProfiles — real profiles the signed-in user can invite
- * or reco to, sourced from `profiles`.
+ * listInvitableProfiles — profiles the signed-in user can invite or
+ * recommend to, scoped to people already in their network (followed_id).
  *
- * Replaces the hard-coded CONTACTS mock that previously powered
- * /invite/friends. Tarik: "populate with test data instead of hard
- * coded data". Profiles are real seeded rows — Alex / Connie / Sam /
- * Maria / Sofia / Henry / Jackie / Penny + anyone else who has signed
- * up. Excludes the signed-in user from their own contact list.
+ * CERGIO-GUARD: do NOT query the full `profiles` table here. Doing so
+ * dumps every seed/test user into the picker, which looks broken and
+ * exposes strangers as fake "contacts". Only people the current user
+ * explicitly follows (via the `network` table) should appear.
+ *
+ * If the user's network is empty the screen already shows an honest
+ * "No one to invite yet — when friends sign up they'll appear here."
+ * empty state. That is the correct experience, not a full-DB dump.
  *
  * Returns rows shaped { id, name, is_connector, initial, has_photo,
- * avatar_seed } — has_photo is always false (no avatar_url on profiles),
- * but avatar_seed is used to deterministically pick a gradient.
+ * avatar_seed }.
  */
 export async function listInvitableProfiles({ limit = 200 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
   const { data: userRes } = await supabase.auth.getUser();
   const meId = userRes?.user?.id || null;
+  if (!meId) return { data: [], error: null };
 
+  // Step 1: get the IDs this user follows.
+  const { data: netRows, error: netErr } = await supabase
+    .from('network')
+    .select('followed_id')
+    .eq('follower_id', meId)
+    .limit(limit);
+  if (netErr) return { data: [], error: netErr };
+  const followedIds = (netRows || []).map(r => r.followed_id).filter(Boolean);
+  if (followedIds.length === 0) return { data: [], error: null };
+
+  // Step 2: fetch profiles only for those followed IDs.
   const { data: profs, error } = await supabase
     .from('profiles')
     .select('id, display_name, cc_verified_at')
+    .in('id', followedIds)
     .not('display_name', 'is', null)
-    .order('display_name', { ascending: true })
-    .limit(limit);
+    .order('display_name', { ascending: true });
   if (error) return { data: [], error };
 
-  // CERGIO-GUARD (2026-05-30): synthesize phone + email per profile so
-  // the Recommend / Invite flow has values to autofill. The
-  // recommendations + notifications tables accept phone/email regardless
-  // of source, and these are deterministic per id so re-renders don't
-  // shuffle them. Real signups (after launch) can have real phone/email
-  // joined off auth.users — but for the test-data seed this lets the
-  // autosuggest land in a usable state.
-  const slug = (name) =>
-    name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
-  const phoneFromId = (id) => {
-    let h = 0;
-    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-    const last4 = String(Math.abs(h) % 10000).padStart(4, '0');
-    return `(305) 555-${last4}`;
-  };
-
+  // CERGIO-GUARD: no synthesized phone/email — these are real network
+  // contacts, not seed-data placeholders. Phone/email join from auth.users
+  // is a future enhancement; for now only the profile display is needed.
   const rows = (profs || [])
-    .filter(p => p.id !== meId)
     .filter(p => (p.display_name || '').trim().length > 0)
     .map(p => {
       const name = p.display_name.trim();
-      const initial = (name[0] || '?').toUpperCase();
       return {
         id:           p.id,
         name,
         is_connector: !!p.cc_verified_at,
-        initial,
-        has_photo:    false, // no avatar_url column on profiles yet
+        initial:      (name[0] || '?').toUpperCase(),
+        has_photo:    false,
         avatar_seed:  p.id,
-        // Synthesized contact channels for the test flow.
-        phone:        phoneFromId(p.id),
-        email:        `${slug(name) || 'friend'}@cergio.test`,
       };
     });
 

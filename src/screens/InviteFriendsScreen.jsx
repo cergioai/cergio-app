@@ -56,12 +56,7 @@ export function InviteFriendsScreen() {
     listInvitableProfiles({ limit: 200 }).then(({ data }) => {
       if (cancelled) return;
       setContacts(data || []);
-      // Pre-select the first two for testing convenience — keeps the
-      // footer visible on first paint so Tarik can see the CTA without
-      // having to find + tap.
-      if (data && data.length > 0) {
-        setSelected(new Set(data.slice(0, 2).map(c => c.id)));
-      }
+      // CERGIO-GUARD: no pre-selection — user picks their own contacts.
     });
     return () => { cancelled = true; };
   }, []);

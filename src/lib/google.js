@@ -214,6 +214,15 @@ export async function verifyAddress(text) {
       const rows = await res.json();
       const r = Array.isArray(rows) ? rows[0] : null;
       if (r && r.lat && r.lon) {
+        // CERGIO-GUARD: Nominatim rescued the request — clear any Google
+        // geocode error so SetupCheckBanner doesn't show a false alarm.
+        // The address resolved successfully; GCP config issues are a
+        // developer concern, not a user-facing problem. Auth errors
+        // (kind='auth') stay visible — those affect more than geocoding.
+        if (status.lastError?.kind === 'geocode') {
+          status.lastError = null;
+          emit();
+        }
         return {
           ok:       true,
           address:  r.display_name || trimmed,
