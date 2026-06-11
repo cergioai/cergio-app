@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
-import { notifyUser, listInvitableProfiles } from '../lib/api';
+import { notifyUser } from '../lib/api';
 import { buildInviteUrl } from '../lib/referral';
 import { supabase, supabaseReady } from '../lib/supabase';
 
@@ -53,21 +53,14 @@ export function RecommendServiceFormScreen() {
   const [serviceType, setServiceType] = useState('');
 
   // ── Step 2: recipient ────────────────────────────────────────────────
+  // CERGIO-GUARD (SPEC-46): Cergio network profiles removed as contact source.
+  // Network profiles have no phone/email — using them as a contact source silently
+  // breaks form validation and produces misleading "sample contacts loaded" toasts.
+  // Only real device contacts (from native Contact Picker API) are used here.
   const [synced, setSynced] = useState([]);
   const [syncing, setSyncing] = useState(false);
-  const [seededPool, setSeededPool] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    listInvitableProfiles({ limit: 200 }).then(({ data }) => {
-      if (!cancelled) setSeededPool(data || []);
-    });
-    return () => { cancelled = true; };
-  }, []);
   const hasSynced = synced.length > 0;
-  const pool = useMemo(
-    () => hasSynced ? synced : seededPool,
-    [hasSynced, synced, seededPool],
-  );
+  const pool = synced;
 
   const [name,  setName]  = useState('');
   const [phone, setPhone] = useState('');
@@ -108,32 +101,34 @@ export function RecommendServiceFormScreen() {
   const remaining   = Math.max(0, 280 - blurb.length);
 
   const connectContacts = async () => {
+    // CERGIO-GUARD (SPEC-46): Cergio network profiles must NEVER be used as a
+    // contact source here — those profiles have no phone/email so picking
+    // them leaves the form fields empty. Only the native Contact Picker API
+    // yields real contact data. On unsupported browsers, prompt manual entry.
     if (!supportsContactPicker) {
-      if (seededPool.length > 0) {
-        setSynced(seededPool);
-        showToast(`${seededPool.length} sample contacts loaded — start typing a name.`);
-        nameRef.current?.focus();
-      } else {
-        showToast('No contacts available yet. Try again in a moment.');
-      }
+      showToast('Open on your phone to import contacts — or type name + phone/email below.');
+      nameRef.current?.focus();
       return;
     }
     setSyncing(true);
     try {
+      // Single-select: picking one person should immediately populate all fields.
       const result = await navigator.contacts.select(
         ['name', 'tel', 'email'],
-        { multiple: true },
+        { multiple: false },
       );
-      const mapped = (result || []).map((c, i) => ({
-        id:    `synced-${i}`,
+      const contacts = result || [];
+      if (!contacts.length) { showToast('No contact selected.'); return; }
+      const c = contacts[0];
+      const picked = {
+        id:    `synced-0`,
         name:  (c.name  || [])[0] || '',
         phone: (c.tel   || [])[0] || '',
         email: (c.email || [])[0] || '',
-      })).filter(c => c.name);
-      if (!mapped.length) { showToast('No contacts picked.'); return; }
-      setSynced(mapped);
-      showToast(`${mapped.length} contacts ready — start typing a name.`);
-      nameRef.current?.focus();
+      };
+      if (!picked.name) { showToast('Contact has no name — enter manually.'); return; }
+      // Auto-populate all fields immediately.
+      pickMatch(picked);
     } catch (e) {
       showToast(e?.message || 'Contact picker cancelled');
     } finally {
@@ -346,10 +341,10 @@ export function RecommendServiceFormScreen() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13.5px] font-extrabold text-black leading-tight">
-                  Plug in your contacts
+                  Pick from your contacts
                 </p>
                 <p className="text-[11.5px] text-b3 mt-0.5 leading-snug">
-                  We auto-fill name + phone + email as you type.
+                  Tap to choose — name, phone & email fill in automatically.
                 </p>
               </div>
               <button

@@ -85,6 +85,24 @@ qa.mjs #45 enforces this.
 
 ---
 
+## UI / BEHAVIOR — RECO FORM CONTACT PICKER
+
+### SPEC-46 · Reco form contacts: device-only, single-select, auto-populate
+**Status:** FROZEN — 2026-06-11  
+**Rule:** In `RecommendServiceFormScreen`, the "Pick from your contacts" button must:
+1. Use ONLY the native Contact Picker API (`navigator.contacts.select`) — never fall back to `seededPool` / Cergio network profiles (those have no phone/email)
+2. Use `multiple: false` (single select) so the chosen contact's name + phone + email populate all three fields immediately
+3. On unsupported browsers (desktop): show a toast directing the user to enter details manually — no fake contacts
+
+**Banned behaviors:**
+- Using `listInvitableProfiles()` or any Cergio network data as a contact source in this form
+- Loading a "pool" of contacts that require a secondary search step to pick from
+- Showing a toast that says "N sample contacts loaded" when no real device contacts were imported
+
+qa.mjs #46 enforces this.
+
+---
+
 ## DATA QUALITY — INFLUENCER CRAWLER
 
 ### SPEC-CQ1 · Micro-influencer follower band
@@ -128,6 +146,7 @@ Every `git push` runs `qa.mjs` via `Unlock and Push.command`. A failing test **b
 | SPEC-44 | #44 | Geocoder error clears when Nominatim rescues |
 | SPEC-12 | #12 | No mock data on signed-in screens |
 | SPEC-45 | #45 | Free spotlight: no Pay step, no paid_at gate, no 24h expiry |
+| SPEC-46 | #46 | Reco form: device contacts only, single-select, auto-populate |
 
 ---
 

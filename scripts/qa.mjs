@@ -1692,6 +1692,35 @@ test('spec-45-free-spotlight-no-pay-gate', 'FROZEN: Free ($0) spotlight skips Pa
   }
 });
 
+test('spec-46-reco-form-device-contacts-only', 'FROZEN: Reco form uses device contacts only — no network profile fallback, single-select, auto-populate (SPEC-46)', '#46', async () => {
+  const recoFile = path.join(REPO_ROOT, 'src/screens/RecommendServiceFormScreen.jsx');
+  const src = fs.readFileSync(recoFile, 'utf8');
+
+  // Must NOT import listInvitableProfiles (network profiles have no phone/email)
+  assert(
+    !src.includes('listInvitableProfiles'),
+    'REGRESSION: RecommendServiceFormScreen imports listInvitableProfiles — network profiles have no phone/email, causes empty contact fields — SPEC-46 violated'
+  );
+
+  // Must NOT have seededPool (the old fallback to network profiles)
+  assert(
+    !src.includes('seededPool'),
+    'REGRESSION: seededPool found in RecommendServiceFormScreen — this was the old network-profile fallback that left phone/email blank — SPEC-46 violated'
+  );
+
+  // Must use single-select (multiple: false) so picking a contact immediately populates fields
+  assert(
+    src.includes('multiple: false'),
+    'REGRESSION: Contact picker must use multiple: false (single-select) so one contact fills all fields immediately — SPEC-46 violated'
+  );
+
+  // Must call pickMatch() after contact picker (auto-populate pattern)
+  assert(
+    src.includes('pickMatch(picked)') || src.includes('pickMatch(contact)'),
+    'REGRESSION: Contact picker must call pickMatch() immediately after picking a contact to auto-populate name/phone/email — SPEC-46 violated'
+  );
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
