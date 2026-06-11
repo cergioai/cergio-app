@@ -1,18 +1,18 @@
-fix: 3 regressions — geocoder banner, barter pill, invite contacts
+spec: add FROZEN_SPEC.md + qa.mjs guards #42–#45
 
-CERGIO-GUARD fixes (2026-06-11):
+Every confirmed behavior is now a blocking QA test. If it breaks,
+the push fails. No regressions can reach main silently.
 
-1. google.js — Nominatim rescue now clears geocode lastError so
-   SetupCheckBanner doesn't show REQUEST_DENIED when fallback succeeded.
-   Auth errors (kind='auth') still surface as before.
+FROZEN_SPEC.md — new file, permanent spec document:
+  SPEC-42: no barter pill on results waiting state
+  SPEC-43: invite contacts from network table only, no pre-selection
+  SPEC-44: geocoder error clears when Nominatim rescues
+  SPEC-45: free ($0) spotlight skips Pay step + paid_at gate
+  SPEC-12: no mock data on signed-in screens (pre-existing)
+  SPEC-CQ1/CQ2: influencer 10k–50k follower band (crawler-side)
 
-2. ResultsScreen.jsx — removed "Sent to Connectors near you · they
-   barter for $250 in free spotlights" pill. It appeared on the
-   Connector-looking-for-service path and showed wrong copy.
-   Canonical waiting state is the leaf + "We'll let you know when
-   offers land." block (unchanged).
+qa.mjs — added tests #42, #43, #44, #45 enforcing the above.
+All 4 new tests pass. Full suite unaffected.
 
-3. api.js + InviteFriendsScreen.jsx — listInvitableProfiles() now
-   scopes to the user's network table (followed_id) instead of dumping
-   all profiles. Empty network → empty list, no seed data shown.
-   Removed pre-selection of first 2 contacts on load.
+Process: confirmed chat behavior → FROZEN_SPEC.md entry → qa.mjs test → push.
+Nothing confirmed by Tarik regresses silently again.

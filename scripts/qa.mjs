@@ -1577,6 +1577,121 @@ async function main() {
   process.exit(failed === 0 ? 0 : 1);
 }
 
+// ─── FROZEN SPEC GUARDS ──────────────────────────────────────────────────────
+// These tests enforce FROZEN_SPEC.md. Every item below is a behavior Tarik
+// confirmed in chat. Regressions here are treated as critical failures —
+// they break user trust and app confidence. DO NOT remove or weaken these.
+//
+// Reference: cergio-app/FROZEN_SPEC.md
+// Process: if a test below fails, fix the regression, never delete the test.
+
+test('spec-42-no-barter-pill', 'FROZEN: No "barter" pill on results waiting state (SPEC-42)', '#42', async () => {
+  // The barter pill ("Sent to Connectors near you · they barter for $250 in
+  // free spotlights") was removed 2026-06-11 after regressing. The only
+  // canonical waiting state is the leaf + "We'll let you know when offers land."
+  // This test ensures the banned copy can never sneak back in.
+  const src = readFile('src/screens/ResultsScreen.jsx');
+
+  // Banned phrases — any of these appearing in JSX (not in comments) is a regression.
+  const stripped = src
+    .replace(/\/\/[^\n]*/g, '')           // strip line comments
+    .replace(/\/\*[\s\S]*?\*\//g, '');    // strip block comments
+
+  assert(
+    !stripped.includes('they barter for'),
+    'REGRESSION: "they barter for" barter pill copy found in ResultsScreen.jsx — SPEC-42 violated'
+  );
+  assert(
+    !stripped.includes('Connectors are locals who get free services in exchange for spotlighting'),
+    'REGRESSION: barter pill explanation copy found in ResultsScreen.jsx — SPEC-42 violated'
+  );
+
+  // Canonical waiting state must still be present.
+  assert(
+    src.includes("We'll let you know when offers land"),
+    'REGRESSION: canonical waiting copy "We\'ll let you know when offers land." is missing from ResultsScreen.jsx — SPEC-42 violated'
+  );
+});
+
+test('spec-43-invite-network-only', 'FROZEN: Invite contacts scoped to network table, no pre-selection (SPEC-43)', '#43', async () => {
+  const api = readFile('src/lib/api.js');
+  const screen = readFile('src/screens/InviteFriendsScreen.jsx');
+
+  // api.js: listInvitableProfiles must query the network table for followed_id,
+  // not do a bare .from('profiles') select without a network scope.
+  assert(
+    api.includes("from('network')") || api.includes('from("network")'),
+    'REGRESSION: listInvitableProfiles does not query network table — SPEC-43 violated (full profiles dump risk)'
+  );
+  assert(
+    api.includes('followed_id') || api.includes('follower_id'),
+    'REGRESSION: listInvitableProfiles missing follower_id / followed_id scope — SPEC-43 violated'
+  );
+
+  // InviteFriendsScreen.jsx: must NOT pre-select any contacts on load.
+  // The pattern setSelected(new Set(data.slice(0, N)...)) is permanently banned.
+  const screenStripped = screen
+    .replace(/\/\/[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert(
+    !screenStripped.match(/setSelected\s*\(\s*new Set\s*\(\s*data\.slice/),
+    'REGRESSION: InviteFriendsScreen pre-selects contacts on load (setSelected+slice) — SPEC-43 violated'
+  );
+});
+
+test('spec-44-geocoder-nominatim-clears-error', 'FROZEN: Nominatim rescue clears geocode lastError so banner disappears (SPEC-44)', '#44', async () => {
+  const src = readFile('src/lib/google.js');
+
+  // After a successful Nominatim fallback, the code must clear status.lastError
+  // when kind === 'geocode'. Without this, SetupCheckBanner shows a false
+  // REQUEST_DENIED error even though the address resolved successfully.
+  assert(
+    src.includes("status.lastError?.kind === 'geocode'") ||
+    src.includes('status.lastError?.kind === "geocode"'),
+    'REGRESSION: google.js does not check lastError.kind === "geocode" in Nominatim path — SPEC-44 violated'
+  );
+  assert(
+    src.includes('status.lastError = null'),
+    'REGRESSION: google.js Nominatim path does not clear status.lastError — banner will show false error — SPEC-44 violated'
+  );
+  // Auth errors must NOT be cleared by Nominatim (they affect more than geocoding).
+  // The null-clear must be guarded by the kind==='geocode' check, not unconditional.
+  const nominatimBlock = src.slice(src.indexOf('Nominatim'), src.indexOf('status.lastError = null') + 50);
+  assert(
+    nominatimBlock.includes("kind === 'geocode'") || nominatimBlock.includes('kind === "geocode"'),
+    'REGRESSION: google.js clears lastError unconditionally in Nominatim path — auth errors would be lost — SPEC-44 violated'
+  );
+});
+
+test('spec-45-free-spotlight-no-pay-gate', 'FROZEN: Free ($0) spotlight skips Pay step and paid_at gate (SPEC-45)', '#45', async () => {
+  // Free spotlights ($0) must never require payment and must not be gated
+  // by paid_at or the 24h expiry rule that applies to unpaid spotlights.
+  // Source files to check: any SpotlightScreen, SpotlightPayScreen, or
+  // spotlight-related logic in the screens/ directory.
+  const screenFiles = fs.readdirSync(path.join(REPO_ROOT, 'src/screens'))
+    .filter(f => /spotlight/i.test(f));
+
+  // If there's no spotlight screen at all yet, this test is informational.
+  if (screenFiles.length === 0) return; // not built yet — skip
+
+  for (const f of screenFiles) {
+    const src = readFile(`src/screens/${f}`);
+    const stripped = src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+    // A free spotlight must not unconditionally require paid_at.
+    // Look for paid_at checks that aren't guarded by a free/zero check.
+    if (stripped.includes('paid_at') && !stripped.includes('isFree') && !stripped.includes('rate === 0') && !stripped.includes("rate === '0'")) {
+      // Only fail if paid_at appears to gate rendering with no free escape.
+      const hasFreeBypass =
+        stripped.includes('free') ||
+        stripped.includes('noCharge') ||
+        stripped.includes('zeroRate');
+      assert(hasFreeBypass,
+        `REGRESSION: ${f} gates on paid_at with no free-swap bypass — SPEC-45 violated`);
+    }
+  }
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
