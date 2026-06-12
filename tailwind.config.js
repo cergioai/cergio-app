@@ -75,6 +75,13 @@ export default {
         // as `text-[#A32D2D]` in ~8 files; replaced with `text-danger`.
         danger: '#A32D2D',
 
+        // ── Semantic: salmon CTA ──────────────────────────────────────────
+        // Pixel-sampled 2026-06-11 from FigJam board (source of truth per Tarik).
+        // Used exclusively for the "Invite friends" CTA button — warm accent
+        // that complements the green brand without competing with it.
+        // NEVER use for availability/status indicators (use bg-[#E05A3A] for those).
+        salmon: '#f9754c',
+
         // ── Semantic: warning / amber notice ─────────────────────────────
         // For "tentative" / "we'll review" / "wait" panels. Used by
         // TaxonomyMatchBadge (provider override), RequestDetailScreen
