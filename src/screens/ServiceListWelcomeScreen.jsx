@@ -2,6 +2,7 @@
 // Per Profile-as-canon: 30px page title (post-hero spacing keeps 26 here),
 // 17px primary CTA, real user first name instead of hardcoded "Jennifer",
 // and a 1-2-3 step preview so the user knows how long the listing flow is.
+import { useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 
 export function ServiceListWelcomeScreen() {
@@ -11,15 +12,18 @@ export function ServiceListWelcomeScreen() {
   const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || 'there';
   const firstName   = displayName.split(/[\s@.]/)[0];
 
-  // CERGIO-GUARD (2026-06-01): Tarik (2026-06-01) — "registered as a
-  // new service and saw a default address (5700 collins). should be
-  // blank for new users." The listingDraft state in App.jsx lives for
-  // the whole session, so a prior in-progress listing (or stale chat
-  // state) leaks into the form. Welcome IS the "start fresh" entry,
-  // so wipe the draft here. Resumed flows would route directly to
-  // /list-service/about without passing through Welcome.
-  const handleStart = () => {
+  // CERGIO-GUARD (2026-06-01 / 2026-06-12): Always reset the listing draft
+  // when Welcome mounts — not just on button click. listingDraft lives in
+  // App.jsx for the whole session, so a prior in-progress listing (e.g. user
+  // exited via the Exit button mid-flow) leaves a stale location in the draft.
+  // Resetting on mount guarantees ServiceListAboutScreen sees location:''
+  // regardless of React 18 batching timing or how the user navigated here.
+  useEffect(() => {
     resetListingDraft?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleStart = () => {
     navigate('/list-service/about');
   };
 
@@ -49,10 +53,10 @@ export function ServiceListWelcomeScreen() {
       {/* body — 26px hero title + 15px b3 body matches Profile section
           treatment. Steps preview so users know what they're committing to. */}
       <div className="flex-1 px-7 pt-7">
-        <h1 className="text-[26px] font-extrabold text-black leading-tight mb-3">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight mb-3">
           Hi {firstName}!
         </h1>
-        <p className="text-[15px] text-b3 leading-relaxed mb-5 font-medium">
+        <p className="text-body-lg text-b3 leading-relaxed mb-5 font-medium">
           You're about to list your service on Cergio — friends-of-friends
           will find you, book you, and grow your network.
         </p>
@@ -70,7 +74,7 @@ export function ServiceListWelcomeScreen() {
       <div className="px-5 pt-6 pb-6">
         <button
           onClick={handleStart}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-heading-2 font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           List my service
