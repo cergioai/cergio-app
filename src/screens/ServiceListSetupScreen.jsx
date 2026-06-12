@@ -59,19 +59,27 @@ export function ServiceListSetupScreen() {
   }, [verified]);
 
   // Escape hatch: gate was dismissed (user tapped "Maybe later") →
-  // navigate to the about step so they can pick up the draft again.
-  // We use a fixed route here (not navigate(-1)) so we always land on
-  // a known, functional screen regardless of browser history state.
+  // go straight to home. Previously this navigated back to
+  // /list-service/about which left the user trapped in the listing flow
+  // (back button cycled through listing steps, no visible exit).
   const handleGateDismiss = () => {
     setGateOpen(false);
     setGateDismissed(true);
-    navigate('/list-service/about', { replace: true });
+    navigate('/home', { replace: true });
   };
 
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-gm to-g relative overflow-hidden">
-      <div className="px-5 pt-6">
+      <div className="px-5 pt-6 flex items-center justify-between">
         <button onClick={() => navigate('/list-service/about')} className="text-white text-2xl font-extrabold">‹</button>
+        {/* Always-visible exit — gets the user to home even if the gate
+            is loading or the dismiss navigation ever fails.             */}
+        <button
+          onClick={() => navigate('/home', { replace: true })}
+          className="text-white/80 text-body font-extrabold px-2 py-1"
+        >
+          Exit
+        </button>
       </div>
 
       <div className="absolute top-[42%] left-[28%] w-3 h-px bg-white/70" />
