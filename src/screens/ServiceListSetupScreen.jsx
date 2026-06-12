@@ -16,8 +16,9 @@ export function ServiceListSetupScreen() {
   const navigate = useNavigate();
   const { listingDraft, resetListingDraft, showToast } = useOutletContext();
   const [errorMessage, setErrorMessage] = useState(null);
-  const [gateOpen, setGateOpen] = useState(false);
-  const [verified, setVerified] = useState(null); // null = loading, bool once resolved
+  const [gateOpen, setGateOpen]   = useState(false);
+  const [gateDismissed, setGateDismissed] = useState(false);
+  const [verified, setVerified]   = useState(null); // null = loading, bool once resolved
 
   // Step 1: probe verification state on mount. Don't call createService
   // until we know whether to show the gate.
@@ -57,10 +58,20 @@ export function ServiceListSetupScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified]);
 
+  // Escape hatch: gate was dismissed (user tapped "Maybe later") →
+  // navigate to the about step so they can pick up the draft again.
+  // We use a fixed route here (not navigate(-1)) so we always land on
+  // a known, functional screen regardless of browser history state.
+  const handleGateDismiss = () => {
+    setGateOpen(false);
+    setGateDismissed(true);
+    navigate('/list-service/about', { replace: true });
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-gm to-g relative overflow-hidden">
       <div className="px-5 pt-6">
-        <button onClick={() => navigate(-1)} className="text-white text-2xl font-extrabold">‹</button>
+        <button onClick={() => navigate('/list-service/about')} className="text-white text-2xl font-extrabold">‹</button>
       </div>
 
       <div className="absolute top-[42%] left-[28%] w-3 h-px bg-white/70" />
@@ -70,13 +81,7 @@ export function ServiceListSetupScreen() {
       {gateOpen && (
         <CcGateModal
           reason="listing"
-          onClose={() => {
-            // User dismissed without verifying — bounce back so they can
-            // resume later. We don't silently persist an un-verified
-            // listing.
-            setGateOpen(false);
-            navigate(-1);
-          }}
+          onClose={handleGateDismiss}
           onVerified={() => {
             setGateOpen(false);
             setVerified(true);
@@ -88,13 +93,25 @@ export function ServiceListSetupScreen() {
       <div className="flex-1 flex flex-col items-center justify-center -mt-12 px-7 text-center">
         {errorMessage ? (
           <>
-            <p className="text-[20px] font-extrabold text-white mb-2">We couldn't save your listing</p>
+            <p className="text-heading-1 font-extrabold text-white mb-2">We couldn't save your listing</p>
             <p className="text-body text-white/85 mb-6 max-w-[300px]">{errorMessage}</p>
             <button
-              onClick={() => navigate(-1)}
-              className="bg-white text-g rounded-[24px] px-8 py-3 text-[15px] font-extrabold"
+              onClick={() => navigate('/list-service/about')}
+              className="bg-white text-g rounded-[24px] px-8 py-3 text-body-lg font-extrabold"
             >
               Go back
+            </button>
+          </>
+        ) : gateDismissed ? (
+          /* Safety net: shouldn't render (navigate replaces this screen)
+             but shows an exit if navigate failed for any reason.         */
+          <>
+            <p className="text-heading-2 font-extrabold text-white mb-4">Verification skipped</p>
+            <button
+              onClick={() => navigate('/list-service/about')}
+              className="bg-white text-g rounded-[24px] px-8 py-3 text-body-lg font-extrabold"
+            >
+              Back to my listing
             </button>
           </>
         ) : (

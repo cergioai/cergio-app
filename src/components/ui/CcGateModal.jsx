@@ -32,7 +32,13 @@ function SaveForm({ onVerified, onCancel }) {
     });
 
     if (stripeError) {
-      setError(stripeError.message || 'Could not verify card.');
+      // Stripe codes that mean "card rejected" vs. "try again" vs. "bad input".
+      const code = stripeError.code || '';
+      const isDeclined = /card_declined|insufficient_funds|do_not_honor|lost_card|stolen_card/i.test(code);
+      const hint = isDeclined
+        ? 'Your card was declined. Try a different card or tap "Maybe later" to skip for now.'
+        : (stripeError.message || 'Could not verify card. Please try again.');
+      setError(hint);
       setBusy(false);
       return;
     }
@@ -44,7 +50,12 @@ function SaveForm({ onVerified, onCancel }) {
       return;
     }
 
-    setError(`Unexpected setup state: ${setupIntent?.status ?? 'unknown'}`);
+    // requires_action or other non-terminal states — Stripe may need 3DS.
+    if (setupIntent?.status === 'requires_action') {
+      setError('Your bank requires extra verification. Please complete it in the window that appeared, then try again.');
+    } else {
+      setError(`Unexpected setup state: ${setupIntent?.status ?? 'unknown'}. Try again or tap "Maybe later".`);
+    }
     setBusy(false);
   };
 
@@ -64,7 +75,7 @@ function SaveForm({ onVerified, onCancel }) {
             ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
             : 'bg-bg5 text-b3 cursor-not-allowed'}`}
       >
-        {busy ? 'Verifying…' : 'Verify with card'}
+        {busy ? 'Verifying…' : error ? 'Try again' : 'Verify with card'}
       </button>
       <button
         type="button"

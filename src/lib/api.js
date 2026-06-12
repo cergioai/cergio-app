@@ -1786,38 +1786,67 @@ export async function listInboundRequests({ limit = 20 } = {}) {
   if (!userRes?.user) return { data: [], error: null };
   const uid = userRes.user.id;
 
-  // 1. What provider types does this provider serve?
+  // 1. What services does this provider have listed?
+  //    Pull taxonomy_provider_type AND category + title as fallbacks for
+  //    providers whose listing pre-dates taxonomy resolution.
   const { data: mySvcs, error: svcErr } = await supabase
     .from('services')
-    .select('id, taxonomy_provider_type')
+    .select('id, taxonomy_provider_type, category, title')
     .eq('owner_id', uid)
     .eq('status', 'listed');
   if (svcErr) return { data: [], error: svcErr };
-  const myTypes = [...new Set((mySvcs || []).map(s => s.taxonomy_provider_type).filter(Boolean))];
-  if (myTypes.length === 0) return { data: [], error: null };
-  // Map provider_type → first service id, so a card can attach a real service.
+  if (!mySvcs || mySvcs.length === 0) return { data: [], error: null };
+
+  // Build lookup: exact taxonomy match first; fall back to category/title.
+  const myTypes = [...new Set(mySvcs.map(s => s.taxonomy_provider_type).filter(Boolean))];
+  // Also collect categories for the fallback query.
+  const myCategories = [...new Set(mySvcs.map(s => s.category).filter(Boolean))];
+
+  // Map service_type/category string → service id for the card's CTA.
   const typeToSvc = {};
   for (const s of mySvcs) {
-    if (s.taxonomy_provider_type && !typeToSvc[s.taxonomy_provider_type]) {
-      typeToSvc[s.taxonomy_provider_type] = s.id;
-    }
+    const key = s.taxonomy_provider_type || s.category || s.title;
+    if (key && !typeToSvc[key]) typeToSvc[key] = s.id;
   }
+  // Catch-all: if no key matched, any service works for the Accept CTA.
+  const fallbackSvcId = mySvcs[0]?.id || null;
 
-  // 2. Pull open requests whose service_type matches one of my types.
-  //    "Open" = created in last 60 minutes (per the broadcast window in
-  //    MARKETPLACE_SPEC § 6 S3) AND status='pending'. RLS lets any
-  //    matching provider read these.
-  const { data: reqs, error: reqErr } = await supabase
+  // 2. Pull open requests.
+  //    Window: 24 h (was 60 min — too short for realistic testing and
+  //    providers who check intermittently). Status must be 'pending'.
+  const windowMs  = 24 * 60 * 60 * 1000;
+  const windowISO = new Date(Date.now() - windowMs).toISOString();
+
+  // Build OR filter: match on service_type (taxonomy) OR category.
+  // When taxonomy_provider_type is set we get exact matches; when it's
+  // null we fall through to category so providers without taxonomy data
+  // still see relevant requests.
+  let query = supabase
     .from('requests')
     .select(`
-      id, service_type, description, location_text, created_at,
+      id, service_type, category, description, location_text, created_at,
       requester:profiles!requests_requester_id_fkey ( id, display_name )
     `)
-    .in('service_type', myTypes)
     .eq('status', 'pending')
-    .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+    .gte('created_at', windowISO)
     .order('created_at', { ascending: false })
     .limit(limit);
+
+  if (myTypes.length > 0 && myCategories.length > 0) {
+    // Match on either taxonomy type OR category.
+    query = query.or(
+      `service_type.in.(${myTypes.map(t => `"${t}"`).join(',')}),` +
+      `category.in.(${myCategories.map(c => `"${c}"`).join(',')})`,
+    );
+  } else if (myTypes.length > 0) {
+    query = query.in('service_type', myTypes);
+  } else if (myCategories.length > 0) {
+    query = query.in('category', myCategories);
+  }
+  // If neither is set just fetch recent pending requests — better than
+  // showing nothing to a provider who skipped taxonomy resolution.
+
+  const { data: reqs, error: reqErr } = await query;
   if (reqErr) return { data: [], error: reqErr };
 
   // 3. Drop requests I've already responded to.
@@ -1831,7 +1860,13 @@ export async function listInboundRequests({ limit = 20 } = {}) {
     return {
       data: reqs
         .filter(r => !skip.has(r.id))
-        .map(r => ({ ...r, my_service_id: typeToSvc[r.service_type] || null })),
+        .map(r => ({
+          ...r,
+          my_service_id:
+            typeToSvc[r.service_type] ||
+            typeToSvc[r.category]     ||
+            fallbackSvcId,
+        })),
       error: null,
     };
   }
@@ -2034,6 +2069,18 @@ export async function setSpotlightRequestStatus(id, status) {
 }
 
 // ─── CC identity verification (v13 + create-setup-intent edge fn) ──────────
+
+/** Fetch offerings for an existing service by ID. Used by
+ *  ServiceListMoreOfferingsScreen when editing an already-published
+ *  service (instead of reading from the in-memory listingDraft). */
+export async function getServiceOfferings(serviceId) {
+  if (!supabaseReady || !serviceId) return { data: [], error: null };
+  return await supabase
+    .from('offerings')
+    .select('id, name, description, kind, price, duration_minutes')
+    .eq('service_id', serviceId)
+    .order('created_at', { ascending: true });
+}
 
 /** Create a Stripe SetupIntent for the signed-in user (creates Customer if
  *  missing). Returns { client_secret, customer_id } for the frontend to

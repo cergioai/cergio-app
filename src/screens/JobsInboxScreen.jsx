@@ -110,6 +110,9 @@ export function JobsInboxScreen() {
   // Decline call respondToRequest with the corresponding status.
   const [inbound, setInbound] = useState(null);
   const [responding, setResponding] = useState({}); // { [requestId]: 'pending'|'done' }
+  // Tracks the last request the provider responded to so we can show a
+  // confirmation card instead of the generic "No requests yet" empty state.
+  const [lastResponded, setLastResponded] = useState(null); // { sender, status }
   // CERGIO-GUARD (2026-06-03): inline counter UI per Tarik — no
   // window.prompt. counterOpenFor stores the id of the request
   // whose counter input is expanded; counterDraft holds the typed
@@ -153,6 +156,9 @@ export function JobsInboxScreen() {
     setResponding(prev => ({ ...prev, [req.id]: 'done' }));
     // Optimistically drop this row so the inbox visibly shrinks.
     setInbound(prev => (prev || []).filter(r => r.id !== req.id));
+    // Remember who we just responded to so the empty-state shows a
+    // confirmation card instead of "No requests yet / List a service".
+    setLastResponded({ sender: req.sender || 'the user', status });
     showToast(
       status === 'offered'   ? 'Offer sent ✓'   :
       status === 'declined'  ? 'Request declined' :
@@ -281,7 +287,7 @@ export function JobsInboxScreen() {
                   <Avatar name={senderName} idx={i} />
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline mb-1">
-                      <span className="text-[15px] font-extrabold text-black truncate">
+                      <span className="text-body-lg font-extrabold text-black truncate">
                         {senderName}
                       </span>
                       <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">
@@ -429,18 +435,51 @@ export function JobsInboxScreen() {
         )}
 
         {activeTab === 'Requests' && requests.length === 0 && (
-          <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
-            <p className="text-body font-extrabold text-black">No requests yet</p>
-            <p className="text-meta text-b3 font-medium mt-1 leading-snug">
-              Booking requests from Cergio users show up here. List a service to get found.
-            </p>
-            <button
-              onClick={() => navigate('/list-service')}
-              className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-body font-extrabold"
-            >
-              List a service →
-            </button>
-          </div>
+          lastResponded ? (
+            /* Confirmation card — shown after provider responds to a request */
+            <div className="bg-white border border-g/30 rounded-[20px] p-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-gl flex items-center justify-center mx-auto mb-3">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <p className="text-body-lg font-extrabold text-black mb-1">
+                {lastResponded.status === 'offered'   ? 'Offer sent!'       :
+                 lastResponded.status === 'declined'  ? 'Request declined'  :
+                 lastResponded.status === 'countered' ? 'Counter sent!'     :
+                 'Response sent!'}
+              </p>
+              <p className="text-body-sm text-b3 font-medium leading-snug mb-4">
+                {lastResponded.status === 'offered'
+                  ? `Your offer was sent to ${lastResponded.sender}. You'll be notified when they confirm.`
+                  : lastResponded.status === 'countered'
+                  ? `Your counter was sent to ${lastResponded.sender}. You'll be notified when they respond.`
+                  : lastResponded.status === 'declined'
+                  ? `You've passed on ${lastResponded.sender}'s request.`
+                  : `Your response was sent to ${lastResponded.sender}.`}
+              </p>
+              <button
+                onClick={() => { setLastResponded(null); navigate('/home'); }}
+                className="bg-g text-white rounded-[24px] py-3 px-6 text-body font-extrabold"
+              >
+                Back to home
+              </button>
+            </div>
+          ) : (
+            /* Generic empty state — no prior action this session */
+            <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
+              <p className="text-body font-extrabold text-black">No requests yet</p>
+              <p className="text-meta text-b3 font-medium mt-1 leading-snug">
+                Booking requests from Cergio users show up here. List a service to get found.
+              </p>
+              <button
+                onClick={() => navigate('/list-service')}
+                className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-body font-extrabold"
+              >
+                List a service →
+              </button>
+            </div>
+          )
         )}
         {activeTab === 'Requests' && requests.filter(matchesSearch).map((req, i) => (
           <div
@@ -460,7 +499,7 @@ export function JobsInboxScreen() {
 
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline mb-1">
-                <span className="text-[15px] font-extrabold text-black truncate">{req.sender}</span>
+                <span className="text-body-lg font-extrabold text-black truncate">{req.sender}</span>
                 <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">{req.date}</span>
               </div>
 

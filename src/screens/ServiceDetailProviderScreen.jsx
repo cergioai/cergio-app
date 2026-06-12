@@ -191,7 +191,7 @@ export function ServiceDetailProviderScreen() {
       {/* title + status */}
       <div className="px-5 pt-5 pb-3">
         <p className="text-meta font-extrabold text-g uppercase tracking-widest mb-1">{svc.sub || 'Service'}</p>
-        <h1 className="text-[24px] font-extrabold text-black leading-tight">{svc.title}</h1>
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">{svc.title}</h1>
         <div className="flex items-center gap-3 mt-2">
           <span className={`inline-flex items-center gap-1.5 text-meta font-extrabold px-2.5 py-1 rounded-pill
             ${svc.status === 'draft' ? 'bg-bg5 text-b2' : 'bg-gl text-gd'}`}>
@@ -223,7 +223,10 @@ export function ServiceDetailProviderScreen() {
       </p>
       <div className="mx-5 bg-white border border-bdr rounded-[16px] mb-5 overflow-hidden">
         {[
-          { label: 'Offerings & pricing',  to: '/list-service/more-offerings',
+          { label: 'Offerings & pricing',
+            // Pass the service id so ServiceListMoreOfferingsScreen can load
+            // this service's real offerings, not the in-memory listingDraft.
+            run: () => navigate('/list-service/more-offerings', { state: { serviceId: svc.id } }),
             sub: `${svc.offerings?.length ?? 1} item${(svc.offerings?.length ?? 1) === 1 ? '' : 's'} · tap to manage` },
           { label: 'Service area',
             sub: svc.location || 'Tap to set the city / address you serve',
@@ -282,7 +285,7 @@ export function ServiceDetailProviderScreen() {
         </button>
         {deleteArmed ? (
           <div className="bg-white border border-danger/40 rounded-[14px] py-3 px-4 flex flex-col gap-2">
-            <p className="text-[12.5px] text-b2 leading-snug">
+            <p className="text-meta text-b2 leading-snug">
               Permanently remove <span className="font-extrabold">&ldquo;{svc.title}&rdquo;</span> + all offerings + pending bookings? This can&apos;t be undone.
             </p>
             <div className="flex items-center gap-3">
