@@ -23,7 +23,7 @@ export function EarnExplainerScreen() {
       {/* header */}
       <div className="flex items-start justify-between px-5 pt-5 pb-2">
         <div className="w-12 h-12 rounded-full bg-gl border border-g/25 flex items-center justify-center">
-          <span className="text-gd text-[20px] font-extrabold">★</span>
+          <span className="text-gd text-heading-1 font-extrabold">★</span>
         </div>
         <button
           onClick={() => navigate(-1)}
@@ -35,7 +35,7 @@ export function EarnExplainerScreen() {
       </div>
 
       <div className="px-5 pt-3 pb-3">
-        <h1 className="text-[24px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           How earnings work
         </h1>
         <p className="text-body-sm text-b3 leading-relaxed mt-2">

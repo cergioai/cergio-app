@@ -158,12 +158,33 @@ test('notify-safe', 'getProvidersForNotify enforces notifySafe + exact provider_
 });
 
 // ─── INVARIANT #5: invite URL canonical format ──────────────────────────
-test('invite-url', 'Invite URL is always ${origin}/?ref=<uuid> via buildInviteUrl', '#5', async () => {
+// CERGIO-GUARD (2026-06-12): canonical format CHANGED by Tarik —
+// "need a much shorter invite link which takes directly to the profile
+// of the connector". New canon: `${base}/i/${code}` where code is the
+// first 10 hex chars of the inviter UUID, resolved by resolve_ref_code
+// + InviteLandingScreen → /u/<id>. Old ?ref= links still parse via
+// captureRefFromUrl, but buildInviteUrl must emit the SHORT form.
+test('invite-url', 'Invite URL is always ${origin}/i/<code> via buildInviteUrl', '#5', async () => {
   const ref = readFile('src/lib/referral.js');
   assert(/export function buildInviteUrl/.test(ref),
     'lib/referral.js must export buildInviteUrl');
-  assert(/\$\{base\}\/\?ref=\$\{inviterId\}/.test(ref),
-    'buildInviteUrl must produce `${base}/?ref=${inviterId}` exactly');
+  assert(/\$\{base\}\/i\/\$\{code\}/.test(ref),
+    'buildInviteUrl must produce `${base}/i/${code}` (short profile link)');
+  assert(/replace\(\/-\/g, ''\)\.slice\(0, 10\)/.test(ref),
+    'short code must be first 10 hex chars of the inviter UUID');
+  assert(/export function storeRef/.test(ref),
+    'lib/referral.js must export storeRef for the /i/:code landing');
+  // The landing screen must exist and resolve + store + redirect.
+  const landing = readFile('src/screens/InviteLandingScreen.jsx');
+  assert(/resolve_ref_code/.test(landing),
+    'InviteLandingScreen must call the resolve_ref_code RPC');
+  assert(/storeRef\(/.test(landing),
+    'InviteLandingScreen must store the resolved ref for attribution');
+  assert(/\/u\/\$\{rows\[0\]\.id\}/.test(landing),
+    'InviteLandingScreen must land on the inviter profile /u/<id>');
+  const app = readFile('src/App.jsx');
+  assert(/path="\/i\/:code"/.test(app),
+    'App.jsx must route /i/:code to InviteLandingScreen');
   // No file in src/ should use the literal "?invite?ref" in CODE (the old
   // broken format). Comments are fine — they're documenting the past bug.
   const allFiles = walkSync(path.join(REPO_ROOT, 'src'));

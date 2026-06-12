@@ -181,7 +181,7 @@ function Cell({ label, dominance, Mark }) {
     <div className="border border-bdr rounded-2xl bg-white p-4 mb-4">
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-[15px] font-extrabold text-black">{label}</p>
+          <p className="text-body-lg font-extrabold text-black">{label}</p>
           <p className="text-meta text-b3 mt-0.5">{dominance}</p>
         </div>
       </div>

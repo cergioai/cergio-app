@@ -1280,11 +1280,19 @@ export async function respondToRequest(requestId, {
     responded_at:          new Date().toISOString(),
   };
 
-  return await supabase
+  const res = await supabase
     .from('request_responses')
     .upsert(row, { onConflict: 'request_id,responder_id,service_id' })
     .select()
     .maybeSingle();
+  // CERGIO-GUARD (2026-06-12): notify the REQUESTER that a provider
+  // accepted/countered — email + SMS + in-app notifications row via the
+  // notify-request edge fn. This is the "info@cergio.ai accepted but
+  // t@cergio.ai never got a confirm" fix on the delivery side.
+  if (!res.error && res.data?.id && ['offered', 'countered'].includes(status)) {
+    fireRequestNotify({ event: 'response', responseId: res.data.id });
+  }
+  return res;
 }
 
 /**
@@ -1873,6 +1881,54 @@ export async function listInboundRequests({ limit = 20 } = {}) {
   return { data: [], error: null };
 }
 
+/**
+ * CERGIO-GUARD (2026-06-12): consumer-side request visibility.
+ * Tarik: "t@cergio.ai didn't get a confirm that info@cergio.ai
+ * confirmed" — the requester had NO surface showing provider
+ * responses once they left /results. This lists the signed-in
+ * user's own posted requests (last 7 days) with every confirmed
+ * response joined, so JobsInboxScreen can render "{provider}
+ * accepted your {service_type} request".
+ *
+ * RLS: request owner reads all response rows on their request
+ * (same policy listResponsesForRequest relies on).
+ */
+export async function listMyRequestsWithResponses({ limit = 20 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const uid = userRes.user.id;
+
+  const windowISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('requests')
+    .select(`
+      id, service_type, category, description, location_text, status, created_at,
+      responses:request_responses (
+        id, status, offered_price_cents, message, responded_at, last_counter_by,
+        responder:profiles!request_responses_responder_id_fkey ( id, display_name ),
+        service:services ( id, title, taxonomy_provider_type )
+      )
+    `)
+    .eq('requester_id', uid)
+    .gte('created_at', windowISO)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return { data: [], error };
+
+  // Only surface meaningful responses; keep declined/withdrawn out of
+  // the requester's face. Sort responses newest-first.
+  return {
+    data: (data || []).map(r => ({
+      ...r,
+      responses: (r.responses || [])
+        .filter(resp => ['offered', 'countered', 'accepted'].includes(resp.status))
+        .sort((a, b) => new Date(b.responded_at || 0) - new Date(a.responded_at || 0)),
+    })),
+    error: null,
+  };
+}
+
 // ─── Spotlight requests (v10) ───────────────────────────────────────────────
 // Provider asks Connector for an IG/TT spotlight. Connector can counter at
 // a lower price. RLS scopes reads to the two parties on the row.
@@ -2181,6 +2237,23 @@ function fireSpotlightNotify(requestId, event) {
     });
 }
 
+/** CERGIO-GUARD (2026-06-12): fire-and-forget call to notify-request edge
+ *  function — email/SMS for (a) request fan-out → providers and (b) provider
+ *  response → requester. Tarik: "need to receive an sms and email ... of
+ *  these (connector requesting and service accepting)". Never awaits or
+ *  surfaces errors — the DB rows are what matters, delivery is best-effort.
+ *  NOTE: email delivery to arbitrary users stays blocked until the
+ *  cergio.ai domain is verified in Resend (sandbox sender restriction). */
+function fireRequestNotify(payload) {
+  const app_url = typeof window !== 'undefined' ? window.location.origin : undefined;
+  supabase.functions
+    .invoke('notify-request', { body: { ...payload, app_url } })
+    .catch(err => {
+      // eslint-disable-next-line no-console
+      console.warn('[notify-request] best-effort send failed', err);
+    });
+}
+
 // ─── Generic user notifications (notify-user edge fn) ──────────────────────
 
 /**
@@ -2308,6 +2381,11 @@ export async function createRequestAndFanOut({
   }));
   const { error: notifyErr } = await supabase.from('notifications').insert(rows);
   if (notifyErr) return { request, notified: 0, error: notifyErr };
+
+  // CERGIO-GUARD (2026-06-12): email/SMS fan-out to the same providers,
+  // best-effort via notify-request edge fn. In-app rows above remain the
+  // source of truth; this never blocks or fails the request flow.
+  fireRequestNotify({ event: 'created', requestId: request.id, providerIds: ownerIds });
 
   return { request, notified: ownerIds.length, error: null };
 }

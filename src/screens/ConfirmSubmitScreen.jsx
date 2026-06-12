@@ -73,7 +73,7 @@ export function ConfirmSubmitScreen() {
       {/* body */}
       <div className="flex-1 overflow-y-auto pb-32">
         <div className="bg-white px-5 pt-6 pb-5">
-          <h1 className="text-[24px] font-extrabold text-black mb-5 leading-tight">Confirm and submit</h1>
+          <h1 className="text-display-2 font-extrabold text-black mb-5 leading-tight">Confirm and submit</h1>
 
           {/* service row — real value from chat, "Add" affordance if missing */}
           <button
@@ -124,7 +124,7 @@ export function ConfirmSubmitScreen() {
                 <circle cx="12" cy="9" r="2.5" />
               </svg>
               {where
-                ? <span className="text-[15px] text-black truncate max-w-[260px]">{where}</span>
+                ? <span className="text-body-lg text-black truncate max-w-[260px]">{where}</span>
                 : <span className="text-body font-extrabold text-danger">Add address</span>}
             </div>
             <span className="text-b3 text-lg">›</span>
@@ -141,7 +141,7 @@ export function ConfirmSubmitScreen() {
                 <path d="M3 10h18M8 2v4M16 2v4" />
               </svg>
               {when
-                ? <span className="text-[15px] text-black">{when}</span>
+                ? <span className="text-body-lg text-black">{when}</span>
                 : <span className="text-body font-extrabold text-danger">Add date / time</span>}
             </div>
             <span className="text-b3 text-lg">›</span>

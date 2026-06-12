@@ -74,12 +74,12 @@ export function RainmakerRequestScreen() {
       </div>
 
       {/* headline */}
-      <h1 className="text-[26px] font-extrabold text-black text-center leading-tight px-7 mb-3">
+      <h1 className="text-display-2 font-extrabold text-black text-center leading-tight px-7 mb-3">
         Get spotlighted by a Connector
       </h1>
 
       {/* sub */}
-      <p className="text-[15px] text-b3 text-center leading-relaxed px-7 mb-9">
+      <p className="text-body-lg text-b3 text-center leading-relaxed px-7 mb-9">
         <span className="text-g font-extrabold">Cergio Connectors</span> have
         large Instagram and TikTok audiences. Offer a free service in
         exchange for the following benefits:
@@ -101,7 +101,7 @@ export function RainmakerRequestScreen() {
       <div className="px-5 pt-8 pb-6">
         <button
           onClick={() => navigate('/connectors/browse')}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Browse Connectors

@@ -42,8 +42,8 @@ export function OnboardScreen() {
           {icon}
         </div>
         <div>
-          <h2 className="text-[26px] font-extrabold text-black leading-tight mb-3">{title}</h2>
-          <p className="text-[15px] text-b3 leading-relaxed">{desc}</p>
+          <h2 className="text-display-2 font-extrabold text-black leading-tight mb-3">{title}</h2>
+          <p className="text-body-lg text-b3 leading-relaxed">{desc}</p>
         </div>
       </div>
 
@@ -63,7 +63,7 @@ export function OnboardScreen() {
       <div className="px-6 pb-9 flex flex-col gap-3">
         <button
           onClick={next}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      transition-opacity hover:opacity-90 active:scale-[.97]"
         >
           {last ? 'Get started' : 'Next'}

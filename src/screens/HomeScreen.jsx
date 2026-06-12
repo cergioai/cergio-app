@@ -853,7 +853,7 @@ export function HomeScreen() {
                   aria-selected={intent === 'find'}
                   onClick={() => setIntent('find')}
                   type="button"
-                  className={`flex-1 inline-flex items-center justify-center gap-1 px-2 pt-2 pb-2.5 text-[12.5px] font-extrabold whitespace-nowrap
+                  className={`flex-1 inline-flex items-center justify-center gap-1 px-2 pt-2 pb-2.5 text-meta font-extrabold whitespace-nowrap
                               border border-bdr transition-colors
                               ${intent === 'find'
                                 ? 'bg-white text-black rounded-t-[14px] border-b-white -mb-px'
@@ -866,7 +866,7 @@ export function HomeScreen() {
                   aria-selected={intent === 'spotlight'}
                   onClick={() => setIntent('spotlight')}
                   type="button"
-                  className={`flex-1 inline-flex items-center justify-center gap-1 px-2 pt-2 pb-2.5 text-[12.5px] font-extrabold whitespace-nowrap
+                  className={`flex-1 inline-flex items-center justify-center gap-1 px-2 pt-2 pb-2.5 text-meta font-extrabold whitespace-nowrap
                               border border-bdr transition-colors
                               ${intent === 'spotlight'
                                 ? 'bg-white text-black rounded-t-[14px] border-b-white -mb-px'

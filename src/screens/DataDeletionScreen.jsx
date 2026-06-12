@@ -73,14 +73,14 @@ export function DataDeletionScreen() {
                   showToast?.('Opening deletion request — email: privacy@cergio.ai');
                 }
               }}
-              className="w-full bg-danger text-white rounded-[14px] py-4 text-[15px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all text-center block"
+              className="w-full bg-danger text-white rounded-[14px] py-4 text-body-lg font-extrabold hover:opacity-90 active:scale-[.98] transition-all text-center block"
             >
               Delete my Cergio account
             </a>
           ) : (
             <button
               onClick={() => navigate('/auth')}
-              className="w-full bg-white border border-bdr text-black rounded-[14px] py-4 text-[15px] font-extrabold"
+              className="w-full bg-white border border-bdr text-black rounded-[14px] py-4 text-body-lg font-extrabold"
             >
               Sign in to delete your account
             </button>

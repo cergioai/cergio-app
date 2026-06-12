@@ -112,7 +112,7 @@ export function RainmakersScreen() {
               {b.icon}
             </div>
             <div>
-              <p className="text-[15px] font-extrabold text-black leading-snug">{b.text}</p>
+              <p className="text-body-lg font-extrabold text-black leading-snug">{b.text}</p>
               {b.tag && <p className="text-meta font-extrabold text-g mt-0.5">{b.tag}</p>}
             </div>
           </div>
@@ -130,7 +130,7 @@ export function RainmakersScreen() {
         >
           ⭐
         </div>
-        <h3 className="text-[20px] font-extrabold text-white mb-2">How to earn Connector status</h3>
+        <h3 className="text-heading-1 font-extrabold text-white mb-2">How to earn Connector status</h3>
         <p className="text-body font-extrabold text-white/90 italic mb-3">
           Invite 10 new friends every month to book on Cergio
         </p>
@@ -149,7 +149,7 @@ export function RainmakersScreen() {
 
       {/* comparison table */}
       <div className="px-5 pt-7 pb-2">
-        <h3 className="text-[20px] font-extrabold text-black text-center leading-tight mb-5">
+        <h3 className="text-heading-1 font-extrabold text-black text-center leading-tight mb-5">
           Enjoy exclusive benefits<br />as a Connector
         </h3>
         <table className="w-full border-collapse">
@@ -227,8 +227,8 @@ export function RainmakersScreen() {
               navigate('/invite/friends-popup');
             }
           }}
-          className="w-full bg-white text-gd rounded-pill py-3.5 text-[15px] font-extrabold
-                     hover:opacity-92 transition-opacity"
+          className="w-full bg-g text-white rounded-pill py-3.5 text-body-lg font-extrabold
+                     hover:opacity-90 active:scale-[.97] transition-all cg-cta"
         >
           Invite my friends
         </button>
@@ -242,7 +242,7 @@ export function RainmakersScreen() {
         <button
           onClick={() => navigate('/rainmaker/apply')}
           className="w-full bg-g text-white rounded-[24px] py-4
-                     text-[15px] font-extrabold hover:opacity-90 active:scale-[.97] transition-all"
+                     text-body-lg font-extrabold hover:opacity-90 active:scale-[.97] transition-all"
         >
           Apply for Connector status
         </button>

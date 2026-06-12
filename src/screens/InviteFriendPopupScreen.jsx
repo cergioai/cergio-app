@@ -67,7 +67,7 @@ export function InviteFriendPopupScreen() {
 
         <div className="mt-10 mb-4 flex items-start gap-3">
           <div className="flex-1">
-            <h1 className="text-[24px] font-extrabold text-black leading-tight tracking-tight">
+            <h1 className="text-display-2 font-extrabold text-black leading-tight tracking-tight">
               Invite friends — ${REWARDS.perFriendUser} credit each
             </h1>
             <p className="text-body-sm text-b3 font-medium mt-2 leading-snug">
@@ -120,7 +120,7 @@ function ActionRow({ icon, label, sub, onClick }) {
         <Icon />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[15px] font-extrabold text-black leading-tight">{label}</p>
+        <p className="text-body-lg font-extrabold text-black leading-tight">{label}</p>
         {sub && <p className="text-meta text-b3 mt-0.5 leading-snug">{sub}</p>}
       </div>
       <span className="text-b3 text-lg">›</span>

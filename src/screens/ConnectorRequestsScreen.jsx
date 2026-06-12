@@ -233,11 +233,11 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
       >
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
-            <p className="text-[15px] font-extrabold text-black leading-tight">
+            <p className="text-body-lg font-extrabold text-black leading-tight">
               {providerName}
             </p>
             {providerHeadline && (
-              <p className="text-[11.5px] text-b3 mt-0.5 leading-snug truncate">
+              <p className="text-meta-sm text-b3 mt-0.5 leading-snug truncate">
                 {providerHeadline}
               </p>
             )}
@@ -251,7 +251,7 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
         </div>
 
         {/* Succinct, human offer line — free vs paid */}
-        <p className="text-[13.5px] text-black leading-snug mb-2">
+        <p className="text-body-sm text-black leading-snug mb-2">
           {isFree ? (
             <>
               <strong>{providerFirst}</strong> is offering you a <strong>free {serviceLabel}</strong> session in return for {platformLabel === 'TikTok' ? 'a TikTok' : 'an IG'} post.
@@ -266,7 +266,7 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
         </p>
 
         {r.message && (
-          <p className="text-[12.5px] text-b2 leading-snug mb-2 line-clamp-3 italic">
+          <p className="text-meta text-b2 leading-snug mb-2 line-clamp-3 italic">
             &ldquo;{r.message}&rdquo;
           </p>
         )}
@@ -343,7 +343,7 @@ function OutboundCard({ request: r, onAccept, onCounter, onDecline, onPay, onCon
     <div className="bg-white border border-bdr rounded-[18px] p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1">
-          <p className="text-[15px] font-extrabold text-black leading-tight">
+          <p className="text-body-lg font-extrabold text-black leading-tight">
             {platformLabel} spotlight request
           </p>
           <p className="text-meta-sm text-b3 mt-0.5">Sent {timeAgo(r.created_at)}</p>

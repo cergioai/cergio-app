@@ -49,7 +49,7 @@ export function RainmakerApplyScreen() {
         >
           ‹
         </button>
-        <h1 className="text-[26px] font-extrabold text-white leading-tight">
+        <h1 className="text-display-2 font-extrabold text-white leading-tight">
           Become a Connector
         </h1>
         {/* CERGIO-GUARD (2026-06-03): elegant succinct copy per Tarik —
@@ -100,7 +100,7 @@ export function RainmakerApplyScreen() {
           <p className="text-meta font-extrabold uppercase tracking-widest text-b3 mb-1">
             The math
           </p>
-          <p className="text-[20px] font-extrabold text-black leading-tight">
+          <p className="text-heading-1 font-extrabold text-black leading-tight">
             {EXAMPLE_FRIENDS} friends → ${EXAMPLE_TOTAL.toLocaleString()}
           </p>
           <p className="text-meta text-b3 mt-2 leading-snug">
@@ -145,7 +145,7 @@ export function RainmakerApplyScreen() {
                       bg-cr border-t border-bdr px-5 py-4 flex justify-end">
         <button
           onClick={() => navigate(`/rainmaker/apply/details?type=${selected}`)}
-          className="bg-g text-white rounded-[24px] px-10 py-3.5 text-[15px] font-extrabold
+          className="bg-g text-white rounded-[24px] px-10 py-3.5 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Next

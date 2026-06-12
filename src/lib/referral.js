@@ -17,7 +17,14 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // ─── URL helpers ────────────────────────────────────────────────────────────
 
 /** Build a referral URL for a given inviter UUID. Use origin so dev + prod
- *  produce the right link automatically. */
+ *  produce the right link automatically.
+ *
+ *  CERGIO-GUARD (2026-06-12): short format per Tarik — "need a much
+ *  shorter invite link which takes directly to the profile of the
+ *  connector (or the service)". `/i/<first-10-hex-of-uuid>` resolves
+ *  via the resolve_ref_code RPC (db/migrations/2026-06-12) and lands
+ *  on /u/<id> — the inviter's public profile — NOT the login page.
+ *  Old `?ref=<uuid>` links keep working through captureRefFromUrl. */
 export function buildInviteUrl(inviterId) {
   if (typeof window === 'undefined') return 'https://cergio.ai';
   const base = window.location.origin;
@@ -27,7 +34,20 @@ export function buildInviteUrl(inviterId) {
     // invitee can still find Cergio.
     return `${base}/`;
   }
-  return `${base}/?ref=${inviterId}`;
+  const code = String(inviterId).replace(/-/g, '').slice(0, 10);
+  return `${base}/i/${code}`;
+}
+
+/** Persist a known inviter UUID directly (used by the /i/:code short-link
+ *  landing after the RPC expands the code). Same storage + TTL contract
+ *  as captureRefFromUrl. */
+export function storeRef(inviterId) {
+  if (typeof window === 'undefined') return null;
+  if (!inviterId || !UUID_RE.test(String(inviterId))) return null;
+  try {
+    localStorage.setItem(REF_STORAGE_KEY, JSON.stringify({ inviter: inviterId, capturedAt: Date.now() }));
+  } catch { /* private mode — ignore */ }
+  return inviterId;
 }
 
 // ─── Capture (runs on app boot) ─────────────────────────────────────────────

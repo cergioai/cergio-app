@@ -83,7 +83,7 @@ export function ManageServicesScreen() {
           <p className="text-body text-b3 mt-2 mb-6">List your first service to start receiving bookings.</p>
           <button
             onClick={handleListClick}
-            className="bg-g text-white rounded-[24px] px-8 py-3 text-[15px] font-extrabold"
+            className="bg-g text-white rounded-[24px] px-8 py-3 text-body-lg font-extrabold"
           >
             List my service
           </button>
@@ -137,7 +137,7 @@ export function ManageServicesScreen() {
                 >
                   <div className={`w-16 h-16 rounded-[12px] flex-shrink-0 ${s.photo_class || s.photoClass || PHOTO_FALLBACKS[i % 3]}`} />
                   <div className="flex-1">
-                    <p className="text-[15px] font-extrabold text-black leading-tight">{s.title}</p>
+                    <p className="text-body-lg font-extrabold text-black leading-tight">{s.title}</p>
                     <p className="text-meta text-b3 mt-0.5">{s.sub || s.category || s.description}</p>
                   </div>
                   <span className="text-b3 text-lg">›</span>

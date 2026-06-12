@@ -38,7 +38,7 @@ export function RainmakerSubmittedScreen() {
             <path d="M5 12l5 5L20 7" />
           </svg>
         </div>
-        <h1 className="text-[24px] font-extrabold text-white text-center leading-tight">
+        <h1 className="text-display-2 font-extrabold text-white text-center leading-tight">
           Your application<br />has been submitted!
         </h1>
       </div>
@@ -47,7 +47,7 @@ export function RainmakerSubmittedScreen() {
       <div className="px-7 pb-9">
         <button
           onClick={() => navigate('/home')}
-          className="w-full bg-white text-g rounded-[24px] py-3.5 text-[15px] font-extrabold
+          className="w-full bg-white text-g rounded-[24px] py-3.5 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Back to home

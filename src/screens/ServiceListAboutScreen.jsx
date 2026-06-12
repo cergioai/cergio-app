@@ -171,7 +171,7 @@ export function ServiceListAboutScreen() {
                 )}
                 {okMapped && (
                   <div className="inline-flex flex-wrap items-center gap-1.5 bg-gl text-gd
-                                  rounded-pill px-2.5 py-1 text-[11.5px] font-extrabold">
+                                  rounded-pill px-2.5 py-1 text-meta-sm font-extrabold">
                     Mapped to {result.provider_type}
                     {candidates.length > 0 && (
                       <span className="font-medium text-gd/80">
@@ -219,7 +219,7 @@ export function ServiceListAboutScreen() {
                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
               <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"/><path d="M9 4v13"/><path d="M15 7v13"/>
             </svg>
-            <span className="text-[12.5px] font-extrabold">
+            <span className="text-meta font-extrabold">
               {serviceAreaGeoJson
                 ? 'Service area drawn — tap to edit'
                 : 'Draw your service area (optional)'}

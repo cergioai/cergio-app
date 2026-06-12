@@ -51,7 +51,7 @@ export function ServiceListVerifyScreen() {
         <button
           onClick={() => navigate('/home')}
           className="w-full bg-white border border-bdr rounded-[18px] py-4
-                     text-[15px] font-extrabold text-black hover:bg-bg5 transition-colors"
+                     text-body-lg font-extrabold text-black hover:bg-bg5 transition-colors"
         >
           I'll do this later
         </button>

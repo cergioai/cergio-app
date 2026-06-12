@@ -105,7 +105,7 @@ export function RateConfirmScreen() {
 
       {/* heading */}
       <div className="px-5 pt-4 pb-5">
-        <h1 className="text-[24px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           Rate and confirm completion
         </h1>
       </div>
@@ -131,7 +131,7 @@ export function RateConfirmScreen() {
 
       {/* details */}
       <div className="px-5 flex-1">
-        <p className="text-[15px] font-extrabold text-black mb-2">{requestDetails.type}</p>
+        <p className="text-body-lg font-extrabold text-black mb-2">{requestDetails.type}</p>
         <div className="flex flex-col gap-1.5 mb-5">
           {requestDetails.items.map((item, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -140,7 +140,7 @@ export function RateConfirmScreen() {
             </div>
           ))}
         </div>
-        <p className="text-[15px] font-extrabold text-black mb-2">Extras</p>
+        <p className="text-body-lg font-extrabold text-black mb-2">Extras</p>
         <div className="flex flex-col gap-1.5">
           {requestDetails.extras.map((e, i) => (
             <span key={i} className="text-body-sm text-b3">{e}</span>
@@ -176,7 +176,7 @@ export function RateConfirmScreen() {
             navigate('/complete');
           }}
           disabled={rating === 0 || busy}
-          className={`w-full rounded-[24px] py-4 text-[15px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-body-lg font-extrabold transition-all
                       ${rating === 0 || busy
                         ? 'bg-bg5 text-b3 cursor-not-allowed'
                         : 'bg-g text-white hover:opacity-90 active:scale-[.97]'}`}

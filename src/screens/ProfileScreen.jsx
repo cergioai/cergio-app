@@ -79,15 +79,15 @@ function GroupCard({ title, summary, value, valueLabel, pill, onClick, accent = 
     >
       <div className="flex-1 pr-3">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className="text-[17px] font-extrabold text-black leading-tight">{title}</span>
+          <span className="text-heading-2 font-extrabold text-black leading-tight">{title}</span>
           {pill}
         </div>
-        <p className="text-[12.5px] text-b3 leading-snug">{summary}</p>
+        <p className="text-meta text-b3 leading-snug">{summary}</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         {value && (
           <div className="text-right">
-            <div className="text-[15px] font-extrabold text-gd leading-tight">{value}</div>
+            <div className="text-body-lg font-extrabold text-gd leading-tight">{value}</div>
             {valueLabel && <div className="text-caps text-b3 leading-tight mt-0.5">{valueLabel}</div>}
           </div>
         )}
@@ -112,7 +112,7 @@ function ActionDrawer({ open, title, onClose, children }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-start mb-3">
-          <h3 className="text-[20px] font-extrabold text-black leading-tight">{title}</h3>
+          <h3 className="text-heading-1 font-extrabold text-black leading-tight">{title}</h3>
           <button
             onClick={onClose}
             className="text-heading-1 text-b3 font-extrabold px-2 -mt-1"
@@ -150,7 +150,7 @@ function DrawerAction({ title, subtitle, pill, onClick, disabled = false, icon =
             {pill}
           </div>
           {subtitle && (
-            <p className="text-[11.5px] text-b3 mt-0.5 leading-snug">{subtitle}</p>
+            <p className="text-meta-sm text-b3 mt-0.5 leading-snug">{subtitle}</p>
           )}
         </div>
       </div>
@@ -314,14 +314,14 @@ export function ProfileScreen() {
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <div className="px-5 pt-8 pb-2 flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-[24px] font-extrabold text-black leading-tight">
+          <h1 className="text-display-2 font-extrabold text-black leading-tight">
             Hi {firstName}!
           </h1>
           {/* CERGIO-GUARD (2026-06-05): user-typed headline. Sits between
               the greeting and the Connector/Member pill so the hero
               reflects the user's own positioning the moment they land. */}
           {headline && (
-            <p className="text-[12.5px] text-b2 leading-snug mt-1 font-medium">
+            <p className="text-meta text-b2 leading-snug mt-1 font-medium">
               {headline}
             </p>
           )}
@@ -329,9 +329,9 @@ export function ProfileScreen() {
             {isSignedIn ? (
               hasRateCard
                 ? <MintPill>Connector ✓</MintPill>
-                : <span className="text-[11.5px] text-b3 font-extrabold uppercase tracking-wide">Member</span>
+                : <span className="text-meta-sm text-b3 font-extrabold uppercase tracking-wide">Member</span>
             ) : (
-              <span className="text-[11.5px] text-b3 font-extrabold uppercase tracking-wide">Not signed in</span>
+              <span className="text-meta-sm text-b3 font-extrabold uppercase tracking-wide">Not signed in</span>
             )}
           </div>
         </div>
@@ -466,7 +466,7 @@ export function ProfileScreen() {
           <button
             onClick={async () => { await auth.signOut(); showToast('Signed out'); navigate('/'); }}
             className="w-full bg-white border-2 border-black text-black rounded-[14px] py-4
-                       text-[17px] font-extrabold hover:bg-bg5/40 transition-colors"
+                       text-heading-2 font-extrabold hover:bg-bg5/40 transition-colors"
           >
             Log out
           </button>
@@ -474,7 +474,7 @@ export function ProfileScreen() {
           <button
             onClick={() => navigate('/auth')}
             className="w-full bg-white border-2 border-black text-black rounded-[14px] py-4
-                       text-[17px] font-extrabold hover:bg-bg5/40 transition-colors"
+                       text-heading-2 font-extrabold hover:bg-bg5/40 transition-colors"
           >
             Sign in
           </button>
@@ -689,7 +689,7 @@ export function ProfileScreen() {
               </h3>
               <button
                 onClick={() => setShowConnectorInfo(false)}
-                className="text-[20px] text-b3 font-extrabold px-2 -mt-1"
+                className="text-heading-1 text-b3 font-extrabold px-2 -mt-1"
                 aria-label="Close"
               >
                 ×

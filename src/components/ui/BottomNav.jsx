@@ -16,6 +16,7 @@
 // Tarik: rigorous UX testing, queued recommendations.
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useActivityUnread } from '../../hooks/useActivityUnread';
+import { useInboxUnread } from '../../hooks/useInboxUnread';
 
 // Tabs that need a real account to be useful — guest sees a small
 // lock dot so the brand doesn't promise content it can't show.
@@ -92,6 +93,11 @@ export function BottomNav({ serviceMode = false, isSignedIn = true }) {
   // by ActivityScreen on mount. Hidden when signed out, when the
   // Activity tab is gated, or when the user is already on /activity.
   const activityUnread = useActivityUnread({ enabled: isSignedIn });
+  // CERGIO-GUARD (2026-06-12): unread Inbox dot per Tarik — "need the
+  // DOT over inbox (to show i'm getting a notification)". Polls inbound
+  // requests + pending bookings + responses to my own requests; see
+  // src/hooks/useInboxUnread.js.
+  const inboxUnread = useInboxUnread({ enabled: isSignedIn });
 
   return (
     <nav
@@ -105,14 +111,16 @@ export function BottomNav({ serviceMode = false, isSignedIn = true }) {
         // with a tiny lock dot — promise calibrated to what they'll
         // see when they tap (sign-in cue card on the destination).
         const isGated = !isSignedIn && GUEST_GATED.has(item.id);
-        const showUnread = item.id === 'activity' && !isGated && !isActive && activityUnread;
+        const showUnread =
+          (item.id === 'activity' && !isGated && !isActive && activityUnread) ||
+          (item.id === 'inbox'    && !isGated && !isActive && inboxUnread);
         return (
           <button
             key={item.id}
             onClick={() => navigate(item.path)}
             className={`relative flex-1 flex flex-col items-center gap-1 py-1
                         ${isActive ? 'text-black' : isGated ? 'text-b3/55' : 'text-b3'}`}
-            title={isGated ? 'Sign in to unlock' : (showUnread ? 'New activity' : undefined)}
+            title={isGated ? 'Sign in to unlock' : (showUnread ? (item.id === 'inbox' ? 'New requests' : 'New activity') : undefined)}
           >
             <Icon />
             {isGated && (

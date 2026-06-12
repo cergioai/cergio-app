@@ -34,7 +34,7 @@ export function SocialPostsScreen() {
 
       {/* headline */}
       <div className="px-7 text-center pb-6">
-        <h1 className="text-[20px] font-extrabold text-black leading-tight mb-2">
+        <h1 className="text-heading-1 font-extrabold text-black leading-tight mb-2">
           Connectors have shared their go-to services on Cergio to 2M+ followers.
         </h1>
         <p className="text-body font-extrabold text-g">#cergiorainmakers</p>
@@ -80,7 +80,7 @@ export function SocialPostsScreen() {
                       bg-cr px-5 pt-3 pb-6 border-t border-bdr">
         <button
           onClick={() => navigate('/rainmaker-request')}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Review Gervon's request

@@ -29,7 +29,7 @@ export function ProfileSharedScreen() {
 
       {/* heading */}
       <div className="px-5 pt-3 pb-6">
-        <h1 className="text-[24px] font-extrabold text-black leading-tight mb-2">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight mb-2">
           {s.rainmakerName} shared your profile!
         </h1>
         <p className="text-body text-b3 leading-relaxed">
@@ -74,7 +74,7 @@ export function ProfileSharedScreen() {
       <div className="mt-auto px-5 pt-4 pb-2 flex flex-col gap-3 items-center">
         <button
           onClick={() => navigate('/complete')}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Looks amazing

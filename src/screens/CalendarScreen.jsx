@@ -137,7 +137,7 @@ export function CalendarScreen() {
                           ${active ? 'bg-g rounded-[14px]' : 'bg-transparent'}`}
             >
               <span className={`text-meta ${active ? 'text-white/85 font-medium' : 'text-b3 font-medium'}`}>{d.month}</span>
-              <span className={`text-[20px] font-extrabold ${active ? 'text-white' : 'text-black'}`}>{d.day}</span>
+              <span className={`text-heading-1 font-extrabold ${active ? 'text-white' : 'text-black'}`}>{d.day}</span>
               {d.bookings > 0 && (
                 <span className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full
                                   ${active ? 'bg-white' : 'bg-g'}`} />

@@ -144,7 +144,7 @@ export function AvailabilityScreen() {
       {/* service hours — only relevant when not unavailable */}
       {status !== 'unavailable' && (
         <div className="px-5 pt-6 pb-2">
-          <p className="text-[20px] font-extrabold text-black mb-1">Service hours</p>
+          <p className="text-heading-1 font-extrabold text-black mb-1">Service hours</p>
           <p className="text-body text-b3 leading-relaxed mb-5">
             What is the earliest and latest time you'll accept reservations on this date?
           </p>
@@ -184,7 +184,7 @@ export function AvailabilityScreen() {
         <button
           onClick={saveAvailability}
           disabled={!canSave}
-          className={`w-full rounded-[24px] py-4 text-[15px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-body-lg font-extrabold transition-all
             ${canSave ? 'bg-black text-white hover:opacity-90 active:scale-[.97]' : 'bg-bg5 text-b3 cursor-not-allowed'}`}
         >
           {saving ? 'Saving…' : 'Save'}

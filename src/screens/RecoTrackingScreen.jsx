@@ -305,7 +305,7 @@ export function RecoTrackingScreen() {
                 </div>
               ) : (
                 r.body && (
-                  <p className="mt-2 text-[12.5px] text-b2 leading-snug whitespace-pre-wrap break-words">
+                  <p className="mt-2 text-meta text-b2 leading-snug whitespace-pre-wrap break-words">
                     &ldquo;{r.body}&rdquo;
                   </p>
                 )

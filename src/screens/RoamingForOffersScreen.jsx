@@ -58,7 +58,7 @@ export function RoamingForOffersScreen() {
       {/* avatars: requester + animated leaf */}
       <div className="flex items-center justify-center gap-3 pt-2 pb-5">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#4478aa] to-[#2a5070]
-                        flex items-center justify-center text-white text-[20px] font-extrabold">
+                        flex items-center justify-center text-white text-heading-1 font-extrabold">
           You
         </div>
         <div className="w-20 h-20 rounded-full bg-gl flex items-center justify-center">
@@ -135,7 +135,7 @@ function Row({ icon, title, sub }) {
         <Icon />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[15px] font-extrabold text-black leading-tight">{title}</p>
+        <p className="text-body-lg font-extrabold text-black leading-tight">{title}</p>
         {sub && <p className="text-body-sm text-b3 mt-0.5 leading-snug">{sub}</p>}
       </div>
     </div>

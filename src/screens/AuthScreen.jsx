@@ -221,10 +221,10 @@ export function AuthScreen() {
             busy.. move to several lines)." Welcome is its own line;
             wordmark sits below with an elegant superscript BETA tag.
             Sub-line moves down a level so the eye lands cleanly. */}
-        <p className="mt-7 text-[15px] text-b3 font-medium tracking-wide">
+        <p className="mt-7 text-body-lg text-b3 font-medium tracking-wide">
           Welcome to
         </p>
-        <h1 className="mt-1.5 text-[30px] font-extrabold text-black leading-tight flex items-start justify-center gap-1">
+        <h1 className="mt-1.5 text-display-1 font-extrabold text-black leading-tight flex items-start justify-center gap-1">
           <span className="tracking-[0.18em] uppercase">Cergio</span>
           <span
             aria-label="beta"
@@ -238,10 +238,10 @@ export function AuthScreen() {
             "add book barter earn on login too". Sits between the
             wordmark and the action prompt so the brand pillars are
             present at every entry point — not just the splash. */}
-        <p className="mt-3 text-[10.5px] text-b3 font-extrabold tracking-[0.18em] uppercase">
+        <p className="mt-3 text-caps text-b3 font-extrabold tracking-[0.18em] uppercase">
           Book · Barter · Earn
         </p>
-        <p className="mt-4 text-[13.5px] text-b2 leading-snug max-w-[260px]">
+        <p className="mt-4 text-body-sm text-b2 leading-snug max-w-[260px]">
           {isSignup ? 'Create your account.' : 'Sign in to keep going.'}
         </p>
         <p className="mt-1 text-meta text-b3 leading-snug max-w-[260px]">
@@ -252,7 +252,7 @@ export function AuthScreen() {
         {activeRef && (
           <div className="mt-5 bg-gl border border-g/25 rounded-pill px-3.5 py-1.5 inline-flex items-center gap-2">
             <span className="text-meta">🌱</span>
-            <p className="text-[11.5px] text-gd font-extrabold leading-snug">
+            <p className="text-meta-sm text-gd font-extrabold leading-snug">
               Invited by a friend · ${REWARDS.perFriendUser} credit each when you book
             </p>
           </div>
@@ -270,7 +270,7 @@ export function AuthScreen() {
               onClick={() => startSocial('google')}
               disabled={!!socialBusy}
               className="w-full flex items-center justify-center gap-2.5 bg-white border border-bdr rounded-[16px] py-4
-                         text-[15px] font-extrabold text-black hover:bg-bg5/40 transition-colors
+                         text-body-lg font-extrabold text-black hover:bg-bg5/40 transition-colors
                          disabled:opacity-60 disabled:cursor-wait shadow-card"
             >
               <svg width="20" height="20" viewBox="0 0 24 24">
@@ -300,7 +300,7 @@ export function AuthScreen() {
             <button
               type="button"
               onClick={() => setMoreOpen(o => !o)}
-              className="w-full mt-4 text-[12.5px] font-extrabold text-b3 hover:text-b2 transition-colors"
+              className="w-full mt-4 text-meta font-extrabold text-b3 hover:text-b2 transition-colors"
             >
               {moreOpen ? '— Hide more options —' : '— More sign-in options —'}
             </button>
@@ -357,7 +357,7 @@ export function AuthScreen() {
             <button
               type="button"
               onClick={() => setStage('choose')}
-              className="text-[12.5px] font-extrabold text-b3 hover:text-b2 mb-4"
+              className="text-meta font-extrabold text-b3 hover:text-b2 mb-4"
             >
               ‹ Back to sign-in options
             </button>
@@ -487,7 +487,7 @@ export function AuthScreen() {
         )}
 
         {/* Footer — about/contact/terms always reachable */}
-        <div className="mt-10 flex items-center justify-center gap-4 text-[11.5px] font-medium text-b3">
+        <div className="mt-10 flex items-center justify-center gap-4 text-meta-sm font-medium text-b3">
           <Link to="/about"   className="hover:text-gd transition-colors">About</Link>
           <span>·</span>
           <Link to="/contact" className="hover:text-gd transition-colors">Contact</Link>
@@ -507,7 +507,7 @@ export function AuthScreen() {
             <div className="flex justify-between items-start mb-3">
               <h3 className="text-heading-2 font-extrabold text-black leading-tight">Reset your password</h3>
               <button onClick={() => setForgotOpen(false)}
-                className="text-[20px] text-b3 font-extrabold px-2 -mt-1" aria-label="Close">×</button>
+                className="text-heading-1 text-b3 font-extrabold px-2 -mt-1" aria-label="Close">×</button>
             </div>
             <p className="text-meta text-b3 leading-snug mb-3">
               We'll email you a link to set a new password.
@@ -525,7 +525,7 @@ export function AuthScreen() {
             <button
               onClick={sendReset}
               disabled={forgotBusy || !forgotEmail.includes('@')}
-              className={`w-full rounded-[14px] py-3.5 text-[15px] font-extrabold transition-all
+              className={`w-full rounded-[14px] py-3.5 text-body-lg font-extrabold transition-all
                 ${!forgotBusy && forgotEmail.includes('@')
                   ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
                   : 'bg-bg5 text-b3 cursor-not-allowed'}`}
@@ -564,7 +564,7 @@ export function AuthScreen() {
             <button
               onClick={completeReset}
               disabled={resetBusy || resetPwd.length < 6}
-              className={`w-full rounded-[14px] py-3.5 text-[15px] font-extrabold transition-all
+              className={`w-full rounded-[14px] py-3.5 text-body-lg font-extrabold transition-all
                 ${!resetBusy && resetPwd.length >= 6
                   ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
                   : 'bg-bg5 text-b3 cursor-not-allowed'}`}

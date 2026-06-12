@@ -119,7 +119,7 @@ export function IntakeFormScreen() {
       <div className="px-5 pt-5 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
-          className="text-[20px] text-b3 bg-transparent border-none cursor-pointer px-1"
+          className="text-heading-1 text-b3 bg-transparent border-none cursor-pointer px-1"
         >
           ←
         </button>
@@ -217,7 +217,7 @@ export function IntakeFormScreen() {
         <button
           onClick={submit}
           disabled={!mandatoryOk || pendingNav}
-          className={`w-full rounded-[24px] py-4 text-[15px] font-extrabold transition-all
+          className={`w-full rounded-[24px] py-4 text-body-lg font-extrabold transition-all
                       ${mandatoryOk && !pendingNav
                         ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
                         : 'bg-bg5 text-b3 cursor-not-allowed'}`}

@@ -8,7 +8,8 @@
 // re-type. CERGIO-GUARD: provider_type-level only, no offering names.
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
-import { listInvitableProfiles } from '../lib/api';
+import { listInvitableProfiles, notifyUser } from '../lib/api';
+import { buildInviteUrl } from '../lib/referral';
 import { PROVIDER_TYPES } from '../data/providerTypes';
 import { deriveDisplayNoun } from '../lib/serviceNoun';
 
@@ -19,9 +20,18 @@ function getInitials(name) {
 export function InviteSelectedReviewScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { showToast, chat } = useOutletContext();
+  const { showToast, chat, auth } = useOutletContext();
 
-  const { mode = 'invite', selectedIds = [], prefilledMessage = null } = location.state || {};
+  const {
+    mode = 'invite',
+    selectedIds = [],
+    // CERGIO-GUARD (2026-06-12): device contacts-book entries forwarded
+    // from InviteFriendsScreen. These people are NOT Cergio profiles —
+    // they carry their own name/email/phone and get a REAL email/SMS
+    // invite via the notify-user edge fn on Send.
+    deviceContacts = [],
+    prefilledMessage = null,
+  } = location.state || {};
   // CERGIO-GUARD (2026-05-30): hydrate the picked contacts from real
   // profiles. Was filtering CONTACTS (mock) by selectedIds — now we
   // pull the profiles table and pick the matching ids. Same shape as
@@ -34,7 +44,10 @@ export function InviteSelectedReviewScreen() {
     });
     return () => { cancelled = true; };
   }, []);
-  const picked = allContacts.filter(c => selectedIds.includes(c.id));
+  const picked = [
+    ...deviceContacts,
+    ...allContacts.filter(c => selectedIds.includes(c.id)),
+  ];
 
   // CERGIO-GUARD: seed the service type from the USER'S OWN WORDS
   // VERBATIM. Auto-canonicalization to PROVIDER_TYPES was hurting more
@@ -84,12 +97,42 @@ export function InviteSelectedReviewScreen() {
     ? (serviceType.trim().length > 0 && review.trim().length > 0)
     : review.trim().length > 0;
 
-  const handleSend = () => {
-    if (!valid) return;
+  // CERGIO-GUARD (2026-06-12): device-book contacts get a REAL invite —
+  // email (+SMS when they have a phone) via the notify-user edge fn
+  // ('invite_received' template). Cergio-profile picks keep the existing
+  // in-app flow. Send is best-effort per contact; we report how many
+  // actually dispatched instead of a blanket fake "sent" toast.
+  const [sending, setSending] = useState(false);
+  const handleSend = async () => {
+    if (!valid || sending) return;
+    const deviceTargets = picked.filter(c => c.device && (c.email || c.phone));
+    let dispatched = 0;
+    if (deviceTargets.length > 0) {
+      setSending(true);
+      const inviterName = auth?.user?.user_metadata?.display_name || 'A friend';
+      const results = await Promise.allSettled(deviceTargets.map(c =>
+        notifyUser({
+          event: 'invite_received',
+          recipient: { email: c.email || undefined, phone: c.phone || undefined, name: c.name },
+          data: {
+            inviter_name: inviterName,
+            inviter_id:   auth?.user?.id || null,
+            note:         review.trim() || null,
+            invite_url:   buildInviteUrl(auth?.user?.id),
+            deep_link:    buildInviteUrl(auth?.user?.id),
+          },
+        })
+      ));
+      dispatched = results.filter(r => r.status === 'fulfilled' && !r.value?.error).length;
+      setSending(false);
+    }
+    const total = picked.length;
     showToast(
       mode === 'reco'
-        ? `Recommendation sent to ${picked.length} ${picked.length === 1 ? 'friend' : 'friends'}`
-        : `${picked.length} ${picked.length === 1 ? 'invite' : 'invites'} sent`
+        ? `Recommendation sent to ${total} ${total === 1 ? 'friend' : 'friends'}`
+        : deviceTargets.length > 0
+          ? `${dispatched}/${deviceTargets.length} contact ${deviceTargets.length === 1 ? 'invite' : 'invites'} dispatched`
+          : `${total} ${total === 1 ? 'invite' : 'invites'} sent`
     );
     navigate('/earnings');
   };
@@ -123,7 +166,7 @@ export function InviteSelectedReviewScreen() {
           <div className="flex flex-wrap gap-2">
             {picked.map(c => (
               <div key={c.id} className="flex items-center gap-2 bg-soft rounded-pill pl-1 pr-3 py-1">
-                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${c.avatarBg}
+                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${c.avatarBg || 'from-[#5BC404] to-[#2F6E00]'}
                                  flex items-center justify-center text-white text-caps font-extrabold`}>
                   {getInitials(c.name)}
                 </div>
@@ -205,11 +248,11 @@ export function InviteSelectedReviewScreen() {
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-bdr px-5 pt-3 pb-5">
         <button
           onClick={handleSend}
-          disabled={!valid}
-          className={`w-full rounded-[24px] py-3.5 text-[15px] font-extrabold transition-all
-            ${valid ? 'bg-g text-white hover:opacity-90 active:scale-[.97]' : 'bg-bg5 text-b3 cursor-not-allowed'}`}
+          disabled={!valid || sending}
+          className={`w-full rounded-[24px] py-3.5 text-body-lg font-extrabold transition-all
+            ${valid && !sending ? 'bg-g text-white hover:opacity-90 active:scale-[.97]' : 'bg-bg5 text-b3 cursor-not-allowed'}`}
         >
-          {mode === 'reco' ? `Send ${noun} reco` : 'Send invites'}
+          {sending ? 'Sending…' : mode === 'reco' ? `Send ${noun} reco` : 'Send invites'}
         </button>
       </div>
     </div>

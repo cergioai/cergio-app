@@ -48,7 +48,7 @@ export function ServiceCompleteScreen() {
             <path d="M5 12l5 5L20 7" />
           </svg>
         </div>
-        <h1 className="text-[24px] font-extrabold text-black text-center leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black text-center leading-tight">
           Thanks for completing a free service!
         </h1>
       </div>
@@ -78,7 +78,7 @@ export function ServiceCompleteScreen() {
       <div className="px-5 pt-8 pb-6">
         <button
           onClick={() => { showToast('Welcome back!'); navigate('/home'); }}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Perfect!

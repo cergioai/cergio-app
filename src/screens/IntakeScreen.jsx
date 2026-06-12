@@ -155,7 +155,7 @@ export function IntakeScreen() {
       <div className="flex justify-between items-center px-5 py-3.5 border-b border-bdr bg-white flex-shrink-0">
         <button
           onClick={() => navigate(-1)}
-          className="text-[20px] text-b3 bg-transparent border-none cursor-pointer px-1"
+          className="text-heading-1 text-b3 bg-transparent border-none cursor-pointer px-1"
         >
           ←
         </button>
@@ -259,7 +259,7 @@ export function IntakeScreen() {
         <div className="px-4 pb-3 flex flex-col gap-2">
           <button
             onClick={() => navigate(freeServices ? '/enable-free-offers' : '/results')}
-            className="w-full bg-g text-white rounded-[24px] py-4 text-[17px] font-extrabold
+            className="w-full bg-g text-white rounded-[24px] py-4 text-heading-2 font-extrabold
                        hover:opacity-90 active:scale-[.97] transition-all"
           >
             {freeServices ? 'Get my free offers →' : 'Show me providers →'}

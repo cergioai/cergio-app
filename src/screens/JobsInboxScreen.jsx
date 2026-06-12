@@ -4,8 +4,10 @@ import {
   listProviderBookings,
   listMyOutboundSpotlightRequests,
   listInboundRequests,
+  listMyRequestsWithResponses,
   respondToRequest,
 } from '../lib/api';
+import { stampInboxSeen } from '../hooks/useInboxUnread';
 
 // Map a Supabase bookings row → the same shape the existing UI uses.
 function bookingToRequest(b) {
@@ -99,9 +101,37 @@ export function JobsInboxScreen() {
     return () => { cancelled = true; };
   }, [auth?.isSignedIn]);
 
+  // CERGIO-GUARD (2026-06-12): stamp the inbox-seen timestamp so the
+  // BottomNav dot (useInboxUnread) clears when the user visits Inbox.
+  useEffect(() => { stampInboxSeen(); }, []);
+
+  // CERGIO-GUARD (2026-06-12): requester-side visibility. Tarik:
+  // "t@cergio.ai didn't get a confirm that info@cergio.ai confirmed."
+  // The requester had no surface showing provider responses after
+  // leaving /results. This loads the user's own posted requests with
+  // confirmed responses so the Requests tab can show "{provider}
+  // accepted your {service} request". Refreshes every 30s alongside
+  // the inbound poll.
+  const [myRequests, setMyRequests] = useState(null);
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setMyRequests([]); return; }
+    let cancelled = false;
+    const fetchOnce = () => {
+      listMyRequestsWithResponses({ limit: 20 }).then(({ data }) => {
+        if (cancelled) return;
+        setMyRequests(data || []);
+      });
+    };
+    fetchOnce();
+    const t = setInterval(fetchOnce, 30000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [auth?.isSignedIn]);
+  // Requests I posted that have at least one live response — the rows
+  // worth surfacing in the Requests tab.
+  const myAnswered = (myRequests || []).filter(r => (r.responses || []).length > 0);
+
   // Real bookings only — empty state when there are none. No more mock pad.
   const requests   = real ?? [];
-  const badgeCount = requests.filter(r => r.isUnread).length;
 
   // CERGIO-GUARD (2026-06-03): open consumer requests this provider can
   // respond to. Sits ABOVE the existing booking list because every
@@ -134,6 +164,15 @@ export function JobsInboxScreen() {
     const t = setInterval(fetchOnce, 30000);
     return () => { cancelled = true; clearInterval(t); };
   }, [auth?.isSignedIn]);
+
+  // CERGIO-GUARD (2026-06-12): the Requests tab badge now counts ALL
+  // actionable items — unread bookings + open requests near you +
+  // provider responses to my own requests — so it matches what the
+  // tab actually renders.
+  const badgeCount =
+    requests.filter(r => r.isUnread).length +
+    (inbound || []).length +
+    myAnswered.reduce((n, r) => n + (r.responses || []).length, 0);
 
   async function handleInboundResponse(req, status) {
     if (!req.my_service_id) {
@@ -258,6 +297,74 @@ export function JobsInboxScreen() {
             MARKETPLACE_SPEC. Sits ABOVE existing bookings because
             every second of provider lag is bid-decay
             (MARKETPLACE_SPEC § 4). */}
+        {/* CERGIO-GUARD (2026-06-12): responses to MY posted requests.
+            Tarik: "t@cergio.ai didn't get a confirm that info@cergio.ai
+            confirmed" — once the requester left /results there was NO
+            surface showing that a provider accepted. This section is
+            that surface. Sits at the very top of the Requests tab:
+            a response to something YOU asked for is the most timely
+            item here. Each response row taps through to the provider's
+            profile (/u/{id}) so the requester can vet them. */}
+        {activeTab === 'Requests' && myAnswered.length > 0 && (
+          <>
+            <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
+              Responses to your requests
+            </p>
+            {myAnswered.map(myReq => (
+              <div key={myReq.id} className="bg-white border-2 border-g/30 rounded-[20px] p-4">
+                <p className="text-body-sm font-extrabold text-black leading-snug truncate">
+                  Your request · {myReq.service_type || myReq.category || 'service'}
+                </p>
+                {myReq.location_text && (
+                  <p className="text-meta text-b3 font-medium leading-snug mt-0.5 truncate">
+                    {myReq.location_text}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-col gap-2">
+                  {myReq.responses.map((resp, ri) => {
+                    const name  = resp.responder?.display_name || 'A provider';
+                    const price = resp.offered_price_cents;
+                    const priceLabel = price != null ? ` — $${(price / 100).toFixed(0)}` : '';
+                    const line =
+                      resp.status === 'accepted'  ? `${name} is confirmed ✓` :
+                      resp.status === 'countered' ? `${name} countered${priceLabel}` :
+                      `${name} accepted your request${priceLabel}`;
+                    const target = resp.responder?.id || null;
+                    return (
+                      <button
+                        key={resp.id}
+                        type="button"
+                        disabled={!target}
+                        onClick={() => target && navigate(`/u/${target}`)}
+                        className="w-full flex items-center gap-3 bg-gl rounded-[14px] px-3 py-2.5 text-left
+                                   hover:opacity-90 transition-opacity disabled:cursor-default"
+                      >
+                        <Avatar name={name} idx={ri} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-body-sm font-extrabold text-gd leading-snug">
+                            {line}
+                          </p>
+                          {resp.service?.title && (
+                            <p className="text-meta-sm text-b2 font-medium leading-snug truncate">
+                              {resp.service.title}
+                            </p>
+                          )}
+                          {target && (
+                            <p className="text-meta-sm text-g font-extrabold mt-0.5">
+                              View profile →
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-b3 text-base flex-shrink-0">›</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
         {activeTab === 'Requests' && inbound && inbound.length > 0 && (
           <>
             <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
@@ -276,6 +383,17 @@ export function JobsInboxScreen() {
               const minutesAgo = req.created_at
                 ? Math.max(0, Math.round((Date.now() - new Date(req.created_at).getTime()) / 60000))
                 : 0;
+              // CERGIO-GUARD (2026-06-12): profile drill before responding.
+              // Tarik: "need to view the profile of the connector before
+              // accepting or countering". Avatar + the info block above the
+              // action row tap through to /u/{requester.id} — same pattern
+              // as ConnectorRequestsScreen InboundCard. Action buttons sit
+              // OUTSIDE the tappable area so Accept/Counter/Decline taps
+              // never accidentally open the profile.
+              const profileTarget = req.requester?.id || null;
+              const openProfile = () => {
+                if (profileTarget) navigate(`/u/${profileTarget}`);
+              };
               return (
                 <div
                   key={req.id}
@@ -284,29 +402,50 @@ export function JobsInboxScreen() {
                   <div className="w-2 flex-shrink-0 mt-1.5">
                     <div className="w-2 h-2 rounded-full bg-g" />
                   </div>
-                  <Avatar name={senderName} idx={i} />
+                  <button
+                    type="button"
+                    onClick={openProfile}
+                    disabled={!profileTarget}
+                    aria-label={`View ${senderName}'s profile`}
+                    className="flex-shrink-0 self-start disabled:cursor-default"
+                  >
+                    <Avatar name={senderName} idx={i} />
+                  </button>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-1">
-                      <span className="text-body-lg font-extrabold text-black truncate">
-                        {senderName}
-                      </span>
-                      <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">
-                        {minutesAgo === 0 ? 'just now' : `${minutesAgo}m ago`}
-                      </span>
-                    </div>
-                    <p className="text-body-sm font-extrabold text-black leading-snug mb-1 truncate">
-                      Needs a {req.service_type}
-                    </p>
-                    {req.description && (
-                      <p className="text-meta text-b3 font-medium leading-snug mb-2 line-clamp-2">
-                        "{req.description}"
+                    <button
+                      type="button"
+                      onClick={openProfile}
+                      disabled={!profileTarget}
+                      className="w-full text-left -m-1 p-1 rounded-[14px] hover:bg-bg5/30 transition-colors
+                                 disabled:hover:bg-transparent disabled:cursor-default"
+                    >
+                      <div className="flex justify-between items-baseline mb-1">
+                        <span className="text-body-lg font-extrabold text-black truncate">
+                          {senderName}
+                        </span>
+                        <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">
+                          {minutesAgo === 0 ? 'just now' : `${minutesAgo}m ago`}
+                        </span>
+                      </div>
+                      <p className="text-body-sm font-extrabold text-black leading-snug mb-1 truncate">
+                        Needs a {req.service_type}
                       </p>
-                    )}
-                    {req.location_text && (
-                      <p className="text-meta text-b3 font-medium leading-snug">
-                        {req.location_text}
-                      </p>
-                    )}
+                      {req.description && (
+                        <p className="text-meta text-b3 font-medium leading-snug mb-2 line-clamp-2">
+                          "{req.description}"
+                        </p>
+                      )}
+                      {req.location_text && (
+                        <p className="text-meta text-b3 font-medium leading-snug">
+                          {req.location_text}
+                        </p>
+                      )}
+                      {profileTarget && (
+                        <p className="text-meta-sm text-g font-extrabold mt-1">
+                          View profile →
+                        </p>
+                      )}
+                    </button>
                     <div className="mt-3 flex gap-2 flex-wrap">
                       <button
                         type="button"
@@ -434,7 +573,13 @@ export function JobsInboxScreen() {
           </>
         )}
 
-        {activeTab === 'Requests' && requests.length === 0 && (
+        {/* CERGIO-GUARD (2026-06-12): the generic "No requests yet"
+            card was rendering UNDER live "requests near you" cards
+            (Tarik's screenshot) because it only checked bookings.
+            Now it only shows when the tab is truly empty. */}
+        {activeTab === 'Requests' && requests.length === 0
+          && (!inbound || inbound.length === 0)
+          && myAnswered.length === 0 && (
           lastResponded ? (
             /* Confirmation card — shown after provider responds to a request */
             <div className="bg-white border border-g/30 rounded-[20px] p-6 text-center">

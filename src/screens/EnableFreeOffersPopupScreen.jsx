@@ -38,7 +38,7 @@ export function EnableFreeOffersPopupScreen() {
 
       {/* headline + body */}
       <div className="px-7 pt-4 text-center">
-        <h1 className="text-[24px] font-extrabold text-black leading-tight mb-3">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight mb-3">
           You're defaulted to<br />free services
         </h1>
         <p className="text-body text-b3 leading-relaxed mb-6">
@@ -72,7 +72,7 @@ export function EnableFreeOffersPopupScreen() {
       <div className="px-5 pt-2 pb-6 mt-auto">
         <button
           onClick={() => navigate('/confirm-submit')}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Continue

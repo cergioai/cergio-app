@@ -117,7 +117,7 @@ export function CrossPostScreen() {
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-16">
       <div className="px-5 pt-8 pb-2 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-extrabold text-black leading-tight">Your free profile,<br />everywhere</h1>
+          <h1 className="text-display-2 font-extrabold text-black leading-tight">Your free profile,<br />everywhere</h1>
           <p className="text-body-sm text-b3 mt-1">Push your Cergio listing to the places customers search — free.</p>
         </div>
         <button
@@ -138,7 +138,7 @@ export function CrossPostScreen() {
           <div className="px-5 mt-3">
             <div className="rounded-2xl bg-card border border-line p-4">
               <p className="text-meta text-b3">Cross-posting</p>
-              <p className="text-[15px] font-extrabold text-black mt-0.5">{service.title}</p>
+              <p className="text-body-lg font-extrabold text-black mt-0.5">{service.title}</p>
             </div>
           </div>
 
@@ -147,7 +147,7 @@ export function CrossPostScreen() {
             <button
               onClick={postAllConnected}
               disabled={!!busy}
-              className="w-full h-12 rounded-full bg-g text-white font-extrabold text-[15px]
+              className="w-full h-12 rounded-full bg-g text-white font-extrabold text-body-lg
                          shadow-card disabled:opacity-60 hover:bg-gd transition-colors"
             >
               {busy ? 'Posting…' : 'Post to all connected channels'}
@@ -169,7 +169,7 @@ export function CrossPostScreen() {
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="text-heading-1 leading-none">{c.emoji}</span>
                       <div className="min-w-0">
-                        <p className="text-[15px] font-extrabold text-black truncate">{c.label}</p>
+                        <p className="text-body-lg font-extrabold text-black truncate">{c.label}</p>
                         <p className="text-meta text-b3 truncate">{c.blurb}</p>
                       </div>
                     </div>

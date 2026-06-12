@@ -51,7 +51,7 @@ export function EarningsBreakdownScreen() {
         <div>
           <p className="text-body-sm font-extrabold text-b3 uppercase tracking-widest mb-1">Balance</p>
           <p className="text-[44px] font-extrabold text-black leading-none">
-            {fmtDollars(balanceCents)}<span className="text-[15px] text-b3 font-extrabold ml-1">USD</span>
+            {fmtDollars(balanceCents)}<span className="text-body-lg text-b3 font-extrabold ml-1">USD</span>
           </p>
         </div>
         <div className="w-14 h-14 rounded-full bg-gl border border-g/25 flex items-center justify-center">
@@ -63,8 +63,8 @@ export function EarningsBreakdownScreen() {
       <div className="px-5 flex flex-col gap-4 mb-8">
         {rows.map((r, i) => (
           <div key={i} className="flex items-center justify-between">
-            <span className="text-[15px] text-black">{r.label}</span>
-            <span className="text-[15px] font-extrabold text-black">{fmtDollars(r.cents)}</span>
+            <span className="text-body-lg text-black">{r.label}</span>
+            <span className="text-body-lg font-extrabold text-black">{fmtDollars(r.cents)}</span>
           </div>
         ))}
       </div>

@@ -37,7 +37,7 @@ export function BookingScreen() {
       <div className="w-20 h-20 rounded-full bg-gl flex items-center justify-center text-4xl mb-5 animate-pop-in">
         ✓
       </div>
-      <h2 className="text-[26px] font-extrabold text-black text-center mb-2.5">Booking confirmed!</h2>
+      <h2 className="text-display-2 font-extrabold text-black text-center mb-2.5">Booking confirmed!</h2>
       <p className="text-body text-b3 text-center leading-relaxed mb-8">
         {name
           ? <>You've booked {name}. We've sent the confirmation to your email.</>
@@ -61,7 +61,7 @@ export function BookingScreen() {
 
       <button
         onClick={() => navigate('/home')}
-        className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+        className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                    mb-3 hover:opacity-90 active:scale-[.97] transition-all"
       >
         Back to home
@@ -69,7 +69,7 @@ export function BookingScreen() {
       <button
         onClick={() => navigate('/invite/friends-popup')}
         className="w-full bg-transparent border border-bdr text-b3 rounded-[24px] py-4
-                   text-[15px] font-extrabold hover:bg-bg5 transition-colors"
+                   text-body-lg font-extrabold hover:bg-bg5 transition-colors"
       >
         Share with friends
       </button>

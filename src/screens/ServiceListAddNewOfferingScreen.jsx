@@ -50,7 +50,7 @@ export function ServiceListAddNewOfferingScreen() {
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`flex-1 rounded-pill py-3 text-[15px] font-extrabold capitalize transition-all
+              className={`flex-1 rounded-pill py-3 text-body-lg font-extrabold capitalize transition-all
                 ${mode === m
                   ? 'bg-white text-black shadow-card'
                   : 'bg-transparent text-black/70'}`}
@@ -118,7 +118,7 @@ export function ServiceListAddNewOfferingScreen() {
                       bg-cr px-5 py-4 flex items-center justify-between">
         <button
           onClick={() => { showToast('Offering deleted'); navigate(-1); }}
-          className="text-[15px] font-extrabold text-black underline underline-offset-2"
+          className="text-body-lg font-extrabold text-black underline underline-offset-2"
         >
           Delete offering
         </button>
@@ -141,7 +141,7 @@ export function ServiceListAddNewOfferingScreen() {
             navigate('/list-service/more-offerings');
           }}
           disabled={!valid}
-          className={`rounded-[24px] px-10 py-3.5 text-[15px] font-extrabold transition-all
+          className={`rounded-[24px] px-10 py-3.5 text-body-lg font-extrabold transition-all
             ${valid
               ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}

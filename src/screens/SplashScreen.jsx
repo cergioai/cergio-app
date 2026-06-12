@@ -34,7 +34,7 @@ export function SplashScreen() {
               "Hi, I'm CERGIO" gets its own line on the login/landing
               splash; the value-prop "I book services your friends
               actually trust" moves to a second softer line below. */}
-          <p className="text-[15px] text-white/80 font-medium text-center leading-snug">
+          <p className="text-body-lg text-white/80 font-medium text-center leading-snug">
             Hi, I&apos;m{' '}
             <span className="font-extrabold tracking-[0.18em] uppercase text-white">
               Cergio
@@ -50,7 +50,7 @@ export function SplashScreen() {
           <p className="text-body text-white/65 font-medium text-center leading-snug mt-1">
             I book services your friends actually trust.
           </p>
-          <p className="text-[11.5px] text-white/45 font-extrabold text-center tracking-[0.18em] uppercase mt-1">
+          <p className="text-meta-sm text-white/45 font-extrabold text-center tracking-[0.18em] uppercase mt-1">
             Book · Barter · Earn
           </p>
         </div>
@@ -59,7 +59,7 @@ export function SplashScreen() {
       <div className="relative z-10 flex flex-col gap-3 w-[280px] mt-12">
         <button
           onClick={() => navigate('/auth')}
-          className="bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      transition-opacity hover:opacity-90 active:scale-[.97]"
         >
           Sign in or sign up
@@ -67,7 +67,7 @@ export function SplashScreen() {
         <button
           onClick={() => navigate('/home')}
           className="bg-transparent text-white/70 border border-white/25 rounded-[24px]
-                     py-4 text-[15px] font-extrabold transition-colors hover:border-white/50"
+                     py-4 text-body-lg font-extrabold transition-colors hover:border-white/50"
         >
           Continue as guest
         </button>
@@ -75,7 +75,7 @@ export function SplashScreen() {
 
       {/* CERGIO-GUARD (2026-05-31): minimal company link row.
           Reachable from the splash without overwhelming the hero. */}
-      <div className="relative z-10 mt-8 flex items-center gap-4 text-[11.5px] font-medium text-white/40">
+      <div className="relative z-10 mt-8 flex items-center gap-4 text-meta-sm font-medium text-white/40">
         <Link to="/about"   className="hover:text-white/70 transition-colors">About</Link>
         <span>·</span>
         <Link to="/contact" className="hover:text-white/70 transition-colors">Contact</Link>

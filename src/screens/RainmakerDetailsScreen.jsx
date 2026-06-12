@@ -142,14 +142,14 @@ export function RainmakerDetailsScreen() {
                       bg-cr px-5 py-4 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
-          className="text-[15px] font-extrabold text-black underline underline-offset-2"
+          className="text-body-lg font-extrabold text-black underline underline-offset-2"
         >
           Back
         </button>
         <button
           onClick={next}
           disabled={!allFilled}
-          className={`rounded-[24px] px-10 py-3.5 text-[15px] font-extrabold transition-all
+          className={`rounded-[24px] px-10 py-3.5 text-body-lg font-extrabold transition-all
             ${allFilled
               ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}

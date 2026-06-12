@@ -328,7 +328,7 @@ function JoinedCard({ ev }) {
           )}
           <span className="font-medium text-b2"> joined Cergio</span>
         </p>
-        <p className="text-[11.5px] text-b3 font-medium mt-0.5">
+        <p className="text-meta-sm text-b3 font-medium mt-0.5">
           {timeAgo(ev.at)}
           {p.is_connector && <span className="text-gd font-extrabold"> · Connector</span>}
         </p>
@@ -445,7 +445,7 @@ function SpotlightCard({ ev }) {
           )}
           <span className="font-medium text-b2"> on {platform}</span>
         </p>
-        <p className="text-[11.5px] text-b3 font-medium mt-0.5">
+        <p className="text-meta-sm text-b3 font-medium mt-0.5">
           {timeAgo(ev.at)}
         </p>
       </div>
@@ -528,7 +528,7 @@ export function ActivityScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cream pb-24 overflow-y-auto">
       <div className="px-5 pt-8 pb-2">
-        <h1 className="text-[24px] font-extrabold text-black leading-tight">Activity</h1>
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">Activity</h1>
         <p className="text-body-sm text-b3 font-medium mt-1.5 leading-snug">
           Your network at a glance.
         </p>
@@ -576,8 +576,8 @@ export function ActivityScreen() {
                 onClick={c.onClick}
                 className="bg-white border border-bdr rounded-[12px] py-2.5 px-2 text-left hover:bg-bg5/40 transition-colors"
               >
-                <p className="text-[20px] font-extrabold text-black leading-none">{c.n}</p>
-                <p className="text-[10.5px] text-b3 font-extrabold uppercase tracking-wide mt-0.5">{c.label}</p>
+                <p className="text-heading-1 font-extrabold text-black leading-none">{c.n}</p>
+                <p className="text-caps text-b3 font-extrabold uppercase tracking-wide mt-0.5">{c.label}</p>
               </button>
             ))}
           </div>
@@ -593,8 +593,8 @@ export function ActivityScreen() {
                 onClick={c.onClick}
                 className="bg-white border border-bdr rounded-[12px] py-2.5 px-2 text-left hover:bg-bg5/40 transition-colors"
               >
-                <p className="text-[20px] font-extrabold text-black leading-none">{c.n}</p>
-                <p className="text-[10.5px] text-b3 font-extrabold uppercase tracking-wide mt-0.5">{c.label}</p>
+                <p className="text-heading-1 font-extrabold text-black leading-none">{c.n}</p>
+                <p className="text-caps text-b3 font-extrabold uppercase tracking-wide mt-0.5">{c.label}</p>
               </button>
             ))}
           </div>
@@ -603,20 +603,20 @@ export function ActivityScreen() {
             <button
               type="button"
               onClick={() => navigate('/invite/friends-popup')}
-              className="flex-1 bg-g text-white rounded-pill py-2.5 text-[12.5px] font-extrabold"
+              className="flex-1 bg-g text-white rounded-pill py-2.5 text-meta font-extrabold"
             >
               Invite a friend
             </button>
             <button
               type="button"
               onClick={() => navigate('/invite/recommend')}
-              className="flex-1 bg-white border border-bdr text-b2 rounded-pill py-2.5 text-[12.5px] font-extrabold"
+              className="flex-1 bg-white border border-bdr text-b2 rounded-pill py-2.5 text-meta font-extrabold"
             >
               Reco a provider
             </button>
           </div>
 
-          <p className="text-[11.5px] text-b3 leading-snug mt-1">
+          <p className="text-meta-sm text-b3 leading-snug mt-1">
             Every friend who joins + books earns you {' '}
             <span className="font-extrabold text-black">${REWARDS.perFriendUser} credit</span>{' '}
             (up to ${REWARDS.perFriend}) — plus {' '}
@@ -714,7 +714,7 @@ export function ActivityScreen() {
             return (
               <div className="mt-2 pb-4 border-b border-bdr">
                 <div className="px-5 mb-3">
-                  <h2 className="text-[17px] font-extrabold text-black leading-tight">
+                  <h2 className="text-heading-2 font-extrabold text-black leading-tight">
                     What&apos;s happening on Cergio
                   </h2>
                 </div>
@@ -724,7 +724,7 @@ export function ActivityScreen() {
                   className="mx-5 w-[calc(100%-2.5rem)] bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 text-left hover:from-gl/80 hover:to-gl/40 transition-colors"
                 >
                   <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">Your feed</p>
-                  <p className="text-[15px] font-extrabold text-black leading-snug mt-1">
+                  <p className="text-body-lg font-extrabold text-black leading-snug mt-1">
                     {isSignedIn
                       ? 'Follow Connectors to see their picks here.'
                       : 'Sign in + follow Connectors to see their picks here.'}
@@ -743,7 +743,7 @@ export function ActivityScreen() {
         return (
         <div className="mt-2 pb-4 border-b border-bdr">
           <div className="px-5 mb-3">
-            <h2 className="text-[17px] font-extrabold text-black leading-tight">
+            <h2 className="text-heading-2 font-extrabold text-black leading-tight">
               What&apos;s happening on Cergio
             </h2>
             <p className="text-meta text-gd font-extrabold mt-1">From your Connectors and network · #cergiofeed</p>
@@ -858,7 +858,7 @@ function NetworkFriendsTab({ invitesDetailed, navigate }) {
     return (
       <div className="mx-5 mt-4 bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4">
         <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">Friends</p>
-        <p className="text-[15px] font-extrabold text-black leading-snug mt-1">No friends yet.</p>
+        <p className="text-body-lg font-extrabold text-black leading-snug mt-1">No friends yet.</p>
         <p className="text-meta text-b3 font-medium mt-1.5 leading-snug">
           Invite friends to start building your network.{' '}
           <button
@@ -904,11 +904,11 @@ function NetworkFriendsTab({ invitesDetailed, navigate }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-body font-extrabold text-black truncate">{name}</p>
-              <p className="text-[11.5px] text-b3 mt-0.5">
+              <p className="text-meta-sm text-b3 mt-0.5">
                 Invited {inv.invited_at ? new Date(inv.invited_at).toLocaleDateString() : '—'}
               </p>
             </div>
-            <span className={`text-[10.5px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-pill ${statusClass}`}>
+            <span className={`text-caps font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-pill ${statusClass}`}>
               {status}
             </span>
           </button>
@@ -927,7 +927,7 @@ function NetworkConnectorsTab({ connectors, followedIds, onToggleFollow, navigat
     return (
       <div className="mx-5 mt-4 bg-white border border-bdr rounded-[16px] p-4">
         <p className="text-body-sm font-extrabold text-black mb-1">No Connectors yet</p>
-        <p className="text-[11.5px] text-b3 leading-snug">
+        <p className="text-meta-sm text-b3 leading-snug">
           Connectors are locals with reach who spotlight services on IG + TikTok.
           They show up here as they verify.
         </p>
@@ -961,7 +961,7 @@ function NetworkConnectorsTab({ connectors, followedIds, onToggleFollow, navigat
               className="flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer"
             >
               <p className="text-body font-extrabold text-black truncate">{name}</p>
-              <p className="text-[11.5px] text-b3 mt-0.5 truncate">
+              <p className="text-meta-sm text-b3 mt-0.5 truncate">
                 {c.instagram_handle && <>IG @{c.instagram_handle}</>}
                 {c.instagram_handle && c.tiktok_handle && ' · '}
                 {c.tiktok_handle && <>TT @{c.tiktok_handle}</>}
@@ -971,7 +971,7 @@ function NetworkConnectorsTab({ connectors, followedIds, onToggleFollow, navigat
             <button
               type="button"
               onClick={() => onToggleFollow(c.id, isFollowing)}
-              className={`rounded-pill px-3 py-1 text-[11.5px] font-extrabold whitespace-nowrap ${isFollowing ? 'bg-bg5 text-b2' : 'bg-g text-white'}`}
+              className={`rounded-pill px-3 py-1 text-meta-sm font-extrabold whitespace-nowrap ${isFollowing ? 'bg-bg5 text-b2' : 'bg-g text-white'}`}
             >
               {isFollowing ? 'Following' : 'Follow'}
             </button>

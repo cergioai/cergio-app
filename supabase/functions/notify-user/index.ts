@@ -141,18 +141,24 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
 
   invite_received: ({ recipient, data, appBase }) => {
     const inviterName = data.inviter_name || 'A friend';
-    const link        = `${appBase}/?invite&ref=${encodeURIComponent(data.inviter_id || '')}`;
+    // CERGIO-GUARD (2026-06-12): prefer the short /i/<code> link the
+    // client now builds (lands on the inviter's profile, not login).
+    // The long ?ref= form stays as fallback for old callers.
+    const link = data.invite_url
+      || `${appBase}/?invite&ref=${encodeURIComponent(data.inviter_id || '')}`;
+    const note = (data.note || '').slice(0, 300);
     return {
       subject: `${inviterName} invited you to Cergio`,
       body_html: `
         <p style="font-size:15px;color:#3A3A3A;margin:0 0 12px;">
           <strong>${escapeHtml(inviterName)}</strong> thinks Cergio would be useful for you — it's a friends-trusted marketplace for services.
         </p>
+        ${note ? `<div style="background:#fff;border:1px solid #E5E5E5;border-radius:14px;padding:14px 18px;margin:0 0 16px;font-size:14px;color:#3A3A3A;">“${escapeHtml(note)}”</div>` : ''}
         <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Sign up and book your first service — ${escapeHtml(inviterName)} earns $25 in credits when you do.</p>`,
       cta_label: 'Sign up free →',
       cta_link:  link,
       sms: `${inviterName} invited you to Cergio — services your friends actually trust. Join: ${link}`,
-      text: `${inviterName} invited you to Cergio.`,
+      text: `${inviterName} invited you to Cergio.${note ? `\n\n"${note}"` : ''}\n\nJoin: ${link}`,
     };
   },
 

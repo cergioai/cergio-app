@@ -31,7 +31,7 @@ export function TermsScreen() {
         </button>
         <Link
           to="/contact"
-          className="text-[12.5px] font-extrabold text-gd hover:underline"
+          className="text-meta font-extrabold text-gd hover:underline"
         >
           Contact us →
         </Link>
@@ -228,7 +228,7 @@ export function TermsScreen() {
 function Section({ title, children }) {
   return (
     <section>
-      <h2 className="text-[15px] font-extrabold text-black leading-tight mb-1.5">
+      <h2 className="text-body-lg font-extrabold text-black leading-tight mb-1.5">
         {title}
       </h2>
       <div>{children}</div>

@@ -145,7 +145,7 @@ export function RequestDetailScreen() {
         >
           ←
         </button>
-        <span className="text-[15px] font-extrabold text-black">{data.consumerName}</span>
+        <span className="text-body-lg font-extrabold text-black">{data.consumerName}</span>
         {data.real ? (
           <button
             onClick={() => navigate(`/messages/${data.id}`)}
@@ -230,7 +230,7 @@ export function RequestDetailScreen() {
             Free for Connectors
           </div>
         )}
-        {data.description && <p className="text-[15px] text-black mb-1">{data.description}</p>}
+        {data.description && <p className="text-body-lg text-black mb-1">{data.description}</p>}
         <p className="text-body text-b3">{data.appointment}</p>
       </div>
 
@@ -263,7 +263,7 @@ export function RequestDetailScreen() {
             </div>
           )}
           <div className="px-5 pt-4 pb-2 mt-auto text-center">
-            <p className="text-[15px] font-extrabold text-black">
+            <p className="text-body-lg font-extrabold text-black">
               {data.isFree
                 ? `Accept to confirm this free spotlight slot`
                 : `Accept to confirm this booking`}
@@ -278,7 +278,7 @@ export function RequestDetailScreen() {
             <button
               onClick={handleAccept}
               disabled={busy}
-              className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+              className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                          hover:opacity-90 active:scale-[.97] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {busy ? 'Working…' : 'Accept'}

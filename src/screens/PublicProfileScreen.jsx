@@ -563,7 +563,7 @@ export function PublicProfileScreen() {
               className="mx-5 mt-6 block bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 hover:from-gl/80 hover:to-gl/40 transition-colors"
             >
               <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">By the numbers</p>
-              <p className="text-[15px] font-extrabold text-black leading-snug mt-1">Just getting started.</p>
+              <p className="text-body-lg font-extrabold text-black leading-snug mt-1">Just getting started.</p>
               <p className="text-meta text-b3 font-medium mt-1 leading-snug">
                 Invite your first friend to start building your network. <span className="text-gd font-extrabold">Send invite →</span>
               </p>
@@ -590,8 +590,8 @@ export function PublicProfileScreen() {
               {cells.map(c => {
                 const inner = (
                   <>
-                    <p className="text-[20px] font-extrabold text-black leading-none">{c.value}</p>
-                    <p className="text-[10.5px] font-extrabold uppercase tracking-wide text-b3 mt-1">{c.label}</p>
+                    <p className="text-heading-1 font-extrabold text-black leading-none">{c.value}</p>
+                    <p className="text-caps font-extrabold uppercase tracking-wide text-b3 mt-1">{c.label}</p>
                   </>
                 );
                 return c.to ? (

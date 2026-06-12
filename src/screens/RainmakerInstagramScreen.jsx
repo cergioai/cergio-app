@@ -159,7 +159,7 @@ export function RainmakerInstagramScreen() {
               </svg>
             </div>
             <div className="flex-1">
-              <p className="text-[15px] font-extrabold text-black leading-tight">
+              <p className="text-body-lg font-extrabold text-black leading-tight">
                 @{handle}
                 {verifiedAt && (
                   <span className="ml-1.5 inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-caps font-extrabold align-middle">
@@ -185,7 +185,7 @@ export function RainmakerInstagramScreen() {
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            className="w-full bg-black text-white rounded-[16px] py-4 text-[15px] font-extrabold
+            className="w-full bg-black text-white rounded-[16px] py-4 text-body-lg font-extrabold
                        hover:opacity-90 active:scale-[.97] transition-all flex items-center justify-center gap-2 mb-4"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -207,7 +207,7 @@ export function RainmakerInstagramScreen() {
               </svg>
             </div>
             <div className="flex-1">
-              <p className="text-[15px] font-extrabold text-black leading-tight">
+              <p className="text-body-lg font-extrabold text-black leading-tight">
                 @{ttHandle}
                 {ttVerifiedAt && (
                   <span className="ml-1.5 inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-caps font-extrabold align-middle">
@@ -233,7 +233,7 @@ export function RainmakerInstagramScreen() {
           <button
             type="button"
             onClick={() => setShowTtModal(true)}
-            className="w-full bg-white border border-bdr text-black rounded-[16px] py-4 text-[15px] font-extrabold
+            className="w-full bg-white border border-bdr text-black rounded-[16px] py-4 text-body-lg font-extrabold
                        hover:border-g/40 transition-colors flex items-center justify-center gap-2 mb-4"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="black">
@@ -310,14 +310,14 @@ export function RainmakerInstagramScreen() {
                       bg-cr px-5 py-4 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
-          className="text-[15px] font-extrabold text-black underline underline-offset-2"
+          className="text-body-lg font-extrabold text-black underline underline-offset-2"
         >
           Back
         </button>
         <button
           onClick={() => connected && navigate('/rainmaker/apply/submitted')}
           disabled={!connected}
-          className={`rounded-[24px] px-10 py-3.5 text-[15px] font-extrabold transition-all
+          className={`rounded-[24px] px-10 py-3.5 text-body-lg font-extrabold transition-all
             ${connected
               ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
               : 'bg-bg5 text-b3 cursor-not-allowed'}`}

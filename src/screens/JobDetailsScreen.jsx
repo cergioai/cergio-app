@@ -75,7 +75,7 @@ export function JobDetailsScreen() {
               {getInitials(provider.name)}
             </div>
             <div>
-              <p className="text-[15px] font-extrabold text-black">{provider.name}</p>
+              <p className="text-body-lg font-extrabold text-black">{provider.name}</p>
               <p className="text-meta text-g font-extrabold">{provider.category}</p>
             </div>
           </div>
@@ -93,7 +93,7 @@ export function JobDetailsScreen() {
         {rows.map((row, i) => (
           <div key={i} className="flex justify-between items-start py-4 border-b border-bdr">
             <div className="flex-1 pr-3">
-              <p className="text-[15px] font-extrabold text-black mb-1">{row.label}</p>
+              <p className="text-body-lg font-extrabold text-black mb-1">{row.label}</p>
               {row.sub.split('\n').map((line, j) => (
                 <p key={j} className="text-body-sm text-b3">{line}</p>
               ))}
@@ -109,7 +109,7 @@ export function JobDetailsScreen() {
 
         {/* request details */}
         <div className="pt-5">
-          <p className="text-[15px] font-extrabold text-black mb-2">Request Details</p>
+          <p className="text-body-lg font-extrabold text-black mb-2">Request Details</p>
           <p className="text-body-sm text-b3 mb-2">{requestDetails.type}</p>
           <div className="flex flex-col gap-1.5 mb-4">
             {requestDetails.items.map((item, i) => (
@@ -130,7 +130,7 @@ export function JobDetailsScreen() {
         <div className="pt-6">
           <button
             onClick={() => navigate('/rate', { state: { bookingId } })}
-            className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+            className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                        hover:opacity-90 active:scale-[.97] transition-all"
           >
             Mark service complete

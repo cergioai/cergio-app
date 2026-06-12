@@ -22,7 +22,7 @@ export function ServiceListPhotosIntroScreen() {
             <path d="M12 19V5M5 12l7-7 7 7" />
             <path d="M5 21h14" />
           </svg>
-          <span className="text-[15px] font-extrabold text-black">Upload photos and video</span>
+          <span className="text-body-lg font-extrabold text-black">Upload photos and video</span>
         </button>
 
         <button
@@ -34,7 +34,7 @@ export function ServiceListPhotosIntroScreen() {
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
             <circle cx="12" cy="13" r="4" />
           </svg>
-          <span className="text-[15px] font-extrabold text-black">Take new photos and videos</span>
+          <span className="text-body-lg font-extrabold text-black">Take new photos and videos</span>
         </button>
       </div>
 

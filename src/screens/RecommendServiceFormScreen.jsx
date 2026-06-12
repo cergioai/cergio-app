@@ -239,11 +239,11 @@ export function RecommendServiceFormScreen() {
         <h1 className="text-heading-1 font-extrabold text-black leading-tight">
           Reco a service provider
         </h1>
-        <p className="text-[12.5px] text-b2 font-medium leading-snug mt-1.5">
+        <p className="text-meta text-b2 font-medium leading-snug mt-1.5">
           Help someone you know turn their craft into a referral network + cash.
           We message them to claim their profile.
         </p>
-        <p className="text-[11.5px] text-gd font-extrabold mt-2 leading-snug">
+        <p className="text-meta-sm text-gd font-extrabold mt-2 leading-snug">
           AI-driven service expanding their earnings + clients. Human impact, shared prosperity.
         </p>
       </div>
@@ -280,7 +280,7 @@ export function RecommendServiceFormScreen() {
       {/* ── Step 1 — service type ───────────────────────────────────── */}
       {step === 1 && (
         <div className="px-5 flex-1 flex flex-col">
-          <p className="text-[15px] text-b2 leading-snug mb-4">
+          <p className="text-body-lg text-b2 leading-snug mb-4">
             What do they do?
           </p>
           <input
@@ -290,7 +290,7 @@ export function RecommendServiceFormScreen() {
             onChange={e => setServiceType(e.target.value)}
             list="reco-service-types"
             placeholder="e.g. Plumber, Tutor, Cleaner…"
-            className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3.5 text-[15px]
+            className="w-full bg-white border border-bdr rounded-[14px] px-4 py-3.5 text-body-lg
                        text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
             onKeyDown={e => { if (e.key === 'Enter' && step1Valid) goNext(); }}
           />
@@ -307,7 +307,7 @@ export function RecommendServiceFormScreen() {
                 key={t}
                 type="button"
                 onClick={() => { setServiceType(t); setStep(2); }}
-                className={`px-3 py-1.5 rounded-pill text-[12.5px] font-extrabold border transition-colors
+                className={`px-3 py-1.5 rounded-pill text-meta font-extrabold border transition-colors
                   ${serviceType === t
                     ? 'bg-g text-white border-g'
                     : 'bg-white text-b2 border-bdr hover:border-g/40 hover:text-black'}`}
@@ -322,7 +322,7 @@ export function RecommendServiceFormScreen() {
       {/* ── Step 2 — recipient ──────────────────────────────────────── */}
       {step === 2 && (
         <div className="px-5 flex-1 flex flex-col">
-          <p className="text-[15px] text-b2 leading-snug mb-1">
+          <p className="text-body-lg text-b2 leading-snug mb-1">
             Who&apos;s the {serviceType.toLowerCase()} you want to reco?
           </p>
           <p className="text-meta text-b3 leading-snug mb-4">
@@ -340,10 +340,10 @@ export function RecommendServiceFormScreen() {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[13.5px] font-extrabold text-black leading-tight">
+                <p className="text-body-sm font-extrabold text-black leading-tight">
                   Pick from your contacts
                 </p>
-                <p className="text-[11.5px] text-b3 mt-0.5 leading-snug">
+                <p className="text-meta-sm text-b3 mt-0.5 leading-snug">
                   Tap to choose — name, phone & email fill in automatically.
                 </p>
               </div>
@@ -439,7 +439,7 @@ export function RecommendServiceFormScreen() {
       {/* ── Step 3 — endorsement blurb ─────────────────────────────── */}
       {step === 3 && (
         <div className="px-5 flex-1 flex flex-col">
-          <p className="text-[15px] text-b2 leading-snug mb-1">
+          <p className="text-body-lg text-b2 leading-snug mb-1">
             Why <span className="font-extrabold text-black">{firstName}</span>’s a great {serviceType.toLowerCase()}.
           </p>
           <p className="text-meta text-b3 leading-snug mb-4">
@@ -451,12 +451,12 @@ export function RecommendServiceFormScreen() {
             onChange={e => setBlurb(e.target.value)}
             maxLength={280}
             placeholder={`Try: "${firstName} did our deep clean before move-out — fast, friendly, fair price."`}
-            className="w-full h-[200px] bg-white border border-bdr rounded-[18px] p-4 text-[15px] text-black
+            className="w-full h-[200px] bg-white border border-bdr rounded-[18px] p-4 text-body-lg text-black
                        placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none font-sans leading-relaxed"
           />
           <p className="text-meta-sm text-b3 mt-2 text-right">{remaining} characters left</p>
           {step3Valid && (
-            <p className="text-[11.5px] text-b3 leading-snug mt-3">
+            <p className="text-meta-sm text-b3 leading-snug mt-3">
               {firstName} gets an SMS + email asking them to claim their Cergio profile + offer free services to Connectors who&apos;ll spotlight them on IG/TikTok. <span className="text-gd font-extrabold">Friend referred.</span>
             </p>
           )}

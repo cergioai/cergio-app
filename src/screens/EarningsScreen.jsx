@@ -318,7 +318,7 @@ export function EarningsScreen() {
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
       {/* Page title aligns with Profile canon: 30px / 800 / leading-tight,
           generous top padding to match the rhythm Profile sets. */}
-      <h1 className="px-5 pt-10 pb-4 text-[30px] font-extrabold text-black leading-tight">Earnings</h1>
+      <h1 className="px-5 pt-10 pb-4 text-display-1 font-extrabold text-black leading-tight">Earnings</h1>
 
       {/* hero balance card — kelly-green gradient outer, white inner.
           Balance = real summed cleared earnings (booking + spotlight). */}
@@ -365,7 +365,7 @@ export function EarningsScreen() {
                 showToast('Opening cash-out request — email: support@cergio.ai');
               }
             }}
-            className="w-full bg-white rounded-[14px] py-3.5 mt-2 text-[15px] font-extrabold text-black text-center block"
+            className="w-full bg-white rounded-[14px] py-3.5 mt-2 text-body-lg font-extrabold text-black text-center block"
           >
             Cash out
           </a>
@@ -409,7 +409,7 @@ export function EarningsScreen() {
               className="mx-5 mb-5 w-[calc(100%-2.5rem)] bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 text-left hover:from-gl/80 hover:to-gl/40 transition-colors"
             >
               <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">Start earning</p>
-              <p className="text-[15px] font-extrabold text-black leading-snug mt-1">
+              <p className="text-body-lg font-extrabold text-black leading-snug mt-1">
                 Invite your first friend — earn ${REWARDS.perFriendUser} when they book.
               </p>
               <p className="text-meta text-b3 font-medium mt-1.5 leading-snug">
@@ -740,7 +740,7 @@ export function EarningsScreen() {
                       const partial   = effCents > 0 && effCents < rawCents;
                       return (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className={`text-[15px] font-extrabold ${cappedOut ? 'text-b3' : 'text-black'}`}>
+                          <span className={`text-body-lg font-extrabold ${cappedOut ? 'text-b3' : 'text-black'}`}>
                             +{fmtDollars(effCents)}
                           </span>
                           {(cappedOut || partial) && (
@@ -787,7 +787,7 @@ export function EarningsScreen() {
               className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
             >
               <p className="text-heading-2 font-extrabold text-black leading-none">{invitesCount}</p>
-              <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">friends invited <span className="text-gd font-extrabold">›</span></p>
+              <p className="text-caps text-b3 mt-0.5 leading-snug flex items-center gap-1">friends invited <span className="text-gd font-extrabold">›</span></p>
             </button>
             <button
               type="button"
@@ -795,7 +795,7 @@ export function EarningsScreen() {
               className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
             >
               <p className="text-heading-2 font-extrabold text-black leading-none">{recsCount}</p>
-              <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">services reco&apos;d <span className="text-gd font-extrabold">›</span></p>
+              <p className="text-caps text-b3 mt-0.5 leading-snug flex items-center gap-1">services reco&apos;d <span className="text-gd font-extrabold">›</span></p>
             </button>
             <button
               type="button"
@@ -803,7 +803,7 @@ export function EarningsScreen() {
               className="flex-1 text-left bg-bg5/40 hover:bg-bg5 rounded-[12px] px-3 py-2 transition-colors"
             >
               <p className="text-heading-2 font-extrabold text-black leading-none">{balanceStr}</p>
-              <p className="text-[10.5px] text-b3 mt-0.5 leading-snug flex items-center gap-1">earned <span className="text-gd font-extrabold">›</span></p>
+              <p className="text-caps text-b3 mt-0.5 leading-snug flex items-center gap-1">earned <span className="text-gd font-extrabold">›</span></p>
             </button>
           </div>
 
@@ -896,7 +896,7 @@ export function EarningsScreen() {
               </h3>
               <button
                 onClick={() => setShowGrowthInfo(false)}
-                className="text-[20px] text-b3 font-extrabold px-2 -mt-1"
+                className="text-heading-1 text-b3 font-extrabold px-2 -mt-1"
                 aria-label="Close"
               >
                 ×
@@ -1038,7 +1038,7 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
       <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3">
         Earned to date
       </p>
-      <p className="text-[26px] font-extrabold text-black leading-none mt-1">
+      <p className="text-display-2 font-extrabold text-black leading-none mt-1">
         ${(totalCents / 100).toFixed(0)}
         <span className="text-b3 font-extrabold text-body ml-1.5">
           of ${(potentialCents / 100).toLocaleString()} potential
@@ -1077,7 +1077,7 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
             <div key={stage.label} className="flex-1 flex items-center gap-1.5">
               <div className="flex-1 bg-bg5 rounded-[10px] py-1.5">
                 <p className="text-heading-2 font-extrabold text-black leading-none">{stage.n}</p>
-                <p className="text-[10.5px] font-extrabold uppercase tracking-wide text-b3 mt-0.5">{stage.label}</p>
+                <p className="text-caps font-extrabold uppercase tracking-wide text-b3 mt-0.5">{stage.label}</p>
               </div>
               {i < 2 && <span className="text-b3 text-meta-sm font-extrabold">→</span>}
             </div>
@@ -1170,7 +1170,7 @@ function FriendTallyPill({
       : `($${cap$} cap)`;
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold rounded-pill px-1.5 py-0.5
+      className={`inline-flex items-center gap-1 text-caps font-extrabold rounded-pill px-1.5 py-0.5
                   ${maxedOut ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}
       title={`${name}: $${left$} left ${titleSuffix}`}
     >

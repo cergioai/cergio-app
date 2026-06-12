@@ -98,7 +98,7 @@ export function MessagesScreen() {
           {getInitials(otherName)}
         </div>
         <div className="flex-1">
-          <p className="text-[15px] font-extrabold text-black leading-tight">{otherName}</p>
+          <p className="text-body-lg font-extrabold text-black leading-tight">{otherName}</p>
           <p className="text-meta text-b3 truncate">{subtitle}</p>
         </div>
       </div>

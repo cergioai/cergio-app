@@ -89,6 +89,7 @@ import { ServiceDetailProviderScreen }      from './screens/ServiceDetailProvide
 import { AuthScreen }                       from './screens/AuthScreen';
 import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
+import { InviteLandingScreen }              from './screens/InviteLandingScreen';
 import { AboutScreen }                      from './screens/AboutScreen';
 import { ContactScreen }                    from './screens/ContactScreen';
 import { TermsScreen }                      from './screens/TermsScreen';
@@ -98,7 +99,7 @@ const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
 // bottom "Request {offering} ($N)" button that the BottomNav was
 // covering, so users on Tarik's screenshot saw the Book CTA hidden.
 // PDP is a focused booking flow anyway; nav is wrong on it.
-const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/', '/service/']; // focused linear flows
+const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/', '/service/', '/i/']; // focused linear flows
 const HIDE_NAV_PATHS_EXTRA = [
   '/intake',                          // chat composer at bottom — nav was covering it
   '/intake-form',                     // structured form fallback — same reason
@@ -463,6 +464,12 @@ export default function App() {
           {/* CERGIO-GUARD (2026-05-30): public profile view — every
               avatar across the app links here via /u/{profileId}. */}
           <Route path="/u/:profileId"          element={<PublicProfileScreen />} />
+
+          {/* CERGIO-GUARD (2026-06-12): short invite links — /i/<code>
+              expands to the inviter's profile + stores the referral.
+              Replaces the long ?ref=<uuid> link that dumped invitees
+              on the login page. */}
+          <Route path="/i/:code"               element={<InviteLandingScreen />} />
 
           {/* CERGIO-GUARD (2026-05-31): company surfaces — About,
               Contact (single form, ?subject= pre-fills), Terms of

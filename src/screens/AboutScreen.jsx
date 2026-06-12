@@ -35,7 +35,7 @@ export function AboutScreen() {
         </button>
         <Link
           to="/contact"
-          className="text-[12.5px] font-extrabold text-gd hover:underline"
+          className="text-meta font-extrabold text-gd hover:underline"
         >
           Contact us →
         </Link>
@@ -70,10 +70,10 @@ export function AboutScreen() {
         <p className="text-meta-sm font-extrabold text-gd tracking-[0.18em] uppercase">
           Our mission
         </p>
-        <h2 className="text-[20px] font-extrabold text-black leading-tight mt-2">
+        <h2 className="text-heading-1 font-extrabold text-black leading-tight mt-2">
           Correct AI. Direct AI. Align AI.
         </h2>
-        <p className="text-[13.5px] text-b2 leading-relaxed mt-2">
+        <p className="text-body-sm text-b2 leading-relaxed mt-2">
           Rebuilding AI on three foundations the web economy refuses
           to fix.
         </p>
@@ -168,7 +168,7 @@ export function AboutScreen() {
         <p className="text-body font-extrabold text-black leading-tight mt-2">
           Tech leads from Uber, Google, Grubhub, and Goldman Sachs.
         </p>
-        <p className="text-[12.5px] text-b2 leading-snug mt-2">
+        <p className="text-meta text-b2 leading-snug mt-2">
           Marketplaces, money flow, ranking, and growth — the stack
           that scaled the last decade of consumer apps, now turned
           toward an AI that corrects itself on human trust and
@@ -220,7 +220,7 @@ function FooterLink({ to, label }) {
   return (
     <Link
       to={to}
-      className="text-[12.5px] text-b2 font-medium hover:text-gd hover:underline"
+      className="text-meta text-b2 font-medium hover:text-gd hover:underline"
     >
       {label}
     </Link>

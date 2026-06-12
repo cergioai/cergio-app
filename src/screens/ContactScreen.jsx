@@ -156,7 +156,7 @@ export function ContactScreen() {
         </button>
         <Link
           to="/about"
-          className="text-[12.5px] font-extrabold text-gd hover:underline"
+          className="text-meta font-extrabold text-gd hover:underline"
         >
           About Cergio →
         </Link>
@@ -166,7 +166,7 @@ export function ContactScreen() {
         <h1 className="text-display-2 font-extrabold text-black leading-tight">
           Contact us
         </h1>
-        <p className="text-[13.5px] text-b2 leading-relaxed mt-2 max-w-[360px]">
+        <p className="text-body-sm text-b2 leading-relaxed mt-2 max-w-[360px]">
           Press, investors, partnerships, support — one form, one
           inbox. Pick a subject so the right person sees it first.
         </p>
@@ -174,7 +174,7 @@ export function ContactScreen() {
 
       {sent ? (
         <div className="mx-5 mt-8 bg-white border border-line rounded-[18px] p-6 text-center">
-          <div className="w-12 h-12 rounded-full bg-gl text-gd flex items-center justify-center text-[20px] font-extrabold mx-auto">
+          <div className="w-12 h-12 rounded-full bg-gl text-gd flex items-center justify-center text-heading-1 font-extrabold mx-auto">
             ✓
           </div>
           <p className="text-body-lg font-extrabold text-black mt-4">
@@ -258,7 +258,7 @@ export function ContactScreen() {
                   />
                 </label>
                 {attachmentError && (
-                  <p className="text-[11.5px] text-danger font-extrabold">{attachmentError}</p>
+                  <p className="text-meta-sm text-danger font-extrabold">{attachmentError}</p>
                 )}
                 {attachmentPreview && (
                   <div className="relative inline-block">
@@ -284,12 +284,12 @@ export function ContactScreen() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+            className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                        hover:opacity-90 active:scale-[.97] transition-all disabled:opacity-50"
           >
             {busy ? 'Sending…' : 'Send message'}
           </button>
-          <p className="text-[11.5px] text-b3 leading-snug text-center mt-1">
+          <p className="text-meta-sm text-b3 leading-snug text-center mt-1">
             By sending you agree to our{' '}
             <Link to="/terms" className="underline">Terms</Link> and{' '}
             <Link to="/privacy" className="underline">Privacy Policy</Link>.

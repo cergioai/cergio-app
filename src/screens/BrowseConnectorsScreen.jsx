@@ -221,7 +221,7 @@ export function BrowseConnectorsScreen() {
         if (!hasAnyOutboundRequest) {
           return (
             <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-5 text-center">
-              <p className="text-[15px] font-extrabold text-black mb-1">
+              <p className="text-body-lg font-extrabold text-black mb-1">
                 Send a spotlight request first
               </p>
               <p className="text-body-sm text-b3 leading-snug mb-4">
@@ -244,7 +244,7 @@ export function BrowseConnectorsScreen() {
         if (confirmedOnly.length === 0) {
           return (
             <div className="mx-5 mt-6 bg-cr2 border border-bdr rounded-[16px] p-5 text-center">
-              <p className="text-[15px] font-extrabold text-black mb-1">
+              <p className="text-body-lg font-extrabold text-black mb-1">
                 Awaiting Connector responses…
               </p>
               <p className="text-body-sm text-b3 leading-snug">
@@ -271,7 +271,7 @@ export function BrowseConnectorsScreen() {
                 <p className="text-body-sm font-extrabold text-warnText leading-tight mb-1">
                   No free Connectors confirmed yet
                 </p>
-                <p className="text-[12.5px] text-warnText leading-snug">
+                <p className="text-meta text-warnText leading-snug">
                   Paid offers below — usually still negotiable. Counter with
                   a free-post swap or a lower price.
                 </p>
@@ -400,7 +400,7 @@ function EmptyState() {
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
         </svg>
       </div>
-      <h2 className="text-[20px] font-extrabold text-black mb-2">No Connectors with rates yet</h2>
+      <h2 className="text-heading-1 font-extrabold text-black mb-2">No Connectors with rates yet</h2>
       <p className="text-body text-b3 leading-relaxed">
         Connectors are setting their spotlight rates over the next few days.
         Check back soon — or invite Connectors you already know.

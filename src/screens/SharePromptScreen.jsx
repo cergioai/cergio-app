@@ -16,7 +16,7 @@ export function SharePromptScreen() {
 
       {/* headline */}
       <div className="px-7 pt-12 pb-8">
-        <h1 className="text-[26px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-2 font-extrabold text-black leading-tight">
           We're glad you enjoyed<br />your free service!
         </h1>
       </div>
@@ -51,11 +51,11 @@ export function SharePromptScreen() {
 
       {/* body copy */}
       <div className="px-7 flex-1">
-        <p className="text-[19px] font-extrabold text-black mb-3">Now it's your turn!</p>
-        <p className="text-[15px] text-b3 leading-relaxed mb-4">
+        <p className="text-heading-2 font-extrabold text-black mb-3">Now it's your turn!</p>
+        <p className="text-body-lg text-b3 leading-relaxed mb-4">
           Share your experience to social media and leave a nice recommendation.
         </p>
-        <p className="text-[15px] text-b3 leading-relaxed">
+        <p className="text-body-lg text-b3 leading-relaxed">
           Once {name} confirms your Instagram post, you'll be able to book more free services!
         </p>
       </div>
@@ -64,7 +64,7 @@ export function SharePromptScreen() {
       <div className="px-5 pt-8 pb-6">
         <button
           onClick={() => navigate('/profile-shared')}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-[15px] font-extrabold
+          className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                      hover:opacity-90 active:scale-[.97] transition-all"
         >
           Let's do it

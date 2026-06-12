@@ -168,7 +168,7 @@ export function FindFriendsScreen() {
       <div className="px-5 pt-10 pb-2 flex items-start justify-between gap-4">
         {/* Page title — Profile canon (30px / 800). One-line headline reads
             cleaner than the previous two-line break. */}
-        <h1 className="text-[30px] font-extrabold text-black leading-tight">
+        <h1 className="text-display-1 font-extrabold text-black leading-tight">
           Find friends
         </h1>
         <button
@@ -278,7 +278,7 @@ export function FindFriendsScreen() {
         </div>
         <button
           onClick={shareInvite}
-          className="w-full mt-3 bg-g text-white rounded-[24px] py-3.5 text-[15px] font-extrabold hover:opacity-90 active:scale-[.98] transition-all"
+          className="w-full mt-3 bg-g text-white rounded-[24px] py-3.5 text-body-lg font-extrabold hover:opacity-90 active:scale-[.98] transition-all"
         >
           Share invite
         </button>
