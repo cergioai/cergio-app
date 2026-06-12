@@ -27,7 +27,7 @@ import { ProviderCard } from '../components/ui/ProviderCard';
 // unaffected — modules are stable there.
 //
 // import { listServices } from '../lib/api';  // DO NOT REINTRODUCE
-import { geocodeAddress } from '../lib/google';
+import { verifyAddress } from '../lib/google';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { buildInviteUrl } from '../lib/referral';
 import { pluralProviderTypeLocal, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
@@ -580,9 +580,13 @@ export function ResultsScreen() {
         let lat = null, lng = null, geoErr = null;
         if (where) {
           try {
-            const g = await geocodeAddress(where);
-            if (g) { lat = g.lat; lng = g.lng; }
-            else { geoErr = 'no-result'; }
+            // Use verifyAddress (not geocodeAddress) so: (a) Nominatim
+            // fallback fires when Google's Geocoding API is unavailable,
+            // and (b) a successful Nominatim result clears the geocode
+            // error that would otherwise keep the SetupCheckBanner visible.
+            const v = await verifyAddress(where);
+            if (v?.ok) { lat = v.lat; lng = v.lng; }
+            else { geoErr = v?.reason || 'no-result'; }
           } catch (e) { geoErr = String(e && e.message || e); }
         }
         const { offering_id: resolvedOfferingId } = chatState;
