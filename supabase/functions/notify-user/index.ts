@@ -154,7 +154,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
           <strong>${escapeHtml(inviterName)}</strong> thinks Cergio would be useful for you — it's a friends-trusted marketplace for services.
         </p>
         ${note ? `<div style="background:#fff;border:1px solid #E5E5E5;border-radius:14px;padding:14px 18px;margin:0 0 16px;font-size:14px;color:#3A3A3A;">“${escapeHtml(note)}”</div>` : ''}
-        <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Sign up and book your first service — ${escapeHtml(inviterName)} earns $25 in credits when you do.</p>`,
+        <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Sign up and book your first service — ${escapeHtml(inviterName)} earns $250 in credits when you do.</p>`,
       cta_label: 'Sign up free →',
       cta_link:  link,
       sms: `${inviterName} invited you to Cergio — services your friends actually trust. Join: ${link}`,

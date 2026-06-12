@@ -248,12 +248,20 @@ export function AuthScreen() {
           {isSignup ? 'Takes seconds.' : 'One tap with Google.'}
         </p>
 
-        {/* Invited-by-a-friend ribbon — only when ?ref captured. */}
-        {activeRef && (
+        {/* CERGIO-GUARD (2026-06-12): invited-by-a-friend ribbon fixes
+            per Tarik:
+            1. Only renders in SIGNUP mode — a stale captured ref was
+               showing "Invited by a friend" to existing users signing
+               in (t@cergio.ai, who was never invited). useSession.signIn
+               also clears the stale ref on successful sign-in now.
+            2. Copy said "$250 credit each" — WRONG: the credit goes to
+               the INVITING party only (REWARDS.perFriendUser, paid when
+               the invitee books). Copy now states exactly that. */}
+        {activeRef && isSignup && (
           <div className="mt-5 bg-gl border border-g/25 rounded-pill px-3.5 py-1.5 inline-flex items-center gap-2">
             <span className="text-meta">🌱</span>
             <p className="text-meta-sm text-gd font-extrabold leading-snug">
-              Invited by a friend · ${REWARDS.perFriendUser} credit each when you book
+              Invited by a friend · they earn ${REWARDS.perFriendUser} credit when you book
             </p>
           </div>
         )}

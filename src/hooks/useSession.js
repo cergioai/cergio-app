@@ -2,7 +2,7 @@
 // Returns { session, user, loading, signIn, signUp, signOut }.
 import { useEffect, useState, useCallback } from 'react';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { recordInviteFromActiveRef } from '../lib/referral';
+import { recordInviteFromActiveRef, clearActiveRef } from '../lib/referral';
 
 export function useSession() {
   const [session, setSession] = useState(null);
@@ -37,7 +37,14 @@ export function useSession() {
 
   const signIn = useCallback(async (email, password) => {
     if (!supabaseReady) return { error: { message: 'Supabase not configured' } };
-    return await supabase.auth.signInWithPassword({ email, password });
+    const res = await supabase.auth.signInWithPassword({ email, password });
+    // CERGIO-GUARD (2026-06-12): an EXISTING account signing in was never
+    // "invited" — drop any stale ?ref/short-link capture so the
+    // "Invited by a friend" ribbon and invite attribution can't misfire.
+    // Tarik bug: t@cergio.ai saw the ribbon after testing his own invite
+    // link in the same browser.
+    if (!res.error) clearActiveRef();
+    return res;
   }, []);
 
   const signUp = useCallback(async (email, password, displayName, phone) => {

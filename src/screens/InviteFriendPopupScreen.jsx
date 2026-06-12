@@ -12,8 +12,11 @@ import { useOutletContext } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
 import { buildInviteUrl } from '../lib/referral';
 
+// CERGIO-GUARD (2026-06-12): per Tarik the credit goes to the INVITING
+// party only — copy must never promise the invitee a credit ("each"/
+// "both" was wrong).
 function buildInviteMessage(amount, url) {
-  return `Hey — I'm using Cergio for booking trusted services. Join + book and we both win: $${amount} credit each. ${url}`;
+  return `Hey — I'm using Cergio for booking trusted services through people you actually know. Join me: ${url}`;
 }
 
 export function InviteFriendPopupScreen() {
@@ -67,11 +70,13 @@ export function InviteFriendPopupScreen() {
 
         <div className="mt-10 mb-4 flex items-start gap-3">
           <div className="flex-1">
+            {/* CERGIO-GUARD (2026-06-12): credit is inviter-only per
+                Tarik — never promise the invitee a credit. */}
             <h1 className="text-display-2 font-extrabold text-black leading-tight tracking-tight">
-              Invite friends — ${REWARDS.perFriendUser} credit each
+              Invite friends — earn ${REWARDS.perFriendUser} credit
             </h1>
             <p className="text-body-sm text-b3 font-medium mt-2 leading-snug">
-              Both of you get ${REWARDS.perFriendUser} credit when they join + book.{' '}
+              You get ${REWARDS.perFriendUser} credit when they join + book.{' '}
               <button
                 type="button"
                 onClick={() => navigate('/rainmaker/apply')}

@@ -81,7 +81,9 @@ export function InviteSelectedReviewScreen() {
       // use THAT as the note body, not the generic invite copy. The
       // friend gets actual context about what the inviter is looking for.
       if (prefilledMessage) return prefilledMessage;
-      return "Hey — I think you'd love Cergio. Use my link to join and we both earn.";
+      // CERGIO-GUARD (2026-06-12): credit is inviter-only — don't
+      // promise the invitee an earn ("we both earn" was wrong).
+      return "Hey — I think you'd love Cergio. It's trusted services through people you know. Join with my link!";
     }
     const phrase = userNoun || serviceType || 'a great provider';
     const parts = [`Looking for a ${phrase}`];

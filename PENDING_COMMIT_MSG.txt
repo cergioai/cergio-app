@@ -1,46 +1,21 @@
-Inbox dot + requester confirms + request email/SMS + contacts import + short invite links
+Fix invite ribbon misfire + inviter-only credit copy
 
-Five Tarik directives (2026-06-12):
+Tarik bugs (2026-06-12):
 
-1. Profile drill on "requests near you" cards (JobsInboxScreen):
-   avatar + info block tap through to /u/{requester.id} so a provider
-   can vet the requester BEFORE Accept / Counter / Decline. Action
-   row stays outside the tappable area.
+1. "Invited by a friend" ribbon showed for t@cergio.ai on sign-in —
+   stale localStorage ref from testing his own invite link. Fixes:
+   • AuthScreen ribbon only renders in SIGNUP mode
+   • useSession.signIn clears the stored ref on successful sign-in
+     (an existing account was never "invited")
 
-2. Inbox notification dot (BottomNav): new useInboxUnread hook —
-   mirrors useActivityUnread (localStorage stamp + 60s poll). Flags
-   fresh inbound requests, pending bookings, and provider responses
-   to the user's own requests. JobsInboxScreen stamps seen on mount.
-
-3. Requester-side confirms: t@cergio.ai never saw that info@cergio.ai
-   accepted. New listMyRequestsWithResponses() API + "Responses to
-   your requests" section at the top of the Requests tab —
-   "{provider} accepted your {service} request — $X", taps to their
-   profile. Requests-tab badge now counts all actionable items.
-   Also fixed "No requests yet" rendering under live request cards.
-
-4. Email + SMS for marketplace requests: new notify-request edge fn
-   (event=created → providers; event=response → requester, writes
-   request_response_offered/countered notifications rows). Wired
-   fire-and-forget from createRequestAndFanOut + respondToRequest.
-   NOTE: Resend still on sandbox sender (onboarding@resend.dev) —
-   delivery to real users stays blocked until cergio.ai domain is
-   verified in Resend. Twilio secrets optional; SMS skips silently.
-
-5. Invite upgrades:
-   • Contacts-book import on InviteFriendsScreen via native Contact
-     Picker (SPEC-46 rules: real device contacts only, honest toast
-     on unsupported browsers). Device picks get REAL email/SMS
-     invites via notify-user invite_received (note + short link).
-   • Short invite links: buildInviteUrl now emits /i/<10-hex-code>
-     instead of /?ref=<uuid>. New InviteLandingScreen resolves via
-     resolve_ref_code RPC (db/migrations/2026-06-12), stores the ref
-     (same 30-day TTL), and lands on the inviter's PUBLIC PROFILE —
-     not the login page. Old ?ref= links still attribute.
-   • qa #5 updated to enforce the new short-link canon (Tarik
-     explicitly changed this behavior); qa #9 satisfied (deep_link).
+2. Credit copy promised "$250 credit each" but the reward goes to the
+   INVITING party only. Honest copy everywhere:
+   • AuthScreen ribbon: "they earn $250 credit when you book"
+   • InviteFriendPopupScreen: "Invite friends — earn $250 credit" /
+     "You get $250 credit when they join + book"; share message no
+     longer promises the invitee anything
+   • InviteSelectedReviewScreen seed note: dropped "we both earn"
+   • notify-user invite_received email: fixed $25 → $250 (inviter)
 
 QA: all 46 flows pass.
-Post-push ops: run "Apply Short Invite Links Migration.command" and
-"Deploy Edge Functions.command" (new notify-request, updated
-notify-user).
+Post-push ops: re-run Deploy Edge Functions.command (notify-user).
