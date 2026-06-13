@@ -19,6 +19,7 @@ import { BottomNav }    from './components/ui/BottomNav';
 import { Toast }        from './components/ui/Toast';
 import { SetupCheckBanner } from './components/ui/SetupCheckBanner';
 import { PaymentSheet } from './components/ui/PaymentSheet';
+import { ScheduleSheet } from './components/ui/ScheduleSheet';
 import { BuildVersionPill } from './components/ui/BuildVersionPill';
 
 import { SplashScreen }     from './screens/SplashScreen';
@@ -196,6 +197,14 @@ function Layout() {
   //  (c) Real provider, paid booking → insert booking (pending), open the
   //      PaymentSheet modal. The sheet flips status to 'confirmed' on Stripe
   //      success, then navigates.
+  // CERGIO-GUARD (2026-06-12): schedule-confirm step per Tarik's flow
+  // board — "need a way for user to confirm time of job and day
+  // (calendar and done etc)". handleBook no longer books immediately:
+  // it (1) runs the free-barter GATE, (2) opens the ScheduleSheet, and
+  // only after Done does proceedBooking insert the row with the chosen
+  // scheduled_at + schedule_confirmed_at.
+  const [scheduleTarget, setScheduleTarget] = useState(null); // provider | null
+
   const handleBook = useCallback(async (provider) => {
     // CERGIO-GUARD: BookingScreen used to render hard-coded mock data
     // ("Deep Cleaning / Jamie Hall / Tuesday 2:00 PM / 123 Main St")
@@ -218,54 +227,85 @@ function Layout() {
       return;
     }
 
-    const { createBooking, updateBookingStatus, createPaymentIntent } = await import('./lib/api');
+    // CERGIO-GUARD (2026-06-12): THE FREE-BARTER GATE. A Connector with
+    // an accepted free booking whose IG post hasn't been uploaded AND
+    // accepted by the provider cannot order another free service.
+    if (provider.isFree) {
+      const { getOutstandingFreeBarter } = await import('./lib/api');
+      const { outstanding } = await getOutstandingFreeBarter();
+      if (outstanding) {
+        const svcTitle = outstanding.service?.title || 'your last free service';
+        showToast(
+          outstanding.posted_at
+            ? `Your IG post for ${svcTitle} is still awaiting the provider's approval — free bookings unlock once they accept.`
+            : `Finish your last barter first: post your IG spotlight for ${svcTitle} (Inbox → Upcoming), then book more free services.`,
+          { sticky: true },
+        );
+        return;
+      }
+    }
 
-    // Insert booking in pending state.
+    // Open the calendar sheet — booking continues in proceedBooking.
+    setScheduleTarget(provider);
+  }, [navigate, showToast, chat?.state]);
+
+  const proceedBooking = useCallback(async (provider, chosenAt) => {
+    setScheduleTarget(null);
+    const whenLabel = chosenAt
+      ? `${chosenAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — ${chosenAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+      : '';
+    // Surface the confirmed time on the BookingScreen summary.
+    setBooking(b => ({ ...(b || {}), when: whenLabel || b?.when || '' }));
+
+    const { createBooking, createPaymentIntent } = await import('./lib/api');
+
+    // Insert booking in pending state with the user-confirmed schedule.
     const { data: row, error } = await createBooking({
       service:    { id: provider.id, owner_id: provider.ownerId },
       offeringId: provider.offeringId,
       totalCents: provider.priceCents || 0,
       isFreeForRainmaker: !!provider.isFree,
+      scheduledAt:        chosenAt || null,
+      scheduleConfirmed:  !!chosenAt,
     });
     if (error || !row) {
       showToast(`Booking failed: ${error?.message || 'unknown error'}`);
       return;
     }
 
-    // (b) Free Connector booking — skip payment, confirm directly.
+    // (b) Free Connector booking — skip payment entirely. Per the flow
+    // board (SVP "Accepting Free Service request") the request stays
+    // PENDING until the provider accepts it; the provider already gets
+    // the notify-provider email on insert. After the job, the Connector
+    // posts on IG and the provider confirms — see the barter loop in
+    // lib/api.js. (Pre-2026-06-12 this auto-confirmed, which skipped
+    // the provider's accept step in Tarik's flow.)
     if (row.is_free_for_rainmaker || (row.total_cents ?? 0) === 0) {
-      const { error: confirmErr } = await updateBookingStatus(row.id, 'confirmed');
-      if (confirmErr) {
-        showToast(`Couldn't confirm booking: ${confirmErr.message}`);
-        return;
-      }
       // CERGIO-GUARD: if this consumer was invited by someone, credit
       // the inviter on their first booking. Best-effort; failure here
       // doesn't change the booking outcome.
       creditInviterOnFirstBooking(row.consumer_id, row.id).catch(() => {});
-      showToast('Booked!');
+      setBooking(b => ({ ...(b || {}), pendingFree: true }));
+      showToast('Request sent — the provider will confirm.');
       navigate('/booking');
       return;
     }
 
     // (c) Paid booking — fetch a PaymentIntent and open the PaymentSheet.
-    // CERGIO-GUARD (2026-05-30): if createPaymentIntent fails (Stripe
-    // not configured in test mode), gracefully fall through to a
-    // confirmed booking + a "demo mode" toast so the user can still
-    // exercise the booking flow end-to-end. Tarik: "offerings on the
-    // services should be clickable (and when selected... together
-    // with book, it goes to CC form and confirm (currently disabled)".
-    // Was previously dead-ending with "Couldn't start payment"; now it
-    // confirms + lands on /booking.
+    // CERGIO-GUARD (2026-06-12): when Stripe isn't configured (test/demo
+    // mode) the booking now stays PENDING instead of auto-confirming.
+    // Tarik: "currently confirms on submission which isn't correct as
+    // the user needs to pick time and service needs to confirm time."
+    // The provider gets the request (notify-provider email + Requests
+    // tab) and confirms via RequestDetailScreen — same waiting loop as
+    // free barters. The live-Stripe path below still confirms on
+    // payment success (card auth IS the consumer's commitment; provider
+    // time-confirm for live payments is a follow-up decision).
     const { data: pi, error: piErr } = await createPaymentIntent(row.id);
     if (piErr || !pi?.client_secret) {
-      const { error: confirmErr } = await updateBookingStatus(row.id, 'confirmed');
-      if (confirmErr) {
-        showToast(`Couldn't confirm booking: ${confirmErr.message}`);
-        return;
-      }
       creditInviterOnFirstBooking(row.consumer_id, row.id).catch(() => {});
-      showToast('Booked (demo mode — no card charged). Finish Stripe setup to take live payments.', { sticky: true });
+      setBooking(b => ({ ...(b || {}), pendingPaid: true }));
+      showToast('Request sent — the provider will confirm your time.');
       navigate('/booking');
       return;
     }
@@ -341,6 +381,17 @@ function Layout() {
             providerName={paymentSheet.providerName}
             onSuccess={handlePaymentSuccess}
             onClose={handlePaymentCancel}
+          />
+        )}
+
+        {/* CERGIO-GUARD (2026-06-12): calendar + Done schedule confirm —
+            opens before every real booking so scheduled_at is the user's
+            actual chosen day/time (anchor of the free-barter loop). */}
+        {scheduleTarget && (
+          <ScheduleSheet
+            title={`When should ${(scheduleTarget.name || 'they').split(' ')[0]} come?`}
+            onDone={(chosenAt) => proceedBooking(scheduleTarget, chosenAt)}
+            onClose={() => setScheduleTarget(null)}
           />
         )}
       </div>

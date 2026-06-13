@@ -2576,6 +2576,11 @@ export async function createBooking({
   service, offeringId = null, scheduledAt = null,
   totalCents = 0, locationText = '', notes = '',
   isFreeForRainmaker = false,
+  // CERGIO-GUARD (2026-06-12): true when the user explicitly picked a
+  // day + time in the ScheduleSheet (calendar + Done) — per Tarik's
+  // flow board. Stamps schedule_confirmed_at so both sides know the
+  // time is real, not the +24h placeholder.
+  scheduleConfirmed = false,
 } = {}) {
   if (!supabaseReady) return NOT_WIRED;
 
@@ -2604,6 +2609,7 @@ export async function createBooking({
       notes:                 notes || null,
       total_cents:           totalCents || 0,
       is_free_for_rainmaker: !!isFreeForRainmaker,
+      schedule_confirmed_at: scheduleConfirmed ? new Date().toISOString() : null,
     })
     .select()
     .single();
@@ -2669,6 +2675,8 @@ export async function listProviderBookings() {
     .select(`
       id, status, scheduled_at, location_text, notes, total_cents,
       is_free_for_rainmaker, created_at,
+      schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
+      post_flag_reason, post_flagged_at,
       consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
       service:services ( id, title, category, photo_class ),
       offering:offerings ( id, name, kind, duration_minutes )
@@ -2792,11 +2800,144 @@ export async function listConsumerBookings() {
     .from('bookings')
     .select(`
       id, status, scheduled_at, location_text, total_cents, created_at,
+      is_free_for_rainmaker,
+      schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
+      post_flag_reason, post_flagged_at,
       provider:profiles!bookings_provider_id_fkey ( id, display_name ),
       service:services ( id, title, category, photo_class )
     `)
     .eq('consumer_id', userRes.user.id)
     .order('scheduled_at', { ascending: false });
+}
+
+// ─── Free-service barter loop (2026-06-12) ──────────────────────────────────
+// Tarik's flow board: Connector books a free service (calendar-confirmed
+// time) → provider accepts → job happens → Connector posts on Instagram
+// and shares to the Cergio feed → provider accepts the post (or flags a
+// problem) → barter complete. Until the post is uploaded AND accepted,
+// the Connector cannot order other free services.
+
+/** Fire-and-forget barter notification via the notify-request edge fn.
+ *  action: 'accepted' | 'posted' | 'post_confirmed' | 'post_flagged'. */
+function fireBookingNotify(bookingId, action) {
+  const app_url = typeof window !== 'undefined' ? window.location.origin : undefined;
+  supabase.functions
+    .invoke('notify-request', { body: { event: 'booking', bookingId, action, app_url } })
+    .catch(err => {
+      // eslint-disable-next-line no-console
+      console.warn('[notify-request booking] best-effort send failed', err);
+    });
+}
+
+/** Provider accepted the booking — used by RequestDetailScreen so the
+ *  consumer hears about the confirm (email + in-app). */
+export function notifyBookingAccepted(bookingId) {
+  fireBookingNotify(bookingId, 'accepted');
+}
+
+/**
+ * Connector marks the IG spotlight for a FREE booking as posted.
+ * Saves the public post URL, stamps posted_at, clears any prior flag
+ * (re-posting after a "something's wrong" resets the review), and
+ * notifies the provider to review + accept.
+ */
+export async function markBookingPosted(bookingId, { postUrl } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
+  const clean = String(postUrl || '').trim();
+  if (!/^https?:\/\//i.test(clean)) {
+    return { data: null, error: { message: 'Paste the public link to your Instagram post.' } };
+  }
+  const res = await supabase
+    .from('bookings')
+    .update({
+      post_url:         clean.slice(0, 500),
+      posted_at:        new Date().toISOString(),
+      post_flag_reason: null,
+      post_flagged_at:  null,
+    })
+    .eq('id', bookingId)
+    .select()
+    .single();
+  if (!res.error && res.data?.id) fireBookingNotify(bookingId, 'posted');
+  return res;
+}
+
+/**
+ * Provider accepts the Connector's IG post → barter complete.
+ * Stamps post_confirmed_at and flips the booking to 'completed'.
+ * This is what releases the Connector's free-service gate.
+ */
+export async function confirmBookingPost(bookingId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
+  const res = await supabase
+    .from('bookings')
+    .update({
+      post_confirmed_at: new Date().toISOString(),
+      status:            'completed',
+      updated_at:        new Date().toISOString(),
+    })
+    .eq('id', bookingId)
+    .select()
+    .single();
+  if (!res.error && res.data?.id) fireBookingNotify(bookingId, 'post_confirmed');
+  return res;
+}
+
+/**
+ * Provider flags a problem with the post ("something's wrong").
+ * Keeps the barter OPEN (gate stays on) and tells the Connector what
+ * to fix. Re-running markBookingPosted clears the flag.
+ */
+export async function flagBookingPost(bookingId, { reason } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
+  const res = await supabase
+    .from('bookings')
+    .update({
+      post_flag_reason: (reason || '').slice(0, 500) || 'Post needs an update.',
+      post_flagged_at:  new Date().toISOString(),
+    })
+    .eq('id', bookingId)
+    .select()
+    .single();
+  if (!res.error && res.data?.id) fireBookingNotify(bookingId, 'post_flagged');
+  return res;
+}
+
+/**
+ * THE GATE — Tarik: "the connector cannot order other free services
+ * until they upload a free IG post that the service will accept."
+ *
+ * Outstanding barter = any FREE booking where I'm the consumer, the
+ * provider accepted it (status is past 'pending', not cancelled), and
+ * the post hasn't been confirmed yet. Pending requests don't block —
+ * the provider hasn't said yes, so no debt exists yet.
+ *
+ * Returns { outstanding: row|null, error } — row carries the service
+ * title + post state so the blocking UI can say exactly what to do.
+ */
+export async function getOutstandingFreeBarter() {
+  if (!supabaseReady) return { outstanding: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { outstanding: null, error: null };
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(`
+      id, status, scheduled_at, posted_at, post_confirmed_at, post_flag_reason,
+      service:services ( id, title ),
+      provider:profiles!bookings_provider_id_fkey ( id, display_name )
+    `)
+    .eq('consumer_id', userRes.user.id)
+    .eq('is_free_for_rainmaker', true)
+    .in('status', ['confirmed', 'in_progress', 'completed'])
+    .is('post_confirmed_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) return { outstanding: null, error };
+  return { outstanding: (data || [])[0] || null, error: null };
 }
 
 // CERGIO-GUARD (2026-05-30): GOAT shares feed for the Activity screen.
@@ -3070,8 +3211,50 @@ export async function listSocialFeed({ limit = 40, days = 60 } = {}) {
     spotEvents = [];
   }
 
-  // ── 5. Merge + sort by timestamp DESC + cap to `limit` ──────────
-  const merged = [...recoEvents, ...joinEvents, ...listingEvents, ...spotEvents]
+  // ── 5. Free-service barters (2026-06-12) ─────────────────────────
+  // CERGIO-GUARD: Connector completed a free service and posted the IG
+  // spotlight — per Tarik's flow board this is "shared on the activity
+  // feed of Cergio". Pulls FREE bookings with posted_at set; RLS scopes
+  // bookings to the two parties (same visibility model as spotlight
+  // events above), so each viewer sees their own barters.
+  let barterEvents = [];
+  try {
+    const { data: barters } = await supabase
+      .from('bookings')
+      .select(`
+        id, posted_at, post_confirmed_at, post_url,
+        consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
+        provider:profiles!bookings_provider_id_fkey ( id, display_name ),
+        service:services ( id, title, taxonomy_provider_type, photo_class, cover_url )
+      `)
+      .eq('is_free_for_rainmaker', true)
+      .not('posted_at', 'is', null)
+      .gte('posted_at', sinceIso)
+      .order('posted_at', { ascending: false })
+      .limit(10);
+    barterEvents = (barters || []).map(b => ({
+      kind:      'barter',
+      at:        b.posted_at,
+      id:        `barter-${b.id}`,
+      post_url:  b.post_url || null,
+      confirmed: !!b.post_confirmed_at,
+      connector: b.consumer ? { id: b.consumer.id, display_name: b.consumer.display_name } : null,
+      provider:  b.provider ? { id: b.provider.id, display_name: b.provider.display_name } : null,
+      service:   b.service ? {
+        id:                     b.service.id,
+        title:                  b.service.title,
+        taxonomy_provider_type: b.service.taxonomy_provider_type || null,
+        photo_class:            b.service.photo_class,
+        cover_url:              b.service.cover_url,
+      } : null,
+    }));
+  } catch {
+    // columns not migrated yet → silently skip
+    barterEvents = [];
+  }
+
+  // ── 6. Merge + sort by timestamp DESC + cap to `limit` ──────────
+  const merged = [...recoEvents, ...joinEvents, ...listingEvents, ...spotEvents, ...barterEvents]
     .filter(ev => ev.at)
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
     .slice(0, limit);

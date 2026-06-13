@@ -453,6 +453,60 @@ function SpotlightCard({ ev }) {
   );
 }
 
+// CERGIO-GUARD (2026-06-12): free-service barter feed card — Connector
+// completed a free service and posted the IG spotlight (Tarik's flow
+// board: "share it on the activity feed of Cergio"). Links to the post
+// when public; shows a ✓ once the provider accepted it.
+function BarterCard({ ev }) {
+  const cName = ev.connector?.display_name || 'A Connector';
+  const pName = ev.provider?.display_name || 'a provider';
+  const svc   = ev.service?.title || ev.service?.taxonomy_provider_type || 'a service';
+  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-g to-gd
+                     text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
+  return (
+    <div className="flex items-center gap-2.5">
+      {ev.connector?.id ? (
+        <Link to={`/u/${ev.connector.id}`} aria-label={`View ${cName}`} className={avatarCls}>
+          {initials(cName)}
+        </Link>
+      ) : (
+        <div className={avatarCls}>{initials(cName)}</div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-body leading-snug text-black">
+          {ev.connector?.id ? (
+            <Link to={`/u/${ev.connector.id}`} className="font-extrabold underline">{cName}</Link>
+          ) : (
+            <span className="font-extrabold">{cName}</span>
+          )}
+          <span className="font-medium text-b2"> bartered </span>
+          <span className="font-extrabold">{svc}</span>
+          <span className="font-medium text-b2"> from </span>
+          {ev.provider?.id ? (
+            <Link to={`/u/${ev.provider.id}`} className="font-extrabold underline">{pName}</Link>
+          ) : (
+            <span className="font-extrabold">{pName}</span>
+          )}
+          <span className="font-medium text-b2"> for an IG spotlight</span>
+          {ev.confirmed && <span className="font-extrabold text-gd"> ✓</span>}
+        </p>
+        <p className="text-meta-sm text-b3 font-medium mt-0.5">
+          {timeAgo(ev.at)}
+          {ev.post_url && (
+            <>
+              {' · '}
+              <a href={ev.post_url} target="_blank" rel="noopener noreferrer"
+                 className="text-g font-extrabold underline underline-offset-2">
+                View post →
+              </a>
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ActivityScreen() {
   const navigate = useNavigate();
   const { auth } = useOutletContext() || {};
@@ -701,6 +755,15 @@ export function ActivityScreen() {
             if (ev.profile) ev.profile.is_friend = true;
             return true;
           }
+          // CERGIO-GUARD (2026-06-12): free-service barter events.
+          // RLS already scopes bookings to the two parties, so any
+          // barter row the viewer can read is THEIR OWN exchange —
+          // always show it (plus followed actors when RLS widens).
+          if (ev.kind === 'barter') {
+            if (isFollowed(ev.connector?.id) && ev.connector) ev.connector.is_friend = true;
+            if (isFollowed(ev.provider?.id)  && ev.provider)  ev.provider.is_friend = true;
+            return true;
+          }
           return false;
         });
         // CERGIO-GUARD (2026-06-04 v8): when the viewer follows
@@ -773,6 +836,9 @@ export function ActivityScreen() {
               }
               if (ev.kind === 'spotlight') {
                 return <SpotlightCard key={ev.id} ev={ev} />;
+              }
+              if (ev.kind === 'barter') {
+                return <BarterCard key={ev.id} ev={ev} />;
               }
               return null;
             })}

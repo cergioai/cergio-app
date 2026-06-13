@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   listProviderBookings,
+  listConsumerBookings,
   listMyOutboundSpotlightRequests,
   listInboundRequests,
   listMyRequestsWithResponses,
   respondToRequest,
+  confirmBookingPost,
+  flagBookingPost,
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
+import { MarkBookingPostedModal } from '../components/ui/MarkBookingPostedModal';
 
 // Map a Supabase bookings row → the same shape the existing UI uses.
 function bookingToRequest(b) {
@@ -205,6 +209,63 @@ export function JobsInboxScreen() {
       'Response sent'
     );
   }
+
+  // CERGIO-GUARD (2026-06-12): Upcoming / Past tabs are REAL now —
+  // they carry the free-service barter loop from Tarik's flow board.
+  // Both roles load lazily when either tab activates:
+  //   as consumer (Connector) → mark IG post done / see flag reasons
+  //   as provider             → review post, Accept or flag a problem
+  const [myJobs, setMyJobs] = useState(null); // { asConsumer:[], asProvider:[] }
+  const [postTarget, setPostTarget] = useState(null);     // booking → MarkBookingPostedModal
+  const [flagOpenFor, setFlagOpenFor] = useState(null);   // booking id with flag input open
+  const [flagDraft, setFlagDraft] = useState('');
+  const [jobBusy, setJobBusy] = useState({});             // { [bookingId]: true }
+  const refreshJobs = async () => {
+    const [c, p] = await Promise.all([listConsumerBookings(), listProviderBookings()]);
+    setMyJobs({ asConsumer: c.data || [], asProvider: p.data || [] });
+  };
+  useEffect(() => {
+    if ((activeTab !== 'Upcoming' && activeTab !== 'Past') || !auth?.isSignedIn) return;
+    let cancelled = false;
+    (async () => {
+      const [c, p] = await Promise.all([listConsumerBookings(), listProviderBookings()]);
+      if (cancelled) return;
+      setMyJobs({ asConsumer: c.data || [], asProvider: p.data || [] });
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, auth?.isSignedIn]);
+
+  // A free booking is "live" until the provider accepts the IG post —
+  // even when the job itself is done. That keeps the barter obligation
+  // visible in Upcoming instead of vanishing into Past unfinished.
+  const isLiveJob = (b) =>
+    ['confirmed', 'in_progress'].includes(b.status) ||
+    (b.is_free_for_rainmaker && !b.post_confirmed_at &&
+      ['confirmed', 'in_progress', 'completed'].includes(b.status));
+  const isPastJob = (b) =>
+    (b.status === 'completed' && (!b.is_free_for_rainmaker || !!b.post_confirmed_at)) ||
+    b.status === 'cancelled';
+
+  const handleConfirmPost = async (b) => {
+    setJobBusy(prev => ({ ...prev, [b.id]: true }));
+    const { error } = await confirmBookingPost(b.id);
+    setJobBusy(prev => ({ ...prev, [b.id]: false }));
+    if (error) { showToast(`Failed: ${error.message}`); return; }
+    showToast('Post accepted ✓ — barter complete');
+    refreshJobs();
+  };
+  const handleFlagPost = async (b) => {
+    const reason = flagDraft.trim();
+    if (!reason) { showToast('Say what needs fixing.'); return; }
+    setJobBusy(prev => ({ ...prev, [b.id]: true }));
+    const { error } = await flagBookingPost(b.id, { reason });
+    setJobBusy(prev => ({ ...prev, [b.id]: false }));
+    if (error) { showToast(`Failed: ${error.message}`); return; }
+    setFlagOpenFor(null);
+    setFlagDraft('');
+    showToast('Sent — they’ll update the post.');
+    refreshJobs();
+  };
 
   // Sent — provider's outgoing spotlight asks. Loaded lazily so the
   // Inbox tab doesn't pay the cost until the user opens the Sent tab.
@@ -741,15 +802,231 @@ export function JobsInboxScreen() {
           );
         })}
 
-        {/* Empty states for Upcoming / Past */}
-        {(activeTab === 'Upcoming' || activeTab === 'Past') && (
-          <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
-            <p className="text-body text-b3 font-medium">
-              No {activeTab.toLowerCase()} jobs yet.
-            </p>
-          </div>
-        )}
+        {/* CERGIO-GUARD (2026-06-12): Upcoming / Past — the barter loop
+            surface. Consumer (Connector) cards carry "Mark IG post
+            done"; provider cards carry "Accept post / Something's
+            wrong". Completed barters land in Past. */}
+        {(activeTab === 'Upcoming' || activeTab === 'Past') && (() => {
+          if (myJobs === null) {
+            return <p className="text-body text-b3 font-medium px-1 py-6">Loading…</p>;
+          }
+          const pick = activeTab === 'Upcoming' ? isLiveJob : isPastJob;
+          // CERGIO-GUARD (2026-06-12): the consumer's own PENDING
+          // requests show in Upcoming as "Awaiting confirm" — Tarik:
+          // "waiting on responses when user clicks to request a
+          // booking". (Provider-side pending lives in the Requests tab
+          // as Needs Response — not duplicated here.)
+          const pickConsumer = activeTab === 'Upcoming'
+            ? (b) => isLiveJob(b) || b.status === 'pending'
+            : isPastJob;
+          const consumerJobs = myJobs.asConsumer.filter(pickConsumer);
+          const providerJobs = myJobs.asProvider.filter(pick);
+          if (consumerJobs.length === 0 && providerJobs.length === 0) {
+            return (
+              <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
+                <p className="text-body text-b3 font-medium">
+                  No {activeTab.toLowerCase()} jobs yet.
+                </p>
+              </div>
+            );
+          }
+          const fmtWhen = (iso) => iso
+            ? `${new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — ${new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+            : '—';
+          const Pill = ({ free, status, postConfirmed }) => (
+            <span className={`rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap
+              ${postConfirmed ? 'bg-gl text-gd'
+                : status === 'pending' ? 'bg-warnBg text-warnText'
+                : status === 'cancelled' ? 'bg-bg5 text-b3'
+                : free ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}>
+              {postConfirmed ? 'Barter complete ✓'
+                : status === 'pending' ? 'Awaiting confirm'
+                : status === 'cancelled' ? 'Cancelled'
+                : free ? 'Free barter' : status === 'completed' ? 'Completed' : 'Booked'}
+            </span>
+          );
+          return (
+            <>
+              {consumerJobs.length > 0 && (
+                <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
+                  Booked by you
+                </p>
+              )}
+              {consumerJobs.map((b, i) => {
+                const otherName = b.provider?.display_name || 'Provider';
+                // Post CTA only once the provider has ACCEPTED — a pending
+                // request has no barter obligation yet.
+                const needsPost   = b.is_free_for_rainmaker && !b.posted_at && !b.post_confirmed_at &&
+                                    ['confirmed', 'in_progress', 'completed'].includes(b.status);
+                const awaitingOk  = b.is_free_for_rainmaker && b.posted_at && !b.post_confirmed_at && !b.post_flag_reason;
+                const flagged     = b.is_free_for_rainmaker && !!b.post_flag_reason && !b.post_confirmed_at;
+                return (
+                  <div key={b.id} className="bg-white border border-bdr rounded-[20px] p-4">
+                    <div className="flex items-start gap-3">
+                      <Avatar name={otherName} idx={i} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <p className="text-body font-extrabold text-black truncate">
+                            {b.service?.title || 'Service'}
+                          </p>
+                          <Pill free={b.is_free_for_rainmaker} status={b.status} postConfirmed={!!b.post_confirmed_at} />
+                        </div>
+                        <p className="text-meta text-b3 font-medium mt-0.5">
+                          {otherName} · {fmtWhen(b.scheduled_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {needsPost && (
+                      <>
+                        <p className="text-meta text-b2 font-medium leading-snug mt-3">
+                          After the job, post your IG spotlight and confirm it here —
+                          that completes the barter and unlocks your next free service.
+                        </p>
+                        <button
+                          onClick={() => setPostTarget(b)}
+                          className="w-full bg-g text-white rounded-[14px] py-3 text-body font-extrabold mt-2 hover:opacity-90 active:scale-[.98] transition-all"
+                        >
+                          Mark IG post done
+                        </button>
+                      </>
+                    )}
+                    {awaitingOk && (
+                      <div className="bg-warnBg border border-warn/40 text-warnText rounded-[12px] px-3 py-2 text-meta font-extrabold text-center mt-3">
+                        Posted · awaiting {otherName.split(' ')[0]}'s approval
+                        {b.post_url && (
+                          <a href={b.post_url} target="_blank" rel="noopener noreferrer" className="block underline underline-offset-2 mt-0.5">
+                            View your post →
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {flagged && (
+                      <>
+                        <div className="bg-warnBg border border-warn/40 rounded-[12px] px-3 py-2 mt-3">
+                          <p className="text-meta-sm font-extrabold text-warnText">
+                            {otherName.split(' ')[0]} flagged your post: “{b.post_flag_reason}”
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setPostTarget(b)}
+                          className="w-full bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-body-sm font-extrabold mt-2 hover:bg-bg5/40"
+                        >
+                          Update post
+                        </button>
+                      </>
+                    )}
+                    {b.post_confirmed_at && b.post_url && (
+                      <a href={b.post_url} target="_blank" rel="noopener noreferrer"
+                         className="block text-center text-meta font-extrabold text-g underline underline-offset-2 mt-2">
+                        View the post →
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+
+              {providerJobs.length > 0 && (
+                <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-3">
+                  Jobs for you
+                </p>
+              )}
+              {providerJobs.map((b, i) => {
+                const otherName = b.consumer?.display_name || 'Cergio user';
+                const reviewNeeded = b.is_free_for_rainmaker && b.posted_at && !b.post_confirmed_at;
+                const awaitingPost = b.is_free_for_rainmaker && !b.posted_at && !b.post_confirmed_at && b.status !== 'cancelled';
+                return (
+                  <div key={b.id} className="bg-white border border-bdr rounded-[20px] p-4">
+                    <div className="flex items-start gap-3">
+                      <Avatar name={otherName} idx={i + 2} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <p className="text-body font-extrabold text-black truncate">
+                            {b.service?.title || 'Service'}
+                          </p>
+                          <Pill free={b.is_free_for_rainmaker} status={b.status} postConfirmed={!!b.post_confirmed_at} />
+                        </div>
+                        <p className="text-meta text-b3 font-medium mt-0.5">
+                          {otherName} · {fmtWhen(b.scheduled_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {awaitingPost && (
+                      <p className="text-meta text-b3 font-medium leading-snug mt-3">
+                        {otherName.split(' ')[0]} posts an IG spotlight after the job —
+                        you'll review and accept it here.
+                      </p>
+                    )}
+                    {reviewNeeded && (
+                      <>
+                        {b.post_url && (
+                          <a href={b.post_url} target="_blank" rel="noopener noreferrer"
+                             className="block text-center text-meta font-extrabold text-g underline underline-offset-2 mt-3">
+                            View their post →
+                          </a>
+                        )}
+                        {b.post_flag_reason && (
+                          <p className="text-meta-sm text-warnText font-extrabold text-center mt-1">
+                            You flagged: “{b.post_flag_reason}” — awaiting their update
+                          </p>
+                        )}
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => { setFlagOpenFor(prev => prev === b.id ? null : b.id); setFlagDraft(''); }}
+                            disabled={jobBusy[b.id]}
+                            className="flex-1 bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-body-sm font-extrabold hover:bg-bg5/40 disabled:opacity-60"
+                          >
+                            Something's wrong
+                          </button>
+                          <button
+                            onClick={() => handleConfirmPost(b)}
+                            disabled={jobBusy[b.id]}
+                            className="flex-1 bg-g text-white rounded-[14px] py-2.5 text-body-sm font-extrabold hover:opacity-90 disabled:opacity-60"
+                          >
+                            {jobBusy[b.id] ? 'Working…' : 'Accept post'}
+                          </button>
+                        </div>
+                        {flagOpenFor === b.id && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              autoFocus
+                              value={flagDraft}
+                              onChange={e => setFlagDraft(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleFlagPost(b); if (e.key === 'Escape') setFlagOpenFor(null); }}
+                              placeholder="What needs fixing? (e.g. tag @cergio, wrong link)"
+                              className="flex-1 border-b border-g/40 bg-transparent outline-none text-body-sm font-medium text-black py-1"
+                            />
+                            <button
+                              onClick={() => handleFlagPost(b)}
+                              disabled={jobBusy[b.id]}
+                              className="bg-black text-white rounded-pill px-3 py-1.5 text-meta font-extrabold disabled:opacity-60"
+                            >
+                              Send
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {b.post_confirmed_at && b.post_url && (
+                      <a href={b.post_url} target="_blank" rel="noopener noreferrer"
+                         className="block text-center text-meta font-extrabold text-g underline underline-offset-2 mt-2">
+                        View the post →
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          );
+        })()}
       </div>
+
+      {postTarget && (
+        <MarkBookingPostedModal
+          booking={postTarget}
+          onClose={() => setPostTarget(null)}
+          onPosted={() => { showToast('Posted ✓ — provider notified to confirm'); refreshJobs(); }}
+        />
+      )}
     </div>
   );
 }

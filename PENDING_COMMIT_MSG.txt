@@ -1,12 +1,43 @@
-Email senders → notify@cergio.ai (domain verified in Resend)
+Free-service barter loop (SPEC-47): schedule confirm → IG post → provider accept → gate
 
-cergio.ai verified in Resend (2026-06-12): DKIM TXT resend._domainkey,
-SPF TXT + MX on the `send` subdomain added at GoDaddy (root MX left
-untouched — Google Workspace mail unaffected). All four edge functions
-(notify-provider, notify-user, notify-spotlight, notify-request) now
-send from Cergio <notify@cergio.ai> instead of the Resend sandbox
-sender, which only ever delivered to the account owner. This was the
-root cause of "no email at t@/info@cergio.ai".
+Implements Tarik's User Flow / SVP Flow board end-to-end:
 
-Also fixed at GoDaddy while in there: the truncated TikTok
-developers-site-verification TXT now carries the full token.
+1. ScheduleSheet (new) — calendar + time slots + Done. Every real
+   booking (PDP + on-demand, free + paid) now opens it so the user
+   confirms day/time; bookings carry schedule_confirmed_at instead of
+   the silent "+24h placeholder".
+
+2. No auto-confirm on submission — free bookings AND demo-mode paid
+   bookings stay PENDING until the provider accepts (SVP "Accepting
+   Free Service request"). BookingScreen says "Request sent!" with
+   honest copy; consumer sees "Awaiting confirm" in Inbox → Upcoming.
+   Provider accept now notifies the consumer (notify-request
+   event=booking action=accepted; email reminds free Connectors to
+   post after the job).
+
+3. Post → review loop: Connector "Mark IG post done"
+   (MarkBookingPostedModal → markBookingPosted: post_url + posted_at,
+   clears prior flags) → provider notified → Inbox → Upcoming shows
+   "View their post / Accept post / Something's wrong" (inline flag
+   reason, no window.prompt). Accept → post_confirmed_at + status
+   completed → barter complete; flag → Connector notified with reason
+   and can resubmit.
+
+4. THE GATE — getOutstandingFreeBarter(): a Connector with an
+   accepted free booking whose post isn't provider-confirmed cannot
+   order another free service. Checked in handleBook before the
+   schedule sheet; releases ONLY on provider confirmation.
+
+5. Activity feed: posted barters surface as kind 'barter'
+   ("X bartered {service} from Y for an IG spotlight ✓ View post →"),
+   same party-scoped visibility as spotlight events.
+
+6. Upcoming / Past tabs in Jobs are real now — both roles, barter
+   CTAs, completed barters land in Past. Inbox dot also fires when a
+   post lands for provider review.
+
+DB: db/migrations/2026-06-12-booking-barter-loop.sql (+ applier
+command). Edge: notify-request event 'booking' (accepted / posted /
+post_confirmed / post_flagged) — needs redeploy.
+
+SPEC-47 added to FROZEN_SPEC.md, enforced by qa #47. All 47 flows pass.

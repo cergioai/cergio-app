@@ -17,7 +17,13 @@ export function BookingScreen() {
     service = '',
     when    = '',
     where   = '',
+    // CERGIO-GUARD (2026-06-12): requests stay PENDING until the provider
+    // accepts the time (per Tarik's flow board) — headline must say
+    // "request sent", not "confirmed", or it's a lie.
+    pendingFree = false,
+    pendingPaid = false,
   } = booking ?? {};
+  const pending = pendingFree || pendingPaid;
 
   // Build the list of rows from real data only. No fabricated
   // defaults — if the chat didn't capture a field, we omit the
@@ -37,11 +43,17 @@ export function BookingScreen() {
       <div className="w-20 h-20 rounded-full bg-gl flex items-center justify-center text-4xl mb-5 animate-pop-in">
         ✓
       </div>
-      <h2 className="text-display-2 font-extrabold text-black text-center mb-2.5">Booking confirmed!</h2>
+      <h2 className="text-display-2 font-extrabold text-black text-center mb-2.5">
+        {pending ? 'Request sent!' : 'Booking confirmed!'}
+      </h2>
       <p className="text-body text-b3 text-center leading-relaxed mb-8">
-        {name
-          ? <>You've booked {name}. We've sent the confirmation to your email.</>
-          : <>We've sent the confirmation to your email.</>}
+        {pendingFree
+          ? <>{name ? `${name} will confirm your free slot.` : 'The provider will confirm your free slot.'} After the job, post your IG spotlight to complete the barter.</>
+          : pendingPaid
+            ? <>{name ? `${name} will confirm your date & time.` : 'The provider will confirm your date & time.'} You won't be charged until they accept.</>
+            : name
+              ? <>You've booked {name}. We've sent the confirmation to your email.</>
+              : <>We've sent the confirmation to your email.</>}
       </p>
 
       {/* summary card — only renders if we have at least one real row */}

@@ -71,7 +71,13 @@ export function useInboxUnread({ enabled = true } = {}) {
         const freshResponse = (mine?.data || []).some(
           r => (r.responses || []).some(resp => isFresh(resp.responded_at)),
         );
-        if (!cancelled) setUnread(freshInbound || freshBooking || freshResponse);
+        // CERGIO-GUARD (2026-06-12): barter-loop events light the dot
+        // too — a Connector just posted their IG spotlight (provider
+        // must review) on my provider bookings.
+        const freshBarter = (bookings?.data || []).some(
+          b => b.is_free_for_rainmaker && !b.post_confirmed_at && isFresh(b.posted_at),
+        );
+        if (!cancelled) setUnread(freshInbound || freshBooking || freshResponse || freshBarter);
       } catch {
         // Network/RLS hiccups — never flag unread on failure.
         if (!cancelled) setUnread(false);

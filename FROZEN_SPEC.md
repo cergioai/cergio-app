@@ -123,6 +123,25 @@ Enforced in `influencer_crawler.py` via `MIN_FOLLOWERS` / `MAX_FOLLOWERS` consta
 
 ---
 
+## BUSINESS LOGIC — FREE-SERVICE BARTER LOOP
+
+### SPEC-47 · Free-service barter completion loop + gate
+**Status:** FROZEN — 2026-06-12 (Tarik flow board "User Flow / SVP Flow")  
+**Rule:**
+1. Every real booking goes through the ScheduleSheet (calendar + time + Done) — the user confirms day/time; `schedule_confirmed_at` is stamped. No more silent "+24h placeholder" confirmations.
+2. Bookings (free AND demo-mode paid) stay **pending** until the provider accepts — never auto-confirm on submission.
+3. After a FREE job, the Connector posts an IG spotlight (`markBookingPosted` → post_url + posted_at), it surfaces on the activity feed (kind `barter`), and the provider must **accept** (`confirmBookingPost` → post_confirmed_at + status completed) or **flag** (`flagBookingPost`).
+4. **THE GATE:** a Connector with an accepted free booking whose post is not yet confirmed cannot order another free service (`getOutstandingFreeBarter` checked in `handleBook` before any free booking).
+
+**Banned behaviors:**
+- Auto-confirming a booking at submission time
+- Creating a free booking without consulting `getOutstandingFreeBarter`
+- Releasing the gate on `posted_at` alone (provider must CONFIRM)
+
+qa.mjs #47 enforces this.
+
+---
+
 ## PROCESS — HOW SPEC ITEMS ARE ADDED
 
 1. Tarik confirms a behavior in chat ("this is correct", "keep it like this", "that's frozen").
@@ -149,6 +168,7 @@ Every `git push` runs `qa.mjs` via `Unlock and Push.command`. A failing test **b
 | SPEC-12 | #12 | No mock data on signed-in screens |
 | SPEC-45 | #45 | Free spotlight: no Pay step, no paid_at gate, no 24h expiry |
 | SPEC-46 | #46 | Reco form: device contacts only, single-select, auto-populate |
+| SPEC-47 | #47 | Free barter loop: schedule confirm, no auto-confirm, post → accept gate |
 
 ---
 

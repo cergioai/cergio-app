@@ -3,7 +3,7 @@
 // legacy mock pitch for demo purposes.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
-import { getBooking, updateBookingStatus } from '../lib/api';
+import { getBooking, updateBookingStatus, notifyBookingAccepted } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -102,6 +102,10 @@ export function RequestDetailScreen() {
     const { error } = await updateBookingStatus(data.id, 'confirmed');
     setBusy(false);
     if (error) { showToast(`Failed: ${error.message}`); return; }
+    // CERGIO-GUARD (2026-06-12): tell the consumer their booking was
+    // accepted (email + in-app row). For free barters the email also
+    // reminds them to post the IG spotlight after the job.
+    notifyBookingAccepted(data.id);
     if (!data.isFree && !provider.ready) {
       // Sticky so the provider sees the payouts-setup reminder long
       // enough to act on it.

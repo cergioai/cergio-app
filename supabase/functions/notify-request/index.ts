@@ -55,6 +55,7 @@ serve(async (req: Request) => {
 
     if (event === 'created')  return await handleCreated(supaAdmin, body, appBase);
     if (event === 'response') return await handleResponse(supaAdmin, body, appBase);
+    if (event === 'booking')  return await handleBooking(supaAdmin, body, appBase);
     return json({ error: `unknown event: ${event}` }, 400);
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
@@ -188,6 +189,126 @@ async function handleResponse(supaAdmin: any, body: any, appBase: string) {
     sms:      smsText,
   });
   return json({ event: 'response', ...sent });
+}
+
+// ── event: booking — barter-loop lifecycle (2026-06-12) ─────────────────────
+// Tarik's flow board: booking accepted → consumer hears it; Connector
+// posts IG → provider reviews; provider accepts/flags → Connector hears
+// it. action: 'accepted' | 'posted' | 'post_confirmed' | 'post_flagged'.
+async function handleBooking(supaAdmin: any, body: any, appBase: string) {
+  const bookingId = body?.bookingId;
+  const action    = body?.action;
+  if (!bookingId) return json({ error: 'bookingId required' }, 400);
+
+  const { data: b, error: bErr } = await supaAdmin
+    .from('bookings')
+    .select(`
+      id, status, scheduled_at, is_free_for_rainmaker,
+      post_url, post_flag_reason,
+      consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
+      provider:profiles!bookings_provider_id_fkey ( id, display_name ),
+      service:services ( id, title )
+    `)
+    .eq('id', bookingId)
+    .single();
+  if (bErr || !b) return json({ error: 'booking not found', detail: bErr?.message }, 404);
+
+  const consumerName = b.consumer?.display_name || 'A Cergio user';
+  const providerName = b.provider?.display_name || 'The provider';
+  const svcTitle     = b.service?.title || 'the service';
+  const when = b.scheduled_at
+    ? new Date(b.scheduled_at).toLocaleString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      })
+    : 'the scheduled time';
+  const link = `${appBase}/inbox`;
+  const free = !!b.is_free_for_rainmaker;
+
+  let recipientId: string | null = null;
+  let msg: any = null;
+  let kind = '';
+  let bodyLine = '';
+
+  if (action === 'accepted') {
+    recipientId = b.consumer?.id || null;
+    kind = 'booking_accepted';
+    bodyLine = `${providerName} confirmed your ${svcTitle} booking — ${when}.`;
+    msg = {
+      subject: `${providerName} confirmed your booking — ${when}`,
+      heading: 'Booking confirmed ✓',
+      lead: `<strong>${escapeHtml(providerName)}</strong> confirmed <strong>${escapeHtml(svcTitle)}</strong> for <strong>${escapeHtml(when)}</strong>.${free ? ' After the job, post your Instagram spotlight and mark it done in your Inbox — that completes the barter.' : ''}`,
+      detail: null,
+      cta: 'View booking →',
+      link,
+      text: `${bodyLine}${free ? '\nAfter the job, post your IG spotlight and mark it done in your Inbox to complete the barter.' : ''}\n\n${link}`,
+      sms: `Cergio: ${providerName} confirmed ${svcTitle} — ${when}.${free ? ' Post your IG spotlight after the job.' : ''} ${link}`,
+    };
+  } else if (action === 'posted') {
+    recipientId = b.provider?.id || null;
+    kind = 'barter_posted';
+    bodyLine = `${consumerName} posted the IG spotlight for ${svcTitle} — review and accept it.`;
+    msg = {
+      subject: `${consumerName} posted your spotlight — confirm it`,
+      heading: 'Spotlight posted 🎉',
+      lead: `<strong>${escapeHtml(consumerName)}</strong> posted the Instagram spotlight for <strong>${escapeHtml(svcTitle)}</strong>. Accept it (or flag a problem) in your Inbox to complete the barter.`,
+      detail: b.post_url ? `<a href="${escapeHtml(b.post_url)}">${escapeHtml(b.post_url)}</a>` : null,
+      cta: 'Review post →',
+      link,
+      text: `${bodyLine}\n${b.post_url || ''}\n\n${link}`,
+      sms: `Cergio: ${consumerName} posted the IG spotlight for ${svcTitle}. Review: ${link}`,
+    };
+  } else if (action === 'post_confirmed') {
+    recipientId = b.consumer?.id || null;
+    kind = 'barter_complete';
+    bodyLine = `${providerName} accepted your post — barter complete ✓. Free services unlocked.`;
+    msg = {
+      subject: `Barter complete ✓ — ${providerName} accepted your post`,
+      heading: 'Barter complete ✓',
+      lead: `<strong>${escapeHtml(providerName)}</strong> accepted your Instagram spotlight for <strong>${escapeHtml(svcTitle)}</strong>. You're all square — free services are unlocked again.`,
+      detail: null,
+      cta: 'Book your next service →',
+      link: `${appBase}/home`,
+      text: `${bodyLine}\n\n${appBase}/home`,
+      sms: `Cergio: ${providerName} accepted your post — barter complete. Free services unlocked.`,
+    };
+  } else if (action === 'post_flagged') {
+    recipientId = b.consumer?.id || null;
+    kind = 'barter_flagged';
+    const reason = b.post_flag_reason || 'Post needs an update.';
+    bodyLine = `${providerName} flagged your post: "${reason}"`;
+    msg = {
+      subject: `${providerName} flagged your spotlight post`,
+      heading: 'Post needs a fix',
+      lead: `<strong>${escapeHtml(providerName)}</strong> flagged your Instagram spotlight for <strong>${escapeHtml(svcTitle)}</strong>. Update the post and resubmit it in your Inbox — the barter stays open until they accept.`,
+      detail: `“${escapeHtml(reason)}”`,
+      cta: 'Update post →',
+      link,
+      text: `${bodyLine}\nUpdate and resubmit: ${link}`,
+      sms: `Cergio: ${providerName} flagged your IG post — "${reason}". Fix it: ${link}`,
+    };
+  } else {
+    return json({ error: `unknown booking action: ${action}` }, 400);
+  }
+
+  if (!recipientId) return json({ error: 'no recipient on booking' }, 422);
+
+  // In-app notification row (web surface).
+  await supaAdmin.from('notifications').insert({
+    profile_id: recipientId,
+    kind,
+    body: bodyLine,
+    data: {
+      booking_id: b.id,
+      service_id: b.service?.id ?? null,
+      action,
+      post_url: b.post_url ?? null,
+      deep_link: link,
+    },
+  });
+
+  const sent = await sendToProfile(supaAdmin, recipientId, msg);
+  return json({ event: 'booking', action, ...sent });
 }
 
 // ── shared: resolve a profile's email (auth.users) + phone (profile_private),

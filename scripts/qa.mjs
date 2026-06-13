@@ -1742,6 +1742,52 @@ test('spec-46-reco-form-device-contacts-only', 'FROZEN: Reco form uses device co
   );
 });
 
+test('spec-47-free-barter-loop', 'FROZEN: Free barter loop — schedule confirm, no auto-confirm, post → accept gate (SPEC-47)', '#47', async () => {
+  const app = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
+  const api = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const inbox = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
+
+  // 1. ScheduleSheet exists and gates every real booking.
+  assert(fs.existsSync(path.join(REPO_ROOT, 'src/components/ui/ScheduleSheet.jsx')),
+    'ScheduleSheet.jsx must exist — calendar + time + Done per SPEC-47');
+  assert(/setScheduleTarget\(provider\)/.test(app),
+    'handleBook must open the ScheduleSheet (setScheduleTarget) instead of booking immediately');
+  assert(/scheduleConfirmed:\s*!!chosenAt/.test(app),
+    'proceedBooking must stamp scheduleConfirmed from the chosen time');
+
+  // 2. No auto-confirm on submission. The free branch and the demo-paid
+  //    fallback must NOT flip the booking to confirmed at creation.
+  const proceedStart = app.indexOf('const proceedBooking');
+  const proceedEnd   = app.indexOf('const handlePaymentSuccess');
+  const proceedSrc   = app.slice(proceedStart, proceedEnd);
+  assert(proceedStart > 0 && proceedEnd > proceedStart, 'proceedBooking block must exist in App.jsx');
+  assert(!/updateBookingStatus\([^)]*'confirmed'\)/.test(proceedSrc),
+    "REGRESSION: proceedBooking auto-confirms a booking at submission — provider must accept (SPEC-47)");
+
+  // 3. THE GATE — free bookings consult getOutstandingFreeBarter first.
+  assert(/export async function getOutstandingFreeBarter/.test(api),
+    'lib/api.js must export getOutstandingFreeBarter');
+  assert(/getOutstandingFreeBarter/.test(app) &&
+         app.indexOf('getOutstandingFreeBarter') < app.indexOf('setScheduleTarget(provider)'),
+    'handleBook must run the free-barter gate BEFORE opening the schedule sheet');
+  // Gate releases only on provider confirmation, never on posted_at alone.
+  const gateStart = api.indexOf('export async function getOutstandingFreeBarter');
+  const gateSrc   = api.slice(gateStart, gateStart + 1600);
+  assert(/\.is\('post_confirmed_at',\s*null\)/.test(gateSrc),
+    'Gate must key on post_confirmed_at (provider acceptance), not posted_at');
+
+  // 4. Loop endpoints exist + inbox carries both sides' CTAs.
+  for (const fn of ['markBookingPosted', 'confirmBookingPost', 'flagBookingPost']) {
+    assert(new RegExp(`export async function ${fn}`).test(api), `lib/api.js must export ${fn}`);
+  }
+  assert(/MarkBookingPostedModal/.test(inbox), 'JobsInbox must mount MarkBookingPostedModal (Connector "Mark IG post done")');
+  assert(/confirmBookingPost|handleConfirmPost/.test(inbox), 'JobsInbox must wire provider Accept post');
+  assert(/flagBookingPost|handleFlagPost/.test(inbox), 'JobsInbox must wire provider Something\'s-wrong flag');
+
+  // 5. Feed share — listSocialFeed emits kind 'barter'.
+  assert(/kind:\s*'barter'/.test(api), "listSocialFeed must emit kind 'barter' for posted free-service spotlights");
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
