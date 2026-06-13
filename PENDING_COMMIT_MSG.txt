@@ -1,21 +1,14 @@
-Fix invite ribbon misfire + inviter-only credit copy
+Desktop contacts upload fallback (.csv/.vcf) on Invite a friend
 
-Tarik bugs (2026-06-12):
-
-1. "Invited by a friend" ribbon showed for t@cergio.ai on sign-in —
-   stale localStorage ref from testing his own invite link. Fixes:
-   • AuthScreen ribbon only renders in SIGNUP mode
-   • useSession.signIn clears the stored ref on successful sign-in
-     (an existing account was never "invited")
-
-2. Credit copy promised "$250 credit each" but the reward goes to the
-   INVITING party only. Honest copy everywhere:
-   • AuthScreen ribbon: "they earn $250 credit when you book"
-   • InviteFriendPopupScreen: "Invite friends — earn $250 credit" /
-     "You get $250 credit when they join + book"; share message no
-     longer promises the invitee anything
-   • InviteSelectedReviewScreen seed note: dropped "we both earn"
-   • notify-user invite_received email: fixed $25 → $250 (inviter)
+Tarik: "says contacts picker needs android / mobile to connect."
+The native Contact Picker API only exists on Chrome Android, so on
+desktop the Connect-your-contacts button now opens a file picker
+instead: upload a contacts export (.csv from Google Contacts or
+Outlook, or .vcf vCard) and the contacts land in the same
+"From your contacts" section. Header-driven CSV parser (handles
+quoted fields + both export shapes) and a minimal vCard parser —
+verified against Google CSV, Outlook CSV, and VCF samples.
+Real contacts only, dedupe on email/phone/name, honest error toast
+when a file has no contacts.
 
 QA: all 46 flows pass.
-Post-push ops: re-run Deploy Edge Functions.command (notify-user).

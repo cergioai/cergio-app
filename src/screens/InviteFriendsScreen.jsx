@@ -12,7 +12,7 @@
 //      to a sticky-at-end flex footer (mt-auto + shrink-0) so it's
 //      ALWAYS the last block in the column and never gets covered.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation, useOutletContext } from 'react-router-dom';
 import { listInvitableProfiles } from '../lib/api';
 
@@ -60,40 +60,123 @@ export function InviteFriendsScreen() {
   // the review screen knows to send a real email/SMS invite (these
   // people are NOT on Cergio yet).
   const [deviceContacts, setDeviceContacts] = useState([]);
+  const fileInputRef = useRef(null);
   const supportsContactPicker = typeof navigator !== 'undefined' &&
     'contacts' in navigator && typeof window !== 'undefined' && 'ContactsManager' in window;
+
+  // Merge helper — dedupes on email/phone/name, never synthesizes fields.
+  const mergeDeviceContacts = (incoming) => {
+    setDeviceContacts(prev => {
+      const seen = new Set(prev.map(c => c.dedupe));
+      const next = [...prev];
+      for (const c of incoming) {
+        const name  = (c.name  || '').trim();
+        const email = (c.email || '').trim();
+        const phone = (c.phone || '').trim();
+        if (!name && !email && !phone) continue;
+        const dedupe = email || phone || name;
+        if (seen.has(dedupe)) continue;
+        seen.add(dedupe);
+        next.push({
+          id: `dev:${dedupe}`,
+          name: name || email || phone,
+          email, phone, dedupe,
+          initial: (name || email || phone)[0].toUpperCase(),
+          device: true,
+        });
+      }
+      return next;
+    });
+  };
+
   const importFromContacts = async () => {
     if (!supportsContactPicker) {
-      showToast('Contact picker needs Chrome on Android/mobile — use Share invite link instead.');
+      // CERGIO-GUARD (2026-06-12): desktop fallback per Tarik ("says
+      // contacts picker needs android / mobile"). The native Contact
+      // Picker API genuinely only exists on Chrome Android — on desktop
+      // we open a file picker for a contacts export (.csv from Google
+      // Contacts / Outlook, or .vcf vCard). Real contacts only.
+      fileInputRef.current?.click();
       return;
     }
     try {
       const picked = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: true });
       if (!picked?.length) return;
-      setDeviceContacts(prev => {
-        const seen = new Set(prev.map(c => c.dedupe));
-        const next = [...prev];
-        for (const c of picked) {
-          const name  = (c.name  || [])[0] || '';
-          const email = (c.email || [])[0] || '';
-          const phone = (c.tel   || [])[0] || '';
-          if (!name && !email && !phone) continue;
-          const dedupe = email || phone || name;
-          if (seen.has(dedupe)) continue;
-          seen.add(dedupe);
-          next.push({
-            id: `dev:${dedupe}`,
-            name: name || email || phone,
-            email, phone, dedupe,
-            initial: (name || email || phone)[0].toUpperCase(),
-            device: true,
-          });
-        }
-        return next;
-      });
+      mergeDeviceContacts(picked.map(c => ({
+        name:  (c.name  || [])[0] || '',
+        email: (c.email || [])[0] || '',
+        phone: (c.tel   || [])[0] || '',
+      })));
       showToast('Contacts added — pick who to invite');
     } catch {
       /* user cancelled the picker — not an error */
+    }
+  };
+
+  // Parse a Google Contacts / Outlook CSV export. Header-driven: finds
+  // name/email/phone columns by pattern so both export shapes work.
+  const parseContactsCsv = (text) => {
+    const rows = [];
+    let row = [], field = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQ) {
+        if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (ch === '"') inQ = false;
+        else field += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (field !== '' || row.length) { row.push(field); rows.push(row); row = []; field = ''; }
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+      } else field += ch;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    if (rows.length < 2) return [];
+    const header = rows[0].map(h => h.toLowerCase());
+    const col = (re) => header.findIndex(h => re.test(h));
+    const iName  = col(/^name$|display name|^first name$/);
+    const iLast  = col(/^last name$/);
+    const iEmail = col(/e-?mail.*(1 - value|address)?|^e-?mail$/);
+    const iPhone = col(/phone.*(1 - value|number)?|^mobile/);
+    return rows.slice(1).map(r => {
+      const first = iName  >= 0 ? r[iName]  || '' : '';
+      const last  = iLast  >= 0 ? r[iLast]  || '' : '';
+      return {
+        name:  `${first} ${last}`.trim(),
+        email: iEmail >= 0 ? (r[iEmail] || '').split(':').pop().trim() : '',
+        phone: iPhone >= 0 ? (r[iPhone] || '').split(':').pop().trim() : '',
+      };
+    });
+  };
+
+  // Parse a vCard (.vcf) export — FN / EMAIL / TEL per card.
+  const parseVcf = (text) => text.split(/BEGIN:VCARD/i).slice(1).map(card => {
+    const grab = (re) => (card.match(re) || [, ''])[1].trim();
+    return {
+      name:  grab(/\nFN[^:]*:(.+)/i),
+      email: grab(/\nEMAIL[^:]*:(.+)/i),
+      phone: grab(/\nTEL[^:]*:(.+)/i),
+    };
+  });
+
+  const handleContactsFile = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const text   = await f.text();
+      const parsed = /\.vcf$/i.test(f.name) ? parseVcf(text) : parseContactsCsv(text);
+      const usable = parsed.filter(c => (c.name || c.email || c.phone));
+      if (usable.length === 0) {
+        showToast('No contacts found — export a .csv or .vcf from Google Contacts and try again.');
+        return;
+      }
+      mergeDeviceContacts(usable);
+      showToast(`${usable.length} contacts imported — pick who to invite`);
+    } catch {
+      showToast("Couldn't read that file — export a .csv or .vcf and try again.");
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -209,6 +292,20 @@ export function InviteFriendsScreen() {
           </svg>
           Connect your contacts book
         </button>
+        {!supportsContactPicker && (
+          <p className="text-meta-sm text-b3 font-medium mt-1.5 leading-snug text-center">
+            On desktop this opens a file picker — upload a contacts export
+            (.csv or .vcf) from Google Contacts or your phone.
+          </p>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,.vcf,text/csv,text/vcard"
+          onChange={handleContactsFile}
+          className="hidden"
+          aria-hidden="true"
+        />
       </div>
 
       {/* search */}
