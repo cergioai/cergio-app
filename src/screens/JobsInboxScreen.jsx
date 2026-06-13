@@ -80,7 +80,7 @@ const TABS = ['Requests', 'Sent', 'Upcoming', 'Past'];
 
 export function JobsInboxScreen() {
   const navigate = useNavigate();
-  const { showToast, auth } = useOutletContext();
+  const { showToast, auth, payForBooking } = useOutletContext();
   const [activeTab, setActiveTab] = useState('Requests');
   const [real, setReal] = useState(null);
   // CERGIO-GUARD: real client-side filter, no 'coming soon' placeholder.
@@ -833,13 +833,15 @@ export function JobsInboxScreen() {
           const fmtWhen = (iso) => iso
             ? `${new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — ${new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
             : '—';
-          const Pill = ({ free, status, postConfirmed }) => (
+          const Pill = ({ free, status, postConfirmed, paymentDue }) => (
             <span className={`rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap
               ${postConfirmed ? 'bg-gl text-gd'
+                : paymentDue ? 'bg-warnBg text-warnText'
                 : status === 'pending' ? 'bg-warnBg text-warnText'
                 : status === 'cancelled' ? 'bg-bg5 text-b3'
                 : free ? 'bg-gl text-gd' : 'bg-bg5 text-b2'}`}>
               {postConfirmed ? 'Barter complete ✓'
+                : paymentDue ? 'Payment due'
                 : status === 'pending' ? 'Awaiting confirm'
                 : status === 'cancelled' ? 'Cancelled'
                 : free ? 'Free barter' : status === 'completed' ? 'Completed' : 'Booked'}
@@ -860,6 +862,12 @@ export function JobsInboxScreen() {
                                     ['confirmed', 'in_progress', 'completed'].includes(b.status);
                 const awaitingOk  = b.is_free_for_rainmaker && b.posted_at && !b.post_confirmed_at && !b.post_flag_reason;
                 const flagged     = b.is_free_for_rainmaker && !!b.post_flag_reason && !b.post_confirmed_at;
+                // CERGIO-GUARD (2026-06-12): pay-after-accept. Provider
+                // confirmed the time → consumer must pay before the booking
+                // is locked in. Only surfaces for paid (non-free) bookings
+                // that haven't been paid yet.
+                const paymentDue  = !b.is_free_for_rainmaker && b.status === 'confirmed' && !b.paid_at;
+                const totalDollars = b.total_cents ? `$${(b.total_cents / 100).toFixed(0)}` : null;
                 return (
                   <div key={b.id} className="bg-white border border-bdr rounded-[20px] p-4">
                     <div className="flex items-start gap-3">
@@ -869,7 +877,7 @@ export function JobsInboxScreen() {
                           <p className="text-body font-extrabold text-black truncate">
                             {b.service?.title || 'Service'}
                           </p>
-                          <Pill free={b.is_free_for_rainmaker} status={b.status} postConfirmed={!!b.post_confirmed_at} />
+                          <Pill free={b.is_free_for_rainmaker} status={b.status} postConfirmed={!!b.post_confirmed_at} paymentDue={paymentDue} />
                         </div>
                         <p className="text-meta text-b3 font-medium mt-0.5">
                           {otherName} · {fmtWhen(b.scheduled_at)}
@@ -902,16 +910,34 @@ export function JobsInboxScreen() {
                     )}
                     {flagged && (
                       <>
-                        <div className="bg-warnBg border border-warn/40 rounded-[12px] px-3 py-2 mt-3">
-                          <p className="text-meta-sm font-extrabold text-warnText">
+                        <div className=”bg-warnBg border border-warn/40 rounded-[12px] px-3 py-2 mt-3”>
+                          <p className=”text-meta-sm font-extrabold text-warnText”>
                             {otherName.split(' ')[0]} flagged your post: “{b.post_flag_reason}”
                           </p>
                         </div>
                         <button
                           onClick={() => setPostTarget(b)}
-                          className="w-full bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-body-sm font-extrabold mt-2 hover:bg-bg5/40"
+                          className=”w-full bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-body-sm font-extrabold mt-2 hover:bg-bg5/40”
                         >
                           Update post
+                        </button>
+                      </>
+                    )}
+                    {/* CERGIO-GUARD (2026-06-12): pay-after-accept CTA.
+                        Provider confirmed the time — consumer pays here to
+                        lock in the booking. `payForBooking` (from App.jsx
+                        outlet context) creates the PaymentIntent and opens
+                        the PaymentSheet in-place. */}
+                    {paymentDue && (
+                      <>
+                        <p className=”text-meta text-b2 font-medium leading-snug mt-3”>
+                          {otherName.split(' ')[0]} confirmed your time — pay to lock it in.
+                        </p>
+                        <button
+                          onClick={() => payForBooking(b, { onPaid: refreshJobs })}
+                          className=”w-full bg-g text-white rounded-[14px] py-3 text-body font-extrabold mt-2 hover:opacity-90 active:scale-[.98] transition-all”
+                        >
+                          Pay{totalDollars ? ` ${totalDollars}` : ''} to lock it in →
                         </button>
                       </>
                     )}

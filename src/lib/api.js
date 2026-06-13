@@ -2674,7 +2674,7 @@ export async function listProviderBookings() {
     .from('bookings')
     .select(`
       id, status, scheduled_at, location_text, notes, total_cents,
-      is_free_for_rainmaker, created_at,
+      is_free_for_rainmaker, created_at, paid_at,
       schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
       post_flag_reason, post_flagged_at,
       consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
@@ -2800,7 +2800,7 @@ export async function listConsumerBookings() {
     .from('bookings')
     .select(`
       id, status, scheduled_at, location_text, total_cents, created_at,
-      is_free_for_rainmaker,
+      is_free_for_rainmaker, paid_at,
       schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
       post_flag_reason, post_flagged_at,
       provider:profiles!bookings_provider_id_fkey ( id, display_name ),
@@ -2833,6 +2833,21 @@ function fireBookingNotify(bookingId, action) {
  *  consumer hears about the confirm (email + in-app). */
 export function notifyBookingAccepted(bookingId) {
   fireBookingNotify(bookingId, 'accepted');
+}
+
+/** CERGIO-GUARD (2026-06-12): optimistic paid marker — PaymentSheet
+ *  stamps paid_at on client-side success; the stripe-webhook is the
+ *  authoritative writer (sets it again server-side, idempotent). */
+export async function markBookingPaid(bookingId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
+  return await supabase
+    .from('bookings')
+    .update({ paid_at: new Date().toISOString() })
+    .eq('id', bookingId)
+    .is('paid_at', null)
+    .select()
+    .maybeSingle();
 }
 
 /**
