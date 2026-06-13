@@ -25,11 +25,9 @@
 //   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER — SMS,
 //     silently skipped when unset (same contract as notify-user).
 //
-// NOTE ON DELIVERABILITY: FROM_EMAIL is Resend's sandbox sender
-// (onboarding@resend.dev) which only delivers to the Resend account
-// owner's address. Until the cergio.ai domain is verified in Resend,
-// mail to arbitrary users (t@cergio.ai, info@cergio.ai) is REJECTED
-// by Resend. Update FROM_EMAIL after domain verification.
+// DELIVERABILITY: cergio.ai was verified in Resend on 2026-06-12
+// (DKIM + SPF + MX on `send` subdomain via GoDaddy), so FROM_EMAIL
+// uses notify@cergio.ai and mail delivers to any recipient.
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
@@ -40,7 +38,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const FROM_EMAIL       = 'Cergio <onboarding@resend.dev>';
+const FROM_EMAIL       = 'Cergio <notify@cergio.ai>'; // verified domain 2026-06-12
 const APP_URL_FALLBACK = 'https://cergio-app-cergio-s-projects.vercel.app';
 const MAX_FANOUT       = 20; // hard cap per call — protects Resend quota
 

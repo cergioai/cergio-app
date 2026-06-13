@@ -26,7 +26,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const FROM_EMAIL    = 'Cergio <onboarding@resend.dev>';
+const FROM_EMAIL    = 'Cergio <notify@cergio.ai>'; // verified domain 2026-06-12
 const APP_URL_FALLBACK = 'https://cergio-app-cergio-s-projects.vercel.app';
 
 serve(async (req: Request) => {

@@ -1,14 +1,12 @@
-Desktop contacts upload fallback (.csv/.vcf) on Invite a friend
+Email senders → notify@cergio.ai (domain verified in Resend)
 
-Tarik: "says contacts picker needs android / mobile to connect."
-The native Contact Picker API only exists on Chrome Android, so on
-desktop the Connect-your-contacts button now opens a file picker
-instead: upload a contacts export (.csv from Google Contacts or
-Outlook, or .vcf vCard) and the contacts land in the same
-"From your contacts" section. Header-driven CSV parser (handles
-quoted fields + both export shapes) and a minimal vCard parser —
-verified against Google CSV, Outlook CSV, and VCF samples.
-Real contacts only, dedupe on email/phone/name, honest error toast
-when a file has no contacts.
+cergio.ai verified in Resend (2026-06-12): DKIM TXT resend._domainkey,
+SPF TXT + MX on the `send` subdomain added at GoDaddy (root MX left
+untouched — Google Workspace mail unaffected). All four edge functions
+(notify-provider, notify-user, notify-spotlight, notify-request) now
+send from Cergio <notify@cergio.ai> instead of the Resend sandbox
+sender, which only ever delivered to the account owner. This was the
+root cause of "no email at t@/info@cergio.ai".
 
-QA: all 46 flows pass.
+Also fixed at GoDaddy while in there: the truncated TikTok
+developers-site-verification TXT now carries the full token.
