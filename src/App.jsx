@@ -257,7 +257,7 @@ function Layout() {
     // Surface the confirmed time on the BookingScreen summary.
     setBooking(b => ({ ...(b || {}), when: whenLabel || b?.when || '' }));
 
-    const { createBooking, createPaymentIntent } = await import('./lib/api');
+    const { createBooking } = await import('./lib/api');
 
     // Insert booking in pending state with the user-confirmed schedule.
     const { data: row, error } = await createBooking({
@@ -291,32 +291,37 @@ function Layout() {
       return;
     }
 
-    // (c) Paid booking — fetch a PaymentIntent and open the PaymentSheet.
-    // CERGIO-GUARD (2026-06-12): when Stripe isn't configured (test/demo
-    // mode) the booking now stays PENDING instead of auto-confirming.
-    // Tarik: "currently confirms on submission which isn't correct as
-    // the user needs to pick time and service needs to confirm time."
-    // The provider gets the request (notify-provider email + Requests
-    // tab) and confirms via RequestDetailScreen — same waiting loop as
-    // free barters. The live-Stripe path below still confirms on
-    // payment success (card auth IS the consumer's commitment; provider
-    // time-confirm for live payments is a follow-up decision).
-    const { data: pi, error: piErr } = await createPaymentIntent(row.id);
+    // (c) Paid booking — CERGIO-GUARD (2026-06-12 v2, Tarik): NO charge
+    // at request time, live Stripe included. The card is only charged
+    // AFTER the provider accepts the time: the consumer gets a
+    // "Pay $X to lock it in" button on the Inbox → Upcoming card
+    // (payForBooking below) once the booking flips to confirmed.
+    // Lifecycle: pending → confirmed (provider) → paid_at (consumer).
+    setBooking(b => ({ ...(b || {}), pendingPaid: true }));
+    showToast('Request sent — you pay once the provider confirms your time.');
+    navigate('/booking');
+  }, [navigate, showToast]);
+
+  // CERGIO-GUARD (2026-06-12): pay-after-accept. Called from the Inbox
+  // Upcoming card on a CONFIRMED paid booking — fetches the
+  // PaymentIntent and opens the PaymentSheet. onPaid lets the caller
+  // refresh its list after success.
+  const payForBooking = useCallback(async (bookingRow, { onPaid } = {}) => {
+    const { createPaymentIntent } = await import('./lib/api');
+    const { data: pi, error: piErr } = await createPaymentIntent(bookingRow.id);
     if (piErr || !pi?.client_secret) {
-      creditInviterOnFirstBooking(row.consumer_id, row.id).catch(() => {});
-      setBooking(b => ({ ...(b || {}), pendingPaid: true }));
-      showToast('Request sent — the provider will confirm your time.');
-      navigate('/booking');
+      showToast('Card payments aren't live yet — you'll be able to pay here once Stripe is enabled.', { sticky: true });
       return;
     }
     setPaymentSheet({
       clientSecret: pi.client_secret,
-      bookingId:    row.id,
-      consumerId:   row.consumer_id,
-      totalCents:   row.total_cents,
-      providerName: provider.name,
+      bookingId:    bookingRow.id,
+      consumerId:   auth?.user?.id || null,
+      totalCents:   bookingRow.total_cents,
+      providerName: bookingRow.provider?.display_name || null,
+      onPaid:       onPaid || null,
     });
-  }, [navigate, showToast]);
+  }, [showToast, auth?.user?.id]);
 
   const handlePaymentSuccess = useCallback(() => {
     // CERGIO-GUARD: credit the inviter on the invitee's first paid
@@ -324,6 +329,16 @@ function Layout() {
     // state. Best-effort — no UI impact on failure.
     if (paymentSheet?.consumerId) {
       creditInviterOnFirstBooking(paymentSheet.consumerId, paymentSheet.bookingId).catch(() => {});
+    }
+    // CERGIO-GUARD (2026-06-12): pay-after-accept — let the opener
+    // (Inbox Upcoming card) refresh its list instead of navigating
+    // away to /booking.
+    if (paymentSheet?.onPaid) {
+      const cb = paymentSheet.onPaid;
+      setPaymentSheet(null);
+      showToast('Paid ✓ — booking locked in');
+      cb();
+      return;
     }
     setPaymentSheet(null);
     showToast('Payment confirmed!');
@@ -356,6 +371,7 @@ function Layout() {
             booking,
             startTask,
             handleBook,
+            payForBooking,
             freeServices,
             setFreeServices,
             serviceMode,

@@ -179,7 +179,7 @@ export function RecommendServiceFormScreen() {
           console.warn('[reco] could not write recommendations row:', recoErr.message);
         }
       }
-      showToast(`Reco’d ${firstName} ✓ — they got the invite.`);
+      showToast(`Reco'd ${firstName} ✓ — they got the invite.`);
       navigate('/earnings');
     } finally {
       setBusy(false);
@@ -440,7 +440,7 @@ export function RecommendServiceFormScreen() {
       {step === 3 && (
         <div className="px-5 flex-1 flex flex-col">
           <p className="text-body-lg text-b2 leading-snug mb-1">
-            Why <span className="font-extrabold text-black">{firstName}</span>’s a great {serviceType.toLowerCase()}.
+            Why <span className="font-extrabold text-black">{firstName}</span>'s a great {serviceType.toLowerCase()}.
           </p>
           <p className="text-meta text-b3 leading-snug mb-4">
             We&apos;ll pull this into the message they get.

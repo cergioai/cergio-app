@@ -578,7 +578,7 @@ export function PublicProfileScreen() {
           { key: 'invited',         label: 'Invited',     value: stats.invited,        to: isSelf ? '/earnings/invites' : null },
           { key: 'joined',          label: 'Joined',      value: stats.joined,         to: isSelf ? '/earnings/invites' : null },
           { key: 'booked',          label: 'Booked',      value: stats.booked,         to: isSelf ? '/earnings' : null },
-          { key: 'recommended',     label: 'Reco’d',       value: stats.recommended,   to: null },
+          { key: 'recommended',     label: 'Reco'd',       value: stats.recommended,   to: null },
           { key: 'listedServices',  label: 'Services',    value: stats.listedServices, to: null },
         ].filter(c => c.value > 0);
         return (
@@ -611,8 +611,8 @@ export function PublicProfileScreen() {
             </div>
             <p className="text-meta-sm text-b3 font-medium leading-snug mt-3">
               {isSelf
-                ? <>You earn ${REWARDS.referrerSharePercent}% of every friend’s booking up to ${REWARDS.perFriend} per friend, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>
-                : <>{firstName}’s network drives ${REWARDS.referrerSharePercent}% per friend booking + ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>}
+                ? <>You earn ${REWARDS.referrerSharePercent}% of every friend's booking up to ${REWARDS.perFriend} per friend, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>
+                : <>{firstName}'s network drives ${REWARDS.referrerSharePercent}% per friend booking + ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>}
             </p>
           </div>
         );
