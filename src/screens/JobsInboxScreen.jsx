@@ -453,7 +453,7 @@ export function JobsInboxScreen() {
               // never accidentally open the profile.
               const profileTarget = req.requester?.id || null;
               const openProfile = () => {
-                if (profileTarget) navigate(`/u/${profileTarget}`);
+                if (profileTarget) navigate(`/u/${profileTarget}?reqId=${req.id}&myServiceId=${req.my_service_id || ""}`);
               };
               return (
                 <div
