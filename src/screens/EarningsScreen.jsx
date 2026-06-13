@@ -1089,7 +1089,7 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
             onClick={onReinvite}
             className="mt-2.5 text-meta-sm text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
           >
-            Re-invite {stalled} {stalled === 1 ? 'friend who hasn’t joined' : 'friends who haven’t joined'} →
+            Re-invite {stalled} {stalled === 1 ? "friend who hasn’t joined" : "friends who haven’t joined"} →
           </button>
         )}
       </div>

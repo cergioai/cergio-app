@@ -912,7 +912,7 @@ export function JobsInboxScreen() {
                       <>
                         <div className=”bg-warnBg border border-warn/40 rounded-[12px] px-3 py-2 mt-3”>
                           <p className=”text-meta-sm font-extrabold text-warnText”>
-                            {otherName.split(' ')[0]} flagged your post: “{b.post_flag_reason}”
+                            {otherName.split(' ')[0]} flagged your post: &ldquo;{b.post_flag_reason}&rdquo;
                           </p>
                         </div>
                         <button
@@ -992,7 +992,7 @@ export function JobsInboxScreen() {
                         )}
                         {b.post_flag_reason && (
                           <p className="text-meta-sm text-warnText font-extrabold text-center mt-1">
-                            You flagged: “{b.post_flag_reason}” — awaiting their update
+                            You flagged: &ldquo;{b.post_flag_reason}&rdquo; — awaiting their update
                           </p>
                         )}
                         <div className="flex gap-2 mt-2">

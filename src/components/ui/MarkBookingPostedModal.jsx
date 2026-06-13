@@ -44,7 +44,7 @@ export function MarkBookingPostedModal({ booking, onClose, onPosted }) {
         {reposting && (
           <div className="bg-warnBg border border-warn/40 rounded-[12px] px-3 py-2 mb-3">
             <p className="text-meta-sm font-extrabold text-warnText">
-              {providerFirst} flagged: “{booking.post_flag_reason}”
+              {providerFirst} flagged: &ldquo;{booking.post_flag_reason}&rdquo;
             </p>
           </div>
         )}
