@@ -23,7 +23,7 @@ export function ServiceListPhotosArrangeScreen() {
     setPhotos(prev => prev.filter((_, i) => i !== idx));
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-24">
+    <div className="flex-1 flex flex-col bg-cream pb-24">
       {/* top bar */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <button

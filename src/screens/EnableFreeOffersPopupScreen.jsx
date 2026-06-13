@@ -8,7 +8,7 @@ export function EnableFreeOffersPopupScreen() {
   const { freeServices, setFreeServices } = useOutletContext();
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="flex-1 flex flex-col bg-cream">
       {/* back chevron */}
       <div className="px-5 pt-5">
         <button

@@ -140,7 +140,7 @@ export function InviteSelectedReviewScreen() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-32 overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-cream pb-32 overflow-y-auto">
       {/* nav */}
       <div className="px-5 pt-5">
         <button

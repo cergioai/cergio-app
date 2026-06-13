@@ -38,7 +38,7 @@ export function BookingScreen() {
   ].filter(Boolean);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-7 bg-white">
+    <div className="flex-1 flex flex-col items-center justify-center px-7 bg-cream">
       {/* check */}
       <div className="w-20 h-20 rounded-full bg-gl flex items-center justify-center text-4xl mb-5 animate-pop-in">
         ✓

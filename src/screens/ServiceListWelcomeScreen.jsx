@@ -28,7 +28,7 @@ export function ServiceListWelcomeScreen() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="flex-1 flex flex-col bg-cream">
       {/* hero image area — soft mint wave-bottom */}
       <div className="relative bg-gl pt-10 pb-2 flex items-center justify-center">
         <button

@@ -19,7 +19,7 @@ export function EarnExplainerScreen() {
   const exampleReferrerDollars = exampleReferrerCents / 100;
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-8 overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-cream pb-8 overflow-y-auto">
       {/* header */}
       <div className="flex items-start justify-between px-5 pt-5 pb-2">
         <div className="w-12 h-12 rounded-full bg-gl border border-g/25 flex items-center justify-center">

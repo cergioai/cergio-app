@@ -36,7 +36,7 @@ export function EarningsBreakdownScreen() {
   const servicesRecoed = 0;
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-8 overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-cream pb-8 overflow-y-auto">
       <div className="px-5 pt-5">
         <button
           onClick={() => navigate(-1)}

@@ -35,7 +35,7 @@ export function OnboardScreen() {
   const { icon, bg, title, desc } = SLIDES[step];
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="flex-1 flex flex-col bg-cream">
       {/* slide */}
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center gap-7">
         <div className={`w-24 h-24 rounded-[28px] flex items-center justify-center text-4xl ${bg}`}>
