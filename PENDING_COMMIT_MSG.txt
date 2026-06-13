@@ -1,43 +1,28 @@
-Free-service barter loop (SPEC-47): schedule confirm → IG post → provider accept → gate
+Provider request screen (SPEC-48): job details, approximate map, IG block, friends-in-common
 
-Implements Tarik's User Flow / SVP Flow board end-to-end:
+Builds the "Accepting Free Service request" screen (Tarik flow board) so the
+service provider sees everything needed to decide on an inbound free request.
 
-1. ScheduleSheet (new) — calendar + time slots + Done. Every real
-   booking (PDP + on-demand, free + paid) now opens it so the user
-   confirms day/time; bookings carry schedule_confirmed_at instead of
-   the silent "+24h placeholder".
+RequestDetailScreen now renders, in mockup order:
+  - Job details (title, free-for-Connectors pill, description, appointment)
+  - Approximate-location card — "Map shows approximate location"; the exact
+    address is shared only AFTER the user confirms the booking. No live map
+    tile / no precise pin until confirmed.
+  - Instagram block — requester handle + follower count + working
+    "See Instagram" link (hidden when no connected handle).
+  - Friends-in-common — mutual network connections with the requester,
+    bucketed friends + Connectors (hidden when zero).
+  - Free-marketing benefit subcopy + "Accept free request" CTA.
 
-2. No auto-confirm on submission — free bookings AND demo-mode paid
-   bookings stay PENDING until the provider accepts (SVP "Accepting
-   Free Service request"). BookingScreen says "Request sent!" with
-   honest copy; consumer sees "Awaiting confirm" in Inbox → Upcoming.
-   Provider accept now notifies the consumer (notify-request
-   event=booking action=accepted; email reminds free Connectors to
-   post after the job).
+Data layer:
+  - getBooking() now selects consumer.instagram_handle / instagram_followers
+    / cc_verified_at for the IG block.
+  - New getMutualConnections() computes mutuals over the canonical `network`
+    graph (any edge, either direction), returning count + Connector count +
+    a capped sample. No fabricated data.
 
-3. Post → review loop: Connector "Mark IG post done"
-   (MarkBookingPostedModal → markBookingPosted: post_url + posted_at,
-   clears prior flags) → provider notified → Inbox → Upcoming shows
-   "View their post / Accept post / Something's wrong" (inline flag
-   reason, no window.prompt). Accept → post_confirmed_at + status
-   completed → barter complete; flag → Connector notified with reason
-   and can resubmit.
+No fake IG photo grid: the "+N more" thumbnail strip is gated on real
+data.igMedia (populated once Meta Graph media access is approved) — never
+placeholder tiles (SPEC-12).
 
-4. THE GATE — getOutstandingFreeBarter(): a Connector with an
-   accepted free booking whose post isn't provider-confirmed cannot
-   order another free service. Checked in handleBook before the
-   schedule sheet; releases ONLY on provider confirmation.
-
-5. Activity feed: posted barters surface as kind 'barter'
-   ("X bartered {service} from Y for an IG spotlight ✓ View post →"),
-   same party-scoped visibility as spotlight events.
-
-6. Upcoming / Past tabs in Jobs are real now — both roles, barter
-   CTAs, completed barters land in Past. Inbox dot also fires when a
-   post lands for provider review.
-
-DB: db/migrations/2026-06-12-booking-barter-loop.sql (+ applier
-command). Edge: notify-request event 'booking' (accepted / posted /
-post_confirmed / post_flagged) — needs redeploy.
-
-SPEC-47 added to FROZEN_SPEC.md, enforced by qa #47. All 47 flows pass.
+Frozen as SPEC-48 in FROZEN_SPEC.md + enforced by qa.mjs #48.

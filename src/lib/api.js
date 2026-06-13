@@ -1441,6 +1441,79 @@ export async function amIFollowing(targetId) {
 }
 
 /**
+ * CERGIO-GUARD (2026-06-13): Mutual connections between the signed-in user
+ * and `otherId`, over the canonical `network` graph (Tarik flow board —
+ * "friends in common with the Connector requesting the service").
+ *
+ * A connection counts in EITHER direction (a follow OR a follower edge),
+ * so "mutual" = any profile X that both the signed-in user and `otherId`
+ * are linked to, regardless of who followed whom. This matches the
+ * intent: shared people across the network (mutual friends, follows,
+ * recos all resolve to network edges).
+ *
+ * Returns { data: { count, connectors, sample: [{id,name,is_connector,
+ * initial}] }, error }. count is the total number of mutuals; sample is
+ * a capped slice (default 3) for avatar/name rendering; connectors is how
+ * many of the mutuals are verified Connectors. No fake data: when the
+ * graph yields nothing, count is 0 and sample is [] (caller hides block).
+ */
+export async function getMutualConnections(otherId, { sampleLimit = 3 } = {}) {
+  if (!supabaseReady) return { data: { count: 0, connectors: 0, sample: [] }, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  const meId = userRes?.user?.id || null;
+  if (!meId || !otherId || meId === otherId) {
+    return { data: { count: 0, connectors: 0, sample: [] }, error: null };
+  }
+
+  // All edges touching a given user → set of the OTHER endpoints.
+  const endpointsFor = async (uid) => {
+    const { data, error } = await supabase
+      .from('network')
+      .select('follower_id, followed_id')
+      .or(`follower_id.eq.${uid},followed_id.eq.${uid}`);
+    if (error) return { ids: new Set(), error };
+    const ids = new Set();
+    for (const r of data || []) {
+      const other = r.follower_id === uid ? r.followed_id : r.follower_id;
+      if (other && other !== uid) ids.add(other);
+    }
+    return { ids, error: null };
+  };
+
+  const mine  = await endpointsFor(meId);
+  if (mine.error)  return { data: { count: 0, connectors: 0, sample: [] }, error: mine.error };
+  const theirs = await endpointsFor(otherId);
+  if (theirs.error) return { data: { count: 0, connectors: 0, sample: [] }, error: theirs.error };
+
+  // Intersection, excluding the two endpoints themselves.
+  const mutualIds = [...mine.ids].filter(id => theirs.ids.has(id) && id !== meId && id !== otherId);
+  if (mutualIds.length === 0) {
+    return { data: { count: 0, connectors: 0, sample: [] }, error: null };
+  }
+
+  const { data: profs, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, cc_verified_at')
+    .in('id', mutualIds);
+  if (error) return { data: { count: 0, connectors: 0, sample: [] }, error };
+
+  const named = (profs || []).filter(p => (p.display_name || '').trim().length > 0);
+  const connectors = named.filter(p => !!p.cc_verified_at).length;
+  // Surface Connectors first in the sample — they carry more signal.
+  const sample = named
+    .sort((a, b) => (b.cc_verified_at ? 1 : 0) - (a.cc_verified_at ? 1 : 0))
+    .slice(0, sampleLimit)
+    .map(p => ({
+      id:           p.id,
+      name:         p.display_name.trim(),
+      is_connector: !!p.cc_verified_at,
+      initial:      (p.display_name.trim()[0] || '?').toUpperCase(),
+    }));
+
+  return { data: { count: mutualIds.length, connectors, sample }, error: null };
+}
+
+/**
  * CERGIO-GUARD (2026-06-04): invite lifecycle counters per Tarik —
  * "where's the friend count and services invited VS Join". Returns
  * { invited, joined, booked } pulled from invites table timestamps.
@@ -2643,7 +2716,7 @@ export async function getBooking(id) {
     .from('bookings')
     .select(`
       *,
-      consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
+      consumer:profiles!bookings_consumer_id_fkey ( id, display_name, instagram_handle, instagram_followers, cc_verified_at ),
       provider:profiles!bookings_provider_id_fkey ( id, display_name ),
       service:services ( id, title, category, description, photo_class, location_text ),
       offering:offerings ( id, name, kind, price_cents, duration_minutes )

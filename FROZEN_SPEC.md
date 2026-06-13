@@ -142,6 +142,26 @@ qa.mjs #47 enforces this.
 
 ---
 
+## UI / DATA — PROVIDER REQUEST SCREEN (ACCEPTING A FREE SERVICE)
+
+### SPEC-48 · Inbound request screen required elements
+**Status:** FROZEN — 2026-06-13 (Tarik dictated as SPEC; flow board "Accepting Free Service request")
+**Rule:** `RequestDetailScreen` (the screen the service provider sees for an inbound request from a Connector) must render, for a free request:
+1. **Job details** — service title, free-for-Connectors pill, description, appointment.
+2. **Approximate-location card** — copy "Map shows approximate location"; the exact address is shared ONLY after the user confirms the booking. No live map tile and no precise pin until confirmed.
+3. **Instagram block** — the requester's IG handle + follower count + a working "See Instagram" link to `instagram.com/<handle>`. Hidden when the requester has no connected handle.
+4. **Friends-in-common** — mutual connections with the requester via `getMutualConnections` over the `network` graph (any edge, either direction; buckets friends + Connectors). Hidden when zero.
+5. **Accept CTA** — "Accept free request" + the "free marketing / service verification with a 4+ star rating" subcopy.
+
+**Banned behaviors:**
+- Faking the IG photo grid. The "+N more" thumbnail strip renders ONLY from real `data.igMedia` (populated once Meta Graph media access is approved). Hardcoded placeholder thumbnails are banned (SPEC-12).
+- Synthesizing follower counts, mutual-connection counts, or names not present in the DB.
+- Revealing the exact job address before `status` is confirmed.
+
+qa.mjs #48 enforces this.
+
+---
+
 ## PROCESS — HOW SPEC ITEMS ARE ADDED
 
 1. Tarik confirms a behavior in chat ("this is correct", "keep it like this", "that's frozen").
@@ -169,7 +189,8 @@ Every `git push` runs `qa.mjs` via `Unlock and Push.command`. A failing test **b
 | SPEC-45 | #45 | Free spotlight: no Pay step, no paid_at gate, no 24h expiry |
 | SPEC-46 | #46 | Reco form: device contacts only, single-select, auto-populate |
 | SPEC-47 | #47 | Free barter loop: schedule confirm, no auto-confirm, post → accept gate |
+| SPEC-48 | #48 | Request screen: job details, approximate map, IG block, friends-in-common, no fake photos |
 
 ---
 
-*Last updated: 2026-06-11 by Claude (Cowork session)*
+*Last updated: 2026-06-13 by Claude (Cowork session)*

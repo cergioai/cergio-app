@@ -1,9 +1,22 @@
 // Per design-spec.md — provider sees an inbound request/booking.
 // When a UUID is in the URL, fetch the real booking; otherwise show the
 // legacy mock pitch for demo purposes.
+//
+// CERGIO-GUARD (2026-06-13): screen rebuilt to match the "Accepting Free
+// Service request" mockup (Tarik flow board). Elements added:
+//   • Approximate-location card — exact address gated until the user
+//     confirms the booking (no live map tile / no fake pinpoint).
+//   • Instagram block — consumer handle + follower count + "See Instagram"
+//     deep link (real data via getBooking; hidden when no handle).
+//   • Friends-in-common — mutual network connections with the requester
+//     (getMutualConnections; hidden when zero).
+//   • Free-marketing benefit subcopy + "Accept free request" CTA.
+// NO IG photo grid: we don't store anyone's IG media, so the "+N more"
+// thumbnail strip from the mockup is intentionally omitted rather than
+// faked (SPEC-12 — no fake data on real screens).
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
-import { getBooking, updateBookingStatus, notifyBookingAccepted } from '../lib/api';
+import { getBooking, updateBookingStatus, notifyBookingAccepted, getMutualConnections } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,6 +31,21 @@ const FALLBACK = {
   isFree:       true,
   status:       'pending',
   real:         false,
+  igHandle:     'ReynaReynolds',
+  igFollowers:  6974,
+  locationText: 'Wynwood, Miami',
+};
+
+// Demo-only mutuals for the non-real FALLBACK pitch so the demo screen
+// renders the full layout. Real bookings always use live network data.
+const FALLBACK_MUTUALS = {
+  count: 4,
+  connectors: 1,
+  sample: [
+    { id: 'd1', name: 'Jordan Lee',   is_connector: false, initial: 'J' },
+    { id: 'd2', name: 'Mia Torres',   is_connector: true,  initial: 'M' },
+    { id: 'd3', name: 'Sam Park',     is_connector: false, initial: 'S' },
+  ],
 };
 
 function getInitials(name = '') {
@@ -42,11 +70,21 @@ function formatAppointment(iso) {
   return `${d.toLocaleDateString('en-US', { weekday: 'short' })}, ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 }
 
+// "3 friends and 1 Connector in common" — bucketed, grammatically correct.
+function mutualSummaryText({ count, connectors }) {
+  const friends = Math.max(0, count - connectors);
+  const parts = [];
+  if (friends > 0)    parts.push(`${friends} ${friends === 1 ? 'friend' : 'friends'}`);
+  if (connectors > 0) parts.push(`${connectors} ${connectors === 1 ? 'Connector' : 'Connectors'}`);
+  return `${parts.join(' and ')} in common`;
+}
+
 export function RequestDetailScreen() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { showToast, auth } = useOutletContext();
   const [data, setData] = useState(null);   // null = loading
+  const [mutuals, setMutuals] = useState(null);
   const [busy, setBusy] = useState(false);
   // Provider must have Stripe payouts enabled before they can accept a paid
   // booking (per Phase B decision: "block accept until payouts_enabled").
@@ -56,17 +94,28 @@ export function RequestDetailScreen() {
     let cancelled = false;
     if (!UUID_RE.test(id || '')) {
       setData(FALLBACK);
+      setMutuals(FALLBACK_MUTUALS);
       return;
     }
     getBooking(id).then(({ data: b, error }) => {
       if (cancelled) return;
-      if (error || !b) { setData(FALLBACK); return; }
+      if (error || !b) { setData(FALLBACK); setMutuals(FALLBACK_MUTUALS); return; }
+      const consumer = b.consumer || {};
       setData({
         id:            b.id,
-        consumerName:  b.consumer?.display_name || 'Cergio user',
+        consumerId:    consumer.id || null,
+        consumerName:  consumer.display_name || 'Cergio user',
+        consumerIsConnector: !!consumer.cc_verified_at,
+        igHandle:      consumer.instagram_handle || null,
+        igFollowers:   consumer.instagram_followers ?? null,
+        // Reserved for real IG media once Meta Graph access is approved.
+        // null today → photo-grid slot stays silent (no fake thumbnails).
+        igMedia:       null,
         serviceType:   b.service?.title || 'Service request',
         description:   b.service?.description || b.notes || '',
         appointment:   formatAppointment(b.scheduled_at),
+        // Approximate area only — exact address is gated until confirmed.
+        locationText:  b.location_text || b.service?.location_text || null,
         message:       b.notes || b.service?.description || 'Tap to view full request.',
         sentDate:      b.created_at ? new Date(b.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
         isFree:        b.is_free_for_rainmaker,
@@ -74,6 +123,15 @@ export function RequestDetailScreen() {
         status:        b.status,
         real:          true,
       });
+      // Friends-in-common with the requester. Fire after we have the
+      // consumer id; failures collapse to "no mutuals" (block hidden).
+      if (consumer.id) {
+        getMutualConnections(consumer.id).then(({ data: m }) => {
+          if (!cancelled) setMutuals(m || { count: 0, connectors: 0, sample: [] });
+        });
+      } else {
+        setMutuals({ count: 0, connectors: 0, sample: [] });
+      }
     });
     return () => { cancelled = true; };
   }, [id]);
@@ -138,6 +196,8 @@ export function RequestDetailScreen() {
     cancelled:  'Declined',
     in_progress:'In progress',
   }[data.status];
+
+  const hasMutuals = mutuals && mutuals.count > 0;
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-20 overflow-y-auto">
@@ -223,7 +283,7 @@ export function RequestDetailScreen() {
         )}
       </div>
 
-      {/* service info */}
+      {/* service info / job details */}
       <div className="px-5 pb-4">
         <h2 className="text-heading-1 font-extrabold text-black leading-tight mb-2">
           {data.serviceType}
@@ -240,6 +300,133 @@ export function RequestDetailScreen() {
         {data.description && <p className="text-body-lg text-black mb-1">{data.description}</p>}
         <p className="text-body text-b3">{data.appointment}</p>
       </div>
+
+      {/* Approximate-location card — mockup "Map shows approximate
+          location". We don't render a live map tile (no maps key / no
+          stored precise coords) and we never reveal the exact address
+          before the booking is confirmed. The soft radius graphic +
+          gated copy convey "somewhere around here". */}
+      <div className="px-5 pb-3">
+        <div className="relative overflow-hidden rounded-[18px] bg-gl border border-line p-4">
+          {/* soft approximate-radius graphic */}
+          <div className="absolute -right-6 -top-8 w-40 h-40 rounded-full bg-g/10" aria-hidden="true" />
+          <div className="absolute right-6 top-6 w-20 h-20 rounded-full border-2 border-g/30" aria-hidden="true" />
+          <div className="relative flex items-start gap-3">
+            <span className="w-9 h-9 min-w-9 rounded-full bg-white border border-bdr flex items-center justify-center mt-0.5">
+              {/* location pin with eye-off — "approximate / hidden" */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z" />
+                <path d="M3 3l18 18" />
+              </svg>
+            </span>
+            <div className="flex-1">
+              <p className="text-body-sm font-extrabold text-black leading-snug">
+                Map shows approximate location
+              </p>
+              <p className="text-meta text-b2 mt-1 leading-snug">
+                {data.locationText
+                  ? <>Around <span className="font-extrabold text-black">{data.locationText}</span>. The exact address is shared after you confirm the booking.</>
+                  : <>Exact address will be shared after the user confirms the booking.</>}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Instagram block — only when the requester has a connected handle.
+          "See Instagram" opens their public profile in a new tab. */}
+      {data.igHandle && (
+        <div className="px-5 pb-3">
+          <div className="bg-soft rounded-[18px] p-3.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="inline-flex items-center justify-center w-9 h-9 min-w-9 rounded-md border-2 border-gd">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="5" />
+                  <circle cx="12" cy="12" r="4" />
+                  <circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <p className="text-body font-extrabold text-black truncate">{data.igHandle}</p>
+                {data.igFollowers != null && data.igFollowers > 0 && (
+                  <p className="text-meta-sm text-b3">{Number(data.igFollowers).toLocaleString()} followers</p>
+                )}
+              </div>
+            </div>
+            <a
+              href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 bg-salmon text-white rounded-pill px-3.5 py-2 text-meta-sm font-extrabold
+                         hover:opacity-90 active:scale-[.97] transition-all"
+            >
+              See Instagram
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* IG photo grid — layout slot reserved for the requester's real
+          Instagram media. We do NOT fabricate thumbnails: this renders
+          only when data.igMedia is populated, which happens once Meta
+          Graph media access is approved and getBooking starts returning
+          media URLs. Until then the slot is silent (SPEC-12). */}
+      {data.igHandle && Array.isArray(data.igMedia) && data.igMedia.length > 0 && (
+        <div className="px-5 pb-3">
+          <div className="grid grid-cols-4 gap-2">
+            {data.igMedia.slice(0, 3).map((m, i) => (
+              <div key={i} className="aspect-square rounded-[12px] overflow-hidden bg-bg5">
+                <img src={m.thumbnail_url || m.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            ))}
+            {data.igMedia.length > 3 && (
+              <a
+                href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="aspect-square rounded-[12px] bg-black text-white flex flex-col items-center justify-center
+                           text-meta-sm font-extrabold leading-tight hover:opacity-90 transition-opacity"
+              >
+                <span className="text-body-lg">+{data.igMedia.length - 3}</span>
+                more
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Friends in common with the requester — hidden when zero. */}
+      {hasMutuals && (
+        <div className="px-5 pb-3">
+          <div className="bg-card border border-line rounded-[18px] p-3.5 flex items-center gap-3">
+            <div className="flex -space-x-2">
+              {mutuals.sample.map(m => (
+                <span
+                  key={m.id}
+                  className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center
+                              text-meta-sm font-extrabold text-white
+                              ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}
+                  title={m.name}
+                >
+                  {m.initial}
+                </span>
+              ))}
+            </div>
+            <div className="min-w-0">
+              <p className="text-body-sm font-extrabold text-black leading-snug">
+                {mutualSummaryText(mutuals)}
+              </p>
+              <p className="text-meta text-b3 leading-snug truncate">
+                {mutuals.sample.map(m => m.name).join(', ')}
+                {mutuals.count > mutuals.sample.length ? ` +${mutuals.count - mutuals.sample.length} more` : ''}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* messages divider */}
+      <p className="text-center text-meta-sm text-b3 py-1">Scroll down for messages</p>
 
       {/* message bubble */}
       <div className="mx-5 mb-3 bg-soft rounded-[18px] p-4">
@@ -272,14 +459,14 @@ export function RequestDetailScreen() {
           <div className="px-5 pt-4 pb-2 mt-auto text-center">
             <p className="text-body-lg font-extrabold text-black">
               {data.isFree
-                ? 'Accept to confirm this free spotlight slot'
+                ? "You'll get free marketing"
                 : data.priceCents > 0
                   ? `Accept to earn $${Math.round(data.priceCents / 100)}`
                   : 'Accept to confirm this booking'}
             </p>
             <p className="text-body-sm text-b3 mb-4">
               {data.isFree
-                ? 'It will appear on your calendar — they post the spotlight in return.'
+                ? 'and service verification with a 4+ star rating.'
                 : data.priceCents > 0
                   ? `It will appear on your calendar. You're paid out via Stripe after the job.`
                   : 'It will appear on your calendar.'}
@@ -292,7 +479,7 @@ export function RequestDetailScreen() {
               className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold
                          hover:opacity-90 active:scale-[.97] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {busy ? 'Working…' : 'Accept'}
+              {busy ? 'Working…' : data.isFree ? 'Accept free request' : 'Accept'}
             </button>
             <button
               onClick={handleDecline}
