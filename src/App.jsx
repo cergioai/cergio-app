@@ -310,7 +310,7 @@ function Layout() {
     const { createPaymentIntent } = await import('./lib/api');
     const { data: pi, error: piErr } = await createPaymentIntent(bookingRow.id);
     if (piErr || !pi?.client_secret) {
-      showToast('Card payments aren't live yet — you'll be able to pay here once Stripe is enabled.', { sticky: true });
+      showToast("Card payments aren't live yet — you'll be able to pay here once Stripe is enabled.", { sticky: true });
       return;
     }
     setPaymentSheet({

@@ -263,7 +263,7 @@ export function JobsInboxScreen() {
     if (error) { showToast(`Failed: ${error.message}`); return; }
     setFlagOpenFor(null);
     setFlagDraft('');
-    showToast('Sent — they'll update the post.');
+    showToast("Sent — they'll update the post.");
     refreshJobs();
   };
 

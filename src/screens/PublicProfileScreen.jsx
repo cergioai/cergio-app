@@ -578,7 +578,7 @@ export function PublicProfileScreen() {
           { key: 'invited',         label: 'Invited',     value: stats.invited,        to: isSelf ? '/earnings/invites' : null },
           { key: 'joined',          label: 'Joined',      value: stats.joined,         to: isSelf ? '/earnings/invites' : null },
           { key: 'booked',          label: 'Booked',      value: stats.booked,         to: isSelf ? '/earnings' : null },
-          { key: 'recommended',     label: 'Reco'd',       value: stats.recommended,   to: null },
+          { key: 'recommended',     label: "Reco'd",       value: stats.recommended,   to: null },
           { key: 'listedServices',  label: 'Services',    value: stats.listedServices, to: null },
         ].filter(c => c.value > 0);
         return (
