@@ -31,7 +31,7 @@ export function ServiceListPhotosPickScreen() {
     : `${photos.length} ${photos.length === 1 ? 'photo' : 'photos'} selected`;
 
   return (
-    <div className="flex-1 flex flex-col bg-white pb-24">
+    <div className="flex-1 flex flex-col bg-cream pb-24">
       {/* hidden real file input — accepts images from camera roll or camera */}
       <input
         ref={inputRef}
