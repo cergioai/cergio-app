@@ -13,7 +13,7 @@
 //
 // All matched contacts show: "Already on Cergio" (with Connect CTA) or
 // "Not yet on Cergio" (with Invite CTA).
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { notifyUser } from '../lib/api';
@@ -38,12 +38,81 @@ export function FindFriendsScreen() {
 
   // ── 1. Phone contacts via Contact Picker API ─────────────────────────────
   const supportsContactPicker = typeof navigator !== 'undefined' &&
-    'contacts' in navigator && 'ContactsManager' in window;
+    'contacts' in navigator && typeof window !== 'undefined' && 'ContactsManager' in window;
+  const fileInputRef = useRef(null);
+
+  // Parse a Google Contacts / Outlook CSV export — header-driven.
+  const parseContactsCsv = (text) => {
+    const rows = [];
+    let row = [], field = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQ) {
+        if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (ch === '"') inQ = false;
+        else field += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (field !== '' || row.length) { row.push(field); rows.push(row); row = []; field = ''; }
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+      } else field += ch;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    if (rows.length < 2) return [];
+    const header = rows[0].map(h => h.toLowerCase());
+    const col = (re) => header.findIndex(h => re.test(h));
+    const iName  = col(/^name$|display name|^first name$/);
+    const iLast  = col(/^last name$/);
+    const iEmail = col(/e-?mail.*(1 - value|address)?|^e-?mail$/);
+    const iPhone = col(/phone.*(1 - value|number)?|^mobile/);
+    return rows.slice(1).map(r => {
+      const first = iName  >= 0 ? r[iName]  || '' : '';
+      const last  = iLast  >= 0 ? r[iLast]  || '' : '';
+      return {
+        name:  `${first} ${last}`.trim(),
+        email: iEmail >= 0 ? (r[iEmail] || '').split(':').pop().trim() : '',
+        phone: iPhone >= 0 ? (r[iPhone] || '').split(':').pop().trim() : '',
+      };
+    });
+  };
+
+  // Parse a vCard (.vcf) export.
+  const parseVcf = (text) => text.split(/BEGIN:VCARD/i).slice(1).map(card => {
+    const grab = (re) => (card.match(re) || [, ''])[1].trim();
+    return {
+      name:  grab(/\nFN[^:]*:(.+)/i),
+      email: grab(/\nEMAIL[^:]*:(.+)/i),
+      phone: grab(/\nTEL[^:]*:(.+)/i),
+    };
+  });
+
+  const handleContactsFile = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const text   = await f.text();
+      const parsed = /\.vcf$/i.test(f.name) ? parseVcf(text) : parseContactsCsv(text);
+      const usable = parsed.filter(c => c.name || c.email || c.phone);
+      if (usable.length === 0) {
+        showToast('No contacts found — export a .csv or .vcf from Google Contacts and try again.');
+        return;
+      }
+      await matchAndShow(usable);
+      showToast(`${usable.length} contacts imported`);
+    } catch {
+      showToast("Couldn't read that file — export a .csv or .vcf and try again.");
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const syncPhoneContacts = async () => {
     setBusy('phone');
     try {
       if (!supportsContactPicker) {
-        showToast('Phone contact picker only works on Chrome Android. Use Share Invite instead.');
+        // Desktop fallback: open file picker for CSV/VCF contacts export.
+        fileInputRef.current?.click();
         return;
       }
       const props = ['name', 'tel', 'email'];
@@ -188,12 +257,20 @@ export function FindFriendsScreen() {
       <h2 className="px-5 mt-8 mb-3 text-heading-1 font-extrabold text-black leading-tight">Connect</h2>
       <SourceRow
         icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>}
-        title="Sync phone contacts"
+        title="Import contacts"
         sub={supportsContactPicker
           ? 'Pick which contacts to share — we never store the rest'
-          : 'Chrome Android only · use Share Invite below'}
+          : 'Upload a .csv or .vcf from Google Contacts or your phone'}
         onClick={syncPhoneContacts}
         busy={busy === 'phone'}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.vcf,text/csv,text/vcard"
+        onChange={handleContactsFile}
+        className="hidden"
+        aria-hidden="true"
       />
       <SourceRow
         icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>}

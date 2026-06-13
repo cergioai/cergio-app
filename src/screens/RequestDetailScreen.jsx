@@ -70,6 +70,7 @@ export function RequestDetailScreen() {
         message:       b.notes || b.service?.description || 'Tap to view full request.',
         sentDate:      b.created_at ? new Date(b.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
         isFree:        b.is_free_for_rainmaker,
+        priceCents:    b.offering?.price_cents ?? b.total_cents ?? 0,
         status:        b.status,
         real:          true,
       });
@@ -209,12 +210,14 @@ export function RequestDetailScreen() {
         ) : (
           <div className="bg-cr2 border border-bdr rounded-[14px] p-3.5">
             <p className="text-body-sm font-extrabold text-black leading-snug">
-              Paid booking request
+              Paid booking{data.priceCents > 0 ? ` · $${Math.round(data.priceCents / 100)}` : ''}
             </p>
             <p className="text-meta text-b2 mt-1 leading-snug">
               <span className="font-extrabold text-black">{data.consumerName}</span> wants to book
               <span className="font-extrabold text-black"> {data.serviceType || 'your service'}</span>.
-              You'll be paid out after the job (via Stripe).
+              {data.priceCents > 0
+                ? <> You'll earn <span className="font-extrabold text-black">${Math.round(data.priceCents / 100)}</span> after the job (via Stripe).</>
+                : <> You'll be paid out after the job (via Stripe).</>}
             </p>
           </div>
         )}
@@ -269,13 +272,17 @@ export function RequestDetailScreen() {
           <div className="px-5 pt-4 pb-2 mt-auto text-center">
             <p className="text-body-lg font-extrabold text-black">
               {data.isFree
-                ? `Accept to confirm this free spotlight slot`
-                : `Accept to confirm this booking`}
+                ? 'Accept to confirm this free spotlight slot'
+                : data.priceCents > 0
+                  ? `Accept to earn $${Math.round(data.priceCents / 100)}`
+                  : 'Accept to confirm this booking'}
             </p>
             <p className="text-body-sm text-b3 mb-4">
               {data.isFree
                 ? 'It will appear on your calendar — they post the spotlight in return.'
-                : 'It will appear on your calendar.'}
+                : data.priceCents > 0
+                  ? `It will appear on your calendar. You're paid out via Stripe after the job.`
+                  : 'It will appear on your calendar.'}
             </p>
           </div>
           <div className="px-5 pb-3 flex flex-col gap-2">
