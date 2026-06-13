@@ -24,9 +24,9 @@
 // to /u/{their-id}, so the graph is fully navigable.
 
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams, Link, useOutletContext } from 'react-router-dom';
+import { useNavigate, useParams, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing, getPublicProfileStats } from '../lib/api';
+import { followProfile, unfollowProfile, amIFollowing, getPublicProfileStats, respondToRequest } from '../lib/api';
 import { REWARDS } from '../lib/rewards';
 
 function initialsOf(name) {
@@ -78,11 +78,11 @@ function AvatarLink({ id, name, size = 40, className = '', clickable = true }) {
 
 function ConnectorBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
+    <span className="inline-flex items-center gap-2 bg-gl border border-g/30 rounded-pill px-3.5 py-1.5 text-body-sm text-gd font-extrabold">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
         <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
       </svg>
-      Connector
+      Verified Connector
     </span>
   );
 }
@@ -175,6 +175,11 @@ function ServiceTile({ svc, recoSummary, onOpen }) {
 export function PublicProfileScreen() {
   const navigate = useNavigate();
   const { profileId } = useParams();
+  const [searchParams] = useSearchParams();
+  // Request context — populated when opened from the Inbox via ?reqId=
+  const reqId = searchParams.get('reqId') || null;
+  const myServiceId = searchParams.get('myServiceId') || null;
+
   // CERGIO-GUARD (2026-06-03): viewer's auth context — needed for Follow.
   const outlet = useOutletContext() || {};
   const auth = outlet.auth;
@@ -184,6 +189,11 @@ export function PublicProfileScreen() {
   // Follow state — null = unknown, true/false = known.
   const [following, setFollowing] = useState(null);
   const [followPending, setFollowPending] = useState(false);
+  // Request-context bar state (when ?reqId= is set).
+  const [reqCtx, setReqCtx] = useState(null);
+  const [respondingInline, setRespondingInline] = useState(null); // null | 'pending' | 'done'
+  const [counterOpenInline, setCounterOpenInline] = useState(false);
+  const [counterDraftInline, setCounterDraftInline] = useState('');
   // CERGIO-GUARD (2026-06-04): network-impact stats — Invited / Joined
   // / Booked / Reco'd / Services. Counts only; $ amounts stay private
   // to the self-view via EarningsScreen.
@@ -228,6 +238,22 @@ export function PublicProfileScreen() {
     });
     return () => { cancelled = true; };
   }, [profileId]);
+
+  // Fetch the inbound request when opened from the Inbox via ?reqId=
+  // so we can show the Accept / Counter / Decline bar below the profile.
+  useEffect(() => {
+    if (!reqId) { setReqCtx(null); return; }
+    let cancelled = false;
+    supabase
+      .from('requests')
+      .select('id, service_type, description, location_text, status')
+      .eq('id', reqId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data) setReqCtx(data);
+      });
+    return () => { cancelled = true; };
+  }, [reqId]);
 
   useEffect(() => {
     if (!supabaseReady || !profileId) { setLoading(false); return; }
@@ -471,7 +497,8 @@ export function PublicProfileScreen() {
   const isConnector = !!profile?.cc_verified_at;
 
   return (
-    <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
+    <>
+    <div className={`flex-1 flex flex-col bg-cream overflow-y-auto ${reqCtx && respondingInline !== 'done' ? 'pb-36' : 'pb-24'}`}>
       {/* Top bar — close (×) + Follow button (right-aligned).
           CERGIO-GUARD (2026-06-03): Follow is the canonical way the
           viewer adds someone to their graph. Following a service
@@ -748,20 +775,27 @@ export function PublicProfileScreen() {
           <p className="text-meta text-b3 font-medium mt-1">See their top-rated service providers</p>
           <div className="mt-4 flex flex-col gap-3">
             {(showAllGoTos ? recoServices : recoServices.slice(0, 6)).map(r => (
-              <div key={r.id} className="bg-white border border-bdr rounded-[16px] p-4">
+              <div
+                key={r.id}
+                onClick={() => navigate(`/service/${r.service.id}`)}
+                className="cursor-pointer bg-white border border-bdr rounded-[16px] p-4 cg-tap"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <AvatarLink id={r.owner?.id} name={r.owner?.name} size={44} />
+                    {/* Owner avatar — stop propagation so it opens the owner's profile, not the service */}
+                    <span onClick={e => { e.stopPropagation(); if (r.owner?.id) navigate(`/u/${r.owner.id}`); }}>
+                      <AvatarLink id={r.owner?.id} name={r.owner?.name} size={44} clickable={false} />
+                    </span>
                     <div className="min-w-0">
-                      {r.owner?.id ? (
-                        <Link to={`/u/${r.owner.id}`} className="text-body-lg font-extrabold text-black hover:underline truncate block">
-                          {r.owner?.name || r.service?.title || 'A provider'}
-                        </Link>
-                      ) : (
-                        <p className="text-body-lg font-extrabold text-black truncate">
-                          {r.owner?.name || r.service?.title || 'A provider'}
-                        </p>
-                      )}
+                      <span
+                        role="link"
+                        tabIndex={0}
+                        onClick={e => { e.stopPropagation(); if (r.owner?.id) navigate(`/u/${r.owner.id}`); }}
+                        onKeyDown={e => { if (e.key === 'Enter' && r.owner?.id) { e.stopPropagation(); navigate(`/u/${r.owner.id}`); } }}
+                        className="text-body-lg font-extrabold text-black hover:underline truncate block cursor-pointer"
+                      >
+                        {r.owner?.name || r.service?.title || 'A provider'}
+                      </span>
                       <p className="inline-flex items-center gap-1 text-meta text-gd font-extrabold mt-0.5">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
                           <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
@@ -776,11 +810,7 @@ export function PublicProfileScreen() {
                   </p>
                 </div>
                 {r.message && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/service/${r.service.id}`)}
-                    className="w-full text-left mt-3 bg-bg5 rounded-[14px] p-3 flex items-start gap-2.5 cg-tap"
-                  >
+                  <div className="w-full mt-3 bg-bg5 rounded-[14px] p-3 flex items-start gap-2.5">
                     <AvatarLink
                       id={profile?.id}
                       name={name}
@@ -789,7 +819,7 @@ export function PublicProfileScreen() {
                       className="ring-2 ring-white"
                     />
                     <p className="flex-1 text-meta text-b2 leading-snug pt-1">{r.message}</p>
-                  </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -821,5 +851,136 @@ export function PublicProfileScreen() {
         </div>
       )}
     </div>
+
+    {/* CERGIO-GUARD (2026-06-13): Sticky request-context bar — shown when
+        this profile was opened from the Inbox via ?reqId=. Lets the provider
+        Accept / Counter / Decline without bouncing back to the Inbox. */}
+    {reqCtx && respondingInline !== 'done' && (
+      <div className="fixed bottom-0 inset-x-0 bg-white border-t-2 border-g/20 px-5 pt-3 pb-6 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        {/* Request summary */}
+        <p className="text-meta text-b3 font-medium mb-1">
+          {firstName} needs a{' '}
+          <span className="font-extrabold text-black">{reqCtx.service_type}</span>
+          {reqCtx.location_text ? ` · ${reqCtx.location_text}` : ''}
+        </p>
+
+        {respondingInline === null && (
+          <div className="flex gap-2 mt-2">
+            {/* Accept */}
+            <button
+              type="button"
+              onClick={async () => {
+                if (!myServiceId) { showToast('You need a listed service to respond.'); return; }
+                setRespondingInline('pending');
+                const { error } = await respondToRequest(reqId, {
+                  status: 'offered',
+                  serviceId: myServiceId,
+                  offeredPriceCents: null,
+                  message: null,
+                  waveN: null,
+                });
+                if (error) {
+                  showToast('Could not send — try again.');
+                  setRespondingInline(null);
+                } else {
+                  setRespondingInline('done');
+                  showToast(`Accepted — ${firstName} will be notified.`);
+                  setTimeout(() => navigate(-1), 1200);
+                }
+              }}
+              className="flex-1 bg-g text-white rounded-pill py-2.5 text-meta font-extrabold cg-cta"
+            >
+              Accept
+            </button>
+            {/* Counter */}
+            <button
+              type="button"
+              onClick={() => { setCounterOpenInline(v => !v); setCounterDraftInline(''); }}
+              className="bg-white border border-bdr rounded-pill px-4 py-2.5 text-meta font-extrabold text-b2"
+            >
+              Counter
+            </button>
+            {/* Decline */}
+            <button
+              type="button"
+              onClick={async () => {
+                setRespondingInline('pending');
+                const { error } = await respondToRequest(reqId, {
+                  status: 'declined',
+                  serviceId: myServiceId || null,
+                  offeredPriceCents: null,
+                  message: null,
+                  waveN: null,
+                });
+                if (error) {
+                  showToast('Could not decline — try again.');
+                  setRespondingInline(null);
+                } else {
+                  setRespondingInline('done');
+                  navigate(-1);
+                }
+              }}
+              className="bg-white border border-bdr rounded-pill px-4 py-2.5 text-meta font-extrabold text-b3"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+
+        {respondingInline === 'pending' && (
+          <p className="text-body-sm text-b3 font-medium mt-2">Sending…</p>
+        )}
+
+        {counterOpenInline && respondingInline === null && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-body-sm font-extrabold text-b3">$</span>
+            <input
+              autoFocus
+              inputMode="decimal"
+              placeholder="Your price"
+              value={counterDraftInline}
+              onChange={e => setCounterDraftInline(e.target.value)}
+              className="flex-1 border border-bdr rounded-[10px] px-3 py-2 text-body-sm font-medium text-black bg-white outline-none focus:border-g"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                const dollars = parseFloat(counterDraftInline);
+                if (!Number.isFinite(dollars) || dollars < 0) { showToast('Enter a valid price.'); return; }
+                if (!myServiceId) { showToast('You need a listed service to respond.'); return; }
+                setRespondingInline('pending');
+                setCounterOpenInline(false);
+                const { error } = await respondToRequest(reqId, {
+                  status: 'countered',
+                  serviceId: myServiceId,
+                  offeredPriceCents: Math.round(dollars * 100),
+                  message: null,
+                  waveN: null,
+                });
+                if (error) {
+                  showToast('Could not send counter — try again.');
+                  setRespondingInline(null);
+                } else {
+                  setRespondingInline('done');
+                  showToast(`Counter sent — ${firstName} will be notified.`);
+                  setTimeout(() => navigate(-1), 1200);
+                }
+              }}
+              className="bg-g text-white rounded-[10px] px-4 py-2 text-meta font-extrabold"
+            >
+              Send
+            </button>
+            <button
+              type="button"
+              onClick={() => setCounterOpenInline(false)}
+              className="text-b3 text-body-lg px-1"
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+    </>
   );
 }
