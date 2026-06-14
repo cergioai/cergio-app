@@ -55,8 +55,12 @@ function Avatar({ name }) {
 // fields (Tarik 2026-06-14). Derived from data we have — not fabricated.
 // e.g. "Hey Jan, need a personal chef tuesday at 5pm — vegan Ecuadorian
 //       birthday party. Happy to spotlight you free to my 319 followers 🙌"
+const GENERIC_NAMES = new Set(['service', 'provider', 'cergio', 'user', 'test', 'business', 'a']);
 function composeNote({ requesterName, serviceType, whenText, description, igFollowers, providerFirst }) {
-  const greet  = providerFirst ? `Hey ${providerFirst}, ` : 'Hi! ';
+  // Only greet by name when it's a plausible given name, never a generic
+  // account label like "Service" / "Provider" (which read broken).
+  const useName = providerFirst && /^[A-Za-z][A-Za-z'-]{1,}$/.test(providerFirst) && !GENERIC_NAMES.has(providerFirst.toLowerCase());
+  const greet  = useName ? `Hey ${providerFirst}, ` : 'Hi! ';
   const svc     = serviceType ? `need a ${serviceType.toLowerCase()}` : 'need your service';
   const when    = whenText ? ` ${whenText}` : '';
   const det     = description && description.trim().toLowerCase() !== (serviceType || '').toLowerCase()

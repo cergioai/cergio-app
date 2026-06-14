@@ -1,15 +1,5 @@
-/inbound: restore "wants to market your services" + personalized Connector note
+/inbound: fix personalized greeting (no "Hey Service")
 
-Per Tarik 2026-06-14:
-- Restored the "{Connector} wants to market your services" headline (frame-2
-  fold): "Requesting a free {service} in exchange for an Instagram spotlight to
-  their {N} followers — no cash."
-- Service being requested shown clearly: title {service} + details
-  (description) + time (when_text), matching the designs.
-- Added a personalized message in the Connector's voice, composed from the real
-  request fields (service, time, details, follower reach), e.g. "Hey {provider},
-  need a personal chef today — {details}. Happy to spotlight you for free to my
-  319 followers 🙌". Derived from real data, not fabricated.
-
-Keeps Accept free request / Counter / Decline. Figma remains layout source of
-truth; exact-color pass still pending.
+The composed Connector note greeted the provider by the first token of their
+account name, which on generic accounts read "Hey Service,". Now the name is
+used only when it's a plausible given name; otherwise the note opens "Hi!".
