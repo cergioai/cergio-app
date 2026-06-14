@@ -1896,7 +1896,7 @@ export async function getInboundRequest(reqId) {
       location_text, lat, lng, is_free_for_rainmaker, budget_cents,
       status, created_at,
       requester:profiles!requests_requester_id_fkey
-        ( id, display_name, instagram_handle, instagram_followers, cc_verified_at )
+        ( id, display_name, headline, bio, instagram_handle, instagram_followers, cc_verified_at )
     `)
     .eq('id', reqId)
     .maybeSingle();

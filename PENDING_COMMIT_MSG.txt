@@ -1,7 +1,9 @@
-/inbound: message uses the requester's raw request text
+/inbound: connector bio + raw request text; scaffold pre-booking Q&A
 
-The message task was showing the parsed type ("Catering") because the field
-preference favored `what` over the raw words. Now getInboundRequest also pulls
-`query`, and the message task prefers `description || query || what` — so it
-reads the requester's actual ask (e.g. "vegan Ecuadorian dinner for 6") rather
-than the category. (This test request only has "Catering" as its raw text.)
+- Added a small Connector bio under the "See full profile" link (profiles.bio
+  / headline), pulled in getInboundRequest.
+- Message now derives from the requester's raw request text (description /
+  query) rather than the parsed type.
+- Scaffolds the pre-booking Q&A feature: migration request_questions (table +
+  RLS) and an Apply command. The Ask UI + API are wired in the next push,
+  after the migration is applied.

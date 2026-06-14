@@ -113,6 +113,7 @@ export function RequestFromConnectorScreen() {
         isConnector,
         igHandle:      requester.instagram_handle || null,
         igFollowers:   requester.instagram_followers ?? null,
+        bio:           (requester.bio || requester.headline || '').trim() || null,
         igMedia:       null,  // reserved — real IG media post Meta approval
         serviceType:   r.service_type || r.category || 'Service request',
         // TASK text for the message: prefer the requester's RAW words
@@ -332,6 +333,9 @@ export function RequestFromConnectorScreen() {
                 className="mt-2 inline-flex items-center gap-1 text-meta-sm font-extrabold text-gd hover:underline">
                 See full profile →
               </button>
+            )}
+            {data.bio && (
+              <p className="text-meta text-b3 leading-snug mt-1.5 line-clamp-3">{data.bio}</p>
             )}
           </div>
         </div>
