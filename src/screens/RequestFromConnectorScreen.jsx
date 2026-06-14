@@ -297,8 +297,9 @@ export function RequestFromConnectorScreen() {
         </div>
       </div>
 
-      {/* headline — Free Service Request ⇄ Free Spotlight + date + summary */}
+      {/* headline — eyebrow label + the exchange + date */}
       <div className="px-5 pt-1 pb-3">
+        <p className="text-caps text-gd mb-1">{data.isFree ? 'Free service request' : 'Paid service request'}</p>
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-heading-2 font-extrabold text-black leading-tight">
             Free {data.serviceType} <span className="text-g">⇄</span> Free spotlight{data.igFollowers > 0 ? <> to {Number(data.igFollowers).toLocaleString()} followers</> : null}

@@ -1,7 +1,4 @@
-Frame 3: IG followers by Connector, network by reco's made, spotlights placeholder
+Frame 3: add a "Free/Paid service request" eyebrow above the headline
 
-- IG (+ TikTok) follower counts now sit next to the Connector badge.
-- Reco's made + Cergio network count sit together on the strength line.
-- Added a "Previous spotlights on Cergio" placeholder section (3 reserved tiles
-  + caption) — lights up with real spotlight media when available, like the
-  Figma. No fake images.
+A small uppercase label above the "Free {service} ⇄ Free spotlight" line so it
+reads clearly as a request (and flips to "Paid service request" in the paid state).
