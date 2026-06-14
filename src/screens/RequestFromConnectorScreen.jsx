@@ -312,11 +312,11 @@ export function RequestFromConnectorScreen() {
       {(data.isConnector || data.igHandle || data.bio) && (
         <div className="px-5 pb-3">
           <div className="bg-bg4 rounded-[18px] p-3.5">
-            {/* identity: avatar + name + Connector badge + bio */}
+            {/* identity: avatar + name + Connector badge + IG counts + bio */}
             <div className="flex items-start gap-3">
               <Avatar name={data.requesterName} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <p className="text-body font-extrabold text-black truncate">{data.requesterName}</p>
                   {data.isConnector && (
                     <span className="inline-flex items-center gap-0.5 bg-gl text-gd text-[10px] font-extrabold px-1.5 py-0.5 rounded-pill">
@@ -324,7 +324,20 @@ export function RequestFromConnectorScreen() {
                     </span>
                   )}
                 </div>
-                {data.bio && <p className="text-meta text-b3 leading-snug mt-0.5 line-clamp-3">{data.bio}</p>}
+                {/* IG logo + followers/counts + See Instagram (text link) */}
+                {(data.igHandle || strength) && (
+                  <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 mt-1 text-meta-sm text-b3">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
+                      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
+                    </svg>
+                    <span>{strength || 'Connector'}</span>
+                    {data.igHandle && (
+                      <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
+                        className="text-gd font-extrabold underline underline-offset-2 hover:opacity-80">See Instagram</a>
+                    )}
+                  </div>
+                )}
+                {data.bio && <p className="text-meta text-b3 leading-snug mt-1 line-clamp-3">{data.bio}</p>}
               </div>
             </div>
 
@@ -359,29 +372,6 @@ export function RequestFromConnectorScreen() {
                 <p className="text-meta text-b3">You have no mutual friends with {data.requesterName} yet.</p>
               )}
             </div>
-
-            {/* IG box — handle + reach (followers · reco's made · Cergio) + See Instagram */}
-            {(data.igHandle || strength) && (
-              <div className="mt-3 pt-3 border-t border-line flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="inline-flex items-center justify-center w-10 h-10 min-w-10 rounded-xl border-2 border-gd">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true">
-                      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
-                    </svg>
-                  </span>
-                  <div className="min-w-0">
-                    {data.igHandle && <p className="text-body-sm font-extrabold text-black truncate">{data.igHandle}</p>}
-                    <p className="text-meta-sm text-b3 leading-snug">{strength || 'Connector'}</p>
-                  </div>
-                </div>
-                {data.igHandle && (
-                  <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
-                    className="shrink-0 bg-salmon text-white rounded-pill px-3.5 py-2 text-meta-sm font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
-                    See Instagram
-                  </a>
-                )}
-              </div>
-            )}
 
             {/* IG photo strip — reserved for real media (no fakes until Meta media) */}
             {data.igHandle && Array.isArray(data.igMedia) && data.igMedia.length > 0 && (

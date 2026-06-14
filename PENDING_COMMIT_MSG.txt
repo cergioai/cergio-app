@@ -1,13 +1,6 @@
-Frame 3 tile + message refinements (Tarik)
+Frame 3: IG counts up next to Connector; See Instagram as a text link
 
-- Services offered now list each service with its OWN reco count, e.g.
-  "Plumber (3 recos)" (dropped the "Services:" word + the aggregate received).
-  getPublicProfileStats returns per-service reco counts.
-- Mutual friends moved directly UNDER the services offered (above the IG box).
-- Message bubble avatar made much smaller.
-- Message now leads with "I need a {service}" so it flows even when the user
-  didn't type the service ("Hi {name}, I need a personal chef today…");
-  appends the user's specifics only when they add detail.
-- Greeting honors the registered first name (removed the generic-name filter,
-  so "Service" shows as "Hi Service,").
-- Reco's-made no longer truncated in the IG box (regression fixed).
+- Moved the IG logo + followers + reco's-made + Cergio-network counts up to sit
+  right under the name / Connector badge in the identity block.
+- "See Instagram" reduced from a salmon button to an inline text link.
+- Removed the now-redundant standalone IG box.
