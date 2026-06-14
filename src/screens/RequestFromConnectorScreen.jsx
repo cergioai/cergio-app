@@ -439,27 +439,18 @@ export function RequestFromConnectorScreen() {
         </div>
       )}
 
-      {/* previous spotlights on Cergio — placeholder (real media lands later);
-          this is how the Connector shows their track record (like the Figma). */}
-      {data.isFree && data.isConnector && (
+      {/* previous spotlights on Cergio — only shown when the Connector has any
+          (no empty placeholder). Lights up with real spotlight media. */}
+      {data.isFree && data.isConnector && Array.isArray(data.spotlights) && data.spotlights.length > 0 && (
         <div className="px-5 pb-3">
           <p className="text-body-sm font-extrabold text-black mb-2">Previous spotlights on Cergio</p>
-          {Array.isArray(data.spotlights) && data.spotlights.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
-              {data.spotlights.slice(0, 3).map((s, i) => (
-                <div key={i} className="aspect-[4/5] rounded-[12px] overflow-hidden bg-bg5">
-                  <img src={s.thumbnail_url || s.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-2">
-                {[0, 1, 2].map(i => <div key={i} className="aspect-[4/5] rounded-[12px] bg-bg5 border border-line" />)}
+          <div className="grid grid-cols-3 gap-2">
+            {data.spotlights.slice(0, 3).map((s, i) => (
+              <div key={i} className="aspect-[4/5] rounded-[12px] overflow-hidden bg-bg5">
+                <img src={s.thumbnail_url || s.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
               </div>
-              <p className="text-meta text-b3 mt-1.5">Their spotlights will appear here once they post on Cergio.</p>
-            </>
-          )}
+            ))}
+          </div>
         </div>
       )}
 

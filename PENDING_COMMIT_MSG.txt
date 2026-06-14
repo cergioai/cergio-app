@@ -1,15 +1,4 @@
-Frame 3: PAID state + flexible-time accept + per-service reco's received
+Frame 3: hide Previous spotlights section when there are none
 
-- PAID state (request with a budget / non-Connector): headline shows the
-  service "· up to $X" instead of the free-spotlight exchange; the message
-  reads "…My budget is up to $X — what's your price?"; the spotlight
-  placeholder + free-marketing benefit are hidden; the primary action becomes
-  "Place a bid" → a composer with a price + optional note via
-  respondToRequest('offered', priceCents, message).
-- Flexible-time accept: when the request has no specific start time, the
-  primary action is "Pick a time & accept" → a datetime picker; the chosen
-  time is sent as "Proposed time: …" in the response. Specific-time requests
-  keep the one-tap accept.
-- Counter (free only) and Decline retained; one unified composer drives bid /
-  counter / pick-a-time.
-- Services now show "(N recos received)" next to each.
+Removed the empty placeholder tiles + caption — the "Previous spotlights on
+Cergio" section now renders only when the Connector actually has spotlights.
