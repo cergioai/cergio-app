@@ -69,7 +69,10 @@ function composeNote({ serviceType, whenText, description, igFollowers, provider
   const task    = (description && description.trim())
     ? description.trim()
     : `need a ${(serviceType || 'service').toLowerCase()}`;
-  const when    = whenText ? ` ${whenText}` : '';
+  // Don't double the timing if the raw task text already contains it
+  // (thin search queries like "personal chef today" already include "today").
+  const whenInTask = whenText && task.toLowerCase().includes(whenText.toLowerCase());
+  const when    = (whenText && !whenInTask) ? ` ${whenText}` : '';
   const reach   = igFollowers > 0
     ? ` to my ${Number(igFollowers).toLocaleString()} followers`
     : ' to my followers';
@@ -184,11 +187,13 @@ export function RequestFromConnectorScreen() {
 
   const alreadyResolved = data.status && data.status !== 'pending';
   const hasMutuals = mutuals && mutuals.count > 0;
+  // Connector strength — differentiate reco's MADE vs RECEIVED + name services.
   const strength = [
     data.igFollowers > 0 ? `${Number(data.igFollowers).toLocaleString()} followers` : null,
-    stats && stats.recommended > 0 ? `${stats.recommended} reco'd` : null,
-    stats && stats.listedServices > 0 ? `${stats.listedServices} ${stats.listedServices === 1 ? 'service' : 'services'}` : null,
+    stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
+    stats && stats.recosReceived > 0 ? `${stats.recosReceived} received` : null,
   ].filter(Boolean).join(' · ');
+  const serviceNames = (stats && stats.serviceNames) || [];
 
   const providerName = auth?.user?.user_metadata?.display_name
     || auth?.user?.user_metadata?.full_name
@@ -308,6 +313,9 @@ export function RequestFromConnectorScreen() {
                     )}
                   </div>
                   <p className="text-meta-sm text-b3 truncate">{strength || 'Connector'}</p>
+                  {serviceNames.length > 0 && (
+                    <p className="text-meta-sm text-b3 truncate">Services: {serviceNames.join(', ')}</p>
+                  )}
                 </div>
               </div>
               {data.igHandle && (

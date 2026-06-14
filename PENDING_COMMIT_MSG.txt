@@ -1,11 +1,9 @@
-/inbound: provider can ask pre-booking questions (Q&A)
+/inbound: differentiate reco's made vs received + name services; fix dup date
 
-Wires the request_questions backend (migration applied) into the screen:
-- api: askRequestQuestion / listRequestQuestions / replyRequestQuestion
-  (+ best-effort notify-request 'question' event).
-- Provider "Ask a question before you accept" action with preset chips
-  (Who buys ingredients? · Cover food costs upfront? · Send an ingredient
-  list?) + free text. Sends to the requester; the Q&A thread renders on the
-  screen (question + reply / "Waiting for reply…").
-
-Requester reply surface (JobsInbox) lands in the next push to close the loop.
+- Connector strength now distinguishes "{N} reco's made" (recommendations the
+  Connector gave) from "{N} received" (recommendations on their own services),
+  and lists service names ("Services: Plumber, Dog Walker"). getPublicProfileStats
+  now returns recosReceived + serviceNames (recos-received = recommendations on
+  services they own).
+- Fixed the personalized message doubling the date ("...today today") when the
+  raw request text already contains the timing.

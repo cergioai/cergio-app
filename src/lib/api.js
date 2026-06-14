@@ -1797,22 +1797,34 @@ export async function getInviteServiceContexts(invites) {
  * Falls back to 0 on RLS errors so the UI stays honest.
  */
 export async function getPublicProfileStats(profileId) {
-  const empty = { invited: 0, joined: 0, booked: 0, recommended: 0, listedServices: 0 };
+  const empty = { invited: 0, joined: 0, booked: 0, recommended: 0, recosReceived: 0, listedServices: 0, serviceNames: [] };
   if (!supabaseReady || !profileId) return { data: empty, error: null };
-  const [invitesRes, recosRes, svcsRes] = await Promise.all([
+
+  // Owned services first — need their ids (for recos-received) + names.
+  const { data: svcs } = await supabase
+    .from('services')
+    .select('id, title, taxonomy_provider_type, category')
+    .eq('owner_id', profileId)
+    .eq('status', 'listed');
+  const ownedIds = (svcs || []).map(s => s.id).filter(Boolean);
+  const serviceNames = [...new Set((svcs || [])
+    .map(s => s.taxonomy_provider_type || s.category || s.title)
+    .filter(Boolean))];
+
+  const [invitesRes, recosMadeRes, recosRecvRes] = await Promise.all([
     supabase
       .from('invites')
       .select('id, joined_at, first_booking_at')
       .eq('inviter_id', profileId),
+    // Reco's MADE — this profile recommended others.
     supabase
       .from('recommendations')
       .select('id', { count: 'exact', head: true })
       .eq('recommender_id', profileId),
-    supabase
-      .from('services')
-      .select('id', { count: 'exact', head: true })
-      .eq('owner_id', profileId)
-      .eq('status', 'listed'),
+    // Reco's RECEIVED — recommendations on services this profile owns.
+    ownedIds.length
+      ? supabase.from('recommendations').select('id', { count: 'exact', head: true }).in('service_id', ownedIds)
+      : Promise.resolve({ count: 0, error: null }),
   ]);
   const invites = invitesRes.data || [];
   return {
@@ -1820,8 +1832,10 @@ export async function getPublicProfileStats(profileId) {
       invited:         invites.length,
       joined:          invites.filter(r => r.joined_at).length,
       booked:          invites.filter(r => r.first_booking_at).length,
-      recommended:     recosRes.error ? 0 : (recosRes.count || 0),
-      listedServices:  svcsRes.error  ? 0 : (svcsRes.count  || 0),
+      recommended:     recosMadeRes.error ? 0 : (recosMadeRes.count || 0),  // made
+      recosReceived:   recosRecvRes.error ? 0 : (recosRecvRes.count || 0),  // received on owned services
+      listedServices:  serviceNames.length,
+      serviceNames,
     },
     error: null,
   };
