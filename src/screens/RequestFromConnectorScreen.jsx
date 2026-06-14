@@ -206,8 +206,8 @@ export function RequestFromConnectorScreen() {
   // audience (IG/TikTok followers) sits next to the Connector badge;
   // reco's made + Cergio network sit together on the strength line.
   const strength = [
-    stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
     stats && stats.networkCount > 0 ? `${stats.networkCount} on Cergio` : null,
+    stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
   ].filter(Boolean).join(' · ');
   const services = (stats && stats.services) || [];
 
@@ -327,16 +327,18 @@ export function RequestFromConnectorScreen() {
                     </span>
                   )}
                   {audience && (
-                    <span className="text-meta-sm text-b3 font-medium">· {audience}</span>
+                    <span className="inline-flex items-center gap-1 text-meta-sm text-b3 font-medium">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
+                        <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
+                      </svg>
+                      {audience}
+                    </span>
                   )}
                 </div>
-                {/* IG logo + followers/counts + See Instagram (text link) */}
-                {(data.igHandle || strength) && (
+                {/* reco's made · Cergio network + See Instagram (text link) */}
+                {(strength || data.igHandle) && (
                   <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 mt-1 text-meta-sm text-b3">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
-                      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
-                    </svg>
-                    <span>{strength || 'Connector'}</span>
+                    {strength && <span>{strength}</span>}
                     {data.igHandle && (
                       <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
                         className="text-gd font-extrabold underline underline-offset-2 hover:opacity-80">See Instagram</a>
@@ -432,13 +434,12 @@ export function RequestFromConnectorScreen() {
       {/* personalized message from the Connector (composed from the request) */}
       <div className="px-5 pb-3">
         <div className="bg-soft rounded-[18px] p-4">
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-6 h-6 min-w-6 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white text-[10px] font-extrabold">
+          <div className="flex items-start gap-2.5">
+            <div className="w-6 h-6 min-w-6 mt-0.5 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white text-[10px] font-extrabold">
               {getInitials(data.requesterName)}
             </div>
-            <p className="text-body-sm font-extrabold text-black flex-1 truncate">{data.requesterName}</p>
+            <p className="text-body text-black leading-relaxed flex-1">{note}</p>
           </div>
-          <p className="text-body text-black leading-relaxed">{note}</p>
         </div>
       </div>
 

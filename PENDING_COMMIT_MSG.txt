@@ -1,4 +1,7 @@
-Frame 3: add a "Free/Paid service request" eyebrow above the headline
+Frame 3: message inline with avatar; IG logo ahead of followers; Cergio first
 
-A small uppercase label above the "Free {service} ⇄ Free spotlight" line so it
-reads clearly as a request (and flips to "Paid service request" in the paid state).
+- Message copy ("Hi {name}, I need a…") now sits on the same line as the small
+  avatar (dropped the redundant name row) to save vertical space.
+- IG logo placed directly ahead of the IG/TikTok follower count (next to the
+  Connector badge).
+- Strength line now leads with the Cergio network count, then reco's made.
