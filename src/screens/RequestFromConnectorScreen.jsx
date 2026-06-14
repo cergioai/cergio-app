@@ -42,6 +42,31 @@ function ShieldIcon({ size = 16 }) {
   );
 }
 
+// Small initials avatar for the message bubble.
+function Avatar({ name }) {
+  return (
+    <div className="w-9 h-9 min-w-9 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white text-meta-sm font-extrabold">
+      {getInitials(name)}
+    </div>
+  );
+}
+
+// Compose a personalized note in the Connector's voice from the real request
+// fields (Tarik 2026-06-14). Derived from data we have — not fabricated.
+// e.g. "Hey Jan, need a personal chef tuesday at 5pm — vegan Ecuadorian
+//       birthday party. Happy to spotlight you free to my 319 followers 🙌"
+function composeNote({ requesterName, serviceType, whenText, description, igFollowers, providerFirst }) {
+  const greet  = providerFirst ? `Hey ${providerFirst}, ` : 'Hi! ';
+  const svc     = serviceType ? `need a ${serviceType.toLowerCase()}` : 'need your service';
+  const when    = whenText ? ` ${whenText}` : '';
+  const det     = description && description.trim().toLowerCase() !== (serviceType || '').toLowerCase()
+    ? ` — ${description.trim()}` : '';
+  const reach   = igFollowers > 0
+    ? ` to my ${Number(igFollowers).toLocaleString()} followers`
+    : ' to my followers';
+  return `${greet}${svc}${when}${det}. Happy to spotlight you for free${reach} 🙌`;
+}
+
 export function RequestFromConnectorScreen() {
   const navigate = useNavigate();
   const { reqId } = useParams();
@@ -126,6 +151,13 @@ export function RequestFromConnectorScreen() {
     stats && stats.listedServices > 0 ? `${stats.listedServices} ${stats.listedServices === 1 ? 'service' : 'services'}` : null,
   ].filter(Boolean).join(' · ');
 
+  const providerFirst = (auth?.user?.user_metadata?.display_name || auth?.user?.user_metadata?.full_name || '')
+    .trim().split(' ')[0] || '';
+  const note = composeNote({
+    requesterName: data.requesterName, serviceType: data.serviceType, whenText: data.whenText,
+    description: data.description, igFollowers: data.igFollowers, providerFirst,
+  });
+
   const mapUrl = (!mapFailed && data.lat && data.lng && MAPS_KEY)
     ? `https://maps.googleapis.com/maps/api/staticmap?center=${data.lat},${data.lng}&zoom=14&size=640x300&scale=2&maptype=roadmap&key=${MAPS_KEY}`
     : null;
@@ -186,8 +218,23 @@ export function RequestFromConnectorScreen() {
           className="text-body-sm font-extrabold text-black">View Details</button>
       </div>
 
+      {/* headline — "{Connector} wants to market your services" (frame 2 fold) */}
+      {data.isFree && (
+        <div className="px-5 pt-3 pb-1">
+          <div className="bg-gl/70 border border-g/25 rounded-[14px] p-3.5">
+            <p className="text-body-sm font-extrabold text-gd leading-snug">
+              {data.requesterName} wants to market your services
+            </p>
+            <p className="text-meta text-b2 mt-1 leading-snug">
+              Requesting a free <span className="font-extrabold text-black">{data.serviceType}</span> in exchange for an
+              Instagram spotlight{data.igFollowers > 0 ? <> to their <span className="font-extrabold text-black">{Number(data.igFollowers).toLocaleString()}</span> followers</> : ' to their audience'} — no cash changes hands.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* title + free + service needed */}
-      <div id="svp-job-details" className="px-5 pt-4 pb-4 scroll-mt-4">
+      <div id="svp-job-details" className="px-5 pt-3 pb-4 scroll-mt-4">
         <h1 className="text-display-2 font-extrabold text-black leading-tight">{data.serviceType}</h1>
         {data.isFree && (
           <div className="flex items-center gap-1.5 mt-2">
@@ -304,6 +351,17 @@ export function RequestFromConnectorScreen() {
           </div>
         </div>
       )}
+
+      {/* personalized message from the Connector (composed from the request) */}
+      <div className="px-5 pb-3">
+        <div className="bg-soft rounded-[18px] p-4">
+          <div className="flex items-center gap-3 mb-2">
+            <Avatar name={data.requesterName} />
+            <p className="text-body font-extrabold text-black flex-1 truncate">{data.requesterName}</p>
+          </div>
+          <p className="text-body text-black leading-relaxed">{note}</p>
+        </div>
+      </div>
 
       {/* benefit line (Figma) */}
       {!alreadyResolved && data.isFree && (

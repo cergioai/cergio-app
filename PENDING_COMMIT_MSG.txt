@@ -1,19 +1,15 @@
-Rebuild /inbound from the Figma frame (1:1 treatments) + real map
+/inbound: restore "wants to market your services" + personalized Connector note
 
-Stops patching the old components; rebuilds the connector-request screen from
-the Figma "Message (Essential Details)" frame so it actually matches the design:
+Per Tarik 2026-06-14:
+- Restored the "{Connector} wants to market your services" headline (frame-2
+  fold): "Requesting a free {service} in exchange for an Instagram spotlight to
+  their {N} followers — no cash."
+- Service being requested shown clearly: title {service} + details
+  (description) + time (when_text), matching the designs.
+- Added a personalized message in the Connector's voice, composed from the real
+  request fields (service, time, details, follower reach), e.g. "Hey {provider},
+  need a personal chef today — {details}. Happy to spotlight you for free to my
+  319 followers 🙌". Derived from real data, not fabricated.
 
-- "Needs Response" + "View Details" as icon+text (not green pills)
-- Large display title; "Free for Connectors" as inline green shield+text
-- Real Google Static Map (VITE_GOOGLE_MAPS_KEY + request lat/lng) under the
-  approximate-area radius + white info box + eye-off pin (falls back to the
-  cream card if the tile errors)
-- "Scroll down for messages" + requester block (IG handle/followers, Connector
-  badge, strength, coral See Instagram) + reserved IG photo strip (real media
-  only) + See full profile
-- Benefit line + green "Accept free request" with Counter / Decline
-- Shows the actual service needed (service_type + description + when)
-- Removed the "wants to market your services" banner (not in the Figma frame)
-
-Figma = layout source of truth; overrides (Connector badge, friends-in-common,
-strength) sit on top. Iterating to exact colors next.
+Keeps Accept free request / Counter / Decline. Figma remains layout source of
+truth; exact-color pass still pending.
