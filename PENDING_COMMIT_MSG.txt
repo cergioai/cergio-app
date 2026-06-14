@@ -1,20 +1,19 @@
-Frame 3 alignment to Figma + flow map source-of-truth (SVP)
+Rebuild /inbound from the Figma frame (1:1 treatments) + real map
 
-Aligns /inbound (RequestFromConnectorScreen) to the Figma "Message — Essential
-Details" frame, per Tarik's decisions:
+Stops patching the old components; rebuilds the connector-request screen from
+the Figma "Message (Essential Details)" frame so it actually matches the design:
 
-- Header now matches Figma: back · {name} · ••• (opens full profile).
-- Status row: "Needs Response" + "View Details" (scrolls to job details).
-- "See full profile" kept (moved onto the requester block, not removed).
-- Frame 2 ("{Connector} wants to market your services") folded into the top
-  banner, now naming the Connector's follower reach.
+- "Needs Response" + "View Details" as icon+text (not green pills)
+- Large display title; "Free for Connectors" as inline green shield+text
+- Real Google Static Map (VITE_GOOGLE_MAPS_KEY + request lat/lng) under the
+  approximate-area radius + white info box + eye-off pin (falls back to the
+  cream card if the tile errors)
+- "Scroll down for messages" + requester block (IG handle/followers, Connector
+  badge, strength, coral See Instagram) + reserved IG photo strip (real media
+  only) + See full profile
+- Benefit line + green "Accept free request" with Counter / Decline
+- Shows the actual service needed (service_type + description + when)
+- Removed the "wants to market your services" banner (not in the Figma frame)
 
-Also adds SVP_FLOW_MAP.md — the design-accurate, frame-by-frame map of the
-"Accepting Free Service request" column (read from the Figma file), the
-terminology translation (Romio→Cergio, GOAT→Connector, Go-To→Reco'd), the
-quarantine plan (src/_quarantine + qa guard so duplicates can't render), and
-the build order. This file is the working source of truth for the rebuild.
-
-Decisions captured: /request/:id stays (requests can be free OR paid via the
-homepage search toggle); frame-2 folded; header matches Figma + keeps See
-full profile.
+Figma = layout source of truth; overrides (Connector badge, friends-in-common,
+strength) sit on top. Iterating to exact colors next.
