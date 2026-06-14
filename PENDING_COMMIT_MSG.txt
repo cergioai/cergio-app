@@ -1,6 +1,5 @@
-Frame 3: IG counts up next to Connector; See Instagram as a text link
+Fix duplicate service names ("Plumber, Plumber")
 
-- Moved the IG logo + followers + reco's-made + Cergio-network counts up to sit
-  right under the name / Connector badge in the identity block.
-- "See Instagram" reduced from a salmon button to an inline text link.
-- Removed the now-redundant standalone IG box.
+getPublicProfileStats now de-duplicates services by display name, summing each
+name's reco count across duplicate listings — so the tile shows "Plumber (N)"
+once instead of repeating it.

@@ -1828,11 +1828,15 @@ export async function getPublicProfileStats(profileId) {
   const recRows = recRowsRes.data || [];
   const recoBySvc = {};
   for (const r of recRows) recoBySvc[r.service_id] = (recoBySvc[r.service_id] || 0) + 1;
-  // One entry per service with its own reco count.
-  const services = (svcs || [])
-    .map(s => ({ name: s.taxonomy_provider_type || s.category || s.title, recos: recoBySvc[s.id] || 0 }))
-    .filter(s => s.name);
-  const serviceNames = [...new Set(services.map(s => s.name))];
+  // One entry per DISTINCT service name, summing reco counts across duplicates.
+  const svcAgg = {};
+  for (const s of (svcs || [])) {
+    const name = s.taxonomy_provider_type || s.category || s.title;
+    if (!name) continue;
+    svcAgg[name] = (svcAgg[name] || 0) + (recoBySvc[s.id] || 0);
+  }
+  const services = Object.entries(svcAgg).map(([name, recos]) => ({ name, recos }));
+  const serviceNames = services.map(s => s.name);
 
   const invites = invitesRes.data || [];
   return {
