@@ -212,7 +212,7 @@ export function RequestFromConnectorScreen() {
   // audience (IG/TikTok followers) sits next to the Connector badge;
   // reco's made + Cergio network sit together on the strength line.
   const strength = [
-    stats && stats.networkCount > 0 ? `${stats.networkCount} on Cergio` : null,
+    stats && stats.networkCount > 0 ? `${stats.networkCount} network on Cergio` : null,
     stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
   ].filter(Boolean).join(' · ');
   const services = (stats && stats.services) || [];

@@ -1,4 +1,5 @@
-Frame 3: hide Previous spotlights section when there are none
+"Network on Cergio" = composite (invites + recos made/received + follows)
 
-Removed the empty placeholder tiles + caption — the "Previous spotlights on
-Cergio" section now renders only when the Connector actually has spotlights.
+The Cergio-network count was just follows (0 for most), so it never showed.
+Redefined networkCount as registered invites + reco's made + reco's received +
+follows, and relabeled it "{N} network on Cergio" so it surfaces meaningfully.

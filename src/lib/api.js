@@ -1839,14 +1839,21 @@ export async function getPublicProfileStats(profileId) {
   const serviceNames = services.map(s => s.name);
 
   const invites = invitesRes.data || [];
+  const joined        = invites.filter(r => r.joined_at).length;
+  const recommended   = recosMadeRes.error ? 0 : (recosMadeRes.count || 0);
+  const recosReceived = recRows.length;
+  const follows       = netRes.error ? 0 : (netRes.count || 0);
   return {
     data: {
       invited:         invites.length,
-      joined:          invites.filter(r => r.joined_at).length,
+      joined,
       booked:          invites.filter(r => r.first_booking_at).length,
-      recommended:     recosMadeRes.error ? 0 : (recosMadeRes.count || 0),  // made
-      recosReceived:   recRows.length,                                      // received on owned services
-      networkCount:    netRes.error ? 0 : (netRes.count || 0),             // friends on Cergio
+      recommended,                 // reco's made
+      recosReceived,               // received on owned services
+      follows,
+      // "Network on Cergio" (Tarik 2026-06-14): composite of registered
+      // invites + reco's made + reco's received + follows.
+      networkCount:    joined + recommended + recosReceived + follows,
       listedServices:  services.length,
       services,
       serviceNames,
