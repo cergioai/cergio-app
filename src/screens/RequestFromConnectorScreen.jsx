@@ -115,7 +115,10 @@ export function RequestFromConnectorScreen() {
         igFollowers:   requester.instagram_followers ?? null,
         igMedia:       null,  // reserved — real IG media post Meta approval
         serviceType:   r.service_type || r.category || 'Service request',
-        description:   r.what || r.description || '',
+        // TASK text for the message: prefer the requester's RAW words
+        // (description / query) over the parsed type (what), e.g.
+        // "vegan Ecuadorian dinner for 6" not "Catering".
+        description:   r.description || r.query || r.what || '',
         whenText:      formatWhen(r),
         locationText:  r.location_text || null,
         lat:           r.lat ?? null,

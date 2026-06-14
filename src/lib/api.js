@@ -1892,7 +1892,7 @@ export async function getInboundRequest(reqId) {
   return await supabase
     .from('requests')
     .select(`
-      id, service_type, category, description, what, when_text, scheduled_at,
+      id, service_type, category, description, what, query, when_text, scheduled_at,
       location_text, lat, lng, is_free_for_rainmaker, budget_cents,
       status, created_at,
       requester:profiles!requests_requester_id_fkey

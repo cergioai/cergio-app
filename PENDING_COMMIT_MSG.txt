@@ -1,13 +1,7 @@
-/inbound: service in headline, task in message, expandable map, named greeting
+/inbound: message uses the requester's raw request text
 
-Tarik 2026-06-14:
-- Headline now leads with the actual service: "Free {service} ⇄ Free spotlight
-  to {N} followers" (dropped the generic "service request"); removed the now-
-  redundant summary line.
-- Message carries the TASK, not the service-type label: composeNote uses the
-  request description (e.g. "cook vegan for my wife's birthday") instead of
-  "need a personal chef". Service type lives in the headline only.
-- Greeting uses the provider's first name when available — "Hi Jane,"; falls
-  back to "Hi!" when the account name is generic. Broadened the name source.
-- Map is tappable and opens an Airbnb-style expanded view (larger map, still
-  approximate area, no precise pin; exact address blocked until confirmed).
+The message task was showing the parsed type ("Catering") because the field
+preference favored `what` over the raw words. Now getInboundRequest also pulls
+`query`, and the message task prefers `description || query || what` — so it
+reads the requester's actual ask (e.g. "vegan Ecuadorian dinner for 6") rather
+than the category. (This test request only has "Catering" as its raw text.)
