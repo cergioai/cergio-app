@@ -54,19 +54,20 @@ function Avatar({ name }) {
 // e.g. "Hey Jan, need a personal chef tuesday at 5pm — vegan Ecuadorian
 //       birthday party. Happy to spotlight you free to my 319 followers 🙌"
 const GENERIC_NAMES = new Set(['service', 'provider', 'cergio', 'user', 'test', 'business', 'a']);
-function composeNote({ requesterName, serviceType, whenText, description, igFollowers, providerFirst }) {
+function composeNote({ serviceType, whenText, description, igFollowers, providerFirst }) {
   // Only greet by name when it's a plausible given name, never a generic
   // account label like "Service" / "Provider" (which read broken).
   const useName = providerFirst && /^[A-Za-z][A-Za-z'-]{1,}$/.test(providerFirst) && !GENERIC_NAMES.has(providerFirst.toLowerCase());
-  const greet  = useName ? `Hey ${providerFirst}, ` : 'Hi! ';
-  const svc     = serviceType ? `need a ${serviceType.toLowerCase()}` : 'need your service';
+  const greet  = useName ? `Hi ${providerFirst}, ` : 'Hi! ';
+  // The TASK lives in the message (the service type is in the headline now).
+  const task    = (description && description.trim())
+    ? description.trim()
+    : `need a ${(serviceType || 'service').toLowerCase()}`;
   const when    = whenText ? ` ${whenText}` : '';
-  const det     = description && description.trim().toLowerCase() !== (serviceType || '').toLowerCase()
-    ? ` — ${description.trim()}` : '';
   const reach   = igFollowers > 0
     ? ` to my ${Number(igFollowers).toLocaleString()} followers`
     : ' to my followers';
-  return `${greet}${svc}${when}${det}. Happy to spotlight you for free${reach} 🙌`;
+  return `${greet}${task}${when}. Happy to spotlight you for free${reach} 🙌`;
 }
 
 // Approximate area only — strip the street number/line + zip + country so the
@@ -96,6 +97,7 @@ export function RequestFromConnectorScreen() {
   const [counterOpen, setCounterOpen] = useState(false);
   const [counterDraft, setCounterDraft] = useState('');
   const [counterMsg, setCounterMsg] = useState('');
+  const [mapOpen, setMapOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,8 +167,12 @@ export function RequestFromConnectorScreen() {
     stats && stats.listedServices > 0 ? `${stats.listedServices} ${stats.listedServices === 1 ? 'service' : 'services'}` : null,
   ].filter(Boolean).join(' · ');
 
-  const providerFirst = (auth?.user?.user_metadata?.display_name || auth?.user?.user_metadata?.full_name || '')
-    .trim().split(' ')[0] || '';
+  const providerName = auth?.user?.user_metadata?.display_name
+    || auth?.user?.user_metadata?.full_name
+    || auth?.user?.user_metadata?.name
+    || auth?.profile?.display_name
+    || '';
+  const providerFirst = providerName.trim().split(' ')[0] || '';
   const note = composeNote({
     requesterName: data.requesterName, serviceType: data.serviceType, whenText: data.whenText,
     description: data.description, igFollowers: data.igFollowers, providerFirst,
@@ -240,13 +246,12 @@ export function RequestFromConnectorScreen() {
       <div className="px-5 pt-1 pb-3">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-heading-2 font-extrabold text-black leading-tight">
-            Free service request <span className="text-g">⇄</span> Free spotlight{data.igFollowers > 0 ? <> to {Number(data.igFollowers).toLocaleString()} followers</> : null}
+            Free {data.serviceType} <span className="text-g">⇄</span> Free spotlight{data.igFollowers > 0 ? <> to {Number(data.igFollowers).toLocaleString()} followers</> : null}
           </h1>
           {data.whenText && (
             <span className="shrink-0 text-meta-sm font-extrabold text-gd bg-gl rounded-pill px-2.5 py-1 mt-0.5 whitespace-nowrap">{data.whenText}</span>
           )}
         </div>
-        <p className="text-body-sm text-b3 mt-1.5 leading-snug">{data.serviceType}</p>
       </div>
 
       {/* requester — IG handle + followers + Connector + See Instagram (coral) */}
@@ -340,26 +345,30 @@ export function RequestFromConnectorScreen() {
         </div>
       </div>
 
-      {/* map — area around the address, moved below the message (Tarik). No
+      {/* map — area around the address; tap to expand (Airbnb-style). No
           precise pin; exact street address blocked until accepted + confirmed. */}
       <div className="px-5 pb-3">
-        <div className="relative rounded-[18px] overflow-hidden h-[200px] bg-[#E8EEE6] border border-line">
+        <button type="button" onClick={() => setMapOpen(true)}
+          className="relative block w-full text-left rounded-[18px] overflow-hidden h-[200px] bg-[#E8EEE6] border border-line">
           {osmSrc ? (
             <iframe title="Approximate area" src={osmSrc} loading="lazy"
               className="absolute inset-0 w-full h-full pointer-events-none" style={{ border: 0, filter: 'saturate(0.92)' }} />
           ) : null}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-g/15 border-2 border-g/40" aria-hidden="true" />
-          <div className="absolute left-3 right-3 bottom-3">
-            <div className="bg-white/95 backdrop-blur rounded-[12px] px-3 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
-              <p className="text-body-sm font-extrabold text-black leading-snug">
-                Approximate area{approxAddr ? <> · {approxAddr}</> : null}
-              </p>
-              <p className="text-meta text-b3 mt-0.5 leading-snug">
-                Exact address is shared after you accept &amp; the booking is confirmed.
-              </p>
-            </div>
-          </div>
-        </div>
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-g/15 border-2 border-g/40" aria-hidden="true" />
+          <span className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.12)] flex items-center justify-center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111114" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+          </span>
+          <span className="absolute left-3 right-3 bottom-3 block">
+            <span className="block bg-white/95 backdrop-blur rounded-[12px] px-3 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
+              <span className="block text-body-sm font-extrabold text-black leading-snug">
+                Approximate area{approxAddr ? ` · ${approxAddr}` : ''}
+              </span>
+              <span className="block text-meta text-b3 mt-0.5 leading-snug">
+                Tap to expand · exact address shared after you accept &amp; confirm.
+              </span>
+            </span>
+          </span>
+        </button>
       </div>
 
       {/* benefit line (Figma) */}
@@ -407,6 +416,26 @@ export function RequestFromConnectorScreen() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* expanded map — Airbnb-style larger view (still approximate, no pin) */}
+      {mapOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setMapOpen(false)}>
+          <div className="relative w-full max-w-[420px] h-[72vh] bg-white rounded-[20px] overflow-hidden" onClick={e => e.stopPropagation()}>
+            {osmSrc ? (
+              <iframe title="Approximate area — expanded" src={osmSrc} className="absolute inset-0 w-full h-full" style={{ border: 0 }} />
+            ) : null}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-44 rounded-full bg-g/15 border-2 border-g/40 pointer-events-none" aria-hidden="true" />
+            <button onClick={() => setMapOpen(false)} aria-label="Close map"
+              className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white shadow-[0_1px_6px_rgba(0,0,0,0.18)] flex items-center justify-center text-black">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+            <div className="absolute left-3 right-3 bottom-3 bg-white/95 backdrop-blur rounded-[12px] px-3 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.12)]">
+              <p className="text-body-sm font-extrabold text-black leading-snug">Approximate area{approxAddr ? ` · ${approxAddr}` : ''}</p>
+              <p className="text-meta text-b3 mt-0.5 leading-snug">Exact address is shared after you accept &amp; the booking is confirmed.</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,13 +1,13 @@
-/inbound: top headline + date/summary, mutual friends in tile, map below msg
+/inbound: service in headline, task in message, expandable map, named greeting
 
-Tarik 2026-06-14 finalize:
-- Removed the "T" name from the header (back · ⚑ ↗ only).
-- New top headline: "Free service request ⇄ Free spotlight to {N} followers"
-  with the date chip beside it and a one-line summary (service · details).
-- Mutual friends moved INTO the connector tile, next to the avatar, each name
-  linked to their profile; explicit empty state "You have no mutual friends
-  with {name} yet." (removed the separate friends block).
-- Map moved BELOW the personalized message (just above the Accept button).
-- Fixed the benefit line being cut off by the sticky bar: more bottom padding
-  + a top border/shadow on the action bar.
-- Summary line shows just the service (dropped the redundant category label).
+Tarik 2026-06-14:
+- Headline now leads with the actual service: "Free {service} ⇄ Free spotlight
+  to {N} followers" (dropped the generic "service request"); removed the now-
+  redundant summary line.
+- Message carries the TASK, not the service-type label: composeNote uses the
+  request description (e.g. "cook vegan for my wife's birthday") instead of
+  "need a personal chef". Service type lives in the headline only.
+- Greeting uses the provider's first name when available — "Hi Jane,"; falls
+  back to "Hi!" when the account name is generic. Broadened the name source.
+- Map is tappable and opens an Airbnb-style expanded view (larger map, still
+  approximate area, no precise pin; exact address blocked until confirmed).
