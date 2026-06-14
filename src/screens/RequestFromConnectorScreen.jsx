@@ -127,6 +127,7 @@ export function RequestFromConnectorScreen() {
         ttFollowers:   requester.tiktok_followers ?? null,
         bio:           (requester.bio || requester.headline || '').trim() || null,
         igMedia:       null,  // reserved — real IG media post Meta approval
+        spotlights:    null,  // reserved — past spotlights this Connector posted
         serviceType:   r.service_type || r.category || 'Service request',
         // TASK text for the message: prefer the requester's RAW words
         // (description / query) over the parsed type (what), e.g.
@@ -202,8 +203,9 @@ export function RequestFromConnectorScreen() {
     data.ttFollowers > 0 ? `${Number(data.ttFollowers).toLocaleString()} TikTok` : null,
   ].filter(Boolean);
   const audience = audienceBits.length ? `${audienceBits.join(' · ')} followers` : null;
+  // audience (IG/TikTok followers) sits next to the Connector badge;
+  // reco's made + Cergio network sit together on the strength line.
   const strength = [
-    audience,
     stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
     stats && stats.networkCount > 0 ? `${stats.networkCount} on Cergio` : null,
   ].filter(Boolean).join(' · ');
@@ -323,6 +325,9 @@ export function RequestFromConnectorScreen() {
                       <ShieldIcon size={9} />Connector
                     </span>
                   )}
+                  {audience && (
+                    <span className="text-meta-sm text-b3 font-medium">· {audience}</span>
+                  )}
                 </div>
                 {/* IG logo + followers/counts + See Instagram (text link) */}
                 {(data.igHandle || strength) && (
@@ -396,6 +401,30 @@ export function RequestFromConnectorScreen() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* previous spotlights on Cergio — placeholder (real media lands later);
+          this is how the Connector shows their track record (like the Figma). */}
+      {data.isConnector && (
+        <div className="px-5 pb-3">
+          <p className="text-body-sm font-extrabold text-black mb-2">Previous spotlights on Cergio</p>
+          {Array.isArray(data.spotlights) && data.spotlights.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2">
+              {data.spotlights.slice(0, 3).map((s, i) => (
+                <div key={i} className="aspect-[4/5] rounded-[12px] overflow-hidden bg-bg5">
+                  <img src={s.thumbnail_url || s.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                {[0, 1, 2].map(i => <div key={i} className="aspect-[4/5] rounded-[12px] bg-bg5 border border-line" />)}
+              </div>
+              <p className="text-meta text-b3 mt-1.5">Their spotlights will appear here once they post on Cergio.</p>
+            </>
+          )}
         </div>
       )}
 

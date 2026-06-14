@@ -1,5 +1,7 @@
-Fix duplicate service names ("Plumber, Plumber")
+Frame 3: IG followers by Connector, network by reco's made, spotlights placeholder
 
-getPublicProfileStats now de-duplicates services by display name, summing each
-name's reco count across duplicate listings — so the tile shows "Plumber (N)"
-once instead of repeating it.
+- IG (+ TikTok) follower counts now sit next to the Connector badge.
+- Reco's made + Cergio network count sit together on the strength line.
+- Added a "Previous spotlights on Cergio" placeholder section (3 reserved tiles
+  + caption) — lights up with real spotlight media when available, like the
+  Figma. No fake images.
