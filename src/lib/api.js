@@ -1861,6 +1861,31 @@ export async function getMyFollowedIds() {
   return { data: (data || []).map(r => r.followed_id), error: null };
 }
 
+/**
+ * CERGIO-GUARD (2026-06-13): fetch ONE open request by id for the
+ * dedicated connector-request screen (the screen a provider opens from
+ * "New requests near you"). Pulls the full job fields the screen renders
+ * — when_text / scheduled_at, location, free flag, budget — plus the
+ * requester's profile (Connector status + IG handle/followers) so the
+ * screen can show connector status, the IG block, and friends-in-common
+ * without a second profile fetch. All real columns; nothing synthesized.
+ */
+export async function getInboundRequest(reqId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!reqId) return { data: null, error: { message: 'reqId required' } };
+  return await supabase
+    .from('requests')
+    .select(`
+      id, service_type, category, description, what, when_text, scheduled_at,
+      location_text, lat, lng, is_free_for_rainmaker, budget_cents,
+      status, created_at,
+      requester:profiles!requests_requester_id_fkey
+        ( id, display_name, instagram_handle, instagram_followers, cc_verified_at )
+    `)
+    .eq('id', reqId)
+    .maybeSingle();
+}
+
 export async function listInboundRequests({ limit = 20 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
   const { data: userRes } = await supabase.auth.getUser();

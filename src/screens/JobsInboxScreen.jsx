@@ -444,16 +444,17 @@ export function JobsInboxScreen() {
               const minutesAgo = req.created_at
                 ? Math.max(0, Math.round((Date.now() - new Date(req.created_at).getTime()) / 60000))
                 : 0;
-              // CERGIO-GUARD (2026-06-12): profile drill before responding.
-              // Tarik: "need to view the profile of the connector before
-              // accepting or countering". Avatar + the info block above the
-              // action row tap through to /u/{requester.id} — same pattern
-              // as ConnectorRequestsScreen InboundCard. Action buttons sit
-              // OUTSIDE the tappable area so Accept/Counter/Decline taps
-              // never accidentally open the profile.
+              // CERGIO-GUARD (2026-06-13): tapping the card opens the
+              // dedicated connector-request screen (job details, map,
+              // Connector status, friends-in-common, Accept/Counter/
+              // Decline). That screen carries a "See full profile" link
+              // to /u/{requester.id}, so Tarik's "view the profile before
+              // responding" need is preserved as a secondary tap. Inline
+              // Accept/Counter/Decline buttons stay OUTSIDE this tappable
+              // area as a quick path.
               const profileTarget = req.requester?.id || null;
               const openProfile = () => {
-                if (profileTarget) navigate(`/u/${profileTarget}?reqId=${req.id}&myServiceId=${req.my_service_id || ""}`);
+                navigate(`/inbound/${req.id}?myServiceId=${req.my_service_id || ""}`);
               };
               return (
                 <div

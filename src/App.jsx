@@ -43,6 +43,7 @@ import { SharePromptScreen }      from './screens/SharePromptScreen';
 import { FreeBenefitsScreen }     from './screens/FreeBenefitsScreen';
 import { RainmakerRequestScreen } from './screens/RainmakerRequestScreen';
 import { RequestDetailScreen }    from './screens/RequestDetailScreen';
+import { RequestFromConnectorScreen } from './screens/RequestFromConnectorScreen';
 import { JobDetailsScreen }       from './screens/JobDetailsScreen';
 import { RateConfirmScreen }      from './screens/RateConfirmScreen';
 import { SocialPostsScreen }      from './screens/SocialPostsScreen';
@@ -459,6 +460,7 @@ export default function App() {
           <Route path="/benefits"          element={<FreeBenefitsScreen />} />
           <Route path="/rainmaker-request" element={<RainmakerRequestScreen />} />
           <Route path="/request/:id?"      element={<RequestDetailScreen />} />
+          <Route path="/inbound/:reqId"    element={<RequestFromConnectorScreen />} />
           <Route path="/job"               element={<JobDetailsScreen />} />
           <Route path="/rate"              element={<RateConfirmScreen />} />
           <Route path="/social-posts"      element={<Navigate to="/home" replace />} />

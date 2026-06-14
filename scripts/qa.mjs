@@ -1788,33 +1788,47 @@ test('spec-47-free-barter-loop', 'FROZEN: Free barter loop — schedule confirm,
   assert(/kind:\s*'barter'/.test(api), "listSocialFeed must emit kind 'barter' for posted free-service spotlights");
 });
 
-test('spec-48-request-detail-elements', 'FROZEN: Provider request screen carries job details, approximate map, IG block, friends-in-common — no fake photos (SPEC-48)', '#48', async () => {
-  const screen = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RequestDetailScreen.jsx'), 'utf8');
+test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carries job details, approximate map, Connector status + IG, friends-in-common — no fake photos (SPEC-48)', '#48', async () => {
+  // The CANONICAL screen a provider opens from "New requests near you".
+  const screen = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RequestFromConnectorScreen.jsx'), 'utf8');
+  const inbox  = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
+  const app    = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api    = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+
+  // 0. The inbound card routes to the dedicated screen (NOT the bare
+  //    profile ?reqId path), and the route is wired.
+  assert(/navigate\(`\/inbound\/\$\{req\.id\}/.test(inbox),
+    'REGRESSION: "New requests near you" must open /inbound/:reqId (the dedicated request screen), not the bare profile path');
+  assert(/path="\/inbound\/:reqId"/.test(app) && /RequestFromConnectorScreen/.test(app),
+    'App.jsx must wire the /inbound/:reqId route to RequestFromConnectorScreen');
 
   // 1. Approximate-location card — exact address gated until confirmed.
   assert(/Map shows approximate location/.test(screen),
-    'RequestDetailScreen must render the approximate-location card copy');
+    'Screen must render the approximate-location card copy');
   assert(/shared after (you|the user) confirm/i.test(screen),
-    'Approximate-location card must state the exact address is shared only after the booking is confirmed');
+    'Approximate-location card must state the exact address is shared only after confirm');
 
-  // 2. Instagram block — real handle + followers + working See Instagram link.
-  assert(/data\.igHandle/.test(screen), 'Screen must render the requester IG handle');
-  assert(/See Instagram/.test(screen) && /instagram\.com\//.test(screen),
-    'Screen must include a See Instagram link to the requester profile');
-  assert(/instagram_handle/.test(api) && /getBooking/.test(api),
-    'getBooking must fetch consumer.instagram_handle for the IG block');
+  // 2. Connector status + Instagram — real handle + followers + See Instagram.
+  assert(/cc_verified_at/.test(api) && /isConnector/.test(screen) && /Connector/.test(screen),
+    'Screen must surface the requester Connector status (cc_verified_at → isConnector badge)');
+  assert(/data\.igHandle/.test(screen) && /See Instagram/.test(screen) && /instagram\.com\//.test(screen),
+    'Screen must include the IG handle + a See Instagram link');
+  assert(/export async function getInboundRequest/.test(api) && /instagram_handle/.test(api),
+    'getInboundRequest must fetch the requester instagram_handle + connector flag');
 
   // 3. Friends-in-common — driven by the network graph, not faked.
   assert(/export async function getMutualConnections/.test(api),
     'lib/api.js must export getMutualConnections (friends-in-common over the network graph)');
   assert(/getMutualConnections/.test(screen),
-    'RequestDetailScreen must call getMutualConnections for friends-in-common');
+    'Screen must call getMutualConnections for friends-in-common');
 
-  // 4. NO fake IG photo grid. The photo strip must be gated on real media
-  //    (data.igMedia) — never a hardcoded placeholder thumbnail array.
-  assert(/Array\.isArray\(data\.igMedia\)/.test(screen),
-    'REGRESSION: IG photo grid must be gated on real data.igMedia — no fabricated thumbnails (SPEC-12/48)');
+  // 4. Real response actions — Accept/Counter/Decline via respondToRequest.
+  assert(/respondToRequest/.test(screen) && /Counter/.test(screen),
+    'Screen must wire Accept/Counter/Decline via respondToRequest');
+
+  // 5. NO fake IG photo grid — any photo strip must gate on real media.
+  assert(!/aspect-square[\s\S]{0,400}https?:\/\//.test(screen) || /data\.igMedia/.test(screen),
+    'REGRESSION: IG photos must gate on real data.igMedia — no fabricated thumbnails (SPEC-12/48)');
 });
 
 main().catch(e => {

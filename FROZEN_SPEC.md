@@ -144,14 +144,14 @@ qa.mjs #47 enforces this.
 
 ## UI / DATA — PROVIDER REQUEST SCREEN (ACCEPTING A FREE SERVICE)
 
-### SPEC-48 · Inbound request screen required elements
-**Status:** FROZEN — 2026-06-13 (Tarik dictated as SPEC; flow board "Accepting Free Service request")
-**Rule:** `RequestDetailScreen` (the screen the service provider sees for an inbound request from a Connector) must render, for a free request:
+### SPEC-48 · Inbound connector-request screen required elements
+**Status:** FROZEN — 2026-06-13 (Tarik dictated as SPEC; flow board "Accepting Free Service request"). Updated 2026-06-13: the canonical screen is `RequestFromConnectorScreen` at route `/inbound/:reqId`, opened from the Inbox "New requests near you" card. The old bare profile path (`/u/:id?reqId=`) is NO LONGER the response surface — it had only a one-line Accept/Counter/Decline bar. (`RequestDetailScreen` at `/request/:id` remains the DIRECT-booking detail screen and carries the same elements.)
+**Rule:** `RequestFromConnectorScreen` (the screen the service provider sees for an inbound request from a Connector) must render, for a free request:
 1. **Job details** — service title, free-for-Connectors pill, description, appointment.
 2. **Approximate-location card** — copy "Map shows approximate location"; the exact address is shared ONLY after the user confirms the booking. No live map tile and no precise pin until confirmed.
-3. **Instagram block** — the requester's IG handle + follower count + a working "See Instagram" link to `instagram.com/<handle>`. Hidden when the requester has no connected handle.
+3. **Requester block** — the requester's **Connector status** (a "Connector" badge when `cc_verified_at` is set) + IG handle + follower count + a working "See Instagram" link to `instagram.com/<handle>`. Hidden when the requester is neither a Connector nor has a handle.
 4. **Friends-in-common** — mutual connections with the requester via `getMutualConnections` over the `network` graph (any edge, either direction; buckets friends + Connectors). Hidden when zero.
-5. **Accept CTA** — "Accept free request" + the "free marketing / service verification with a 4+ star rating" subcopy.
+5. **Actions** — Accept / Counter / Decline via `respondToRequest` ("Accept free request" label for free requests) + the "free marketing / service verification with a 4+ star rating" subcopy. Plus a "See full profile" link to the requester's PublicProfile.
 
 **Banned behaviors:**
 - Faking the IG photo grid. The "+N more" thumbnail strip renders ONLY from real `data.igMedia` (populated once Meta Graph media access is approved). Hardcoded placeholder thumbnails are banned (SPEC-12).

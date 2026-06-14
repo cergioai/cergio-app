@@ -1,28 +1,28 @@
-Provider request screen (SPEC-48): job details, approximate map, IG block, friends-in-common
+Dedicated connector-request screen on the live flow (SPEC-48 corrected)
 
-Builds the "Accepting Free Service request" screen (Tarik flow board) so the
-service provider sees everything needed to decide on an inbound free request.
+Fixes the real breakdown Tarik caught: the elements we built (map, Connector
+status, job details, friends-in-common) were on RequestDetailScreen
+(/request/:id, the DIRECT-booking path), but the deployed "New requests near
+you" flow opens /u/{requester}?reqId= (PublicProfile), whose request UI was
+just a one-line Accept/Counter/Decline bar. The two paths had diverged.
 
-RequestDetailScreen now renders, in mockup order:
-  - Job details (title, free-for-Connectors pill, description, appointment)
-  - Approximate-location card — "Map shows approximate location"; the exact
-    address is shared only AFTER the user confirms the booking. No live map
-    tile / no precise pin until confirmed.
-  - Instagram block — requester handle + follower count + working
-    "See Instagram" link (hidden when no connected handle).
-  - Friends-in-common — mutual network connections with the requester,
-    bucketed friends + Connectors (hidden when zero).
-  - Free-marketing benefit subcopy + "Accept free request" CTA.
+New canonical screen — RequestFromConnectorScreen at /inbound/:reqId:
+  - Job details (free pill, description, when_text/scheduled_at)
+  - Approximate-location card (exact address only after confirm)
+  - Requester block: Connector status badge + IG handle + followers +
+    See Instagram link
+  - Friends-in-common over the network graph (getMutualConnections)
+  - Accept / Counter / Decline via respondToRequest (real actions)
+  - "See full profile" link preserves the profile-drill need
+  - No fake IG photo grid (gated on real media)
 
-Data layer:
-  - getBooking() now selects consumer.instagram_handle / instagram_followers
-    / cc_verified_at for the IG block.
-  - New getMutualConnections() computes mutuals over the canonical `network`
-    graph (any edge, either direction), returning count + Connector count +
-    a capped sample. No fabricated data.
+Wiring:
+  - api.getInboundRequest(reqId) selects the full requests row (timing,
+    location, free flag, budget) + requester profile (IG, cc_verified_at).
+  - App.jsx route /inbound/:reqId.
+  - JobsInboxScreen "New requests near you" card now opens /inbound/:reqId
+    instead of the bare profile ?reqId path.
 
-No fake IG photo grid: the "+N more" thumbnail strip is gated on real
-data.igMedia (populated once Meta Graph media access is approved) — never
-placeholder tiles (SPEC-12).
-
-Frozen as SPEC-48 in FROZEN_SPEC.md + enforced by qa.mjs #48.
+SPEC-48 retargeted to the canonical connector-request screen + qa #48 now
+asserts the inbox routes to /inbound/:reqId and the screen carries every
+element. RequestDetailScreen stays as the direct-booking detail screen.
