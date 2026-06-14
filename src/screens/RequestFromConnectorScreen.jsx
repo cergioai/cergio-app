@@ -220,13 +220,12 @@ export function RequestFromConnectorScreen() {
   const ico = 'w-9 h-9 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.10)] flex items-center justify-center text-black';
 
   return (
-    <div className="flex-1 flex flex-col bg-cr pb-28 overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-cr pb-48 overflow-y-auto">
       {/* header — back · name · flag + share */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <button onClick={() => navigate(-1)} className={ico} aria-label="Back">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
         </button>
-        <span className="text-heading-2 font-extrabold text-black truncate px-2">{data.requesterName}</span>
         <div className="flex items-center gap-2">
           <button onClick={handleFlag} className={ico} aria-label="Flag">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>
@@ -237,38 +236,17 @@ export function RequestFromConnectorScreen() {
         </div>
       </div>
 
-      {/* Free for Connectors — single brand signal kept at top */}
-      {data.isFree && (
-        <div className="px-5 pb-1">
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldIcon size={15} />
-            <span className="text-body-sm font-extrabold text-g">Free for Connectors</span>
-          </span>
+      {/* headline — Free Service Request ⇄ Free Spotlight + date + summary */}
+      <div className="px-5 pt-1 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-heading-2 font-extrabold text-black leading-tight">
+            Free service request <span className="text-g">⇄</span> Free spotlight{data.igFollowers > 0 ? <> to {Number(data.igFollowers).toLocaleString()} followers</> : null}
+          </h1>
+          {data.whenText && (
+            <span className="shrink-0 text-meta-sm font-extrabold text-gd bg-gl rounded-pill px-2.5 py-1 mt-0.5 whitespace-nowrap">{data.whenText}</span>
+          )}
         </div>
-      )}
-
-      {/* map — real OSM map of the AREA around the address (no precise marker).
-          Exact street address is BLOCKED until the booking is accepted +
-          confirmed; only the approximate area (city/state) is shown. */}
-      <div className="px-5 pb-3">
-        <div className="relative rounded-[18px] overflow-hidden h-[200px] bg-[#E8EEE6] border border-line">
-          {osmSrc ? (
-            <iframe title="Approximate area" src={osmSrc} loading="lazy"
-              className="absolute inset-0 w-full h-full pointer-events-none" style={{ border: 0, filter: 'saturate(0.92)' }} />
-          ) : null}
-          {/* approximate radius — no exact pin */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-g/15 border-2 border-g/40" aria-hidden="true" />
-          <div className="absolute left-3 right-3 bottom-3">
-            <div className="bg-white/95 backdrop-blur rounded-[12px] px-3 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
-              <p className="text-body-sm font-extrabold text-black leading-snug">
-                Approximate area{approxAddr ? <> · {approxAddr}</> : null}
-              </p>
-              <p className="text-meta text-b3 mt-0.5 leading-snug">
-                Exact address is shared after you accept &amp; the booking is confirmed.
-              </p>
-            </div>
-          </div>
-        </div>
+        <p className="text-body-sm text-b3 mt-1.5 leading-snug">{data.serviceType}</p>
       </div>
 
       {/* requester — IG handle + followers + Connector + See Instagram (coral) */}
@@ -318,33 +296,35 @@ export function RequestFromConnectorScreen() {
               </div>
             )}
 
+            {/* mutual friends — linked, with explicit empty state (Tarik) */}
+            <div className="mt-2.5 pt-2.5 border-t border-line">
+              {mutuals === null ? null : hasMutuals ? (
+                <div className="flex items-center gap-2.5">
+                  <div className="flex -space-x-2 shrink-0">
+                    {mutuals.sample.map(m => (
+                      <button key={m.id} onClick={() => navigate(`/u/${m.id}`)} title={m.name}
+                        className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
+                    ))}
+                  </div>
+                  <p className="text-meta text-b2 leading-snug min-w-0">
+                    <span className="font-extrabold text-black">{mutualSummaryText(mutuals)}</span>{' — '}
+                    {mutuals.sample.map((m, i) => (
+                      <span key={m.id}>{i > 0 ? ', ' : ''}<button onClick={() => navigate(`/u/${m.id}`)} className="text-gd font-extrabold hover:underline">{m.name}</button></span>
+                    ))}
+                    {mutuals.count > mutuals.sample.length ? ` +${mutuals.count - mutuals.sample.length} more` : ''}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-meta text-b3">You have no mutual friends with {data.requesterName} yet.</p>
+              )}
+            </div>
+
             {data.requesterId && (
               <button onClick={() => navigate(`/u/${data.requesterId}`)}
                 className="mt-2 inline-flex items-center gap-1 text-meta-sm font-extrabold text-gd hover:underline">
                 See full profile →
               </button>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* friends in common (override) */}
-      {hasMutuals && (
-        <div className="px-5 pb-3">
-          <div className="bg-card border border-line rounded-[18px] p-3.5 flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {mutuals.sample.map(m => (
-                <span key={m.id}
-                  className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-meta-sm font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}
-                  title={m.name}>{m.initial}</span>
-              ))}
-            </div>
-            <div className="min-w-0">
-              <p className="text-body-sm font-extrabold text-black leading-snug">{mutualSummaryText(mutuals)}</p>
-              <p className="text-meta text-b3 leading-snug truncate">
-                {mutuals.sample.map(m => m.name).join(', ')}{mutuals.count > mutuals.sample.length ? ` +${mutuals.count - mutuals.sample.length} more` : ''}
-              </p>
-            </div>
           </div>
         </div>
       )}
@@ -360,6 +340,28 @@ export function RequestFromConnectorScreen() {
         </div>
       </div>
 
+      {/* map — area around the address, moved below the message (Tarik). No
+          precise pin; exact street address blocked until accepted + confirmed. */}
+      <div className="px-5 pb-3">
+        <div className="relative rounded-[18px] overflow-hidden h-[200px] bg-[#E8EEE6] border border-line">
+          {osmSrc ? (
+            <iframe title="Approximate area" src={osmSrc} loading="lazy"
+              className="absolute inset-0 w-full h-full pointer-events-none" style={{ border: 0, filter: 'saturate(0.92)' }} />
+          ) : null}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-g/15 border-2 border-g/40" aria-hidden="true" />
+          <div className="absolute left-3 right-3 bottom-3">
+            <div className="bg-white/95 backdrop-blur rounded-[12px] px-3 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
+              <p className="text-body-sm font-extrabold text-black leading-snug">
+                Approximate area{approxAddr ? <> · {approxAddr}</> : null}
+              </p>
+              <p className="text-meta text-b3 mt-0.5 leading-snug">
+                Exact address is shared after you accept &amp; the booking is confirmed.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* benefit line (Figma) */}
       {!alreadyResolved && data.isFree && (
         <div className="px-5 pt-2 text-center">
@@ -370,7 +372,7 @@ export function RequestFromConnectorScreen() {
 
       {/* sticky actions — Accept free request / Counter / Decline */}
       {!alreadyResolved && (
-        <div className="fixed bottom-0 inset-x-0 max-w-[390px] mx-auto bg-cr px-5 pt-3 pb-6">
+        <div className="fixed bottom-0 inset-x-0 max-w-[390px] mx-auto bg-cr px-5 pt-3 pb-6 border-t border-line shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
           {phase === 'pending' ? (
             <p className="text-body-sm text-b3 font-medium text-center py-3">Sending…</p>
           ) : counterOpen ? (

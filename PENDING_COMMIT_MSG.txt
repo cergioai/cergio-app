@@ -1,18 +1,13 @@
-/inbound finalize-spec: declutter, real area map, richer counter (SPEC-48)
+/inbound: top headline + date/summary, mutual friends in tile, map below msg
 
-UX overrides on top of the Figma frame (Tarik 2026-06-14, finalize):
-- Removed redundancy: the "wants to market your services" banner, the
-  "Needs Response / View Details" status row, and the "Personal Chef" title
-  block — the request now lives inside the personalized message.
-- Header ••• replaced with Flag + Share (share uses Web Share / copy link).
-- Map fixed: was a fake placeholder (Google key not in the Vercel build).
-  Now a real keyless OpenStreetMap embed of the AREA around the address, no
-  precise pin. Shows only the approximate area (city/state); the exact street
-  address is BLOCKED until the provider accepts + the booking is confirmed.
-- Counter upgraded: "$ Counter ⇄" pill; opening it reveals a price field AND
-  a note (e.g. "I can do it, but on a different day") — the note is sent via
-  respondToRequest(message).
-- Kept: Connector strength, mutual friends (if any) under the requester tile,
-  the personalized message, Accept free request / Decline.
-
-qa #48 updated to the new approximate-area copy.
+Tarik 2026-06-14 finalize:
+- Removed the "T" name from the header (back · ⚑ ↗ only).
+- New top headline: "Free service request ⇄ Free spotlight to {N} followers"
+  with the date chip beside it and a one-line summary (service · details).
+- Mutual friends moved INTO the connector tile, next to the avatar, each name
+  linked to their profile; explicit empty state "You have no mutual friends
+  with {name} yet." (removed the separate friends block).
+- Map moved BELOW the personalized message (just above the Accept button).
+- Fixed the benefit line being cut off by the sticky bar: more bottom padding
+  + a top border/shadow on the action bar.
+- Summary line shows just the service (dropped the redundant category label).
