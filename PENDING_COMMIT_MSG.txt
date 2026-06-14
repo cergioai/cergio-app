@@ -1,7 +1,12 @@
-Reverse spotlight: inbound card leads with provider service reputation
+Reverse spotlight: dedicated detail screen (/spotlight/:id)
 
-When a Connector views a provider's spotlight request, the card now leads with
-the provider's SERVICE reputation — their services each with reco's received,
-plus their bio — since that's how a Connector decides whether to offer a
-spotlight (not the provider's IG reach). listMyInboundSpotlightRequests now
-hydrates each provider's bio + services + reco's-received (batched).
+A frame-3-quality detail screen for an inbound spotlight request (provider →
+Connector). Leads with the provider's SERVICE reputation — avatar · services
+(each with reco's received) · bio · network on Cergio · IG (secondary) — then
+the spotlight ask (free swap or paid, with the earn-after-fee math), the
+provider's message, mutual friends, and Offer-the-spotlight / Set-your-price /
+Decline actions (setSpotlightRequestStatus + counterSpotlightRequest).
+
+- api: getSpotlightRequest(id) hydrates the provider's reputation.
+- Route /spotlight/:id (+ added to HIDE_NAV_PREFIXES).
+- ConnectorRequestsScreen inbound card now opens this detail screen.

@@ -44,6 +44,7 @@ import { FreeBenefitsScreen }     from './screens/FreeBenefitsScreen';
 import { RainmakerRequestScreen } from './screens/RainmakerRequestScreen';
 import { RequestDetailScreen }    from './screens/RequestDetailScreen';
 import { RequestFromConnectorScreen } from './screens/RequestFromConnectorScreen';
+import { SpotlightRequestScreen } from './screens/SpotlightRequestScreen';
 import { JobDetailsScreen }       from './screens/JobDetailsScreen';
 import { RateConfirmScreen }      from './screens/RateConfirmScreen';
 import { SocialPostsScreen }      from './screens/SocialPostsScreen';
@@ -101,7 +102,7 @@ const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
 // bottom "Request {offering} ($N)" button that the BottomNav was
 // covering, so users on Tarik's screenshot saw the Book CTA hidden.
 // PDP is a focused booking flow anyway; nav is wrong on it.
-const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/', '/service/', '/i/', '/inbound', '/request']; // focused linear flows — /inbound + /request have fixed-bottom action bars the BottomNav was covering
+const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/', '/service/', '/i/', '/inbound', '/request', '/spotlight']; // focused linear flows — these have fixed-bottom action bars the BottomNav was covering
 const HIDE_NAV_PATHS_EXTRA = [
   '/intake',                          // chat composer at bottom — nav was covering it
   '/intake-form',                     // structured form fallback — same reason
@@ -461,6 +462,7 @@ export default function App() {
           <Route path="/rainmaker-request" element={<RainmakerRequestScreen />} />
           <Route path="/request/:id?"      element={<RequestDetailScreen />} />
           <Route path="/inbound/:reqId"    element={<RequestFromConnectorScreen />} />
+          <Route path="/spotlight/:id"     element={<SpotlightRequestScreen />} />
           <Route path="/job"               element={<JobDetailsScreen />} />
           <Route path="/rate"              element={<RateConfirmScreen />} />
           <Route path="/social-posts"      element={<Navigate to="/home" replace />} />

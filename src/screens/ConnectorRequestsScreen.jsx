@@ -223,7 +223,7 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
   // disable the drill so the card never dead-ends.
   const profileTarget = r.provider?.id || r.service?.owner_id || null;
   const onCardTap = () => {
-    if (profileTarget) navigate(`/u/${profileTarget}`);
+    navigate(`/spotlight/${r.id}`);   // full frame-3-quality detail screen
   };
 
   return (

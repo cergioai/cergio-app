@@ -2252,6 +2252,52 @@ export async function listMyInboundSpotlightRequests({ limit = 50 } = {}) {
   return { data: hydrated, error: null };
 }
 
+/**
+ * CERGIO-GUARD (2026-06-14): one inbound spotlight request by id, hydrated with
+ * the provider's SERVICE reputation (services + reco's received + bio) — the
+ * Connector decides on a spotlight by the provider's quality, not their reach.
+ * Powers the dedicated spotlight-request detail screen (/spotlight/:id).
+ */
+export async function getSpotlightRequest(id) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!id) return { data: null, error: { message: 'id required' } };
+  const { data: r, error } = await supabase
+    .from('spotlight_requests')
+    .select('*, service:services(id, title, category, taxonomy_provider_type, owner_id)')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !r) return { data: null, error };
+
+  const pid = r.provider_id;
+  let provider = null, providerServices = [], providerRecosReceived = 0;
+  if (pid) {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('id, display_name, headline, bio, instagram_handle, instagram_followers')
+      .eq('id', pid).maybeSingle();
+    provider = prof || null;
+    const { data: svcs } = await supabase
+      .from('services')
+      .select('id, title, taxonomy_provider_type, category')
+      .eq('owner_id', pid).eq('status', 'listed');
+    const svcIds = (svcs || []).map(s => s.id);
+    const recoBySvc = {};
+    if (svcIds.length) {
+      const { data: recRows } = await supabase.from('recommendations').select('service_id').in('service_id', svcIds);
+      for (const rr of recRows || []) recoBySvc[rr.service_id] = (recoBySvc[rr.service_id] || 0) + 1;
+    }
+    const agg = {};
+    for (const s of (svcs || [])) {
+      const name = s.taxonomy_provider_type || s.category || s.title;
+      if (!name) continue;
+      agg[name] = (agg[name] || 0) + (recoBySvc[s.id] || 0);
+      providerRecosReceived += (recoBySvc[s.id] || 0);
+    }
+    providerServices = Object.entries(agg).map(([name, recos]) => ({ name, recos }));
+  }
+  return { data: { ...r, provider, providerServices, providerRecosReceived }, error: null };
+}
+
 /** Counter with a lower price. Either party (Connector or Provider) can
  *  counter — we auto-detect role from the signed-in user vs the row.
  *  Status → 'countered'; last_counter_by stamps who just countered so the
