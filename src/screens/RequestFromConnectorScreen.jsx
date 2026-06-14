@@ -59,7 +59,7 @@ function Avatar({ name }) {
 // fields (Tarik 2026-06-14). Derived from data we have — not fabricated.
 // e.g. "Hey Jan, need a personal chef tuesday at 5pm — vegan Ecuadorian
 //       birthday party. Happy to spotlight you free to my 319 followers 🙌"
-function composeNote({ serviceType, whenText, description, igFollowers, providerFirst }) {
+function composeNote({ serviceType, whenText, description, igFollowers, providerFirst, isFree = true, budgetCents = 0 }) {
   // Greet by the provider's registered first name when present.
   const useName = providerFirst && /^[A-Za-z][A-Za-z'-]{1,}$/.test(providerFirst);
   const greet   = useName ? `Hi ${providerFirst}, ` : 'Hi! ';
@@ -70,10 +70,11 @@ function composeNote({ serviceType, whenText, description, igFollowers, provider
   const desc     = (description || '').trim();
   const specifics = desc && !desc.toLowerCase().includes(svc) ? desc : '';
   const when     = whenText && !`${svc} ${specifics}`.toLowerCase().includes(whenText.toLowerCase()) ? ` ${whenText}` : '';
-  const reach    = igFollowers > 0
-    ? ` to my ${Number(igFollowers).toLocaleString()} followers`
-    : ' to my followers';
-  return `${greet}I need a ${svc}${specifics ? ` — ${specifics}` : ''}${when}. Happy to spotlight you for free${reach} 🙌`;
+  const reach    = igFollowers > 0 ? ` to my ${Number(igFollowers).toLocaleString()} followers` : ' to my followers';
+  const closer   = isFree
+    ? ` Happy to spotlight you for free${reach} 🙌`
+    : (budgetCents > 0 ? ` My budget is up to $${Math.round(budgetCents / 100)} — what's your price?` : " What's your price?");
+  return `${greet}I need a ${svc}${specifics ? ` — ${specifics}` : ''}${when}.${closer}`;
 }
 
 // Approximate area only — strip the street number/line + zip + country so the
@@ -100,9 +101,10 @@ export function RequestFromConnectorScreen() {
   const [mutuals, setMutuals] = useState(null);
   const [stats, setStats] = useState(null);   // connector strength (recos / services)
   const [phase, setPhase] = useState(null);    // null | 'pending' | 'done'
-  const [counterOpen, setCounterOpen] = useState(false);
-  const [counterDraft, setCounterDraft] = useState('');
-  const [counterMsg, setCounterMsg] = useState('');
+  const [composerMode, setComposerMode] = useState(null); // null | 'bid' | 'counter' | 'accept-time'
+  const [counterDraft, setCounterDraft] = useState('');   // bid / counter price
+  const [counterMsg, setCounterMsg] = useState('');       // note to the requester
+  const [timeDraft, setTimeDraft] = useState('');         // chosen time when flexible
   const [mapOpen, setMapOpen] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [askOpen, setAskOpen] = useState(false);
@@ -134,6 +136,7 @@ export function RequestFromConnectorScreen() {
         // "vegan Ecuadorian dinner for 6" not "Catering".
         description:   r.description || r.query || r.what || '',
         whenText:      formatWhen(r),
+        scheduledAt:   r.scheduled_at || null,
         locationText:  r.location_text || null,
         lat:           r.lat ?? null,
         lng:           r.lng ?? null,
@@ -195,6 +198,9 @@ export function RequestFromConnectorScreen() {
 
   const alreadyResolved = data.status && data.status !== 'pending';
   const hasMutuals = mutuals && mutuals.count > 0;
+  const isPaid = !data.isFree;                 // budget set / not a Connector barter
+  const hasSpecificTime = !!data.scheduledAt || /\b\d{1,2}\s*(:|am|pm)/i.test(data.whenText || '');
+  const isFlexibleTime = !hasSpecificTime;     // provider picks the time on accept
   // Top line = the connector's REACH/contribution: audience (IG + TikTok) ·
   // reco's MADE · Cergio network. Their services + reco's RECEIVED sit under
   // the bio (contrasted as what they DO + social proof on their work).
@@ -221,6 +227,7 @@ export function RequestFromConnectorScreen() {
   const note = composeNote({
     requesterName: data.requesterName, serviceType: data.serviceType, whenText: data.whenText,
     description: data.description, igFollowers: data.igFollowers, providerFirst,
+    isFree: data.isFree, budgetCents: data.budgetCents,
   });
 
   // Approximate area + keyless OSM map of the neighborhood (no precise marker
@@ -271,11 +278,32 @@ export function RequestFromConnectorScreen() {
     }
   };
 
-  const submitCounter = () => {
-    const dollars = parseFloat(counterDraft);
-    if (!Number.isFinite(dollars) || dollars < 0) { showToast('Enter a valid price.'); return; }
-    setCounterOpen(false);
-    sendResponse('countered', Math.round(dollars * 100), counterMsg.trim() || null);
+  const openComposer = (mode) => { setCounterDraft(''); setCounterMsg(''); setTimeDraft(''); setComposerMode(mode); };
+
+  const fmtChosen = (v) => {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? v
+      : `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  };
+
+  // Unified submit for the bid / counter / pick-a-time composer.
+  const submitResponse = () => {
+    const wantsPrice = composerMode === 'bid' || composerMode === 'counter';
+    let priceCents = null;
+    if (wantsPrice) {
+      const dollars = parseFloat(counterDraft);
+      if (!Number.isFinite(dollars) || dollars < 0) { showToast('Enter a price.'); return; }
+      priceCents = Math.round(dollars * 100);
+    }
+    if (isFlexibleTime && !timeDraft) { showToast('Pick a start time.'); return; }
+    const parts = [];
+    if (isFlexibleTime && timeDraft) parts.push(`Proposed time: ${fmtChosen(timeDraft)}`);
+    if (counterMsg.trim()) parts.push(counterMsg.trim());
+    const message = parts.join(' · ') || null;
+    const status = composerMode === 'counter' ? 'countered' : 'offered';
+    setComposerMode(null);
+    sendResponse(status, priceCents, message);
   };
 
   const ico = 'w-9 h-9 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.10)] flex items-center justify-center text-black';
@@ -302,7 +330,11 @@ export function RequestFromConnectorScreen() {
         <p className="text-caps text-gd mb-1">{data.isFree ? 'Free service request' : 'Paid service request'}</p>
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-heading-2 font-extrabold text-black leading-tight">
-            Free {data.serviceType} <span className="text-g">⇄</span> Free spotlight{data.igFollowers > 0 ? <> to {Number(data.igFollowers).toLocaleString()} followers</> : null}
+            {data.isFree ? (
+              <>Free {data.serviceType} <span className="text-g">⇄</span> Free spotlight{data.igFollowers > 0 ? <> to {Number(data.igFollowers).toLocaleString()} followers</> : null}</>
+            ) : (
+              <>{data.serviceType}{data.budgetCents > 0 ? <> · up to <span className="text-g">${Math.round(data.budgetCents / 100)}</span></> : null}</>
+            )}
           </h1>
           {data.whenText && (
             <span className="shrink-0 text-meta-sm font-extrabold text-gd bg-gl rounded-pill px-2.5 py-1 mt-0.5 whitespace-nowrap">{data.whenText}</span>
@@ -353,7 +385,7 @@ export function RequestFromConnectorScreen() {
             {services.length > 0 && (
               <p className="text-meta-sm text-b3 leading-snug mt-2">
                 {services.map((s, i) => (
-                  <span key={s.name}>{i > 0 ? ', ' : ''}<span className="font-extrabold text-b2">{s.name}</span>{s.recos > 0 ? ` (${s.recos} reco${s.recos === 1 ? '' : 's'})` : ''}</span>
+                  <span key={s.name}>{i > 0 ? ', ' : ''}<span className="font-extrabold text-b2">{s.name}</span> ({s.recos} reco{s.recos === 1 ? '' : 's'} received)</span>
                 ))}
               </p>
             )}
@@ -409,7 +441,7 @@ export function RequestFromConnectorScreen() {
 
       {/* previous spotlights on Cergio — placeholder (real media lands later);
           this is how the Connector shows their track record (like the Figma). */}
-      {data.isConnector && (
+      {data.isFree && data.isConnector && (
         <div className="px-5 pb-3">
           <p className="text-body-sm font-extrabold text-black mb-2">Previous spotlights on Cergio</p>
           {Array.isArray(data.spotlights) && data.spotlights.length > 0 ? (
@@ -526,39 +558,65 @@ export function RequestFromConnectorScreen() {
         </div>
       )}
 
-      {/* sticky actions — Accept free request / Counter / Decline */}
+      {/* sticky actions — adapt to free/paid + flexible time */}
       {!alreadyResolved && (
         <div className="fixed bottom-0 inset-x-0 max-w-[390px] mx-auto bg-cr px-5 pt-3 pb-6 border-t border-line shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
           {phase === 'pending' ? (
             <p className="text-body-sm text-b3 font-medium text-center py-3">Sending…</p>
-          ) : counterOpen ? (
+          ) : composerMode ? (
             <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-9 h-9 min-w-9 rounded-[10px] bg-gl text-gd text-body font-extrabold">$</span>
-                <input autoFocus inputMode="decimal" placeholder="Propose a price" value={counterDraft}
-                  onChange={e => setCounterDraft(e.target.value)}
-                  className="flex-1 border border-bdr rounded-[12px] px-3 py-3 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
-              </div>
+              {(composerMode === 'bid' || composerMode === 'counter') && (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-9 h-9 min-w-9 rounded-[10px] bg-gl text-gd text-body font-extrabold">$</span>
+                  <input autoFocus inputMode="decimal"
+                    placeholder={composerMode === 'bid' ? 'Your bid price' : 'Propose a price'}
+                    value={counterDraft} onChange={e => setCounterDraft(e.target.value)}
+                    className="flex-1 border border-bdr rounded-[12px] px-3 py-3 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
+                </div>
+              )}
+              {isFlexibleTime && (
+                <div className="mt-2">
+                  <label className="block text-meta-sm font-extrabold text-b2 mb-1">Pick a start time</label>
+                  <input type="datetime-local" value={timeDraft} onChange={e => setTimeDraft(e.target.value)}
+                    className="w-full border border-bdr rounded-[12px] px-3 py-3 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
+                </div>
+              )}
               <input value={counterMsg} onChange={e => setCounterMsg(e.target.value)}
-                placeholder="Add a note — e.g. I can do it, but on a different day"
+                placeholder="Add a note (optional)"
                 className="w-full mt-2 border border-bdr rounded-[12px] px-3 py-3 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
               <div className="flex items-center gap-2 mt-2">
-                <button onClick={submitCounter} className="flex-1 bg-g text-white rounded-[24px] py-3.5 text-body font-extrabold active:scale-[.98] transition-all">Send counter</button>
-                <button onClick={() => setCounterOpen(false)} className="text-body font-extrabold text-b3 px-3">Cancel</button>
+                <button onClick={submitResponse} className="flex-1 bg-g text-white rounded-[24px] py-3.5 text-body font-extrabold active:scale-[.98] transition-all">
+                  {composerMode === 'bid' ? 'Send bid' : composerMode === 'counter' ? 'Send counter' : 'Confirm & accept'}
+                </button>
+                <button onClick={() => setComposerMode(null)} className="text-body font-extrabold text-b3 px-3">Cancel</button>
               </div>
             </div>
           ) : (
             <>
-              <button onClick={() => sendResponse('offered')}
-                className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
-                {data.isFree ? 'Accept free request' : 'Accept'}
-              </button>
-              <div className="flex items-center justify-center gap-3 mt-2.5">
-                <button onClick={() => { setCounterDraft(''); setCounterMsg(''); setCounterOpen(true); }}
-                  className="inline-flex items-center gap-1.5 border border-bdr rounded-pill px-4 py-2 text-body-sm font-extrabold text-b2 hover:bg-bg5 active:scale-[.97] transition-all">
-                  <span className="text-g">$</span>Counter
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10l-3-3M17 17H7l3 3" /></svg>
+              {isPaid ? (
+                <button onClick={() => openComposer('bid')}
+                  className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
+                  Place a bid{data.budgetCents > 0 ? ` · budget $${Math.round(data.budgetCents / 100)}` : ''}
                 </button>
+              ) : isFlexibleTime ? (
+                <button onClick={() => openComposer('accept-time')}
+                  className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
+                  Pick a time &amp; accept
+                </button>
+              ) : (
+                <button onClick={() => sendResponse('offered')}
+                  className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
+                  Accept free request
+                </button>
+              )}
+              <div className="flex items-center justify-center gap-3 mt-2.5">
+                {!isPaid && (
+                  <button onClick={() => openComposer('counter')}
+                    className="inline-flex items-center gap-1.5 border border-bdr rounded-pill px-4 py-2 text-body-sm font-extrabold text-b2 hover:bg-bg5 active:scale-[.97] transition-all">
+                    <span className="text-g">$</span>Counter
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10l-3-3M17 17H7l3 3" /></svg>
+                  </button>
+                )}
                 <button onClick={() => sendResponse('declined')} className="rounded-pill px-4 py-2 text-body-sm font-extrabold text-g hover:bg-gl active:scale-[.97] transition-all">Decline</button>
               </div>
             </>
