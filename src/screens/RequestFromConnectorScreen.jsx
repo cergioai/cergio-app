@@ -172,16 +172,17 @@ export function RequestFromConnectorScreen() {
           ←
         </button>
         <span className="text-body-lg font-extrabold text-black truncate px-2">{data.requesterName}</span>
+        {/* ••• matches Figma; opens the requester's full profile */}
         {data.requesterId ? (
-          <button onClick={() => navigate(`/u/${data.requesterId}`)}
-            className="text-meta-sm font-extrabold text-gd whitespace-nowrap">
-            See full profile
+          <button onClick={() => navigate(`/u/${data.requesterId}`)} aria-label="More"
+            className="w-9 h-9 rounded-full bg-card border border-bdr flex items-center justify-center text-b2 text-base">
+            •••
           </button>
         ) : <div className="w-9" />}
       </div>
 
-      {/* status pill */}
-      <div className="px-5 pb-3">
+      {/* status row — "Needs Response" + "View Details" (Figma frame 3) */}
+      <div className="px-5 pb-3 flex items-center justify-between">
         {alreadyResolved ? (
           <div className="inline-flex items-center gap-1.5 bg-bg5 text-b2 text-meta-sm font-extrabold px-2.5 py-1 rounded-pill">
             <span className="w-2 h-2 rounded-full bg-b3" />
@@ -193,17 +194,24 @@ export function RequestFromConnectorScreen() {
             Needs Response
           </div>
         )}
+        <button
+          onClick={() => document.getElementById('svp-job-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className="text-body-sm font-extrabold text-black whitespace-nowrap">
+          View Details
+        </button>
       </div>
 
       {/* purpose banner */}
       <div className="px-5 pb-3">
         {data.isFree ? (
           <div className="bg-gl/60 border border-g/30 rounded-[14px] p-3.5">
-            <p className="text-body-sm font-extrabold text-gd leading-snug">Free spotlight exchange</p>
+            {/* Frame 2 ("{Connector} wants to market your services") folded in here */}
+            <p className="text-body-sm font-extrabold text-gd leading-snug">
+              {data.requesterName} wants to market your services
+            </p>
             <p className="text-meta text-b2 mt-1 leading-snug">
-              <span className="font-extrabold text-black">{data.requesterName}</span> is asking for a free slot of{' '}
-              <span className="font-extrabold text-black">{data.serviceType}</span>. In exchange, they'll spotlight it
-              to their social audience — no cash changes hands.
+              In exchange for a free <span className="font-extrabold text-black">{data.serviceType}</span>, they'll
+              spotlight it{data.igFollowers > 0 ? <> to their <span className="font-extrabold text-black">{Number(data.igFollowers).toLocaleString()}</span> followers</> : ' to their social audience'} — no cash changes hands.
             </p>
           </div>
         ) : (
@@ -220,7 +228,7 @@ export function RequestFromConnectorScreen() {
       </div>
 
       {/* job details */}
-      <div className="px-5 pb-4">
+      <div id="svp-job-details" className="px-5 pb-4 scroll-mt-4">
         <h2 className="text-heading-1 font-extrabold text-black leading-tight mb-2">{data.serviceType}</h2>
         {data.isFree && (
           <div className="inline-flex items-center gap-1 bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill mb-3">
@@ -298,6 +306,13 @@ export function RequestFromConnectorScreen() {
               </a>
             )}
           </div>
+          {/* "See full profile" kept (Tarik) — drill into the requester */}
+          {data.requesterId && (
+            <button onClick={() => navigate(`/u/${data.requesterId}`)}
+              className="mt-2 inline-flex items-center gap-1 text-meta-sm font-extrabold text-gd hover:underline">
+              See full profile →
+            </button>
+          )}
         </div>
       )}
 
