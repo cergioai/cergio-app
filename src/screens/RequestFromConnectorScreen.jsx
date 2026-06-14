@@ -7,7 +7,7 @@
 // NO fake IG media — the photo strip is gated on real data.igMedia.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
-import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions } from '../lib/api';
+import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName } from '../lib/api';
 
 const QUICK_QS = [
   'Who buys the ingredients?',
@@ -110,6 +110,7 @@ export function RequestFromConnectorScreen() {
   const [questions, setQuestions] = useState([]);
   const [askOpen, setAskOpen] = useState(false);
   const [askDraft, setAskDraft] = useState('');
+  const [myName, setMyName] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +126,8 @@ export function RequestFromConnectorScreen() {
         isConnector,
         igHandle:      requester.instagram_handle || null,
         igFollowers:   requester.instagram_followers ?? null,
+        ttHandle:      requester.tiktok_handle || null,
+        ttFollowers:   requester.tiktok_followers ?? null,
         bio:           (requester.bio || requester.headline || '').trim() || null,
         igMedia:       null,  // reserved — real IG media post Meta approval
         serviceType:   r.service_type || r.category || 'Service request',
@@ -153,6 +156,13 @@ export function RequestFromConnectorScreen() {
     });
     return () => { cancelled = true; };
   }, [reqId]);
+
+  // Signed-in provider's name, for greeting them by first name in the note.
+  useEffect(() => {
+    let cancelled = false;
+    getMyDisplayName().then(({ data: n }) => { if (!cancelled) setMyName(n || ''); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Load any pre-booking Q&A on this request.
   useEffect(() => {
@@ -187,15 +197,24 @@ export function RequestFromConnectorScreen() {
 
   const alreadyResolved = data.status && data.status !== 'pending';
   const hasMutuals = mutuals && mutuals.count > 0;
-  // Connector strength — differentiate reco's MADE vs RECEIVED + name services.
+  // Top line = the connector's REACH/contribution: audience (IG + TikTok) ·
+  // reco's MADE · Cergio network. Their services + reco's RECEIVED sit under
+  // the bio (contrasted as what they DO + social proof on their work).
+  const audienceBits = [
+    data.igFollowers > 0 ? `${Number(data.igFollowers).toLocaleString()} IG` : null,
+    data.ttFollowers > 0 ? `${Number(data.ttFollowers).toLocaleString()} TikTok` : null,
+  ].filter(Boolean);
+  const audience = audienceBits.length ? `${audienceBits.join(' · ')} followers` : null;
   const strength = [
-    data.igFollowers > 0 ? `${Number(data.igFollowers).toLocaleString()} followers` : null,
+    audience,
     stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
-    stats && stats.recosReceived > 0 ? `${stats.recosReceived} received` : null,
+    stats && stats.networkCount > 0 ? `${stats.networkCount} on Cergio` : null,
   ].filter(Boolean).join(' · ');
   const serviceNames = (stats && stats.serviceNames) || [];
+  const recosReceived = (stats && stats.recosReceived) || 0;
 
-  const providerName = auth?.user?.user_metadata?.display_name
+  const providerName = myName
+    || auth?.user?.user_metadata?.display_name
     || auth?.user?.user_metadata?.full_name
     || auth?.user?.user_metadata?.name
     || auth?.profile?.display_name
@@ -313,9 +332,6 @@ export function RequestFromConnectorScreen() {
                     )}
                   </div>
                   <p className="text-meta-sm text-b3 truncate">{strength || 'Connector'}</p>
-                  {serviceNames.length > 0 && (
-                    <p className="text-meta-sm text-b3 truncate">Services: {serviceNames.join(', ')}</p>
-                  )}
                 </div>
               </div>
               {data.igHandle && (
@@ -326,23 +342,7 @@ export function RequestFromConnectorScreen() {
               )}
             </div>
 
-            {/* IG photo strip — reserved for real media (no fakes until Meta media) */}
-            {data.igHandle && Array.isArray(data.igMedia) && data.igMedia.length > 0 && (
-              <div className="grid grid-cols-4 gap-2 mt-3">
-                {data.igMedia.slice(0, 3).map((m, i) => (
-                  <div key={i} className="aspect-square rounded-[12px] overflow-hidden bg-bg5">
-                    <img src={m.thumbnail_url || m.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  </div>
-                ))}
-                {data.igMedia.length > 3 && (
-                  <div className="aspect-square rounded-[12px] bg-black text-white flex flex-col items-center justify-center text-meta-sm font-extrabold leading-tight">
-                    <span className="text-body-lg">+{data.igMedia.length - 3}</span>more
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* mutual friends — linked, with explicit empty state (Tarik) */}
+            {/* mutual friends — moved up, just under the connector (Tarik) */}
             <div className="mt-2.5 pt-2.5 border-t border-line">
               {mutuals === null ? null : hasMutuals ? (
                 <div className="flex items-center gap-2.5">
@@ -365,14 +365,42 @@ export function RequestFromConnectorScreen() {
               )}
             </div>
 
+            {/* IG photo strip — reserved for real media (no fakes until Meta media) */}
+            {data.igHandle && Array.isArray(data.igMedia) && data.igMedia.length > 0 && (
+              <div className="grid grid-cols-4 gap-2 mt-3">
+                {data.igMedia.slice(0, 3).map((m, i) => (
+                  <div key={i} className="aspect-square rounded-[12px] overflow-hidden bg-bg5">
+                    <img src={m.thumbnail_url || m.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                ))}
+                {data.igMedia.length > 3 && (
+                  <div className="aspect-square rounded-[12px] bg-black text-white flex flex-col items-center justify-center text-meta-sm font-extrabold leading-tight">
+                    <span className="text-body-lg">+{data.igMedia.length - 3}</span>more
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* bio — BEFORE the see-full-profile link (Tarik) */}
+            {data.bio && (
+              <p className="text-meta text-b3 leading-snug mt-2 line-clamp-3">{data.bio}</p>
+            )}
+
+            {/* Services + reco's RECEIVED — under the bio, contrasted vs
+                reco's made up top (Tarik) */}
+            {(serviceNames.length > 0 || recosReceived > 0) && (
+              <p className="text-meta-sm text-b3 leading-snug mt-1.5">
+                {serviceNames.length > 0 && <>Services: <span className="font-extrabold text-b2">{serviceNames.join(', ')}</span></>}
+                {serviceNames.length > 0 && recosReceived > 0 ? ' · ' : ''}
+                {recosReceived > 0 && <>{recosReceived} reco's received</>}
+              </p>
+            )}
+
             {data.requesterId && (
               <button onClick={() => navigate(`/u/${data.requesterId}`)}
                 className="mt-2 inline-flex items-center gap-1 text-meta-sm font-extrabold text-gd hover:underline">
                 See full profile →
               </button>
-            )}
-            {data.bio && (
-              <p className="text-meta text-b3 leading-snug mt-1.5 line-clamp-3">{data.bio}</p>
             )}
           </div>
         </div>

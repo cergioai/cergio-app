@@ -1811,7 +1811,7 @@ export async function getPublicProfileStats(profileId) {
     .map(s => s.taxonomy_provider_type || s.category || s.title)
     .filter(Boolean))];
 
-  const [invitesRes, recosMadeRes, recosRecvRes] = await Promise.all([
+  const [invitesRes, recosMadeRes, recosRecvRes, netRes] = await Promise.all([
     supabase
       .from('invites')
       .select('id, joined_at, first_booking_at')
@@ -1825,6 +1825,8 @@ export async function getPublicProfileStats(profileId) {
     ownedIds.length
       ? supabase.from('recommendations').select('id', { count: 'exact', head: true }).in('service_id', ownedIds)
       : Promise.resolve({ count: 0, error: null }),
+    // Cergio network — friends/connections this profile follows on the platform.
+    supabase.from('network').select('id', { count: 'exact', head: true }).eq('follower_id', profileId),
   ]);
   const invites = invitesRes.data || [];
   return {
@@ -1834,6 +1836,7 @@ export async function getPublicProfileStats(profileId) {
       booked:          invites.filter(r => r.first_booking_at).length,
       recommended:     recosMadeRes.error ? 0 : (recosMadeRes.count || 0),  // made
       recosReceived:   recosRecvRes.error ? 0 : (recosRecvRes.count || 0),  // received on owned services
+      networkCount:    netRes.error ? 0 : (netRes.count || 0),             // friends on Cergio
       listedServices:  serviceNames.length,
       serviceNames,
     },
@@ -1910,7 +1913,7 @@ export async function getInboundRequest(reqId) {
       location_text, lat, lng, is_free_for_rainmaker, budget_cents,
       status, created_at,
       requester:profiles!requests_requester_id_fkey
-        ( id, display_name, headline, bio, instagram_handle, instagram_followers, cc_verified_at )
+        ( id, display_name, headline, bio, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, cc_verified_at )
     `)
     .eq('id', reqId)
     .maybeSingle();
@@ -1936,6 +1939,16 @@ export async function askRequestQuestion(requestId, body) {
     .maybeSingle();
   if (!res.error && res.data?.id) fireRequestNotify({ event: 'question', questionId: res.data.id, requestId });
   return res;
+}
+
+/** The signed-in user's profile display name (for greeting them by name). */
+export async function getMyDisplayName() {
+  if (!supabaseReady) return { data: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  const uid = userRes?.user?.id;
+  if (!uid) return { data: null, error: null };
+  const { data } = await supabase.from('profiles').select('display_name').eq('id', uid).maybeSingle();
+  return { data: data?.display_name || null, error: null };
 }
 
 export async function listRequestQuestions(requestId) {

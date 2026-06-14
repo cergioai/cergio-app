@@ -159,6 +159,15 @@ qa.mjs #47 enforces this.
 4. **Friends-in-common** — mutual connections with the requester via `getMutualConnections` over the `network` graph (any edge, either direction; buckets friends + Connectors). Hidden when zero.
 5. **Actions** — Accept / Counter / Decline via `respondToRequest` ("Accept free request" label for free requests) + the "free marketing / service verification with a 4+ star rating" subcopy. Plus a "See full profile" link to the requester's PublicProfile.
 
+**FROZEN layout — finalized 2026-06-14 (Tarik):**
+- Header: back · (no requester name) · **Flag + Share** (Share = Web Share / copy link; Flag reports). No kebab.
+- **Top headline:** "Free {service} ⇄ Free spotlight to {N} followers" + a date chip. No separate big service title / no "wants to market" banner.
+- **Connector tile top line = reach/contribution:** audience (IG + **TikTok** followers when present) · **reco's MADE** · **Cergio network** count (friends on platform). **Mutual friends** sit directly under it (linked to each profile; explicit empty state "You have no mutual friends with {name} yet."). **Bio** (`profiles.bio`/`headline`) under the tile, **BEFORE** "See full profile". **Services + reco's RECEIVED** under the bio (contrasted vs reco's made up top).
+- **Personalized message** composed from the requester's RAW task text (`description`/`query`, not the parsed type), greeting the provider by **first name** ("Hi {First}," when available), no doubled date.
+- **Map:** real keyless **OpenStreetMap** embed of the AREA (no precise pin), **tappable → expands** (Airbnb-style). Approximate area (city/state) only; exact street address **blocked until accept + confirm**. Sits BELOW the message, above the Accept button.
+- **Pre-booking Q&A:** "Ask a question before you accept" — preset chips + free text via `askRequestQuestion`; thread renders question + reply. (Requester reply surface = follow-up.)
+- **Actions:** "Accept free request" / **Counter** ($ + optional note via `respondToRequest(message)`) / Decline.
+
 **Banned behaviors:**
 - Faking the IG photo grid. The "+N more" thumbnail strip renders ONLY from real `data.igMedia` (populated once Meta Graph media access is approved). Hardcoded placeholder thumbnails are banned (SPEC-12).
 - Synthesizing follower counts, mutual-connection counts, or names not present in the DB.

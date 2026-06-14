@@ -1,9 +1,15 @@
-/inbound: differentiate reco's made vs received + name services; fix dup date
+FREEZE frame 3: finalize connector tile + greeting; SPEC-48 + qa lock
 
-- Connector strength now distinguishes "{N} reco's made" (recommendations the
-  Connector gave) from "{N} received" (recommendations on their own services),
-  and lists service names ("Services: Plumber, Dog Walker"). getPublicProfileStats
-  now returns recosReceived + serviceNames (recos-received = recommendations on
-  services they own).
-- Fixed the personalized message doubling the date ("...today today") when the
-  raw request text already contains the timing.
+Final frame-3 tweaks (Tarik):
+- Mutual friends moved up directly under the connector; bio moved BEFORE the
+  "See full profile" link.
+- Connector tile top line = reach: audience (IG + TikTok followers) · reco's
+  MADE · Cergio network count (getPublicProfileStats now returns networkCount;
+  getInboundRequest fetches TikTok handle/followers).
+- Services + reco's RECEIVED moved UNDER the bio (contrasted vs reco's made).
+- Greeting uses the provider's profile first name (getMyDisplayName) — "Hi
+  {First}," when available.
+
+FROZEN: SPEC-48 updated with the finalized layout; qa #48 now also locks the
+headline, TikTok fetch, reco's made/received + Cergio network, the Ask-a-
+question flow, the expandable map, and the mutual-friends empty state.

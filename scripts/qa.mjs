@@ -1840,6 +1840,20 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
   // 5. NO fake IG photo grid — any photo strip must gate on real media.
   assert(!/aspect-square[\s\S]{0,400}https?:\/\//.test(screen) || /data\.igMedia/.test(screen),
     'REGRESSION: IG photos must gate on real data.igMedia — no fabricated thumbnails (SPEC-12/48)');
+
+  // 6. FROZEN finalized layout (2026-06-14).
+  assert(/Free \{data\.serviceType\}/.test(screen) && /Free spotlight/.test(screen),
+    'Top headline must read "Free {service} ⇄ Free spotlight…"');
+  assert(/tiktok_handle/.test(api) && /tiktok_followers/.test(api),
+    'getInboundRequest must fetch TikTok handle/followers');
+  assert(/reco's made/.test(screen) && /reco's received/.test(screen) && /on Cergio/.test(screen),
+    'Connector tile must distinguish reco\'s made / received and show the Cergio network count');
+  assert(/export async function askRequestQuestion/.test(api) && /Ask a question before you accept/.test(screen),
+    'Pre-booking Q&A: askRequestQuestion + "Ask a question" affordance');
+  assert(/setMapOpen\(true\)/.test(screen),
+    'Map must be tappable to expand (Airbnb-style)');
+  assert(/no mutual friends with/i.test(screen),
+    'Mutual friends must have an explicit empty state');
 });
 
 main().catch(e => {
