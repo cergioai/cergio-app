@@ -1797,21 +1797,18 @@ export async function getInviteServiceContexts(invites) {
  * Falls back to 0 on RLS errors so the UI stays honest.
  */
 export async function getPublicProfileStats(profileId) {
-  const empty = { invited: 0, joined: 0, booked: 0, recommended: 0, recosReceived: 0, listedServices: 0, serviceNames: [] };
+  const empty = { invited: 0, joined: 0, booked: 0, recommended: 0, recosReceived: 0, networkCount: 0, listedServices: 0, services: [], serviceNames: [] };
   if (!supabaseReady || !profileId) return { data: empty, error: null };
 
-  // Owned services first — need their ids (for recos-received) + names.
+  // Owned services first — need their ids for per-service reco counts.
   const { data: svcs } = await supabase
     .from('services')
     .select('id, title, taxonomy_provider_type, category')
     .eq('owner_id', profileId)
     .eq('status', 'listed');
   const ownedIds = (svcs || []).map(s => s.id).filter(Boolean);
-  const serviceNames = [...new Set((svcs || [])
-    .map(s => s.taxonomy_provider_type || s.category || s.title)
-    .filter(Boolean))];
 
-  const [invitesRes, recosMadeRes, recosRecvRes, netRes] = await Promise.all([
+  const [invitesRes, recosMadeRes, recRowsRes, netRes] = await Promise.all([
     supabase
       .from('invites')
       .select('id, joined_at, first_booking_at')
@@ -1821,13 +1818,22 @@ export async function getPublicProfileStats(profileId) {
       .from('recommendations')
       .select('id', { count: 'exact', head: true })
       .eq('recommender_id', profileId),
-    // Reco's RECEIVED — recommendations on services this profile owns.
+    // Reco's RECEIVED — fetched per service so we can show a count next to each.
     ownedIds.length
-      ? supabase.from('recommendations').select('id', { count: 'exact', head: true }).in('service_id', ownedIds)
-      : Promise.resolve({ count: 0, error: null }),
+      ? supabase.from('recommendations').select('service_id').in('service_id', ownedIds)
+      : Promise.resolve({ data: [], error: null }),
     // Cergio network — friends/connections this profile follows on the platform.
     supabase.from('network').select('id', { count: 'exact', head: true }).eq('follower_id', profileId),
   ]);
+  const recRows = recRowsRes.data || [];
+  const recoBySvc = {};
+  for (const r of recRows) recoBySvc[r.service_id] = (recoBySvc[r.service_id] || 0) + 1;
+  // One entry per service with its own reco count.
+  const services = (svcs || [])
+    .map(s => ({ name: s.taxonomy_provider_type || s.category || s.title, recos: recoBySvc[s.id] || 0 }))
+    .filter(s => s.name);
+  const serviceNames = [...new Set(services.map(s => s.name))];
+
   const invites = invitesRes.data || [];
   return {
     data: {
@@ -1835,9 +1841,10 @@ export async function getPublicProfileStats(profileId) {
       joined:          invites.filter(r => r.joined_at).length,
       booked:          invites.filter(r => r.first_booking_at).length,
       recommended:     recosMadeRes.error ? 0 : (recosMadeRes.count || 0),  // made
-      recosReceived:   recosRecvRes.error ? 0 : (recosRecvRes.count || 0),  // received on owned services
+      recosReceived:   recRows.length,                                      // received on owned services
       networkCount:    netRes.error ? 0 : (netRes.count || 0),             // friends on Cergio
-      listedServices:  serviceNames.length,
+      listedServices:  services.length,
+      services,
       serviceNames,
     },
     error: null,

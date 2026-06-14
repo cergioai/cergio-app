@@ -59,24 +59,21 @@ function Avatar({ name }) {
 // fields (Tarik 2026-06-14). Derived from data we have — not fabricated.
 // e.g. "Hey Jan, need a personal chef tuesday at 5pm — vegan Ecuadorian
 //       birthday party. Happy to spotlight you free to my 319 followers 🙌"
-const GENERIC_NAMES = new Set(['service', 'provider', 'cergio', 'user', 'test', 'business', 'a']);
 function composeNote({ serviceType, whenText, description, igFollowers, providerFirst }) {
-  // Only greet by name when it's a plausible given name, never a generic
-  // account label like "Service" / "Provider" (which read broken).
-  const useName = providerFirst && /^[A-Za-z][A-Za-z'-]{1,}$/.test(providerFirst) && !GENERIC_NAMES.has(providerFirst.toLowerCase());
-  const greet  = useName ? `Hi ${providerFirst}, ` : 'Hi! ';
-  // The TASK lives in the message (the service type is in the headline now).
-  const task    = (description && description.trim())
-    ? description.trim()
-    : `need a ${(serviceType || 'service').toLowerCase()}`;
-  // Don't double the timing if the raw task text already contains it
-  // (thin search queries like "personal chef today" already include "today").
-  const whenInTask = whenText && task.toLowerCase().includes(whenText.toLowerCase());
-  const when    = (whenText && !whenInTask) ? ` ${whenText}` : '';
-  const reach   = igFollowers > 0
+  // Greet by the provider's registered first name when present.
+  const useName = providerFirst && /^[A-Za-z][A-Za-z'-]{1,}$/.test(providerFirst);
+  const greet   = useName ? `Hi ${providerFirst}, ` : 'Hi! ';
+  // Always lead with "I need a {service}" so it flows even when the user
+  // didn't type the service explicitly; append their specifics only when
+  // they add detail beyond the service type.
+  const svc      = (serviceType || 'service').toLowerCase();
+  const desc     = (description || '').trim();
+  const specifics = desc && !desc.toLowerCase().includes(svc) ? desc : '';
+  const when     = whenText && !`${svc} ${specifics}`.toLowerCase().includes(whenText.toLowerCase()) ? ` ${whenText}` : '';
+  const reach    = igFollowers > 0
     ? ` to my ${Number(igFollowers).toLocaleString()} followers`
     : ' to my followers';
-  return `${greet}${task}${when}. Happy to spotlight you for free${reach} 🙌`;
+  return `${greet}I need a ${svc}${specifics ? ` — ${specifics}` : ''}${when}. Happy to spotlight you for free${reach} 🙌`;
 }
 
 // Approximate area only — strip the street number/line + zip + country so the
@@ -210,8 +207,7 @@ export function RequestFromConnectorScreen() {
     stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
     stats && stats.networkCount > 0 ? `${stats.networkCount} on Cergio` : null,
   ].filter(Boolean).join(' · ');
-  const serviceNames = (stats && stats.serviceNames) || [];
-  const recosReceived = (stats && stats.recosReceived) || 0;
+  const services = (stats && stats.services) || [];
 
   const providerName = myName
     || auth?.user?.user_metadata?.display_name
@@ -332,14 +328,37 @@ export function RequestFromConnectorScreen() {
               </div>
             </div>
 
-            {/* services offered + reco's received */}
-            {(serviceNames.length > 0 || recosReceived > 0) && (
+            {/* services offered — each with its own reco count (no "Services:" word) */}
+            {services.length > 0 && (
               <p className="text-meta-sm text-b3 leading-snug mt-2">
-                {serviceNames.length > 0 && <>Services: <span className="font-extrabold text-b2">{serviceNames.join(', ')}</span></>}
-                {serviceNames.length > 0 && recosReceived > 0 ? ' · ' : ''}
-                {recosReceived > 0 && <>{recosReceived} reco's received</>}
+                {services.map((s, i) => (
+                  <span key={s.name}>{i > 0 ? ', ' : ''}<span className="font-extrabold text-b2">{s.name}</span>{s.recos > 0 ? ` (${s.recos} reco${s.recos === 1 ? '' : 's'})` : ''}</span>
+                ))}
               </p>
             )}
+
+            {/* mutual friends — directly under the services offered (Tarik) */}
+            <div className="mt-2.5">
+              {mutuals === null ? null : hasMutuals ? (
+                <div className="flex items-center gap-2.5">
+                  <div className="flex -space-x-2 shrink-0">
+                    {mutuals.sample.map(m => (
+                      <button key={m.id} onClick={() => navigate(`/u/${m.id}`)} title={m.name}
+                        className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
+                    ))}
+                  </div>
+                  <p className="text-meta text-b2 leading-snug min-w-0">
+                    <span className="font-extrabold text-black">{mutualSummaryText(mutuals)}</span>{' — '}
+                    {mutuals.sample.map((m, i) => (
+                      <span key={m.id}>{i > 0 ? ', ' : ''}<button onClick={() => navigate(`/u/${m.id}`)} className="text-gd font-extrabold hover:underline">{m.name}</button></span>
+                    ))}
+                    {mutuals.count > mutuals.sample.length ? ` +${mutuals.count - mutuals.sample.length} more` : ''}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-meta text-b3">You have no mutual friends with {data.requesterName} yet.</p>
+              )}
+            </div>
 
             {/* IG box — handle + reach (followers · reco's made · Cergio) + See Instagram */}
             {(data.igHandle || strength) && (
@@ -352,7 +371,7 @@ export function RequestFromConnectorScreen() {
                   </span>
                   <div className="min-w-0">
                     {data.igHandle && <p className="text-body-sm font-extrabold text-black truncate">{data.igHandle}</p>}
-                    <p className="text-meta-sm text-b3 truncate">{strength || 'Connector'}</p>
+                    <p className="text-meta-sm text-b3 leading-snug">{strength || 'Connector'}</p>
                   </div>
                 </div>
                 {data.igHandle && (
@@ -380,29 +399,6 @@ export function RequestFromConnectorScreen() {
               </div>
             )}
 
-            {/* mutual friends — BELOW the IG box (Tarik) */}
-            <div className="mt-3 pt-3 border-t border-line">
-              {mutuals === null ? null : hasMutuals ? (
-                <div className="flex items-center gap-2.5">
-                  <div className="flex -space-x-2 shrink-0">
-                    {mutuals.sample.map(m => (
-                      <button key={m.id} onClick={() => navigate(`/u/${m.id}`)} title={m.name}
-                        className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
-                    ))}
-                  </div>
-                  <p className="text-meta text-b2 leading-snug min-w-0">
-                    <span className="font-extrabold text-black">{mutualSummaryText(mutuals)}</span>{' — '}
-                    {mutuals.sample.map((m, i) => (
-                      <span key={m.id}>{i > 0 ? ', ' : ''}<button onClick={() => navigate(`/u/${m.id}`)} className="text-gd font-extrabold hover:underline">{m.name}</button></span>
-                    ))}
-                    {mutuals.count > mutuals.sample.length ? ` +${mutuals.count - mutuals.sample.length} more` : ''}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-meta text-b3">You have no mutual friends with {data.requesterName} yet.</p>
-              )}
-            </div>
-
             {data.requesterId && (
               <button onClick={() => navigate(`/u/${data.requesterId}`)}
                 className="mt-2 inline-flex items-center gap-1 text-meta-sm font-extrabold text-gd hover:underline">
@@ -416,9 +412,11 @@ export function RequestFromConnectorScreen() {
       {/* personalized message from the Connector (composed from the request) */}
       <div className="px-5 pb-3">
         <div className="bg-soft rounded-[18px] p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <Avatar name={data.requesterName} />
-            <p className="text-body font-extrabold text-black flex-1 truncate">{data.requesterName}</p>
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-6 h-6 min-w-6 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white text-[10px] font-extrabold">
+              {getInitials(data.requesterName)}
+            </div>
+            <p className="text-body-sm font-extrabold text-black flex-1 truncate">{data.requesterName}</p>
           </div>
           <p className="text-body text-black leading-relaxed">{note}</p>
         </div>

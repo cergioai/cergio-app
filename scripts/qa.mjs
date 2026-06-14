@@ -1846,8 +1846,8 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
     'Top headline must read "Free {service} ⇄ Free spotlight…"');
   assert(/tiktok_handle/.test(api) && /tiktok_followers/.test(api),
     'getInboundRequest must fetch TikTok handle/followers');
-  assert(/reco's made/.test(screen) && /reco's received/.test(screen) && /on Cergio/.test(screen),
-    'Connector tile must distinguish reco\'s made / received and show the Cergio network count');
+  assert(/reco's made/.test(screen) && /on Cergio/.test(screen) && /\$\{s\.recos\} reco/.test(screen),
+    'Connector tile must show reco\'s made, the Cergio network count, and a per-service reco count');
   assert(/export async function askRequestQuestion/.test(api) && /Ask a question before you accept/.test(screen),
     'Pre-booking Q&A: askRequestQuestion + "Ask a question" affordance');
   assert(/setMapOpen\(true\)/.test(screen),

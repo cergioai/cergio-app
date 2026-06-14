@@ -1,10 +1,13 @@
-Frame 3 tile reorder + search form date/time picker
+Frame 3 tile + message refinements (Tarik)
 
-- Frame 3 connector tile restructured (Tarik): identity first — avatar · name ·
-  Connector badge · bio · services offered (+ reco's received) — then the IG box
-  (handle · followers/reach · See Instagram), then mutual friends BELOW the IG
-  box, then See full profile. Surfaces service reputation above connector reach.
-- Search form (IntakeFormScreen): replaced the free-text "When" with a real
-  date + time picker. "I'm flexible on the exact time" hides the time field
-  (the provider picks it on the request screen). A specific start time is now
-  required unless flexible. (Budget already present = the paid signal.)
+- Services offered now list each service with its OWN reco count, e.g.
+  "Plumber (3 recos)" (dropped the "Services:" word + the aggregate received).
+  getPublicProfileStats returns per-service reco counts.
+- Mutual friends moved directly UNDER the services offered (above the IG box).
+- Message bubble avatar made much smaller.
+- Message now leads with "I need a {service}" so it flows even when the user
+  didn't type the service ("Hi {name}, I need a personal chef today…");
+  appends the user's specifics only when they add detail.
+- Greeting honors the registered first name (removed the generic-name filter,
+  so "Service" shows as "Hi Service,").
+- Reco's-made no longer truncated in the IG box (regression fixed).
