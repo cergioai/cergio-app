@@ -27,7 +27,8 @@ export function IntakeFormScreen() {
   const prefill   = location.state?.prefill ?? {};
 
   const [what,       setWhat]       = useState(prefill.what  ?? '');
-  const [when,       setWhen]       = useState(prefill.when  ?? '');
+  const [date,       setDate]       = useState(prefill.date  ?? '');
+  const [time,       setTime]       = useState(prefill.time  ?? '');
   const [flexible,   setFlexible]   = useState(prefill.flexible_time === true);
   const [where,      setWhere]      = useState(prefill.where ?? defaultAddress?.formatted_address ?? '');
   const [coords,     setCoords]     = useState(null);
@@ -37,13 +38,22 @@ export function IntakeFormScreen() {
   const [savePrompt, setSavePrompt] = useState(null);
   const [pendingNav, setPendingNav] = useState(false);
 
-  const mandatoryOk = what.trim() && when.trim() && where.trim();
+  // A specific start time is required UNLESS the user is flexible (then the
+  // provider picks the time on the request screen).
+  const mandatoryOk = what.trim() && where.trim() && date.trim() && (flexible || time.trim());
 
   // Compose the chat turn and head to /results.
   const finishSubmit = () => {
+    const whenLabel = (() => {
+      const d = date.trim() ? new Date(`${date}T${time || '00:00'}`) : null;
+      const dateLabel = d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+      if (flexible) return `${dateLabel} (flexible time)`;
+      const timeLabel = time ? new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+      return `${dateLabel}${timeLabel ? ` at ${timeLabel}` : ''}`;
+    })();
     const composed = [
       `Service: ${what.trim()}`,
-      `When: ${when.trim()}${flexible ? ' (flexible)' : ''}`,
+      `When: ${whenLabel}`,
       `Where: ${where.trim()}`,
       budget.trim()  ? `Budget: ${budget.trim()}`     : null,
       details.trim() ? `Details: ${details.trim()}`   : null,
@@ -143,13 +153,24 @@ export function IntakeFormScreen() {
         </Field>
 
         <Field label="When do you need this done?" required>
-          <input
-            value={when}
-            onChange={e => setWhen(e.target.value)}
-            placeholder="e.g. Monday 2pm, or 'any evening next week'"
-            className="w-full bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
-                       placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
-          />
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="flex-1 min-w-0 bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
+                         outline-none focus:ring-2 focus:ring-g/30"
+            />
+            {!flexible && (
+              <input
+                type="time"
+                value={time}
+                onChange={e => setTime(e.target.value)}
+                className="flex-1 min-w-0 bg-bg5 rounded-[14px] px-4 py-3.5 text-body text-black
+                           outline-none focus:ring-2 focus:ring-g/30"
+              />
+            )}
+          </div>
           <label className="inline-flex items-center gap-2 mt-2 text-meta text-b2 font-medium">
             <input
               type="checkbox"
@@ -157,7 +178,7 @@ export function IntakeFormScreen() {
               onChange={e => setFlexible(e.target.checked)}
               className="accent-g"
             />
-            I'm flexible on the exact time
+            I'm flexible on the exact time — the provider picks it
           </label>
         </Field>
 

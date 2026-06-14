@@ -1,15 +1,10 @@
-FREEZE frame 3: finalize connector tile + greeting; SPEC-48 + qa lock
+Frame 3 tile reorder + search form date/time picker
 
-Final frame-3 tweaks (Tarik):
-- Mutual friends moved up directly under the connector; bio moved BEFORE the
-  "See full profile" link.
-- Connector tile top line = reach: audience (IG + TikTok followers) · reco's
-  MADE · Cergio network count (getPublicProfileStats now returns networkCount;
-  getInboundRequest fetches TikTok handle/followers).
-- Services + reco's RECEIVED moved UNDER the bio (contrasted vs reco's made).
-- Greeting uses the provider's profile first name (getMyDisplayName) — "Hi
-  {First}," when available.
-
-FROZEN: SPEC-48 updated with the finalized layout; qa #48 now also locks the
-headline, TikTok fetch, reco's made/received + Cergio network, the Ask-a-
-question flow, the expandable map, and the mutual-friends empty state.
+- Frame 3 connector tile restructured (Tarik): identity first — avatar · name ·
+  Connector badge · bio · services offered (+ reco's received) — then the IG box
+  (handle · followers/reach · See Instagram), then mutual friends BELOW the IG
+  box, then See full profile. Surfaces service reputation above connector reach.
+- Search form (IntakeFormScreen): replaced the free-text "When" with a real
+  date + time picker. "I'm flexible on the exact time" hides the time field
+  (the provider picks it on the request screen). A specific start time is now
+  required unless flexible. (Budget already present = the paid signal.)

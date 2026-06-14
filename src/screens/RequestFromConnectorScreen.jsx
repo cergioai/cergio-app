@@ -311,39 +311,77 @@ export function RequestFromConnectorScreen() {
         </div>
       </div>
 
-      {/* requester — IG handle + followers + Connector + See Instagram (coral) */}
-      {(data.isConnector || data.igHandle) && (
+      {/* requester block — identity (avatar · bio · services) ABOVE the IG box;
+          mutual friends BELOW the IG box (Tarik 2026-06-14). */}
+      {(data.isConnector || data.igHandle || data.bio) && (
         <div className="px-5 pb-3">
           <div className="bg-bg4 rounded-[18px] p-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="inline-flex items-center justify-center w-10 h-10 min-w-10 rounded-xl border-2 border-gd">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true">
-                    <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
-                  </svg>
-                </span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-body font-extrabold text-black truncate">{data.igHandle || data.requesterName}</p>
-                    {data.isConnector && (
-                      <span className="inline-flex items-center gap-0.5 bg-gl text-gd text-[10px] font-extrabold px-1.5 py-0.5 rounded-pill">
-                        <ShieldIcon size={9} />Connector
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-meta-sm text-b3 truncate">{strength || 'Connector'}</p>
+            {/* identity: avatar + name + Connector badge + bio */}
+            <div className="flex items-start gap-3">
+              <Avatar name={data.requesterName} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-body font-extrabold text-black truncate">{data.requesterName}</p>
+                  {data.isConnector && (
+                    <span className="inline-flex items-center gap-0.5 bg-gl text-gd text-[10px] font-extrabold px-1.5 py-0.5 rounded-pill">
+                      <ShieldIcon size={9} />Connector
+                    </span>
+                  )}
                 </div>
+                {data.bio && <p className="text-meta text-b3 leading-snug mt-0.5 line-clamp-3">{data.bio}</p>}
               </div>
-              {data.igHandle && (
-                <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
-                  className="shrink-0 bg-salmon text-white rounded-pill px-3.5 py-2 text-meta-sm font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
-                  See Instagram
-                </a>
-              )}
             </div>
 
-            {/* mutual friends — moved up, just under the connector (Tarik) */}
-            <div className="mt-2.5 pt-2.5 border-t border-line">
+            {/* services offered + reco's received */}
+            {(serviceNames.length > 0 || recosReceived > 0) && (
+              <p className="text-meta-sm text-b3 leading-snug mt-2">
+                {serviceNames.length > 0 && <>Services: <span className="font-extrabold text-b2">{serviceNames.join(', ')}</span></>}
+                {serviceNames.length > 0 && recosReceived > 0 ? ' · ' : ''}
+                {recosReceived > 0 && <>{recosReceived} reco's received</>}
+              </p>
+            )}
+
+            {/* IG box — handle + reach (followers · reco's made · Cergio) + See Instagram */}
+            {(data.igHandle || strength) && (
+              <div className="mt-3 pt-3 border-t border-line flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="inline-flex items-center justify-center w-10 h-10 min-w-10 rounded-xl border-2 border-gd">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
+                    </svg>
+                  </span>
+                  <div className="min-w-0">
+                    {data.igHandle && <p className="text-body-sm font-extrabold text-black truncate">{data.igHandle}</p>}
+                    <p className="text-meta-sm text-b3 truncate">{strength || 'Connector'}</p>
+                  </div>
+                </div>
+                {data.igHandle && (
+                  <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
+                    className="shrink-0 bg-salmon text-white rounded-pill px-3.5 py-2 text-meta-sm font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
+                    See Instagram
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* IG photo strip — reserved for real media (no fakes until Meta media) */}
+            {data.igHandle && Array.isArray(data.igMedia) && data.igMedia.length > 0 && (
+              <div className="grid grid-cols-4 gap-2 mt-3">
+                {data.igMedia.slice(0, 3).map((m, i) => (
+                  <div key={i} className="aspect-square rounded-[12px] overflow-hidden bg-bg5">
+                    <img src={m.thumbnail_url || m.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                ))}
+                {data.igMedia.length > 3 && (
+                  <div className="aspect-square rounded-[12px] bg-black text-white flex flex-col items-center justify-center text-meta-sm font-extrabold leading-tight">
+                    <span className="text-body-lg">+{data.igMedia.length - 3}</span>more
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* mutual friends — BELOW the IG box (Tarik) */}
+            <div className="mt-3 pt-3 border-t border-line">
               {mutuals === null ? null : hasMutuals ? (
                 <div className="flex items-center gap-2.5">
                   <div className="flex -space-x-2 shrink-0">
@@ -364,37 +402,6 @@ export function RequestFromConnectorScreen() {
                 <p className="text-meta text-b3">You have no mutual friends with {data.requesterName} yet.</p>
               )}
             </div>
-
-            {/* IG photo strip — reserved for real media (no fakes until Meta media) */}
-            {data.igHandle && Array.isArray(data.igMedia) && data.igMedia.length > 0 && (
-              <div className="grid grid-cols-4 gap-2 mt-3">
-                {data.igMedia.slice(0, 3).map((m, i) => (
-                  <div key={i} className="aspect-square rounded-[12px] overflow-hidden bg-bg5">
-                    <img src={m.thumbnail_url || m.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  </div>
-                ))}
-                {data.igMedia.length > 3 && (
-                  <div className="aspect-square rounded-[12px] bg-black text-white flex flex-col items-center justify-center text-meta-sm font-extrabold leading-tight">
-                    <span className="text-body-lg">+{data.igMedia.length - 3}</span>more
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* bio — BEFORE the see-full-profile link (Tarik) */}
-            {data.bio && (
-              <p className="text-meta text-b3 leading-snug mt-2 line-clamp-3">{data.bio}</p>
-            )}
-
-            {/* Services + reco's RECEIVED — under the bio, contrasted vs
-                reco's made up top (Tarik) */}
-            {(serviceNames.length > 0 || recosReceived > 0) && (
-              <p className="text-meta-sm text-b3 leading-snug mt-1.5">
-                {serviceNames.length > 0 && <>Services: <span className="font-extrabold text-b2">{serviceNames.join(', ')}</span></>}
-                {serviceNames.length > 0 && recosReceived > 0 ? ' · ' : ''}
-                {recosReceived > 0 && <>{recosReceived} reco's received</>}
-              </p>
-            )}
 
             {data.requesterId && (
               <button onClick={() => navigate(`/u/${data.requesterId}`)}
