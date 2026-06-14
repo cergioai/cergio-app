@@ -1,5 +1,18 @@
-/inbound: fix personalized greeting (no "Hey Service")
+/inbound finalize-spec: declutter, real area map, richer counter (SPEC-48)
 
-The composed Connector note greeted the provider by the first token of their
-account name, which on generic accounts read "Hey Service,". Now the name is
-used only when it's a plausible given name; otherwise the note opens "Hi!".
+UX overrides on top of the Figma frame (Tarik 2026-06-14, finalize):
+- Removed redundancy: the "wants to market your services" banner, the
+  "Needs Response / View Details" status row, and the "Personal Chef" title
+  block — the request now lives inside the personalized message.
+- Header ••• replaced with Flag + Share (share uses Web Share / copy link).
+- Map fixed: was a fake placeholder (Google key not in the Vercel build).
+  Now a real keyless OpenStreetMap embed of the AREA around the address, no
+  precise pin. Shows only the approximate area (city/state); the exact street
+  address is BLOCKED until the provider accepts + the booking is confirmed.
+- Counter upgraded: "$ Counter ⇄" pill; opening it reveals a price field AND
+  a note (e.g. "I can do it, but on a different day") — the note is sent via
+  respondToRequest(message).
+- Kept: Connector strength, mutual friends (if any) under the requester tile,
+  the personalized message, Accept free request / Decline.
+
+qa #48 updated to the new approximate-area copy.

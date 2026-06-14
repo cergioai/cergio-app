@@ -9,8 +9,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
 import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile } from '../lib/api';
 
-const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || null;
-
 function getInitials(name = '') {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
 }
@@ -71,6 +69,18 @@ function composeNote({ requesterName, serviceType, whenText, description, igFoll
   return `${greet}${svc}${when}${det}. Happy to spotlight you for free${reach} 🙌`;
 }
 
+// Approximate area only — strip the street number/line + zip + country so the
+// EXACT address stays hidden until the booking is accepted + confirmed.
+// "5700 Collins Ave, Miami Beach, FL 33140, USA" → "Miami Beach, FL"
+function approxArea(text) {
+  if (!text) return null;
+  let parts = text.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1 && /\d/.test(parts[0])) parts = parts.slice(1);       // drop street line
+  parts = parts.filter(p => !/^(usa|united states|us)$/i.test(p));            // drop country
+  parts = parts.map(p => p.replace(/\s*\d{4,}.*$/, '').trim()).filter(Boolean); // drop zip
+  return parts.slice(0, 2).join(', ') || null;
+}
+
 export function RequestFromConnectorScreen() {
   const navigate = useNavigate();
   const { reqId } = useParams();
@@ -85,7 +95,7 @@ export function RequestFromConnectorScreen() {
   const [phase, setPhase] = useState(null);    // null | 'pending' | 'done'
   const [counterOpen, setCounterOpen] = useState(false);
   const [counterDraft, setCounterDraft] = useState('');
-  const [mapFailed, setMapFailed] = useState(false);
+  const [counterMsg, setCounterMsg] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -162,18 +172,32 @@ export function RequestFromConnectorScreen() {
     description: data.description, igFollowers: data.igFollowers, providerFirst,
   });
 
-  const mapUrl = (!mapFailed && data.lat && data.lng && MAPS_KEY)
-    ? `https://maps.googleapis.com/maps/api/staticmap?center=${data.lat},${data.lng}&zoom=14&size=640x300&scale=2&maptype=roadmap&key=${MAPS_KEY}`
+  // Approximate area + keyless OSM map of the neighborhood (no precise marker
+  // so the exact address stays hidden until the booking is confirmed).
+  const approxAddr = approxArea(data.locationText);
+  const hasGeo = Number.isFinite(data.lat) && Number.isFinite(data.lng);
+  const dLat = 0.008, dLng = 0.012;
+  const osmSrc = hasGeo
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${data.lng - dLng}%2C${data.lat - dLat}%2C${data.lng + dLng}%2C${data.lat + dLat}&layer=mapnik`
     : null;
 
-  const sendResponse = async (status, offeredPriceCents = null) => {
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) await navigator.share({ title: `${data.serviceType} request`, url });
+      else { await navigator.clipboard.writeText(url); showToast('Link copied'); }
+    } catch { /* dismissed */ }
+  };
+  const handleFlag = () => showToast('Flagged for review — thanks.');
+
+  const sendResponse = async (status, offeredPriceCents = null, message = null) => {
     if ((status === 'offered' || status === 'countered') && !myServiceId) {
       showToast('You need a listed service to respond.');
       return;
     }
     setPhase('pending');
     const { error } = await respondToRequest(data.id, {
-      status, serviceId: myServiceId || null, offeredPriceCents, message: null, waveN: null,
+      status, serviceId: myServiceId || null, offeredPriceCents, message, waveN: null,
     });
     if (error) { showToast('Could not send — try again.'); setPhase(null); return; }
     setPhase('done');
@@ -190,93 +214,62 @@ export function RequestFromConnectorScreen() {
     const dollars = parseFloat(counterDraft);
     if (!Number.isFinite(dollars) || dollars < 0) { showToast('Enter a valid price.'); return; }
     setCounterOpen(false);
-    sendResponse('countered', Math.round(dollars * 100));
+    sendResponse('countered', Math.round(dollars * 100), counterMsg.trim() || null);
   };
 
   const ico = 'w-9 h-9 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.10)] flex items-center justify-center text-black';
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-28 overflow-y-auto">
-      {/* header — back · name · ••• (Figma) */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+      {/* header — back · name · flag + share */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <button onClick={() => navigate(-1)} className={ico} aria-label="Back">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
         </button>
         <span className="text-heading-2 font-extrabold text-black truncate px-2">{data.requesterName}</span>
-        <button onClick={() => data.requesterId && navigate(`/u/${data.requesterId}`)} className={ico} aria-label="More">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleFlag} className={ico} aria-label="Flag">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>
+          </button>
+          <button onClick={handleShare} className={ico} aria-label="Share">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" /></svg>
+          </button>
+        </div>
       </div>
 
-      {/* status row — (!) Needs Response · View Details (icon+text, NOT a pill) */}
-      <div className="px-5 py-2 flex items-center justify-between border-b border-line">
-        {alreadyResolved ? (
-          <span className="text-body-sm font-extrabold text-b3">Closed</span>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-[#2E9CDB] flex items-center justify-center text-white text-[11px] font-extrabold">!</span>
-            <span className="text-body-sm font-extrabold text-black">Needs Response</span>
-          </div>
-        )}
-        <button onClick={() => document.getElementById('svp-job-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-          className="text-body-sm font-extrabold text-black">View Details</button>
-      </div>
-
-      {/* headline — "{Connector} wants to market your services" (frame 2 fold) */}
+      {/* Free for Connectors — single brand signal kept at top */}
       {data.isFree && (
-        <div className="px-5 pt-3 pb-1">
-          <div className="bg-gl/70 border border-g/25 rounded-[14px] p-3.5">
-            <p className="text-body-sm font-extrabold text-gd leading-snug">
-              {data.requesterName} wants to market your services
-            </p>
-            <p className="text-meta text-b2 mt-1 leading-snug">
-              Requesting a free <span className="font-extrabold text-black">{data.serviceType}</span> in exchange for an
-              Instagram spotlight{data.igFollowers > 0 ? <> to their <span className="font-extrabold text-black">{Number(data.igFollowers).toLocaleString()}</span> followers</> : ' to their audience'} — no cash changes hands.
-            </p>
-          </div>
+        <div className="px-5 pb-1">
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldIcon size={15} />
+            <span className="text-body-sm font-extrabold text-g">Free for Connectors</span>
+          </span>
         </div>
       )}
 
-      {/* title + free + service needed */}
-      <div id="svp-job-details" className="px-5 pt-3 pb-4 scroll-mt-4">
-        <h1 className="text-display-2 font-extrabold text-black leading-tight">{data.serviceType}</h1>
-        {data.isFree && (
-          <div className="flex items-center gap-1.5 mt-2">
-            <ShieldIcon size={16} />
-            <span className="text-body-sm font-extrabold text-g">Free for Connectors</span>
-          </div>
-        )}
-        {data.description && <p className="text-body-lg text-black mt-3 leading-snug">{data.description}</p>}
-        {data.whenText && <p className="text-body text-b3 mt-0.5">{data.whenText}</p>}
-      </div>
-
-      {/* map — real Google Static Map (lat/lng) under the approximate-area overlay */}
+      {/* map — real OSM map of the AREA around the address (no precise marker).
+          Exact street address is BLOCKED until the booking is accepted +
+          confirmed; only the approximate area (city/state) is shown. */}
       <div className="px-5 pb-3">
-        <div className="relative rounded-[18px] overflow-hidden h-[196px] bg-[#EFE9DF] border border-line">
-          {mapUrl && (
-            <img src={mapUrl} alt="" onError={() => setMapFailed(true)}
-              className="absolute inset-0 w-full h-full object-cover" />
-          )}
-          {/* approximate-area radius */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full bg-[#3FA9B8]/30 border-2 border-[#2F8C9A]/50" aria-hidden="true" />
-          {/* eye-off pin, top-right */}
-          <div className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.12)] flex items-center justify-center">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111114" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z" /><path d="M3 3l18 18" />
-            </svg>
-          </div>
-          {/* white floating info box */}
-          <div className="absolute left-4 right-4 top-1/2 -translate-y-1/2 bg-white rounded-[14px] p-3.5 shadow-[0_2px_12px_rgba(0,0,0,0.10)]">
-            <p className="text-body-sm font-extrabold text-black leading-snug">Map shows approximate location</p>
-            <p className="text-meta text-b3 mt-1 leading-snug">
-              {data.locationText ? <>Around <span className="font-semibold text-b2">{data.locationText}</span>. </> : null}
-              Exact address is shared after you confirm the booking.
-            </p>
+        <div className="relative rounded-[18px] overflow-hidden h-[200px] bg-[#E8EEE6] border border-line">
+          {osmSrc ? (
+            <iframe title="Approximate area" src={osmSrc} loading="lazy"
+              className="absolute inset-0 w-full h-full pointer-events-none" style={{ border: 0, filter: 'saturate(0.92)' }} />
+          ) : null}
+          {/* approximate radius — no exact pin */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-g/15 border-2 border-g/40" aria-hidden="true" />
+          <div className="absolute left-3 right-3 bottom-3">
+            <div className="bg-white/95 backdrop-blur rounded-[12px] px-3 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
+              <p className="text-body-sm font-extrabold text-black leading-snug">
+                Approximate area{approxAddr ? <> · {approxAddr}</> : null}
+              </p>
+              <p className="text-meta text-b3 mt-0.5 leading-snug">
+                Exact address is shared after you accept &amp; the booking is confirmed.
+              </p>
+            </div>
           </div>
         </div>
       </div>
-
-      <p className="text-center text-meta text-b3 py-2">Scroll down for messages</p>
 
       {/* requester — IG handle + followers + Connector + See Instagram (coral) */}
       {(data.isConnector || data.igHandle) && (
@@ -381,13 +374,20 @@ export function RequestFromConnectorScreen() {
           {phase === 'pending' ? (
             <p className="text-body-sm text-b3 font-medium text-center py-3">Sending…</p>
           ) : counterOpen ? (
-            <div className="flex items-center gap-2">
-              <span className="text-body-sm font-extrabold text-b3">$</span>
-              <input autoFocus inputMode="decimal" placeholder="Your price" value={counterDraft}
-                onChange={e => setCounterDraft(e.target.value)}
-                className="flex-1 border border-bdr rounded-[12px] px-3 py-3 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
-              <button onClick={submitCounter} className="bg-g text-white rounded-[12px] px-4 py-3 text-meta font-extrabold">Send</button>
-              <button onClick={() => setCounterOpen(false)} className="text-meta font-extrabold text-b3 px-2">Cancel</button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-9 h-9 min-w-9 rounded-[10px] bg-gl text-gd text-body font-extrabold">$</span>
+                <input autoFocus inputMode="decimal" placeholder="Propose a price" value={counterDraft}
+                  onChange={e => setCounterDraft(e.target.value)}
+                  className="flex-1 border border-bdr rounded-[12px] px-3 py-3 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
+              </div>
+              <input value={counterMsg} onChange={e => setCounterMsg(e.target.value)}
+                placeholder="Add a note — e.g. I can do it, but on a different day"
+                className="w-full mt-2 border border-bdr rounded-[12px] px-3 py-3 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
+              <div className="flex items-center gap-2 mt-2">
+                <button onClick={submitCounter} className="flex-1 bg-g text-white rounded-[24px] py-3.5 text-body font-extrabold active:scale-[.98] transition-all">Send counter</button>
+                <button onClick={() => setCounterOpen(false)} className="text-body font-extrabold text-b3 px-3">Cancel</button>
+              </div>
             </div>
           ) : (
             <>
@@ -395,9 +395,13 @@ export function RequestFromConnectorScreen() {
                 className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
                 {data.isFree ? 'Accept free request' : 'Accept'}
               </button>
-              <div className="flex items-center justify-center gap-6 mt-2">
-                <button onClick={() => { setCounterDraft(''); setCounterOpen(true); }} className="text-body font-extrabold text-b2 py-1">Counter</button>
-                <button onClick={() => sendResponse('declined')} className="text-body font-extrabold text-g py-1">Decline</button>
+              <div className="flex items-center justify-center gap-3 mt-2.5">
+                <button onClick={() => { setCounterDraft(''); setCounterMsg(''); setCounterOpen(true); }}
+                  className="inline-flex items-center gap-1.5 border border-bdr rounded-pill px-4 py-2 text-body-sm font-extrabold text-b2 hover:bg-bg5 active:scale-[.97] transition-all">
+                  <span className="text-g">$</span>Counter
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10l-3-3M17 17H7l3 3" /></svg>
+                </button>
+                <button onClick={() => sendResponse('declined')} className="rounded-pill px-4 py-2 text-body-sm font-extrabold text-g hover:bg-gl active:scale-[.97] transition-all">Decline</button>
               </div>
             </>
           )}

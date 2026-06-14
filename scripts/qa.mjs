@@ -1802,11 +1802,11 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
   assert(/path="\/inbound\/:reqId"/.test(app) && /RequestFromConnectorScreen/.test(app),
     'App.jsx must wire the /inbound/:reqId route to RequestFromConnectorScreen');
 
-  // 1. Approximate-location card — exact address gated until confirmed.
-  assert(/Map shows approximate location/.test(screen),
-    'Screen must render the approximate-location card copy');
-  assert(/shared after (you|the user) confirm/i.test(screen),
-    'Approximate-location card must state the exact address is shared only after confirm');
+  // 1. Approximate-area map — exact street address blocked until confirmed.
+  assert(/[Aa]pproximate area/.test(screen),
+    'Screen must render the approximate-area map label');
+  assert(/Exact address[\s\S]{0,60}confirm/i.test(screen),
+    'Map must state the exact address is shared only after accept + confirm');
 
   // 2. Connector status + Instagram — real handle + followers + See Instagram.
   //    Connector = ≥300 followers OR cc_verified_at (Tarik 2026-06-13), and a
