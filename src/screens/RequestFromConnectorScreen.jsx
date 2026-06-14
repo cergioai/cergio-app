@@ -7,7 +7,13 @@
 // NO fake IG media — the photo strip is gated on real data.igMedia.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
-import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile } from '../lib/api';
+import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions } from '../lib/api';
+
+const QUICK_QS = [
+  'Who buys the ingredients?',
+  'Will you cover food costs upfront?',
+  'Can I send you an ingredient list?',
+];
 
 function getInitials(name = '') {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
@@ -98,6 +104,9 @@ export function RequestFromConnectorScreen() {
   const [counterDraft, setCounterDraft] = useState('');
   const [counterMsg, setCounterMsg] = useState('');
   const [mapOpen, setMapOpen] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askDraft, setAskDraft] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -138,6 +147,16 @@ export function RequestFromConnectorScreen() {
       } else {
         setMutuals({ count: 0, connectors: 0, sample: [] });
       }
+    });
+    return () => { cancelled = true; };
+  }, [reqId]);
+
+  // Load any pre-booking Q&A on this request.
+  useEffect(() => {
+    let cancelled = false;
+    if (!reqId) return;
+    listRequestQuestions(reqId).then(({ data: qs }) => {
+      if (!cancelled) setQuestions(qs || []);
     });
     return () => { cancelled = true; };
   }, [reqId]);
@@ -199,6 +218,16 @@ export function RequestFromConnectorScreen() {
     } catch { /* dismissed */ }
   };
   const handleFlag = () => showToast('Flagged for review — thanks.');
+
+  const sendQuestion = async () => {
+    const text = askDraft.trim();
+    if (!text) { showToast('Type a question first.'); return; }
+    const { data: q, error } = await askRequestQuestion(data.id, text);
+    if (error || !q) { showToast('Could not send — try again.'); return; }
+    setQuestions(prev => [...prev, q]);
+    setAskDraft(''); setAskOpen(false);
+    showToast(`Question sent — ${data.requesterName} will be notified.`);
+  };
 
   const sendResponse = async (status, offeredPriceCents = null, message = null) => {
     if ((status === 'offered' || status === 'countered') && !myServiceId) {
@@ -351,6 +380,55 @@ export function RequestFromConnectorScreen() {
           <p className="text-body text-black leading-relaxed">{note}</p>
         </div>
       </div>
+
+      {/* pre-booking Q&A — ask follow-up questions before deciding (Tarik) */}
+      {!alreadyResolved && (
+        <div className="px-5 pb-3">
+          {questions.length > 0 && (
+            <div className="flex flex-col gap-2 mb-2">
+              {questions.map(q => (
+                <div key={q.id} className="bg-white border border-line rounded-[14px] p-3">
+                  <p className="text-meta-sm font-extrabold text-b3">You asked</p>
+                  <p className="text-body-sm text-black leading-snug">{q.body}</p>
+                  {q.reply ? (
+                    <div className="mt-2 pl-3 border-l-2 border-g/40">
+                      <p className="text-meta-sm font-extrabold text-gd">{data.requesterName} replied</p>
+                      <p className="text-body-sm text-black leading-snug">{q.reply}</p>
+                    </div>
+                  ) : (
+                    <p className="text-meta text-b3 mt-1">Waiting for reply…</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {askOpen ? (
+            <div className="bg-white border border-bdr rounded-[16px] p-3">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {QUICK_QS.map(q => (
+                  <button key={q} type="button" onClick={() => setAskDraft(q)}
+                    className="text-meta-sm font-extrabold text-gd bg-gl rounded-pill px-2.5 py-1 hover:bg-g/15 transition-colors">
+                    {q}
+                  </button>
+                ))}
+              </div>
+              <textarea autoFocus rows={2} value={askDraft} onChange={e => setAskDraft(e.target.value)}
+                placeholder="Ask a question before you decide…"
+                className="w-full border border-bdr rounded-[12px] px-3 py-2.5 text-body-sm font-medium text-black bg-white outline-none focus:border-g resize-none" />
+              <div className="flex items-center gap-2 mt-2">
+                <button onClick={sendQuestion} className="flex-1 bg-g text-white rounded-pill py-2.5 text-meta font-extrabold active:scale-[.98] transition-all">Send question</button>
+                <button onClick={() => setAskOpen(false)} className="text-meta font-extrabold text-b3 px-3">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => { setAskDraft(''); setAskOpen(true); }}
+              className="w-full inline-flex items-center justify-center gap-1.5 border border-bdr rounded-pill py-2.5 text-body-sm font-extrabold text-gd hover:bg-bg5 transition-colors">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+              Ask a question before you accept
+            </button>
+          )}
+        </div>
+      )}
 
       {/* map — area around the address; tap to expand (Airbnb-style). No
           precise pin; exact street address blocked until accepted + confirmed. */}

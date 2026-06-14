@@ -1,9 +1,11 @@
-/inbound: connector bio + raw request text; scaffold pre-booking Q&A
+/inbound: provider can ask pre-booking questions (Q&A)
 
-- Added a small Connector bio under the "See full profile" link (profiles.bio
-  / headline), pulled in getInboundRequest.
-- Message now derives from the requester's raw request text (description /
-  query) rather than the parsed type.
-- Scaffolds the pre-booking Q&A feature: migration request_questions (table +
-  RLS) and an Apply command. The Ask UI + API are wired in the next push,
-  after the migration is applied.
+Wires the request_questions backend (migration applied) into the screen:
+- api: askRequestQuestion / listRequestQuestions / replyRequestQuestion
+  (+ best-effort notify-request 'question' event).
+- Provider "Ask a question before you accept" action with preset chips
+  (Who buys ingredients? · Cover food costs upfront? · Send an ingredient
+  list?) + free text. Sends to the requester; the Q&A thread renders on the
+  screen (question + reply / "Waiting for reply…").
+
+Requester reply surface (JobsInbox) lands in the next push to close the loop.

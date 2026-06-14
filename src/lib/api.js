@@ -1902,6 +1902,51 @@ export async function getInboundRequest(reqId) {
     .maybeSingle();
 }
 
+// ─── Pre-booking Q&A on a request (provider asks the requester) ──────────────
+// CERGIO-GUARD (2026-06-14): lets a provider ask follow-up questions BEFORE
+// accepting (who buys ingredients, pay food costs upfront, send a list…).
+// Backed by request_questions (RLS: asker + request owner only).
+
+const Q_COLS = 'id, request_id, asker_id, body, reply, created_at, replied_at';
+
+export async function askRequestQuestion(requestId, body) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  const text = (body || '').trim().slice(0, 600);
+  if (!requestId || !text) return { data: null, error: { message: 'question required' } };
+  const res = await supabase
+    .from('request_questions')
+    .insert({ request_id: requestId, asker_id: userRes.user.id, body: text })
+    .select(Q_COLS)
+    .maybeSingle();
+  if (!res.error && res.data?.id) fireRequestNotify({ event: 'question', questionId: res.data.id, requestId });
+  return res;
+}
+
+export async function listRequestQuestions(requestId) {
+  if (!supabaseReady || !requestId) return { data: [], error: null };
+  return await supabase
+    .from('request_questions')
+    .select(Q_COLS)
+    .eq('request_id', requestId)
+    .order('created_at', { ascending: true });
+}
+
+export async function replyRequestQuestion(questionId, reply) {
+  if (!supabaseReady) return NOT_WIRED;
+  const text = (reply || '').trim().slice(0, 600);
+  if (!questionId || !text) return { data: null, error: { message: 'reply required' } };
+  const res = await supabase
+    .from('request_questions')
+    .update({ reply: text, replied_at: new Date().toISOString() })
+    .eq('id', questionId)
+    .select('id, reply, replied_at')
+    .maybeSingle();
+  if (!res.error && res.data?.id) fireRequestNotify({ event: 'question_reply', questionId });
+  return res;
+}
+
 export async function listInboundRequests({ limit = 20 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
   const { data: userRes } = await supabase.auth.getUser();
