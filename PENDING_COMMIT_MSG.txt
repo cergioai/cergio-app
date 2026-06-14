@@ -1,28 +1,31 @@
-Dedicated connector-request screen on the live flow (SPEC-48 corrected)
+Connector-request screen: free framing, connector strength, nav fix (SPEC-48)
 
-Fixes the real breakdown Tarik caught: the elements we built (map, Connector
-status, job details, friends-in-common) were on RequestDetailScreen
-(/request/:id, the DIRECT-booking path), but the deployed "New requests near
-you" flow opens /u/{requester}?reqId= (PublicProfile), whose request UI was
-just a one-line Accept/Counter/Decline bar. The two paths had diverged.
+Fixes the off-spec render Tarik caught on the live /inbound screen:
 
-New canonical screen — RequestFromConnectorScreen at /inbound/:reqId:
-  - Job details (free pill, description, when_text/scheduled_at)
-  - Approximate-location card (exact address only after confirm)
-  - Requester block: Connector status badge + IG handle + followers +
-    See Instagram link
-  - Friends-in-common over the network graph (getMutualConnections)
-  - Accept / Counter / Decline via respondToRequest (real actions)
-  - "See full profile" link preserves the profile-drill need
-  - No fake IG photo grid (gated on real media)
+1. "Paid request" → free. Root cause: the requests table never writes
+   is_free_for_rainmaker (only bookings do), so every request read as paid.
+   Per Tarik, a request FROM a Connector is a free barter by definition, so
+   free framing is now driven by connector status:
+   isFree = isConnectorProfile(requester) || requests.is_free_for_rainmaker.
 
-Wiring:
-  - api.getInboundRequest(reqId) selects the full requests row (timing,
-    location, free flag, budget) + requester profile (IG, cc_verified_at).
-  - App.jsx route /inbound/:reqId.
-  - JobsInboxScreen "New requests near you" card now opens /inbound/:reqId
-    instead of the bare profile ?reqId path.
+2. Connector rule + strength. New isConnectorProfile / CONNECTOR_MIN_FOLLOWERS
+   (300 at launch from the user-entered IG count; →3000 post-launch, or
+   manual admin acceptance via cc_verified_at). The requester block now shows
+   connector strength ALWAYS — followers + reco count + listed services
+   (getPublicProfileStats) — with the Connector badge when they qualify.
+   (T @ 319 followers now reads as a Connector + free request.)
 
-SPEC-48 retargeted to the canonical connector-request screen + qa #48 now
-asserts the inbox routes to /inbound/:reqId and the screen carries every
-element. RequestDetailScreen stays as the direct-booking detail screen.
+3. Accept hidden by nav. /inbound (and /request) added to HIDE_NAV_PREFIXES
+   so the global BottomNav stops covering the fixed Accept/Counter/Decline
+   bar — same fix the PDP Book button already had.
+
+4. Connector badge on the full profile (PublicProfileScreen Social row),
+   which Tarik flagged was missing.
+
+SPEC-48 updated: connector-driven free framing, the 300-follower rule, the
+post-launch "verified CC required to submit" gate (noted, not yet enforced),
+and the /inbound nav-hide. qa #48 enforces all of it.
+
+Still open (next): friends-in-common on the full profile; a real map tile;
+writing is_free_for_rainmaker at request creation if we ever want paid
+requests to coexist.

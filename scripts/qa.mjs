@@ -1809,8 +1809,19 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
     'Approximate-location card must state the exact address is shared only after confirm');
 
   // 2. Connector status + Instagram — real handle + followers + See Instagram.
-  assert(/cc_verified_at/.test(api) && /isConnector/.test(screen) && /Connector/.test(screen),
-    'Screen must surface the requester Connector status (cc_verified_at → isConnector badge)');
+  //    Connector = ≥300 followers OR cc_verified_at (Tarik 2026-06-13), and a
+  //    request FROM a Connector is FREE (barter), never "Paid request".
+  assert(/export function isConnectorProfile/.test(api) && /CONNECTOR_MIN_FOLLOWERS/.test(api),
+    'lib/api.js must export isConnectorProfile + CONNECTOR_MIN_FOLLOWERS (the connector rule)');
+  assert(/isConnectorProfile/.test(screen) && /isFree:\s*isConnector/.test(screen),
+    'Screen must derive Connector status via isConnectorProfile AND treat a Connector request as free');
+  assert(/isConnector/.test(screen) && /Connector/.test(screen),
+    'Screen must surface the requester Connector badge');
+
+  // 2b. The global BottomNav must NOT cover the fixed action bar — /inbound
+  //     is in the nav-hide prefixes.
+  assert(/'\/inbound'/.test(app),
+    'REGRESSION: /inbound must be in HIDE_NAV_PREFIXES so the BottomNav does not cover Accept/Counter/Decline');
   assert(/data\.igHandle/.test(screen) && /See Instagram/.test(screen) && /instagram\.com\//.test(screen),
     'Screen must include the IG handle + a See Instagram link');
   assert(/export async function getInboundRequest/.test(api) && /instagram_handle/.test(api),

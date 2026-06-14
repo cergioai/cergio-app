@@ -101,7 +101,7 @@ const HIDE_NAV_PATHS    = ['/', '/onboard', '/auth'];
 // bottom "Request {offering} ($N)" button that the BottomNav was
 // covering, so users on Tarik's screenshot saw the Book CTA hidden.
 // PDP is a focused booking flow anyway; nav is wrong on it.
-const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/', '/service/', '/i/']; // focused linear flows
+const HIDE_NAV_PREFIXES = ['/rainmaker/apply', '/list-service', '/invite', '/messages', '/u/', '/service/', '/i/', '/inbound', '/request']; // focused linear flows — /inbound + /request have fixed-bottom action bars the BottomNav was covering
 const HIDE_NAV_PATHS_EXTRA = [
   '/intake',                          // chat composer at bottom — nav was covering it
   '/intake-form',                     // structured form fallback — same reason

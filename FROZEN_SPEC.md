@@ -149,7 +149,13 @@ qa.mjs #47 enforces this.
 **Rule:** `RequestFromConnectorScreen` (the screen the service provider sees for an inbound request from a Connector) must render, for a free request:
 1. **Job details** — service title, free-for-Connectors pill, description, appointment.
 2. **Approximate-location card** — copy "Map shows approximate location"; the exact address is shared ONLY after the user confirms the booking. No live map tile and no precise pin until confirmed.
-3. **Requester block** — the requester's **Connector status** (a "Connector" badge when `cc_verified_at` is set) + IG handle + follower count + a working "See Instagram" link to `instagram.com/<handle>`. Hidden when the requester is neither a Connector nor has a handle.
+3. **Requester block** — the requester's **Connector status** + strength signals (IG follower count, reco count, listed services) shown ALWAYS so the provider can judge how strong a Connector they are + a working "See Instagram" link. **Connector rule** (`isConnectorProfile`, Tarik 2026-06-13): `cc_verified_at` set OR `instagram_followers ≥ CONNECTOR_MIN_FOLLOWERS` (300 at launch from the user-entered IG count; rises to 3000 post-launch, or manual admin acceptance). A "Connector" badge renders when this is true.
+
+**Free-barter framing is driven by Connector status:** a request FROM a Connector is a FREE service ↔ social-reach exchange (`isFree = isConnectorProfile(requester) || requests.is_free_for_rainmaker`). It must NOT read as "Paid request". (The `requests` table never writes `is_free_for_rainmaker`, so connector status is the operative free signal.)
+
+**Post-launch gate (NOT enforced yet — testing):** submitting a connector request will require a verified CC. Unverified is allowed for now.
+
+**Layout:** `/inbound` is in `HIDE_NAV_PREFIXES` so the global BottomNav never covers the fixed Accept/Counter/Decline bar.
 4. **Friends-in-common** — mutual connections with the requester via `getMutualConnections` over the `network` graph (any edge, either direction; buckets friends + Connectors). Hidden when zero.
 5. **Actions** — Accept / Counter / Decline via `respondToRequest` ("Accept free request" label for free requests) + the "free marketing / service verification with a 4+ star rating" subcopy. Plus a "See full profile" link to the requester's PublicProfile.
 

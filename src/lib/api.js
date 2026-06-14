@@ -1870,6 +1870,22 @@ export async function getMyFollowedIds() {
  * screen can show connector status, the IG block, and friends-in-common
  * without a second profile fetch. All real columns; nothing synthesized.
  */
+// CERGIO-GUARD (2026-06-13): a "Connector" is anyone with an audience big
+// enough to barter social reach for a free service. Tarik 2026-06-13: the
+// launch threshold is 300 followers, read from the user-entered IG count
+// (live IG verification isn't approved yet). Post-launch this rises to
+// 3000, OR a profile is accepted manually via the future admin module
+// (which stamps cc_verified_at). Connector status drives BOTH the
+// Connector badge AND the free-barter framing — a request FROM a Connector
+// is a free service ↔ social-reach exchange, not a paid job.
+export const CONNECTOR_MIN_FOLLOWERS = 300;
+export function isConnectorProfile(p) {
+  if (!p) return false;
+  if (p.cc_verified_at) return true;  // manually accepted (admin module)
+  const followers = Number(p.instagram_followers ?? p.follower_count ?? 0);
+  return followers >= CONNECTOR_MIN_FOLLOWERS;
+}
+
 export async function getInboundRequest(reqId) {
   if (!supabaseReady) return NOT_WIRED;
   if (!reqId) return { data: null, error: { message: 'reqId required' } };

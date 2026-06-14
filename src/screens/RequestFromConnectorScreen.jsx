@@ -13,7 +13,7 @@
 // NO fake IG photo grid (gated on real media; absent today).
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
-import { getInboundRequest, getMutualConnections, respondToRequest } from '../lib/api';
+import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile } from '../lib/api';
 
 function getInitials(name = '') {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
@@ -56,6 +56,7 @@ export function RequestFromConnectorScreen() {
   const [data, setData] = useState(null);     // null = loading
   const [notFound, setNotFound] = useState(false);
   const [mutuals, setMutuals] = useState(null);
+  const [stats, setStats] = useState(null);   // connector strength (recos / services)
   const [phase, setPhase] = useState(null);    // null | 'pending' | 'done'
   const [counterOpen, setCounterOpen] = useState(false);
   const [counterDraft, setCounterDraft] = useState('');
@@ -66,11 +67,15 @@ export function RequestFromConnectorScreen() {
       if (cancelled) return;
       if (error || !r) { setNotFound(true); return; }
       const requester = r.requester || {};
+      // Connector status drives the badge AND the free-barter framing:
+      // a request FROM a Connector is a free service ↔ reach exchange
+      // (Tarik 2026-06-13). Connector = ≥300 followers OR cc_verified_at.
+      const isConnector = isConnectorProfile(requester);
       setData({
         id:            r.id,
         requesterId:   requester.id || null,
         requesterName: requester.display_name || 'A Cergio user',
-        isConnector:   !!requester.cc_verified_at,
+        isConnector,
         igHandle:      requester.instagram_handle || null,
         igFollowers:   requester.instagram_followers ?? null,
         igMedia:       null,  // reserved — real IG media post Meta approval
@@ -78,13 +83,18 @@ export function RequestFromConnectorScreen() {
         description:   r.what || r.description || '',
         whenText:      formatWhen(r),
         locationText:  r.location_text || null,
-        isFree:        r.is_free_for_rainmaker,
+        // Free when the requester is a Connector (barter), or if an
+        // explicit free flag was ever set on the request row.
+        isFree:        isConnector || !!r.is_free_for_rainmaker,
         budgetCents:   r.budget_cents ?? 0,
         status:        r.status,
       });
       if (requester.id) {
         getMutualConnections(requester.id).then(({ data: m }) => {
           if (!cancelled) setMutuals(m || { count: 0, connectors: 0, sample: [] });
+        });
+        getPublicProfileStats(requester.id).then(({ data: s }) => {
+          if (!cancelled) setStats(s || null);
         });
       } else {
         setMutuals({ count: 0, connectors: 0, sample: [] });
@@ -270,9 +280,14 @@ export function RequestFromConnectorScreen() {
                     </span>
                   )}
                 </div>
-                {data.igFollowers != null && data.igFollowers > 0 && (
-                  <p className="text-meta-sm text-b3">{Number(data.igFollowers).toLocaleString()} followers</p>
-                )}
+                <p className="text-meta-sm text-b3 truncate">
+                  {[
+                    data.igFollowers != null && data.igFollowers > 0
+                      ? `${Number(data.igFollowers).toLocaleString()} followers` : null,
+                    stats && stats.recommended > 0 ? `${stats.recommended} reco'd` : null,
+                    stats && stats.listedServices > 0 ? `${stats.listedServices} ${stats.listedServices === 1 ? 'service' : 'services'}` : null,
+                  ].filter(Boolean).join(' · ') || 'Connector'}
+                </p>
               </div>
             </div>
             {data.igHandle && (

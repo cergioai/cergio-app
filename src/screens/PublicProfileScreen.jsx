@@ -442,6 +442,10 @@ export function PublicProfileScreen() {
 
   const igHandle = profile?.instagram_handle || null;
   const igFollowers = profile?.instagram_followers || profile?.follower_count || 0;
+  // CERGIO-GUARD (2026-06-13): Connector status — ≥300 followers (user-
+  // entered IG count for now) OR manually accepted (cc_verified_at).
+  // Shown as a badge so providers can judge connector strength.
+  const profileIsConnector = Number(igFollowers) >= 300 || !!profile?.cc_verified_at;
 
   // Skeleton shell — keeps the close button + cream background visible
   // even while data is in-flight or missing, so the user always has a
@@ -657,7 +661,15 @@ export function PublicProfileScreen() {
 
       {/* Social */}
       <div className="px-5 mt-7">
-        <h2 className="text-heading-1 font-extrabold text-black">Social</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-heading-1 font-extrabold text-black">Social</h2>
+          {profileIsConnector && (
+            <span className="inline-flex items-center gap-1 bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
+              Connector
+            </span>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-3 mt-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border-2 border-gd">
