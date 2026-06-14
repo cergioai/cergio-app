@@ -2214,13 +2214,41 @@ export async function listMyInboundSpotlightRequests({ limit = 50 } = {}) {
   if (providerIds.length === 0) return { data: rows, error: null };
   const { data: provProfs } = await supabase
     .from('profiles')
-    .select('id, display_name, headline')
+    .select('id, display_name, headline, bio')
     .in('id', providerIds);
   const provMap = Object.fromEntries((provProfs || []).map(p => [p.id, p]));
-  const hydrated = rows.map(r => ({
-    ...r,
-    provider: provMap[r.provider_id] || null,
-  }));
+
+  // Service reputation per provider — the Connector decides on a spotlight by
+  // the provider's quality (services + reco's RECEIVED), not their IG reach.
+  const { data: provSvcs } = await supabase
+    .from('services')
+    .select('id, owner_id, title, taxonomy_provider_type, category')
+    .in('owner_id', providerIds)
+    .eq('status', 'listed');
+  const svcIds = (provSvcs || []).map(s => s.id);
+  const recoBySvc = {};
+  if (svcIds.length) {
+    const { data: recRows } = await supabase.from('recommendations').select('service_id').in('service_id', svcIds);
+    for (const r of recRows || []) recoBySvc[r.service_id] = (recoBySvc[r.service_id] || 0) + 1;
+  }
+  const repByProvider = {};
+  for (const s of (provSvcs || [])) {
+    const name = s.taxonomy_provider_type || s.category || s.title;
+    if (!name) continue;
+    const rep = (repByProvider[s.owner_id] ||= { services: {}, recosReceived: 0 });
+    rep.services[name] = (rep.services[name] || 0) + (recoBySvc[s.id] || 0);
+    rep.recosReceived += (recoBySvc[s.id] || 0);
+  }
+
+  const hydrated = rows.map(r => {
+    const rep = repByProvider[r.provider_id];
+    return {
+      ...r,
+      provider: provMap[r.provider_id] || null,
+      providerServices: rep ? Object.entries(rep.services).map(([name, recos]) => ({ name, recos })) : [],
+      providerRecosReceived: rep ? rep.recosReceived : 0,
+    };
+  });
   return { data: hydrated, error: null };
 }
 

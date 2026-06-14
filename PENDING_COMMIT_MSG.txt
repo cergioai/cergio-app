@@ -1,5 +1,7 @@
-"Network on Cergio" = composite (invites + recos made/received + follows)
+Reverse spotlight: inbound card leads with provider service reputation
 
-The Cergio-network count was just follows (0 for most), so it never showed.
-Redefined networkCount as registered invites + reco's made + reco's received +
-follows, and relabeled it "{N} network on Cergio" so it surfaces meaningfully.
+When a Connector views a provider's spotlight request, the card now leads with
+the provider's SERVICE reputation — their services each with reco's received,
+plus their bio — since that's how a Connector decides whether to offer a
+spotlight (not the provider's IG reach). listMyInboundSpotlightRequests now
+hydrates each provider's bio + services + reco's-received (batched).

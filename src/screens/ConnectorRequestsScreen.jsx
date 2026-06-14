@@ -206,6 +206,10 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
   const providerName = r.provider?.display_name || r.service?.title || 'A provider';
   const providerFirst = providerName.split(' ')[0];
   const providerHeadline = r.provider?.headline || null;
+  // Service reputation — what a Connector judges a spotlight on (not IG reach).
+  const providerBio = r.provider?.bio || null;
+  const providerServices = r.providerServices || [];
+  const providerRecosReceived = r.providerRecosReceived || 0;
   // Service-type label — prefer the formal taxonomy (Personal Trainer,
   // Plumber), fall back to the listing title (Trainer at Beach Park).
   const serviceLabel =
@@ -241,7 +245,18 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
                 {providerHeadline}
               </p>
             )}
-            <p className="text-meta-sm text-b3 mt-0.5">
+            {/* lead with SERVICE reputation: services + reco's received, bio */}
+            {(providerServices.length > 0 || providerRecosReceived > 0) && (
+              <p className="text-meta-sm text-gd font-extrabold mt-1 leading-snug">
+                {providerServices.length > 0
+                  ? providerServices.map(s => `${s.name} (${s.recos} reco${s.recos === 1 ? '' : 's'} received)`).join(', ')
+                  : `${providerRecosReceived} reco${providerRecosReceived === 1 ? '' : 's'} received`}
+              </p>
+            )}
+            {providerBio && (
+              <p className="text-meta text-b3 mt-1 leading-snug line-clamp-2">{providerBio}</p>
+            )}
+            <p className="text-meta-sm text-b3 mt-1">
               {platformLabel} spotlight · {timeAgo(r.created_at)}
             </p>
           </div>
