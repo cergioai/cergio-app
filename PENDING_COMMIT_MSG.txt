@@ -1,4 +1,8 @@
-Fix: move `sent` useState above tabCounts (TDZ crash — "Cannot access before initialization")
+Inbox: "Book a time" on an accepted offer — closes the barter loop end-to-end
 
-tabCounts referenced the `sent` state before its declaration, white-screening /inbox.
-Declared `sent` alongside `myJobs` (above the counts); kept the eager-load effect.
+The two-step barter stalled because the requester had no direct way to turn a provider's
+offer into a scheduled booking (the response card only linked to the profile), so no booking
+existed for the provider to mark complete. Now the "Responses to your requests" card has a
+"Book a free time →" / "Book a time · $X" button that runs handleBook (free-barter gate →
+ScheduleSheet → createBooking), creating the dated booking that flows to Upcoming for both
+parties and lets the provider proceed (confirm → mark complete → rate → IG post → confirm).

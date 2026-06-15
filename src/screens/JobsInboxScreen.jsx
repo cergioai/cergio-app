@@ -114,7 +114,7 @@ const TABS = ['Overview', 'Requests', 'Sent', 'Upcoming', 'Past'];
 
 export function JobsInboxScreen() {
   const navigate = useNavigate();
-  const { showToast, auth, payForBooking } = useOutletContext();
+  const { showToast, auth, payForBooking, handleBook } = useOutletContext();
   const [activeTab, setActiveTab] = useState('Overview');
   const [real, setReal] = useState(null);
   // CERGIO-GUARD: real client-side filter, no 'coming soon' placeholder.
@@ -548,33 +548,56 @@ export function JobsInboxScreen() {
                       resp.status === 'countered' ? `${name} countered${priceLabel}` :
                       `${name} accepted your request${priceLabel}`;
                     const target = resp.responder?.id || null;
+                    const canBook = !!(resp.service?.id && resp.responder?.id) && handleBook;
                     return (
-                      <button
-                        key={resp.id}
-                        type="button"
-                        disabled={!target}
-                        onClick={() => target && navigate(`/u/${target}`)}
-                        className="w-full flex items-center gap-3 bg-gl rounded-[14px] px-3 py-2.5 text-left
-                                   hover:opacity-90 transition-opacity disabled:cursor-default"
-                      >
-                        <Avatar name={name} idx={ri} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-body-sm font-extrabold text-gd leading-snug">
-                            {line}
-                          </p>
-                          {resp.service?.title && (
-                            <p className="text-meta-sm text-b2 font-medium leading-snug truncate">
-                              {resp.service.title}
+                      <div key={resp.id} className="bg-gl rounded-[14px] px-3 py-2.5">
+                        <button
+                          type="button"
+                          disabled={!target}
+                          onClick={() => target && navigate(`/u/${target}`)}
+                          className="w-full flex items-center gap-3 text-left
+                                     hover:opacity-90 transition-opacity disabled:cursor-default"
+                        >
+                          <Avatar name={name} idx={ri} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-body-sm font-extrabold text-gd leading-snug">
+                              {line}
                             </p>
-                          )}
-                          {target && (
-                            <p className="text-meta-sm text-g font-extrabold mt-0.5">
-                              View profile →
-                            </p>
-                          )}
-                        </div>
-                        <span className="text-b3 text-base flex-shrink-0">›</span>
-                      </button>
+                            {resp.service?.title && (
+                              <p className="text-meta-sm text-b2 font-medium leading-snug truncate">
+                                {resp.service.title}
+                              </p>
+                            )}
+                            {target && (
+                              <p className="text-meta-sm text-g font-extrabold mt-0.5">
+                                View profile →
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-b3 text-base flex-shrink-0">›</span>
+                        </button>
+                        {/* Book a time — turns the offer into a scheduled booking,
+                            which kicks off the barter (service → IG post → confirm).
+                            Tarik 2026-06-15: closes the end-to-end loop. */}
+                        {canBook && (
+                          <button
+                            type="button"
+                            onClick={() => handleBook({
+                              id:         resp.service.id,
+                              ownerId:    resp.responder.id,
+                              name,
+                              title:      resp.service.title,
+                              offeringId: null,
+                              price:      (price || 0) / 100,
+                              priceCents: price || 0,
+                              isFree:     !price,
+                            })}
+                            className="w-full mt-2 bg-g text-white rounded-[12px] py-2 text-meta font-extrabold cg-cta active:scale-[.98] transition-all"
+                          >
+                            {price ? `Book a time · $${(price / 100).toFixed(0)}` : 'Book a free time →'}
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
