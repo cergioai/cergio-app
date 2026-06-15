@@ -1,9 +1,11 @@
-Spotlight request: drop redundant ask line on free swaps, mutual-friends defaults to "none yet"
+Inbox key counts on both request types + counter-with-$ on free spotlight swaps
 
-- Free swap: removed "Sim is offering a free X in return for a free spotlight" —
-  the headline already states it. Paid keeps its line (carries the price).
-- Mutual connections row now always renders once loaded; when count is 0 it
-  shows "No mutual connections yet" instead of disappearing.
-- (IG followers / network-on-Cergio / Connector badge still render only when
-  the requester actually has those values — they were hidden only because the
-  test provider had all zeros.)
+- New getInboxPartyCounts(ids) + usePartyCounts hook + formatKeyCounts: a compact
+  "mutual · network · reco's · IG/TikTok" line, mutual friends always shown
+  (defaults to "No mutuals" at 0).
+- Spotlight inbox (ConnectorRequestsScreen InboundCard): key counts about the
+  provider; Counter now shows on FREE swaps too ("Counter $").
+- Free-service inbox (JobsInboxScreen "New requests near you"): key counts about
+  the requester (reco's MADE). Inline $ counter already existed.
+- CounterSpotlightModal: handles a $0 free base — "Name your price" (upward
+  counter from free), accepts any positive amount, hides the savings row.

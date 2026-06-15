@@ -13,6 +13,7 @@ import {
   flagBookingPost,
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
+import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
 import { MarkBookingPostedModal } from '../components/ui/MarkBookingPostedModal';
 
 // Map a Supabase bookings row → the same shape the existing UI uses.
@@ -192,6 +193,10 @@ export function JobsInboxScreen() {
     const t = setInterval(fetchOnce, 30000);
     return () => { cancelled = true; clearInterval(t); };
   }, [auth?.isSignedIn]);
+
+  // Key counts about each requester (the Connector/user asking for a free
+  // service) — mutual friends · network · reco's · reach, shown on the card.
+  const requesterCounts = usePartyCounts((inbound || []).map(r => r.requester?.id));
 
   // CERGIO-GUARD (2026-06-12): the Requests tab badge now counts ALL
   // actionable items — unread bookings + open requests near you +
@@ -548,6 +553,12 @@ export function JobsInboxScreen() {
                       {req.location_text && (
                         <p className="text-meta text-b3 font-medium leading-snug">
                           {req.location_text}
+                        </p>
+                      )}
+                      {/* Key counts — mutual friends · network · reco's · reach. */}
+                      {formatKeyCounts(requesterCounts[req.requester?.id], { recoKind: 'made' }) && (
+                        <p className="text-meta-sm text-b2 font-medium mt-1">
+                          {formatKeyCounts(requesterCounts[req.requester?.id], { recoKind: 'made' })}
                         </p>
                       )}
                       {profileTarget && (

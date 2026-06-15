@@ -17,16 +17,21 @@ export function CounterSpotlightModal({ request, role = 'connector', onClose, on
   // must be lower than the current.
   const currentCents = request.offered_price_cents ?? request.official_price_cents;
   const officialCents = request.official_price_cents;
-  // Default suggestion: 80% of current (friendly 20% off).
-  const suggested = Math.max(0, Math.round(currentCents * 0.8) / 100);
-  const [dollars, setDollars] = useState(String(suggested));
+  // FREE-SWAP counter (Tarik 2026-06-15): when the current ask is $0, the
+  // Connector isn't lowering a price — they're naming the price they'd do it
+  // for instead of free (an UPWARD counter). So a free base accepts any
+  // positive number; a paid base keeps the must-be-lower rule.
+  const isFreeBase = (currentCents || 0) === 0;
+  // Default suggestion: paid → 80% of current (friendly 20% off); free → blank.
+  const suggested = isFreeBase ? '' : String(Math.max(0, Math.round(currentCents * 0.8) / 100));
+  const [dollars, setDollars] = useState(suggested);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
   const offerCents = (dollars === '' || dollars == null)
     ? null
     : Math.max(0, Math.round(+dollars * 100));
-  const valid = offerCents != null && offerCents > 0 && offerCents < currentCents;
+  const valid = offerCents != null && offerCents > 0 && (isFreeBase || offerCents < currentCents);
   const savingsCents = offerCents != null ? Math.max(0, currentCents - offerCents) : 0;
 
   const submit = async (e) => {
@@ -49,14 +54,20 @@ export function CounterSpotlightModal({ request, role = 'connector', onClose, on
       <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-5 pb-7" onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-4" />
         <h2 className="text-[20px] font-extrabold text-black leading-tight mb-1">
-          {request.offered_price_cents != null ? 'Counter back' : 'Offer a lower price'}
+          {isFreeBase ? 'Name your price' : request.offered_price_cents != null ? 'Counter back' : 'Offer a lower price'}
         </h2>
         <p className="text-meta text-b3 mb-4 leading-relaxed">
-          Current ask is <strong className="text-black">{fmtDollars(currentCents)}</strong>{' '}
-          for {request.platform === 'instagram' ? 'an Instagram' : 'a TikTok'} post
-          {request.offered_price_cents != null && (
-            <> (down from rate-card <strong>{fmtDollars(officialCents)}</strong>)</>
-          )}. Offer a lower number and they'll see the savings.
+          {isFreeBase ? (
+            <>They asked for a <strong className="text-black">free swap</strong> on{' '}
+            {request.platform === 'instagram' ? 'Instagram' : 'TikTok'}. Counter with the
+            price you'd do it for instead — they can accept or keep negotiating.</>
+          ) : (
+            <>Current ask is <strong className="text-black">{fmtDollars(currentCents)}</strong>{' '}
+            for {request.platform === 'instagram' ? 'an Instagram' : 'a TikTok'} post
+            {request.offered_price_cents != null && (
+              <> (down from rate-card <strong>{fmtDollars(officialCents)}</strong>)</>
+            )}. Offer a lower number and they'll see the savings.</>
+          )}
         </p>
 
         <form onSubmit={submit} className="flex flex-col gap-3">
@@ -77,10 +88,12 @@ export function CounterSpotlightModal({ request, role = 'connector', onClose, on
           {/* Breakdown card */}
           {valid && (
             <div className="bg-gl border border-g/30 rounded-[14px] px-3.5 py-3">
-              <div className="flex items-center justify-between text-body-sm mb-1">
-                <span className="text-gd font-extrabold">{role === 'connector' ? 'They save' : 'You save'}</span>
-                <span className="font-extrabold text-gd">{fmtDollars(savingsCents)}</span>
-              </div>
+              {!isFreeBase && (
+                <div className="flex items-center justify-between text-body-sm mb-1">
+                  <span className="text-gd font-extrabold">{role === 'connector' ? 'They save' : 'You save'}</span>
+                  <span className="font-extrabold text-gd">{fmtDollars(savingsCents)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between text-meta text-gd/80">
                 <span>{role === 'connector' ? 'You earn' : 'Connector earns'}</span>
                 <span>{fmtDollars(sellerEarningsCents(offerCents))}</span>

@@ -2391,6 +2391,46 @@ export async function getSpotlightRequest(id) {
   return { data: { ...r, provider, providerServices, providerRecosReceived }, error: null };
 }
 
+/**
+ * Glanceable "key counts" for a set of profile ids — the other party on each
+ * inbox card. Tarik 2026-06-15: surface mutual friends · network on Cergio ·
+ * reco's · IG/TikTok reach right in the inbox so a Connector/provider can
+ * judge a request without opening it. Inbox lists are small (≤20), so a
+ * per-id fan-out for network/mutuals is fine; followers come from one batched
+ * read. Returns { [id]: { networkCount, recosMade, recosReceived, igFollowers,
+ * ttFollowers, mutualCount } }.
+ */
+export async function getInboxPartyCounts(ids = []) {
+  if (!supabaseReady) return { data: {}, error: null };
+  const unique = [...new Set((ids || []).filter(Boolean))];
+  if (unique.length === 0) return { data: {}, error: null };
+
+  const { data: profs } = await supabase
+    .from('profiles')
+    .select('id, instagram_followers, tiktok_followers')
+    .in('id', unique);
+  const followerMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+
+  const entries = await Promise.all(unique.map(async (id) => {
+    const [statsRes, mutRes] = await Promise.all([
+      getPublicProfileStats(id),
+      getMutualConnections(id),
+    ]);
+    const s = statsRes?.data || {};
+    const m = mutRes?.data || {};
+    const f = followerMap[id] || {};
+    return [id, {
+      networkCount:  s.networkCount || 0,
+      recosMade:     s.recommended || 0,
+      recosReceived: s.recosReceived || 0,
+      igFollowers:   f.instagram_followers || 0,
+      ttFollowers:   f.tiktok_followers || 0,
+      mutualCount:   m.count || 0,
+    }];
+  }));
+  return { data: Object.fromEntries(entries), error: null };
+}
+
 /** Counter with a lower price. Either party (Connector or Provider) can
  *  counter — we auto-detect role from the signed-in user vs the row.
  *  Status → 'countered'; last_counter_by stamps who just countered so the

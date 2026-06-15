@@ -14,6 +14,7 @@ import {
   confirmSpotlightPost,
 } from '../lib/api';
 import { fmtDollars, sellerEarningsCents, platformFeeCents, PLATFORM_FEE_RATE } from '../lib/fees';
+import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
 import { CounterSpotlightModal } from '../components/ui/CounterSpotlightModal';
 import { SpotlightPaymentModal } from '../components/ui/SpotlightPaymentModal';
 import { MarkPostedModal } from '../components/ui/MarkPostedModal';
@@ -86,6 +87,9 @@ export function ConnectorRequestsScreen() {
     refresh();
   };
 
+  // Key counts about each provider who sent an inbound spotlight request.
+  const partyCounts = usePartyCounts(inbound.map(r => r.provider?.id || r.provider_id));
+
   const list = tab === 'inbound' ? inbound : outbound;
 
   return (
@@ -128,6 +132,7 @@ export function ConnectorRequestsScreen() {
         <div className="mt-5 flex flex-col gap-3 px-5">
           {list.map(r => tab === 'inbound'
             ? <InboundCard key={r.id} request={r}
+                counts={partyCounts[r.provider?.id || r.provider_id]}
                 onAccept={() => handleAccept(r)}
                 onCounter={() => setCounterTarget({ request: r, role: 'connector' })}
                 onDecline={() => handleDecline(r)}
@@ -191,7 +196,7 @@ export function ConnectorRequestsScreen() {
 //
 // Action row sits below the Link so taps on Accept/Counter/Decline don't
 // accidentally trigger the profile drill.
-function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted }) {
+function InboundCard({ request: r, counts, onAccept, onCounter, onDecline, onMarkPosted }) {
   const navigate = useNavigate();
   const pill = STATUS_PILL[r.status] || STATUS_PILL.pending;
   const platformLabel = r.platform === 'instagram' ? 'Instagram' : 'TikTok';
@@ -256,6 +261,12 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
             {providerBio && (
               <p className="text-meta text-b3 mt-1 leading-snug line-clamp-2">{providerBio}</p>
             )}
+            {/* Key counts — mutual friends · network · reco's · reach. */}
+            {formatKeyCounts(counts, { recoKind: 'received' }) && (
+              <p className="text-meta-sm text-b2 font-medium mt-1">
+                {formatKeyCounts(counts, { recoKind: 'received' })}
+              </p>
+            )}
             <p className="text-meta-sm text-b3 mt-1">
               {platformLabel} spotlight · {timeAgo(r.created_at)}
             </p>
@@ -293,15 +304,12 @@ function InboundCard({ request: r, onAccept, onCounter, onDecline, onMarkPosted 
             className="flex-1 bg-white border border-bdr text-danger rounded-[14px] py-2.5 text-body-sm font-extrabold hover:bg-bg5/40">
             Decline
           </button>
-          {/* CERGIO-GUARD: countering a $0 free-swap ask is impossible
-              (counters must be LOWER than the current ask) — hide the
-              dead button on free requests. */}
-          {!isFree && (
-            <button onClick={onCounter}
-              className="flex-1 bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-body-sm font-extrabold hover:bg-bg5/40">
-              Counter
-            </button>
-          )}
+          {/* Counter with $ — on a free swap this means "name your price"
+              (the modal accepts an upward counter from $0). Tarik 2026-06-15. */}
+          <button onClick={onCounter}
+            className="flex-1 bg-white border-2 border-black text-black rounded-[14px] py-2.5 text-body-sm font-extrabold hover:bg-bg5/40">
+            {isFree ? 'Counter $' : 'Counter'}
+          </button>
           <button onClick={onAccept}
             className="flex-1 bg-g text-white rounded-[14px] py-2.5 text-body-sm font-extrabold hover:opacity-90">
             Accept
