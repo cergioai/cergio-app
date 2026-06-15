@@ -1,5 +1,11 @@
-BrowseConnectors: dedupe the spotlight-request buttons (two same-titled listings showed twice)
+Free-service inbox card matches the spotlight InboundCard template (reach-led sequence)
 
-The broadcast→"we'll notify you / Cancel request" waiting state already mirrors the consumer
-request flow; the entry just rendered one button per listing, so two listings with the same
-title ("Personal Chef in Miami…") produced two identical buttons. Dedupe by title.
+Tarik 2026-06-15: same card format both sides, but each leads with what matters —
+SERVICE seeing a Connector's free-service request leads with the Connector's REACH;
+Connector seeing a provider's spotlight request leads with reco's/service.
+
+JobsInbox "New requests near you" card now mirrors the spotlight InboundCard layout:
+name + "New" status pill → key counts (reach-led: IG · network · reco's made) up next to
+the name → "Free service request · {timeAgo}" → ask line ("{name} is looking for a free
+{service} — they'll spotlight you in return", mirror of "X is offering you a free Y") →
+their message as an italic quote → location → Accept/Counter/Decline.

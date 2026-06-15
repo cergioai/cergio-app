@@ -540,31 +540,38 @@ export function JobsInboxScreen() {
                       className="w-full text-left -m-1 p-1 rounded-[14px] hover:bg-bg5/30 transition-colors
                                  disabled:hover:bg-transparent disabled:cursor-default"
                     >
-                      <div className="flex justify-between items-baseline mb-1">
+                      {/* Same template as the spotlight InboundCard, but the
+                          SERVICE seeing a Connector's request leads with REACH
+                          (Tarik 2026-06-15): name + status, then IG · network ·
+                          reco's made, then the ask line + their message. */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
                         <span className="text-body-lg font-extrabold text-black truncate">
                           {senderName}
                         </span>
-                        <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">
-                          {minutesAgo === 0 ? 'just now' : `${minutesAgo}m ago`}
+                        <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap flex-shrink-0">
+                          New
                         </span>
                       </div>
-                      <p className="text-body-sm font-extrabold text-black leading-snug mb-1 truncate">
-                        Needs a {req.service_type}
+                      {formatKeyCounts(requesterCounts[req.requester?.id], { recoKind: 'made' }) && (
+                        <p className="text-meta-sm text-b2 font-medium">
+                          {formatKeyCounts(requesterCounts[req.requester?.id], { recoKind: 'made' })}
+                        </p>
+                      )}
+                      <p className="text-meta-sm text-b3 mt-0.5">
+                        Free service request · {minutesAgo === 0 ? 'just now' : `${minutesAgo}m ago`}
+                      </p>
+                      {/* Ask line — mirror of the spotlight side's offer line. */}
+                      <p className="text-body-sm text-black leading-snug mt-2">
+                        <strong>{senderName.split(' ')[0]}</strong> is looking for a <strong>free {req.service_type}</strong> — they'll spotlight you in return.
                       </p>
                       {req.description && (
-                        <p className="text-meta text-b3 font-medium leading-snug mb-2 line-clamp-2">
-                          "{req.description}"
+                        <p className="text-meta text-b2 italic leading-snug mt-2 line-clamp-3">
+                          &ldquo;{req.description}&rdquo;
                         </p>
                       )}
                       {req.location_text && (
-                        <p className="text-meta text-b3 font-medium leading-snug">
+                        <p className="text-meta text-b3 font-medium leading-snug mt-1">
                           {req.location_text}
-                        </p>
-                      )}
-                      {/* Key counts — mutual friends · network · reco's · reach. */}
-                      {formatKeyCounts(requesterCounts[req.requester?.id], { recoKind: 'made' }) && (
-                        <p className="text-meta-sm text-b2 font-medium mt-1">
-                          {formatKeyCounts(requesterCounts[req.requester?.id], { recoKind: 'made' })}
                         </p>
                       )}
                       {profileTarget && (
