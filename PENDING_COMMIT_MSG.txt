@@ -1,14 +1,14 @@
-Close standing items: requester Q&A reply, quarantine ?reqId bar, de-mock /job + /complete
+Spotlight request = identical flow to a free-service request: broadcast + "we'll notify you" + cancel
 
-1. Requester reply surface — the connector now answers pre-booking questions in
-   their Inbox (Requests tab → "Questions to answer", reply inline via
-   replyRequestQuestion). New api listMyRequestQuestions; badge + empty-state
-   account for open questions. Closes the Q&A loop.
-2. Quarantined the orphaned /u/:id?reqId= sticky Accept/Counter/Decline bar in
-   PublicProfile (superseded by /inbound/:reqId, SPEC-48) — reqCtx is never
-   hydrated, so the dead bar can't render.
-3. De-mocked the post-accept screens (SPEC-12):
-   - /job (JobDetailsScreen) rebuilt on the REAL booking via getBooking — real
-     client, service, time, location, details (no more Jennifer/David/Broadway).
-   - /complete (ServiceCompleteScreen) reads the real client + reach from
-     RateConfirm's router state — no fabricated "Lydia · 23,735 followers".
+- broadcastSpotlightRequest() in api.js: provider-side mirror of createRequestAndNotify.
+  Fans out one pending spotlight_requests row per matching Connector (free swap,
+  official_price_cents=0), skips Connectors who already have a live request,
+  fires notify-spotlight best-effort. Connectors see it inbound on /spotlight/:id.
+- BrowseConnectorsScreen: replaced the dead-end "List a service to start" pick-a-
+  Connector roster entry with the same paradigm as the consumer service request:
+    1. Entry: "Ask Connectors to spotlight you" -> Request spotlights for {service}
+       (one button per listed service; "List a service first" only when none).
+    2. Waiting: "We'll notify you when Connectors respond" + inline Cancel
+       (mirror of the consumer's "we'll let you know when offers land").
+    3. Responses: confirmed Connectors surface in the roster (offered/countered/accepted).
+- Fixes the bug where a provider with services was told to "List a service."

@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestSpotlightModal } from '../components/ui/RequestSpotlightModal';
-import { listMyOutboundSpotlightRequests } from '../lib/api';
+import { listMyOutboundSpotlightRequests, listMyServices, broadcastSpotlightRequest } from '../lib/api';
 
 function fmtFollowers(n) {
   if (!Number.isFinite(+n) || n == null) return '—';
@@ -112,6 +112,10 @@ export function BrowseConnectorsScreen() {
   // confirmedConnectorIds === Set() → fetched, zero confirmations yet
   const [confirmedConnectorIds, setConfirmedConnectorIds] = useState(null);
   const [hasAnyOutboundRequest, setHasAnyOutboundRequest] = useState(false);
+  // Provider's own services — the thing a Connector spotlights. Drives the
+  // broadcast entry (mirror of the consumer posting a service request).
+  const [myServices, setMyServices] = useState([]);
+  const [broadcasting, setBroadcasting] = useState(false);
 
   useEffect(() => {
     if (!supabaseReady) { setLoading(false); return; }
@@ -174,6 +178,28 @@ export function BrowseConnectorsScreen() {
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
+  // Load the provider's own services so the broadcast entry can offer them.
+  useEffect(() => {
+    let cancelled = false;
+    listMyServices().then(({ data }) => {
+      if (!cancelled) setMyServices(data || []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Broadcast a free spotlight request for one of the provider's services to
+  // matching Connectors, then drop into the "we'll notify you" waiting state.
+  const broadcast = async (service) => {
+    if (broadcasting) return;
+    setBroadcasting(true);
+    const { data, error } = await broadcastSpotlightRequest({ serviceId: service.id });
+    setBroadcasting(false);
+    if (error) { showToast(error.message || 'Could not send request'); return; }
+    setHasAnyOutboundRequest(true);
+    const n = data?.count || 0;
+    showToast(n ? `Request sent to ${n} Connector${n > 1 ? 's' : ''}` : 'Spotlight request sent');
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-24">
       {/* header */}
@@ -216,50 +242,81 @@ export function BrowseConnectorsScreen() {
           c.spotlight_price_tiktok_cents == null
         );
 
-        // No outbound request ever sent → CTA prompting the user to
-        // broadcast one first. This is the cleanest path to the gate.
+        // ENTRY — no request broadcast yet. Mirrors the consumer's "post a
+        // request" step (Tarik 2026-06-14: the provider-asks-for-a-spotlight
+        // flow must be IDENTICAL to the connector-asks-for-a-free-service flow
+        // — broadcast, then "we'll notify you when they respond / cancel").
         if (!hasAnyOutboundRequest) {
+          // Nothing to spotlight yet → guide them to list a service first.
+          if (myServices.length === 0) {
+            return (
+              <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-5 text-center">
+                <p className="text-body-lg font-extrabold text-black mb-1">
+                  List a service first
+                </p>
+                <p className="text-body-sm text-b3 leading-snug mb-4">
+                  Connectors spotlight a service you offer in exchange for a
+                  free post. Add one to get started.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/list-service')}
+                  className="bg-g text-white rounded-pill px-5 py-2.5 text-body-sm font-extrabold cg-cta"
+                >
+                  List a service →
+                </button>
+              </div>
+            );
+          }
           return (
-            <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-5 text-center">
-              <p className="text-body-lg font-extrabold text-black mb-1">
-                Send a spotlight request first
+            <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-5">
+              <p className="text-body-lg font-extrabold text-black mb-1 text-center">
+                Ask Connectors to spotlight you
               </p>
-              <p className="text-body-sm text-b3 leading-snug mb-4">
-                Cergio asks matching Connectors if they can take your
-                request — when they confirm (free or with a paid offer),
-                they show up here.
+              <p className="text-body-sm text-b3 leading-snug mb-4 text-center">
+                We'll send your request to matching Connectors — free posts
+                first, where they spotlight you in exchange for the service.
+                You only hear back when one says yes; nothing's locked in
+                until you confirm.
               </p>
-              <button
-                type="button"
-                onClick={() => navigate('/list-service')}
-                className="bg-g text-white rounded-pill px-5 py-2.5 text-body-sm font-extrabold cg-cta"
-              >
-                List a service to start →
-              </button>
+              <div className="flex flex-col gap-2">
+                {myServices.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={broadcasting}
+                    onClick={() => broadcast(s)}
+                    className="w-full bg-g text-white rounded-pill px-5 py-3 text-body-sm font-extrabold cg-cta disabled:opacity-60"
+                  >
+                    {broadcasting ? 'Sending…' : `Request spotlights for ${s.title} →`}
+                  </button>
+                ))}
+              </div>
             </div>
           );
         }
 
-        // Outbound request(s) exist but no Connector has confirmed yet.
+        // Broadcast sent, no Connector has said yes yet → waiting state,
+        // identical to the consumer's "we'll let you know when offers land"
+        // (+ inline cancel).
         if (confirmedOnly.length === 0) {
           return (
             <div className="mx-5 mt-6 bg-cr2 border border-bdr rounded-[16px] p-5 text-center">
               <p className="text-body-lg font-extrabold text-black mb-1">
-                Awaiting Connector responses…
+                We'll notify you when Connectors respond
               </p>
               <p className="text-body-sm text-b3 leading-snug">
-                Free fits surface first. Paid counters show up here too.
+                Your request is out to matching Connectors. Free swaps surface
+                first; paid counters show up here too.
               </p>
-              {/* CERGIO-GUARD (2026-06-03): Cancel link per Tarik —
-                  same affordance the consumer side has on the
-                  roaming-for-services state. */}
+              {/* CERGIO-GUARD (2026-06-03): inline cancel per Tarik — same
+                  affordance the consumer side has on its waiting state. */}
               <CancelSpotlightLink
                 onCancelled={() => {
                   showToast('Spotlight request cancelled');
                   navigate('/home');
                 }}
               />
-
             </div>
           );
         }

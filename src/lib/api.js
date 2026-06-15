@@ -2204,6 +2204,67 @@ export async function createSpotlightRequest({ connectorId, platform, officialPr
   return res;
 }
 
+/**
+ * Broadcast a FREE spotlight request to matching Connectors — the provider-side
+ * mirror of createRequestAndNotify (a consumer posts a service request, we fan
+ * out, they wait for offers). Tarik 2026-06-14: the provider-asks-for-a-
+ * spotlight flow must be IDENTICAL to the connector-asks-for-a-free-service
+ * flow — broadcast, then "we'll notify you when they respond / cancel."
+ *
+ * Inserts one pending spotlight_requests row per matching Connector so each
+ * sees it inbound and can offer / counter / decline. official_price_cents = 0
+ * → this is a free-swap ask (the Connector may counter with a price). Skips
+ * Connectors who already have a live request from this provider so a
+ * re-broadcast can't duplicate. Fires notify-spotlight (created) best-effort.
+ */
+export async function broadcastSpotlightRequest({ serviceId = null, message = null, limit = 40 } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) {
+    return { data: null, error: { message: 'You must be signed in to request a spotlight.' } };
+  }
+  const me = userRes.user.id;
+
+  // Matching Connectors = profiles with at least one social handle (the same
+  // pool the roster shows), excluding the requester. NULL rate = free-swap only.
+  const { data: pool, error: poolErr } = await supabase
+    .from('profiles')
+    .select('id, instagram_handle, tiktok_handle')
+    .or('instagram_handle.not.is.null,tiktok_handle.not.is.null')
+    .neq('id', me)
+    .limit(limit);
+  if (poolErr) return { data: null, error: poolErr };
+  if (!pool || pool.length === 0) return { data: { count: 0 }, error: null };
+
+  // Don't double-send: skip Connectors who already have a live request from
+  // this provider (any non-terminal status).
+  const { data: existing } = await supabase
+    .from('spotlight_requests')
+    .select('connector_id')
+    .eq('provider_id', me)
+    .in('status', ['pending', 'offered', 'countered', 'accepted']);
+  const already = new Set((existing || []).map(r => r.connector_id));
+
+  const rows = pool
+    .filter(c => !already.has(c.id))
+    .map(c => ({
+      provider_id:          me,
+      connector_id:         c.id,
+      service_id:           serviceId,
+      platform:             c.instagram_handle ? 'instagram' : 'tiktok',
+      official_price_cents: 0,
+      message:              (message || '').slice(0, 2000) || null,
+      status:               'pending',
+    }));
+  if (rows.length === 0) return { data: { count: 0 }, error: null };
+
+  const res = await supabase.from('spotlight_requests').insert(rows).select('id');
+  if (res.error) return { data: null, error: res.error };
+  // Best-effort fan-out notify (never awaited, never blocks the UI).
+  for (const r of (res.data || [])) fireSpotlightNotify(r.id, 'created');
+  return { data: { count: (res.data || []).length }, error: null };
+}
+
 /** List requests where the signed-in user is the provider (their outbound). */
 export async function listMyOutboundSpotlightRequests({ limit = 50 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
