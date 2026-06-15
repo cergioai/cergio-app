@@ -1,10 +1,15 @@
-SPEC-48c: party-signal RULE — a service viewing a Connector LEADS with the Connector badge
+Inbox: Overview summary tab + folder counts + Awaiting-schedule + global upcoming banner
 
-Tarik 2026-06-15: "make it a rule — lead with the same info next to each user type everywhere,
-respective priority." The /inbox free-service + booking cards were missing the Connector badge.
+Tarik 2026-06-15. Two-step barter kept (the requester schedules); accepted offers are now
+visible instead of lost, and confirmed/booked jobs show in Upcoming with their date.
 
-- getInboxPartyCounts now returns isConnector (via isConnectorProfile) alongside the counts.
-- JobsInbox free-service "New requests near you" + booking cards now LEAD with the Connector
-  badge next to the name, then IG · network · reco's made (reach-led). Status pill demoted to subtle.
-- Rule frozen in FROZEN_SPEC SPEC-48c: service-viewing-Connector → Connector badge + reach;
-  Connector-viewing-service → service type + reco's received first. qa #48 asserts the flag + badge.
+- listMySentOffers(): my offered/countered responses awaiting the requester to pick a time.
+- JobsInbox:
+  • New "Overview" tab (default) — digest of New requests / Awaiting their schedule / Upcoming
+    (+ Sent, Past) each with a count, 1–2 preview lines, and "View all →" that opens the folder.
+  • Folder counts next to every tab (Requests, Sent, Upcoming, Past); tab row scrolls.
+  • "Awaiting their schedule" section in Requests — "You offered {service} to {name} · waiting on
+    them to pick a time; moves to Upcoming once they book." Empty state accounts for it.
+  • myJobs + sent now load eagerly so counts/Overview are ready without switching tabs.
+- UpcomingBanner: global dismissible "N upcoming services — tap to view" in the app shell on
+  nav screens; dismiss persists (localStorage), re-appears when the count changes.

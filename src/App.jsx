@@ -16,6 +16,7 @@ import { useSession } from './hooks/useSession';
 import { captureRefFromUrl, creditInviterOnFirstBooking } from './lib/referral';
 
 import { BottomNav }    from './components/ui/BottomNav';
+import { UpcomingBanner } from './components/ui/UpcomingBanner';
 import { Toast }        from './components/ui/Toast';
 import { SetupCheckBanner } from './components/ui/SetupCheckBanner';
 import { PaymentSheet } from './components/ui/PaymentSheet';
@@ -366,6 +367,9 @@ function Layout() {
             env vars are missing, with the exact remediation. Dismissible
             per session. CERGIO-GUARD: keep this mounted at root. */}
         <SetupCheckBanner />
+        {/* Global dismissible "N upcoming services" banner — only on nav
+            screens so it never covers a focused flow's fixed action bar. */}
+        {showNav && <UpcomingBanner isSignedIn={auth.isSignedIn} />}
         <Outlet
           context={{
             chat,

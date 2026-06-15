@@ -7,6 +7,7 @@ import {
   listInboundRequests,
   listMyRequestsWithResponses,
   listMyRequestQuestions,
+  listMySentOffers,
   replyRequestQuestion,
   respondToRequest,
   confirmBookingPost,
@@ -81,12 +82,40 @@ function Avatar({ name, idx }) {
   );
 }
 
-const TABS = ['Requests', 'Sent', 'Upcoming', 'Past'];
+// Overview digest row — folder title + count + a couple of preview lines + View all.
+function OverviewRow({ title, count, items = [], onView }) {
+  return (
+    <div className="bg-white border border-bdr rounded-[18px] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-body-lg font-extrabold text-black">
+          {title}{count > 0 && <span className="text-g"> · {count}</span>}
+        </p>
+        <button onClick={onView} className="text-body-sm font-extrabold text-g whitespace-nowrap flex-shrink-0">
+          View all →
+        </button>
+      </div>
+      {count === 0 ? (
+        <p className="text-meta text-b3 mt-1">Nothing here yet.</p>
+      ) : items.length > 0 ? (
+        <div className="mt-2 flex flex-col gap-1">
+          {items.map((it, i) => (
+            <p key={i} className="text-meta text-b2 truncate">• {it}</p>
+          ))}
+          {count > items.length && (
+            <p className="text-meta-sm text-b3">+{count - items.length} more</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const TABS = ['Overview', 'Requests', 'Sent', 'Upcoming', 'Past'];
 
 export function JobsInboxScreen() {
   const navigate = useNavigate();
   const { showToast, auth, payForBooking } = useOutletContext();
-  const [activeTab, setActiveTab] = useState('Requests');
+  const [activeTab, setActiveTab] = useState('Overview');
   const [real, setReal] = useState(null);
   // CERGIO-GUARD: real client-side filter, no 'coming soon' placeholder.
   // Filters across sender + preview + date across all tabs.
@@ -196,6 +225,17 @@ export function JobsInboxScreen() {
     return () => { cancelled = true; clearInterval(t); };
   }, [auth?.isSignedIn]);
 
+  // My offers awaiting the requester to schedule (two-step barter, SPEC-47).
+  const [sentOffers, setSentOffers] = useState([]);
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setSentOffers([]); return; }
+    let cancelled = false;
+    const fetchOnce = () => listMySentOffers().then(({ data }) => { if (!cancelled) setSentOffers(data || []); });
+    fetchOnce();
+    const t = setInterval(fetchOnce, 30000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [auth?.isSignedIn]);
+
   // Key counts about each card's other party — the connector-request requester
   // AND the booking consumer — mutual · network · reco's · reach. One call for
   // the whole inbox so every card (booking or free request) reads the same map.
@@ -261,7 +301,9 @@ export function JobsInboxScreen() {
     setMyJobs({ asConsumer: c.data || [], asProvider: p.data || [] });
   };
   useEffect(() => {
-    if ((activeTab !== 'Upcoming' && activeTab !== 'Past') || !auth?.isSignedIn) return;
+    // Eager (was Upcoming/Past-only) so the Overview + folder counts have
+    // upcoming/past totals without switching tabs.
+    if (!auth?.isSignedIn) return;
     let cancelled = false;
     (async () => {
       const [c, p] = await Promise.all([listConsumerBookings(), listProviderBookings()]);
@@ -269,7 +311,7 @@ export function JobsInboxScreen() {
       setMyJobs({ asConsumer: c.data || [], asProvider: p.data || [] });
     })();
     return () => { cancelled = true; };
-  }, [activeTab, auth?.isSignedIn]);
+  }, [auth?.isSignedIn]);
 
   // A free booking is "live" until the provider accepts the IG post —
   // even when the job itself is done. That keeps the barter obligation
@@ -281,6 +323,25 @@ export function JobsInboxScreen() {
   const isPastJob = (b) =>
     (b.status === 'completed' && (!b.is_free_for_rainmaker || !!b.post_confirmed_at)) ||
     b.status === 'cancelled';
+
+  // Per-folder counts for the tab labels + the Overview digest.
+  const upcomingCount = myJobs
+    ? myJobs.asConsumer.filter(b => isLiveJob(b) || b.status === 'pending').length
+      + myJobs.asProvider.filter(isLiveJob).length
+    : 0;
+  const pastCount = myJobs
+    ? myJobs.asConsumer.filter(isPastJob).length + myJobs.asProvider.filter(isPastJob).length
+    : 0;
+  const newRequestsCount = (inbound || []).length;
+  const awaitingCount = sentOffers.length;
+  const sentCount = (sent || []).length;
+  const tabCounts = {
+    Overview: 0,
+    Requests: badgeCount,
+    Sent: sentCount,
+    Upcoming: upcomingCount,
+    Past: pastCount,
+  };
 
   const handleConfirmPost = async (b) => {
     setJobBusy(prev => ({ ...prev, [b.id]: true }));
@@ -307,12 +368,12 @@ export function JobsInboxScreen() {
   // Inbox tab doesn't pay the cost until the user opens the Sent tab.
   const [sent, setSent] = useState(null);
   useEffect(() => {
-    if (activeTab !== 'Sent' || !auth?.isSignedIn) return;
-    if (sent !== null) return;
+    // Eager so the Sent folder count shows on the Overview without switching.
+    if (!auth?.isSignedIn || sent !== null) return;
     listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => {
       setSent(data || []);
     });
-  }, [activeTab, auth?.isSignedIn, sent]);
+  }, [auth?.isSignedIn, sent]);
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 bg-cr">
@@ -359,23 +420,25 @@ export function JobsInboxScreen() {
         )}
       </div>
 
-      {/* tabs */}
-      <div className="flex items-center gap-6 px-5 border-b border-bdr">
+      {/* tabs — horizontally scrollable; every folder shows its count */}
+      <div className="flex items-center gap-5 px-5 border-b border-bdr overflow-x-auto">
         {TABS.map(tab => {
           const active = tab === activeTab;
+          const count = tabCounts[tab] || 0;
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className="relative pb-3 flex items-center gap-1.5 cursor-pointer"
+              className="relative pb-3 flex items-center gap-1.5 cursor-pointer flex-shrink-0"
             >
               <span className={`text-body ${active ? 'font-extrabold text-black' : 'font-medium text-b3'}`}>
                 {tab}
               </span>
-              {active && tab === 'Requests' && badgeCount > 0 && (
-                <div className="bg-g text-white text-caps font-extrabold rounded-full
-                                min-w-[18px] h-[18px] flex items-center justify-center px-1.5">
-                  {badgeCount}
+              {count > 0 && (
+                <div className={`text-caps font-extrabold rounded-full min-w-[18px] h-[18px]
+                                 flex items-center justify-center px-1.5
+                                 ${active ? 'bg-g text-white' : 'bg-bg5 text-b2'}`}>
+                  {count}
                 </div>
               )}
               {active && (
@@ -388,6 +451,42 @@ export function JobsInboxScreen() {
 
       {/* request list — filter pills removed per audit */}
       <div className="px-5 flex flex-col gap-3 pt-4">
+
+        {/* OVERVIEW — at-a-glance digest of every folder with counts + View all
+            (Tarik 2026-06-15). The default landing tab. */}
+        {activeTab === 'Overview' && (
+          <>
+            <OverviewRow
+              title="New requests"
+              count={newRequestsCount}
+              items={(inbound || []).slice(0, 2).map(r => `${r.requester?.display_name || 'A user'} · ${r.service_type || 'service'}`)}
+              onView={() => setActiveTab('Requests')}
+            />
+            <OverviewRow
+              title="Awaiting their schedule"
+              count={awaitingCount}
+              items={sentOffers.slice(0, 2).map(o => `${o.requesterName} · ${o.serviceType}`)}
+              onView={() => setActiveTab('Requests')}
+            />
+            <OverviewRow
+              title="Upcoming jobs"
+              count={upcomingCount}
+              items={myJobs
+                ? [...myJobs.asConsumer.filter(b => isLiveJob(b) || b.status === 'pending'),
+                   ...myJobs.asProvider.filter(isLiveJob)]
+                    .slice(0, 2)
+                    .map(b => `${b.service?.title || 'Service'}`)
+                : []}
+              onView={() => setActiveTab('Upcoming')}
+            />
+            {sentCount > 0 && (
+              <OverviewRow title="Spotlight requests sent" count={sentCount} onView={() => setActiveTab('Sent')} />
+            )}
+            {pastCount > 0 && (
+              <OverviewRow title="Past" count={pastCount} onView={() => setActiveTab('Past')} />
+            )}
+          </>
+        )}
 
         {/* CERGIO-GUARD (2026-06-03): open consumer requests for this
             provider's service type — the "notify → confirm" half of
@@ -716,6 +815,33 @@ export function JobsInboxScreen() {
           </>
         )}
 
+        {/* AWAITING SCHEDULE — offers I've sent that are waiting on the
+            requester to pick a time (two-step barter, SPEC-47). Tarik
+            2026-06-15: so an accepted request isn't "lost" before it becomes
+            a scheduled Upcoming job. */}
+        {activeTab === 'Requests' && sentOffers.length > 0 && (
+          <>
+            <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
+              Awaiting their schedule
+            </p>
+            {sentOffers.map(o => (
+              <div key={o.id} className="bg-white border border-bdr rounded-[20px] p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-body-sm font-extrabold text-black leading-snug">
+                    You offered <span className="text-gd">{o.serviceType}</span> to {o.requesterName}
+                  </p>
+                  <span className="bg-bg5 text-b2 rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap flex-shrink-0">
+                    {o.status === 'countered' ? 'Countered' : 'Offer sent'}
+                  </span>
+                </div>
+                <p className="text-meta text-b3 leading-snug mt-1">
+                  Waiting on {o.requesterName.split(' ')[0]} to pick a time — it moves to Upcoming once they book.
+                </p>
+              </div>
+            ))}
+          </>
+        )}
+
         {/* CERGIO-GUARD (2026-06-12): the generic "No requests yet"
             card was rendering UNDER live "requests near you" cards
             (Tarik's screenshot) because it only checked bookings.
@@ -723,6 +849,7 @@ export function JobsInboxScreen() {
         {activeTab === 'Requests' && requests.length === 0
           && (!inbound || inbound.length === 0)
           && openQuestions.length === 0
+          && sentOffers.length === 0
           && myAnswered.length === 0 && (
           lastResponded ? (
             /* Confirmation card — shown after provider responds to a request */

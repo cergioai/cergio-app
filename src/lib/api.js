@@ -2265,6 +2265,58 @@ export async function broadcastSpotlightRequest({ serviceId = null, message = nu
   return { data: { count: (res.data || []).length }, error: null };
 }
 
+/**
+ * My OFFERS on others' free-service requests that are awaiting the requester to
+ * pick a time (two-step barter, SPEC-47). Tarik 2026-06-15: after a provider
+ * accepts a request it sits as an offer with no date — surface it as "Awaiting
+ * schedule" so it isn't lost until the requester books a time (→ Upcoming).
+ */
+export async function listMySentOffers({ limit = 30 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const uid = userRes.user.id;
+
+  const { data: resp, error } = await supabase
+    .from('request_responses')
+    .select('id, request_id, status, offered_price_cents, responded_at')
+    .eq('responder_id', uid)
+    .in('status', ['offered', 'countered'])
+    .order('responded_at', { ascending: false })
+    .limit(limit);
+  if (error || !resp?.length) return { data: [], error };
+
+  const reqIds = [...new Set(resp.map(r => r.request_id).filter(Boolean))];
+  const { data: reqs } = await supabase
+    .from('requests')
+    .select('id, service_type, category, requester_id, when_text, scheduled_at, status')
+    .in('id', reqIds);
+  const reqMap = Object.fromEntries((reqs || []).map(r => [r.id, r]));
+  const requesterIds = [...new Set((reqs || []).map(r => r.requester_id).filter(Boolean))];
+  let profMap = {};
+  if (requesterIds.length) {
+    const { data: profs } = await supabase.from('profiles').select('id, display_name').in('id', requesterIds);
+    profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+  }
+
+  const rows = resp.map(r => {
+    const req = reqMap[r.request_id] || {};
+    return {
+      id:                r.id,
+      requestId:         r.request_id,
+      status:            r.status,
+      offeredPriceCents: r.offered_price_cents,
+      serviceType:       req.service_type || req.category || 'service',
+      requesterId:       req.requester_id || null,
+      requesterName:     profMap[req.requester_id]?.display_name || 'A user',
+      whenText:          req.when_text || null,
+      scheduledAt:       req.scheduled_at || null,
+      respondedAt:       r.responded_at,
+    };
+  });
+  return { data: rows, error: null };
+}
+
 /** List requests where the signed-in user is the provider (their outbound). */
 export async function listMyOutboundSpotlightRequests({ limit = 50 } = {}) {
   if (!supabaseReady) return { data: [], error: null };
