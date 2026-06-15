@@ -1,13 +1,9 @@
-Spotlight request (Connector's view): counter on free swaps, richer provider counts, grammar + scheduling note
+Spotlight request: drop redundant ask line on free swaps, mutual-friends defaults to "none yet"
 
-- Counter is now available on FREE swaps too (not just paid) — the Connector can
-  counter "I'll do it for $X" via the same price composer ("Counter with a price").
-- Lead stays the SERVICE (title + reco's received) — that's what drives the
-  Connector's yes — then a Connector badge (if the requester is also a Connector)
-  + a richer count line: network on Cergio · reco's made · IG · TikTok.
-  getSpotlightRequest now hydrates tiktok_handle/followers + cc_verified_at.
-- Headline grammar: "Free {Service} Offer  ⇄  Free {IG/TikTok} Spotlight".
-  Ask copy fixed: "in return for a free {platform} spotlight" (was "a Instagram").
-- Scheduling note: accepting agrees to the swap; the two parties arrange timing
-  together afterward — explicitly different from a Connector requesting a free
-  SERVICE (where the time is set up front).
+- Free swap: removed "Sim is offering a free X in return for a free spotlight" —
+  the headline already states it. Paid keeps its line (carries the price).
+- Mutual connections row now always renders once loaded; when count is 0 it
+  shows "No mutual connections yet" instead of disappearing.
+- (IG followers / network-on-Cergio / Connector badge still render only when
+  the requester actually has those values — they were hidden only because the
+  test provider had all zeros.)

@@ -169,17 +169,26 @@ export function SpotlightRequestScreen() {
             </div>
           </div>
 
-          {hasMutuals && (
+          {/* Mutual connections — always shown once loaded. Defaults to a
+              "none yet" state when the count is 0 (Tarik 2026-06-15) rather
+              than hiding the row entirely. */}
+          {mutuals && (
             <div className="mt-2.5 pt-2.5 border-t border-line flex items-center gap-2.5">
-              <div className="flex -space-x-2 shrink-0">
-                {mutuals.sample.map(m => (
-                  <button key={m.id} onClick={() => navigate(`/u/${m.id}`)} title={m.name}
-                    className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
-                ))}
-              </div>
-              <p className="text-meta text-b2 leading-snug min-w-0">
-                <span className="font-extrabold text-black">{mutualSummaryText(mutuals)}</span>
-              </p>
+              {hasMutuals ? (
+                <>
+                  <div className="flex -space-x-2 shrink-0">
+                    {mutuals.sample.map(m => (
+                      <button key={m.id} onClick={() => navigate(`/u/${m.id}`)} title={m.name}
+                        className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
+                    ))}
+                  </div>
+                  <p className="text-meta text-b2 leading-snug min-w-0">
+                    <span className="font-extrabold text-black">{mutualSummaryText(mutuals)}</span>
+                  </p>
+                </>
+              ) : (
+                <p className="text-meta text-b3 leading-snug">No mutual connections yet</p>
+              )}
             </div>
           )}
 
@@ -195,14 +204,15 @@ export function SpotlightRequestScreen() {
       {/* the ask + message */}
       <div className="px-5 pb-3">
         <div className="bg-soft rounded-[18px] p-4">
-          <p className="text-body text-black leading-relaxed">
-            {isFree ? (
-              <><span className="font-extrabold">{providerFirst}</span> is offering a free <span className="font-extrabold">{serviceLabel}</span> in return for a free {platformLabel} spotlight.</>
-            ) : (
-              <><span className="font-extrabold">{providerFirst}</span> wants a {platformLabel} spotlight for their <span className="font-extrabold">{serviceLabel}</span> and will pay <span className="font-extrabold">{fmtDollars(effective)}</span>.</>
-            )}
-          </p>
-          {data.message && <p className="text-body-sm text-b2 italic mt-2 leading-snug">&ldquo;{data.message}&rdquo;</p>}
+          {/* Free case: the headline already says it ("Free {Service} Offer ⇄
+              Free Spotlight") — no redundant restatement. Paid case keeps the
+              line because it carries the price. */}
+          {!isFree && (
+            <p className="text-body text-black leading-relaxed">
+              <span className="font-extrabold">{providerFirst}</span> wants a {platformLabel} spotlight for their <span className="font-extrabold">{serviceLabel}</span> and will pay <span className="font-extrabold">{fmtDollars(effective)}</span>.
+            </p>
+          )}
+          {data.message && <p className={`text-body-sm text-b2 italic leading-snug ${isFree ? '' : 'mt-2'}`}>&ldquo;{data.message}&rdquo;</p>}
           {/* Scheduling note — unlike a Connector requesting a free SERVICE (where
               the time matters up front), accepting a spotlight just agrees to the
               swap; the two parties arrange timing together afterward. */}
