@@ -770,59 +770,46 @@ export function JobsInboxScreen() {
             className="bg-white border border-bdr rounded-[20px] p-4 flex gap-3 cursor-pointer
                        transition-shadow hover:shadow-card"
           >
-            {/* unread dot column */}
-            <div className="w-2 flex-shrink-0 mt-1.5">
-              {req.isUnread && <div className="w-2 h-2 rounded-full bg-g" />}
-            </div>
-
             <Avatar name={req.sender} idx={i} />
 
+            {/* Same template as the spotlight / "New requests near you" cards
+                (Tarik 2026-06-15): name + status, reach-led counts, type · date,
+                the ask line, then their message. Drives /inbox off the old format. */}
             <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-baseline mb-1">
+              <div className="flex items-start justify-between gap-2 mb-1">
                 <span className="text-body-lg font-extrabold text-black truncate">{req.sender}</span>
-                <span className="text-meta text-b3 font-medium flex-shrink-0 ml-2">{req.date}</span>
-              </div>
-
-              <p className={`text-body-sm font-extrabold leading-snug mb-1 truncate
-                              ${req.isFreeForRainmakers ? 'text-gd' : 'text-black'}`}>
-                {req.preview}
-              </p>
-              {req.note && (
-                <p className="text-meta text-b3 font-medium leading-snug mb-2 line-clamp-2">
-                  "{req.note}"
-                </p>
-              )}
-
-              {/* Key counts — same glanceable line as the new request cards. */}
-              {formatKeyCounts(requesterCounts[req.consumerId], { recoKind: 'made' }) && (
-                <p className="text-meta-sm text-b2 font-medium mb-2">
-                  {formatKeyCounts(requesterCounts[req.consumerId], { recoKind: 'made' })}
-                </p>
-              )}
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-meta text-b3 font-medium">{req.appointmentTime}</span>
-                {req.isFreeForRainmakers && (
-                  <span className="inline-flex items-center gap-1 bg-gl text-gd
-                                   text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" />
-                    </svg>
-                    Free for Connectors
+                {req.needsResponse && (
+                  <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap flex-shrink-0">
+                    Needs response
                   </span>
                 )}
               </div>
 
-              {req.needsResponse && (
-                <div className="mt-3 inline-flex items-center gap-1.5 bg-g text-white
-                                text-meta-sm font-extrabold px-2.5 py-1 rounded-pill">
-                  <span className="w-3.5 h-3.5 rounded-full bg-white text-g
-                                   flex items-center justify-center text-[9px] font-extrabold">
-                    !
-                  </span>
-                  Needs Response
-                </div>
+              {formatKeyCounts(requesterCounts[req.consumerId], { recoKind: 'made' }) && (
+                <p className="text-meta-sm text-b2 font-medium">
+                  {formatKeyCounts(requesterCounts[req.consumerId], { recoKind: 'made' })}
+                </p>
               )}
+
+              <p className="text-meta-sm text-b3 mt-0.5">
+                {req.isFreeForRainmakers ? 'Free service request' : 'Booking request'} · {req.date}
+              </p>
+
+              <p className="text-body-sm text-black leading-snug mt-2">
+                {req.isFreeForRainmakers ? (
+                  <><strong>{req.sender.split(' ')[0]}</strong> is looking for a <strong>free {req.serviceTitle}</strong> — they'll spotlight you in return.</>
+                ) : (
+                  <><strong>{req.sender.split(' ')[0]}</strong> wants to book your <strong>{req.serviceTitle}</strong>.</>
+                )}
+              </p>
+
+              {req.note && (
+                <p className="text-meta text-b2 italic leading-snug mt-2 line-clamp-3">
+                  &ldquo;{req.note}&rdquo;
+                </p>
+              )}
+
+              <p className="text-meta text-b3 font-medium leading-snug mt-1">{req.appointmentTime}</p>
             </div>
           </div>
         ))}

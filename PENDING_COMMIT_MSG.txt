@@ -1,11 +1,8 @@
-Free-service inbox card matches the spotlight InboundCard template (reach-led sequence)
+Drive /inbox BOOKINGS cards to the new card template (off the old format)
 
-Tarik 2026-06-15: same card format both sides, but each leads with what matters —
-SERVICE seeing a Connector's free-service request leads with the Connector's REACH;
-Connector seeing a provider's spotlight request leads with reco's/service.
-
-JobsInbox "New requests near you" card now mirrors the spotlight InboundCard layout:
-name + "New" status pill → key counts (reach-led: IG · network · reco's made) up next to
-the name → "Free service request · {timeAgo}" → ask line ("{name} is looking for a free
-{service} — they'll spotlight you in return", mirror of "X is offering you a free Y") →
-their message as an italic quote → location → Accept/Counter/Decline.
+Tarik 2026-06-15: /inbox still showed the old request format; the updated design is the
+spotlight/"New requests near you" template. Booking cards now match it exactly:
+name + "Needs response" pill → reach-led counts (IG · network · reco's made) → "Booking/
+Free service request · {date}" → ask line ("{name} wants to book your {service}" / "is
+looking for a free {service} — they'll spotlight you in return") → their note as an italic
+quote → appointment. Tap still opens /request/:id. One card format across the inbox.
