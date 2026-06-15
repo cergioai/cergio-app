@@ -1,13 +1,14 @@
-Barter: booking off an offer auto-confirms → lands in both Upcoming (SPEC-47b)
+Barter: provider Mark-job-complete + rate-with-post + easy action surfacing (SPEC-47c)
 
-Diagnosed: t's "Book a time" created no booking (DB shows none today) and t's outstanding
-free-barter list is empty (gate NOT blocking) — the loop just had a redundant re-accept step
-that buried the result. Now booking off a provider's existing offer is created CONFIRMED
-("the provider already said yes"), so both sides see it in Inbox → Upcoming immediately and
-the requester is sent there on success. Cold consumer bookings still stay pending (SPEC-47).
-
-- createBooking: new `confirmed` option (status 'confirmed' vs 'pending').
-- App.proceedBooking: passes provider.preConfirmed → confirmed; on success routes to /inbox
-  with "Booked & confirmed — see it in Inbox → Upcoming" (errors still surface clearly).
-- JobsInbox "Book a time" passes preConfirmed:true.
-- FROZEN_SPEC SPEC-47b documents the exception.
+- bookings.completed_at (migration applied) + markBookingComplete(): provider marks the job
+  complete anytime → nudges the Connector to post (notify-request job_complete; email + in-app,
+  SMS later). Distinct from post_confirmed_at; for paid it starts the auto-release window.
+- Inbox Upcoming "Jobs for you": provider gets a "Mark job complete" button; once complete the
+  Connector's card upgrades to a prominent "‹Provider› marked the job complete — post now" prompt.
+- Rate + post in ONE step (MarkBookingPostedModal): star rating required. 4★+ → createReview +
+  markBookingPosted publishes the spotlight. Below 4★ → post HELD; Connector explains; review is
+  saved + framed as PRIVATE ("truthful reviews from trusted friends, not gamed reviews from
+  strangers") and shared with the provider. (Provider reply/escalate/admin = next module.)
+- Overview action rows make the notifications easy to find: "Post your IG spotlight · N" and
+  "Spotlights to review · N".
+- FROZEN_SPEC SPEC-47c. (Feed post thumbnail + Previous-spotlights population = next.)

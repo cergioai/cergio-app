@@ -133,8 +133,24 @@ Enforced in `influencer_crawler.py` via `MIN_FOLLOWERS` / `MAX_FOLLOWERS` consta
 3. After a FREE job, the Connector posts an IG spotlight (`markBookingPosted` → post_url + posted_at), it surfaces on the activity feed (kind `barter`), and the provider must **accept** (`confirmBookingPost` → post_confirmed_at + status completed) or **flag** (`flagBookingPost`).
 4. **THE GATE:** a Connector with an accepted free booking whose post is not yet confirmed cannot order another free service (`getOutstandingFreeBarter` checked in `handleBook` before any free booking).
 
+**SPEC-47c · Mark-complete + rate-with-post (FROZEN 2026-06-15, Tarik):**
+- The PROVIDER can **Mark job complete** anytime (even before start) on a Jobs → Upcoming
+  "Jobs for you" card → `markBookingComplete` stamps `bookings.completed_at` and fires
+  notify-request (`job_complete`) so the Connector is nudged to post (email + in-app; SMS once
+  Twilio is wired). This is distinct from `post_confirmed_at` (the barter still closes only on
+  provider confirm). For PAID jobs, `completed_at` starts the auto-release window (paid module).
+- The Connector **rates + posts in ONE step** (`MarkBookingPostedModal`): a star rating is
+  required. **4★+** → `createReview` + `markBookingPosted` publishes the spotlight. **Below 4★**
+  → the post is **HELD**: the Connector must explain; the review is saved (`createReview` with
+  comment), shown as PRIVATE ("truthful reviews from trusted friends, not gamed reviews from
+  strangers"), shared with the provider; the spotlight does NOT go live until resolved. Provider
+  reply / escalate / admin dispute = the next module.
+- Easy surfacing: the Jobs **Overview** shows action rows — "Post your IG spotlight · N" (you're
+  the Connector, provider marked complete) and "Spotlights to review · N" (you're the provider,
+  Connector posted).
+
 **Banned behaviors:**
-- Auto-confirming a booking at submission time
+- Auto-confirming a booking at submission time (except SPEC-47b: booking off a provider's existing offer)
 - Creating a free booking without consulting `getOutstandingFreeBarter`
 - Releasing the gate on `posted_at` alone (provider must CONFIRM)
 

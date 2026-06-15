@@ -3145,7 +3145,7 @@ export async function listProviderBookings() {
     .from('bookings')
     .select(`
       id, status, scheduled_at, location_text, notes, total_cents,
-      is_free_for_rainmaker, created_at, paid_at,
+      is_free_for_rainmaker, created_at, paid_at, completed_at,
       schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
       post_flag_reason, post_flagged_at,
       consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
@@ -3271,7 +3271,7 @@ export async function listConsumerBookings() {
     .from('bookings')
     .select(`
       id, status, scheduled_at, location_text, total_cents, created_at,
-      is_free_for_rainmaker, paid_at,
+      is_free_for_rainmaker, paid_at, completed_at,
       schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
       post_flag_reason, post_flagged_at,
       provider:profiles!bookings_provider_id_fkey ( id, display_name ),
@@ -3368,6 +3368,29 @@ export async function confirmBookingPost(bookingId) {
     .select()
     .single();
   if (!res.error && res.data?.id) fireBookingNotify(bookingId, 'post_confirmed');
+  return res;
+}
+
+/**
+ * Provider marks the JOB (service) complete — anytime, even before/at the start
+ * (Tarik 2026-06-15). Distinct from confirmBookingPost: completed_at says the
+ * service was delivered, which (a) nudges the Connector to make the IG post and
+ * (b) starts the paid auto-release window. The barter still only closes when
+ * the provider confirms the post (post_confirmed_at). Fires notify-request
+ * (job_complete) → the Connector gets "post your spotlight" (email + in-app;
+ * SMS once Twilio is wired).
+ */
+export async function markBookingComplete(bookingId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
+  const res = await supabase
+    .from('bookings')
+    .update({ completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', bookingId)
+    .is('completed_at', null)
+    .select()
+    .maybeSingle();
+  if (!res.error && res.data?.id) fireBookingNotify(bookingId, 'job_complete');
   return res;
 }
 

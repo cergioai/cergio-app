@@ -12,6 +12,7 @@ import {
   respondToRequest,
   confirmBookingPost,
   flagBookingPost,
+  markBookingComplete,
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
 import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
@@ -336,6 +337,15 @@ export function JobsInboxScreen() {
   const newRequestsCount = (inbound || []).length;
   const awaitingCount = sentOffers.length;
   const sentCount = (sent || []).length;
+  // Action-needed surfacing (Tarik 2026-06-15): the IG-post nudge (me as the
+  // Connector, once the provider marked complete) and the spotlight review
+  // (me as the provider, once the Connector posted).
+  const needPostCount = myJobs
+    ? myJobs.asConsumer.filter(b => b.is_free_for_rainmaker && b.completed_at && !b.posted_at && !b.post_confirmed_at).length
+    : 0;
+  const reviewSpotlightCount = myJobs
+    ? myJobs.asProvider.filter(b => b.is_free_for_rainmaker && b.posted_at && !b.post_confirmed_at).length
+    : 0;
   const tabCounts = {
     Overview: 0,
     Requests: badgeCount,
@@ -350,6 +360,14 @@ export function JobsInboxScreen() {
     setJobBusy(prev => ({ ...prev, [b.id]: false }));
     if (error) { showToast(`Failed: ${error.message}`); return; }
     showToast('Post accepted ✓ — barter complete');
+    refreshJobs();
+  };
+  const handleMarkComplete = async (b) => {
+    setJobBusy(prev => ({ ...prev, [b.id]: true }));
+    const { error } = await markBookingComplete(b.id);
+    setJobBusy(prev => ({ ...prev, [b.id]: false }));
+    if (error) { showToast(`Failed: ${error.message}`); return; }
+    showToast(b.is_free_for_rainmaker ? 'Marked complete — they\'ll be asked to post their IG spotlight.' : 'Marked complete.');
     refreshJobs();
   };
   const handleFlagPost = async (b) => {
@@ -455,6 +473,36 @@ export function JobsInboxScreen() {
             (Tarik 2026-06-15). The default landing tab. */}
         {activeTab === 'Overview' && (
           <>
+            {needPostCount > 0 && (
+              <div className="bg-gl border-2 border-g/40 rounded-[18px] p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-body-lg font-extrabold text-gd">
+                    Post your IG spotlight<span className="text-g"> · {needPostCount}</span>
+                  </p>
+                  <button onClick={() => setActiveTab('Upcoming')} className="text-body-sm font-extrabold text-g whitespace-nowrap flex-shrink-0">
+                    Do it now →
+                  </button>
+                </div>
+                <p className="text-meta text-b2 mt-1 leading-snug">
+                  A provider marked your job complete. Post to finish the barter + unlock new free services.
+                </p>
+              </div>
+            )}
+            {reviewSpotlightCount > 0 && (
+              <div className="bg-gl border-2 border-g/40 rounded-[18px] p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-body-lg font-extrabold text-gd">
+                    Spotlights to review<span className="text-g"> · {reviewSpotlightCount}</span>
+                  </p>
+                  <button onClick={() => setActiveTab('Upcoming')} className="text-body-sm font-extrabold text-g whitespace-nowrap flex-shrink-0">
+                    Review →
+                  </button>
+                </div>
+                <p className="text-meta text-b2 mt-1 leading-snug">
+                  A Connector posted your IG spotlight — review and accept it.
+                </p>
+              </div>
+            )}
             {myAnswered.length > 0 && (
               <OverviewRow
                 title="Offers to book"
@@ -1133,15 +1181,26 @@ export function JobsInboxScreen() {
                     </div>
                     {needsPost && (
                       <>
-                        <p className="text-meta text-b2 font-medium leading-snug mt-3">
-                          After the job, post your IG spotlight and confirm it here —
-                          that completes the barter and unlocks your next free service.
-                        </p>
+                        {b.completed_at ? (
+                          <div className="bg-gl border border-g/30 rounded-[12px] px-3 py-2.5 mt-3">
+                            <p className="text-body-sm font-extrabold text-gd leading-snug">
+                              {otherName.split(' ')[0]} marked the job complete — post your IG spotlight now.
+                            </p>
+                            <p className="text-meta text-b2 leading-snug mt-0.5">
+                              It finishes the barter and unlocks your next free service.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-meta text-b2 font-medium leading-snug mt-3">
+                            After the job, post your IG spotlight and confirm it here —
+                            that completes the barter and unlocks your next free service.
+                          </p>
+                        )}
                         <button
                           onClick={() => setPostTarget(b)}
                           className="w-full bg-g text-white rounded-[14px] py-3 text-body font-extrabold mt-2 hover:opacity-90 active:scale-[.98] transition-all"
                         >
-                          Mark IG post done
+                          {b.completed_at ? 'Post your IG spotlight →' : 'Mark IG post done'}
                         </button>
                       </>
                     )}
@@ -1207,6 +1266,9 @@ export function JobsInboxScreen() {
                 const otherName = b.consumer?.display_name || 'Cergio user';
                 const reviewNeeded = b.is_free_for_rainmaker && b.posted_at && !b.post_confirmed_at;
                 const awaitingPost = b.is_free_for_rainmaker && !b.posted_at && !b.post_confirmed_at && b.status !== 'cancelled';
+                // Provider can mark the job complete anytime (even before start)
+                // until it's done — Tarik 2026-06-15.
+                const canMarkComplete = !b.completed_at && !b.post_confirmed_at && b.status !== 'cancelled';
                 return (
                   <div key={b.id} className="bg-white border border-bdr rounded-[20px] p-4">
                     <div className="flex items-start gap-3">
@@ -1223,11 +1285,34 @@ export function JobsInboxScreen() {
                         </p>
                       </div>
                     </div>
-                    {awaitingPost && (
-                      <p className="text-meta text-b3 font-medium leading-snug mt-3">
-                        {otherName.split(' ')[0]} posts an IG spotlight after the job —
-                        you'll review and accept it here.
-                      </p>
+                    {/* Mark job complete — available anytime until done. */}
+                    {canMarkComplete && (
+                      <>
+                        <p className="text-meta text-b3 font-medium leading-snug mt-3">
+                          {b.is_free_for_rainmaker
+                            ? `${otherName.split(' ')[0]} posts an IG spotlight after the job — mark it complete to nudge them.`
+                            : `Mark the job complete when it's done — payment releases automatically after.`}
+                        </p>
+                        <button
+                          onClick={() => handleMarkComplete(b)}
+                          disabled={jobBusy[b.id]}
+                          className="w-full bg-g text-white rounded-[14px] py-3 text-body font-extrabold mt-2 hover:opacity-90 active:scale-[.98] transition-all disabled:opacity-60"
+                        >
+                          {jobBusy[b.id] ? 'Working…' : 'Mark job complete'}
+                        </button>
+                      </>
+                    )}
+                    {/* Marked complete, awaiting the Connector's IG post. */}
+                    {b.completed_at && awaitingPost && (
+                      <div className="bg-warnBg border border-warn/40 text-warnText rounded-[12px] px-3 py-2 text-meta font-extrabold text-center mt-3">
+                        Marked complete · {otherName.split(' ')[0]} will post their IG spotlight; you'll review it here.
+                      </div>
+                    )}
+                    {/* Paid: marked complete → auto-release window. */}
+                    {b.completed_at && !b.is_free_for_rainmaker && !b.post_confirmed_at && (
+                      <div className="bg-gl text-gd rounded-[12px] px-3 py-2 text-meta font-extrabold text-center mt-3">
+                        Marked complete · funds release automatically within 3h unless challenged.
+                      </div>
                     )}
                     {reviewNeeded && (
                       <>
@@ -1297,7 +1382,12 @@ export function JobsInboxScreen() {
         <MarkBookingPostedModal
           booking={postTarget}
           onClose={() => setPostTarget(null)}
-          onPosted={() => { showToast('Posted ✓ — provider notified to confirm'); refreshJobs(); }}
+          onPosted={(res) => {
+            showToast(res?.heldForLowRating
+              ? 'Review sent to the provider — your post is on hold until the rating is resolved.'
+              : 'Posted ✓ — provider notified to confirm');
+            refreshJobs();
+          }}
         />
       )}
     </div>
