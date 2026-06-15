@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import {
   getSpotlightRequest, setSpotlightRequestStatus, counterSpotlightRequest,
-  getMutualConnections, getPublicProfileStats,
+  getMutualConnections, getPublicProfileStats, isConnectorProfile,
 } from '../lib/api';
 import { fmtDollars, sellerEarningsCents, PLATFORM_FEE_RATE } from '../lib/fees';
 
@@ -76,11 +76,23 @@ export function SpotlightRequestScreen() {
   const services = data.providerServices || [];
   const recosReceived = data.providerRecosReceived || 0;
   const networkCount = (stats && stats.networkCount) || 0;
+  const recosMade = (stats && stats.recommended) || 0;
   const igFollowers = data.provider?.instagram_followers || 0;
+  const ttFollowers = data.provider?.tiktok_followers || 0;
+  const providerIsConnector = isConnectorProfile(data.provider || {});
+  // Counts about the requesting provider (lead with the SERVICE above; these
+  // back it up). Tarik 2026-06-14: show network · reco's · reach + Connector status.
+  const countLine = [
+    networkCount > 0 ? `${networkCount} network on Cergio` : null,
+    recosMade > 0 ? `${recosMade} reco${recosMade === 1 ? '' : 's'} made` : null,
+    igFollowers > 0 ? `${Number(igFollowers).toLocaleString()} IG` : null,
+    ttFollowers > 0 ? `${Number(ttFollowers).toLocaleString()} TikTok` : null,
+  ].filter(Boolean).join(' · ');
 
   const effective = data.offered_price_cents ?? data.official_price_cents ?? 0;
   const isFree = effective === 0;
   const platformLabel = data.platform === 'instagram' ? 'Instagram' : 'TikTok';
+  const platformShort = data.platform === 'instagram' ? 'IG' : 'TikTok';
   const serviceLabel = data.service?.taxonomy_provider_type || data.service?.title || 'service';
   const isMyTurn = data.status === 'pending' || (data.status === 'countered' && data.last_counter_by === 'provider');
   const hasMutuals = mutuals && mutuals.count > 0;
@@ -120,7 +132,7 @@ export function SpotlightRequestScreen() {
         <p className="text-caps text-gd mb-1">{isFree ? 'Free spotlight swap' : 'Paid spotlight request'}</p>
         <h1 className="text-heading-2 font-extrabold text-black leading-tight">
           {isFree ? (
-            <>Free {serviceLabel} <span className="text-g">⇄</span> your {platformLabel} spotlight</>
+            <>Free {serviceLabel} Offer <span className="text-g">⇄</span> Free {platformShort} Spotlight</>
           ) : (
             <>Spotlight {serviceLabel} on {platformLabel} <span className="text-g">·</span> earn {fmtDollars(sellerEarningsCents(effective))}</>
           )}
@@ -136,7 +148,15 @@ export function SpotlightRequestScreen() {
           <div className="flex items-start gap-3">
             <Avatar name={providerName} />
             <div className="min-w-0 flex-1">
-              <p className="text-body font-extrabold text-black truncate">{providerName}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-body font-extrabold text-black truncate">{providerName}</p>
+                {providerIsConnector && (
+                  <span className="inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide shrink-0">
+                    Connector
+                  </span>
+                )}
+              </div>
+              {/* LEAD with the SERVICE — this is what makes the Connector decide. */}
               {(services.length > 0 || recosReceived > 0) && (
                 <p className="text-meta-sm text-gd font-extrabold mt-0.5 leading-snug">
                   {services.length > 0
@@ -145,10 +165,7 @@ export function SpotlightRequestScreen() {
                 </p>
               )}
               {providerBio && <p className="text-meta text-b3 leading-snug mt-1 line-clamp-3">{providerBio}</p>}
-              <p className="text-meta-sm text-b3 mt-1">
-                {[networkCount > 0 ? `${networkCount} network on Cergio` : null,
-                  igFollowers > 0 ? `${Number(igFollowers).toLocaleString()} IG` : null].filter(Boolean).join(' · ')}
-              </p>
+              {countLine && <p className="text-meta-sm text-b3 mt-1">{countLine}</p>}
             </div>
           </div>
 
@@ -180,12 +197,18 @@ export function SpotlightRequestScreen() {
         <div className="bg-soft rounded-[18px] p-4">
           <p className="text-body text-black leading-relaxed">
             {isFree ? (
-              <><span className="font-extrabold">{providerFirst}</span> is offering a free <span className="font-extrabold">{serviceLabel}</span> in return for a {platformLabel} spotlight.</>
+              <><span className="font-extrabold">{providerFirst}</span> is offering a free <span className="font-extrabold">{serviceLabel}</span> in return for a free {platformLabel} spotlight.</>
             ) : (
               <><span className="font-extrabold">{providerFirst}</span> wants a {platformLabel} spotlight for their <span className="font-extrabold">{serviceLabel}</span> and will pay <span className="font-extrabold">{fmtDollars(effective)}</span>.</>
             )}
           </p>
           {data.message && <p className="text-body-sm text-b2 italic mt-2 leading-snug">&ldquo;{data.message}&rdquo;</p>}
+          {/* Scheduling note — unlike a Connector requesting a free SERVICE (where
+              the time matters up front), accepting a spotlight just agrees to the
+              swap; the two parties arrange timing together afterward. */}
+          <p className="text-meta text-b3 mt-2.5 pt-2.5 border-t border-line leading-snug">
+            Accepting agrees to the swap — you and {providerFirst} arrange the timing together afterward.
+          </p>
         </div>
       </div>
 
@@ -214,12 +237,10 @@ export function SpotlightRequestScreen() {
                 {isFree ? 'Offer the spotlight' : `Accept · earn ${fmtDollars(sellerEarningsCents(effective))}`}
               </button>
               <div className="flex items-center justify-center gap-3 mt-2.5">
-                {!isFree && (
-                  <button onClick={() => { setCounterDraft(''); setCounterOpen(true); }}
-                    className="inline-flex items-center gap-1.5 border border-bdr rounded-pill px-4 py-2 text-body-sm font-extrabold text-b2 hover:bg-bg5 active:scale-[.97] transition-all">
-                    <span className="text-g">$</span>Set your price
-                  </button>
-                )}
+                <button onClick={() => { setCounterDraft(''); setCounterOpen(true); }}
+                  className="inline-flex items-center gap-1.5 border border-bdr rounded-pill px-4 py-2 text-body-sm font-extrabold text-b2 hover:bg-bg5 active:scale-[.97] transition-all">
+                  <span className="text-g">$⇄</span>{isFree ? 'Counter with a price' : 'Set your price'}
+                </button>
                 <button onClick={decline} className="rounded-pill px-4 py-2 text-body-sm font-extrabold text-g hover:bg-gl active:scale-[.97] transition-all">Decline</button>
               </div>
             </>

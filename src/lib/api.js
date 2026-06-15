@@ -2366,7 +2366,7 @@ export async function getSpotlightRequest(id) {
   if (pid) {
     const { data: prof } = await supabase
       .from('profiles')
-      .select('id, display_name, headline, bio, instagram_handle, instagram_followers')
+      .select('id, display_name, headline, bio, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, cc_verified_at')
       .eq('id', pid).maybeSingle();
     provider = prof || null;
     const { data: svcs } = await supabase
