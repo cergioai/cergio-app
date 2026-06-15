@@ -455,6 +455,16 @@ export function JobsInboxScreen() {
             (Tarik 2026-06-15). The default landing tab. */}
         {activeTab === 'Overview' && (
           <>
+            {myAnswered.length > 0 && (
+              <OverviewRow
+                title="Offers to book"
+                count={myAnswered.reduce((n, r) => n + (r.responses || []).length, 0)}
+                items={myAnswered
+                  .flatMap(r => (r.responses || []).map(resp => `${resp.responder?.display_name || 'A provider'} · ${resp.service?.title || r.service_type || 'service'}`))
+                  .slice(0, 2)}
+                onView={() => setActiveTab('Requests')}
+              />
+            )}
             <OverviewRow
               title="New requests"
               count={newRequestsCount}

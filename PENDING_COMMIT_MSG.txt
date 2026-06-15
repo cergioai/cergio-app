@@ -1,8 +1,5 @@
-Inbox: "Book a time" on an accepted offer — closes the barter loop end-to-end
+Overview: surface "Offers to book" so the booking step is findable from the default tab
 
-The two-step barter stalled because the requester had no direct way to turn a provider's
-offer into a scheduled booking (the response card only linked to the profile), so no booking
-existed for the provider to mark complete. Now the "Responses to your requests" card has a
-"Book a free time →" / "Book a time · $X" button that runs handleBook (free-barter gate →
-ScheduleSheet → createBooking), creating the dated booking that flows to Upcoming for both
-parties and lets the provider proceed (confirm → mark complete → rate → IG post → confirm).
+Adds an "Offers to book (N)" row at the top of the inbox Overview (the provider offers you've
+received), View all → Requests, where the new "Book a time" button schedules the offer. Makes
+the end-to-end barter step easy to find from the landing screen.
