@@ -292,6 +292,7 @@ export function JobsInboxScreen() {
   //   as consumer (Connector) → mark IG post done / see flag reasons
   //   as provider             → review post, Accept or flag a problem
   const [myJobs, setMyJobs] = useState(null); // { asConsumer:[], asProvider:[] }
+  const [sent, setSent] = useState(null);     // outgoing spotlight asks (eager, for counts)
   const [postTarget, setPostTarget] = useState(null);     // booking → MarkBookingPostedModal
   const [flagOpenFor, setFlagOpenFor] = useState(null);   // booking id with flag input open
   const [flagDraft, setFlagDraft] = useState('');
@@ -364,11 +365,9 @@ export function JobsInboxScreen() {
     refreshJobs();
   };
 
-  // Sent — provider's outgoing spotlight asks. Loaded lazily so the
-  // Inbox tab doesn't pay the cost until the user opens the Sent tab.
-  const [sent, setSent] = useState(null);
+  // Sent — provider's outgoing spotlight asks (eager so the Sent folder count
+  // shows on the Overview). State is declared higher up so tabCounts can read it.
   useEffect(() => {
-    // Eager so the Sent folder count shows on the Overview without switching.
     if (!auth?.isSignedIn || sent !== null) return;
     listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => {
       setSent(data || []);

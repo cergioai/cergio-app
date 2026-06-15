@@ -1,15 +1,4 @@
-Inbox: Overview summary tab + folder counts + Awaiting-schedule + global upcoming banner
+Fix: move `sent` useState above tabCounts (TDZ crash — "Cannot access before initialization")
 
-Tarik 2026-06-15. Two-step barter kept (the requester schedules); accepted offers are now
-visible instead of lost, and confirmed/booked jobs show in Upcoming with their date.
-
-- listMySentOffers(): my offered/countered responses awaiting the requester to pick a time.
-- JobsInbox:
-  • New "Overview" tab (default) — digest of New requests / Awaiting their schedule / Upcoming
-    (+ Sent, Past) each with a count, 1–2 preview lines, and "View all →" that opens the folder.
-  • Folder counts next to every tab (Requests, Sent, Upcoming, Past); tab row scrolls.
-  • "Awaiting their schedule" section in Requests — "You offered {service} to {name} · waiting on
-    them to pick a time; moves to Upcoming once they book." Empty state accounts for it.
-  • myJobs + sent now load eagerly so counts/Overview are ready without switching tabs.
-- UpcomingBanner: global dismissible "N upcoming services — tap to view" in the app shell on
-  nav screens; dismiss persists (localStorage), re-appears when the count changes.
+tabCounts referenced the `sent` state before its declaration, white-screening /inbox.
+Declared `sent` alongside `myJobs` (above the counts); kept the eager-load effect.
