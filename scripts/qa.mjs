@@ -1848,6 +1848,10 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
     'getInboundRequest must fetch TikTok handle/followers');
   assert(/reco's made/.test(screen) && /on Cergio/.test(screen) && /\{s\.recos\} reco/.test(screen),
     'Connector tile must show reco\'s made, the Cergio network count, and a per-service reco count');
+  // Lead with REACH for a free-service request (Tarik 2026-06-15): the IG
+  // followers line is the prominent lead, ABOVE the network/reco's-made line.
+  assert(/IG followers/.test(screen) && /reachLine/.test(screen),
+    'Connector tile must LEAD with the "{N} IG followers" reach line (SPEC-48, 2026-06-15)');
   assert(/export async function askRequestQuestion/.test(api) && /Ask a question before you accept/.test(screen),
     'Pre-booking Q&A: askRequestQuestion + "Ask a question" affordance');
   assert(/setMapOpen\(true\)/.test(screen),

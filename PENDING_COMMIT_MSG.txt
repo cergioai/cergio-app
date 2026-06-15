@@ -1,14 +1,14 @@
-SPEC-48b: booking detail to frame-3 parity + new-card-only inbox + quarantine the FALLBACK mock
+Free-service request: lead the requester with REACH (IG followers → network → reco's made)
 
-Why it looked regressed: nothing reverted — the booking detail /request/:id only got the
-first SPEC-48 pass; this session's newer polish (key counts, Connector badge) landed only on
-/inbound & /spotlight. This brings /request/:id (free AND paid) to full parity and freezes it.
+Tarik 2026-06-15: for a Connector requesting a FREE service, reach is the most relevant
+signal — match the profile interim screen's order.
 
-- RequestDetailScreen (/request/:id): + Connector badge + key-counts line (network · reco's
-  made · IG · TikTok via shared usePartyCounts/formatKeyCounts; mutuals stay in the dedicated
-  friends-in-common block). Same elements as /inbound, for free and paid bookings.
-- QUARANTINE: the demo FALLBACK mock (hardcoded fake requester) is unplugged — a missing/
-  invalid booking now shows a clean "no longer available" state, never fake data (SPEC-12).
-- JobsInbox: booking cards now carry the SAME key-counts line as the connector free-request
-  cards — one card design for both request types. One shared count source (usePartyCounts).
-- FROZEN_SPEC SPEC-48b + qa #48 extended to guard parity, the shared hook, and the quarantine.
+- RequestFromConnectorScreen (/inbound, frame 3): the connector tile now LEADS with
+  "{N} IG followers" as its own prominent line, then "network on Cergio · reco's made",
+  then See Instagram, then bio. Services + reco's RECEIVED stay below; mutual friends below that.
+  (Was: followers as a small chip next to the name.)
+- Shared formatKeyCounts: recoKind:'made' (free-service requester contexts — Jobs inbox cards
+  + booking detail) is now reach-led: IG · TikTok · network · reco's made · mutual.
+  recoKind:'received' (spotlight) keeps reputation-first order.
+- FROZEN_SPEC SPEC-48 updated to the new lead-with-reach sequence; qa #48 asserts the
+  "IG followers" lead line.

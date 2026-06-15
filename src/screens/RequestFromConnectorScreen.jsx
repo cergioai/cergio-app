@@ -204,13 +204,15 @@ export function RequestFromConnectorScreen() {
   // Top line = the connector's REACH/contribution: audience (IG + TikTok) ·
   // reco's MADE · Cergio network. Their services + reco's RECEIVED sit under
   // the bio (contrasted as what they DO + social proof on their work).
-  const audienceBits = [
-    data.igFollowers > 0 ? `${Number(data.igFollowers).toLocaleString()} IG` : null,
+  // LEAD with REACH (Tarik 2026-06-15): a Connector requesting a FREE service
+  // is judged on reach first — IG followers, then network on Cergio, then
+  // reco's made; services + reco's RECEIVED sit lower. Mirrors the profile
+  // interim screen's order.
+  const reachBits = [
+    data.igFollowers > 0 ? `${Number(data.igFollowers).toLocaleString()} IG followers` : null,
     data.ttFollowers > 0 ? `${Number(data.ttFollowers).toLocaleString()} TikTok` : null,
   ].filter(Boolean);
-  const audience = audienceBits.length ? `${audienceBits.join(' · ')} followers` : null;
-  // audience (IG/TikTok followers) sits next to the Connector badge;
-  // reco's made + Cergio network sit together on the strength line.
+  const reachLine = reachBits.join(' · ');
   const strength = [
     stats && stats.networkCount > 0 ? `${stats.networkCount} network on Cergio` : null,
     stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
@@ -358,24 +360,21 @@ export function RequestFromConnectorScreen() {
                       <ShieldIcon size={9} />Connector
                     </span>
                   )}
-                  {audience && (
-                    <span className="inline-flex items-center gap-1 text-meta-sm text-b3 font-medium">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
-                        <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
-                      </svg>
-                      {audience}
-                    </span>
-                  )}
                 </div>
-                {/* reco's made · Cergio network + See Instagram (text link) */}
-                {(strength || data.igHandle) && (
-                  <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 mt-1 text-meta-sm text-b3">
-                    {strength && <span>{strength}</span>}
-                    {data.igHandle && (
-                      <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
-                        className="text-gd font-extrabold underline underline-offset-2 hover:opacity-80">See Instagram</a>
-                    )}
-                  </div>
+                {/* LEAD with reach: IG followers (prominent), then network ·
+                    reco's made, then See Instagram, then bio. */}
+                {reachLine && (
+                  <p className="flex items-center gap-1 text-body-sm font-extrabold text-black mt-0.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
+                      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
+                    </svg>
+                    {reachLine}
+                  </p>
+                )}
+                {strength && <p className="text-meta-sm text-b3 mt-0.5">{strength}</p>}
+                {data.igHandle && (
+                  <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
+                    className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-0.5">See Instagram</a>
                 )}
                 {data.bio && <p className="text-meta text-b3 leading-snug mt-1 line-clamp-3">{data.bio}</p>}
               </div>

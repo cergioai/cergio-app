@@ -18,15 +18,26 @@ function fmtK(n) {
 // chooses reco's made (free-service requester) vs received (spotlight provider).
 export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true } = {}) {
   if (!c) return null;
-  const recos = recoKind === 'made' ? c.recosMade : c.recosReceived;
   const parts = [];
   // includeMutual=false on screens that already render a dedicated
   // friends-in-common block (e.g. the booking detail), to avoid duplication.
-  if (includeMutual) parts.push(c.mutualCount > 0 ? `${c.mutualCount} mutual` : 'No mutuals');
-  if (c.networkCount > 0) parts.push(`${c.networkCount} network`);
-  if (recos > 0)          parts.push(`${recos} reco${recos === 1 ? '' : 's'}`);
-  if (c.igFollowers > 0)  parts.push(`${fmtK(c.igFollowers)} IG`);
-  if (c.ttFollowers > 0)  parts.push(`${fmtK(c.ttFollowers)} TikTok`);
+  const pushMutual = () => { if (includeMutual) parts.push(c.mutualCount > 0 ? `${c.mutualCount} mutual` : 'No mutuals'); };
+  if (recoKind === 'made') {
+    // Reach-led — a Connector requesting a FREE service is judged on reach
+    // first (Tarik 2026-06-15): IG followers, then network, then reco's made.
+    if (c.igFollowers > 0)  parts.push(`${fmtK(c.igFollowers)} IG`);
+    if (c.ttFollowers > 0)  parts.push(`${fmtK(c.ttFollowers)} TikTok`);
+    if (c.networkCount > 0) parts.push(`${c.networkCount} network`);
+    if (c.recosMade > 0)    parts.push(`${c.recosMade} reco${c.recosMade === 1 ? '' : 's'} made`);
+    pushMutual();
+  } else {
+    // Service-led — a Connector judging a provider's spotlight: reputation first.
+    pushMutual();
+    if (c.networkCount > 0)  parts.push(`${c.networkCount} network`);
+    if (c.recosReceived > 0) parts.push(`${c.recosReceived} reco${c.recosReceived === 1 ? '' : 's'}`);
+    if (c.igFollowers > 0)   parts.push(`${fmtK(c.igFollowers)} IG`);
+    if (c.ttFollowers > 0)   parts.push(`${fmtK(c.ttFollowers)} TikTok`);
+  }
   return parts.join(' · ');
 }
 
