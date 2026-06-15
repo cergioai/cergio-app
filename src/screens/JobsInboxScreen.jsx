@@ -593,14 +593,17 @@ export function JobsInboxScreen() {
                           <button
                             type="button"
                             onClick={() => handleBook({
-                              id:         resp.service.id,
-                              ownerId:    resp.responder.id,
+                              id:           resp.service.id,
+                              ownerId:      resp.responder.id,
                               name,
-                              title:      resp.service.title,
-                              offeringId: null,
-                              price:      (price || 0) / 100,
-                              priceCents: price || 0,
-                              isFree:     !price,
+                              title:        resp.service.title,
+                              offeringId:   null,
+                              price:        (price || 0) / 100,
+                              priceCents:   price || 0,
+                              isFree:       !price,
+                              // Provider already offered → confirm on schedule
+                              // so it lands in both Upcoming immediately.
+                              preConfirmed: true,
                             })}
                             className="w-full mt-2 bg-g text-white rounded-[12px] py-2 text-meta font-extrabold cg-cta active:scale-[.98] transition-all"
                           >

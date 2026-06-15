@@ -129,7 +129,7 @@ Enforced in `influencer_crawler.py` via `MIN_FOLLOWERS` / `MAX_FOLLOWERS` consta
 **Status:** FROZEN — 2026-06-12 (Tarik flow board "User Flow / SVP Flow")  
 **Rule:**
 1. Every real booking goes through the ScheduleSheet (calendar + time + Done) — the user confirms day/time; `schedule_confirmed_at` is stamped. No more silent "+24h placeholder" confirmations.
-2. Bookings (free AND demo-mode paid) stay **pending** until the provider accepts — never auto-confirm on submission.
+2. Bookings (free AND demo-mode paid) stay **pending** until the provider accepts — never auto-confirm on submission. **EXCEPTION (SPEC-47b, Tarik 2026-06-15):** a booking made off a provider's EXISTING offer (the "Book a time" action on a "Responses to your requests" card → `handleBook({preConfirmed:true})` → `createBooking({confirmed:true})`) is created **confirmed**, because the provider already said yes by offering. It lands in both parties' Upcoming immediately — no redundant re-accept. A cold consumer-initiated booking still stays pending.
 3. After a FREE job, the Connector posts an IG spotlight (`markBookingPosted` → post_url + posted_at), it surfaces on the activity feed (kind `barter`), and the provider must **accept** (`confirmBookingPost` → post_confirmed_at + status completed) or **flag** (`flagBookingPost`).
 4. **THE GATE:** a Connector with an accepted free booking whose post is not yet confirmed cannot order another free service (`getOutstandingFreeBarter` checked in `handleBook` before any free booking).
 

@@ -262,7 +262,9 @@ function Layout() {
 
     const { createBooking } = await import('./lib/api');
 
-    // Insert booking in pending state with the user-confirmed schedule.
+    // Insert booking with the user-confirmed schedule. preConfirmed bookings
+    // (off a provider's existing offer) go in CONFIRMED so they appear in both
+    // parties' Upcoming immediately — no redundant provider re-accept.
     const { data: row, error } = await createBooking({
       service:    { id: provider.id, owner_id: provider.ownerId },
       offeringId: provider.offeringId,
@@ -270,9 +272,19 @@ function Layout() {
       isFreeForRainmaker: !!provider.isFree,
       scheduledAt:        chosenAt || null,
       scheduleConfirmed:  !!chosenAt,
+      confirmed:          !!provider.preConfirmed,
     });
     if (error || !row) {
       showToast(`Booking failed: ${error?.message || 'unknown error'}`);
+      return;
+    }
+
+    // preConfirmed (booked off an offer) — it's already confirmed; send the
+    // user straight to Inbox → Upcoming where both sides now see it.
+    if (provider.preConfirmed) {
+      creditInviterOnFirstBooking(row.consumer_id, row.id).catch(() => {});
+      showToast('Booked & confirmed — see it in Inbox → Upcoming.');
+      navigate('/inbox');
       return;
     }
 

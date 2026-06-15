@@ -1,5 +1,13 @@
-Overview: surface "Offers to book" so the booking step is findable from the default tab
+Barter: booking off an offer auto-confirms → lands in both Upcoming (SPEC-47b)
 
-Adds an "Offers to book (N)" row at the top of the inbox Overview (the provider offers you've
-received), View all → Requests, where the new "Book a time" button schedules the offer. Makes
-the end-to-end barter step easy to find from the landing screen.
+Diagnosed: t's "Book a time" created no booking (DB shows none today) and t's outstanding
+free-barter list is empty (gate NOT blocking) — the loop just had a redundant re-accept step
+that buried the result. Now booking off a provider's existing offer is created CONFIRMED
+("the provider already said yes"), so both sides see it in Inbox → Upcoming immediately and
+the requester is sent there on success. Cold consumer bookings still stay pending (SPEC-47).
+
+- createBooking: new `confirmed` option (status 'confirmed' vs 'pending').
+- App.proceedBooking: passes provider.preConfirmed → confirmed; on success routes to /inbox
+  with "Booked & confirmed — see it in Inbox → Upcoming" (errors still surface clearly).
+- JobsInbox "Book a time" passes preConfirmed:true.
+- FROZEN_SPEC SPEC-47b documents the exception.

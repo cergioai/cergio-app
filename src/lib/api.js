@@ -3047,6 +3047,11 @@ export async function createBooking({
   // flow board. Stamps schedule_confirmed_at so both sides know the
   // time is real, not the +24h placeholder.
   scheduleConfirmed = false,
+  // CERGIO-GUARD (2026-06-15, Tarik): book directly as 'confirmed' when the
+  // booking comes off a provider's EXISTING offer — the provider already said
+  // yes, so the redundant re-accept step is skipped and it lands in both
+  // parties' Upcoming immediately ("ultra intuitive easy flow").
+  confirmed = false,
 } = {}) {
   if (!supabaseReady) return NOT_WIRED;
 
@@ -3069,7 +3074,7 @@ export async function createBooking({
       provider_id:           service.owner_id,
       service_id:            service.id,
       offering_id:           offeringId,
-      status:                'pending',
+      status:                confirmed ? 'confirmed' : 'pending',
       scheduled_at:          when.toISOString(),
       location_text:         locationText || null,
       notes:                 notes || null,
