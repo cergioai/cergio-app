@@ -16,11 +16,13 @@ function fmtK(n) {
 // Compact one-line summary. Mutual connections ALWAYS render (even 0 →
 // "No mutuals") per Tarik; the rest appear only when present. `recoKind`
 // chooses reco's made (free-service requester) vs received (spotlight provider).
-export function formatKeyCounts(c, { recoKind = 'received' } = {}) {
+export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true } = {}) {
   if (!c) return null;
   const recos = recoKind === 'made' ? c.recosMade : c.recosReceived;
   const parts = [];
-  parts.push(c.mutualCount > 0 ? `${c.mutualCount} mutual` : 'No mutuals');
+  // includeMutual=false on screens that already render a dedicated
+  // friends-in-common block (e.g. the booking detail), to avoid duplication.
+  if (includeMutual) parts.push(c.mutualCount > 0 ? `${c.mutualCount} mutual` : 'No mutuals');
   if (c.networkCount > 0) parts.push(`${c.networkCount} network`);
   if (recos > 0)          parts.push(`${recos} reco${recos === 1 ? '' : 's'}`);
   if (c.igFollowers > 0)  parts.push(`${fmtK(c.igFollowers)} IG`);

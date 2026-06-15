@@ -1,11 +1,14 @@
-Inbox key counts on both request types + counter-with-$ on free spotlight swaps
+SPEC-48b: booking detail to frame-3 parity + new-card-only inbox + quarantine the FALLBACK mock
 
-- New getInboxPartyCounts(ids) + usePartyCounts hook + formatKeyCounts: a compact
-  "mutual · network · reco's · IG/TikTok" line, mutual friends always shown
-  (defaults to "No mutuals" at 0).
-- Spotlight inbox (ConnectorRequestsScreen InboundCard): key counts about the
-  provider; Counter now shows on FREE swaps too ("Counter $").
-- Free-service inbox (JobsInboxScreen "New requests near you"): key counts about
-  the requester (reco's MADE). Inline $ counter already existed.
-- CounterSpotlightModal: handles a $0 free base — "Name your price" (upward
-  counter from free), accepts any positive amount, hides the savings row.
+Why it looked regressed: nothing reverted — the booking detail /request/:id only got the
+first SPEC-48 pass; this session's newer polish (key counts, Connector badge) landed only on
+/inbound & /spotlight. This brings /request/:id (free AND paid) to full parity and freezes it.
+
+- RequestDetailScreen (/request/:id): + Connector badge + key-counts line (network · reco's
+  made · IG · TikTok via shared usePartyCounts/formatKeyCounts; mutuals stay in the dedicated
+  friends-in-common block). Same elements as /inbound, for free and paid bookings.
+- QUARANTINE: the demo FALLBACK mock (hardcoded fake requester) is unplugged — a missing/
+  invalid booking now shows a clean "no longer available" state, never fake data (SPEC-12).
+- JobsInbox: booking cards now carry the SAME key-counts line as the connector free-request
+  cards — one card design for both request types. One shared count source (usePartyCounts).
+- FROZEN_SPEC SPEC-48b + qa #48 extended to guard parity, the shared hook, and the quarantine.

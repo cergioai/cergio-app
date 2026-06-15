@@ -16,37 +16,11 @@
 // faked (SPEC-12 — no fake data on real screens).
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
-import { getBooking, updateBookingStatus, notifyBookingAccepted, getMutualConnections } from '../lib/api';
+import { getBooking, updateBookingStatus, notifyBookingAccepted, getMutualConnections, isConnectorProfile } from '../lib/api';
+import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
 import { useProviderReady } from '../hooks/useProviderReady';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const FALLBACK = {
-  consumerName: 'Reyna',
-  serviceType:  'Housekeeper request',
-  description:  'Apartment Clean — 1 BD / 2 BA (+ extras)',
-  appointment:  'Tue, Feb 27 — 10:00 AM',
-  message:      "Hi, my name is Gervon. I'm eager to try out your service and blast it on socials. Looking forward to the house clean. Should be light :)",
-  sentDate:     'Feb 13',
-  isFree:       true,
-  status:       'pending',
-  real:         false,
-  igHandle:     'ReynaReynolds',
-  igFollowers:  6974,
-  locationText: 'Wynwood, Miami',
-};
-
-// Demo-only mutuals for the non-real FALLBACK pitch so the demo screen
-// renders the full layout. Real bookings always use live network data.
-const FALLBACK_MUTUALS = {
-  count: 4,
-  connectors: 1,
-  sample: [
-    { id: 'd1', name: 'Jordan Lee',   is_connector: false, initial: 'J' },
-    { id: 'd2', name: 'Mia Torres',   is_connector: true,  initial: 'M' },
-    { id: 'd3', name: 'Sam Park',     is_connector: false, initial: 'S' },
-  ],
-};
 
 function getInitials(name = '') {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
@@ -89,17 +63,19 @@ export function RequestDetailScreen() {
   // Provider must have Stripe payouts enabled before they can accept a paid
   // booking (per Phase B decision: "block accept until payouts_enabled").
   const provider = useProviderReady(auth);
+  // Key counts about the requester (parity with /inbound & /spotlight). The
+  // dedicated friends-in-common block below carries mutuals, so omit them here.
+  const partyCounts = usePartyCounts(data?.consumerId ? [data.consumerId] : []);
 
   useEffect(() => {
     let cancelled = false;
-    if (!UUID_RE.test(id || '')) {
-      setData(FALLBACK);
-      setMutuals(FALLBACK_MUTUALS);
-      return;
-    }
+    // QUARANTINE (2026-06-15, Tarik): the old demo FALLBACK pitch (hardcoded
+    // mock requester) is unplugged — no fake data on a real screen (SPEC-12).
+    // A missing/invalid booking now shows a clean not-found state (data=false).
+    if (!UUID_RE.test(id || '')) { setData(false); return; }
     getBooking(id).then(({ data: b, error }) => {
       if (cancelled) return;
-      if (error || !b) { setData(FALLBACK); setMutuals(FALLBACK_MUTUALS); return; }
+      if (error || !b) { setData(false); return; }
       const consumer = b.consumer || {};
       setData({
         id:            b.id,
@@ -136,10 +112,18 @@ export function RequestDetailScreen() {
     return () => { cancelled = true; };
   }, [id]);
 
-  if (!data) {
+  if (data === null) {
     return (
       <div className="flex-1 flex items-center justify-center bg-cr">
         <p className="text-body text-b3">Loading request…</p>
+      </div>
+    );
+  }
+  if (data === false) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-cr px-8 text-center">
+        <p className="text-body font-extrabold text-black">This request is no longer available.</p>
+        <button onClick={() => navigate('/inbox')} className="mt-4 bg-g text-white rounded-[24px] py-3 px-5 text-body-sm font-extrabold">Back to Inbox</button>
       </div>
     );
   }
@@ -282,6 +266,26 @@ export function RequestDetailScreen() {
           </div>
         )}
       </div>
+
+      {/* Requester signal — Connector status + key counts (network · reco's ·
+          reach), parity with the /inbound frame-3 screen. SPEC-48: this screen
+          carries the same elements. Mutuals live in the dedicated block below. */}
+      {(() => {
+        const counts = partyCounts[data.consumerId];
+        const isConnector = data.consumerIsConnector || isConnectorProfile({ instagram_followers: data.igFollowers });
+        const line = formatKeyCounts(counts, { recoKind: 'made', includeMutual: false });
+        if (!isConnector && !line) return null;
+        return (
+          <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
+            {isConnector && (
+              <span className="inline-flex items-center gap-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide">
+                Connector
+              </span>
+            )}
+            {line && <span className="text-meta-sm text-b2 font-medium">{line}</span>}
+          </div>
+        );
+      })()}
 
       {/* service info / job details */}
       <div className="px-5 pb-4">

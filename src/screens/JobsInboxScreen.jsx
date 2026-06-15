@@ -35,6 +35,8 @@ function bookingToRequest(b) {
     : `Booking request · ${svcTitle}`;
   return {
     id:                  b.id,
+    consumerId:          b.consumer?.id || null,
+    serviceTitle:        svcTitle,
     sender:              b.consumer?.display_name || 'Cergio user',
     // Free-form note (if the consumer left one) becomes the secondary
     // preview; the purpose line above is what reads as the "what".
@@ -194,9 +196,13 @@ export function JobsInboxScreen() {
     return () => { cancelled = true; clearInterval(t); };
   }, [auth?.isSignedIn]);
 
-  // Key counts about each requester (the Connector/user asking for a free
-  // service) — mutual friends · network · reco's · reach, shown on the card.
-  const requesterCounts = usePartyCounts((inbound || []).map(r => r.requester?.id));
+  // Key counts about each card's other party — the connector-request requester
+  // AND the booking consumer — mutual · network · reco's · reach. One call for
+  // the whole inbox so every card (booking or free request) reads the same map.
+  const requesterCounts = usePartyCounts([
+    ...(inbound || []).map(r => r.requester?.id),
+    ...(real || []).map(r => r.consumerId),
+  ]);
 
   // CERGIO-GUARD (2026-06-12): the Requests tab badge now counts ALL
   // actionable items — unread bookings + open requests near you +
@@ -777,6 +783,13 @@ export function JobsInboxScreen() {
               {req.note && (
                 <p className="text-meta text-b3 font-medium leading-snug mb-2 line-clamp-2">
                   "{req.note}"
+                </p>
+              )}
+
+              {/* Key counts — same glanceable line as the new request cards. */}
+              {formatKeyCounts(requesterCounts[req.consumerId], { recoKind: 'made' }) && (
+                <p className="text-meta-sm text-b2 font-medium mb-2">
+                  {formatKeyCounts(requesterCounts[req.consumerId], { recoKind: 'made' })}
                 </p>
               )}
 

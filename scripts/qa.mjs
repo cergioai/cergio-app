@@ -1854,6 +1854,18 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
     'Map must be tappable to expand (Airbnb-style)');
   assert(/no mutual friends with/i.test(screen),
     'Mutual friends must have an explicit empty state');
+
+  // 7. SPEC-48b — booking detail parity + new-card-only inbox + FALLBACK quarantine (2026-06-15).
+  const reqDetail = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RequestDetailScreen.jsx'), 'utf8');
+  const hook = fs.readFileSync(path.join(REPO_ROOT, 'src/hooks/usePartyCounts.js'), 'utf8');
+  assert(!/Reyna|Gervon|ReynaReynolds/.test(reqDetail),
+    'REGRESSION: booking-detail FALLBACK mock (Reyna/Gervon) must stay quarantined — no fake data (SPEC-12/48b)');
+  assert(/usePartyCounts/.test(reqDetail) && /formatKeyCounts/.test(reqDetail),
+    'Booking detail (/request/:id) must carry the key-counts line — parity with /inbound (SPEC-48b)');
+  assert(/usePartyCounts/.test(inbox) && /formatKeyCounts/.test(inbox),
+    'Jobs inbox cards (bookings + free requests) must render the shared key-counts line (SPEC-48b)');
+  assert(/export function formatKeyCounts/.test(hook),
+    'usePartyCounts.js must export the single shared formatKeyCounts (no parallel count-formatting variations)');
 });
 
 main().catch(e => {

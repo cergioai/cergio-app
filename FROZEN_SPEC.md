@@ -175,6 +175,14 @@ qa.mjs #47 enforces this.
 
 qa.mjs #48 enforces this.
 
+**SPEC-48b · Booking detail parity + new-card-only inbox.** FROZEN 2026-06-15 (Tarik: "the new cards are the ONLY cards (for bookings and connector free request)… quarantine anything else… it regressed completely, freeze it — free and paid").
+- The direct-booking detail `RequestDetailScreen` (`/request/:id`) — used for FREE and PAID bookings — carries the SAME frame-3 elements as `/inbound`: approximate-location card, IG block + "See Instagram", friends-in-common, AND a **Connector badge + key-counts line** (`network · reco's made · IG · TikTok` via `usePartyCounts`/`formatKeyCounts`; mutuals omitted from the line since the dedicated friends-in-common block carries them).
+- **No fake data:** the old demo `FALLBACK` (Reyna / Gervon / Housekeeper) is QUARANTINED. A missing/invalid booking renders a clean "This request is no longer available" state — never mock data (SPEC-12).
+- **Inbox cards:** every inbound card in the Jobs "Requests" tab — connector free-service requests AND bookings — renders the same key-counts line (`formatKeyCounts`). The old bare booking card (no counts) is replaced; it is the single card design for both request types.
+- `usePartyCounts` / `formatKeyCounts` (`src/hooks/usePartyCounts.js`) is the ONE source for inbox/detail key counts on `/inbound`, `/spotlight`, `/request/:id`, JobsInbox, and ConnectorRequests — no parallel count-formatting variations.
+
+qa.mjs #48 enforces this.
+
 ---
 
 ## PROCESS — HOW SPEC ITEMS ARE ADDED
