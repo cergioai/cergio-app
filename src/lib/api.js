@@ -2407,7 +2407,7 @@ export async function getInboxPartyCounts(ids = []) {
 
   const { data: profs } = await supabase
     .from('profiles')
-    .select('id, instagram_followers, tiktok_followers')
+    .select('id, instagram_followers, tiktok_followers, cc_verified_at')
     .in('id', unique);
   const followerMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
 
@@ -2426,6 +2426,9 @@ export async function getInboxPartyCounts(ids = []) {
       igFollowers:   f.instagram_followers || 0,
       ttFollowers:   f.tiktok_followers || 0,
       mutualCount:   m.count || 0,
+      // Connector flag so cards can lead with the badge (Tarik 2026-06-15 rule:
+      // a service viewing a Connector leads with the Connector badge).
+      isConnector:   isConnectorProfile(f),
     }];
   }));
   return { data: Object.fromEntries(entries), error: null };

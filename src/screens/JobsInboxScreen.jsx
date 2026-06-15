@@ -545,10 +545,19 @@ export function JobsInboxScreen() {
                           (Tarik 2026-06-15): name + status, then IG · network ·
                           reco's made, then the ask line + their message. */}
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <span className="text-body-lg font-extrabold text-black truncate">
-                          {senderName}
-                        </span>
-                        <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap flex-shrink-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          <span className="text-body-lg font-extrabold text-black truncate">
+                            {senderName}
+                          </span>
+                          {/* RULE (Tarik 2026-06-15): a service viewing a Connector
+                              LEADS with the Connector badge. */}
+                          {requesterCounts[req.requester?.id]?.isConnector && (
+                            <span className="inline-flex items-center gap-0.5 bg-gl text-gd text-[10px] font-extrabold px-1.5 py-0.5 rounded-pill shrink-0">
+                              Connector
+                            </span>
+                          )}
+                        </div>
+                        <span className="bg-bg5 text-b2 rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap flex-shrink-0">
                           New
                         </span>
                       </div>
@@ -777,9 +786,17 @@ export function JobsInboxScreen() {
                 the ask line, then their message. Drives /inbox off the old format. */}
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2 mb-1">
-                <span className="text-body-lg font-extrabold text-black truncate">{req.sender}</span>
+                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                  <span className="text-body-lg font-extrabold text-black truncate">{req.sender}</span>
+                  {/* RULE (Tarik 2026-06-15): lead with the Connector badge. */}
+                  {requesterCounts[req.consumerId]?.isConnector && (
+                    <span className="inline-flex items-center gap-0.5 bg-gl text-gd text-[10px] font-extrabold px-1.5 py-0.5 rounded-pill shrink-0">
+                      Connector
+                    </span>
+                  )}
+                </div>
                 {req.needsResponse && (
-                  <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap flex-shrink-0">
+                  <span className="bg-bg5 text-b2 rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold whitespace-nowrap flex-shrink-0">
                     Needs response
                   </span>
                 )}

@@ -1,8 +1,10 @@
-Drive /inbox BOOKINGS cards to the new card template (off the old format)
+SPEC-48c: party-signal RULE — a service viewing a Connector LEADS with the Connector badge
 
-Tarik 2026-06-15: /inbox still showed the old request format; the updated design is the
-spotlight/"New requests near you" template. Booking cards now match it exactly:
-name + "Needs response" pill → reach-led counts (IG · network · reco's made) → "Booking/
-Free service request · {date}" → ask line ("{name} wants to book your {service}" / "is
-looking for a free {service} — they'll spotlight you in return") → their note as an italic
-quote → appointment. Tap still opens /request/:id. One card format across the inbox.
+Tarik 2026-06-15: "make it a rule — lead with the same info next to each user type everywhere,
+respective priority." The /inbox free-service + booking cards were missing the Connector badge.
+
+- getInboxPartyCounts now returns isConnector (via isConnectorProfile) alongside the counts.
+- JobsInbox free-service "New requests near you" + booking cards now LEAD with the Connector
+  badge next to the name, then IG · network · reco's made (reach-led). Status pill demoted to subtle.
+- Rule frozen in FROZEN_SPEC SPEC-48c: service-viewing-Connector → Connector badge + reach;
+  Connector-viewing-service → service type + reco's received first. qa #48 asserts the flag + badge.

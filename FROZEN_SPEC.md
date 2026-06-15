@@ -181,6 +181,10 @@ qa.mjs #48 enforces this.
 - **Inbox cards:** every inbound card in the Jobs "Requests" tab — connector free-service requests AND bookings — renders the same key-counts line (`formatKeyCounts`). The old bare booking card (no counts) is replaced; it is the single card design for both request types.
 - `usePartyCounts` / `formatKeyCounts` (`src/hooks/usePartyCounts.js`) is the ONE source for inbox/detail key counts on `/inbound`, `/spotlight`, `/request/:id`, JobsInbox, and ConnectorRequests — no parallel count-formatting variations.
 
+**SPEC-48c · Party-signal ordering RULE (FROZEN 2026-06-15, Tarik: "make it a rule… lead with the same info next to each user type everywhere, but show respective priority").** Every card/detail that renders another user leads with the same signal block, ordered by who is looking:
+- **A service/provider viewing a CONNECTOR** (free-service request inbox cards, `/inbound`, `/request/:id` free): LEAD with the **Connector badge**, then **IG followers · Cergio network · reco's made**, then mutual. Reach is the decision driver. `getInboxPartyCounts` returns `isConnector` (via `isConnectorProfile`) so the badge renders; `formatKeyCounts(…, {recoKind:'made'})` gives the reach-led order.
+- **A user/Connector viewing a SERVICE/provider** (spotlight inbox cards, `/spotlight`): LEAD with the **service type + reco's RECEIVED**, then mutual, then network, then IG. Service reputation is the decision driver. `formatKeyCounts(…, {recoKind:'received'})`.
+
 qa.mjs #48 enforces this.
 
 ---

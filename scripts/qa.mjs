@@ -1870,6 +1870,14 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
     'Jobs inbox cards (bookings + free requests) must render the shared key-counts line (SPEC-48b)');
   assert(/export function formatKeyCounts/.test(hook),
     'usePartyCounts.js must export the single shared formatKeyCounts (no parallel count-formatting variations)');
+
+  // 8. SPEC-48c — party-signal RULE: a service viewing a Connector LEADS with the
+  //    Connector badge; getInboxPartyCounts must expose the isConnector flag and
+  //    the inbox cards must render the badge.
+  assert(/isConnector:\s*isConnectorProfile/.test(api),
+    'getInboxPartyCounts must expose isConnector (via isConnectorProfile) so cards can lead with the badge (SPEC-48c)');
+  assert(/\?\.isConnector/.test(inbox) && /Connector\b/.test(inbox),
+    'Inbox cards (service viewing a Connector) must lead with the Connector badge (SPEC-48c)');
 });
 
 main().catch(e => {
