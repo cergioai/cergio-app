@@ -239,21 +239,12 @@ export function PublicProfileScreen() {
     return () => { cancelled = true; };
   }, [profileId]);
 
-  // Fetch the inbound request when opened from the Inbox via ?reqId=
-  // so we can show the Accept / Counter / Decline bar below the profile.
-  useEffect(() => {
-    if (!reqId) { setReqCtx(null); return; }
-    let cancelled = false;
-    supabase
-      .from('requests')
-      .select('id, service_type, description, location_text, status')
-      .eq('id', reqId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled && data) setReqCtx(data);
-      });
-    return () => { cancelled = true; };
-  }, [reqId]);
+  // QUARANTINED (2026-06-14): the old ?reqId= sticky Accept/Counter/Decline
+  // bar is RETIRED — the canonical response surface is now /inbound/:reqId
+  // (RequestFromConnectorScreen, SPEC-48). The Inbox no longer links here with
+  // ?reqId, so we never hydrate reqCtx; the bar below can never render. Kept
+  // the dead branch only to avoid touching the large render tree.
+  useEffect(() => { setReqCtx(null); }, [reqId]);
 
   useEffect(() => {
     if (!supabaseReady || !profileId) { setLoading(false); return; }

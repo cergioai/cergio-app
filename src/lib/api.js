@@ -1978,6 +1978,38 @@ export async function listRequestQuestions(requestId) {
     .order('created_at', { ascending: true });
 }
 
+/** Questions asked on the signed-in user's OWN requests (for them to answer). */
+export async function listMyRequestQuestions() {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  const uid = userRes?.user?.id;
+  if (!uid) return { data: [], error: null };
+  const { data: myReqs } = await supabase.from('requests').select('id, service_type').eq('requester_id', uid);
+  const reqIds = (myReqs || []).map(r => r.id);
+  if (!reqIds.length) return { data: [], error: null };
+  const { data: qs, error } = await supabase
+    .from('request_questions')
+    .select(Q_COLS)
+    .in('request_id', reqIds)
+    .order('created_at', { ascending: false });
+  if (error) return { data: [], error };
+  const askerIds = [...new Set((qs || []).map(q => q.asker_id).filter(Boolean))];
+  let profMap = {};
+  if (askerIds.length) {
+    const { data: profs } = await supabase.from('profiles').select('id, display_name').in('id', askerIds);
+    profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+  }
+  const svcMap = Object.fromEntries((myReqs || []).map(r => [r.id, r.service_type]));
+  return {
+    data: (qs || []).map(q => ({
+      ...q,
+      askerName: profMap[q.asker_id]?.display_name || 'A provider',
+      serviceType: svcMap[q.request_id] || null,
+    })),
+    error: null,
+  };
+}
+
 export async function replyRequestQuestion(questionId, reply) {
   if (!supabaseReady) return NOT_WIRED;
   const text = (reply || '').trim().slice(0, 600);

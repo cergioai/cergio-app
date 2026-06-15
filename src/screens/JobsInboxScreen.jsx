@@ -6,6 +6,8 @@ import {
   listMyOutboundSpotlightRequests,
   listInboundRequests,
   listMyRequestsWithResponses,
+  listMyRequestQuestions,
+  replyRequestQuestion,
   respondToRequest,
   confirmBookingPost,
   flagBookingPost,
@@ -134,6 +136,28 @@ export function JobsInboxScreen() {
   // worth surfacing in the Requests tab.
   const myAnswered = (myRequests || []).filter(r => (r.responses || []).length > 0);
 
+  // Pre-booking questions providers asked on MY requests — I answer them here.
+  const [myQuestions, setMyQuestions] = useState([]);
+  const [replyDraft, setReplyDraft] = useState({});   // { [questionId]: text }
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setMyQuestions([]); return; }
+    let cancelled = false;
+    const fetchOnce = () => listMyRequestQuestions().then(({ data }) => { if (!cancelled) setMyQuestions(data || []); });
+    fetchOnce();
+    const t = setInterval(fetchOnce, 30000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [auth?.isSignedIn]);
+  const sendReply = async (q) => {
+    const text = (replyDraft[q.id] || '').trim();
+    if (!text) { showToast('Type a reply first.'); return; }
+    const { error } = await replyRequestQuestion(q.id, text);
+    if (error) { showToast('Could not send — try again.'); return; }
+    setMyQuestions(prev => prev.map(x => x.id === q.id ? { ...x, reply: text } : x));
+    setReplyDraft(prev => ({ ...prev, [q.id]: '' }));
+    showToast('Reply sent.');
+  };
+  const openQuestions = myQuestions.filter(q => !q.reply);
+
   // Real bookings only — empty state when there are none. No more mock pad.
   const requests   = real ?? [];
 
@@ -176,6 +200,7 @@ export function JobsInboxScreen() {
   const badgeCount =
     requests.filter(r => r.isUnread).length +
     (inbound || []).length +
+    openQuestions.length +
     myAnswered.reduce((n, r) => n + (r.responses || []).length, 0);
 
   async function handleInboundResponse(req, status) {
@@ -366,6 +391,29 @@ export function JobsInboxScreen() {
             a response to something YOU asked for is the most timely
             item here. Each response row taps through to the provider's
             profile (/u/{id}) so the requester can vet them. */}
+        {/* Pre-booking questions providers asked on your requests — reply here. */}
+        {activeTab === 'Requests' && openQuestions.length > 0 && (
+          <>
+            <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
+              Questions to answer
+            </p>
+            {openQuestions.map(q => (
+              <div key={q.id} className="bg-white border-2 border-g/30 rounded-[18px] p-4">
+                <p className="text-body-sm font-extrabold text-black leading-snug">
+                  {q.askerName}{q.serviceType ? ` · ${q.serviceType}` : ''}
+                </p>
+                <p className="text-body text-black leading-snug mt-1">&ldquo;{q.body}&rdquo;</p>
+                <div className="flex items-center gap-2 mt-2.5">
+                  <input value={replyDraft[q.id] || ''} onChange={e => setReplyDraft(prev => ({ ...prev, [q.id]: e.target.value }))}
+                    placeholder="Type your reply…"
+                    className="flex-1 border border-bdr rounded-[12px] px-3 py-2.5 text-body-sm font-medium text-black bg-white outline-none focus:border-g" />
+                  <button onClick={() => sendReply(q)} className="bg-g text-white rounded-[12px] px-4 py-2.5 text-meta font-extrabold active:scale-[.97] transition-all">Reply</button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
         {activeTab === 'Requests' && myAnswered.length > 0 && (
           <>
             <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
@@ -641,6 +689,7 @@ export function JobsInboxScreen() {
             Now it only shows when the tab is truly empty. */}
         {activeTab === 'Requests' && requests.length === 0
           && (!inbound || inbound.length === 0)
+          && openQuestions.length === 0
           && myAnswered.length === 0 && (
           lastResponded ? (
             /* Confirmation card — shown after provider responds to a request */

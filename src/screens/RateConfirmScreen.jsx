@@ -78,12 +78,14 @@ export function RateConfirmScreen() {
   // customer/service. Otherwise (demo path), keep the hardcoded fallback so
   // the screen still looks complete.
   const [job, setJob] = useState(JOB_FALLBACK);
+  const [client, setClient] = useState({ name: null, followers: 0 });
   useEffect(() => {
     if (!bookingId) return;
     let cancelled = false;
     getBooking(bookingId).then(({ data, error }) => {
       if (cancelled || error || !data) return;
       setJob(bookingToJob(data, auth?.user?.id));
+      setClient({ name: data.consumer?.display_name || null, followers: data.consumer?.instagram_followers || 0 });
     });
     return () => { cancelled = true; };
   }, [bookingId, auth?.user?.id]);
@@ -173,7 +175,7 @@ export function RateConfirmScreen() {
               }
             }
             setBusy(false);
-            navigate('/complete');
+            navigate('/complete', { state: { consumerName: client.name, followers: client.followers } });
           }}
           disabled={rating === 0 || busy}
           className={`w-full rounded-[24px] py-4 text-body-lg font-extrabold transition-all

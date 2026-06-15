@@ -1,12 +1,7 @@
-// Per design-spec.md — uses tokens only.
 // Provider-facing: confirms service completion + earned benefits.
-import { useNavigate, useOutletContext } from 'react-router-dom';
-
-const COMPLETION = {
-  followerCount: 23735,
-  ratedBy: 'Lydia',
-  stars: 5,
-};
+// CERGIO-GUARD (2026-06-14): reads the real client/reach from router state
+// (passed by RateConfirmScreen) — no more fabricated "Lydia · 23,735" (SPEC-12).
+import { useNavigate, useOutletContext, useLocation } from 'react-router-dom';
 
 // Benefit row pattern (per design-spec):
 // - icon: dark green on light mint, for contrast
@@ -33,8 +28,14 @@ function BenefitRow({ title, subtitle }) {
 
 export function ServiceCompleteScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useOutletContext();
-  const { followerCount, ratedBy, stars } = COMPLETION;
+  const st = location.state || {};
+  const clientName = (st.consumerName || '').trim() || null;
+  const followers = Number(st.followers) || 0;
+  const marketingSub = followers > 0
+    ? `Your service is being shared to ${followers.toLocaleString()} followers`
+    : (clientName ? `${clientName} will spotlight your service to their followers` : 'Your service gets a social spotlight');
 
   return (
     <div className="flex-1 flex flex-col bg-cr pb-20">
@@ -62,15 +63,15 @@ export function ServiceCompleteScreen() {
       <div className="px-7 flex flex-col gap-7 flex-1">
         <BenefitRow
           title="Free marketing worth up to $1,000+"
-          subtitle={`Your profile was shared to ${followerCount.toLocaleString()} followers`}
+          subtitle={marketingSub}
         />
         <BenefitRow
           title="Instant verification"
           subtitle="Your profile is now public on Cergio's search"
         />
         <BenefitRow
-          title={`A recommendation from ${ratedBy}`}
-          subtitle={`${ratedBy} rated you ${stars} stars on Cergio`}
+          title={clientName ? `A recommendation from ${clientName}` : 'A recommendation on Cergio'}
+          subtitle={clientName ? `${clientName} can recommend you after a 4+ star rating` : 'Earn a recommendation after a 4+ star rating'}
         />
       </div>
 
