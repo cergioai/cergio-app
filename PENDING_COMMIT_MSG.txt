@@ -1,14 +1,5 @@
-Free-service request: lead the requester with REACH (IG followers → network → reco's made)
+BrowseConnectors: dedupe the spotlight-request buttons (two same-titled listings showed twice)
 
-Tarik 2026-06-15: for a Connector requesting a FREE service, reach is the most relevant
-signal — match the profile interim screen's order.
-
-- RequestFromConnectorScreen (/inbound, frame 3): the connector tile now LEADS with
-  "{N} IG followers" as its own prominent line, then "network on Cergio · reco's made",
-  then See Instagram, then bio. Services + reco's RECEIVED stay below; mutual friends below that.
-  (Was: followers as a small chip next to the name.)
-- Shared formatKeyCounts: recoKind:'made' (free-service requester contexts — Jobs inbox cards
-  + booking detail) is now reach-led: IG · TikTok · network · reco's made · mutual.
-  recoKind:'received' (spotlight) keeps reputation-first order.
-- FROZEN_SPEC SPEC-48 updated to the new lead-with-reach sequence; qa #48 asserts the
-  "IG followers" lead line.
+The broadcast→"we'll notify you / Cancel request" waiting state already mirrors the consumer
+request flow; the entry just rendered one button per listing, so two listings with the same
+title ("Personal Chef in Miami…") produced two identical buttons. Dedupe by title.

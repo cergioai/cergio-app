@@ -280,7 +280,9 @@ export function BrowseConnectorsScreen() {
                 until you confirm.
               </p>
               <div className="flex flex-col gap-2">
-                {myServices.map(s => (
+                {/* Dedupe by title so two listings with the same name don't
+                    render two identical buttons (Tarik 2026-06-15). */}
+                {[...new Map(myServices.map(s => [s.title, s])).values()].map(s => (
                   <button
                     key={s.id}
                     type="button"
