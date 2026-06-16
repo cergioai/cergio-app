@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed, getMyFollowedIds, getMyInviteCounts, getMyInvitesDetailed, followProfile, unfollowProfile } from '../lib/api';
 import { stampActivitySeen } from '../hooks/useActivityUnread';
+import { IgPostTile } from '../components/ui/IgPostTile';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { REWARDS } from '../lib/rewards';
 import { fmtDollars } from '../lib/fees';
@@ -492,17 +493,9 @@ function BarterCard({ ev }) {
         </p>
         <p className="text-meta-sm text-b3 font-medium mt-0.5">
           {timeAgo(ev.at)}
-          {ev.post_url && (
-            <>
-              {' · '}
-              <a href={ev.post_url} target="_blank" rel="noopener noreferrer"
-                 className="text-g font-extrabold underline underline-offset-2">
-                View post →
-              </a>
-            </>
-          )}
         </p>
       </div>
+      {ev.post_url && <IgPostTile url={ev.post_url} size={52} label="View the IG spotlight" />}
     </div>
   );
 }

@@ -1,9 +1,9 @@
-Below-4★ private review dispute: provider reply + escalate + admin hook (SPEC-47e)
+IG post tile on the feed + Previous-spotlights track record (SPEC-47f)
 
-- review_threads table + bookings.dispute_escalated_at (migration). getMyOpenDisputes /
-  listReviewThread / addReviewReply (escalate stamps + pings support).
-- DisputeCard: both parties see the rating + comment; reply back-and-forth; PROVIDER (rated
-  low) can Escalate → flagged to Cergio/support (admin manual now; AI resolution phase 2).
-  Private-review framing ("truthful reviews from trusted friends, not gamed reviews from strangers").
-- JobsInbox: Overview "Ratings to resolve · N" action row + a Requests-tab section; badge counts them.
-- FROZEN_SPEC SPEC-47e. The held spotlight goes live only at 4★+.
+- IgPostTile: honest tappable IG-branded tile (gradient + glyph + "View", links to post_url) —
+  no fabricated photo until Meta media access (SPEC-12); swap to real <img> then.
+- Activity feed barter item now shows the spotlight as an IgPostTile (replaces the text link).
+- getConnectorSpotlights(connectorId): a Connector's prior confirmed barter posts. The frame-3
+  "Previous spotlights on Cergio" section is now populated from it (was a reserved placeholder),
+  giving providers the Connector's posting track record before they accept.
+- FROZEN_SPEC SPEC-47f.

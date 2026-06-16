@@ -1921,6 +1921,29 @@ export function isConnectorProfile(p) {
   return followers >= CONNECTOR_MIN_FOLLOWERS;
 }
 
+/**
+ * A Connector's previous IG spotlights (Tarik 2026-06-15): confirmed free-barter
+ * bookings they completed that carry a post URL. Powers the "Previous spotlights"
+ * track record on the frame-3 connector-request screen + their profile. Real
+ * post links only (tappable IG tiles); no fabricated media (SPEC-12).
+ */
+export async function getConnectorSpotlights(connectorId, { limit = 6 } = {}) {
+  if (!supabaseReady || !connectorId) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, post_url, post_confirmed_at, posted_at, service:services(title)')
+    .eq('consumer_id', connectorId)
+    .eq('is_free_for_rainmaker', true)
+    .not('post_url', 'is', null)
+    .order('posted_at', { ascending: false })
+    .limit(limit);
+  if (error) return { data: [], error };
+  return {
+    data: (data || []).map(b => ({ id: b.id, post_url: b.post_url, title: b.service?.title || 'spotlight' })),
+    error: null,
+  };
+}
+
 export async function getInboundRequest(reqId) {
   if (!supabaseReady) return NOT_WIRED;
   if (!reqId) return { data: null, error: { message: 'reqId required' } };

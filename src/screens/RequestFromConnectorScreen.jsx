@@ -7,7 +7,8 @@
 // NO fake IG media — the photo strip is gated on real data.igMedia.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
-import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName } from '../lib/api';
+import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights } from '../lib/api';
+import { IgPostTile } from '../components/ui/IgPostTile';
 
 const QUICK_QS = [
   'Who buys the ingredients?',
@@ -110,6 +111,7 @@ export function RequestFromConnectorScreen() {
   const [askOpen, setAskOpen] = useState(false);
   const [askDraft, setAskDraft] = useState('');
   const [myName, setMyName] = useState('');
+  const [spotlights, setSpotlights] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,6 +152,9 @@ export function RequestFromConnectorScreen() {
         });
         getPublicProfileStats(requester.id).then(({ data: s }) => {
           if (!cancelled) setStats(s || null);
+        });
+        getConnectorSpotlights(requester.id).then(({ data: sp }) => {
+          if (!cancelled) setSpotlights(sp || []);
         });
       } else {
         setMutuals({ count: 0, connectors: 0, sample: [] });
@@ -438,16 +443,17 @@ export function RequestFromConnectorScreen() {
         </div>
       )}
 
-      {/* previous spotlights on Cergio — only shown when the Connector has any
-          (no empty placeholder). Lights up with real spotlight media. */}
-      {data.isFree && data.isConnector && Array.isArray(data.spotlights) && data.spotlights.length > 0 && (
+      {/* previous spotlights on Cergio — the Connector's track record of posts
+          they've made for other services. Real IG post links (tappable tiles),
+          not fabricated media; only shown when they have any. */}
+      {data.isConnector && spotlights.length > 0 && (
         <div className="px-5 pb-3">
-          <p className="text-body-sm font-extrabold text-black mb-2">Previous spotlights on Cergio</p>
+          <p className="text-body-sm font-extrabold text-black mb-2">
+            Previous spotlights on Cergio <span className="text-b3 font-medium">· {spotlights.length}</span>
+          </p>
           <div className="grid grid-cols-3 gap-2">
-            {data.spotlights.slice(0, 3).map((s, i) => (
-              <div key={i} className="aspect-[4/5] rounded-[12px] overflow-hidden bg-bg5">
-                <img src={s.thumbnail_url || s.media_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-              </div>
+            {spotlights.slice(0, 6).map(s => (
+              <IgPostTile key={s.id} url={s.post_url} aspect="4 / 5" label={`Spotlight: ${s.title}`} />
             ))}
           </div>
         </div>
