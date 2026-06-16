@@ -1,14 +1,11 @@
-Barter: provider Mark-job-complete + rate-with-post + easy action surfacing (SPEC-47c)
+Spotlight post step = Connector's unique referral link, Story-first guided flow (SPEC-47d)
 
-- bookings.completed_at (migration applied) + markBookingComplete(): provider marks the job
-  complete anytime → nudges the Connector to post (notify-request job_complete; email + in-app,
-  SMS later). Distinct from post_confirmed_at; for paid it starts the auto-release window.
-- Inbox Upcoming "Jobs for you": provider gets a "Mark job complete" button; once complete the
-  Connector's card upgrades to a prominent "‹Provider› marked the job complete — post now" prompt.
-- Rate + post in ONE step (MarkBookingPostedModal): star rating required. 4★+ → createReview +
-  markBookingPosted publishes the spotlight. Below 4★ → post HELD; Connector explains; review is
-  saved + framed as PRIVATE ("truthful reviews from trusted friends, not gamed reviews from
-  strangers") and shared with the provider. (Provider reply/escalate/admin = next module.)
-- Overview action rows make the notifications easy to find: "Post your IG spotlight · N" and
-  "Spotlights to review · N".
-- FROZEN_SPEC SPEC-47c. (Feed post thumbnail + Previous-spotlights population = next.)
+Built the IG-post step around conversions + the barter→free-marketing logic:
+- MarkBookingPostedModal (4★+): shows the Connector's UNIQUE link buildInviteUrl(connectorId)
+  + ?s={bookingId} with a Copy button + the 7%/$250 earnings hook.
+- Effortless Story-first flow: copy link → add to Story with the Link sticker → save to a
+  "Spotlights" Highlight (keeps the clickable link past 24h). "Open Instagram" helper.
+- Bio-link upsell (earns on every post; feed posts tag @cergio + #cergiofeed).
+- JobsInbox passes connectorId so the link is the poster's own referral link.
+- FROZEN_SPEC SPEC-47d. Next: per-spotlight click-audit (route logs ?s=), earnings visibility,
+  and the scheduled oEmbed auto-check (activates when Meta Graph is approved).

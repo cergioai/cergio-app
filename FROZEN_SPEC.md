@@ -149,6 +149,11 @@ Enforced in `influencer_crawler.py` via `MIN_FOLLOWERS` / `MAX_FOLLOWERS` consta
   the Connector, provider marked complete) and "Spotlights to review · N" (you're the provider,
   Connector posted).
 
+**SPEC-47d · Spotlight = the Connector's UNIQUE referral link, Story-first (FROZEN 2026-06-15, Tarik).** The post step (`MarkBookingPostedModal`, 4★+ path) is built around conversions:
+- The Connector's UNIQUE link `buildInviteUrl(connectorId)` (`/i/{code}`) + `?s={bookingId}`. Signups through it credit them (7% up to $250, first-touch via the existing referral system); `?s=` ties a click to THIS spotlight for the auto-audit.
+- Story-first guided flow (the only clickable, trackable IG surface): copy link → add to Story with the **Link sticker** → save to a **"Spotlights" Highlight** (permanence past 24h). "Open Instagram" helper. Bio-link upsell ("earns on every post"; feed posts tag @cergio + #cergiofeed). Earnings shown inline to motivate.
+- Qualify/audit: clickthrough on the unique link is the live-proof now; automatic **oEmbed caption check** (@cergio + link + #cergiofeed) activates once Meta Graph access is approved (scheduled).
+
 **Banned behaviors:**
 - Auto-confirming a booking at submission time (except SPEC-47b: booking off a provider's existing offer)
 - Creating a free booking without consulting `getOutstandingFreeBarter`

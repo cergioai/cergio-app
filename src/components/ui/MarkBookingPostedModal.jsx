@@ -6,6 +6,7 @@
 // createReview in lib/api do the writes.
 import { useState } from 'react';
 import { markBookingPosted, createReview } from '../../lib/api';
+import { buildInviteUrl } from '../../lib/referral';
 
 function Stars({ value, onChange }) {
   return (
@@ -22,15 +23,28 @@ function Stars({ value, onChange }) {
   );
 }
 
-export function MarkBookingPostedModal({ booking, onClose, onPosted }) {
+export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted }) {
   const [url, setUrl]         = useState(booking?.post_url || '');
   const [stars, setStars]     = useState(0);
   const [comment, setComment] = useState('');
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState(null);
+  const [copied, setCopied]   = useState(false);
+  const [showBio, setShowBio] = useState(false);
   const providerFirst = (booking?.provider?.display_name || 'the provider').split(' ')[0];
   const reposting = !!booking?.post_flag_reason;
   const lowRating = stars > 0 && stars < 4;
+
+  // The connector's UNIQUE referral link (Tarik 2026-06-15): every signup
+  // through it credits them (7% up to $250). `?s=` ties the click to THIS
+  // spotlight for the auto-audit once Meta Graph is approved.
+  const spotlightLink = connectorId
+    ? `${buildInviteUrl(connectorId)}${buildInviteUrl(connectorId).includes('?') ? '&' : '?'}s=${booking?.id || ''}`
+    : '';
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(spotlightLink); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+    catch { setErr('Copy failed — long-press the link to copy.'); }
+  };
 
   const submit = async (e) => {
     e?.preventDefault?.();
@@ -117,18 +131,61 @@ export function MarkBookingPostedModal({ booking, onClose, onPosted }) {
               </div>
             </>
           ) : (
-            <div>
-              <label className="block text-meta font-extrabold text-black mb-1">Instagram post URL</label>
-              <input
-                type="url"
-                value={url}
-                onChange={e => setUrl(e.target.value)}
-                placeholder="https://www.instagram.com/p/..."
-                autoCapitalize="none"
-                autoCorrect="off"
-                className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-body-sm text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
-              />
-            </div>
+            <>
+              {/* Unique link + earnings hook */}
+              {spotlightLink && (
+                <div className="bg-gl border border-g/30 rounded-[14px] p-3.5">
+                  <p className="text-meta font-extrabold text-gd mb-1.5">Your spotlight link</p>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 truncate text-meta text-black bg-white rounded-[10px] px-2.5 py-2 border border-bdr">{spotlightLink}</span>
+                    <button type="button" onClick={copyLink}
+                      className="bg-g text-white rounded-[10px] px-3 py-2 text-meta font-extrabold whitespace-nowrap">
+                      {copied ? 'Copied ✓' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-meta-sm text-b2 mt-1.5 leading-snug">
+                    Every signup through your link earns you <span className="font-extrabold text-gd">7% of their spend, up to $250</span>.
+                  </p>
+                </div>
+              )}
+
+              {/* Effortless 3-step Story flow */}
+              <ol className="text-meta text-b2 leading-snug flex flex-col gap-1.5 pl-4 list-decimal">
+                <li><span className="font-extrabold text-black">Copy your link</span> above.</li>
+                <li>Open Instagram → add this service to your <span className="font-extrabold text-black">Story</span> → tap the <span className="font-extrabold text-black">Link sticker</span> → paste.</li>
+                <li>Save the Story to a <span className="font-extrabold text-black">“Spotlights” Highlight</span> so the link keeps working past 24h.</li>
+              </ol>
+              <a href="https://instagram.com" target="_blank" rel="noreferrer"
+                 className="block text-center bg-black text-white rounded-[14px] py-2.5 text-body-sm font-extrabold active:scale-[.98] transition-all">
+                Open Instagram
+              </a>
+
+              {/* Bio-link upsell — the always-on converter */}
+              <button type="button" onClick={() => setShowBio(s => !s)}
+                className="text-meta-sm text-gd font-extrabold text-left">
+                {showBio ? '– ' : '+ '}Put this link in your bio too — earns on every post
+              </button>
+              {showBio && (
+                <p className="text-meta text-b3 leading-snug -mt-1">
+                  Instagram → Edit profile → add your link under <span className="font-extrabold">Links</span>. One-time
+                  setup; then every post routes through it. Posting to your feed? Tag <span className="font-extrabold">@cergio</span> + <span className="font-extrabold">#cergiofeed</span>.
+                </p>
+              )}
+
+              {/* Confirm — paste the Story Highlight / post link for the record */}
+              <div>
+                <label className="block text-meta font-extrabold text-black mb-1">Paste your Story-Highlight or post link</label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  placeholder="https://www.instagram.com/..."
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-body-sm text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+                />
+              </div>
+            </>
           )}
 
           {err && <p className="text-meta text-danger font-extrabold">{err}</p>}

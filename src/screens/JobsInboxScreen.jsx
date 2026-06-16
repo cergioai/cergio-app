@@ -1381,6 +1381,7 @@ export function JobsInboxScreen() {
       {postTarget && (
         <MarkBookingPostedModal
           booking={postTarget}
+          connectorId={auth?.user?.id}
           onClose={() => setPostTarget(null)}
           onPosted={(res) => {
             showToast(res?.heldForLowRating
