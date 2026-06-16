@@ -1296,6 +1296,43 @@ export async function respondToRequest(requestId, {
 }
 
 /**
+ * Provider accepts a free-service request AND picks a time → a CONFIRMED booking
+ * at that time (Tarik 2026-06-16). Goes through the accept_request_with_time
+ * SECURITY DEFINER RPC (the provider creates the booking on the Connector's
+ * behalf). Either party can reschedule afterwards. Returns { bookingId }.
+ */
+export async function acceptRequestWithTime({ requestId, serviceId, scheduledAt } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!requestId || !serviceId) return { data: null, error: { message: 'A listed service is required to accept.' } };
+  const { data, error } = await supabase.rpc('accept_request_with_time', {
+    p_request_id:  requestId,
+    p_service_id:  serviceId,
+    p_scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+  });
+  if (error) return { data: null, error };
+  return { data: { bookingId: data }, error: null };
+}
+
+/** Either party reschedules a confirmed booking (the "change the time together"
+ *  half of accept-with-time). Updates scheduled_at + notifies the other side. */
+export async function rescheduleBooking(bookingId, when) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId || !when) return { data: null, error: { message: 'Pick a new time.' } };
+  const res = await supabase
+    .from('bookings')
+    .update({
+      scheduled_at:          new Date(when).toISOString(),
+      schedule_confirmed_at: new Date().toISOString(),
+      updated_at:            new Date().toISOString(),
+    })
+    .eq('id', bookingId)
+    .select()
+    .maybeSingle();
+  if (!res.error && res.data?.id) fireBookingNotify(bookingId, 'rescheduled');
+  return res;
+}
+
+/**
  * List every confirmed response on a request. The request owner sees
  * all rows; a responder only sees their own. Caller is expected to be
  * the consumer who posted the request (called from ResultsScreen).
@@ -3508,6 +3545,11 @@ export async function confirmBookingPost(bookingId) {
 export async function markBookingComplete(bookingId) {
   if (!supabaseReady) return NOT_WIRED;
   if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
+  // TODO (SPEC-47g, PLANNED — build after QA): paid 3-hr auto-release keys off
+  // completed_at. GUARD: if completed_at < scheduled_at (provider marked complete
+  // BEFORE the job's start time), DO NOT auto-release — require the consumer to
+  // CONFIRM the job was actually done first. Not yet wired (needs Stripe Connect
+  // transfer + scheduled edge function).
   const res = await supabase
     .from('bookings')
     .update({ completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })

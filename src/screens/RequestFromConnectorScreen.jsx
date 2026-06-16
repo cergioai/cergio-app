@@ -7,7 +7,7 @@
 // NO fake IG media — the photo strip is gated on real data.igMedia.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
-import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights } from '../lib/api';
+import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime } from '../lib/api';
 import { IgPostTile } from '../components/ui/IgPostTile';
 
 const QUICK_QS = [
@@ -285,6 +285,21 @@ export function RequestFromConnectorScreen() {
     }
   };
 
+  // Accept + pick a time → CONFIRMED booking at that time (Tarik 2026-06-16).
+  // Either party can reschedule it afterwards. scheduledAt may be null (the
+  // request had no concrete time) — the RPC then defaults, and the connector
+  // can set/adjust it.
+  const acceptWithTime = async (scheduledAt) => {
+    if (!myServiceId) { showToast('You need a listed service to accept.'); return; }
+    setPhase('pending');
+    const { error } = await acceptRequestWithTime({ requestId: data.id, serviceId: myServiceId, scheduledAt });
+    if (error) { showToast(error.message || 'Could not confirm — try again.'); setPhase(null); return; }
+    setPhase('done');
+    setComposerMode(null);
+    showToast(`Booked & confirmed — ${data.requesterName} can reschedule with you.`);
+    setTimeout(() => navigate('/inbox'), 1200);
+  };
+
   const openComposer = (mode) => { setCounterDraft(''); setCounterMsg(''); setTimeDraft(''); setComposerMode(mode); };
 
   const fmtChosen = (v) => {
@@ -296,6 +311,12 @@ export function RequestFromConnectorScreen() {
 
   // Unified submit for the bid / counter / pick-a-time composer.
   const submitResponse = () => {
+    // Pick-a-time accept → CONFIRMED booking at that time (not just an offer).
+    if (composerMode === 'accept-time') {
+      if (!timeDraft) { showToast('Pick a start time.'); return; }
+      acceptWithTime(timeDraft);
+      return;
+    }
     const wantsPrice = composerMode === 'bid' || composerMode === 'counter';
     let priceCents = null;
     if (wantsPrice) {
@@ -303,9 +324,7 @@ export function RequestFromConnectorScreen() {
       if (!Number.isFinite(dollars) || dollars < 0) { showToast('Enter a price.'); return; }
       priceCents = Math.round(dollars * 100);
     }
-    if (isFlexibleTime && !timeDraft) { showToast('Pick a start time.'); return; }
     const parts = [];
-    if (isFlexibleTime && timeDraft) parts.push(`Proposed time: ${fmtChosen(timeDraft)}`);
     if (counterMsg.trim()) parts.push(counterMsg.trim());
     const message = parts.join(' · ') || null;
     const status = composerMode === 'counter' ? 'countered' : 'offered';
@@ -600,9 +619,9 @@ export function RequestFromConnectorScreen() {
                   Pick a time &amp; accept
                 </button>
               ) : (
-                <button onClick={() => sendResponse('offered')}
+                <button onClick={() => acceptWithTime(data.scheduledAt)}
                   className="w-full bg-g text-white rounded-[24px] py-4 text-body-lg font-extrabold hover:opacity-90 active:scale-[.97] transition-all">
-                  Accept free request
+                  Accept &amp; confirm{data.scheduledAt ? '' : ' time'}
                 </button>
               )}
               <div className="flex items-center justify-center gap-3 mt-2.5">

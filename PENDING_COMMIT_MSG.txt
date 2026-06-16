@@ -1,9 +1,10 @@
-IG post tile on the feed + Previous-spotlights track record (SPEC-47f)
+Provider accept-with-time → confirmed booking + reschedule (SPEC-47h)
 
-- IgPostTile: honest tappable IG-branded tile (gradient + glyph + "View", links to post_url) —
-  no fabricated photo until Meta media access (SPEC-12); swap to real <img> then.
-- Activity feed barter item now shows the spotlight as an IgPostTile (replaces the text link).
-- getConnectorSpotlights(connectorId): a Connector's prior confirmed barter posts. The frame-3
-  "Previous spotlights on Cergio" section is now populated from it (was a reserved placeholder),
-  giving providers the Connector's posting track record before they accept.
-- FROZEN_SPEC SPEC-47f.
+Fixes "I accepted but couldn't pick a time / it just said offer sent, waiting on them."
+- accept_request_with_time RPC (SECURITY DEFINER): provider creates a CONFIRMED booking for
+  the Connector at the chosen time (verifies caller owns the service). + acceptRequestWithTime API.
+- Frame-3: "Pick a time & accept" (flexible) and "Accept & confirm" (specific time) now create a
+  confirmed booking via the RPC instead of sending an offer → lands in both Upcoming immediately.
+- Reschedule: rescheduleBooking API + inline datetime control on both Upcoming card types — either
+  party can change the time together. Notifies the other side.
+- FROZEN_SPEC SPEC-47h. (Plain inbox-inline Accept still sends a quick offer; time-pick is on detail.)

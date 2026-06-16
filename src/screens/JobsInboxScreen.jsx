@@ -13,6 +13,7 @@ import {
   confirmBookingPost,
   flagBookingPost,
   markBookingComplete,
+  rescheduleBooking,
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
 import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
@@ -81,6 +82,30 @@ function Avatar({ name, idx }) {
                   ${AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]}`}
     >
       {getInitials(name)}
+    </div>
+  );
+}
+
+// Inline reschedule control — either party changes a confirmed booking's time
+// (the "change the time together" half of accept-with-time). Tarik 2026-06-16.
+function RescheduleInline({ booking, openId, setOpenId, value, setValue, onSave, busy }) {
+  const open = openId === booking.id;
+  if (!open) {
+    return (
+      <button type="button" onClick={() => { setOpenId(booking.id); setValue(''); }}
+        className="text-meta-sm font-extrabold text-g mt-2">
+        Reschedule
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <input type="datetime-local" value={value} onChange={e => setValue(e.target.value)}
+        className="flex-1 min-w-0 border border-bdr rounded-[10px] px-2 py-1.5 text-meta text-black bg-white outline-none focus:border-g" />
+      <button type="button" disabled={busy} onClick={() => onSave(booking)}
+        className="bg-g text-white rounded-[10px] px-3 py-1.5 text-meta font-extrabold disabled:opacity-60">Save</button>
+      <button type="button" onClick={() => setOpenId(null)} aria-label="Cancel"
+        className="text-body text-b3 font-extrabold px-1">×</button>
     </div>
   );
 }
@@ -373,6 +398,18 @@ export function JobsInboxScreen() {
     setJobBusy(prev => ({ ...prev, [b.id]: false }));
     if (error) { showToast(`Failed: ${error.message}`); return; }
     showToast('Post accepted ✓ — barter complete');
+    refreshJobs();
+  };
+  const [rescheduleFor, setRescheduleFor] = useState(null);
+  const [rescheduleAt, setRescheduleAt] = useState('');
+  const handleReschedule = async (b) => {
+    if (!rescheduleAt) { showToast('Pick a new time.'); return; }
+    setJobBusy(prev => ({ ...prev, [b.id]: true }));
+    const { error } = await rescheduleBooking(b.id, rescheduleAt);
+    setJobBusy(prev => ({ ...prev, [b.id]: false }));
+    if (error) { showToast(error.message || 'Could not reschedule.'); return; }
+    setRescheduleFor(null); setRescheduleAt('');
+    showToast('Time updated — the other side is notified.');
     refreshJobs();
   };
   const handleMarkComplete = async (b) => {
@@ -1219,6 +1256,10 @@ export function JobsInboxScreen() {
                         </p>
                       </div>
                     </div>
+                    {['confirmed', 'in_progress'].includes(b.status) && !b.post_confirmed_at && (
+                      <RescheduleInline booking={b} openId={rescheduleFor} setOpenId={setRescheduleFor}
+                        value={rescheduleAt} setValue={setRescheduleAt} onSave={handleReschedule} busy={jobBusy[b.id]} />
+                    )}
                     {needsPost && (
                       <>
                         {b.completed_at ? (
@@ -1325,6 +1366,10 @@ export function JobsInboxScreen() {
                         </p>
                       </div>
                     </div>
+                    {['confirmed', 'in_progress'].includes(b.status) && !b.post_confirmed_at && (
+                      <RescheduleInline booking={b} openId={rescheduleFor} setOpenId={setRescheduleFor}
+                        value={rescheduleAt} setValue={setRescheduleAt} onSave={handleReschedule} busy={jobBusy[b.id]} />
+                    )}
                     {/* Mark job complete — available anytime until done. */}
                     {canMarkComplete && (
                       <>
