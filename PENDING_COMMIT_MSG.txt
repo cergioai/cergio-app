@@ -1,11 +1,9 @@
-Spotlight post step = Connector's unique referral link, Story-first guided flow (SPEC-47d)
+Spotlight: earnings visibility + per-spotlight click-audit
 
-Built the IG-post step around conversions + the barter→free-marketing logic:
-- MarkBookingPostedModal (4★+): shows the Connector's UNIQUE link buildInviteUrl(connectorId)
-  + ?s={bookingId} with a Copy button + the 7%/$250 earnings hook.
-- Effortless Story-first flow: copy link → add to Story with the Link sticker → save to a
-  "Spotlights" Highlight (keeps the clickable link past 24h). "Open Instagram" helper.
-- Bio-link upsell (earns on every post; feed posts tag @cergio + #cergiofeed).
-- JobsInbox passes connectorId so the link is the poster's own referral link.
-- FROZEN_SPEC SPEC-47d. Next: per-spotlight click-audit (route logs ?s=), earnings visibility,
-  and the scheduled oEmbed auto-check (activates when Meta Graph is approved).
+- Earnings (motivation): getMyEarningsSummary() (earned vs pending); the Rate & post step now
+  shows "You've earned $X · $Y pending" right under the 7%/$250 hook.
+- Click-audit: spotlight_verified_at column + verify_spotlight(uuid) SECURITY DEFINER RPC
+  (migration). The /i/{code}?s={bookingId} landing stamps that booking's spotlight "verified
+  live" when the unique link is tapped (anonymous clicker → RPC). The provider's review card
+  shows "Spotlight link verified ✓ — it's live and driving clicks". Soft signal; provider still
+  accepts the post. This is the clickthrough proof that works NOW, before Meta Graph.

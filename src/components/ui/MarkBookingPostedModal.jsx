@@ -4,9 +4,11 @@
 // must explain (private review shared with the provider + analyzed by Cergio),
 // and the provider can reply / escalate (module 2). markBookingPosted +
 // createReview in lib/api do the writes.
-import { useState } from 'react';
-import { markBookingPosted, createReview } from '../../lib/api';
+import { useState, useEffect } from 'react';
+import { markBookingPosted, createReview, getMyEarningsSummary } from '../../lib/api';
 import { buildInviteUrl } from '../../lib/referral';
+
+const fmtUsd = (cents) => `$${Math.round((cents || 0) / 100).toLocaleString()}`;
 
 function Stars({ value, onChange }) {
   return (
@@ -31,6 +33,12 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
   const [err, setErr]         = useState(null);
   const [copied, setCopied]   = useState(false);
   const [showBio, setShowBio] = useState(false);
+  const [earn, setEarn]       = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getMyEarningsSummary().then(({ data }) => { if (!cancelled) setEarn(data || null); });
+    return () => { cancelled = true; };
+  }, []);
   const providerFirst = (booking?.provider?.display_name || 'the provider').split(' ')[0];
   const reposting = !!booking?.post_flag_reason;
   const lowRating = stars > 0 && stars < 4;
@@ -146,6 +154,11 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
                   <p className="text-meta-sm text-b2 mt-1.5 leading-snug">
                     Every signup through your link earns you <span className="font-extrabold text-gd">7% of their spend, up to $250</span>.
                   </p>
+                  {earn && (earn.earnedCents > 0 || earn.pendingCents > 0) && (
+                    <p className="text-meta-sm text-gd font-extrabold mt-1.5 pt-1.5 border-t border-g/20">
+                      You've earned {fmtUsd(earn.earnedCents)}{earn.pendingCents > 0 ? ` · ${fmtUsd(earn.pendingCents)} pending` : ''}
+                    </p>
+                  )}
                 </div>
               )}
 

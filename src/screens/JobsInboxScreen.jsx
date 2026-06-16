@@ -1316,6 +1316,11 @@ export function JobsInboxScreen() {
                     )}
                     {reviewNeeded && (
                       <>
+                        {b.spotlight_verified_at && (
+                          <div className="bg-gl text-gd rounded-[10px] px-3 py-1.5 text-meta-sm font-extrabold text-center mt-3">
+                            Spotlight link verified ✓ — it's live and driving clicks
+                          </div>
+                        )}
                         {b.post_url && (
                           <a href={b.post_url} target="_blank" rel="noopener noreferrer"
                              className="block text-center text-meta font-extrabold text-g underline underline-offset-2 mt-3">

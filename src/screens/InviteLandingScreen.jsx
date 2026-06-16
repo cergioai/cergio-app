@@ -24,6 +24,8 @@ import { supabase, supabaseReady } from '../lib/supabase';
 import { storeRef } from '../lib/referral';
 import { LeafLogo } from '../components/ui/LeafLogo';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function InviteLandingScreen() {
   const { code } = useParams();
   const navigate = useNavigate();
@@ -35,6 +37,13 @@ export function InviteLandingScreen() {
       if (!supabaseReady || clean.length < 6) {
         navigate('/', { replace: true });
         return;
+      }
+      // Per-spotlight click-audit (Tarik 2026-06-15): ?s={bookingId} on the
+      // Connector's unique link → stamp that spotlight "verified live" (the
+      // link is in the post and working). Best-effort; never blocks the redirect.
+      const s = new URLSearchParams(window.location.search).get('s');
+      if (s && UUID_RE.test(s)) {
+        supabase.rpc('verify_spotlight', { p_booking: s }).catch(() => {});
       }
       const { data, error } = await supabase.rpc('resolve_ref_code', { code: clean });
       if (cancelled) return;

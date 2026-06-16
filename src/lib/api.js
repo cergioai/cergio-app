@@ -2675,6 +2675,24 @@ export async function getMyEarnings({ limit = 50, kind } = {}) {
 }
 
 /**
+ * Quick earnings summary for motivation surfaces (Tarik 2026-06-15): total
+ * EARNED (paid/released) vs PENDING across the ledger. Spotlight + referral
+ * earnings are what the Connector grows by posting, so this is shown at the
+ * post moment + on the inbox Overview.
+ */
+export async function getMyEarningsSummary() {
+  const { data, error } = await getMyEarnings({ limit: 500 });
+  if (error) return { data: { earnedCents: 0, pendingCents: 0 }, error };
+  let earnedCents = 0, pendingCents = 0;
+  for (const r of (data || [])) {
+    const c = r.amount_cents || 0;
+    if (['paid', 'released', 'completed', 'confirmed'].includes(r.status)) earnedCents += c;
+    else pendingCents += c;
+  }
+  return { data: { earnedCents, pendingCents }, error: null };
+}
+
+/**
  * Create a PaymentIntent for an accepted spotlight request. Returns the
  * client_secret the frontend feeds to Stripe's PaymentSheet. After the
  * provider completes the payment, the stripe-webhook flips paid_at on the
@@ -3147,7 +3165,7 @@ export async function listProviderBookings() {
       id, status, scheduled_at, location_text, notes, total_cents,
       is_free_for_rainmaker, created_at, paid_at, completed_at,
       schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
-      post_flag_reason, post_flagged_at,
+      post_flag_reason, post_flagged_at, spotlight_verified_at,
       consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
       service:services ( id, title, category, photo_class ),
       offering:offerings ( id, name, kind, duration_minutes )
