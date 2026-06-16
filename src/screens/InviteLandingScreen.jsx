@@ -43,7 +43,13 @@ export function InviteLandingScreen() {
       // link is in the post and working). Best-effort; never blocks the redirect.
       const s = new URLSearchParams(window.location.search).get('s');
       if (s && UUID_RE.test(s)) {
-        supabase.rpc('verify_spotlight', { p_booking: s }).catch(() => {});
+        // supabase.rpc() returns a thenable QUERY BUILDER, not a real Promise —
+        // it has NO .catch(). Calling .catch() threw synchronously and aborted
+        // this whole effect, so the profile redirect below never ran and every
+        // invite/spotlight link hung on "Opening profile…". Adopt it into a
+        // real promise so the fire-and-forget audit can't break the redirect.
+        // (Tarik 2026-06-16.)
+        Promise.resolve(supabase.rpc('verify_spotlight', { p_booking: s })).catch(() => {});
       }
       const { data, error } = await supabase.rpc('resolve_ref_code', { code: clean });
       if (cancelled) return;

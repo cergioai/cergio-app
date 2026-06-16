@@ -1788,6 +1788,23 @@ test('spec-47-free-barter-loop', 'FROZEN: Free barter loop — schedule confirm,
   assert(/kind:\s*'barter'/.test(api), "listSocialFeed must emit kind 'barter' for posted free-service spotlights");
 });
 
+test('rpc-catch-footgun', 'No supabase.rpc(...).catch() — the builder is a thenable with no .catch(); it throws synchronously and aborts the caller', '#rpc1', async () => {
+  const srcDir = path.join(REPO_ROOT, 'src');
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); continue; }
+      if (!/\.(jsx?|tsx?)$/.test(e.name)) continue;
+      const src = fs.readFileSync(p, 'utf8');
+      if (/\.rpc\([^)]*\)\s*\.catch\b/.test(src)) offenders.push(path.relative(REPO_ROOT, p));
+    }
+  };
+  walk(srcDir);
+  assert(offenders.length === 0,
+    `supabase.rpc(...).catch() throws synchronously (no .catch on the builder) — wrap in Promise.resolve(...) or await in try/catch. Offenders: ${offenders.join(', ')}`);
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
