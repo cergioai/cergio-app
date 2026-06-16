@@ -1,10 +1,6 @@
-Provider accept-with-time → confirmed booking + reschedule (SPEC-47h)
+Inbox "Accept" now does accept-with-time → confirmed booking too (SPEC-47h)
 
-Fixes "I accepted but couldn't pick a time / it just said offer sent, waiting on them."
-- accept_request_with_time RPC (SECURITY DEFINER): provider creates a CONFIRMED booking for
-  the Connector at the chosen time (verifies caller owns the service). + acceptRequestWithTime API.
-- Frame-3: "Pick a time & accept" (flexible) and "Accept & confirm" (specific time) now create a
-  confirmed booking via the RPC instead of sending an offer → lands in both Upcoming immediately.
-- Reschedule: rescheduleBooking API + inline datetime control on both Upcoming card types — either
-  party can change the time together. Notifies the other side.
-- FROZEN_SPEC SPEC-47h. (Plain inbox-inline Accept still sends a quick offer; time-pick is on detail.)
+You were accepting from the inbox card's Accept button, which still sent a quick offer
+("waiting on them to pick a time"). Now the inbox Accept opens an inline time picker and
+confirms the booking via accept_request_with_time — same as the detail screen. Pick a time
+(or leave blank), tap Confirm booking → it's a confirmed Upcoming job for both, reschedulable.

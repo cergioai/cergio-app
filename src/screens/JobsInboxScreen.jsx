@@ -14,6 +14,7 @@ import {
   flagBookingPost,
   markBookingComplete,
   rescheduleBooking,
+  acceptRequestWithTime,
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
 import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
@@ -236,6 +237,26 @@ export function JobsInboxScreen() {
   // whose counter input is expanded; counterDraft holds the typed
   // dollar value.
   const [counterOpenFor, setCounterOpenFor] = useState(null);
+  // Accept-with-time: picking a time here CONFIRMS the booking (Tarik 2026-06-16).
+  const [acceptOpenFor, setAcceptOpenFor] = useState(null);
+  const [acceptDraft, setAcceptDraft] = useState('');
+  const handleAcceptWithTime = async (req) => {
+    if (!req.my_service_id) { showToast('You need a listed service to accept.'); return; }
+    setResponding(prev => ({ ...prev, [req.id]: 'pending' }));
+    const { error } = await acceptRequestWithTime({
+      requestId: req.id, serviceId: req.my_service_id, scheduledAt: acceptDraft || null,
+    });
+    if (error) {
+      showToast(error.message || 'Could not confirm — try again.');
+      setResponding(prev => ({ ...prev, [req.id]: undefined }));
+      return;
+    }
+    setResponding(prev => ({ ...prev, [req.id]: 'done' }));
+    setInbound(prev => (prev || []).filter(r => r.id !== req.id));
+    setAcceptOpenFor(null); setAcceptDraft('');
+    showToast(`Booked & confirmed — ${req.requester?.display_name || 'they'} can reschedule with you.`);
+    refreshJobs?.();
+  };
   const [counterDraft, setCounterDraft] = useState('');
   useEffect(() => {
     if (!auth?.isSignedIn) { setInbound([]); return; }
@@ -852,7 +873,11 @@ export function JobsInboxScreen() {
                       <button
                         type="button"
                         disabled={state === 'pending'}
-                        onClick={() => handleInboundResponse(req, 'offered')}
+                        onClick={() => {
+                          if (!req.my_service_id) { showToast('You need a listed service to accept.'); return; }
+                          setAcceptOpenFor(prev => prev === req.id ? null : req.id);
+                          setAcceptDraft(''); setCounterOpenFor(null);
+                        }}
                         className="flex-1 bg-g text-white rounded-pill py-2 text-meta font-extrabold cg-cta disabled:opacity-60"
                       >
                         {state === 'pending' ? 'Sending…' : 'Accept'}
@@ -885,6 +910,31 @@ export function JobsInboxScreen() {
                         Decline
                       </button>
                     </div>
+                    {acceptOpenFor === req.id && (
+                      <div className="mt-2">
+                        <p className="text-meta-sm text-b3 font-medium mb-1">
+                          Pick a time to confirm (or leave blank — you can both reschedule).
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="datetime-local"
+                            value={acceptDraft}
+                            onChange={e => setAcceptDraft(e.target.value)}
+                            className="flex-1 min-w-0 border border-bdr rounded-[10px] px-2 py-1.5 text-meta text-black bg-white outline-none focus:border-g"
+                          />
+                          <button
+                            type="button"
+                            disabled={state === 'pending'}
+                            onClick={() => handleAcceptWithTime(req)}
+                            className="bg-g text-white rounded-[10px] px-3 py-1.5 text-meta font-extrabold cg-cta disabled:opacity-60 whitespace-nowrap"
+                          >
+                            {state === 'pending' ? '…' : 'Confirm booking'}
+                          </button>
+                          <button type="button" onClick={() => setAcceptOpenFor(null)}
+                            className="text-body font-extrabold text-b3 px-1" aria-label="Cancel">×</button>
+                        </div>
+                      </div>
+                    )}
                     {counterOpenFor === req.id && (
                       <div className="mt-2 flex items-center gap-2">
                         <span className="text-body-sm font-extrabold text-b3">$</span>
