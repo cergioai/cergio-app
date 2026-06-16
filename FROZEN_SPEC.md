@@ -154,6 +154,8 @@ Enforced in `influencer_crawler.py` via `MIN_FOLLOWERS` / `MAX_FOLLOWERS` consta
 - Story-first guided flow (the only clickable, trackable IG surface): copy link → add to Story with the **Link sticker** → save to a **"Spotlights" Highlight** (permanence past 24h). "Open Instagram" helper. Bio-link upsell ("earns on every post"; feed posts tag @cergio + #cergiofeed). Earnings shown inline to motivate.
 - Qualify/audit: clickthrough on the unique link is the live-proof now; automatic **oEmbed caption check** (@cergio + link + #cergiofeed) activates once Meta Graph access is approved (scheduled).
 
+**SPEC-47e · Below-4★ private review dispute (FROZEN 2026-06-16, Tarik).** When a Connector rates a barter <4★ the spotlight is held (SPEC-47c) and a private dispute opens (`review_threads` table + `bookings.dispute_escalated_at`; `getMyOpenDisputes` / `listReviewThread` / `addReviewReply`). Both parties see the rating + comment and reply; the PROVIDER (rated low) can also **Escalate** → stamps `dispute_escalated_at` + pings support (admin handles manually now; AI resolution phase 2). Surfaced via the inbox **Overview** "Ratings to resolve · N" + a Requests-tab section. Reviews are **private, not public** ("truthful reviews from trusted friends, not gamed reviews from strangers"). The post goes live only when the rating reaches 4★+.
+
 **Banned behaviors:**
 - Auto-confirming a booking at submission time (except SPEC-47b: booking off a provider's existing offer)
 - Creating a free booking without consulting `getOutstandingFreeBarter`

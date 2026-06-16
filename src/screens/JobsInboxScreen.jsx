@@ -16,7 +16,9 @@ import {
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
 import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
+import { getMyOpenDisputes } from '../lib/api';
 import { MarkBookingPostedModal } from '../components/ui/MarkBookingPostedModal';
+import { DisputeCard } from '../components/ui/DisputeCard';
 
 // Map a Supabase bookings row → the same shape the existing UI uses.
 function bookingToRequest(b) {
@@ -226,6 +228,16 @@ export function JobsInboxScreen() {
     return () => { cancelled = true; clearInterval(t); };
   }, [auth?.isSignedIn]);
 
+  // Open below-4★ disputes where I'm a party (provider or connector).
+  const [disputes, setDisputes] = useState([]);
+  const refreshDisputes = () => getMyOpenDisputes().then(({ data }) => setDisputes(data || []));
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setDisputes([]); return; }
+    let cancelled = false;
+    getMyOpenDisputes().then(({ data }) => { if (!cancelled) setDisputes(data || []); });
+    return () => { cancelled = true; };
+  }, [auth?.isSignedIn]);
+
   // My offers awaiting the requester to schedule (two-step barter, SPEC-47).
   const [sentOffers, setSentOffers] = useState([]);
   useEffect(() => {
@@ -253,6 +265,7 @@ export function JobsInboxScreen() {
     requests.filter(r => r.isUnread).length +
     (inbound || []).length +
     openQuestions.length +
+    disputes.length +
     myAnswered.reduce((n, r) => n + (r.responses || []).length, 0);
 
   async function handleInboundResponse(req, status) {
@@ -473,6 +486,21 @@ export function JobsInboxScreen() {
             (Tarik 2026-06-15). The default landing tab. */}
         {activeTab === 'Overview' && (
           <>
+            {disputes.length > 0 && (
+              <div className="bg-white border-2 border-salmon/40 rounded-[18px] p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-body-lg font-extrabold text-black">
+                    Ratings to resolve<span className="text-salmon"> · {disputes.length}</span>
+                  </p>
+                  <button onClick={() => setActiveTab('Requests')} className="text-body-sm font-extrabold text-g whitespace-nowrap flex-shrink-0">
+                    Open →
+                  </button>
+                </div>
+                <p className="text-meta text-b2 mt-1 leading-snug">
+                  A below-4★ review needs a response before the spotlight can go live.
+                </p>
+              </div>
+            )}
             {needPostCount > 0 && (
               <div className="bg-gl border-2 border-g/40 rounded-[18px] p-4">
                 <div className="flex items-center justify-between gap-2">
@@ -558,6 +586,18 @@ export function JobsInboxScreen() {
             a response to something YOU asked for is the most timely
             item here. Each response row taps through to the provider's
             profile (/u/{id}) so the requester can vet them. */}
+        {/* Below-4★ disputes — provider/connector back-and-forth + escalate. */}
+        {activeTab === 'Requests' && disputes.length > 0 && (
+          <>
+            <p className="text-meta font-extrabold text-b3 uppercase tracking-wide pt-1">
+              Ratings to resolve
+            </p>
+            {disputes.map(d => (
+              <DisputeCard key={d.bookingId} dispute={d} showToast={showToast} onChange={refreshDisputes} />
+            ))}
+          </>
+        )}
+
         {/* Pre-booking questions providers asked on your requests — reply here. */}
         {activeTab === 'Requests' && openQuestions.length > 0 && (
           <>

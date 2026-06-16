@@ -3279,6 +3279,90 @@ export async function createReview(bookingId, stars, comment = '') {
     .single();
 }
 
+/**
+ * Open below-4★ disputes for the signed-in user (Tarik 2026-06-15). Returns one
+ * row per unresolved <4★ review where I'm a party — role 'provider' (I was rated
+ * low) or 'connector' (I gave the low rating) — with the rating, comment, other
+ * party, and escalation flag. "Open" = the barter hasn't been confirmed yet.
+ */
+export async function getMyOpenDisputes() {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const me = userRes.user.id;
+  const { data: revs, error } = await supabase
+    .from('reviews')
+    .select('id, booking_id, rater_id, rated_id, stars, comment, created_at')
+    .lt('stars', 4)
+    .or(`rater_id.eq.${me},rated_id.eq.${me}`)
+    .order('created_at', { ascending: false });
+  if (error || !revs?.length) return { data: [], error };
+  const bookingIds = [...new Set(revs.map(r => r.booking_id))];
+  const { data: bks } = await supabase
+    .from('bookings')
+    .select('id, post_confirmed_at, dispute_escalated_at, service:services(id, title)')
+    .in('id', bookingIds);
+  const bkMap = Object.fromEntries((bks || []).map(b => [b.id, b]));
+  const otherIds = [...new Set(revs.map(r => (r.rater_id === me ? r.rated_id : r.rater_id)).filter(Boolean))];
+  let profMap = {};
+  if (otherIds.length) {
+    const { data: profs } = await supabase.from('profiles').select('id, display_name').in('id', otherIds);
+    profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+  }
+  const rows = revs.map(r => {
+    const b = bkMap[r.booking_id] || {};
+    const role = r.rated_id === me ? 'provider' : 'connector';
+    const otherId = r.rater_id === me ? r.rated_id : r.rater_id;
+    return {
+      bookingId:    r.booking_id,
+      role,
+      stars:        r.stars,
+      comment:      r.comment || '',
+      otherName:    profMap[otherId]?.display_name || (role === 'provider' ? 'A Connector' : 'The provider'),
+      serviceTitle: b.service?.title || 'service',
+      escalated:    !!b.dispute_escalated_at,
+      resolved:     !!b.post_confirmed_at,
+    };
+  }).filter(r => !r.resolved);
+  return { data: rows, error: null };
+}
+
+/** The dispute back-and-forth for one booking (oldest first, with sender names). */
+export async function listReviewThread(bookingId) {
+  if (!supabaseReady || !bookingId) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('review_threads')
+    .select('id, sender_id, body, is_escalation, created_at')
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: true });
+  if (error || !data?.length) return { data: data || [], error };
+  const ids = [...new Set(data.map(m => m.sender_id))];
+  const { data: profs } = await supabase.from('profiles').select('id, display_name').in('id', ids);
+  const pm = Object.fromEntries((profs || []).map(p => [p.id, p]));
+  return { data: data.map(m => ({ ...m, senderName: pm[m.sender_id]?.display_name || 'User' })), error: null };
+}
+
+/** Post a reply (or escalation) on a dispute thread. Escalation stamps the
+ *  booking + pings support (admin module handles it manually for now). */
+export async function addReviewReply(bookingId, body, { escalate = false } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId || !(body || '').trim()) return { data: null, error: { message: 'Write something first.' } };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  const res = await supabase
+    .from('review_threads')
+    .insert({ booking_id: bookingId, sender_id: userRes.user.id, body: body.trim().slice(0, 2000), is_escalation: !!escalate })
+    .select()
+    .single();
+  if (!res.error && escalate) {
+    await supabase.from('bookings').update({ dispute_escalated_at: new Date().toISOString() }).eq('id', bookingId);
+    fireBookingNotify(bookingId, 'dispute_escalated');
+  } else if (!res.error) {
+    fireBookingNotify(bookingId, 'dispute_reply');
+  }
+  return res;
+}
+
 /** Bookings where the signed-in user is the consumer (their history). */
 export async function listConsumerBookings() {
   if (!supabaseReady) return NOT_WIRED;

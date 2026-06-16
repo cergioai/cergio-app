@@ -1,9 +1,9 @@
-Spotlight: earnings visibility + per-spotlight click-audit
+Below-4★ private review dispute: provider reply + escalate + admin hook (SPEC-47e)
 
-- Earnings (motivation): getMyEarningsSummary() (earned vs pending); the Rate & post step now
-  shows "You've earned $X · $Y pending" right under the 7%/$250 hook.
-- Click-audit: spotlight_verified_at column + verify_spotlight(uuid) SECURITY DEFINER RPC
-  (migration). The /i/{code}?s={bookingId} landing stamps that booking's spotlight "verified
-  live" when the unique link is tapped (anonymous clicker → RPC). The provider's review card
-  shows "Spotlight link verified ✓ — it's live and driving clicks". Soft signal; provider still
-  accepts the post. This is the clickthrough proof that works NOW, before Meta Graph.
+- review_threads table + bookings.dispute_escalated_at (migration). getMyOpenDisputes /
+  listReviewThread / addReviewReply (escalate stamps + pings support).
+- DisputeCard: both parties see the rating + comment; reply back-and-forth; PROVIDER (rated
+  low) can Escalate → flagged to Cergio/support (admin manual now; AI resolution phase 2).
+  Private-review framing ("truthful reviews from trusted friends, not gamed reviews from strangers").
+- JobsInbox: Overview "Ratings to resolve · N" action row + a Requests-tab section; badge counts them.
+- FROZEN_SPEC SPEC-47e. The held spotlight goes live only at 4★+.
