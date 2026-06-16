@@ -3602,7 +3602,7 @@ export async function getOutstandingFreeBarter() {
   const { data, error } = await supabase
     .from('bookings')
     .select(`
-      id, status, scheduled_at, posted_at, post_confirmed_at, post_flag_reason,
+      id, status, scheduled_at, completed_at, posted_at, post_confirmed_at, post_flag_reason,
       service:services ( id, title ),
       provider:profiles!bookings_provider_id_fkey ( id, display_name )
     `)
@@ -3613,7 +3613,21 @@ export async function getOutstandingFreeBarter() {
     .order('created_at', { ascending: false })
     .limit(1);
   if (error) return { outstanding: null, error };
-  return { outstanding: (data || [])[0] || null, error: null };
+  const outstanding = (data || [])[0] || null;
+  // The Connector has acted (rated + posted, OR rated <4★ which HOLDS the
+  // post) the moment a review by them exists. Surface that so the global
+  // post-gate (BarterPostGate) only HARD-BLOCKS the app when the provider
+  // marked complete AND the Connector hasn't rated yet — never after they've
+  // already done their turn. Tarik 2026-06-16 (SPEC-47i).
+  if (outstanding && outstanding.completed_at && !outstanding.posted_at) {
+    const { count } = await supabase
+      .from('reviews')
+      .select('id', { count: 'exact', head: true })
+      .eq('booking_id', outstanding.id)
+      .eq('rater_id', userRes.user.id);
+    outstanding.reviewed = (count || 0) > 0;
+  }
+  return { outstanding, error: null };
 }
 
 // CERGIO-GUARD (2026-05-30): GOAT shares feed for the Activity screen.

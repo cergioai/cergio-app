@@ -17,6 +17,7 @@ import { captureRefFromUrl, creditInviterOnFirstBooking } from './lib/referral';
 
 import { BottomNav }    from './components/ui/BottomNav';
 import { UpcomingBanner } from './components/ui/UpcomingBanner';
+import { BarterPostGate } from './components/ui/BarterPostGate';
 import { Toast }        from './components/ui/Toast';
 import { SetupCheckBanner } from './components/ui/SetupCheckBanner';
 import { PaymentSheet } from './components/ui/PaymentSheet';
@@ -406,6 +407,12 @@ function Layout() {
         {/* CERGIO-GUARD: build version pill — shows current short SHA
             so HMR-stale-closure bugs are immediately observable. */}
         <BuildVersionPill />
+
+        {/* CERGIO-GUARD (2026-06-16, SPEC-47i): forced barter post-gate.
+            When the provider has marked the job complete, the Connector's
+            whole app is blocked until they rate + post their IG spotlight.
+            No block if the provider hasn't marked complete. */}
+        <BarterPostGate isSignedIn={auth.isSignedIn} userId={auth?.user?.id || null} />
 
         {paymentSheet && (
           <PaymentSheet

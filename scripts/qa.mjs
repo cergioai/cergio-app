@@ -1788,6 +1788,37 @@ test('spec-47-free-barter-loop', 'FROZEN: Free barter loop — schedule confirm,
   assert(/kind:\s*'barter'/.test(api), "listSocialFeed must emit kind 'barter' for posted free-service spotlights");
 });
 
+test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {
+  const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
+  const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const inbox = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
+  const gatePath = path.join(REPO_ROOT, 'src/components/ui/BarterPostGate.jsx');
+
+  // 1. The gate component exists and is mounted at the app root.
+  assert(fs.existsSync(gatePath), 'BarterPostGate.jsx must exist');
+  const gate = fs.readFileSync(gatePath, 'utf8');
+  assert(/<BarterPostGate\b/.test(app), 'App.jsx must mount <BarterPostGate /> at root');
+
+  // 2. HARD BLOCK only when provider marked complete AND connector hasn't
+  //    posted/reviewed. Never block on a job the provider hasn't completed.
+  assert(/completed_at/.test(gate) && /!\s*[\w.]*posted_at/.test(gate),
+    'Gate must require completed_at AND !posted_at to block (provider-complete + connector-not-posted)');
+  assert(/reviewed/.test(gate),
+    'Gate must release once the connector has reviewed (covers the held <4★ path) — no permanent lock');
+
+  // 3. getOutstandingFreeBarter surfaces completed_at + reviewed so the gate
+  //    can distinguish "your turn" from "already acted".
+  const gs = api.indexOf('export async function getOutstandingFreeBarter');
+  const gsrc = api.slice(gs, gs + 1600);
+  assert(/completed_at/.test(gsrc), 'getOutstandingFreeBarter must select completed_at');
+  assert(/\.reviewed\s*=/.test(gsrc), 'getOutstandingFreeBarter must set a reviewed flag');
+
+  // 4. Provider "Mark job complete" disappears once the connector posted
+  //    (no double "Mark complete" + "Accept post").
+  assert(/canMarkComplete\s*=\s*!b\.completed_at\s*&&\s*!b\.posted_at/.test(inbox),
+    'Provider canMarkComplete must also gate on !posted_at (drops once connector posted)');
+});
+
 test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carries job details, approximate map, Connector status + IG, friends-in-common — no fake photos (SPEC-48)', '#48', async () => {
   // The CANONICAL screen a provider opens from "New requests near you".
   const screen = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RequestFromConnectorScreen.jsx'), 'utf8');
