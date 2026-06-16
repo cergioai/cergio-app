@@ -27,10 +27,10 @@ begin
 
   insert into public.bookings
     (consumer_id, provider_id, service_id, status, scheduled_at,
-     schedule_confirmed_at, is_free_for_rainmaker)
+     schedule_confirmed_at, is_free_for_rainmaker, total_cents)
   values
     (v_requester, auth.uid(), p_service_id, 'confirmed',
-     coalesce(p_scheduled_at, now() + interval '1 day'), now(), true)
+     coalesce(p_scheduled_at, now() + interval '1 day'), now(), true, 0)
   returning id into v_booking;
 
   -- Mark the request handled so it leaves the provider's "new requests".

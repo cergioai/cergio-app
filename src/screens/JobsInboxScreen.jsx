@@ -100,13 +100,15 @@ function RescheduleInline({ booking, openId, setOpenId, value, setValue, onSave,
     );
   }
   return (
-    <div className="flex items-center gap-2 mt-2">
+    <div className="mt-2">
       <input type="datetime-local" value={value} onChange={e => setValue(e.target.value)}
-        className="flex-1 min-w-0 border border-bdr rounded-[10px] px-2 py-1.5 text-meta text-black bg-white outline-none focus:border-g" />
-      <button type="button" disabled={busy} onClick={() => onSave(booking)}
-        className="bg-g text-white rounded-[10px] px-3 py-1.5 text-meta font-extrabold disabled:opacity-60">Save</button>
-      <button type="button" onClick={() => setOpenId(null)} aria-label="Cancel"
-        className="text-body text-b3 font-extrabold px-1">×</button>
+        className="w-full border border-bdr rounded-[10px] px-3 py-2 text-body-sm text-black bg-white outline-none focus:border-g" />
+      <div className="flex items-center gap-2 mt-2">
+        <button type="button" disabled={busy} onClick={() => onSave(booking)}
+          className="flex-1 bg-g text-white rounded-[12px] py-2.5 text-body-sm font-extrabold disabled:opacity-60">Save new time</button>
+        <button type="button" onClick={() => setOpenId(null)} aria-label="Cancel"
+          className="text-body-sm text-b3 font-extrabold px-3">Cancel</button>
+      </div>
     </div>
   );
 }
@@ -915,23 +917,23 @@ export function JobsInboxScreen() {
                         <p className="text-meta-sm text-b3 font-medium mb-1">
                           Pick a time to confirm (or leave blank — you can both reschedule).
                         </p>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="datetime-local"
-                            value={acceptDraft}
-                            onChange={e => setAcceptDraft(e.target.value)}
-                            className="flex-1 min-w-0 border border-bdr rounded-[10px] px-2 py-1.5 text-meta text-black bg-white outline-none focus:border-g"
-                          />
+                        <input
+                          type="datetime-local"
+                          value={acceptDraft}
+                          onChange={e => setAcceptDraft(e.target.value)}
+                          className="w-full border border-bdr rounded-[10px] px-3 py-2 text-body-sm text-black bg-white outline-none focus:border-g"
+                        />
+                        <div className="flex items-center gap-2 mt-2">
                           <button
                             type="button"
                             disabled={state === 'pending'}
                             onClick={() => handleAcceptWithTime(req)}
-                            className="bg-g text-white rounded-[10px] px-3 py-1.5 text-meta font-extrabold cg-cta disabled:opacity-60 whitespace-nowrap"
+                            className="flex-1 bg-g text-white rounded-[12px] py-2.5 text-body-sm font-extrabold cg-cta disabled:opacity-60"
                           >
-                            {state === 'pending' ? '…' : 'Confirm booking'}
+                            {state === 'pending' ? 'Confirming…' : 'Confirm booking'}
                           </button>
                           <button type="button" onClick={() => setAcceptOpenFor(null)}
-                            className="text-body font-extrabold text-b3 px-1" aria-label="Cancel">×</button>
+                            className="text-body-sm font-extrabold text-b3 px-3" aria-label="Cancel">Cancel</button>
                         </div>
                       </div>
                     )}

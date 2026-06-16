@@ -1,6 +1,6 @@
-Inbox "Accept" now does accept-with-time → confirmed booking too (SPEC-47h)
+Fix accept-with-time: total_cents on the RPC insert (null error) + roomy date inputs
 
-You were accepting from the inbox card's Accept button, which still sent a quick offer
-("waiting on them to pick a time"). Now the inbox Accept opens an inline time picker and
-confirms the booking via accept_request_with_time — same as the detail screen. Pick a time
-(or leave blank), tap Confirm booking → it's a confirmed Upcoming job for both, reschedulable.
+- accept_request_with_time RPC: the bookings insert was missing total_cents (NOT NULL) → null
+  constraint error on Confirm. Now sets total_cents = 0. (Re-applied to live DB.)
+- Date inputs no longer truncated: the accept-time picker and the reschedule control now put the
+  datetime-local on its own full-width row with the Confirm/Save + Cancel buttons below.
