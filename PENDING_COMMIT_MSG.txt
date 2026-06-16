@@ -1,6 +1,0 @@
-Fix accept-with-time: total_cents on the RPC insert (null error) + roomy date inputs
-
-- accept_request_with_time RPC: the bookings insert was missing total_cents (NOT NULL) → null
-  constraint error on Confirm. Now sets total_cents = 0. (Re-applied to live DB.)
-- Date inputs no longer truncated: the accept-time picker and the reschedule control now put the
-  datetime-local on its own full-width row with the Confirm/Save + Cancel buttons below.

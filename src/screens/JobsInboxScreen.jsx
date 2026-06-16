@@ -1400,8 +1400,11 @@ export function JobsInboxScreen() {
                 const reviewNeeded = b.is_free_for_rainmaker && b.posted_at && !b.post_confirmed_at;
                 const awaitingPost = b.is_free_for_rainmaker && !b.posted_at && !b.post_confirmed_at && b.status !== 'cancelled';
                 // Provider can mark the job complete anytime (even before start)
-                // until it's done — Tarik 2026-06-15.
-                const canMarkComplete = !b.completed_at && !b.post_confirmed_at && b.status !== 'cancelled';
+                // until it's done — Tarik 2026-06-15. Once the Connector has
+                // already posted their spotlight (posted_at), the job is
+                // self-evidently done: drop "Mark complete" so only the
+                // review/accept-post CTA shows (Tarik 2026-06-16).
+                const canMarkComplete = !b.completed_at && !b.posted_at && !b.post_confirmed_at && b.status !== 'cancelled';
                 return (
                   <div key={b.id} className="bg-white border border-bdr rounded-[20px] p-4">
                     <div className="flex items-start gap-3">
