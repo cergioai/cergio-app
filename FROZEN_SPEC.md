@@ -235,6 +235,22 @@ qa.mjs #49 enforces this.
 
 ---
 
+## UI / BEHAVIOR — INBOX (ACTION-FIRST)
+
+### SPEC-50 · Action-first inbox Overview
+**Status:** FROZEN — 2026-06-16 (Tarik)
+**Rule:** The Jobs **Overview** tab is a single prioritized **action feed**, not a passive digest. Each item is a compact one-liner (`ActionRow`): a headline + short sub-line + the PRIMARY action INLINE. Rules:
+- **Lead with $** when a real amount exists (`total_cents`, `offered_price_cents`) — never fabricate an amount (inbound requests have no stored budget, so they lead with the service, not a fake $).
+- **Green tone** = "your turn / needs your review" (provider Accept-post, consumer Rate & post). **Salmon** = dispute. Plain = neutral.
+- **Priority order:** disputes → spotlight to review (provider) → rate & post (consumer) → pay-due ($) → new requests → offers to book.
+- **Inline actions** reuse existing handlers: Accept post (`handleConfirmPost`), Rate & post (`setPostTarget`), Pay (`payForBooking`), View (`/inbound/:id`).
+- A **money / free filter** (chips) sorts the feed. Cut clutter copy — no long explanatory paragraphs.
+- Empty state: "You're all caught up." Slim Upcoming/Past shortcuts sit below the feed. The Requests/Sent/Upcoming/Past tabs remain the detailed folders.
+
+qa.mjs #50 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

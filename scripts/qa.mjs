@@ -1805,6 +1805,23 @@ test('rpc-catch-footgun', 'No supabase.rpc(...).catch() — the builder is a the
     `supabase.rpc(...).catch() throws synchronously (no .catch on the builder) — wrap in Promise.resolve(...) or await in try/catch. Offenders: ${offenders.join(', ')}`);
 });
 
+test('spec-50-action-first-inbox', 'FROZEN: Inbox Overview is an action-first feed — one-liners, $-led, green review, inline actions, filter (SPEC-50)', '#50', async () => {
+  const inbox = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
+  assert(/function ActionRow/.test(inbox), 'ActionRow (compact one-liner) component must exist');
+  // Overview builds a prioritized action list with inline actions.
+  assert(/actionLabel:\s*'Accept post'/.test(inbox), 'Provider spotlight-review must be an inline Accept-post action');
+  assert(/actionLabel:\s*'Rate & post'/.test(inbox), 'Consumer must rate & post inline');
+  assert(/actionLabel:\s*'Pay'/.test(inbox), 'Pay-due item must offer inline Pay');
+  // Leads with $ where a real amount exists.
+  assert(/usd\(b\.total_cents\)/.test(inbox) || /usd\(resp\.offered_price_cents\)/.test(inbox),
+    'Money items must lead with a $ amount from real cents');
+  // Filter chips.
+  assert(/actionFilter/.test(inbox) && /\[\s*'money'\s*,\s*'Money'\s*\]/.test(inbox),
+    'Action feed must have a money/free filter');
+  // Green tone reserved for "your turn / review" rows.
+  assert(/tone:\s*'green'/.test(inbox), 'Review/your-turn rows must use the green tone');
+});
+
 test('login-on-book-invite', 'Booking while logged out invites to sign in (returnTo) — never dead-ends with an error', '#login1', async () => {
   const app  = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const auth = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/AuthScreen.jsx'), 'utf8');

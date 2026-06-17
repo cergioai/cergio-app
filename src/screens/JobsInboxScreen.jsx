@@ -141,12 +141,45 @@ function OverviewRow({ title, count, items = [], onView }) {
   );
 }
 
+// CERGIO-GUARD (2026-06-16, Tarik — SPEC-50): action-first inbox row. One
+// liner: headline (leads with $ when there's a real amount, else free/service
+// context) + a short sub-line + the PRIMARY action inline. Green tone = "needs
+// your review / your turn"; salmon = dispute; plain = neutral. No clutter copy.
+function ActionRow({ tone = 'plain', headline, sub, actionLabel, onAction, busy }) {
+  const wrap =
+    tone === 'green'  ? 'bg-gl border-2 border-g/40'
+  : tone === 'salmon' ? 'bg-white border-2 border-salmon/40'
+  :                     'bg-white border border-bdr';
+  const btn =
+    tone === 'salmon' ? 'bg-white border border-bdr text-b2'
+  :                     'bg-g text-white';
+  return (
+    <div className={`${wrap} rounded-[16px] p-3.5 flex items-center gap-3`}>
+      <div className="min-w-0 flex-1">
+        <p className={`text-body font-extrabold leading-snug truncate ${tone === 'green' ? 'text-gd' : 'text-black'}`}>
+          {headline}
+        </p>
+        {sub && <p className="text-meta text-b3 leading-snug truncate mt-0.5">{sub}</p>}
+      </div>
+      <button
+        onClick={onAction}
+        disabled={busy}
+        className={`${btn} rounded-pill px-4 py-2 text-meta font-extrabold whitespace-nowrap flex-shrink-0 disabled:opacity-60 active:scale-[.97] transition`}
+      >
+        {busy ? '…' : actionLabel}
+      </button>
+    </div>
+  );
+}
+
 const TABS = ['Overview', 'Requests', 'Sent', 'Upcoming', 'Past'];
 
 export function JobsInboxScreen() {
   const navigate = useNavigate();
   const { showToast, auth, payForBooking, handleBook } = useOutletContext();
   const [activeTab, setActiveTab] = useState('Overview');
+  // Action-feed filter (SPEC-50): all | money | free.
+  const [actionFilter, setActionFilter] = useState('all');
   const [real, setReal] = useState(null);
   // CERGIO-GUARD: real client-side filter, no 'coming soon' placeholder.
   // Filters across sender + preview + date across all tabs.
@@ -544,94 +577,116 @@ export function JobsInboxScreen() {
 
         {/* OVERVIEW — at-a-glance digest of every folder with counts + View all
             (Tarik 2026-06-15). The default landing tab. */}
-        {activeTab === 'Overview' && (
-          <>
-            {disputes.length > 0 && (
-              <div className="bg-white border-2 border-salmon/40 rounded-[18px] p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-body-lg font-extrabold text-black">
-                    Ratings to resolve<span className="text-salmon"> · {disputes.length}</span>
-                  </p>
-                  <button onClick={() => setActiveTab('Requests')} className="text-body-sm font-extrabold text-g whitespace-nowrap flex-shrink-0">
-                    Open →
-                  </button>
+        {activeTab === 'Overview' && (() => {
+          // ── Action-first feed (SPEC-50, Tarik 2026-06-16) ──────────────
+          // One prioritized list of things that need YOU to act, each a
+          // one-liner leading with $ (when a real amount exists) and the
+          // primary action inline. Highest-urgency first.
+          const first = (p) => (p?.display_name || 'Someone').split(' ')[0];
+          const usd   = (cents) => `$${Math.round((cents || 0) / 100)}`;
+          const asProvider = myJobs?.asProvider || [];
+          const asConsumer = myJobs?.asConsumer || [];
+          const items = [];
+
+          // 1. Disputes — a held <4★ review blocking a spotlight (salmon).
+          disputes.forEach(d => items.push({
+            key: 'dispute-' + d.bookingId, tone: 'salmon', money: false,
+            headline: 'Rating to resolve',
+            sub: 'A below-4★ review needs your response',
+            actionLabel: 'Open', onAction: () => setActiveTab('Requests'),
+          }));
+
+          // 2. Provider: a Connector posted your spotlight — review + accept (green).
+          asProvider
+            .filter(b => b.is_free_for_rainmaker && b.posted_at && !b.post_confirmed_at && !b.post_flag_reason)
+            .forEach(b => items.push({
+              key: 'review-' + b.id, tone: 'green', money: false,
+              headline: `Review ${first(b.consumer)}'s spotlight`,
+              sub: `${b.service?.title || 'Service'} · they posted your IG spotlight`,
+              actionLabel: 'Accept post', onAction: () => handleConfirmPost(b), busy: jobBusy[b.id],
+            }));
+
+          // 3. Consumer: provider marked complete — rate & post your spotlight (green).
+          asConsumer
+            .filter(b => b.is_free_for_rainmaker && b.completed_at && !b.posted_at && !b.post_confirmed_at)
+            .forEach(b => items.push({
+              key: 'post-' + b.id, tone: 'green', money: false,
+              headline: 'Rate & post your spotlight',
+              sub: `${first(b.provider)} marked ${b.service?.title || 'your service'} complete`,
+              actionLabel: 'Rate & post', onAction: () => setPostTarget(b),
+            }));
+
+          // 4. Consumer: confirmed paid booking, not yet paid — lead with $.
+          asConsumer
+            .filter(b => !b.is_free_for_rainmaker && b.status === 'confirmed' && !b.paid_at && (b.total_cents || 0) > 0)
+            .forEach(b => items.push({
+              key: 'pay-' + b.id, tone: 'plain', money: true,
+              headline: `${usd(b.total_cents)} · ${b.service?.title || 'your booking'}`,
+              sub: `${first(b.provider)} confirmed your time — pay to lock it in`,
+              actionLabel: 'Pay', onAction: () => payForBooking(b, { onPaid: refreshJobs }), busy: jobBusy[b.id],
+            }));
+
+          // 5. Provider: new inbound requests — accept fast (bid-decay). Lead
+          //    with the service; free-barter framing handled on the detail.
+          (inbound || []).forEach(r => items.push({
+            key: 'req-' + r.id, tone: 'plain', money: false,
+            headline: `New request · ${r.service_type || r.category || 'service'}`,
+            sub: `${first(r.requester)}${r.location_text ? ` · ${r.location_text}` : ''}`,
+            actionLabel: 'View', onAction: () => navigate(`/inbound/${r.id}`),
+          }));
+
+          // 6. Consumer: a provider accepted your request — book a time (lead $ when offered).
+          myAnswered.forEach(r => (r.responses || []).forEach(resp => items.push({
+            key: 'offer-' + resp.id, tone: 'plain', money: !!resp.offered_price_cents,
+            headline: resp.offered_price_cents
+              ? `${usd(resp.offered_price_cents)} · ${resp.service?.title || r.service_type || 'service'}`
+              : `${resp.service?.title || r.service_type || 'Offer'} accepted`,
+            sub: `${first(resp.responder)} accepted — book a time`,
+            actionLabel: 'Book', onAction: () => setActiveTab('Requests'),
+          })));
+
+          const filtered = items.filter(it =>
+            actionFilter === 'all' ? true : actionFilter === 'money' ? it.money : !it.money);
+          const FILTERS = [['all', 'All'], ['money', 'Money'], ['free', 'Free']];
+
+          return (
+            <>
+              {/* filter chips — only when there's more than one item to sort */}
+              {items.length > 1 && (
+                <div className="flex gap-2">
+                  {FILTERS.map(([k, label]) => (
+                    <button key={k} onClick={() => setActionFilter(k)}
+                      className={`rounded-pill px-3.5 py-1.5 text-meta font-extrabold transition
+                        ${actionFilter === k ? 'bg-black text-white' : 'bg-white border border-bdr text-b2'}`}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
-                <p className="text-meta text-b2 mt-1 leading-snug">
-                  A below-4★ review needs a response before the spotlight can go live.
-                </p>
-              </div>
-            )}
-            {needPostCount > 0 && (
-              <div className="bg-gl border-2 border-g/40 rounded-[18px] p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-body-lg font-extrabold text-gd">
-                    Post your IG spotlight<span className="text-g"> · {needPostCount}</span>
-                  </p>
-                  <button onClick={() => setActiveTab('Upcoming')} className="text-body-sm font-extrabold text-g whitespace-nowrap flex-shrink-0">
-                    Do it now →
-                  </button>
+              )}
+
+              {filtered.length > 0 ? (
+                filtered.map(it => <ActionRow key={it.key} {...it} />)
+              ) : (
+                <div className="bg-white border border-bdr rounded-[18px] p-6 text-center">
+                  <p className="text-body font-extrabold text-black">You're all caught up.</p>
+                  <p className="text-meta text-b3 mt-1">New requests and jobs that need you will show up here.</p>
                 </div>
-                <p className="text-meta text-b2 mt-1 leading-snug">
-                  A provider marked your job complete. Post to finish the barter + unlock new free services.
-                </p>
+              )}
+
+              {/* slim folder shortcuts below the action feed */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button onClick={() => setActiveTab('Upcoming')} className="bg-white border border-bdr rounded-[16px] p-3.5 text-left">
+                  <p className="text-heading-1 font-extrabold text-black leading-none">{upcomingCount}</p>
+                  <p className="text-meta text-b3 font-extrabold mt-1">Upcoming</p>
+                </button>
+                <button onClick={() => setActiveTab('Past')} className="bg-white border border-bdr rounded-[16px] p-3.5 text-left">
+                  <p className="text-heading-1 font-extrabold text-black leading-none">{pastCount}</p>
+                  <p className="text-meta text-b3 font-extrabold mt-1">Past</p>
+                </button>
               </div>
-            )}
-            {reviewSpotlightCount > 0 && (
-              <div className="bg-gl border-2 border-g/40 rounded-[18px] p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-body-lg font-extrabold text-gd">
-                    Spotlights to review<span className="text-g"> · {reviewSpotlightCount}</span>
-                  </p>
-                  <button onClick={() => setActiveTab('Upcoming')} className="text-body-sm font-extrabold text-g whitespace-nowrap flex-shrink-0">
-                    Review →
-                  </button>
-                </div>
-                <p className="text-meta text-b2 mt-1 leading-snug">
-                  A Connector posted your IG spotlight — review and accept it.
-                </p>
-              </div>
-            )}
-            {myAnswered.length > 0 && (
-              <OverviewRow
-                title="Offers to book"
-                count={myAnswered.reduce((n, r) => n + (r.responses || []).length, 0)}
-                items={myAnswered
-                  .flatMap(r => (r.responses || []).map(resp => `${resp.responder?.display_name || 'A provider'} · ${resp.service?.title || r.service_type || 'service'}`))
-                  .slice(0, 2)}
-                onView={() => setActiveTab('Requests')}
-              />
-            )}
-            <OverviewRow
-              title="New requests"
-              count={newRequestsCount}
-              items={(inbound || []).slice(0, 2).map(r => `${r.requester?.display_name || 'A user'} · ${r.service_type || 'service'}`)}
-              onView={() => setActiveTab('Requests')}
-            />
-            <OverviewRow
-              title="Awaiting their schedule"
-              count={awaitingCount}
-              items={sentOffers.slice(0, 2).map(o => `${o.requesterName} · ${o.serviceType}`)}
-              onView={() => setActiveTab('Requests')}
-            />
-            <OverviewRow
-              title="Upcoming jobs"
-              count={upcomingCount}
-              items={myJobs
-                ? [...myJobs.asConsumer.filter(b => isLiveJob(b) || b.status === 'pending'),
-                   ...myJobs.asProvider.filter(isLiveJob)]
-                    .slice(0, 2)
-                    .map(b => `${b.service?.title || 'Service'}`)
-                : []}
-              onView={() => setActiveTab('Upcoming')}
-            />
-            {sentCount > 0 && (
-              <OverviewRow title="Spotlight requests sent" count={sentCount} onView={() => setActiveTab('Sent')} />
-            )}
-            {pastCount > 0 && (
-              <OverviewRow title="Past" count={pastCount} onView={() => setActiveTab('Past')} />
-            )}
-          </>
-        )}
+            </>
+          );
+        })()}
 
         {/* CERGIO-GUARD (2026-06-03): open consumer requests for this
             provider's service type — the "notify → confirm" half of
