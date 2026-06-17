@@ -57,6 +57,12 @@ export function AuthScreen() {
 
   const activeRef = getActiveRef();
   const isReset   = new URLSearchParams(location.search).get('reset') === 'true';
+  // CERGIO-GUARD (2026-06-16, Tarik): when a logged-out user tries to book,
+  // handleBook routes them here with ?returnTo=/service/<id> so we send them
+  // right back to finish booking after sign-in (never a dead-end). Defaults
+  // to /home. Only same-origin internal paths are honored.
+  const returnToRaw = new URLSearchParams(location.search).get('returnTo') || '';
+  const returnTo = /^\/[a-zA-Z0-9/_-]+$/.test(returnToRaw) ? returnToRaw : '/home';
 
   // 'choose'  → Google + Email + More options buttons (calm landing)
   // 'email'   → expanded email/password form
@@ -157,11 +163,11 @@ export function AuthScreen() {
           return;
         }
         showToast('Welcome to Cergio ✓');
-        navigate('/home');
+        navigate(returnTo);
       } else {
         const { error } = await auth.signIn(email.trim(), password);
         if (error) { showToast(error.message); return; }
-        navigate('/home');
+        navigate(returnTo);
       }
     } finally {
       setBusy(false);

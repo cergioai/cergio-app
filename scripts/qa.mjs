@@ -1805,6 +1805,17 @@ test('rpc-catch-footgun', 'No supabase.rpc(...).catch() — the builder is a the
     `supabase.rpc(...).catch() throws synchronously (no .catch on the builder) — wrap in Promise.resolve(...) or await in try/catch. Offenders: ${offenders.join(', ')}`);
 });
 
+test('login-on-book-invite', 'Booking while logged out invites to sign in (returnTo) — never dead-ends with an error', '#login1', async () => {
+  const app  = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
+  const auth = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/AuthScreen.jsx'), 'utf8');
+  // handleBook must gate on auth and route to /auth?returnTo before booking.
+  assert(/!auth\?\.isSignedIn/.test(app) && /\/auth\?returnTo=/.test(app),
+    'handleBook must redirect logged-out users to /auth?returnTo instead of letting createBooking fail');
+  // AuthScreen must honor returnTo after a successful sign-in.
+  assert(/returnTo/.test(auth) && /navigate\(returnTo\)/.test(auth),
+    'AuthScreen must navigate(returnTo) after sign-in so the user lands back on the service');
+});
+
 test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prioritized party-signal block; People-who-love = recos received (SPEC-49)', '#49', async () => {
   const prof = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/PublicProfileScreen.jsx'), 'utf8');
   const hook = fs.readFileSync(path.join(REPO_ROOT, 'src/hooks/usePartyCounts.js'), 'utf8');

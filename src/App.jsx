@@ -231,6 +231,18 @@ function Layout() {
       return;
     }
 
+    // CERGIO-GUARD (2026-06-16, Tarik): book-while-logged-out must INVITE
+    // the user to sign in — never dead-end. createBooking would reject with
+    // "You must be signed in to book" → an error toast with no way forward.
+    // Instead, route to /auth with a returnTo so they land right back on this
+    // service and can book in one tap after signing in.
+    if (!auth?.isSignedIn) {
+      const back = provider.id ? `/service/${provider.id}` : '/results';
+      showToast(`Sign in to book ${provider.title || provider.name || 'this service'} — it only takes a moment.`);
+      navigate(`/auth?returnTo=${encodeURIComponent(back)}`);
+      return;
+    }
+
     // CERGIO-GUARD (2026-06-12): THE FREE-BARTER GATE. A Connector with
     // an accepted free booking whose IG post hasn't been uploaded AND
     // accepted by the provider cannot order another free service.
@@ -251,7 +263,7 @@ function Layout() {
 
     // Open the calendar sheet — booking continues in proceedBooking.
     setScheduleTarget(provider);
-  }, [navigate, showToast, chat?.state]);
+  }, [navigate, showToast, chat?.state, auth?.isSignedIn]);
 
   const proceedBooking = useCallback(async (provider, chosenAt) => {
     setScheduleTarget(null);
