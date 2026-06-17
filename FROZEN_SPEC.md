@@ -226,10 +226,16 @@ qa.mjs #48 enforces this.
 **Status:** FROZEN — 2026-06-16 (Tarik)
 **Rule:** `/u/:profileId` (`PublicProfileScreen`) is the ONE canonical profile for every user — a SERVICE, a CONNECTOR, or BOTH. It LEADS with a party-signal block (`ProfileSignalBlock`) that reuses the EXACT same data + formatter as the request previews (`getInboxPartyCounts` → `formatKeyCounts`) — no parallel count formatting (SPEC-48b DRY rule).
 - **Connector facet:** Connector badge + `formatKeyCounts(recoKind:'made')` → e.g. "319 IG · 5 network · 5 recos made · No mutuals".
-- **Service facet:** role + always-on "{N} recos received" + `formatKeyCounts(recoKind:'received', includeReco:false)` → e.g. "Hair Stylist · 0 recos received" then "No mutuals · 12.4K IG · 3.1K TikTok".
+- **Service facet:** role + always-on "{N} recos received" + `formatKeyCounts(recoKind:'received', includeReco:false, includeReach:false)` → e.g. "Hair Stylist · 0 recos received" then "No mutuals · 5 network". **IG/TikTok reach is NOT on the service facet** (SPEC-49b).
 - **Viewer priority (SPEC-48c, same rule as request previews):** consumer mode (`serviceMode===false`, looking to book) → **service facet leads**; provider mode (`serviceMode===true`, marketing) → **connector facet leads**. When the subject is BOTH, both facets show, priority on top.
 - **"People who love {name}" = recommendations RECEIVED** (recommender + their note), NOT the bookings-review table. **"{name}'s Go-Tos" = recommendations MADE.**
 - The old standalone RoleBadge/ConnectorBadge row + reviews-sourced section are QUARANTINED. No fake data (SPEC-12).
+
+**SPEC-49b · Profile layout + IG de-duplication (FROZEN 2026-06-17, Tarik).**
+- **IG reach lives ONCE, around the Connector badge.** `formatKeyCounts` gained an `includeReach` option (default true; existing callers unchanged). The unified profile's SERVICE facet passes `includeReach:false` so IG/TikTok counts render only on the CONNECTOR facet — they were duplicating across both facets, and IG reach is a connector signal, not relevant to a service (e.g. a plumber).
+- **"By the numbers" stats grid is REMOVED** (redundant — the signal block already carries network/recos/IG). The dead `getPublicProfileStats` fetch + `stats` state are removed from `PublicProfileScreen`.
+- **"View Instagram" link RESTORED** beneath the signal block (regressed off the profile; matches the SPEC-48 "See Instagram" affordance). Opens `instagram.com/{handle}`. The standalone Social-section IG handle + follower-count row is REMOVED — the handle is reachable by tapping View Instagram.
+- **About (bio) moved to the TOP** of the content, directly under the identity/signal block, before Services.
 
 qa.mjs #49 enforces this.
 

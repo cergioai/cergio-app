@@ -26,9 +26,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing, getPublicProfileStats, respondToRequest, getInboxPartyCounts, isConnectorProfile } from '../lib/api';
+import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile } from '../lib/api';
 import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
-import { REWARDS } from '../lib/rewards';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -198,10 +197,6 @@ export function PublicProfileScreen() {
   const [respondingInline, setRespondingInline] = useState(null); // null | 'pending' | 'done'
   const [counterOpenInline, setCounterOpenInline] = useState(false);
   const [counterDraftInline, setCounterDraftInline] = useState('');
-  // CERGIO-GUARD (2026-06-04): network-impact stats — Invited / Joined
-  // / Booked / Reco'd / Services. Counts only; $ amounts stay private
-  // to the self-view via EarningsScreen.
-  const [stats, setStats] = useState(null);
   // Party-signal counts for the lead block — SAME source as the request
   // previews (getInboxPartyCounts → formatKeyCounts) so a profile is judged
   // with identical data + ordering (SPEC-49).
@@ -240,15 +235,6 @@ export function PublicProfileScreen() {
     return () => { cancelled = true; };
   }, [auth?.isSignedIn, profileId]);
 
-  // Network-impact stats — public, no $ amounts.
-  useEffect(() => {
-    if (!profileId) { setStats(null); return; }
-    let cancelled = false;
-    getPublicProfileStats(profileId).then(({ data }) => {
-      if (!cancelled) setStats(data);
-    });
-    return () => { cancelled = true; };
-  }, [profileId]);
 
   // Lead party-signal counts (mutual · network · recos · IG/TikTok · connector).
   useEffect(() => {
@@ -470,11 +456,6 @@ export function PublicProfileScreen() {
   }, [services]);
 
   const igHandle = profile?.instagram_handle || null;
-  const igFollowers = profile?.instagram_followers || profile?.follower_count || 0;
-  // CERGIO-GUARD (2026-06-13): Connector status — ≥300 followers (user-
-  // entered IG count for now) OR manually accepted (cc_verified_at).
-  // Shown as a badge so providers can judge connector strength.
-  const profileIsConnector = Number(igFollowers) >= 300 || !!profile?.cc_verified_at;
 
   // Skeleton shell — keeps the close button + cream background visible
   // even while data is in-flight or missing, so the user always has a
@@ -609,125 +590,39 @@ export function PublicProfileScreen() {
         serviceMode={serviceMode}
       />
 
-      {/* CERGIO-GUARD (2026-06-04): By-the-numbers block per Tarik —
-          "need # of friends invited (or services reco'd) and joined
-          and services on users profiles prominently so they track
-          their networks". Public counts only — engaging signal of
-          network impact. Tappable on the SELF view (routes the user
-          to /earnings/invites + /earnings) so the numbers turn into
-          action. Hides silently when zero across the board. */}
-      {/* CERGIO-GUARD (2026-06-04 v8): self-view nudge when all
-          stats are zero. Other people's profiles still hide cleanly
-          when there's nothing to show. Self-view shows a "Just
-          getting started" card pointing to invite — turns a hollow
-          profile into a hook for first action. */}
-      {(() => {
-        const isSelf = auth?.user?.id === profileId;
-        if (stats && (stats.invited + stats.joined + stats.booked + stats.recommended + stats.listedServices) === 0) {
-          if (!isSelf) return null;
-          return (
-            <Link
-              to="/invite/friends-popup"
-              className="mx-5 mt-6 block bg-gradient-to-br from-gl to-white border border-g/30 rounded-[16px] p-4 hover:from-gl/80 hover:to-gl/40 transition-colors"
-            >
-              <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">By the numbers</p>
-              <p className="text-body-lg font-extrabold text-black leading-snug mt-1">Just getting started.</p>
-              <p className="text-meta text-b3 font-medium mt-1 leading-snug">
-                Invite your first friend to start building your network. <span className="text-gd font-extrabold">Send invite →</span>
-              </p>
-            </Link>
-          );
-        }
-        return null;
-      })()}
-      {stats && (stats.invited + stats.joined + stats.booked + stats.recommended + stats.listedServices) > 0 && (() => {
-        const isSelf = auth?.user?.id === profileId;
-        const cells = [
-          { key: 'invited',         label: 'Invited',     value: stats.invited,        to: isSelf ? '/earnings/invites' : null },
-          { key: 'joined',          label: 'Joined',      value: stats.joined,         to: isSelf ? '/earnings/invites' : null },
-          { key: 'booked',          label: 'Booked',      value: stats.booked,         to: isSelf ? '/earnings' : null },
-          { key: 'recommended',     label: "Reco'd",       value: stats.recommended,   to: null },
-          { key: 'listedServices',  label: 'Services',    value: stats.listedServices, to: null },
-        ].filter(c => c.value > 0);
-        return (
-          <div className="mx-5 mt-6 bg-white border border-bdr rounded-[16px] p-4">
-            <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-2">
-              By the numbers
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {cells.map(c => {
-                const inner = (
-                  <>
-                    <p className="text-heading-1 font-extrabold text-black leading-none">{c.value}</p>
-                    <p className="text-caps font-extrabold uppercase tracking-wide text-b3 mt-1">{c.label}</p>
-                  </>
-                );
-                return c.to ? (
-                  <Link
-                    key={c.key}
-                    to={c.to}
-                    className="bg-bg5/60 rounded-[10px] py-2 px-1 text-center hover:bg-bg5 transition-colors"
-                  >
-                    {inner}
-                  </Link>
-                ) : (
-                  <div key={c.key} className="bg-bg5/60 rounded-[10px] py-2 px-1 text-center">
-                    {inner}
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-meta-sm text-b3 font-medium leading-snug mt-3">
-              {isSelf
-                ? <>You earn ${REWARDS.referrerSharePercent}% of every friend's booking up to ${REWARDS.perFriend} per friend, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>
-                : <>{firstName}'s network drives ${REWARDS.referrerSharePercent}% per friend booking + ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.</>}
-            </p>
-          </div>
-        );
-      })()}
+      {/* View Instagram — small link beneath the signal block, near the
+          Connector badge (SPEC-49, Tarik 2026-06-17). IG reach (followers ·
+          network) is shown in the connector facet above; the handle/count is
+          no longer printed as its own row — tap here to open the IG profile.
+          Re-adds the "See Instagram" affordance from the free-request
+          acceptance screen (SPEC-48), which had regressed off this profile. */}
+      {igHandle && (
+        <a
+          href={`https://instagram.com/${igHandle.replace(/^@/, '')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mx-5 mt-3 inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold hover:underline"
+        >
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-md border-2 border-gd">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="5"/>
+              <circle cx="12" cy="12" r="4"/>
+              <circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none"/>
+            </svg>
+          </span>
+          View Instagram
+        </a>
+      )}
 
-      {/* About */}
-      <div className="px-5 mt-7">
+      {/* About — bio moved to the TOP of the content (Tarik 2026-06-17), right
+          under the identity block, before Services. */}
+      <div className="px-5 mt-6">
         <h2 className="text-heading-1 font-extrabold text-black">About</h2>
         {profile?.bio ? (
           <p className="text-body-sm text-b2 leading-relaxed mt-2">{profile.bio}</p>
         ) : (
           <p className="text-body-sm text-b3 leading-relaxed mt-2">No bio yet!</p>
         )}
-      </div>
-
-      {/* Social */}
-      <div className="px-5 mt-7">
-        <div className="flex items-center gap-2">
-          <h2 className="text-heading-1 font-extrabold text-black">Social</h2>
-          {profileIsConnector && (
-            <span className="inline-flex items-center gap-1 bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
-              Connector
-            </span>
-          )}
-        </div>
-        <div className="flex items-center justify-between gap-3 mt-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border-2 border-gd">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="5"/>
-                <circle cx="12" cy="12" r="4"/>
-                <circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none"/>
-              </svg>
-            </span>
-            {igHandle ? (
-              <span className="text-body font-extrabold text-black truncate">{igHandle}</span>
-            ) : (
-              <span className="text-body font-medium text-b3">Instagram</span>
-            )}
-          </div>
-          {igHandle && igFollowers > 0 && (
-            <span className="text-body-sm font-extrabold text-black whitespace-nowrap">
-              {Number(igFollowers).toLocaleString()} followers
-            </span>
-          )}
-        </div>
       </div>
 
       {/* Their Services — conditional: section is hidden entirely when

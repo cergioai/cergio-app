@@ -1,0 +1,15 @@
+Profile tweaks (SPEC-49b): IG de-dup + About-first + View Instagram
+
+- formatKeyCounts gains includeReach (default true; existing callers
+  unchanged). Profile SERVICE facet now passes includeReach:false so
+  IG/TikTok reach renders ONCE, on the Connector facet around the badge
+  (was duplicating across both facets; IG is a connector signal, not
+  relevant to a service like a plumber).
+- Removed the redundant "By the numbers" stats grid + the dead
+  getPublicProfileStats fetch / stats state from PublicProfileScreen.
+- Restored the small "View Instagram" link beneath the signal block
+  (regressed off the profile; mirrors the SPEC-48 See-Instagram link).
+  Removed the standalone Social IG handle+count row — handle is reachable
+  via View Instagram.
+- Moved About (bio) to the top of the content, under the identity block.
+- FROZEN_SPEC SPEC-49 updated + new SPEC-49b. qa #49 green.

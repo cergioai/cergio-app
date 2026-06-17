@@ -21,17 +21,22 @@ function fmtK(n) {
 // "N recos received/made" label in the facet heading and doesn't want it
 // duplicated in the sub-line. Defaults to true so every existing caller (inbox
 // cards, booking detail) is byte-for-byte unchanged.
-export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true, includeReco = true } = {}) {
+export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true, includeReco = true, includeReach = true } = {}) {
   if (!c) return null;
   const parts = [];
   // includeMutual=false on screens that already render a dedicated
   // friends-in-common block (e.g. the booking detail), to avoid duplication.
   const pushMutual = () => { if (includeMutual) parts.push(c.mutualCount > 0 ? `${c.mutualCount} mutual` : 'No mutuals'); };
+  // includeReach=false drops IG/TikTok reach from the line. The unified
+  // profile's SERVICE facet uses this (SPEC-49, Tarik 2026-06-17): IG reach
+  // belongs around the CONNECTOR badge, not on a service like a plumber, and
+  // it was rendering on both facets (duplicated). Defaults true so every
+  // existing caller (inbox cards, booking detail, connector facet) is unchanged.
   if (recoKind === 'made') {
     // Reach-led — a Connector requesting a FREE service is judged on reach
     // first (Tarik 2026-06-15): IG followers, then network, then reco's made.
-    if (c.igFollowers > 0)  parts.push(`${fmtK(c.igFollowers)} IG`);
-    if (c.ttFollowers > 0)  parts.push(`${fmtK(c.ttFollowers)} TikTok`);
+    if (includeReach && c.igFollowers > 0)  parts.push(`${fmtK(c.igFollowers)} IG`);
+    if (includeReach && c.ttFollowers > 0)  parts.push(`${fmtK(c.ttFollowers)} TikTok`);
     if (c.networkCount > 0) parts.push(`${c.networkCount} network`);
     if (includeReco && c.recosMade > 0) parts.push(`${c.recosMade} reco${c.recosMade === 1 ? '' : 's'} made`);
     pushMutual();
@@ -40,8 +45,8 @@ export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true
     pushMutual();
     if (c.networkCount > 0)  parts.push(`${c.networkCount} network`);
     if (includeReco && c.recosReceived > 0) parts.push(`${c.recosReceived} reco${c.recosReceived === 1 ? '' : 's'}`);
-    if (c.igFollowers > 0)   parts.push(`${fmtK(c.igFollowers)} IG`);
-    if (c.ttFollowers > 0)   parts.push(`${fmtK(c.ttFollowers)} TikTok`);
+    if (includeReach && c.igFollowers > 0)   parts.push(`${fmtK(c.igFollowers)} IG`);
+    if (includeReach && c.ttFollowers > 0)   parts.push(`${fmtK(c.ttFollowers)} TikTok`);
   }
   return parts.join(' · ');
 }
