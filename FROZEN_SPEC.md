@@ -259,6 +259,19 @@ qa.mjs #50 enforces this.
 
 ---
 
+## UI / BEHAVIOR — CONTACTS IMPORT (INVITE SPINE)
+
+### SPEC-52 · Contacts import: native picker + Gmail + file fallback
+**Status:** FROZEN — 2026-06-16 (Tarik: "best most intuitive easy picker… both gold standard + desktop Gmail")
+**Rule:** The invite/reco picker (`InviteFriendsScreen`) offers, in order of intuitiveness:
+1. **Native phone Contact Picker** (`navigator.contacts.select`) — mobile gold standard (Cash App-style). Primary button.
+2. **Connect Gmail** — desktop gold standard via Google Identity Services token flow + People API (`contacts.readonly`), in `lib/googleContacts.js`. **Env-gated on `VITE_GOOGLE_CLIENT_ID`** — hidden/disabled until configured so it NEVER breaks the page. Setup steps in `GOOGLE_CONTACTS_SETUP.md`.
+3. **CSV / vCard upload** — desktop fallback when Gmail isn't configured.
+
+**No fake contacts** (SPEC-12): every path keeps only real `name||email||phone` rows; imported contacts get `dev:` ids and are sent real email/SMS invites. Native iOS/Android apps come later. qa.mjs #52 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

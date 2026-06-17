@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation, useOutletContext } from 'react-router-dom';
 import { listInvitableProfiles } from '../lib/api';
+import { importGoogleContacts, isGoogleContactsConfigured } from '../lib/googleContacts';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -60,6 +61,8 @@ export function InviteFriendsScreen() {
   // the review screen knows to send a real email/SMS invite (these
   // people are NOT on Cergio yet).
   const [deviceContacts, setDeviceContacts] = useState([]);
+  const [gmailBusy, setGmailBusy] = useState(false);
+  const gmailReady = isGoogleContactsConfigured();
   const fileInputRef = useRef(null);
   const supportsContactPicker = typeof navigator !== 'undefined' &&
     'contacts' in navigator && typeof window !== 'undefined' && 'ContactsManager' in window;
@@ -110,6 +113,24 @@ export function InviteFriendsScreen() {
       showToast('Contacts added — pick who to invite');
     } catch {
       /* user cancelled the picker — not an error */
+    }
+  };
+
+  // Connect Gmail (desktop gold-standard import). Opens Google consent,
+  // pulls People API connections, merges them like device contacts. Falls
+  // back to the CSV/vCard file picker when Gmail isn't configured yet.
+  const importFromGmail = async () => {
+    if (!gmailReady) { fileInputRef.current?.click(); return; }
+    setGmailBusy(true);
+    try {
+      const rows = await importGoogleContacts();
+      if (!rows.length) { showToast('No contacts found in that Google account.'); return; }
+      mergeDeviceContacts(rows);
+      showToast(`${rows.length} Gmail contacts added — pick who to invite`);
+    } catch (e) {
+      showToast(e?.message || 'Could not connect Gmail — try again.');
+    } finally {
+      setGmailBusy(false);
     }
   };
 
@@ -276,13 +297,16 @@ export function InviteFriendsScreen() {
       {/* CERGIO-GUARD (2026-06-12): contacts-book connect button.
           Real device contacts via the native picker — Cergio-network
           profiles below stay untouched (SPEC-43). */}
-      <div className="px-5 pb-3">
+      <div className="px-5 pb-3 flex flex-col gap-2">
+        {/* Phone contacts (native picker) — the mobile gold standard. On
+            desktop the native API doesn't exist, so this opens the CSV/vCard
+            file picker instead. */}
         <button
           type="button"
           onClick={importFromContacts}
-          className="w-full bg-white border-2 border-g text-g rounded-[14px] py-3 px-4
+          className="w-full bg-g text-white rounded-[14px] py-3 px-4
                      flex items-center justify-center gap-2 text-body-sm font-extrabold
-                     hover:bg-gl transition-colors"
+                     hover:opacity-90 active:scale-[.98] transition"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -290,14 +314,31 @@ export function InviteFriendsScreen() {
             <circle cx="12" cy="10" r="2.5"/>
             <path d="M8.5 17c.7-1.8 2-2.5 3.5-2.5s2.8.7 3.5 2.5"/>
           </svg>
-          Connect your contacts book
+          {supportsContactPicker ? 'Pick from your phone contacts' : 'Upload a contacts file (.csv / .vcf)'}
         </button>
-        {!supportsContactPicker && (
-          <p className="text-meta-sm text-b3 font-medium mt-1.5 leading-snug text-center">
-            On desktop this opens a file picker — upload a contacts export
-            (.csv or .vcf) from Google Contacts or your phone.
-          </p>
+
+        {/* Connect Gmail — desktop gold standard. Hidden when not configured
+            AND the native picker is available (mobile), so mobile stays clean;
+            on desktop without config it still offers the file-upload fallback. */}
+        {(gmailReady || !supportsContactPicker) && (
+          <button
+            type="button"
+            onClick={importFromGmail}
+            disabled={gmailBusy}
+            className="w-full bg-white border-2 border-g text-g rounded-[14px] py-3 px-4
+                       flex items-center justify-center gap-2 text-body-sm font-extrabold
+                       hover:bg-gl transition-colors disabled:opacity-60"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#4285F4" d="M22 12.06c0-.7-.06-1.36-.18-2H12v3.83h5.6a4.8 4.8 0 0 1-2.08 3.15v2.62h3.36C20.85 17.9 22 15.27 22 12.06z"/>
+              <path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.36-2.62c-.93.62-2.12.99-3.26.99-2.5 0-4.62-1.69-5.38-3.96H3.15v2.6A10 10 0 0 0 12 22z"/>
+              <path fill="#FBBC05" d="M6.62 13.98a6 6 0 0 1 0-3.84v-2.6H3.15a10 10 0 0 0 0 9.04l3.47-2.6z"/>
+              <path fill="#EA4335" d="M12 6.18c1.47 0 2.79.5 3.83 1.5l2.87-2.87A10 10 0 0 0 12 2 10 10 0 0 0 3.15 7.54l3.47 2.6C7.38 7.87 9.5 6.18 12 6.18z"/>
+            </svg>
+            {gmailBusy ? 'Connecting Gmail…' : gmailReady ? 'Connect Gmail' : 'Upload Gmail contacts (.csv)'}
+          </button>
         )}
+
         <input
           ref={fileInputRef}
           type="file"

@@ -1805,6 +1805,25 @@ test('rpc-catch-footgun', 'No supabase.rpc(...).catch() — the builder is a the
     `supabase.rpc(...).catch() throws synchronously (no .catch on the builder) — wrap in Promise.resolve(...) or await in try/catch. Offenders: ${offenders.join(', ')}`);
 });
 
+test('spec-52-contacts-import', 'Contacts import: native phone picker + Gmail (People API) + CSV/vCard fallback, no fake contacts (SPEC-52)', '#52', async () => {
+  const screen = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/InviteFriendsScreen.jsx'), 'utf8');
+  const gPath  = path.join(REPO_ROOT, 'src/lib/googleContacts.js');
+  assert(fs.existsSync(gPath), 'googleContacts.js (Gmail People API helper) must exist');
+  const g = fs.readFileSync(gPath, 'utf8');
+  // Gmail path: People API + GIS token flow, env-gated so it never breaks.
+  assert(/people\.googleapis\.com/.test(g) && /contacts\.readonly/.test(g),
+    'Gmail import must use the People API with read-only scope');
+  assert(/VITE_GOOGLE_CLIENT_ID/.test(g) && /isGoogleContactsConfigured/.test(g),
+    'Gmail import must be gated on VITE_GOOGLE_CLIENT_ID (hidden/disabled until configured)');
+  // No fake data: only real rows.
+  assert(/filter\(c => c\.name \|\| c\.email \|\| c\.phone\)/.test(g),
+    'Gmail import must keep only real rows (no synthesized contacts)');
+  // Screen wires all three paths: native picker, Gmail, and CSV/vCard fallback.
+  assert(/navigator\.contacts\.select/.test(screen), 'Native phone Contact Picker must remain wired');
+  assert(/importFromGmail/.test(screen) && /importGoogleContacts/.test(screen), 'Connect-Gmail must be wired');
+  assert(/accept=".csv,.vcf/.test(screen), 'CSV/vCard upload fallback must remain');
+});
+
 test('spec-51-spotlight-clicks', 'IG post performance: clicks tracked per spotlight + totalled on Earnings (SPEC-51)', '#51', async () => {
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
   const land  = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/InviteLandingScreen.jsx'), 'utf8');
