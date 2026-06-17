@@ -1395,6 +1395,9 @@ export function JobsInboxScreen() {
                     {awaitingOk && (
                       <div className="bg-warnBg border border-warn/40 text-warnText rounded-[12px] px-3 py-2 text-meta font-extrabold text-center mt-3">
                         Posted · awaiting {otherName.split(' ')[0]}'s approval
+                        {(b.spotlight_clicks || 0) > 0 && (
+                          <span className="block text-gd mt-0.5">{b.spotlight_clicks} click{b.spotlight_clicks === 1 ? '' : 's'} on your link so far</span>
+                        )}
                         {b.post_url && (
                           <a href={b.post_url} target="_blank" rel="noopener noreferrer" className="block underline underline-offset-2 mt-0.5">
                             View your post →
@@ -1434,6 +1437,11 @@ export function JobsInboxScreen() {
                           Pay{totalDollars ? ` ${totalDollars}` : ''} to lock it in →
                         </button>
                       </>
+                    )}
+                    {b.post_confirmed_at && (b.spotlight_clicks || 0) > 0 && (
+                      <div className="bg-gl text-gd rounded-[10px] px-3 py-1.5 text-meta-sm font-extrabold text-center mt-2">
+                        {b.spotlight_clicks} click{b.spotlight_clicks === 1 ? '' : 's'} from this spotlight
+                      </div>
                     )}
                     {b.post_confirmed_at && b.post_url && (
                       <a href={b.post_url} target="_blank" rel="noopener noreferrer"
@@ -1513,7 +1521,7 @@ export function JobsInboxScreen() {
                       <>
                         {b.spotlight_verified_at && (
                           <div className="bg-gl text-gd rounded-[10px] px-3 py-1.5 text-meta-sm font-extrabold text-center mt-3">
-                            Spotlight link verified ✓ — it's live and driving clicks
+                            Spotlight link verified ✓{(b.spotlight_clicks || 0) > 0 ? ` — ${b.spotlight_clicks} click${b.spotlight_clicks === 1 ? '' : 's'} so far` : ' — live and driving clicks'}
                           </div>
                         )}
                         {b.post_url && (
@@ -1563,6 +1571,11 @@ export function JobsInboxScreen() {
                           </div>
                         )}
                       </>
+                    )}
+                    {b.post_confirmed_at && (b.spotlight_clicks || 0) > 0 && (
+                      <div className="bg-gl text-gd rounded-[10px] px-3 py-1.5 text-meta-sm font-extrabold text-center mt-2">
+                        {b.spotlight_clicks} click{b.spotlight_clicks === 1 ? '' : 's'} from this spotlight
+                      </div>
                     )}
                     {b.post_confirmed_at && b.post_url && (
                       <a href={b.post_url} target="_blank" rel="noopener noreferrer"

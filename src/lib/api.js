@@ -3225,7 +3225,7 @@ export async function listProviderBookings() {
       id, status, scheduled_at, location_text, notes, total_cents,
       is_free_for_rainmaker, created_at, paid_at, completed_at,
       schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
-      post_flag_reason, post_flagged_at, spotlight_verified_at,
+      post_flag_reason, post_flagged_at, spotlight_verified_at, spotlight_clicks,
       consumer:profiles!bookings_consumer_id_fkey ( id, display_name ),
       service:services ( id, title, category, photo_class ),
       offering:offerings ( id, name, kind, duration_minutes )
@@ -3435,7 +3435,7 @@ export async function listConsumerBookings() {
       id, status, scheduled_at, location_text, total_cents, created_at,
       is_free_for_rainmaker, paid_at, completed_at,
       schedule_confirmed_at, post_url, posted_at, post_confirmed_at,
-      post_flag_reason, post_flagged_at,
+      post_flag_reason, post_flagged_at, spotlight_verified_at, spotlight_clicks,
       provider:profiles!bookings_provider_id_fkey ( id, display_name ),
       service:services ( id, title, category, photo_class )
     `)
@@ -3628,6 +3628,31 @@ export async function getOutstandingFreeBarter() {
     outstanding.reviewed = (count || 0) > 0;
   }
   return { outstanding, error: null };
+}
+
+// IG post performance (Tarik 2026-06-16): total clicks on the user's spotlight
+// links, split by role. asConnector = clicks on posts THEY made; asProvider =
+// clicks the spotlights for THEIR service drove. One booking counter serves
+// both sides. Real data only (0 when none).
+export async function getMySpotlightClicks() {
+  const zero = { asConnector: 0, asProvider: 0, total: 0 };
+  if (!supabaseReady) return { data: zero, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  const me = userRes?.user?.id;
+  if (!me) return { data: zero, error: null };
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('consumer_id, provider_id, spotlight_clicks')
+    .or(`consumer_id.eq.${me},provider_id.eq.${me}`)
+    .eq('is_free_for_rainmaker', true)
+    .gt('spotlight_clicks', 0);
+  if (error) return { data: zero, error };
+  let asConnector = 0, asProvider = 0;
+  for (const b of data || []) {
+    if (b.consumer_id === me) asConnector += b.spotlight_clicks || 0;
+    if (b.provider_id === me) asProvider += b.spotlight_clicks || 0;
+  }
+  return { data: { asConnector, asProvider, total: asConnector + asProvider }, error: null };
 }
 
 // CERGIO-GUARD (2026-05-30): GOAT shares feed for the Activity screen.

@@ -251,6 +251,14 @@ qa.mjs #50 enforces this.
 
 ---
 
+## ANALYTICS — IG POST PERFORMANCE
+
+### SPEC-51 · Spotlight click tracking (connectors + services)
+**Status:** FROZEN — 2026-06-16 (Tarik)
+**Rule:** Every tap on a Connector's unique spotlight link (`/i/{code}?s={bookingId}`) increments `bookings.spotlight_clicks` via the `record_spotlight_click` SECURITY DEFINER RPC (also stamps `spotlight_verified_at`). ONE booking counter serves BOTH parties: the Connector sees clicks on posts they made; the service/provider sees clicks their spotlight drove. Per-spotlight counts render on the Inbox spotlight rows; a role-split total renders on **Earnings** ("IG spotlight clicks"). No fake data — the Earnings card hides when total is 0. qa.mjs #51 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

@@ -48,8 +48,10 @@ export function InviteLandingScreen() {
         // this whole effect, so the profile redirect below never ran and every
         // invite/spotlight link hung on "Opening profile…". Adopt it into a
         // real promise so the fire-and-forget audit can't break the redirect.
-        // (Tarik 2026-06-16.)
-        Promise.resolve(supabase.rpc('verify_spotlight', { p_booking: s })).catch(() => {});
+        // (Tarik 2026-06-16.) record_spotlight_click both increments the
+        // per-post click count (shown to the Connector + the service on
+        // Earnings) AND stamps verified-live.
+        Promise.resolve(supabase.rpc('record_spotlight_click', { p_booking: s })).catch(() => {});
       }
       const { data, error } = await supabase.rpc('resolve_ref_code', { code: clean });
       if (cancelled) return;

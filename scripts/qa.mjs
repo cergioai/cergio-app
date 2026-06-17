@@ -1805,6 +1805,28 @@ test('rpc-catch-footgun', 'No supabase.rpc(...).catch() — the builder is a the
     `supabase.rpc(...).catch() throws synchronously (no .catch on the builder) — wrap in Promise.resolve(...) or await in try/catch. Offenders: ${offenders.join(', ')}`);
 });
 
+test('spec-51-spotlight-clicks', 'IG post performance: clicks tracked per spotlight + totalled on Earnings (SPEC-51)', '#51', async () => {
+  const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const land  = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/InviteLandingScreen.jsx'), 'utf8');
+  const earn  = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/EarningsScreen.jsx'), 'utf8');
+  const inbox = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
+  const mig   = path.join(REPO_ROOT, 'supabase/migrations/20260616030000_spotlight_clicks.sql');
+
+  // Migration adds the counter + increment RPC.
+  assert(fs.existsSync(mig), 'spotlight_clicks migration must exist');
+  const m = fs.readFileSync(mig, 'utf8');
+  assert(/spotlight_clicks/.test(m) && /record_spotlight_click/.test(m),
+    'migration must add spotlight_clicks column + record_spotlight_click RPC');
+  // The link landing increments via the RPC (wrapped in Promise.resolve — no .catch footgun).
+  assert(/record_spotlight_click/.test(land), 'InviteLandingScreen must call record_spotlight_click');
+  // Earnings totals clicks (both roles), inbox shows per-spotlight.
+  assert(/getMySpotlightClicks/.test(api) && /getMySpotlightClicks/.test(earn),
+    'Earnings must surface getMySpotlightClicks total');
+  assert(/spotlight_clicks/.test(inbox), 'Inbox spotlight rows must show the per-post click count');
+  // No-fake-data: clicks come from real cents/counts, card hides at 0.
+  assert(/spotlightClicks\.total > 0/.test(earn), 'Earnings clicks card must hide when total is 0 (no fake data)');
+});
+
 test('spec-50-action-first-inbox', 'FROZEN: Inbox Overview is an action-first feed — one-liners, $-led, green review, inline actions, filter (SPEC-50)', '#50', async () => {
   const inbox = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
   assert(/function ActionRow/.test(inbox), 'ActionRow (compact one-liner) component must exist');

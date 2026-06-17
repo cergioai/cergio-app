@@ -3,7 +3,7 @@
 // REWARDS canonical $250-per-friend across every CTA.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { getMyEarnings, listMyServices, getMyInviteCounts } from '../lib/api';
+import { getMyEarnings, listMyServices, getMyInviteCounts, getMySpotlightClicks } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 import { REWARDS } from '../lib/rewards';
 
@@ -88,13 +88,17 @@ export function EarningsScreen() {
   // CERGIO-GUARD (2026-06-04): full invite funnel — Invited / Joined /
   // Booked. Replaces the bare invitesCount on the summary block.
   const [inviteCounts, setInviteCounts] = useState({ invited: 0, joined: 0, booked: 0 });
+  // IG post performance — clicks on the user's spotlight links (SPEC-51).
+  const [spotlightClicks, setSpotlightClicks] = useState({ asConnector: 0, asProvider: 0, total: 0 });
   useEffect(() => {
     if (!auth?.isSignedIn) {
       setEarnings([]); setHasService(false);
       setInvitesCount(0); setRecsCount(0);
       setInviteCounts({ invited: 0, joined: 0, booked: 0 });
+      setSpotlightClicks({ asConnector: 0, asProvider: 0, total: 0 });
       return;
     }
+    getMySpotlightClicks().then(({ data }) => setSpotlightClicks(data || { asConnector: 0, asProvider: 0, total: 0 }));
     getMyEarnings({ limit: 50 }).then(({ data }) => setEarnings(data || []));
     listMyServices().then(({ data }) => {
       const rows = data || [];
@@ -385,6 +389,24 @@ export function EarningsScreen() {
           </p>
         )}
       </div>
+
+      {/* IG post performance — clicks the user's spotlight links drove
+          (SPEC-51). Only shown when there's real data. asConnector = clicks on
+          posts they made; asProvider = clicks their service's spotlights drove. */}
+      {spotlightClicks.total > 0 && (
+        <div className="mx-5 mb-5 bg-white border border-bdr rounded-[16px] p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-meta-sm font-extrabold uppercase tracking-widest text-b3">IG spotlight clicks</p>
+            <span className="text-display-2 font-extrabold text-g leading-none">{spotlightClicks.total.toLocaleString()}</span>
+          </div>
+          <p className="text-meta text-b3 font-medium mt-1 leading-snug">
+            {spotlightClicks.asConnector > 0 && <>{spotlightClicks.asConnector.toLocaleString()} from posts you made</>}
+            {spotlightClicks.asConnector > 0 && spotlightClicks.asProvider > 0 && ' · '}
+            {spotlightClicks.asProvider > 0 && <>{spotlightClicks.asProvider.toLocaleString()} to your services</>}
+            {' — tracked via your unique link.'}
+          </p>
+        </div>
+      )}
 
       {/* CERGIO-GUARD (2026-06-04): top counts strip — Tarik:
           "show counts all services reco'd invited friends..joined
