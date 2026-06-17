@@ -26,7 +26,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile } from '../lib/api';
+import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds } from '../lib/api';
 import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
 
 function initialsOf(name) {
@@ -109,7 +109,7 @@ function fmtMonthYear(iso) {
 
 // One service-card row (used in the "Their Services" + "Their Go-Tos"
 // sections). Cover image or photo-class gradient fallback. Tap → PDP.
-function ServiceTile({ svc, recoSummary, onOpen }) {
+export function ServiceTile({ svc, recoSummary, onOpen }) {
   const grad = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
   const price = svc.price_cents != null ? Math.round(svc.price_cents / 100) : null;
   return (
@@ -172,6 +172,51 @@ function ServiceTile({ svc, recoSummary, onOpen }) {
   );
 }
 
+// One recommendation-RECEIVED row, shown beneath the service it praises
+// (SPEC-49c). Leads with the recommender (linked) + trust badges: "In your
+// network" when the VIEWER knows them (mutual), and "Connector" when they're
+// a verified Connector. Their note sits in a soft bubble below.
+function RecoRow({ r }) {
+  return (
+    <div className="bg-white border border-bdr rounded-[14px] p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <AvatarLink id={r.recommender?.id} name={r.recommender?.name} size={36} clickable={!!r.recommender?.id} />
+          <div className="min-w-0">
+            <p className="text-body font-extrabold text-black truncate">
+              {r.recommender?.name || 'A friend'}
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {r.isMutual && (
+                <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
+                  </svg>
+                  In your network
+                </span>
+              )}
+              {r.recommender?.is_connector && (
+                <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
+                  Connector
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <p className="text-meta-sm text-b3 font-medium whitespace-nowrap">
+          {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
+        </p>
+      </div>
+      {r.message && (
+        <div className="mt-2 bg-bg5 rounded-[12px] p-3">
+          <p className="text-meta text-b2 leading-snug">{r.message}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PublicProfileScreen() {
   const navigate = useNavigate();
   const { profileId } = useParams();
@@ -204,8 +249,12 @@ export function PublicProfileScreen() {
   // Recommendations RECEIVED on this profile's services — "People who love
   // {name}" (Tarik 2026-06-16: recos received, not the bookings-review table).
   const [recosReceived, setRecosReceived] = useState([]);
+  // svcId → [{ id, recommender, isMutual, message, sent_at }] — recommendations
+  // GROUPED per service (SPEC-49c): each service shows its own recommenders,
+  // mutuals-with-viewer + Connectors first. Top-3 inline, "see all" expands.
+  const [recosByService, setRecosByService] = useState({});
   const [services, setServices] = useState([]);
-  // svcId → { total, friends, connectors }
+  // svcId → { total, friends, connectors, mutuals }
   const [svcRecoSummary, setSvcRecoSummary] = useState({});
   // Reviews on services this profile owns: { id, stars, comment, reviewer:{id,name}, booked_at }
   const [reviews, setReviews] = useState([]);
@@ -214,14 +263,19 @@ export function PublicProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // "See all (N) →" pagination toggles per § 5.5 — collapsed by default
-  // (top 4 / 5 / 6 rows shown), tap to expand the section in place. No
-  // sub-route needed; the affordance is a soft expand within the page so
-  // every Reco'd / review / service remains discoverable without
-  // bouncing the user off the profile they're inspecting.
-  const [showAllServices, setShowAllServices] = useState(false);
-  const [showAllReviews,  setShowAllReviews]  = useState(false);
-  const [showAllGoTos,    setShowAllGoTos]    = useState(false);
+  // Per-service recommendation expansion (SPEC-49c): each service shows its
+  // top-3 recommenders; tapping "See all" adds that service id to the set to
+  // reveal the rest in place. Services themselves cap at 3 inline — the rest
+  // live on the dedicated /u/:id/services page ("View all services").
+  const [openRecoSvcs, setOpenRecoSvcs] = useState(() => new Set());
+  const toggleRecoSvc = (id) => setOpenRecoSvcs(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  // Go-Tos (recommendations MADE) still expand in place.
+  const [showAllGoTos, setShowAllGoTos] = useState(false);
+  const INLINE_SERVICES = 3;
 
   // CERGIO-GUARD (2026-06-03): probe whether the signed-in viewer
   // already follows this profile. Used to gate the Follow / Following
@@ -312,19 +366,48 @@ export function PublicProfileScreen() {
           ? await supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', recIds)
           : { data: [] };
         const profMap = Object.fromEntries((recProfs || []).map(p => [p.id, p]));
+        const svcTitleMap = Object.fromEntries(svcRows.map(s => [s.id, s.title]));
+
+        // Viewer's network → flag which recommenders the VIEWER already knows
+        // ("mutuals with the viewer"). Always surfaced on recommended services
+        // as the trust signal (SPEC-49c, Tarik 2026-06-17). Signed-out → none.
+        const netRes = await getMyNetworkIds();
+        if (cancelled) return;
+        const netSet = new Set(netRes?.data || []);
+
+        // Group recommendations RECEIVED per service. Within each service,
+        // surface mutuals-with-viewer first, then Connectors, then everyone
+        // else (recRows already sorted by sent_at desc, so recency holds
+        // within each rank — Array.sort is stable).
+        const byService = {};
         const summary = {};
         for (const r of recRows) {
           const k = r.service_id;
-          if (!summary[k]) summary[k] = { total: 0, friends: 0, connectors: 0 };
+          const rp = profMap[r.recommender_id];
+          const isConnector = !!rp?.cc_verified_at;
+          const isMutual = !!(rp && netSet.has(rp.id));
+          if (!summary[k]) summary[k] = { total: 0, friends: 0, connectors: 0, mutuals: 0 };
           summary[k].total += 1;
-          if (profMap[r.recommender_id]?.cc_verified_at) summary[k].connectors += 1;
-          else summary[k].friends += 1;
+          if (isConnector) summary[k].connectors += 1; else summary[k].friends += 1;
+          if (isMutual) summary[k].mutuals += 1;
+          (byService[k] ||= []).push({
+            id: r.id,
+            message: r.message || '',
+            sent_at: r.sent_at,
+            serviceTitle: svcTitleMap[k] || '',
+            isMutual,
+            recommender: rp ? { id: rp.id, name: rp.display_name, is_connector: isConnector } : null,
+          });
         }
-        if (!cancelled) setSvcRecoSummary(summary);
+        for (const k of Object.keys(byService)) {
+          byService[k].sort((a, b) => {
+            const rank = (x) => (x.isMutual ? 0 : x.recommender?.is_connector ? 1 : 2);
+            return rank(a) - rank(b);
+          });
+        }
+        if (!cancelled) { setSvcRecoSummary(summary); setRecosByService(byService); }
 
-        // "People who love {name}" — the recommendations this profile's
-        // services RECEIVED (recommender + their note). Tarik 2026-06-16.
-        const svcTitleMap = Object.fromEntries(svcRows.map(s => [s.id, s.title]));
+        // Flat aggregate kept as a stable data handle + curator fallback.
         const shapedReceived = recRows.map(r => {
           const rp = profMap[r.recommender_id];
           return {
@@ -382,6 +465,7 @@ export function PublicProfileScreen() {
         setReviews([]);
         setSvcRecoSummary({});
         setRecosReceived([]);
+        setRecosByService({});
       }
 
       // Their Go-Tos — services this profile has recommended.
@@ -625,89 +709,53 @@ export function PublicProfileScreen() {
         )}
       </div>
 
-      {/* Their Services — conditional: section is hidden entirely when
-          the profile owns no listed services (e.g. a pure Connector who
-          only spotlights others). "See all (N) →" toggle expands the
-          list in place when more than 4 exist. */}
+      {/* {firstName}'s Services — each service LEADS its own recommendations
+          (SPEC-49c, Tarik 2026-06-17): up to 3 services inline, each followed
+          by its top-3 recommenders (mutuals-with-viewer + Connectors first),
+          with a per-service "See all" expand. More than 3 services → the rest
+          live on the dedicated /u/:id/services page via "View all services".
+          A pure Connector/curator with no services skips this whole block and
+          only shows Recommendations Made below. */}
       {services.length > 0 && (
         <div className="px-5 mt-8">
           <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Services</h2>
-          <div className="mt-3 flex flex-col gap-4">
-            {(showAllServices ? services : services.slice(0, 4)).map(svc => (
-              <ServiceTile
-                key={svc.id}
-                svc={svc}
-                recoSummary={svcRecoSummary[svc.id]}
-                onOpen={() => navigate(`/service/${svc.id}`)}
-              />
-            ))}
-          </div>
-          {services.length > 4 && (
-            <button
-              type="button"
-              onClick={() => setShowAllServices(v => !v)}
-              className="mt-3 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
-            >
-              {showAllServices
-                ? 'Show less'
-                : `See all ${firstName}'s services (${services.length}) →`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* People who love {firstName} — recommendations RECEIVED on their
-          services (the recommender + their note). Tarik 2026-06-16: this
-          section is recos received, not the bookings-review table.
-          QUARANTINED: the old `reviews` data source is no longer rendered. */}
-      {recosReceived.length > 0 && (
-        <div className="px-5 mt-8">
-          <h2 className="text-heading-1 font-extrabold text-black">People who love {firstName}</h2>
-          <p className="text-meta text-b3 font-medium mt-0.5">Friends who recommend their service</p>
-          <div className="mt-3 flex flex-col gap-3">
-            {(showAllReviews ? recosReceived : recosReceived.slice(0, 5)).map(r => (
-              <div key={r.id} className="bg-white border border-bdr rounded-[14px] p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <AvatarLink
-                      id={r.recommender?.id}
-                      name={r.recommender?.name}
-                      size={36}
-                      clickable={!!r.recommender?.id}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-body font-extrabold text-black truncate">
-                        {r.recommender?.name || 'A friend'}
-                      </p>
-                      {r.recommender?.is_connector && (
-                        <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
-                          Connector
-                        </span>
+          <div className="mt-3 flex flex-col gap-8">
+            {services.slice(0, INLINE_SERVICES).map(svc => {
+              const recos = recosByService[svc.id] || [];
+              const expanded = openRecoSvcs.has(svc.id);
+              const shown = expanded ? recos : recos.slice(0, 3);
+              return (
+                <div key={svc.id} className="flex flex-col gap-3">
+                  <ServiceTile
+                    svc={svc}
+                    recoSummary={svcRecoSummary[svc.id]}
+                    onOpen={() => navigate(`/service/${svc.id}`)}
+                  />
+                  {recos.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      {shown.map(r => <RecoRow key={r.id} r={r} />)}
+                      {recos.length > 3 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleRecoSvc(svc.id)}
+                          className="inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline self-start"
+                        >
+                          {expanded ? 'Show less' : `See all ${recos.length} recommendations →`}
+                        </button>
                       )}
                     </div>
-                  </div>
-                  <p className="text-meta-sm text-b3 font-medium whitespace-nowrap">
-                    {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
-                  </p>
+                  )}
                 </div>
-                {r.message && (
-                  <div className="mt-2 bg-bg5 rounded-[12px] p-3">
-                    <p className="text-meta text-b2 leading-snug">{r.message}</p>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
-          {recosReceived.length > 5 && (
+          {services.length > INLINE_SERVICES && (
             <button
               type="button"
-              onClick={() => setShowAllReviews(v => !v)}
-              className="mt-3 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
+              onClick={() => navigate(`/u/${profileId}/services`)}
+              className="mt-6 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
             >
-              {showAllReviews
-                ? 'Show less'
-                : `See all recommendations (${recosReceived.length}) →`}
+              View all {firstName}&apos;s services ({services.length}) →
             </button>
           )}
         </div>

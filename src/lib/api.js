@@ -1933,6 +1933,30 @@ export async function getMyFollowedIds() {
   return { data: (data || []).map(r => r.followed_id), error: null };
 }
 
+// CERGIO-GUARD (2026-06-17, Tarik — SPEC-49c): the signed-in viewer's FULL
+// network — every profile id connected to them in either direction (they
+// follow OR are followed by). Used by the unified profile to flag which
+// recommenders on a service are people the VIEWER already knows ("mutuals
+// with the viewer"), the trust signal Tarik wants surfaced on every
+// recommended service. Returns a plain array of ids; signed-out → [].
+export async function getMyNetworkIds() {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  const meId = userRes?.user?.id || null;
+  if (!meId) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('network')
+    .select('follower_id, followed_id')
+    .or(`follower_id.eq.${meId},followed_id.eq.${meId}`);
+  if (error) return { data: [], error };
+  const ids = new Set();
+  for (const r of data || []) {
+    const other = r.follower_id === meId ? r.followed_id : r.follower_id;
+    if (other && other !== meId) ids.add(other);
+  }
+  return { data: [...ids], error: null };
+}
+
 /**
  * CERGIO-GUARD (2026-06-13): fetch ONE open request by id for the
  * dedicated connector-request screen (the screen a provider opens from

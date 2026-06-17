@@ -94,6 +94,7 @@ import { ServiceDetailProviderScreen }      from './screens/ServiceDetailProvide
 import { AuthScreen }                       from './screens/AuthScreen';
 import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
+import { PublicProfileServicesScreen }      from './screens/PublicProfileServicesScreen';
 import { InviteLandingScreen }              from './screens/InviteLandingScreen';
 import { AboutScreen }                      from './screens/AboutScreen';
 import { ContactScreen }                    from './screens/ContactScreen';
@@ -569,6 +570,7 @@ export default function App() {
 
           {/* CERGIO-GUARD (2026-05-30): public profile view — every
               avatar across the app links here via /u/{profileId}. */}
+          <Route path="/u/:profileId/services" element={<PublicProfileServicesScreen />} />
           <Route path="/u/:profileId"          element={<PublicProfileScreen />} />
 
           {/* CERGIO-GUARD (2026-06-12): short invite links — /i/<code>

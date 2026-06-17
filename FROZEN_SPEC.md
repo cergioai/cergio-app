@@ -237,6 +237,13 @@ qa.mjs #48 enforces this.
 - **"View Instagram" link RESTORED** beneath the signal block (regressed off the profile; matches the SPEC-48 "See Instagram" affordance). Opens `instagram.com/{handle}`. The standalone Social-section IG handle + follower-count row is REMOVED — the handle is reachable by tapping View Instagram.
 - **About (bio) moved to the TOP** of the content, directly under the identity/signal block, before Services.
 
+**SPEC-49c · Services lead their own recommendations + dedicated all-services page (FROZEN 2026-06-17, Tarik).**
+- **Each service LEADS its own recommendations.** On `/u/:profileId`, up to **3 services render inline**; each service tile is immediately followed by **its top 3 recommendations RECEIVED** (the recommender + their note), with a per-service **"See all N recommendations"** in-place expand. Recommendations are grouped per service in `recosByService` (built from the same `recommendations` rows; no fake data, SPEC-12).
+- **Mutuals-with-viewer always surface.** Within each service the recommenders are ordered **mutuals-with-the-viewer → Connectors → everyone else**. A recommender the VIEWER is connected to (via `getMyNetworkIds`, both directions of the `network` graph) gets an **"In your network"** badge; verified Connectors get the **Connector** badge. Signed-out viewers simply see no mutual badges.
+- **Recommendations Made (the "{name}'s Go-Tos" section) sits BELOW the 3rd service.**
+- **More than 3 services → "View all {name}'s services (N) →"** appears after the 3rd service and routes to the dedicated **`/u/:profileId/services`** page (`PublicProfileServicesScreen`), which lists every listed service with the same `ServiceTile` + reco summary. (Inline services no longer expand in place.)
+- **Curator with NO services:** the Services block is skipped entirely; the profile shows only Recommendations Made, led by the signal-block counts (network/recos/IG) — unchanged.
+
 qa.mjs #49 enforces this.
 
 ---

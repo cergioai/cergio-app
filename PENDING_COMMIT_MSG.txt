@@ -1,15 +1,19 @@
-Profile tweaks (SPEC-49b): IG de-dup + About-first + View Instagram
+Profile services restructure (SPEC-49c): per-service recos + all-services page
 
-- formatKeyCounts gains includeReach (default true; existing callers
-  unchanged). Profile SERVICE facet now passes includeReach:false so
-  IG/TikTok reach renders ONCE, on the Connector facet around the badge
-  (was duplicating across both facets; IG is a connector signal, not
-  relevant to a service like a plumber).
-- Removed the redundant "By the numbers" stats grid + the dead
-  getPublicProfileStats fetch / stats state from PublicProfileScreen.
-- Restored the small "View Instagram" link beneath the signal block
-  (regressed off the profile; mirrors the SPEC-48 See-Instagram link).
-  Removed the standalone Social IG handle+count row — handle is reachable
-  via View Instagram.
-- Moved About (bio) to the top of the content, under the identity block.
-- FROZEN_SPEC SPEC-49 updated + new SPEC-49b. qa #49 green.
+- Each service now LEADS its own recommendations on /u/:profileId. Up to
+  3 services render inline; each service tile is followed by its top-3
+  recommendations RECEIVED, with a per-service "See all N" in-place expand
+  (recosByService grouping from the same recommendations rows).
+- Mutuals-with-the-viewer always surface: recommenders the viewer knows
+  (getMyNetworkIds, both directions of the network graph) get an
+  "In your network" badge and sort first, then Connectors, then others.
+- "{name}'s Go-Tos" (Recommendations Made) now sits below the 3rd service.
+- >3 services → "View all {name}'s services (N) →" routes to a new
+  dedicated page (PublicProfileServicesScreen, /u/:profileId/services)
+  listing every service with the same ServiceTile + reco summary.
+- Curator with no services: Services block skipped, only Recommendations
+  Made shows, led by the signal-block counts (unchanged).
+- Removed the standalone aggregate "People who love" section (folded into
+  per-service). New getMyNetworkIds() helper in api.js. ServiceTile exported
+  for reuse. FROZEN_SPEC SPEC-49c added. qa #49/#12/#48 green; all changed
+  files compile (esbuild).
