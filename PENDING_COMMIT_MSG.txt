@@ -1,19 +1,10 @@
-Profile services restructure (SPEC-49c): per-service recos + all-services page
+Profile: drop network from service facet too (SPEC-49b follow-up)
 
-- Each service now LEADS its own recommendations on /u/:profileId. Up to
-  3 services render inline; each service tile is followed by its top-3
-  recommendations RECEIVED, with a per-service "See all N" in-place expand
-  (recosByService grouping from the same recommendations rows).
-- Mutuals-with-the-viewer always surface: recommenders the viewer knows
-  (getMyNetworkIds, both directions of the network graph) get an
-  "In your network" badge and sort first, then Connectors, then others.
-- "{name}'s Go-Tos" (Recommendations Made) now sits below the 3rd service.
-- >3 services → "View all {name}'s services (N) →" routes to a new
-  dedicated page (PublicProfileServicesScreen, /u/:profileId/services)
-  listing every service with the same ServiceTile + reco summary.
-- Curator with no services: Services block skipped, only Recommendations
-  Made shows, led by the signal-block counts (unchanged).
-- Removed the standalone aggregate "People who love" section (folded into
-  per-service). New getMyNetworkIds() helper in api.js. ServiceTile exported
-  for reuse. FROZEN_SPEC SPEC-49c added. qa #49/#12/#48 green; all changed
-  files compile (esbuild).
+The Cergio-network count was still showing on BOTH the service and
+connector facets (duplicated). Per Tarik, IG AND network are connector-
+side signals that belong around the Connector badge, not on a service
+(e.g. a plumber). formatKeyCounts gains an includeNetwork option
+(default true; existing callers unchanged); the profile's service facet
+now passes includeReach:false + includeNetwork:false, leaving only the
+always-on mutuals line under "role · N recos received". FROZEN_SPEC
+SPEC-49b updated. qa #49 green.

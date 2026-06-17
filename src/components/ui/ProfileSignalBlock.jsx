@@ -42,10 +42,12 @@ function ServiceFacet({ counts, role, prominent }) {
   const recos = counts?.recosReceived || 0;
   // Always-on "N recos received" (service reputation signal) — suppress the
   // duplicate reco chip in the sub-line via includeReco:false. includeReach:false
-  // drops IG/TikTok here (SPEC-49, Tarik 2026-06-17): IG reach is a CONNECTOR
-  // signal shown around the connector badge, not relevant on a service (e.g. a
-  // plumber), and it was duplicating across both facets.
-  const line = formatKeyCounts(counts, { recoKind: 'received', includeReco: false, includeReach: false });
+  // + includeNetwork:false drop IG/TikTok AND the Cergio-network count here
+  // (SPEC-49b, Tarik 2026-06-17): reach + network are CONNECTOR signals shown
+  // around the connector badge, not relevant on a service (e.g. a plumber),
+  // and they were duplicating across both facets. The service facet keeps only
+  // the always-on mutuals line (trust) under its "role · N recos received".
+  const line = formatKeyCounts(counts, { recoKind: 'received', includeReco: false, includeReach: false, includeNetwork: false });
   return (
     <div className={prominent ? '' : 'mt-2.5 pt-2.5 border-t border-bdr'}>
       <p className={`leading-snug ${prominent ? 'text-body-sm font-extrabold text-black' : 'text-meta text-b2 font-extrabold'}`}>

@@ -21,7 +21,7 @@ function fmtK(n) {
 // "N recos received/made" label in the facet heading and doesn't want it
 // duplicated in the sub-line. Defaults to true so every existing caller (inbox
 // cards, booking detail) is byte-for-byte unchanged.
-export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true, includeReco = true, includeReach = true } = {}) {
+export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true, includeReco = true, includeReach = true, includeNetwork = true } = {}) {
   if (!c) return null;
   const parts = [];
   // includeMutual=false on screens that already render a dedicated
@@ -37,13 +37,13 @@ export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true
     // first (Tarik 2026-06-15): IG followers, then network, then reco's made.
     if (includeReach && c.igFollowers > 0)  parts.push(`${fmtK(c.igFollowers)} IG`);
     if (includeReach && c.ttFollowers > 0)  parts.push(`${fmtK(c.ttFollowers)} TikTok`);
-    if (c.networkCount > 0) parts.push(`${c.networkCount} network`);
+    if (includeNetwork && c.networkCount > 0) parts.push(`${c.networkCount} network`);
     if (includeReco && c.recosMade > 0) parts.push(`${c.recosMade} reco${c.recosMade === 1 ? '' : 's'} made`);
     pushMutual();
   } else {
     // Service-led — a Connector judging a provider's spotlight: reputation first.
     pushMutual();
-    if (c.networkCount > 0)  parts.push(`${c.networkCount} network`);
+    if (includeNetwork && c.networkCount > 0)  parts.push(`${c.networkCount} network`);
     if (includeReco && c.recosReceived > 0) parts.push(`${c.recosReceived} reco${c.recosReceived === 1 ? '' : 's'}`);
     if (includeReach && c.igFollowers > 0)   parts.push(`${fmtK(c.igFollowers)} IG`);
     if (includeReach && c.ttFollowers > 0)   parts.push(`${fmtK(c.ttFollowers)} TikTok`);
