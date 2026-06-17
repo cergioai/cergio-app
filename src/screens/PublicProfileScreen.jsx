@@ -26,7 +26,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing, getPublicProfileStats, respondToRequest } from '../lib/api';
+import { followProfile, unfollowProfile, amIFollowing, getPublicProfileStats, respondToRequest, getInboxPartyCounts, isConnectorProfile } from '../lib/api';
+import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
 import { REWARDS } from '../lib/rewards';
 
 function initialsOf(name) {
@@ -183,6 +184,9 @@ export function PublicProfileScreen() {
   // CERGIO-GUARD (2026-06-03): viewer's auth context — needed for Follow.
   const outlet = useOutletContext() || {};
   const auth = outlet.auth;
+  // Viewer priority (SPEC-49/48c): consumer mode (false) → service facet leads;
+  // provider mode (true) → connector facet leads. Same rule as request previews.
+  const serviceMode = !!outlet.serviceMode;
   const showToast = outlet.showToast || ((m) => { /* eslint-disable-next-line no-console */ console.log('[toast]', m); });
 
   const [profile, setProfile] = useState(null);
@@ -198,6 +202,13 @@ export function PublicProfileScreen() {
   // / Booked / Reco'd / Services. Counts only; $ amounts stay private
   // to the self-view via EarningsScreen.
   const [stats, setStats] = useState(null);
+  // Party-signal counts for the lead block — SAME source as the request
+  // previews (getInboxPartyCounts → formatKeyCounts) so a profile is judged
+  // with identical data + ordering (SPEC-49).
+  const [counts, setCounts] = useState(null);
+  // Recommendations RECEIVED on this profile's services — "People who love
+  // {name}" (Tarik 2026-06-16: recos received, not the bookings-review table).
+  const [recosReceived, setRecosReceived] = useState([]);
   const [services, setServices] = useState([]);
   // svcId → { total, friends, connectors }
   const [svcRecoSummary, setSvcRecoSummary] = useState({});
@@ -235,6 +246,16 @@ export function PublicProfileScreen() {
     let cancelled = false;
     getPublicProfileStats(profileId).then(({ data }) => {
       if (!cancelled) setStats(data);
+    });
+    return () => { cancelled = true; };
+  }, [profileId]);
+
+  // Lead party-signal counts (mutual · network · recos · IG/TikTok · connector).
+  useEffect(() => {
+    if (!profileId) { setCounts(null); return; }
+    let cancelled = false;
+    getInboxPartyCounts([profileId]).then(({ data }) => {
+      if (!cancelled) setCounts((data || {})[profileId] || null);
     });
     return () => { cancelled = true; };
   }, [profileId]);
@@ -296,12 +317,13 @@ export function PublicProfileScreen() {
         const svcIds = svcRows.map(s => s.id);
         const { data: ownerRecs } = await supabase
           .from('recommendations')
-          .select('id, service_id, recommender_id')
-          .in('service_id', svcIds);
+          .select('id, service_id, recommender_id, message, sent_at')
+          .in('service_id', svcIds)
+          .order('sent_at', { ascending: false });
         const recRows = ownerRecs || [];
         const recIds = [...new Set(recRows.map(r => r.recommender_id).filter(Boolean))];
         const { data: recProfs } = recIds.length
-          ? await supabase.from('profiles').select('id, cc_verified_at').in('id', recIds)
+          ? await supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', recIds)
           : { data: [] };
         const profMap = Object.fromEntries((recProfs || []).map(p => [p.id, p]));
         const summary = {};
@@ -313,6 +335,21 @@ export function PublicProfileScreen() {
           else summary[k].friends += 1;
         }
         if (!cancelled) setSvcRecoSummary(summary);
+
+        // "People who love {name}" — the recommendations this profile's
+        // services RECEIVED (recommender + their note). Tarik 2026-06-16.
+        const svcTitleMap = Object.fromEntries(svcRows.map(s => [s.id, s.title]));
+        const shapedReceived = recRows.map(r => {
+          const rp = profMap[r.recommender_id];
+          return {
+            id: r.id,
+            message: r.message || '',
+            sent_at: r.sent_at,
+            serviceTitle: svcTitleMap[r.service_id] || '',
+            recommender: rp ? { id: rp.id, name: rp.display_name, is_connector: !!rp.cc_verified_at } : null,
+          };
+        });
+        if (!cancelled) setRecosReceived(shapedReceived);
 
         // Reviews for those services — go reviews → bookings join.
         // Schema (verified against api.js): reviews(id, booking_id,
@@ -358,6 +395,7 @@ export function PublicProfileScreen() {
       } else {
         setReviews([]);
         setSvcRecoSummary({});
+        setRecosReceived([]);
       }
 
       // Their Go-Tos — services this profile has recommended.
@@ -555,13 +593,21 @@ export function PublicProfileScreen() {
             )}
           </div>
         </div>
-        {(role || isConnector) && (
-          <div className="flex items-center gap-3 mt-3 flex-wrap">
-            <RoleBadge label={role} />
-            {isConnector && <ConnectorBadge />}
-          </div>
-        )}
+        {/* QUARANTINED (2026-06-16, SPEC-49): the standalone RoleBadge +
+            ConnectorBadge row is replaced by the viewer-prioritized signal
+            block below, which carries the Connector pill + role + the same
+            reach/reputation data as the request previews. */}
       </div>
+
+      {/* Lead signal block — connector + service facets, ordered by viewer
+          mode (consumer → service first; provider → connector first). */}
+      <ProfileSignalBlock
+        counts={counts}
+        role={role}
+        isService={services.length > 0}
+        isConnector={counts?.isConnector ?? isConnector}
+        serviceMode={serviceMode}
+      />
 
       {/* CERGIO-GUARD (2026-06-04): By-the-numbers block per Tarik —
           "need # of friends invited (or services reco'd) and joined
@@ -715,41 +761,50 @@ export function PublicProfileScreen() {
         </div>
       )}
 
-      {/* People who love {firstName} — review rows from bookings */}
-      {reviews.length > 0 && (
+      {/* People who love {firstName} — recommendations RECEIVED on their
+          services (the recommender + their note). Tarik 2026-06-16: this
+          section is recos received, not the bookings-review table.
+          QUARANTINED: the old `reviews` data source is no longer rendered. */}
+      {recosReceived.length > 0 && (
         <div className="px-5 mt-8">
           <h2 className="text-heading-1 font-extrabold text-black">People who love {firstName}</h2>
-          <p className="text-meta text-b3 font-medium mt-0.5">See top reviews of their service</p>
+          <p className="text-meta text-b3 font-medium mt-0.5">Friends who recommend their service</p>
           <div className="mt-3 flex flex-col gap-3">
-            {(showAllReviews ? reviews : reviews.slice(0, 5)).map(r => (
+            {(showAllReviews ? recosReceived : recosReceived.slice(0, 5)).map(r => (
               <div key={r.id} className="bg-white border border-bdr rounded-[14px] p-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <AvatarLink
-                      id={r.reviewer?.id}
-                      name={r.reviewer?.name}
+                      id={r.recommender?.id}
+                      name={r.recommender?.name}
                       size={36}
-                      clickable={!!r.reviewer?.id}
+                      clickable={!!r.recommender?.id}
                     />
-                    <p className="text-body font-extrabold text-black truncate">
-                      {r.reviewer?.name || 'A customer'}
-                    </p>
+                    <div className="min-w-0">
+                      <p className="text-body font-extrabold text-black truncate">
+                        {r.recommender?.name || 'A friend'}
+                      </p>
+                      {r.recommender?.is_connector && (
+                        <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
+                          Connector
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-meta-sm text-b3 font-medium whitespace-nowrap">
-                    {fmtMonthYear(r.booked_at)
-                      ? `Booked ${fmtMonthYear(r.booked_at)}`
-                      : ''}
+                    {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
                   </p>
                 </div>
-                {r.comment && (
+                {r.message && (
                   <div className="mt-2 bg-bg5 rounded-[12px] p-3">
-                    <p className="text-meta text-b2 leading-snug">{r.comment}</p>
+                    <p className="text-meta text-b2 leading-snug">{r.message}</p>
                   </div>
                 )}
               </div>
             ))}
           </div>
-          {reviews.length > 5 && (
+          {recosReceived.length > 5 && (
             <button
               type="button"
               onClick={() => setShowAllReviews(v => !v)}
@@ -757,7 +812,7 @@ export function PublicProfileScreen() {
             >
               {showAllReviews
                 ? 'Show less'
-                : `See all go-to reviews (${reviews.length}) →`}
+                : `See all recommendations (${recosReceived.length}) →`}
             </button>
           )}
         </div>
@@ -843,7 +898,7 @@ export function PublicProfileScreen() {
 
       {/* Empty state — no services + no recos authored. Surfaces gently
           rather than rendering a blank scroll area. */}
-      {services.length === 0 && recoServices.length === 0 && reviews.length === 0 && (
+      {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && (
         <div className="px-5 mt-8 mb-8">
           <div className="bg-white border border-bdr rounded-[14px] p-5 text-center">
             <p className="text-body font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>

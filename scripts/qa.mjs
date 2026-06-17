@@ -1805,6 +1805,32 @@ test('rpc-catch-footgun', 'No supabase.rpc(...).catch() — the builder is a the
     `supabase.rpc(...).catch() throws synchronously (no .catch on the builder) — wrap in Promise.resolve(...) or await in try/catch. Offenders: ${offenders.join(', ')}`);
 });
 
+test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prioritized party-signal block; People-who-love = recos received (SPEC-49)', '#49', async () => {
+  const prof = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/PublicProfileScreen.jsx'), 'utf8');
+  const hook = fs.readFileSync(path.join(REPO_ROOT, 'src/hooks/usePartyCounts.js'), 'utf8');
+  const blockPath = path.join(REPO_ROOT, 'src/components/ui/ProfileSignalBlock.jsx');
+
+  // 1. The signal block exists and is mounted, reusing the SAME source as the
+  //    request previews (getInboxPartyCounts + formatKeyCounts) — no parallel
+  //    count formatter (SPEC-48b/48c DRY rule).
+  assert(fs.existsSync(blockPath), 'ProfileSignalBlock.jsx must exist');
+  const block = fs.readFileSync(blockPath, 'utf8');
+  assert(/formatKeyCounts/.test(block), 'ProfileSignalBlock must use the shared formatKeyCounts');
+  assert(/<ProfileSignalBlock/.test(prof), 'PublicProfileScreen must mount ProfileSignalBlock');
+  assert(/getInboxPartyCounts/.test(prof), 'PublicProfileScreen must load counts via getInboxPartyCounts');
+
+  // 2. Viewer priority — serviceMode drives which facet leads (SPEC-48c).
+  assert(/serviceMode/.test(prof) && /serviceMode/.test(block),
+    'Profile must pass serviceMode so the leading facet flips by viewer (consumer→service, provider→connector)');
+
+  // 3. People-who-love is recommendations RECEIVED, not the bookings-review
+  //    table (Tarik 2026-06-16).
+  assert(/recosReceived/.test(prof), 'PublicProfileScreen must render recosReceived for People-who-love');
+
+  // 4. includeReco option keeps formatKeyCounts the single source.
+  assert(/includeReco/.test(hook), 'formatKeyCounts must support includeReco (profile facet avoids double reco chip)');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

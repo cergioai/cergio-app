@@ -16,7 +16,12 @@ function fmtK(n) {
 // Compact one-line summary. Mutual connections ALWAYS render (even 0 →
 // "No mutuals") per Tarik; the rest appear only when present. `recoKind`
 // chooses reco's made (free-service requester) vs received (spotlight provider).
-export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true } = {}) {
+// `includeReco=false` suppresses the auto reco's-made/received chip — used by
+// the unified profile (ProfileSignalBlock), which renders an always-on
+// "N recos received/made" label in the facet heading and doesn't want it
+// duplicated in the sub-line. Defaults to true so every existing caller (inbox
+// cards, booking detail) is byte-for-byte unchanged.
+export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true, includeReco = true } = {}) {
   if (!c) return null;
   const parts = [];
   // includeMutual=false on screens that already render a dedicated
@@ -28,13 +33,13 @@ export function formatKeyCounts(c, { recoKind = 'received', includeMutual = true
     if (c.igFollowers > 0)  parts.push(`${fmtK(c.igFollowers)} IG`);
     if (c.ttFollowers > 0)  parts.push(`${fmtK(c.ttFollowers)} TikTok`);
     if (c.networkCount > 0) parts.push(`${c.networkCount} network`);
-    if (c.recosMade > 0)    parts.push(`${c.recosMade} reco${c.recosMade === 1 ? '' : 's'} made`);
+    if (includeReco && c.recosMade > 0) parts.push(`${c.recosMade} reco${c.recosMade === 1 ? '' : 's'} made`);
     pushMutual();
   } else {
     // Service-led — a Connector judging a provider's spotlight: reputation first.
     pushMutual();
     if (c.networkCount > 0)  parts.push(`${c.networkCount} network`);
-    if (c.recosReceived > 0) parts.push(`${c.recosReceived} reco${c.recosReceived === 1 ? '' : 's'}`);
+    if (includeReco && c.recosReceived > 0) parts.push(`${c.recosReceived} reco${c.recosReceived === 1 ? '' : 's'}`);
     if (c.igFollowers > 0)   parts.push(`${fmtK(c.igFollowers)} IG`);
     if (c.ttFollowers > 0)   parts.push(`${fmtK(c.ttFollowers)} TikTok`);
   }

@@ -220,6 +220,29 @@ qa.mjs #48 enforces this.
 
 ---
 
+## UI / DATA — UNIFIED PUBLIC PROFILE
+
+### SPEC-49 · Viewer-prioritized unified profile (service / connector / both)
+**Status:** FROZEN — 2026-06-16 (Tarik)
+**Rule:** `/u/:profileId` (`PublicProfileScreen`) is the ONE canonical profile for every user — a SERVICE, a CONNECTOR, or BOTH. It LEADS with a party-signal block (`ProfileSignalBlock`) that reuses the EXACT same data + formatter as the request previews (`getInboxPartyCounts` → `formatKeyCounts`) — no parallel count formatting (SPEC-48b DRY rule).
+- **Connector facet:** Connector badge + `formatKeyCounts(recoKind:'made')` → e.g. "319 IG · 5 network · 5 recos made · No mutuals".
+- **Service facet:** role + always-on "{N} recos received" + `formatKeyCounts(recoKind:'received', includeReco:false)` → e.g. "Hair Stylist · 0 recos received" then "No mutuals · 12.4K IG · 3.1K TikTok".
+- **Viewer priority (SPEC-48c, same rule as request previews):** consumer mode (`serviceMode===false`, looking to book) → **service facet leads**; provider mode (`serviceMode===true`, marketing) → **connector facet leads**. When the subject is BOTH, both facets show, priority on top.
+- **"People who love {name}" = recommendations RECEIVED** (recommender + their note), NOT the bookings-review table. **"{name}'s Go-Tos" = recommendations MADE.**
+- The old standalone RoleBadge/ConnectorBadge row + reviews-sourced section are QUARANTINED. No fake data (SPEC-12).
+
+qa.mjs #49 enforces this.
+
+---
+
+## CODE HEALTH — SUPABASE RPC
+
+### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder
+**Status:** FROZEN — 2026-06-16 (Tarik — bug: every invite/spotlight `/i/` link hung on "Opening profile…")
+**Rule:** `supabase.rpc(...)` returns a thenable QUERY BUILDER with **no `.catch()`** — calling `.catch()` throws synchronously and aborts the caller. Fire-and-forget RPCs must be wrapped: `Promise.resolve(supabase.rpc(...)).catch(()=>{})` or awaited in try/catch. qa.mjs #rpc1 enforces this.
+
+---
+
 ## PROCESS — HOW SPEC ITEMS ARE ADDED
 
 1. Tarik confirms a behavior in chat ("this is correct", "keep it like this", "that's frozen").
