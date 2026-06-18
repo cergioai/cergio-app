@@ -7,7 +7,7 @@
 // NO fake IG media — the photo strip is gated on real data.igMedia.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
-import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime } from '../lib/api';
+import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime, listMyServices } from '../lib/api';
 import { IgPostTile } from '../components/ui/IgPostTile';
 
 const QUICK_QS = [
@@ -98,6 +98,14 @@ export function RequestFromConnectorScreen() {
   const { showToast, auth } = useOutletContext();
 
   const [data, setData] = useState(null);     // null = loading
+  // CERGIO-GUARD (2026-06-17, Tarik): the Inbox card passes the provider's
+  // service via ?myServiceId=, but a DIRECT /inbound link (shared/bookmarked)
+  // has none — which made Accept/Counter wrongly say "you need a listed
+  // service" even with a matching listing. Fallback: resolve the provider's
+  // own matching LISTED service (effect below). effectiveServiceId is used by
+  // every respond handler instead of the raw URL param.
+  const [resolvedSvcId, setResolvedSvcId] = useState(null);
+  const effectiveServiceId = myServiceId || resolvedSvcId;
   const [notFound, setNotFound] = useState(false);
   const [mutuals, setMutuals] = useState(null);
   const [stats, setStats] = useState(null);   // connector strength (recos / services)
@@ -169,6 +177,29 @@ export function RequestFromConnectorScreen() {
     getMyDisplayName().then(({ data: n }) => { if (!cancelled) setMyName(n || ''); });
     return () => { cancelled = true; };
   }, []);
+
+  // Resolve the provider's own service when the URL didn't carry one (direct
+  // link). Match the request's type to a LISTED service (taxonomy → category →
+  // title), else fall back to the only/most-recent listing. Mirrors how the
+  // Inbox derives my_service_id, so Accept works from anywhere. (Tarik 2026-06-17)
+  useEffect(() => {
+    if (myServiceId || !data) return;
+    let cancelled = false;
+    listMyServices().then(({ data: svcs }) => {
+      if (cancelled) return;
+      const listed = (svcs || []).filter(s => s.status === 'listed');
+      if (!listed.length) { setResolvedSvcId(null); return; }
+      const want = (data.serviceType || '').trim().toLowerCase();
+      const match = want && listed.find(s =>
+        [s.taxonomy_provider_type, s.category, s.title].some(v => {
+          const t = (v || '').toLowerCase();
+          return t && (t === want || t.includes(want) || want.includes(t));
+        })
+      );
+      setResolvedSvcId((match || listed[0]).id);
+    });
+    return () => { cancelled = true; };
+  }, [myServiceId, data]);
 
   // Load any pre-booking Q&A on this request.
   useEffect(() => {
@@ -266,13 +297,13 @@ export function RequestFromConnectorScreen() {
   };
 
   const sendResponse = async (status, offeredPriceCents = null, message = null) => {
-    if ((status === 'offered' || status === 'countered') && !myServiceId) {
+    if ((status === 'offered' || status === 'countered') && !effectiveServiceId) {
       showToast('You need a listed service to respond.');
       return;
     }
     setPhase('pending');
     const { error } = await respondToRequest(data.id, {
-      status, serviceId: myServiceId || null, offeredPriceCents, message, waveN: null,
+      status, serviceId: effectiveServiceId || null, offeredPriceCents, message, waveN: null,
     });
     if (error) { showToast('Could not send — try again.'); setPhase(null); return; }
     setPhase('done');
@@ -290,9 +321,9 @@ export function RequestFromConnectorScreen() {
   // request had no concrete time) — the RPC then defaults, and the connector
   // can set/adjust it.
   const acceptWithTime = async (scheduledAt) => {
-    if (!myServiceId) { showToast('You need a listed service to accept.'); return; }
+    if (!effectiveServiceId) { showToast('You need a listed service to accept.'); return; }
     setPhase('pending');
-    const { error } = await acceptRequestWithTime({ requestId: data.id, serviceId: myServiceId, scheduledAt });
+    const { error } = await acceptRequestWithTime({ requestId: data.id, serviceId: effectiveServiceId, scheduledAt });
     if (error) { showToast(error.message || 'Could not confirm — try again.'); setPhase(null); return; }
     setPhase('done');
     setComposerMode(null);

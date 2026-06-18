@@ -160,7 +160,7 @@ export async function listMyServices() {
 
   return await supabase
     .from('services')
-    .select('id, title, category, description, location_text, photo_class, cover_url, status, rating_avg, rating_count, bookings_count, created_at')
+    .select('id, title, category, taxonomy_provider_type, description, location_text, photo_class, cover_url, status, rating_avg, rating_count, bookings_count, created_at')
     .eq('owner_id', userRes.user.id)
     .order('created_at', { ascending: false });
 }

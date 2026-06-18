@@ -1,12 +1,12 @@
-Freeze SPEC-49d: "recos made" intentionally exceeds Go-Tos shown
+Fix: /inbound Accept works from a direct link (resolve own service)
 
-No app behavior change — documents + protects existing behavior (Tarik
-2026-06-17). A recommendation made to a not-yet-registered provider
-stores the review + their contact so they can be notified to register;
-it COUNTS toward "recos made" and drives the notify-to-register loop,
-but is NOT displayed on the profile (no claimed provider/photo). Go-Tos
-renders only recos whose service_id resolves. The count/section
-difference is intentional — do not reconcile them.
+Bug: accepting a connector request said "you need a listed service" even
+when the provider HAS a matching listing — because RequestFromConnectorScreen
+relied entirely on the ?myServiceId= param that only the Inbox card adds. A
+direct/shared /inbound link had no param, so Accept/Counter always failed.
 
-Also adds scripts/diag_profile_recos.mjs: a read-only diagnostic that
-reports a profile's recos-made vs how many resolve to a service.
+Fix: when the URL has no myServiceId, resolve the signed-in provider's own
+matching LISTED service (taxonomy_provider_type → category → title match
+against the request type, else the only/most-recent listing). All respond
+handlers now use effectiveServiceId = myServiceId || resolved. listMyServices
+now also returns taxonomy_provider_type for the match. qa #48 green.
