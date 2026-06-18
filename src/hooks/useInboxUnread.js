@@ -24,6 +24,8 @@ import {
   listProviderBookings,
   listMyRequestsWithResponses,
   recoTimesOnMyServices,
+  listMyInboundSpotlightRequests,
+  listMyOutboundSpotlightRequests,
 } from '../lib/api';
 
 const LS_KEY = 'cergio:lastInboxSeenAt';
@@ -60,11 +62,13 @@ export function useInboxUnread({ enabled = true } = {}) {
         return Number.isFinite(ms) && ms > lastSeenMs;
       };
       try {
-        const [inb, bookings, mine, recos] = await Promise.all([
+        const [inb, bookings, mine, recos, spotIn, spotOut] = await Promise.all([
           listInboundRequests({ limit: 10 }),
           listProviderBookings(),
           listMyRequestsWithResponses({ limit: 10 }),
           recoTimesOnMyServices({ limit: 20 }),
+          listMyInboundSpotlightRequests({ limit: 20 }),
+          listMyOutboundSpotlightRequests({ limit: 20 }),
         ]);
         const freshInbound = (inb?.data || []).some(r => isFresh(r.created_at));
         const freshBooking = (bookings?.data || []).some(
@@ -83,7 +87,20 @@ export function useInboxUnread({ enabled = true } = {}) {
         // one of my services (a 4★+ rate writes one) lights the dot too — "T
         // rated but info didn't get a notification".
         const freshReco = (recos?.data || []).some(r => isFresh(r.sent_at));
-        if (!cancelled) setUnread(freshInbound || freshBooking || freshResponse || freshBarter || freshReco);
+        // CERGIO-GUARD (2026-06-18, Tarik): the dot also covers SPOTLIGHT
+        // requests — a new inbound spotlight ask, or the other party responding
+        // so it's now my turn. Inbound: a new request (created) or the provider
+        // just countered (my turn as Connector). Outbound: the Connector
+        // accepted, or countered back (my turn as provider).
+        const freshSpotIn = (spotIn?.data || []).some(r =>
+          isFresh(r.created_at) ||
+          (r.status === 'countered' && r.last_counter_by === 'provider' && isFresh(r.responded_at)));
+        const freshSpotOut = (spotOut?.data || []).some(r =>
+          (r.status === 'accepted' && isFresh(r.responded_at)) ||
+          (r.status === 'countered' && r.last_counter_by === 'connector' && isFresh(r.responded_at)));
+        if (!cancelled) setUnread(
+          freshInbound || freshBooking || freshResponse || freshBarter || freshReco || freshSpotIn || freshSpotOut,
+        );
       } catch {
         // Network/RLS hiccups — never flag unread on failure.
         if (!cancelled) setUnread(false);

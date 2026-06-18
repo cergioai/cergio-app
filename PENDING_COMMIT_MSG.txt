@@ -1,21 +1,15 @@
-Inbox: viewable action rows, confirmed standout, dot on reco received
+Post-gate fires earlier + inbox dot covers spotlight requests
 
-Tarik 2026-06-18 — "app needs to be very very intuitive."
+Tarik 2026-06-18.
 
-- Every Overview action row is now VIEWABLE: the body taps through to the
-  item's detail (service PDP / request) with a "· View →" cue, alongside the
-  primary action. Fixes "given a button to accept but no way to view!!"
-- Confirmed bookings stand out: green "✓ Confirmed · {service}" row with a
-  one-tap "Add to calendar" (Google Calendar link from scheduled_at) so the
-  user clearly sees it's locked in and can add it — instead of a plain BOOK.
-- Inbox dot now also lights on a fresh recommendation RECEIVED on your
-  services (a 4★+ rate writes one) — "T rated but info didn't get a
-  notification". New api helper recoTimesOnMyServices; wired into
-  useInboxUnread.
-- FROZEN_SPEC SPEC-50 updated; qa #50 extended. All 58 flows green.
-
-NOTE (no code change): the forced rate/post LOCK on login (BarterPostGate,
-SPEC-47i) fires only AFTER the provider marks the job complete — that's by
-design (you can't post before the service is done). If T wasn't locked, the
-provider hadn't marked complete yet. The "Rate & post" action is also surfaced
-on the (now chronological) Overview with a clear View.
+- SPEC-47i rev: the forced rate/post lock now fires once the barter service
+  has HAPPENED — provider marked complete OR the scheduled time has passed —
+  not only after the provider remembers to mark complete. getOutstandingFreeBarter
+  returns a serviceHappened flag; BarterPostGate blocks on it; copy adapts
+  ("Your {service} is done" when only the time has passed). Future-dated
+  barters still don't block.
+- Inbox dot now covers SPOTLIGHT requests too: a new inbound spotlight ask, or
+  the other party responding so it's your turn (inbound countered-by-provider;
+  outbound accepted / countered-by-connector). Wired listMyInbound/Outbound
+  SpotlightRequests into useInboxUnread.
+- FROZEN_SPEC SPEC-47i updated; qa #47i + #50 updated. All 58 flows green.

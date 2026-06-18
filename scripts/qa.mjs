@@ -1879,6 +1879,9 @@ test('spec-50-action-first-inbox', 'FROZEN: Inbox Overview is an action-first fe
   const dot = fs.readFileSync(path.join(REPO_ROOT, 'src/hooks/useInboxUnread.js'), 'utf8');
   assert(/recoTimesOnMyServices/.test(dot) && /freshReco/.test(dot),
     'useInboxUnread must light the dot on a fresh recommendation received (recoTimesOnMyServices) — SPEC-50');
+  // Dot also covers SPOTLIGHT requests (inbound ask / other party's turn).
+  assert(/listMyInboundSpotlightRequests/.test(dot) && /listMyOutboundSpotlightRequests/.test(dot),
+    'useInboxUnread must cover spotlight requests (inbound + outbound) — SPEC-50');
 });
 
 test('login-on-book-invite', 'Booking while logged out invites to sign in (returnTo) — never dead-ends with an error', '#login1', async () => {
@@ -2024,7 +2027,7 @@ test('spec-55-fanout-rehydrates-services-near', 'FROZEN: getProvidersForNotify r
     'createRequestAndFanOut must exclude the requester from their own fan-out (ownerIds !== uid) — SPEC-55.');
 });
 
-test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {
+test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
   const inbox = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
@@ -2035,18 +2038,19 @@ test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Co
   const gate = fs.readFileSync(gatePath, 'utf8');
   assert(/<BarterPostGate\b/.test(app), 'App.jsx must mount <BarterPostGate /> at root');
 
-  // 2. HARD BLOCK only when provider marked complete AND connector hasn't
-  //    posted/reviewed. Never block on a job the provider hasn't completed.
-  assert(/completed_at/.test(gate) && /!\s*[\w.]*posted_at/.test(gate),
-    'Gate must require completed_at AND !posted_at to block (provider-complete + connector-not-posted)');
+  // 2. HARD BLOCK once the service has HAPPENED (provider marked complete OR the
+  //    scheduled time passed) AND connector hasn't posted/reviewed. Fires EARLIER
+  //    than the old complete-only rule (SPEC-47i rev 2026-06-18).
+  assert(/serviceHappened/.test(gate) && /!\s*[\w.]*posted_at/.test(gate),
+    'Gate must block on serviceHappened AND !posted_at (complete OR scheduled-passed + not-posted)');
   assert(/reviewed/.test(gate),
     'Gate must release once the connector has reviewed (covers the held <4★ path) — no permanent lock');
 
-  // 3. getOutstandingFreeBarter surfaces completed_at + reviewed so the gate
-  //    can distinguish "your turn" from "already acted".
+  // 3. getOutstandingFreeBarter surfaces serviceHappened + reviewed so the gate
+  //    can fire at the service time and distinguish "your turn" from "already acted".
   const gs = api.indexOf('export async function getOutstandingFreeBarter');
-  const gsrc = api.slice(gs, gs + 1600);
-  assert(/completed_at/.test(gsrc), 'getOutstandingFreeBarter must select completed_at');
+  const gsrc = api.slice(gs, gs + 2600);
+  assert(/serviceHappened\s*=/.test(gsrc), 'getOutstandingFreeBarter must set serviceHappened (completed_at OR scheduled time passed)');
   assert(/\.reviewed\s*=/.test(gsrc), 'getOutstandingFreeBarter must set a reviewed flag');
 
   // 4. Provider "Mark job complete" disappears once the connector posted

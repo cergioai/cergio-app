@@ -3707,18 +3707,25 @@ export async function getOutstandingFreeBarter() {
     .limit(1);
   if (error) return { outstanding: null, error };
   const outstanding = (data || [])[0] || null;
-  // The Connector has acted (rated + posted, OR rated <4★ which HOLDS the
-  // post) the moment a review by them exists. Surface that so the global
-  // post-gate (BarterPostGate) only HARD-BLOCKS the app when the provider
-  // marked complete AND the Connector hasn't rated yet — never after they've
-  // already done their turn. Tarik 2026-06-16 (SPEC-47i).
-  if (outstanding && outstanding.completed_at && !outstanding.posted_at) {
-    const { count } = await supabase
-      .from('reviews')
-      .select('id', { count: 'exact', head: true })
-      .eq('booking_id', outstanding.id)
-      .eq('rater_id', userRes.user.id);
-    outstanding.reviewed = (count || 0) > 0;
+  // CERGIO-GUARD (2026-06-18, Tarik — SPEC-47i rev): the service has HAPPENED
+  // (so the post is owed) once EITHER the provider marked it complete OR the
+  // scheduled time has passed. Firing on "scheduled time passed" makes the
+  // gate lock EARLIER — it no longer waits for the provider to remember to
+  // mark complete. serviceHappened drives the hard block in BarterPostGate.
+  if (outstanding) {
+    const past = outstanding.scheduled_at && new Date(outstanding.scheduled_at).getTime() < Date.now();
+    outstanding.serviceHappened = !!(outstanding.completed_at || past);
+    // The Connector has done their turn (rated + posted, OR rated <4★ which
+    // HOLDS the post) the moment a review by them exists — never block after
+    // that. Compute it whenever the service has happened + not yet posted.
+    if (outstanding.serviceHappened && !outstanding.posted_at) {
+      const { count } = await supabase
+        .from('reviews')
+        .select('id', { count: 'exact', head: true })
+        .eq('booking_id', outstanding.id)
+        .eq('rater_id', userRes.user.id);
+      outstanding.reviewed = (count || 0) > 0;
+    }
   }
   return { outstanding, error: null };
 }

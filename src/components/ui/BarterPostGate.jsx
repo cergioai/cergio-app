@@ -23,7 +23,7 @@ export function BarterPostGate({ isSignedIn, userId }) {
       const { outstanding } = await getOutstandingFreeBarter();
       const block =
         outstanding &&
-        outstanding.completed_at &&        // provider marked the job complete
+        outstanding.serviceHappened &&     // provider marked complete OR the scheduled time passed
         !outstanding.posted_at &&          // connector hasn't posted yet
         !outstanding.post_confirmed_at &&
         !outstanding.reviewed;             // and hasn't already rated (held <4★)
@@ -68,7 +68,9 @@ export function BarterPostGate({ isSignedIn, userId }) {
           </svg>
         </div>
         <h2 className="text-[22px] font-extrabold text-black leading-tight mb-2">
-          {providerFirst} marked your service complete
+          {booking.completed_at
+            ? `${providerFirst} marked your service complete`
+            : `Your ${svcTitle} is done`}
         </h2>
         <p className="text-body-sm text-b3 leading-relaxed mb-6">
           Your turn — rate your <span className="font-extrabold text-black">{svcTitle}</span> and
