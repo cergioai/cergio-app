@@ -137,7 +137,8 @@ export function RequestFromConnectorScreen() {
         igFollowers:   requester.instagram_followers ?? null,
         ttHandle:      requester.tiktok_handle || null,
         ttFollowers:   requester.tiktok_followers ?? null,
-        bio:           (requester.bio || requester.headline || '').trim() || null,
+        headline:      (requester.headline || '').trim() || null,
+        bio:           (requester.bio || '').trim() || null,
         igMedia:       null,  // reserved — real IG media post Meta approval
         spotlights:    null,  // reserved — past spotlights this Connector posted
         serviceType:   r.service_type || r.category || 'Service request',
@@ -416,6 +417,11 @@ export function RequestFromConnectorScreen() {
                     </span>
                   )}
                 </div>
+                {/* Headline — below the Connector badge, above the IG count
+                    (Tarik 2026-06-17). The bio stays below, above services. */}
+                {data.headline && (
+                  <p className="text-meta text-b2 font-medium leading-snug mt-0.5">{data.headline}</p>
+                )}
                 {/* LEAD with reach: IG followers (prominent), then network ·
                     reco's made, then See Instagram, then bio. */}
                 {reachLine && (
@@ -501,9 +507,13 @@ export function RequestFromConnectorScreen() {
           <p className="text-body-sm font-extrabold text-black mb-2">
             Previous spotlights on Cergio <span className="text-b3 font-medium">· {spotlights.length}</span>
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          {/* Spotlights ~70% smaller (Tarik 2026-06-17) — fixed-width tiles in a
+              wrapping row rather than full-width thirds. */}
+          <div className="flex flex-wrap gap-2">
             {spotlights.slice(0, 6).map(s => (
-              <IgPostTile key={s.id} url={s.post_url} aspect="4 / 5" label={`Spotlight: ${s.title}`} />
+              <div key={s.id} className="w-[76px]">
+                <IgPostTile url={s.post_url} aspect="4 / 5" label={`Spotlight: ${s.title}`} />
+              </div>
             ))}
           </div>
         </div>

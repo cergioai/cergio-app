@@ -1,18 +1,12 @@
-Recommend-on-service + review boxes (SPEC-53)
+Profile: connector headline below badge + smaller spotlights
 
-Why: a recommendation made via the invite/reco form stores service_id=null,
-so it counts toward "recos made" but never shows on a provider's profile
-(SPEC-49d). Tarik: add a Recommend button on the service itself (for
-on-platform providers) so the reco LINKS to the real service and displays.
-
-- New recommendService(serviceId,{review}) in api.js — inserts a recommendation
-  with the real service_id (recommender_id = auth.uid()), so it surfaces on the
-  provider's profile ("People who love {name}") AND the recommender's Go-Tos.
-- New RecommendProviderModal (review textarea) opened from a "Recommend {name}"
-  button on ServiceDetailScreen — shown to signed-in viewers who aren't the
-  owner; flips to "Recommended ✓" after posting.
-- MarkBookingPostedModal: added a "Write a review (optional)" textarea for 4★+
-  (saved via createReview alongside the rating). Below-4★ flow unchanged.
-- listMyServices now returns taxonomy_provider_type (also used by the earlier
-  /inbound accept fix).
-- FROZEN_SPEC SPEC-53 + qa #53 added; all changed files compile; #12/#47/#49 green.
+- Headline now renders BELOW the Connector badge and ABOVE the IG count,
+  on BOTH the /inbound connector tile and the full-profile signal block
+  (ProfileSignalBlock). Bio stays where it is (above the service line /
+  About). Headline is separated from bio on /inbound (getInboundRequest
+  already returns both); removed the duplicate name-header headline on the
+  full profile. Rendered once, under the lead facet.
+- "Previous spotlights" IgPostTiles shrunk ~70% (fixed ~76px tiles in a
+  wrapping row instead of full-width thirds).
+- Colors/fonts already follow design-spec (cream bg + DM Sans scale).
+- qa #48/#49/#53 green; all changed files compile.

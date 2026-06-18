@@ -648,14 +648,9 @@ export function PublicProfileScreen() {
           <AvatarLink id={profile?.id} name={name} size={72} clickable={false} className="ring-2 ring-white shadow-sm" />
           <div className="flex-1 min-w-0">
             <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">{name}</h1>
-            {/* CERGIO-GUARD (2026-06-05): user-authored headline —
-                appears beside the name when set. One short line that
-                gives context before the role/Connector pills. */}
-            {profile?.headline && (
-              <p className="mt-1 text-body-sm text-b2 leading-snug font-medium">
-                {profile.headline}
-              </p>
-            )}
+            {/* Headline moved into the signal block below the Connector badge
+                (Tarik 2026-06-17, matches the /inbound layout) — no longer here
+                to avoid duplication. */}
           </div>
         </div>
         {/* QUARANTINED (2026-06-16, SPEC-49): the standalone RoleBadge +
@@ -672,6 +667,7 @@ export function PublicProfileScreen() {
         isService={services.length > 0}
         isConnector={counts?.isConnector ?? isConnector}
         serviceMode={serviceMode}
+        headline={profile?.headline}
       />
 
       {/* View Instagram — small link beneath the signal block, near the

@@ -22,13 +22,18 @@ function ShieldIcon({ size = 11 }) {
   );
 }
 
-function ConnectorFacet({ counts, prominent }) {
+function ConnectorFacet({ counts, prominent, headline }) {
   const line = formatKeyCounts(counts, { recoKind: 'made' });
   return (
     <div className={prominent ? '' : 'mt-2.5 pt-2.5 border-t border-bdr'}>
       <span className="inline-flex items-center gap-1 bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
         <ShieldIcon size={10} />Connector
       </span>
+      {/* Headline — below the Connector badge, above the IG/counts line
+          (Tarik 2026-06-17). Only on the lead facet to avoid duplication. */}
+      {prominent && headline && (
+        <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
+      )}
       {line && (
         <p className={`mt-1 leading-snug ${prominent ? 'text-body-sm font-extrabold text-black' : 'text-meta text-b2 font-medium'}`}>
           {line}
@@ -38,7 +43,7 @@ function ConnectorFacet({ counts, prominent }) {
   );
 }
 
-function ServiceFacet({ counts, role, prominent }) {
+function ServiceFacet({ counts, role, prominent, headline }) {
   const recos = counts?.recosReceived || 0;
   // Always-on "N recos received" (service reputation signal) — suppress the
   // duplicate reco chip in the sub-line via includeReco:false. includeReach:false
@@ -54,6 +59,10 @@ function ServiceFacet({ counts, role, prominent }) {
         {role || 'Service'}
         <span className="text-b3 font-medium"> · {recos} reco{recos === 1 ? '' : 's'} received</span>
       </p>
+      {/* Headline under the lead identity (Tarik 2026-06-17), once. */}
+      {prominent && headline && (
+        <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
+      )}
       {line && (
         <p className={`mt-0.5 leading-snug ${prominent ? 'text-body-sm text-b2 font-medium' : 'text-meta text-b3 font-medium'}`}>
           {line}
@@ -67,11 +76,11 @@ function ServiceFacet({ counts, role, prominent }) {
 // networkCount, recosMade, recosReceived, mutualCount, isConnector).
 // isService / isConnector: the subject's roles. serviceMode: viewer is a
 // provider (true) vs consumer (false) — drives which facet leads.
-export function ProfileSignalBlock({ counts, role, isService, isConnector, serviceMode }) {
+export function ProfileSignalBlock({ counts, role, isService, isConnector, serviceMode, headline }) {
   if (!counts || (!isService && !isConnector)) return null;
 
-  const connector = isConnector ? <ConnectorFacet key="c" counts={counts} prominent /> : null;
-  const service   = isService   ? <ServiceFacet   key="s" counts={counts} role={role} prominent /> : null;
+  const connector = isConnector ? <ConnectorFacet key="c" counts={counts} prominent headline={headline} /> : null;
+  const service   = isService   ? <ServiceFacet   key="s" counts={counts} role={role} prominent headline={headline} /> : null;
 
   // Only one role → render that facet alone.
   if (!connector || !service) {
@@ -86,7 +95,7 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
   // Both roles → priority facet prominent on top, the other muted below.
   // Provider/marketing viewer leads with the Connector; consumer/booking
   // viewer leads with the Service (SPEC-48c).
-  const lead      = serviceMode ? <ConnectorFacet counts={counts} prominent /> : <ServiceFacet counts={counts} role={role} prominent />;
+  const lead      = serviceMode ? <ConnectorFacet counts={counts} prominent headline={headline} /> : <ServiceFacet counts={counts} role={role} prominent headline={headline} />;
   const secondary = serviceMode ? <ServiceFacet   counts={counts} role={role} /> : <ConnectorFacet counts={counts} />;
   return (
     <div className="mx-5 mt-5 bg-white border border-bdr rounded-[16px] p-4">
