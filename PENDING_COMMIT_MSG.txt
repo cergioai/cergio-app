@@ -1,21 +1,24 @@
-Notifications: fire on recommend + accept-with-time (SPEC-56)
+Referral payout integrity + invite-loop notifications + tracking $ (SPEC-57)
 
-Tarik 2026-06-18 — notifications/email audit. Two events wrote their row but
-never fired a notification, so the recipient got no email/SMS:
+Tarik 2026-06-18 — "make sure users get paid for referrals"; invite tracking
+is the spine.
 
-- recommendService now fires notifyUser({ event: 'service_recommended',
-  recipient: <service owner> }) — the notify-user edge fn already had that
-  template; it just was never called. Best-effort, skips self, never blocks.
-- acceptRequestWithTime now fires fireBookingNotify(bookingId, 'accepted') —
-  this path creates the confirmed booking directly (no request_response row),
-  so the requester was never told their request was accepted.
+MONEY FIX:
+- A FREE ($0) first booking no longer BURNS the referral. creditInviterOnFirst
+  Booking returned early-stamped first_booking_at at $0, locking the inviter
+  out of ever earning from that friend's later PAID bookings. Now a $0 booking
+  is a no-op (no stamp, no row) so the 7%-capped reward lands on the friend's
+  first PAYING booking.
 
-Audited the rest of the notify chain (request created, response, question,
-spotlight created/countered/posted/confirmed, booking posted/confirmed/
-complete/reschedule/dispute) — all already fire.
+NOTIFICATIONS (templates existed, never fired):
+- recordInviteFromActiveRef fires invite_joined to the inviter when their
+  friend signs up.
+- creditInviterOnFirstBooking fires first_booking to the inviter when a real
+  credit is written. Both include data.deep_link.
 
-Also audited the search → results flow: honest empty states, no dead-end
-buttons, offers render as provider cards routing to the PDP, waiting state has
-live reply counts + inline cancel. No fixes needed.
+INVITE TRACKING (the spine, intuitive):
+- InviteTrackingScreen now leads with an earnings-at-a-glance header ($ earned
+  from referrals + invited/joined/booked funnel) and a per-row +$X reward badge
+  on booked friends.
 
-FROZEN_SPEC SPEC-56 added; qa #56 added. All 59 flows green.
+FROZEN_SPEC SPEC-57 added; qa #57 added. All 60 flows green.

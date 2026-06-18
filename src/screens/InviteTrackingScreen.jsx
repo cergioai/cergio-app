@@ -101,6 +101,18 @@ export function InviteTrackingScreen() {
     return rows.filter(r => statusOf(r) === filter);
   }, [rows, filter]);
 
+  // CERGIO-GUARD (2026-06-18, Tarik — invite tracking is the spine, show the $):
+  // total referral $ earned (credited reward across booked friends) so the user
+  // sees exactly what their invites paid out, at a glance.
+  const earnedCents = useMemo(
+    () => (rows || []).reduce((s, r) => s + (r.first_booking_at ? (r.reward_cents || 0) : 0), 0),
+    [rows],
+  );
+  const fmtUsd = (c) => {
+    const n = (c || 0) / 100;
+    return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
+  };
+
   // Canonical nudge copy. Short by design — WhatsApp + SMS both reward
   // brevity and the tracked URL pulls the recipient into the right
   // attribution flow on landing.
@@ -175,6 +187,24 @@ export function InviteTrackingScreen() {
         Track every friend you've invited. Tap Resend to nudge them on WhatsApp, SMS, or copy the link.
       </p>
 
+      {/* Earnings-at-a-glance — what your invites have paid out + the funnel.
+          The $ leads (Tarik: invite tracking is the spine; users must see they
+          get paid). */}
+      {rows !== null && (
+        <div className="mx-5 mt-4 bg-white border border-bdr rounded-[16px] p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-display-2 font-extrabold text-gd leading-none">{fmtUsd(earnedCents)}</p>
+            <p className="text-meta text-b3 font-extrabold mt-1">earned from referrals</p>
+          </div>
+          <div className="text-right">
+            <p className="text-body-sm font-extrabold text-black leading-snug">
+              {counts.invited} pending · {counts.joined} joined · {counts.booked} booked
+            </p>
+            <p className="text-meta text-b3 mt-0.5">${REWARDS.perFriendUser} per friend who joins + books</p>
+          </div>
+        </div>
+      )}
+
       {/* Filter chips */}
       <div className="px-5 mt-5 flex gap-2 flex-wrap">
         {[
@@ -240,6 +270,13 @@ export function InviteTrackingScreen() {
                     <span className={`text-caps font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 ${meta.cls}`}>
                       {meta.label}
                     </span>
+                    {/* Reward earned from this friend (credited on their first
+                        paying booking) — the $ users care about. */}
+                    {r.reward_cents > 0 && (
+                      <span className="text-caps font-extrabold uppercase tracking-wide rounded-pill px-1.5 py-0.5 bg-g text-white">
+                        +{fmtUsd(r.reward_cents)}
+                      </span>
+                    )}
                     {/* CERGIO-GUARD (2026-06-05): service-type pill —
                         sourced from a matching recommendations row.
                         Hidden when no reco was sent (plain invite). */}

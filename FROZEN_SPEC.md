@@ -345,6 +345,17 @@ qa.mjs #56 enforces this.
 
 ---
 
+### SPEC-57 · Referral payout integrity + invite-loop notifications (the spine)
+**Status:** FROZEN — 2026-06-18 (Tarik — "make sure users get paid for referrals"; "invite tracking is the spine, very tight + intuitive")
+**Rule:**
+- **A FREE ($0) first booking must NOT consume the referral.** `creditInviterOnFirstBooking` returns early when `bookingTotalCents <= 0` — it does NOT stamp `first_booking_at` and writes no $0 row — so the reward stays OPEN and lands on the friend's first PAYING booking (7% of total, capped `REWARDS.perFriend`). Previously a free first booking burned the referral at $0 forever.
+- **The invite loop fires its notifications** (the notify-user edge fn already had the templates, but they were never called): `recordInviteFromActiveRef` fires **`invite_joined`** to the inviter when the friend signs up; `creditInviterOnFirstBooking` fires **`first_booking`** to the inviter when a real credit is written. Both include `data.deep_link` (qa #9).
+- **InviteTrackingScreen shows the $:** an earnings-at-a-glance header (total referral $ earned + the invited/joined/booked funnel) and a per-row **+$X** reward badge on booked friends. Status: Invited → Joined → Booked (first paying booking).
+
+qa.mjs #57 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

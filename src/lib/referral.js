@@ -9,6 +9,7 @@
 
 import { supabase, supabaseReady } from './supabase';
 import { REWARDS } from './rewards';
+import { notifyUser } from './api';
 
 const REF_STORAGE_KEY = 'cergio.ref';
 const REF_TTL_DAYS    = 30;
@@ -138,6 +139,19 @@ export async function recordInviteFromActiveRef(inviteeUserId) {
   // chain is broken in a benign way.
   // eslint-disable-next-line no-console
   if (error) console.warn('[referral] could not record invite:', error.message);
+  // CERGIO-GUARD (2026-06-18, Tarik — invite tracking is the spine): tell the
+  // inviter their friend just joined. The notify-user edge fn has the
+  // `invite_joined` template; it was never fired. Best-effort.
+  if (!error) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
+    try {
+      notifyUser({
+        event: 'invite_joined',
+        recipient: inviter,
+        data: { invitee_id: inviteeUserId, deep_link: `${origin}/earnings/invites` },
+      });
+    } catch { /* best-effort */ }
+  }
   return { error };
 }
 
@@ -194,6 +208,17 @@ export async function creditInviterOnFirstBooking(consumerId, bookingId) {
       .eq('id', bookingId)
       .maybeSingle();
     bookingTotalCents = bkRow?.total_cents || 0;
+  }
+
+  // CERGIO-GUARD (2026-06-18, Tarik — referrals must actually pay out): a FREE
+  // ($0) first booking earns 7%×$0 = $0. If we stamped first_booking_at here,
+  // the referral would be BURNED — the inviter could never earn from this
+  // friend's later PAID bookings (the finder below filters first_booking_at IS
+  // NULL). So a free first booking is a NO-OP: leave the invite OPEN so the
+  // reward lands on the friend's first paying booking. (Re-firing on more free
+  // bookings just no-ops again — idempotent.)
+  if (bookingTotalCents <= 0) {
+    return { error: null };
   }
 
   // 2. Prior credit toward this friend's cap (sum existing tier='direct'
@@ -256,6 +281,21 @@ export async function creditInviterOnFirstBooking(consumerId, bookingId) {
   if (earnErr) {
     // eslint-disable-next-line no-console
     console.warn('[referral] could not write earnings:', earnErr.message);
+  } else if (creditCents > 0) {
+    // CERGIO-GUARD (2026-06-18, Tarik): tell the inviter they just EARNED from
+    // their referral. The notify-user `first_booking` template existed but was
+    // never fired — referrers never knew they got paid. Best-effort.
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
+      notifyUser({
+        event: 'first_booking',
+        recipient: invite.inviter_id,
+        data: {
+          amount_cents: creditCents, invitee_id: consumerId, friend: inviteeName,
+          booking_id: bookingId || null, deep_link: `${origin}/earnings`,
+        },
+      });
+    } catch { /* best-effort */ }
   }
 
   // 2nd-hop: walk the chain and credit the grandparent inviter with the
