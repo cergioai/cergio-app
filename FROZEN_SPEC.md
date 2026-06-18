@@ -323,6 +323,14 @@ qa.mjs #54 enforces this.
 
 ---
 
+### SPEC-55 · Provider fan-out must re-hydrate services_near rows before the provider-type filter
+**Status:** FROZEN — 2026-06-18 (Tarik — bug: providers never got "new request near you" notifications)
+**Rule:** `services_near` returns ONLY proximity columns (id / title / location / distance), NOT `taxonomy_provider_type`. Any code that strict-filters its results on `taxonomy_provider_type` MUST first re-hydrate full rows from `services` by id (id → `services.select(id, owner_id, taxonomy_provider_type, status).eq(status,'listed')`), exactly like `searchServices` does. `getProvidersForNotify` filtered the RAW rpc rows → `taxonomy_provider_type` was always undefined → matched nothing → `createRequestAndFanOut` fanned out to ZERO providers (no `new_request` notifications ever written). The re-hydrate is required for fan-out to work. The requester is excluded from their own fan-out (`ownerIds.filter(id => id !== uid)`).
+
+qa.mjs #55 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

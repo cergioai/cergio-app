@@ -1,16 +1,21 @@
-Profile: Recommendations-received + Services-received sections (SPEC-49f)
+Fix: provider request fan-out never matched anyone (SPEC-55)
 
-Tarik 2026-06-18 — full-profile additions.
+Tarik 2026-06-18 — "requested a plumber/chef and the provider didn't get
+notified." Root cause found via live diagnostic: ZERO new_request
+notifications had EVER been written.
 
-- "Recommendations received" — consolidated header + list of every reco
-  RECEIVED across the profile's services (recosReceived, RecoRow). The
-  SPEC-49 "People who love {name}" surface as its own section, alongside the
-  per-service inline recos. Collapses when none.
-- "Services {name} has received" — services the profile has used on Cergio
-  (completed/confirmed/in-progress bookings where they were the consumer,
-  deduped, newest first, ServiceTile). Collapses when none.
-- Section order: signal block → Spotlights → Services → Recommendations
-  received → Services received → Go-Tos.
-- All sections use design-spec tokens only (bg-cream / DM Sans scale / b3 /
-  bdr) — no arbitrary colors or fonts.
-- FROZEN_SPEC SPEC-49f added; qa #49 extended. All 57 flows green.
+services_near returns only proximity columns (id/title/location/distance),
+NOT taxonomy_provider_type. getProvidersForNotify was filtering the RAW rpc
+rows on s.taxonomy_provider_type — always undefined → allow.includes('') →
+false → matched NOTHING → createRequestAndFanOut fanned out to 0 providers,
+every time.
+
+- getProvidersForNotify now re-hydrates full rows from the services table by
+  id (owner_id + taxonomy_provider_type, status='listed') BEFORE the strict
+  provider-type filter — the same fix searchServices already uses.
+- createRequestAndFanOut excludes the requester from their own fan-out.
+- FROZEN_SPEC SPEC-55 added; qa #55 added. All 58 flows green.
+
+NOTE (separate, by design): info@cergio is a Personal Chef — it correctly
+won't be notified of PLUMBER requests. This fix is why it (and every matching
+provider) now gets notified of matching requests at all.

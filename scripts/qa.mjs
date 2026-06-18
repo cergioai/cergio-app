@@ -1980,6 +1980,27 @@ test('spec-54-roster-accepted-only', 'FROZEN: Find-a-Connector roster shows ACCE
     'ConnectorRow must not render rate-card prices — show the agreed deal instead (SPEC-54).');
 });
 
+test('spec-55-fanout-rehydrates-services-near', 'FROZEN: getProvidersForNotify re-hydrates services_near rows before the provider-type filter (SPEC-55)', '#55', async () => {
+  const api = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  // Isolate the getProvidersForNotify body.
+  const start = api.indexOf('export async function getProvidersForNotify');
+  assert(start !== -1, 'api must export getProvidersForNotify');
+  const body = api.slice(start, start + 2400);
+
+  // It must NOT filter the RAW services_near rows on taxonomy_provider_type —
+  // it must re-fetch from the services table by id first (the rpc returns no
+  // taxonomy column). We assert a services re-hydration with owner_id +
+  // taxonomy_provider_type happens inside the function.
+  assert(/from\('services'\)/.test(body) && /taxonomy_provider_type/.test(body) && /owner_id/.test(body),
+    'getProvidersForNotify must re-hydrate rows from the services table (id → owner_id + taxonomy_provider_type) before filtering — SPEC-55.');
+  assert(/\.in\('id',\s*ids\)/.test(body),
+    'getProvidersForNotify must re-fetch services by the ids services_near returned — SPEC-55.');
+
+  // The requester is excluded from their own fan-out.
+  assert(/filter\(id\s*=>\s*id\s*!==\s*uid\)/.test(api),
+    'createRequestAndFanOut must exclude the requester from their own fan-out (ownerIds !== uid) — SPEC-55.');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

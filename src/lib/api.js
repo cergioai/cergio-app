@@ -252,7 +252,23 @@ export async function getProvidersForNotify({
   });
   if (error) return { data: null, error };
 
-  const filtered = (data || []).filter(s =>
+  // CERGIO-GUARD (2026-06-18): services_near returns ONLY proximity columns
+  // (id / title / location / distance) — NOT taxonomy_provider_type. Filtering
+  // the RAW rpc rows on `s.taxonomy_provider_type` matched NOTHING (it's always
+  // undefined → allow.includes('') → false), so NO provider was EVER fanned out
+  // a new_request — confirmed by zero new_request rows in the notifications
+  // table. Re-hydrate full rows by id (the SAME fix searchServices already
+  // applies) BEFORE the strict provider-type filter so matching actually works.
+  const ids = (data || []).map(s => s.id).filter(Boolean);
+  if (ids.length === 0) return { data: [], error: null };
+  const { data: full, error: fullErr } = await supabase
+    .from('services')
+    .select('id, owner_id, taxonomy_provider_type, status')
+    .in('id', ids)
+    .eq('status', 'listed');
+  if (fullErr) return { data: null, error: fullErr };
+
+  const filtered = (full || []).filter(s =>
     allow.includes(s.taxonomy_provider_type || '')
   );
   return { data: filtered, error: null };
@@ -2955,7 +2971,10 @@ export async function createRequestAndFanOut({
   //    useRequestActivity polls on the SRP — same anchor on both sides.
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
   const deep_link = `${origin}/results?req=${request.id}`;
-  const ownerIds = Array.from(new Set((provs || []).map(s => s.owner_id).filter(Boolean)));
+  // Exclude the requester themselves — a user who owns a matching service must
+  // not be fanned out their own request (CERGIO-GUARD 2026-06-18).
+  const ownerIds = Array.from(new Set((provs || []).map(s => s.owner_id).filter(Boolean)))
+    .filter(id => id !== uid);
   if (ownerIds.length === 0) return { request, notified: 0, error: null };
 
   // Build one row per recipient — the insert is bulk for atomicity.
