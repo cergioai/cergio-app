@@ -163,7 +163,12 @@ function timeAgo(iso) {
   try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return ''; }
 }
 
-function ActionRow({ tone = 'plain', headline, sub, actionLabel, onAction, busy, ts }) {
+// CERGIO-GUARD (2026-06-18, Tarik): every action row must ALSO be viewable —
+// "given a button to accept but no way to view!! this has regressed". The body
+// (headline + sub) is now a tappable button that opens the item's detail
+// (onView), with a chevron cue; the primary action stays on the right. So a row
+// always offers BOTH "see what this is" and "do the thing".
+function ActionRow({ tone = 'plain', headline, sub, actionLabel, onAction, busy, ts, onView }) {
   const wrap =
     tone === 'green'  ? 'bg-gl border-2 border-g/40'
   : tone === 'salmon' ? 'bg-white border-2 border-salmon/40'
@@ -173,22 +178,34 @@ function ActionRow({ tone = 'plain', headline, sub, actionLabel, onAction, busy,
   :                     'bg-g text-white';
   return (
     <div className={`${wrap} rounded-[16px] p-3.5 flex items-center gap-3`}>
-      <div className="min-w-0 flex-1">
+      <button
+        type="button"
+        onClick={onView}
+        disabled={!onView}
+        className="min-w-0 flex-1 text-left disabled:cursor-default"
+      >
         <div className="flex items-center gap-2">
           <p className={`text-body font-extrabold leading-snug truncate flex-1 ${tone === 'green' ? 'text-gd' : 'text-black'}`}>
             {headline}
           </p>
           {ts && <span className="text-meta-sm text-b3 font-medium whitespace-nowrap flex-shrink-0">{timeAgo(ts)}</span>}
         </div>
-        {sub && <p className="text-meta text-b3 leading-snug truncate mt-0.5">{sub}</p>}
-      </div>
-      <button
-        onClick={onAction}
-        disabled={busy}
-        className={`${btn} rounded-pill px-4 py-2 text-meta font-extrabold whitespace-nowrap flex-shrink-0 disabled:opacity-60 active:scale-[.97] transition`}
-      >
-        {busy ? '…' : actionLabel}
+        <div className="flex items-center gap-1 mt-0.5">
+          {sub && <p className="text-meta text-b3 leading-snug truncate">{sub}</p>}
+          {onView && (
+            <span className="text-meta-sm text-g font-extrabold whitespace-nowrap flex-shrink-0">· View →</span>
+          )}
+        </div>
       </button>
+      {actionLabel && (
+        <button
+          onClick={onAction}
+          disabled={busy}
+          className={`${btn} rounded-pill px-4 py-2 text-meta font-extrabold whitespace-nowrap flex-shrink-0 disabled:opacity-60 active:scale-[.97] transition`}
+        >
+          {busy ? '…' : actionLabel}
+        </button>
+      )}
     </div>
   );
 }
@@ -605,6 +622,17 @@ export function JobsInboxScreen() {
           // primary action inline. Highest-urgency first.
           const first = (p) => (p?.display_name || 'Someone').split(' ')[0];
           const usd   = (cents) => `$${Math.round((cents || 0) / 100)}`;
+          const viewSvc = (id) => () => id ? navigate(`/service/${id}`) : setActiveTab('Requests');
+          // Google Calendar "add event" link for a confirmed booking (Tarik
+          // 2026-06-18: confirmed services should be easy to add to a calendar).
+          const gcalUrl = (b) => {
+            const start = b?.scheduled_at ? new Date(b.scheduled_at) : null;
+            if (!start || isNaN(start.getTime())) return null;
+            const end = new Date(start.getTime() + 60 * 60 * 1000);
+            const fmt = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+            const text = encodeURIComponent(`Cergio · ${b.service?.title || 'service'}`);
+            return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${fmt(start)}/${fmt(end)}&details=${encodeURIComponent('Booked via Cergio')}`;
+          };
           const asProvider = myJobs?.asProvider || [];
           const asConsumer = myJobs?.asConsumer || [];
           const items = [];
@@ -626,6 +654,7 @@ export function JobsInboxScreen() {
               headline: `Review ${first(b.consumer)}'s spotlight`,
               sub: `${b.service?.title || 'Service'} · they posted your IG spotlight`,
               actionLabel: 'Accept post', onAction: () => handleConfirmPost(b), busy: jobBusy[b.id],
+              onView: viewSvc(b.service?.id),
               ts: b.posted_at,
             }));
 
@@ -637,6 +666,7 @@ export function JobsInboxScreen() {
               headline: 'Rate & post your spotlight',
               sub: `${first(b.provider)} marked ${b.service?.title || 'your service'} complete`,
               actionLabel: 'Rate & post', onAction: () => setPostTarget(b),
+              onView: viewSvc(b.service?.id),
               ts: b.completed_at,
             }));
 
@@ -652,6 +682,7 @@ export function JobsInboxScreen() {
               headline: 'Rate & recommend',
               sub: `${first(b.provider)} completed ${b.service?.title || 'your service'} — recommend them`,
               actionLabel: 'Rate', onAction: () => setPostTarget(b),
+              onView: viewSvc(b.service?.id),
               ts: b.completed_at,
             }));
 
@@ -663,6 +694,7 @@ export function JobsInboxScreen() {
               headline: `${usd(b.total_cents)} · ${b.service?.title || 'your booking'}`,
               sub: `${first(b.provider)} confirmed your time — pay to lock it in`,
               actionLabel: 'Pay', onAction: () => payForBooking(b, { onPaid: refreshJobs }), busy: jobBusy[b.id],
+              onView: viewSvc(b.service?.id),
               ts: b.schedule_confirmed_at || b.created_at,
             }));
 
@@ -684,6 +716,7 @@ export function JobsInboxScreen() {
               : `${resp.service?.title || r.service_type || 'Offer'} accepted`,
             sub: `${first(resp.responder)} accepted — book a time`,
             actionLabel: 'Book', onAction: () => setActiveTab('Requests'),
+            onView: viewSvc(resp.service?.id),
             ts: resp.responded_at || resp.created_at,
           })));
 
@@ -703,13 +736,21 @@ export function JobsInboxScreen() {
             const fmtWhenShort = (iso) => iso
               ? new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
               : 'a time';
-            recent.forEach(({ b, who }) => items.push({
-              key: 'confirmed-' + b.id, tone: 'plain', money: false,
-              headline: `Booked · ${b.service?.title || 'service'}`,
-              sub: `Confirmed with ${first(who)} for ${fmtWhenShort(b.scheduled_at)}`,
-              actionLabel: 'View', onAction: () => setActiveTab('Upcoming'),
-              ts: b.schedule_confirmed_at,
-            }));
+            recent.forEach(({ b, who }) => {
+              // CERGIO-GUARD (2026-06-18, Tarik): a confirmed booking must STAND
+              // OUT as confirmed (green) with a one-tap "Add to calendar" — the
+              // old plain "Booked … [View]" looked like an unfinished action.
+              const cal = gcalUrl(b);
+              items.push({
+                key: 'confirmed-' + b.id, tone: 'green', money: false,
+                headline: `✓ Confirmed · ${b.service?.title || 'service'}`,
+                sub: `Booked with ${first(who)} · ${fmtWhenShort(b.scheduled_at)} — add it to your calendar`,
+                actionLabel: cal ? 'Add to calendar' : 'View',
+                onAction: () => cal ? window.open(cal, '_blank', 'noopener') : setActiveTab('Upcoming'),
+                onView: () => (b.service?.id ? navigate(`/service/${b.service.id}`) : setActiveTab('Upcoming')),
+                ts: b.schedule_confirmed_at,
+              });
+            });
           }
 
           // CERGIO-GUARD (2026-06-18, Tarik): the action feed is sorted

@@ -23,6 +23,7 @@ import {
   listInboundRequests,
   listProviderBookings,
   listMyRequestsWithResponses,
+  recoTimesOnMyServices,
 } from '../lib/api';
 
 const LS_KEY = 'cergio:lastInboxSeenAt';
@@ -59,10 +60,11 @@ export function useInboxUnread({ enabled = true } = {}) {
         return Number.isFinite(ms) && ms > lastSeenMs;
       };
       try {
-        const [inb, bookings, mine] = await Promise.all([
+        const [inb, bookings, mine, recos] = await Promise.all([
           listInboundRequests({ limit: 10 }),
           listProviderBookings(),
           listMyRequestsWithResponses({ limit: 10 }),
+          recoTimesOnMyServices({ limit: 20 }),
         ]);
         const freshInbound = (inb?.data || []).some(r => isFresh(r.created_at));
         const freshBooking = (bookings?.data || []).some(
@@ -77,7 +79,11 @@ export function useInboxUnread({ enabled = true } = {}) {
         const freshBarter = (bookings?.data || []).some(
           b => b.is_free_for_rainmaker && !b.post_confirmed_at && isFresh(b.posted_at),
         );
-        if (!cancelled) setUnread(freshInbound || freshBooking || freshResponse || freshBarter);
+        // CERGIO-GUARD (2026-06-18, Tarik): a fresh recommendation RECEIVED on
+        // one of my services (a 4★+ rate writes one) lights the dot too — "T
+        // rated but info didn't get a notification".
+        const freshReco = (recos?.data || []).some(r => isFresh(r.sent_at));
+        if (!cancelled) setUnread(freshInbound || freshBooking || freshResponse || freshBarter || freshReco);
       } catch {
         // Network/RLS hiccups — never flag unread on failure.
         if (!cancelled) setUnread(false);

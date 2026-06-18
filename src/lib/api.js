@@ -2029,6 +2029,31 @@ export function isConnectorProfile(p) {
  * track record on the frame-3 connector-request screen + their profile. Real
  * post links only (tappable IG tiles); no fabricated media (SPEC-12).
  */
+/**
+ * CERGIO-GUARD (2026-06-18, Tarik): sent_at times of recommendations RECEIVED on
+ * the signed-in user's own services. Powers the Inbox dot — when someone
+ * recommends you (a 4★+ rate writes a recommendation, SPEC-53), the provider
+ * gets a notification dot. Read-only; empty on signed-out / no services / error.
+ */
+export async function recoTimesOnMyServices({ limit = 50 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const { data: svcs } = await supabase
+    .from('services')
+    .select('id')
+    .eq('owner_id', userRes.user.id);
+  const ids = (svcs || []).map(s => s.id);
+  if (!ids.length) return { data: [], error: null };
+  const { data } = await supabase
+    .from('recommendations')
+    .select('sent_at')
+    .in('service_id', ids)
+    .order('sent_at', { ascending: false })
+    .limit(limit);
+  return { data: data || [], error: null };
+}
+
 export async function getConnectorSpotlights(connectorId, { limit = 6 } = {}) {
   if (!supabaseReady || !connectorId) return { data: [], error: null };
   const { data, error } = await supabase

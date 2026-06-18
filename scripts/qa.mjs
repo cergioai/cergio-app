@@ -1866,6 +1866,19 @@ test('spec-50-action-first-inbox', 'FROZEN: Inbox Overview is an action-first fe
   // (Tarik 2026-06-18). Disputes stay pinned.
   assert(/items\.sort\(/.test(inbox) && /new Date\(b\.ts/.test(inbox),
     'Overview action feed must sort by ts (newest first) — SPEC-50 chronological order');
+  // Every action row must also be VIEWABLE (onView) — "given a button to accept
+  // but no way to view" regression (Tarik 2026-06-18).
+  assert(/function ActionRow\([^)]*onView/.test(inbox) && /onView:/.test(inbox),
+    'ActionRow must accept onView and items must pass it — every action is also viewable (SPEC-50)');
+  // A confirmed booking stands out (green ✓ Confirmed) with a one-tap calendar add.
+  assert(/✓ Confirmed ·/.test(inbox) && /calendar\.google\.com\/calendar\/render/.test(inbox),
+    'Confirmed booking must render a standout "✓ Confirmed" row + Add-to-calendar link (SPEC-50)');
+
+  // The Inbox dot lights on a fresh recommendation received (a 4★+ rate writes
+  // one) so the provider is notified (Tarik 2026-06-18).
+  const dot = fs.readFileSync(path.join(REPO_ROOT, 'src/hooks/useInboxUnread.js'), 'utf8');
+  assert(/recoTimesOnMyServices/.test(dot) && /freshReco/.test(dot),
+    'useInboxUnread must light the dot on a fresh recommendation received (recoTimesOnMyServices) — SPEC-50');
 });
 
 test('login-on-book-invite', 'Booking while logged out invites to sign in (returnTo) — never dead-ends with an error', '#login1', async () => {

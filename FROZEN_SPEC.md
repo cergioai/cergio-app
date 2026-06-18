@@ -269,6 +269,9 @@ qa.mjs #49 enforces this.
 - **Green tone** = "your turn / needs your review" (provider Accept-post, consumer Rate & post). **Salmon** = dispute. Plain = neutral.
 - **Order (rev 2026-06-18, Tarik):** the feed is sorted **chronologically, newest first** so the "All" view shows the latest items (including free barters) on top instead of being grouped by section. **Disputes stay pinned** above the chronological list (they block a payout). The build order of the sections no longer dictates display order.
 - **Inline actions** reuse existing handlers: Accept post (`handleConfirmPost`), Rate & post (`setPostTarget`), Pay (`payForBooking`), View (`/inbound/:id`).
+- **Every row is also VIEWABLE (rev 2026-06-18, Tarik):** the row body (headline + sub) is a tappable button (`onView`) that opens the item's detail (service PDP / request), shown with a "· View →" cue. A row never offers only an action with no way to see what it is. ("given a button to accept but no way to view!! this has regressed").
+- **Confirmed bookings stand out:** a confirmed booking renders a green "✓ Confirmed · {service}" row with a one-tap **Add to calendar** (Google Calendar template link from `scheduled_at`), so the user clearly sees it's locked in and can add it.
+- **Inbox dot (`useInboxUnread`)** lights on: fresh inbound request, fresh pending booking, a provider accepting your request, a Connector posting your spotlight, AND a **fresh recommendation received** on your services (a 4★+ rate writes one) — so "T rated → info gets the dot" works.
 - A **money / free filter** (chips) sorts the feed. Cut clutter copy — no long explanatory paragraphs.
 - Empty state: "You're all caught up." Slim Upcoming/Past shortcuts sit below the feed. The Requests/Sent/Upcoming/Past tabs remain the detailed folders.
 

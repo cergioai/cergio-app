@@ -1,27 +1,21 @@
-Inbox chronological feed + profile reco fixes
+Inbox: viewable action rows, confirmed standout, dot on reco received
 
-Tarik 2026-06-18.
+Tarik 2026-06-18 — "app needs to be very very intuitive."
 
-1) Inbox Overview "All" now sorts CHRONOLOGICALLY (newest first) so the
-   latest items — including free barters — lead, instead of being grouped by
-   section priority and sinking to the bottom. Disputes stay pinned on top.
-   (SPEC-50 order revised; qa #50 extended.)
+- Every Overview action row is now VIEWABLE: the body taps through to the
+  item's detail (service PDP / request) with a "· View →" cue, alongside the
+  primary action. Fixes "given a button to accept but no way to view!!"
+- Confirmed bookings stand out: green "✓ Confirmed · {service}" row with a
+  one-tap "Add to calendar" (Google Calendar link from scheduled_at) so the
+  user clearly sees it's locked in and can add it — instead of a plain BOOK.
+- Inbox dot now also lights on a fresh recommendation RECEIVED on your
+  services (a 4★+ rate writes one) — "T rated but info didn't get a
+  notification". New api helper recoTimesOnMyServices; wired into
+  useInboxUnread.
+- FROZEN_SPEC SPEC-50 updated; qa #50 extended. All 58 flows green.
 
-2) Profile: removed the "Services received/used" section — services a person
-   *booked* are not shown on their profile (wasn't in spec). Keeps Services
-   (owned) + Go-Tos (recommended). (SPEC-49f revised; qa #49 updated.)
-
-3) Profile Go-Tos now show an "In your network" mutual badge when the viewer
-   is connected to the recommended provider. Viewer network (getMyNetworkIds)
-   is computed once so curators with no own services still get mutual flags.
-   (SPEC-49 updated; qa #49 extended.)
-
-NOTE (no code change): the "missing chef reco" — live diagnostic shows T has
-only 5 invite-style recommendations (Tutor/Plumber/Handyman/PA), all with
-service_id=null and a phone, and NO Personal Chef reco at all. So it's not
-hidden — it was never recorded. To recommend info@cergio's chef, T completes
-the "Rate & recommend" on the completed chef barter (now visible chronologically
-in Overview), which writes the service-linked reco that shows in Go-Tos. The 5
-invite recos stay hidden per SPEC-49d (unclaimed providers).
-
-All 58 qa flows green.
+NOTE (no code change): the forced rate/post LOCK on login (BarterPostGate,
+SPEC-47i) fires only AFTER the provider marks the job complete — that's by
+design (you can't post before the service is done). If T wasn't locked, the
+provider hadn't marked complete yet. The "Rate & post" action is also surfaced
+on the (now chronological) Overview with a clear View.
