@@ -1326,6 +1326,10 @@ export async function acceptRequestWithTime({ requestId, serviceId, scheduledAt 
     p_scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
   });
   if (error) return { data: null, error };
+  // CERGIO-GUARD (2026-06-18, Tarik): notify the requester their request was
+  // accepted + confirmed. This path creates a booking directly (no
+  // request_response row), so without this fire the consumer got no email/SMS.
+  if (data) fireBookingNotify(data, 'accepted');
   return { data: { bookingId: data }, error: null };
 }
 
@@ -1805,6 +1809,26 @@ export async function recommendService(serviceId, { review = '' } = {}) {
     })
     .select('id')
     .maybeSingle();
+  // CERGIO-GUARD (2026-06-18, Tarik): notify the service owner they were
+  // recommended/rated — the notify-user edge fn already has a
+  // `service_recommended` template, but recommendService never fired it (so the
+  // provider got no email/SMS, only the in-app dot). Best-effort, never blocks.
+  if (!error && data?.id) {
+    try {
+      const { data: svc } = await supabase
+        .from('services')
+        .select('owner_id, title')
+        .eq('id', serviceId)
+        .maybeSingle();
+      if (svc?.owner_id && svc.owner_id !== userRes.user.id) {
+        notifyUser({
+          event: 'service_recommended',
+          recipient: svc.owner_id,
+          data: { service_id: serviceId, service_title: svc.title || null, recommender_id: userRes.user.id },
+        });
+      }
+    } catch { /* best-effort — never block the rating */ }
+  }
   return { data: data || null, error: error || null };
 }
 

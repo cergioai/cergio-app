@@ -2027,6 +2027,22 @@ test('spec-55-fanout-rehydrates-services-near', 'FROZEN: getProvidersForNotify r
     'createRequestAndFanOut must exclude the requester from their own fan-out (ownerIds !== uid) — SPEC-55.');
 });
 
+test('spec-56-notify-coverage', 'FROZEN: recommendService + acceptRequestWithTime fire their notifications (SPEC-56)', '#56', async () => {
+  const api = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+
+  // recommendService notifies the service owner (service_recommended).
+  const rs = api.indexOf('export async function recommendService');
+  const rsrc = api.slice(rs, rs + 1400);
+  assert(/notifyUser\(\{[\s\S]*?event:\s*'service_recommended'/.test(rsrc),
+    "recommendService must fire notifyUser({ event: 'service_recommended', ... }) — SPEC-56");
+
+  // acceptRequestWithTime notifies the requester (booking accepted).
+  const aw = api.indexOf('export async function acceptRequestWithTime');
+  const awsrc = api.slice(aw, aw + 900);
+  assert(/fireBookingNotify\(\s*data\s*,\s*'accepted'\s*\)/.test(awsrc),
+    "acceptRequestWithTime must fire fireBookingNotify(data, 'accepted') — SPEC-56");
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

@@ -335,6 +335,16 @@ qa.mjs #55 enforces this.
 
 ---
 
+### SPEC-56 · Recommendation + accept-with-time must fire their notifications
+**Status:** FROZEN — 2026-06-18 (Tarik — "verify real email/SMS fire for the key events")
+**Rule:** Two events were writing their row but never firing a notification, so the recipient got no email/SMS:
+- **`recommendService`** must fire `notifyUser({ event: 'service_recommended', recipient: <service owner> })` after writing the recommendation (the notify-user edge fn already has that template). Best-effort; never blocks the rating. Skips self-recommendation.
+- **`acceptRequestWithTime`** must fire `fireBookingNotify(bookingId, 'accepted')` after the RPC — this path creates the confirmed booking directly (no `request_response` row), so without it the requester is never told their request was accepted.
+
+qa.mjs #56 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

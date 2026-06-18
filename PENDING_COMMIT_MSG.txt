@@ -1,15 +1,21 @@
-Post-gate fires earlier + inbox dot covers spotlight requests
+Notifications: fire on recommend + accept-with-time (SPEC-56)
 
-Tarik 2026-06-18.
+Tarik 2026-06-18 — notifications/email audit. Two events wrote their row but
+never fired a notification, so the recipient got no email/SMS:
 
-- SPEC-47i rev: the forced rate/post lock now fires once the barter service
-  has HAPPENED — provider marked complete OR the scheduled time has passed —
-  not only after the provider remembers to mark complete. getOutstandingFreeBarter
-  returns a serviceHappened flag; BarterPostGate blocks on it; copy adapts
-  ("Your {service} is done" when only the time has passed). Future-dated
-  barters still don't block.
-- Inbox dot now covers SPOTLIGHT requests too: a new inbound spotlight ask, or
-  the other party responding so it's your turn (inbound countered-by-provider;
-  outbound accepted / countered-by-connector). Wired listMyInbound/Outbound
-  SpotlightRequests into useInboxUnread.
-- FROZEN_SPEC SPEC-47i updated; qa #47i + #50 updated. All 58 flows green.
+- recommendService now fires notifyUser({ event: 'service_recommended',
+  recipient: <service owner> }) — the notify-user edge fn already had that
+  template; it just was never called. Best-effort, skips self, never blocks.
+- acceptRequestWithTime now fires fireBookingNotify(bookingId, 'accepted') —
+  this path creates the confirmed booking directly (no request_response row),
+  so the requester was never told their request was accepted.
+
+Audited the rest of the notify chain (request created, response, question,
+spotlight created/countered/posted/confirmed, booking posted/confirmed/
+complete/reschedule/dispute) — all already fire.
+
+Also audited the search → results flow: honest empty states, no dead-end
+buttons, offers render as provider cards routing to the PDP, waiting state has
+live reply counts + inline cancel. No fixes needed.
+
+FROZEN_SPEC SPEC-56 added; qa #56 added. All 59 flows green.
