@@ -1,18 +1,19 @@
-Find-a-Connector roster: ACCEPTED connectors only, with agreed price (SPEC-54)
+Full profile mirrors the interim accept screen (SPEC-49e)
 
-Tarik 2026-06-18 — "only show confirmed connectors (this one is not
-confirmed)." A seeded $25-countered row was leaking T onto info@cergio's
-roster because the old gate counted offered/countered as "confirmed."
+Tarik 2026-06-18 — "view full profile should show the same hierarchy as the
+interim accept screen (not plumber then connector)... show the service they
+spotlighted."
 
-- BrowseConnectorsScreen confirmation gate now keys ONLY on
-  status === 'accepted'. pending/offered/countered/declined/withdrawn/
-  expired no longer qualify — a counter is an open negotiation, not a yes.
-- The gate records the AGREED price per connector
-  (offered_price_cents ?? official_price_cents ?? 0) in a Map, and the
-  roster row shows that deal ("Free swap · accepted" or "Agreed $X/post")
-  instead of the rate-card sticker (which wrongly showed $500 for a
-  connector who'd accepted a free/$25 swap).
-- Free-first sort + "no free connectors" messaging now key off the agreed
-  price, not the rate card. Waiting-state copy updated (counters live in
-  Spotlight requests > Sent, not the roster).
-- FROZEN_SPEC SPEC-54 added; qa #54 added. All 57 qa flows green.
+- ProfileSignalBlock: a Connector subject now ALWAYS leads with the Connector
+  facet (reach: badge → headline → "IG · network · recos made"), with the
+  service facet below — instead of "Plumber · 0 recos received" on top.
+  connectorLeads = isConnector || serviceMode (serviceMode retained for the
+  consumer/booking nuance, but never demotes a Connector below their service).
+- PublicProfileScreen: added a "Spotlights on Cergio" section — the Connector's
+  posted track record via getConnectorSpotlights, rendered as the same small
+  IgPostTiles (w-[76px], 4/5, ~70%) used on the interim /inbound screen. Real
+  post links only; collapses when none.
+- Hierarchy now: Connector/reach → View Instagram → About (bio) → Spotlights →
+  Services — matching /inbound.
+- FROZEN_SPEC SPEC-49 lead-facet rule updated + SPEC-49e added; qa #49 extended
+  (connector-leads + spotlight track record). All 57 qa flows green.

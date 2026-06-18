@@ -26,8 +26,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds } from '../lib/api';
+import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds, getConnectorSpotlights } from '../lib/api';
 import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
+import { IgPostTile } from '../components/ui/IgPostTile';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -254,6 +255,10 @@ export function PublicProfileScreen() {
   // mutuals-with-viewer + Connectors first. Top-3 inline, "see all" expands.
   const [recosByService, setRecosByService] = useState({});
   const [services, setServices] = useState([]);
+  // Spotlights this profile has POSTED on IG/TikTok (their Connector track
+  // record — free barters with a confirmed post). Same source as the interim
+  // /inbound screen (getConnectorSpotlights), rendered as small post tiles.
+  const [spotlights, setSpotlights] = useState([]);
   // svcId → { total, friends, connectors, mutuals }
   const [svcRecoSummary, setSvcRecoSummary] = useState({});
   // Reviews on services this profile owns: { id, stars, comment, reviewer:{id,name}, booked_at }
@@ -296,6 +301,17 @@ export function PublicProfileScreen() {
     let cancelled = false;
     getInboxPartyCounts([profileId]).then(({ data }) => {
       if (!cancelled) setCounts((data || {})[profileId] || null);
+    });
+    return () => { cancelled = true; };
+  }, [profileId]);
+
+  // Spotlights this profile has posted (Connector track record) — same source
+  // as the interim /inbound accept screen (Tarik 2026-06-18).
+  useEffect(() => {
+    if (!profileId) { setSpotlights([]); return; }
+    let cancelled = false;
+    getConnectorSpotlights(profileId).then(({ data }) => {
+      if (!cancelled) setSpotlights(data || []);
     });
     return () => { cancelled = true; };
   }, [profileId]);
@@ -704,6 +720,26 @@ export function PublicProfileScreen() {
           <p className="text-body-sm text-b3 leading-relaxed mt-2">No bio yet!</p>
         )}
       </div>
+
+      {/* Spotlights on Cergio — the Connector's track record of posts they've
+          made for other services (real IG/TikTok post links, small tiles ~70%,
+          matching the interim /inbound screen — Tarik 2026-06-18). Gated on real
+          data; collapses silently when none. */}
+      {spotlights.length > 0 && (
+        <div className="px-5 mt-8">
+          <h2 className="text-heading-1 font-extrabold text-black">Spotlights on Cergio</h2>
+          <p className="text-meta text-b3 font-medium mt-1">
+            Services {firstName} has spotlighted on Instagram
+          </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {spotlights.slice(0, 9).map(s => (
+              <div key={s.id} className="w-[76px]">
+                <IgPostTile url={s.post_url} aspect="4 / 5" label={`Spotlight: ${s.title}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* {firstName}'s Services — each service LEADS its own recommendations
           (SPEC-49c, Tarik 2026-06-17): up to 3 services inline, each followed

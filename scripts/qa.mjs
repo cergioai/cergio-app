@@ -1898,6 +1898,17 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
 
   // 4. includeReco option keeps formatKeyCounts the single source.
   assert(/includeReco/.test(hook), 'formatKeyCounts must support includeReco (profile facet avoids double reco chip)');
+
+  // 5. SPEC-49e: a Connector subject LEADS with the Connector facet (reach),
+  //    not the service — mirrors the interim /inbound screen ("not plumber
+  //    then connector").
+  assert(/connectorLeads\s*=\s*isConnector/.test(block),
+    'ProfileSignalBlock must lead with the Connector facet for Connector subjects (connectorLeads = isConnector ...) — SPEC-49e.');
+
+  // 6. SPEC-49e: the full profile shows the Connector's spotlight track record
+  //    via the same source + tile as the interim screen.
+  assert(/getConnectorSpotlights/.test(prof) && /IgPostTile/.test(prof),
+    'PublicProfileScreen must render the spotlight track record (getConnectorSpotlights + IgPostTile) — SPEC-49e.');
 });
 
 test('spec-53-recommend-from-booking', 'FROZEN: Recommendations come from a completed booking (rate+post); IG post optional when paid; no service-page button (SPEC-53)', '#53', async () => {

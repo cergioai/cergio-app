@@ -92,11 +92,15 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
     );
   }
 
-  // Both roles → priority facet prominent on top, the other muted below.
-  // Provider/marketing viewer leads with the Connector; consumer/booking
-  // viewer leads with the Service (SPEC-48c).
-  const lead      = serviceMode ? <ConnectorFacet counts={counts} prominent headline={headline} /> : <ServiceFacet counts={counts} role={role} prominent headline={headline} />;
-  const secondary = serviceMode ? <ServiceFacet   counts={counts} role={role} /> : <ConnectorFacet counts={counts} />;
+  // Both roles → the CONNECTOR facet LEADS (reach is the headline signal),
+  // exactly like the interim accept screen on /inbound (Tarik 2026-06-18:
+  // "not plumber then connector"). The headline sits under the Connector
+  // badge, the service facet drops below. serviceMode is retained for the
+  // pure consumer/booking nuance; whenever the subject IS a Connector, the
+  // Connector leads.
+  const connectorLeads = isConnector || serviceMode;
+  const lead      = connectorLeads ? <ConnectorFacet counts={counts} prominent headline={headline} /> : <ServiceFacet counts={counts} role={role} prominent headline={headline} />;
+  const secondary = connectorLeads ? <ServiceFacet   counts={counts} role={role} /> : <ConnectorFacet counts={counts} />;
   return (
     <div className="mx-5 mt-5 bg-white border border-bdr rounded-[16px] p-4">
       {lead}
