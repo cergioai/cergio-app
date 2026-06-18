@@ -1900,10 +1900,9 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
   assert(/includeReco/.test(hook), 'formatKeyCounts must support includeReco (profile facet avoids double reco chip)');
 });
 
-test('spec-53-recommend-on-service', 'FROZEN: Recommend-on-service writes a service-linked recommendation + review boxes (SPEC-53)', '#53', async () => {
+test('spec-53-recommend-from-booking', 'FROZEN: Recommendations come from a completed booking (rate+post); IG post optional when paid; no service-page button (SPEC-53)', '#53', async () => {
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
   const pdp   = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/ServiceDetailScreen.jsx'), 'utf8');
-  const modalPath = path.join(REPO_ROOT, 'src/components/ui/RecommendProviderModal.jsx');
   const postModal = fs.readFileSync(path.join(REPO_ROOT, 'src/components/ui/MarkBookingPostedModal.jsx'), 'utf8');
 
   // 1. recommendService inserts a recommendation LINKED to the real service_id
@@ -1912,14 +1911,18 @@ test('spec-53-recommend-on-service', 'FROZEN: Recommend-on-service writes a serv
   const fn = api.slice(api.indexOf('export async function recommendService'), api.indexOf('export async function recommendService') + 700);
   assert(/service_id:\s*serviceId/.test(fn), 'recommendService must store the real service_id (not null)');
 
-  // 2. The service page mounts the recommend popup.
-  assert(fs.existsSync(modalPath), 'RecommendProviderModal.jsx must exist');
-  assert(/RecommendProviderModal/.test(pdp), 'ServiceDetailScreen must mount RecommendProviderModal');
-  const modal = fs.readFileSync(modalPath, 'utf8');
-  assert(/recommendService/.test(modal) && /textarea/.test(modal), 'RecommendProviderModal must use recommendService + a review textarea');
+  // 2. The rate + post flow is the recommendation mechanism: it creates a
+  //    service-linked recommendation (recommendService) for 4★+.
+  assert(/recommendService/.test(postModal), 'MarkBookingPostedModal must create a service-linked recommendation (rate+post is the reco flow)');
 
-  // 3. Rate + IG-post popup carries a review box for 4★+ (saved via createReview).
-  assert(/stars\s*>=\s*4/.test(postModal) && /textarea/.test(postModal), 'MarkBookingPostedModal must show a review textarea for 4★+');
+  // 3. IG post is OPTIONAL when paid, required for free/barter.
+  assert(/isPaid/.test(postModal) && /is_free_for_rainmaker/.test(postModal),
+    'MarkBookingPostedModal must make the IG post optional for paid bookings');
+
+  // 4. NO standalone "recommend without booking" button on the service page —
+  //    recommendations only come from a completed booking.
+  assert(!/RecommendProviderModal/.test(pdp),
+    'ServiceDetailScreen must NOT mount a standalone recommend modal — recos come from a booking');
 });
 
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {

@@ -5,7 +5,7 @@
 // and the provider can reply / escalate (module 2). markBookingPosted +
 // createReview in lib/api do the writes.
 import { useState, useEffect } from 'react';
-import { markBookingPosted, createReview, getMyEarningsSummary } from '../../lib/api';
+import { markBookingPosted, createReview, getMyEarningsSummary, recommendService } from '../../lib/api';
 import { buildInviteUrl } from '../../lib/referral';
 
 const fmtUsd = (cents) => `$${Math.round((cents || 0) / 100).toLocaleString()}`;
@@ -42,6 +42,12 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
   const providerFirst = (booking?.provider?.display_name || 'the provider').split(' ')[0];
   const reposting = !!booking?.post_flag_reason;
   const lowRating = stars > 0 && stars < 4;
+  // SPEC-54 (Tarik 2026-06-17): the IG post is the barter obligation for FREE
+  // services (required), but OPTIONAL when the user PAID — they can rate +
+  // recommend without posting. A 4★+ submit always writes a service-linked
+  // recommendation so it shows on profiles.
+  const isPaid = !booking?.is_free_for_rainmaker;
+  const hasUrl = /^https?:\/\//i.test(url.trim());
 
   // The connector's UNIQUE referral link (Tarik 2026-06-15): every signup
   // through it credits them (7% up to $250). `?s=` ties the click to THIS
@@ -59,7 +65,9 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
     if (busy) return;
     if (!stars) { setErr('Please rate the service first.'); return; }
     if (lowRating && !comment.trim()) { setErr('Please explain what went wrong.'); return; }
-    if (!lowRating && !/^https?:\/\//i.test(url.trim())) { setErr('Paste the public link to your Instagram post.'); return; }
+    // IG post is REQUIRED for free/barter (the barter obligation) but OPTIONAL
+    // when the user paid (SPEC-54).
+    if (!lowRating && !isPaid && !hasUrl) { setErr('Paste the public link to your Instagram post.'); return; }
     setBusy(true);
     setErr(null);
 
@@ -76,10 +84,18 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
       return;
     }
 
-    // 4★+ → publish the spotlight, completing the barter.
-    const { error } = await markBookingPosted(booking.id, { postUrl: url });
+    // 4★+ → write a service-linked recommendation so it surfaces on profiles
+    // (provider's "Recommendations received" + recommender's Go-Tos). SPEC-54.
+    const svcId = booking?.service?.id || booking?.service_id;
+    if (svcId) await recommendService(svcId, { review: comment.trim() });
+
+    // Publish the IG spotlight when a link was given. Free barter requires it
+    // (validated above); paid is optional — skip the post but keep the reco.
+    if (hasUrl) {
+      const { error } = await markBookingPosted(booking.id, { postUrl: url });
+      if (error) { setBusy(false); setErr(error.message || 'Could not save.'); return; }
+    }
     setBusy(false);
-    if (error) { setErr(error.message || 'Could not save.'); return; }
     onPosted?.();
     onClose?.();
   };
@@ -89,12 +105,14 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
       <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-5 pb-7 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-4" />
         <h2 className="text-[20px] font-extrabold text-black leading-tight mb-1">
-          {reposting ? 'Update your spotlight' : 'Rate & post your spotlight'}
+          {reposting ? 'Update your spotlight' : isPaid ? 'Rate & recommend' : 'Rate & post your spotlight'}
         </h2>
         <p className="text-meta text-b3 mb-3 leading-relaxed">
           Rate your <span className="font-extrabold text-black">{booking?.service?.title || 'service'}</span>{' '}
-          from {providerFirst}, then post your Instagram spotlight to finish the barter and
-          unlock your next free service.
+          from {providerFirst}
+          {isPaid
+            ? <> and recommend them to your network. Posting an Instagram spotlight is optional.</>
+            : <>, then post your Instagram spotlight to finish the barter and unlock your next free service.</>}
         </p>
         {reposting && (
           <div className="bg-warnBg border border-warn/40 rounded-[12px] px-3 py-2 mb-3">
@@ -204,7 +222,9 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
 
               {/* Confirm — paste the Story Highlight / post link for the record */}
               <div>
-                <label className="block text-meta font-extrabold text-black mb-1">Paste your Story-Highlight or post link</label>
+                <label className="block text-meta font-extrabold text-black mb-1">
+                  Paste your Story-Highlight or post link{isPaid && <span className="text-b3 font-medium"> (optional)</span>}
+                </label>
                 <input
                   type="url"
                   value={url}
@@ -228,7 +248,11 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
                 ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
                 : 'bg-bg5 text-b3 cursor-not-allowed'}`}
           >
-            {busy ? 'Saving…' : lowRating ? 'Submit review' : reposting ? 'Resubmit spotlight' : 'Rate & post spotlight'}
+            {busy ? 'Saving…'
+              : lowRating ? 'Submit review'
+              : reposting ? 'Resubmit spotlight'
+              : isPaid ? (hasUrl ? 'Recommend & post' : 'Post recommendation')
+              : 'Rate & post spotlight'}
           </button>
           <button
             type="button"

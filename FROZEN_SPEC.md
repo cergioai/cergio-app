@@ -289,12 +289,15 @@ qa.mjs #50 enforces this.
 
 ## UI / BEHAVIOR — RECOMMEND A PROVIDER + REVIEWS
 
-### SPEC-53 · Recommend an on-platform service (service-linked) + review boxes
-**Status:** FROZEN — 2026-06-17 (Tarik)
+### SPEC-53 · Recommendations come from a completed booking (rate + post); IG post optional when paid
+**Status:** FROZEN — 2026-06-17 (Tarik — SUPERSEDES the earlier same-day "Recommend button on the service page" version, which was removed)
 **Rule:**
-- A **"Recommend {name}"** button on the service page (`ServiceDetailScreen`) lets any signed-in viewer who is NOT the owner vouch for an **on-platform** service. It opens `RecommendProviderModal` (a **review** textarea) and writes a recommendation **LINKED to the real `service_id`** via `recommendService(serviceId, {review})` — so it surfaces on the provider's profile ("People who love {name}" / recos received) AND the recommender's Go-Tos (recos made). Contrast the invite/reco form (`RecommendServiceFormScreen`), which recommends a free-text type to a friend with `service_id = null` (counts but doesn't display — SPEC-49d).
-- The **rate + IG-post** popup (`MarkBookingPostedModal`) shows a **"Write a review (optional)"** textarea for **4★+** (saved via `createReview` alongside the rating). The existing **below-4★** required "what went wrong?" private-review flow is unchanged (SPEC-47c/47e).
-- No fake data (SPEC-12): the review text is the recommender's own words; the recommendation is a real row.
+- A recommendation (with a star) can ONLY be made AFTER the user has **booked & completed** that service on the platform. It happens in the **rate + post** flow (`MarkBookingPostedModal`) — there is **NO standalone "Recommend" button on the service page** (`ServiceDetailScreen` mounts no recommend modal).
+- That flow serves **both free and paid** bookings. The **IG post is REQUIRED for free/barter** (the barter obligation) and **OPTIONAL when the user PAID** (`isPaid = !is_free_for_rainmaker`; paid submit skips `markBookingPosted` when no link).
+- A **4★+** submit writes a **service-linked recommendation** (`recommendService` → `recommendations.service_id`) so it surfaces on the provider's profile ("People who love {name}" / recos received) AND the recommender's Go-Tos. Below-4★ stays the private held-review path (SPEC-47c/47e).
+- **EXCEPTION:** the first/**invite recommendation** that onboards a not-yet-registered provider (`RecommendServiceFormScreen`, free-text, `service_id = null`) needs no booking — it drives notify-to-register (SPEC-49d).
+- Inbox surfaces **"Rate & post"** (free) and **"Rate & recommend"** (paid, time-boxed 14d) for completed bookings.
+- No fake data (SPEC-12): the review text is the user's own words; the recommendation is a real row.
 
 qa.mjs #53 enforces this.
 

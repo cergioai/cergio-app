@@ -640,6 +640,21 @@ export function JobsInboxScreen() {
               ts: b.completed_at,
             }));
 
+          // 3b. Consumer: a PAID booking the provider completed — rate & recommend
+          //     (IG post optional). Time-boxed (14d) so it doesn't nag forever
+          //     once they've moved on. Same modal; recommendation shows on
+          //     profiles. (SPEC-54, Tarik 2026-06-17)
+          asConsumer
+            .filter(b => !b.is_free_for_rainmaker && b.completed_at && !b.posted_at
+              && (Date.now() - new Date(b.completed_at).getTime()) < 14 * 24 * 60 * 60 * 1000)
+            .forEach(b => items.push({
+              key: 'rate-' + b.id, tone: 'green', money: false,
+              headline: 'Rate & recommend',
+              sub: `${first(b.provider)} completed ${b.service?.title || 'your service'} — recommend them`,
+              actionLabel: 'Rate', onAction: () => setPostTarget(b),
+              ts: b.completed_at,
+            }));
+
           // 4. Consumer: confirmed paid booking, not yet paid — lead with $.
           asConsumer
             .filter(b => !b.is_free_for_rainmaker && b.status === 'confirmed' && !b.paid_at && (b.total_cents || 0) > 0)

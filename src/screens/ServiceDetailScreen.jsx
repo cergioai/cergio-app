@@ -24,7 +24,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestQuoteSheet } from '../components/ui/RequestQuoteSheet';
-import { RecommendProviderModal } from '../components/ui/RecommendProviderModal';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -158,9 +157,6 @@ export function ServiceDetailScreen() {
   const location = useLocation();
   const { handleBook, showToast, defaultAddress, auth } = useOutletContext();
   const [requestSheetOpen, setRequestSheetOpen] = useState(false);
-  // Recommend-this-provider popup (Tarik 2026-06-17).
-  const [recommendOpen, setRecommendOpen] = useState(false);
-  const [recommended, setRecommended] = useState(false);
 
   // Prefer state passed from ResultsScreen (fast path). Cold-deep-link
   // fallback re-fetches the row + its recommenders.
@@ -540,27 +536,11 @@ export function ServiceDetailScreen() {
         </div>
       </div>
 
-      {/* Recommend this provider (Tarik 2026-06-17) — anyone signed in (not the
-          owner) can vouch for an on-platform service. Writes a recommendation
-          LINKED to this service_id so it shows on the provider's profile +
-          the recommender's Go-Tos. */}
-      {auth?.isSignedIn && provider.ownerId && auth?.user?.id !== provider.ownerId && (
-        <div className="px-5 mt-4">
-          <button
-            type="button"
-            onClick={() => { if (!recommended) setRecommendOpen(true); }}
-            disabled={recommended}
-            className={`inline-flex items-center gap-2 rounded-pill px-4 py-2 text-body-sm font-extrabold transition-all
-              ${recommended ? 'bg-gl text-gd cursor-default' : 'bg-gl text-gd hover:bg-gl/70 active:scale-[.98]'}`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
-              <path d="M9 12l2 2 4-4"/>
-            </svg>
-            {recommended ? `Recommended ✓` : `Recommend ${firstName}`}
-          </button>
-        </div>
-      )}
+      {/* Recommend button REMOVED (Tarik 2026-06-17, SPEC-54): a recommendation
+          can only be made AFTER booking & completing the service — it happens in
+          the rate + post flow (MarkBookingPostedModal), not from the service
+          page. The only no-booking reco is the invite-reco that onboards a new
+          provider (RecommendServiceFormScreen). */}
 
       {/* Reco line — "Reco'd by N friends and E Connectors, including
           {LeadName}" with single lead-recommender avatar pinned right.
@@ -899,14 +879,6 @@ export function ServiceDetailScreen() {
         />
       )}
 
-      {recommendOpen && (
-        <RecommendProviderModal
-          serviceId={provider.id || serviceId}
-          providerName={ownerProfile?.display_name || provider.name}
-          onClose={() => setRecommendOpen(false)}
-          onDone={() => { setRecommended(true); showToast?.(`Thanks — your recommendation is live on ${firstName}'s profile.`); }}
-        />
-      )}
     </div>
   );
 }

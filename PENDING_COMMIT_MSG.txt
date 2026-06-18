@@ -1,15 +1,18 @@
-Inbox: timestamps on Overview events + surface recently-confirmed bookings
+Recommendations come from a completed booking (SPEC-53 rewrite)
 
-Tarik 2026-06-17:
-- Every Overview action row now shows a relative timestamp (now/5m/3h/2d/
-  1w, then a date) next to the headline (new timeAgo helper; ActionRow ts).
-- Added a "Booked · {service}" Overview row for bookings CONFIRMED in the
-  last 48h (consumer + provider, free or paid-up, not yet completed). This
-  surfaces a "just accepted/booked" job in the action feed instead of it
-  only living in Upcoming — which is why an accepted free booking looked
-  like it "wasn't showing" (it was in Upcoming; the action-first Overview
-  had no entry for a confirmed-with-nothing-pending job).
+Tarik 2026-06-17 — recos are now gated on a real booking; the rate+post
+flow is the single recommendation mechanism:
 
-Diagnosis note: the accept itself is CORRECT — verified the just-accepted
-free booking exists with consumer_id = the requester (T), status confirmed.
-No data bug; this is purely surfacing + timestamps. qa #50/#47 green.
+- Removed the standalone "Recommend {name}" button + RecommendProviderModal
+  usage from ServiceDetailScreen (today's earlier SPEC-53). Recos no longer
+  happen from the service page.
+- MarkBookingPostedModal now serves BOTH free and paid bookings:
+    • IG post REQUIRED for free/barter, OPTIONAL when paid (isPaid).
+    • A 4★+ submit writes a service-linked recommendation (recommendService)
+      so it shows on the provider's profile + the recommender's Go-Tos.
+    • Copy/labels adapt ("Rate & recommend" / optional post link / button).
+- Inbox Overview: added "Rate & recommend" for PAID completed bookings
+  (time-boxed 14d) alongside the free "Rate & post".
+- EXCEPTION preserved: the invite-reco (RecommendServiceFormScreen, no
+  booking) that onboards a new provider — SPEC-49d.
+- FROZEN_SPEC SPEC-53 rewritten; qa #53 updated. #47/#49/#50/#53 green.
