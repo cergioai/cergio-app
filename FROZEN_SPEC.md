@@ -250,10 +250,11 @@ qa.mjs #48 enforces this.
 - The full profile (`/u/:profileId`) mirrors the interim `/inbound` accept screen's information hierarchy: **Connector/reach leads** (badge → headline → "IG · network · recos made" → View Instagram), **then** About (bio), **then** the service facet/services. NOT "plumber then connector".
 - **Spotlights on Cergio** section added: the Connector's posted track record (`getConnectorSpotlights(profileId)` — free barters with a confirmed `post_url`), rendered as **small `IgPostTile`s (`w-[76px]`, aspect 4/5, ~70%)** in a wrapping row, labeled `Spotlight: {service title}`. Same source + tile as the interim screen. Real post links only — collapses silently when none (SPEC-12).
 
-**SPEC-49f · Recommendations-received + Services-received sections (FROZEN 2026-06-18, Tarik).**
+**SPEC-49f · Recommendations-received section (FROZEN 2026-06-18, Tarik).**
 - **"Recommendations received"** — a consolidated header + list of every recommendation RECEIVED across the profile's services (`recosReceived`, rendered with `RecoRow`). This is the SPEC-49 "People who love {name}" surface as its own section, in addition to the per-service inline recos (SPEC-49c). Collapses when none.
-- **"Services {name} has received"** — services the profile has actually used on Cergio: completed/confirmed/in-progress bookings where they were the **consumer**, deduped, newest first, rendered with `ServiceTile`. Collapses when none. Real rows only (SPEC-12).
-- Section order on the full profile: signal block → Spotlights on Cergio → {name}'s Services → Recommendations received → Services received → {name}'s Go-Tos.
+- **No "Services received / used" section** — Tarik 2026-06-18: services a person *booked* are NOT shown on their profile (wasn't in spec). The profile shows services they OWN ({name}'s Services) and services they RECOMMEND ({name}'s Go-Tos), not services consumed.
+- Section order on the full profile: signal block → Spotlights on Cergio → {name}'s Services → Recommendations received → {name}'s Go-Tos.
+- **Mutuals on Go-Tos** — each recommended-service (Go-To) card shows an **"In your network"** badge when the VIEWER is connected to that recommended provider (owner in the viewer's `getMyNetworkIds` set). Same trust signal as the per-service recos; computed once so curators with no own services still get it.
 
 qa.mjs #49 enforces this.
 
@@ -266,7 +267,7 @@ qa.mjs #49 enforces this.
 **Rule:** The Jobs **Overview** tab is a single prioritized **action feed**, not a passive digest. Each item is a compact one-liner (`ActionRow`): a headline + short sub-line + the PRIMARY action INLINE. Rules:
 - **Lead with $** when a real amount exists (`total_cents`, `offered_price_cents`) — never fabricate an amount (inbound requests have no stored budget, so they lead with the service, not a fake $).
 - **Green tone** = "your turn / needs your review" (provider Accept-post, consumer Rate & post). **Salmon** = dispute. Plain = neutral.
-- **Priority order:** disputes → spotlight to review (provider) → rate & post (consumer) → pay-due ($) → new requests → offers to book.
+- **Order (rev 2026-06-18, Tarik):** the feed is sorted **chronologically, newest first** so the "All" view shows the latest items (including free barters) on top instead of being grouped by section. **Disputes stay pinned** above the chronological list (they block a payout). The build order of the sections no longer dictates display order.
 - **Inline actions** reuse existing handlers: Accept post (`handleConfirmPost`), Rate & post (`setPostTarget`), Pay (`payForBooking`), View (`/inbound/:id`).
 - A **money / free filter** (chips) sorts the feed. Cut clutter copy — no long explanatory paragraphs.
 - Empty state: "You're all caught up." Slim Upcoming/Past shortcuts sit below the feed. The Requests/Sent/Upcoming/Past tabs remain the detailed folders.

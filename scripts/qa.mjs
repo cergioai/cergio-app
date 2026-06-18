@@ -1861,6 +1861,11 @@ test('spec-50-action-first-inbox', 'FROZEN: Inbox Overview is an action-first fe
     'Action feed must have a money/free filter');
   // Green tone reserved for "your turn / review" rows.
   assert(/tone:\s*'green'/.test(inbox), 'Review/your-turn rows must use the green tone');
+  // Feed is sorted CHRONOLOGICALLY (newest first) so "All" shows the latest
+  // items (incl. free barters) on top, not grouped by section priority
+  // (Tarik 2026-06-18). Disputes stay pinned.
+  assert(/items\.sort\(/.test(inbox) && /new Date\(b\.ts/.test(inbox),
+    'Overview action feed must sort by ts (newest first) — SPEC-50 chronological order');
 });
 
 test('login-on-book-invite', 'Booking while logged out invites to sign in (returnTo) — never dead-ends with an error', '#login1', async () => {
@@ -1922,12 +1927,17 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
   assert(/bio=\{profile\?\.bio\}/.test(prof) && /igHandle=\{igHandle\}/.test(prof),
     'PublicProfileScreen must pass bio + igHandle into ProfileSignalBlock (About + View Instagram folded in) — SPEC-49e.');
 
-  // 8. SPEC-49f: consolidated "Recommendations received" + "Services received"
-  //    sections on the full profile.
-  assert(/Recommendations received/.test(prof) && /servicesReceived/.test(prof),
-    'PublicProfileScreen must render the "Recommendations received" + "Services received" sections — SPEC-49f.');
-  assert(/consumer_id/.test(prof),
-    'Services-received must load completed bookings where the profile is the consumer — SPEC-49f.');
+  // 8. SPEC-49f: consolidated "Recommendations received" section on the full
+  //    profile. NO "services received/used" section (services consumed are not
+  //    shown on a profile — Tarik 2026-06-18).
+  assert(/Recommendations received/.test(prof),
+    'PublicProfileScreen must render the "Recommendations received" section — SPEC-49f.');
+  assert(!/servicesReceived/.test(prof),
+    'PublicProfileScreen must NOT render a services-received/used section — SPEC-49f (services consumed are not shown).');
+
+  // 9. Go-Tos cards flag mutuals (viewer connected to the recommended provider).
+  assert(/isMutual:\s*!!\(owner\s*&&\s*netSet\.has\(owner\.id\)\)/.test(prof),
+    'Go-Tos must flag isMutual from the viewer network (netSet) — mutuals on reco’d services.');
 });
 
 test('spec-53-recommend-from-booking', 'FROZEN: Recommendations come from a completed booking (rate+post); IG post optional when paid; no service-page button (SPEC-53)', '#53', async () => {

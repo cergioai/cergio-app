@@ -1,21 +1,27 @@
-Fix: provider request fan-out never matched anyone (SPEC-55)
+Inbox chronological feed + profile reco fixes
 
-Tarik 2026-06-18 — "requested a plumber/chef and the provider didn't get
-notified." Root cause found via live diagnostic: ZERO new_request
-notifications had EVER been written.
+Tarik 2026-06-18.
 
-services_near returns only proximity columns (id/title/location/distance),
-NOT taxonomy_provider_type. getProvidersForNotify was filtering the RAW rpc
-rows on s.taxonomy_provider_type — always undefined → allow.includes('') →
-false → matched NOTHING → createRequestAndFanOut fanned out to 0 providers,
-every time.
+1) Inbox Overview "All" now sorts CHRONOLOGICALLY (newest first) so the
+   latest items — including free barters — lead, instead of being grouped by
+   section priority and sinking to the bottom. Disputes stay pinned on top.
+   (SPEC-50 order revised; qa #50 extended.)
 
-- getProvidersForNotify now re-hydrates full rows from the services table by
-  id (owner_id + taxonomy_provider_type, status='listed') BEFORE the strict
-  provider-type filter — the same fix searchServices already uses.
-- createRequestAndFanOut excludes the requester from their own fan-out.
-- FROZEN_SPEC SPEC-55 added; qa #55 added. All 58 flows green.
+2) Profile: removed the "Services received/used" section — services a person
+   *booked* are not shown on their profile (wasn't in spec). Keeps Services
+   (owned) + Go-Tos (recommended). (SPEC-49f revised; qa #49 updated.)
 
-NOTE (separate, by design): info@cergio is a Personal Chef — it correctly
-won't be notified of PLUMBER requests. This fix is why it (and every matching
-provider) now gets notified of matching requests at all.
+3) Profile Go-Tos now show an "In your network" mutual badge when the viewer
+   is connected to the recommended provider. Viewer network (getMyNetworkIds)
+   is computed once so curators with no own services still get mutual flags.
+   (SPEC-49 updated; qa #49 extended.)
+
+NOTE (no code change): the "missing chef reco" — live diagnostic shows T has
+only 5 invite-style recommendations (Tutor/Plumber/Handyman/PA), all with
+service_id=null and a phone, and NO Personal Chef reco at all. So it's not
+hidden — it was never recorded. To recommend info@cergio's chef, T completes
+the "Rate & recommend" on the completed chef barter (now visible chronologically
+in Overview), which writes the service-linked reco that shows in Go-Tos. The 5
+invite recos stay hidden per SPEC-49d (unclaimed providers).
+
+All 58 qa flows green.

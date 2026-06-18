@@ -265,10 +265,6 @@ export function PublicProfileScreen() {
   const [reviews, setReviews] = useState([]);
   // Recommendations this profile has authored, joined to services + owners.
   const [recoServices, setRecoServices] = useState([]);
-  // Services this profile has RECEIVED — completed bookings where they were the
-  // consumer, joined to the service + its owner (provider). Social proof of what
-  // they've actually used on Cergio (Tarik 2026-06-18). Real rows only.
-  const [servicesReceived, setServicesReceived] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -353,6 +349,14 @@ export function PublicProfileScreen() {
       if (!prof) { setNotFound(true); setLoading(false); return; }
       setProfile(prof);
 
+      // Viewer's network ids (both directions) — flags mutuals on BOTH the
+      // per-service recos AND the Go-Tos (recommended services). Computed once
+      // so a curator with no services of their own still gets mutual flags on
+      // their recommendations (Tarik 2026-06-18). Signed-out → empty set.
+      const netRes = await getMyNetworkIds();
+      if (cancelled) return;
+      const netSet = new Set(netRes?.data || []);
+
       // Services they own (for the "Their Services" + "People who love"
       // and to derive role).
       const { data: svcs } = await supabase
@@ -388,12 +392,9 @@ export function PublicProfileScreen() {
         const profMap = Object.fromEntries((recProfs || []).map(p => [p.id, p]));
         const svcTitleMap = Object.fromEntries(svcRows.map(s => [s.id, s.title]));
 
-        // Viewer's network → flag which recommenders the VIEWER already knows
-        // ("mutuals with the viewer"). Always surfaced on recommended services
-        // as the trust signal (SPEC-49c, Tarik 2026-06-17). Signed-out → none.
-        const netRes = await getMyNetworkIds();
-        if (cancelled) return;
-        const netSet = new Set(netRes?.data || []);
+        // netSet (computed above) flags which recommenders the VIEWER already
+        // knows ("mutuals with the viewer") — the trust signal on recommended
+        // services (SPEC-49c).
 
         // Group recommendations RECEIVED per service. Within each service,
         // surface mutuals-with-viewer first, then Connectors, then everyone
@@ -528,6 +529,10 @@ export function PublicProfileScreen() {
             id: r.id,
             sent_at: r.sent_at,
             message: r.message || '',
+            // Mutual = the VIEWER is connected to the recommended provider
+            // (owner in the viewer's network). Surfaces an "In your network"
+            // badge on the Go-To card (Tarik 2026-06-18).
+            isMutual: !!(owner && netSet.has(owner.id)),
             service: {
               id: s.id,
               title: s.title,
@@ -545,39 +550,6 @@ export function PublicProfileScreen() {
         })
         .filter(Boolean);
       if (!cancelled) setRecoServices(shapedRecos);
-
-      // Services RECEIVED — completed bookings where this profile is the
-      // consumer. Same readability path as getConnectorSpotlights (bookings are
-      // viewable to render a person's track record). Dedupe by service; collapse
-      // silently when none (no fake data, SPEC-12).
-      const { data: rcvBkgs } = await supabase
-        .from('bookings')
-        .select('service_id, status, completed_at, created_at')
-        .eq('consumer_id', profileId)
-        .in('status', ['completed', 'confirmed', 'in_progress'])
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (cancelled) return;
-      const rcvIds = [...new Set((rcvBkgs || []).map(b => b.service_id).filter(Boolean))];
-      const { data: rcvSvcs } = rcvIds.length
-        ? await supabase
-            .from('services')
-            .select(`
-              id, title, category, description, location_text, photo_class, cover_url,
-              taxonomy_provider_type, owner_id,
-              offerings ( id, name, price_cents, is_default )
-            `)
-            .in('id', rcvIds)
-            .eq('status', 'listed')
-        : { data: [] };
-      if (cancelled) return;
-      // Keep booking recency order; map to the same shape ServiceTile expects.
-      const rcvSvcMap = Object.fromEntries((rcvSvcs || []).map(s => {
-        const def = (s.offerings || []).find(o => o.is_default) || s.offerings?.[0];
-        return [s.id, { ...s, price_cents: def?.price_cents ?? null }];
-      }));
-      const shapedReceived = rcvIds.map(id => rcvSvcMap[id]).filter(Boolean);
-      if (!cancelled) setServicesReceived(shapedReceived);
 
       setLoading(false);
     })();
@@ -819,25 +791,6 @@ export function PublicProfileScreen() {
         </div>
       )}
 
-      {/* Services received — services {firstName} has actually used on Cergio
-          (completed/confirmed bookings as the consumer). Social proof of what
-          they book. Reuses ServiceTile; collapses when none (Tarik 2026-06-18). */}
-      {servicesReceived.length > 0 && (
-        <div className="px-5 mt-8">
-          <h2 className="text-heading-1 font-extrabold text-black">Services {firstName} has received</h2>
-          <div className="mt-3 flex flex-col gap-4">
-            {servicesReceived.slice(0, 6).map(svc => (
-              <ServiceTile
-                key={svc.id}
-                svc={svc}
-                recoSummary={svcRecoSummary[svc.id]}
-                onOpen={() => navigate(`/service/${svc.id}`)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* {firstName}'s Go-Tos — services they've recommended.
           CERGIO-GUARD (2026-05-30 v2): card layout rebuilt to match
           the Jennifer Leighton mockup. Dropped the redundant
@@ -881,6 +834,15 @@ export function PublicProfileScreen() {
                         </svg>
                         {r.service?.taxonomy_provider_type || r.service?.category || 'Service'}
                       </p>
+                      {/* Mutual badge — viewer is connected to this provider. */}
+                      {r.isMutual && (
+                        <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold mt-0.5">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
+                          </svg>
+                          In your network
+                        </span>
+                      )}
                     </div>
                   </div>
                   <p className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-1">
@@ -918,7 +880,7 @@ export function PublicProfileScreen() {
 
       {/* Empty state — no services + no recos authored. Surfaces gently
           rather than rendering a blank scroll area. */}
-      {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && servicesReceived.length === 0 && spotlights.length === 0 && (
+      {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && spotlights.length === 0 && (
         <div className="px-5 mt-8 mb-8">
           <div className="bg-white border border-bdr rounded-[14px] p-5 text-center">
             <p className="text-body font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>

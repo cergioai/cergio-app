@@ -712,6 +712,18 @@ export function JobsInboxScreen() {
             }));
           }
 
+          // CERGIO-GUARD (2026-06-18, Tarik): the action feed is sorted
+          // CHRONOLOGICALLY (newest first) so "All" shows everything in time
+          // order — the latest items (incl. free barters) lead, instead of
+          // being grouped by section priority and sinking to the bottom.
+          // Disputes stay pinned on top (they block a payout). Everything else
+          // sorts by ts desc.
+          items.sort((a, b) => {
+            const ap = a.tone === 'salmon' ? 1 : 0;
+            const bp = b.tone === 'salmon' ? 1 : 0;
+            if (ap !== bp) return bp - ap;            // disputes first
+            return new Date(b.ts || 0) - new Date(a.ts || 0);  // then newest first
+          });
           const filtered = items.filter(it =>
             actionFilter === 'all' ? true : actionFilter === 'money' ? it.money : !it.money);
           const FILTERS = [['all', 'All'], ['money', 'Money'], ['free', 'Free']];
