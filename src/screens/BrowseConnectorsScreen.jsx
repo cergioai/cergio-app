@@ -98,18 +98,18 @@ export function BrowseConnectorsScreen() {
   const [connectors, setConnectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [requestTarget, setRequestTarget] = useState(null);  // Connector row open in modal
-  // CERGIO-GUARD (2026-06-03): per Tarik — same notify→confirm→show
-  // gate as the consumer-side ResultsScreen applies here.
-  // "did search for connectors... got this suggested paid (but
-  //  connector hadn't confirmed).. need to ONLY show confirmed
-  //  ...even when they counter with offer instead of free"
-  // We restrict the roster to Connectors who've responded with
-  // status IN ('offered','countered','accepted') on at least one
-  // outbound spotlight_requests row from this provider. A counter
-  // at a paid price still counts as confirmed — the Connector said
-  // "yes, here's my price." Until they respond, they don't appear.
-  // confirmedConnectorIds === null → not yet fetched (loading gate)
-  // confirmedConnectorIds === Set() → fetched, zero confirmations yet
+  // CERGIO-GUARD (2026-06-17): per Tarik — ONLY show Connectors who have
+  // ACCEPTED. "only show confirmed connectors (this one is not confirmed)".
+  // The earlier rule also counted 'offered'/'countered' as confirmed, but a
+  // counter is still an open negotiation — and a seeded/provider-side counter
+  // could surface a Connector who never actually said yes (that's exactly the
+  // $25-countered T row that leaked onto info@cergio's roster). A confirmation
+  // now means status === 'accepted' on an outbound spotlight_requests row from
+  // this provider — nothing less.
+  // confirmed is a Map<connector_id, agreedCents> so the row can show the price
+  // the Connector ACTUALLY agreed (free swap = 0), not their rate-card sticker.
+  //   confirmedConnectorIds === null  → not yet fetched (loading gate)
+  //   confirmedConnectorIds === Map() → fetched, zero acceptances yet
   const [confirmedConnectorIds, setConfirmedConnectorIds] = useState(null);
   const [hasAnyOutboundRequest, setHasAnyOutboundRequest] = useState(false);
   // Provider's own services — the thing a Connector spotlights. Drives the
@@ -152,12 +152,13 @@ export function BrowseConnectorsScreen() {
     })();
   }, []);
 
-  // CERGIO-GUARD (2026-06-03): poll the user's outbound
-  // spotlight_requests so we know which Connectors have actually
-  // confirmed. Status 'offered' / 'countered' / 'accepted' all
-  // count — a paid counter is still a "yes, here's my price."
-  // 'pending' / 'declined' / 'withdrawn' / 'expired' do NOT count.
-  // Refreshes every 5s while the screen is open.
+  // CERGIO-GUARD (2026-06-17): poll the user's outbound spotlight_requests so
+  // we know which Connectors have ACCEPTED. ONLY status === 'accepted' counts
+  // (Tarik: "only show confirmed connectors"). 'pending' / 'offered' /
+  // 'countered' / 'declined' / 'withdrawn' / 'expired' do NOT — a counter is an
+  // open negotiation, not a confirmation. We record the agreed price per
+  // Connector (offered_price_cents ?? official_price_cents ?? 0) so the roster
+  // row shows what they actually said yes to. Refreshes every 5s.
   useEffect(() => {
     let cancelled = false;
     const fetchOnce = async () => {
@@ -165,10 +166,10 @@ export function BrowseConnectorsScreen() {
       if (cancelled) return;
       const rows = data || [];
       setHasAnyOutboundRequest(rows.length > 0);
-      const confirmed = new Set();
+      const confirmed = new Map();   // connector_id -> agreed cents (0 = free swap)
       for (const r of rows) {
-        if (['offered', 'countered', 'accepted'].includes(r.status) && r.connector_id) {
-          confirmed.add(r.connector_id);
+        if (r.status === 'accepted' && r.connector_id && !confirmed.has(r.connector_id)) {
+          confirmed.set(r.connector_id, r.offered_price_cents ?? r.official_price_cents ?? 0);
         }
       }
       setConfirmedConnectorIds(confirmed);
@@ -230,17 +231,14 @@ export function BrowseConnectorsScreen() {
       ) : connectors.length === 0 ? (
         <EmptyState />
       ) : (() => {
-        // CERGIO-GUARD (2026-06-03): apply the confirmation-only
-        // gate. Until a Connector has responded (offered / countered
-        // / accepted) on one of this provider's outbound spotlight
-        // requests, they don't show up in the roster. A countered
-        // paid price still counts — "yes, here's my price" IS a
-        // confirmation per Tarik's directive.
-        const confirmedOnly = connectors.filter(c => confirmedConnectorIds.has(c.id));
-        const hasFreeConnector = confirmedOnly.some(c =>
-          c.spotlight_price_instagram_cents == null &&
-          c.spotlight_price_tiktok_cents == null
-        );
+        // CERGIO-GUARD (2026-06-17): apply the ACCEPTED-only gate. A Connector
+        // only appears once they've accepted one of this provider's outbound
+        // spotlight requests. We attach the agreed price (agreedCents, 0 = free
+        // swap) so the row reflects what they said yes to, not their rate card.
+        const confirmedOnly = connectors
+          .filter(c => confirmedConnectorIds.has(c.id))
+          .map(c => ({ ...c, agreedCents: confirmedConnectorIds.get(c.id) }));
+        const hasFreeConnector = confirmedOnly.some(c => (c.agreedCents ?? 0) === 0);
 
         // ENTRY — no request broadcast yet. Mirrors the consumer's "post a
         // request" step (Tarik 2026-06-14: the provider-asks-for-a-spotlight
@@ -305,11 +303,12 @@ export function BrowseConnectorsScreen() {
           return (
             <div className="mx-5 mt-6 bg-cr2 border border-bdr rounded-[16px] p-5 text-center">
               <p className="text-body-lg font-extrabold text-black mb-1">
-                We'll notify you when Connectors respond
+                We'll notify you when Connectors accept
               </p>
               <p className="text-body-sm text-b3 leading-snug">
-                Your request is out to matching Connectors. Free swaps surface
-                first; paid counters show up here too.
+                Your request is out to matching Connectors. Once one accepts,
+                they show up here — free swaps first. Counter-offers land in
+                Spotlight requests › Sent for you to accept or counter back.
               </p>
               {/* CERGIO-GUARD (2026-06-03): inline cancel per Tarik — same
                   affordance the consumer side has on its waiting state. */}
@@ -341,9 +340,7 @@ export function BrowseConnectorsScreen() {
                 a posted rate (both IG + TT cents null) bubble to top
                 so the user sees barter options before paid offers. */}
             {(() => {
-              const isFree = (c) =>
-                c.spotlight_price_instagram_cents == null &&
-                c.spotlight_price_tiktok_cents == null;
+              const isFree = (c) => (c.agreedCents ?? 0) === 0;
               const sorted = [...confirmedOnly].sort((a, b) => {
                 const af = isFree(a) ? 0 : 1;
                 const bf = isFree(b) ? 0 : 1;
@@ -385,8 +382,12 @@ function ConnectorRow({ connector: c, onClick }) {
   const igReach  = c.instagram_followers || 0;
   const ttReach  = c.tiktok_followers || 0;
   const totalReach = igReach + ttReach;
-  const igPrice = fmtPriceCents(c.spotlight_price_instagram_cents);
-  const ttPrice = fmtPriceCents(c.spotlight_price_tiktok_cents);
+  // CERGIO-GUARD (2026-06-17): show the AGREED price (what the Connector
+  // accepted), not the rate-card sticker — 0 = free swap. agreedCents is
+  // attached by the accepted-only gate above.
+  const agreedCents = c.agreedCents ?? 0;
+  const agreedIsFree = agreedCents === 0;
+  const agreedPrice = fmtPriceCents(agreedCents);
   const initials = ((c.display_name || c.instagram_handle || c.tiktok_handle || '?')[0] || '?').toUpperCase();
 
   return (
@@ -409,35 +410,25 @@ function ConnectorRow({ connector: c, onClick }) {
           {totalReach > 0 && <> · {fmtFollowers(totalReach)} total reach</>}
         </p>
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
-          {/* CERGIO-GUARD (2026-05-30): Tarik flagged that paid Connectors
-              should be visually clear — easy to assume "Connector = free"
-              when actually plenty post a price. Lead with an amber
-              "Paid Connector" pill whenever any rate is set so the user
-              sees the cost commitment BEFORE the individual rate pills. */}
-          {(igPrice || ttPrice) && (
-            <span className="bg-warnBg text-warnText border border-warn/40 rounded-pill px-2.5 py-0.5 text-meta font-extrabold inline-flex items-center gap-1">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/>
-              </svg>
-              Paid Connector
-            </span>
-          )}
-          {igPrice && (
-            <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta font-extrabold">
-              IG · {igPrice}/post
-            </span>
-          )}
-          {ttPrice && (
-            <span className="bg-gl text-gd rounded-pill px-2.5 py-0.5 text-meta font-extrabold">
-              TT · {ttPrice}/post
-            </span>
-          )}
-          {!igPrice && !ttPrice && (
+          {/* CERGIO-GUARD (2026-06-17): the roster only lists Connectors who
+              ACCEPTED, so the pill shows the AGREED deal — a green "Free swap"
+              when they took the service for a post, or an amber "Agreed $X/post"
+              when they accepted at a price. No more rate-card stickers (which
+              wrongly showed $500 for a Connector who'd accepted a $25 / free
+              swap). */}
+          {agreedIsFree ? (
             <span className="bg-gl text-gd border border-g/40 rounded-pill px-2.5 py-0.5 text-meta font-extrabold inline-flex items-center gap-1">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
               </svg>
-              Free / swap only
+              Free swap · accepted
+            </span>
+          ) : (
+            <span className="bg-warnBg text-warnText border border-warn/40 rounded-pill px-2.5 py-0.5 text-meta font-extrabold inline-flex items-center gap-1">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/>
+              </svg>
+              Agreed {agreedPrice}/post
             </span>
           )}
         </div>

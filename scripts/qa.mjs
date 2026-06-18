@@ -1925,6 +1925,31 @@ test('spec-53-recommend-from-booking', 'FROZEN: Recommendations come from a comp
     'ServiceDetailScreen must NOT mount a standalone recommend modal — recos come from a booking');
 });
 
+test('spec-54-roster-accepted-only', 'FROZEN: Find-a-Connector roster shows ACCEPTED connectors only, with the agreed price (SPEC-54)', '#54', async () => {
+  const src = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/BrowseConnectorsScreen.jsx'), 'utf8');
+  const stripped = src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // 1. The confirmation gate keys ONLY on status === 'accepted'.
+  assert(/status\s*===\s*'accepted'/.test(stripped),
+    "BrowseConnectorsScreen must gate the roster on status === 'accepted'.");
+
+  // 2. It must NOT count 'offered' or 'countered' as confirmed anymore
+  //    (the old rule that leaked a seeded counter onto the roster).
+  assert(!/\[\s*'offered'\s*,\s*'countered'\s*,\s*'accepted'\s*\]/.test(stripped),
+    "REGRESSION: roster still counts offered/countered as confirmed — SPEC-54 requires accepted only.");
+
+  // 3. The agreed price drives the row, not the rate-card sticker. The
+  //    confirmation lookup records offered_price_cents ?? official_price_cents.
+  assert(/agreedCents/.test(stripped),
+    'BrowseConnectorsScreen must surface the agreed price (agreedCents), not the rate card.');
+  assert(/offered_price_cents\s*\?\?\s*(?:r\.)?official_price_cents/.test(stripped),
+    'The accepted-only gate must record the agreed price (offered ?? official ?? 0).');
+
+  // 4. The ConnectorRow no longer reads the rate-card columns for its pills.
+  assert(!/spotlight_price_instagram_cents/.test(src.slice(src.indexOf('function ConnectorRow'))),
+    'ConnectorRow must not render rate-card prices — show the agreed deal instead (SPEC-54).');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

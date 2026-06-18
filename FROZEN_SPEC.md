@@ -303,6 +303,17 @@ qa.mjs #53 enforces this.
 
 ---
 
+### SPEC-54 · Find-a-Connector roster shows ACCEPTED connectors only (with the agreed price)
+**Status:** FROZEN — 2026-06-18 (Tarik — "only show confirmed connectors (this one is not confirmed)"; SUPERSEDES the earlier rule that counted `offered`/`countered` as confirmed)
+**Rule:**
+- On `BrowseConnectorsScreen` (the provider's "Find a Connector to spotlight you" screen), a Connector appears **only** when they have a spotlight_requests row from this provider with **`status === 'accepted'`**. `pending` / `offered` / `countered` / `declined` / `withdrawn` / `expired` do **NOT** qualify — a counter is an open negotiation, not a confirmation (a seeded/provider-side counter must never surface a Connector who never said yes).
+- The confirmation lookup is a `Map<connector_id, agreedCents>` built from `offered_price_cents ?? official_price_cents ?? 0`. The roster row shows the **agreed deal** — "Free swap · accepted" when `agreedCents === 0`, else "Agreed $X/post" — **never the rate-card sticker** (`spotlight_price_*`).
+- Free-first sort and the "free first" / "no free connectors" messaging key off `agreedCents`, not the rate card.
+
+qa.mjs #54 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder
