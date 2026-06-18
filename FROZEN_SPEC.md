@@ -244,6 +244,8 @@ qa.mjs #48 enforces this.
 - **More than 3 services → "View all {name}'s services (N) →"** appears after the 3rd service and routes to the dedicated **`/u/:profileId/services`** page (`PublicProfileServicesScreen`), which lists every listed service with the same `ServiceTile` + reco summary. (Inline services no longer expand in place.)
 - **Curator with NO services:** the Services block is skipped entirely; the profile shows only Recommendations Made, led by the signal-block counts (network/recos/IG) — unchanged.
 
+**SPEC-49d · "Recos made" count INTENTIONALLY exceeds what Go-Tos displays (FROZEN 2026-06-17, Tarik).** A recommendation can be made to a provider who has NOT claimed/registered yet — the `recommendations` row holds the recommender's review (`message`) + the provider's contact (`recipient_id`/`recipient_phone`) so they can be notified (repeatedly) to eventually register. These rows **count** toward "recos made" (raw count of `recommendations` where `recommender_id = profile`) and feed the notify-to-register loop, but they are **NOT displayed** on the profile — there's no claimed provider profile/photo to show (no fake data, SPEC-12). The Go-Tos / Recommendations Made section renders ONLY recommendations whose `service_id` resolves to a real service (`recoServices` resolves `service_id` → `services` and drops the rest). **Do NOT "reconcile" the count with the section** by either dropping the count or rendering unclaimed recos — the difference is the point.
+
 qa.mjs #49 enforces this.
 
 ---

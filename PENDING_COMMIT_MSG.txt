@@ -1,10 +1,12 @@
-Profile: drop network from service facet too (SPEC-49b follow-up)
+Freeze SPEC-49d: "recos made" intentionally exceeds Go-Tos shown
 
-The Cergio-network count was still showing on BOTH the service and
-connector facets (duplicated). Per Tarik, IG AND network are connector-
-side signals that belong around the Connector badge, not on a service
-(e.g. a plumber). formatKeyCounts gains an includeNetwork option
-(default true; existing callers unchanged); the profile's service facet
-now passes includeReach:false + includeNetwork:false, leaving only the
-always-on mutuals line under "role · N recos received". FROZEN_SPEC
-SPEC-49b updated. qa #49 green.
+No app behavior change — documents + protects existing behavior (Tarik
+2026-06-17). A recommendation made to a not-yet-registered provider
+stores the review + their contact so they can be notified to register;
+it COUNTS toward "recos made" and drives the notify-to-register loop,
+but is NOT displayed on the profile (no claimed provider/photo). Go-Tos
+renders only recos whose service_id resolves. The count/section
+difference is intentional — do not reconcile them.
+
+Also adds scripts/diag_profile_recos.mjs: a read-only diagnostic that
+reports a profile's recos-made vs how many resolve to a service.
