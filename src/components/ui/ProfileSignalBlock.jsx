@@ -1,17 +1,20 @@
-// CERGIO-GUARD (2026-06-16, Tarik — SPEC-49): the unified profile's LEAD signal
-// block. Copies the interim pre-acceptance party-signal from the request
-// previews (same getInboxPartyCounts + formatKeyCounts source) onto the public
-// profile, so a profile is judged at a glance with the SAME data and the SAME
-// ordering rule as a request card.
+// CERGIO-GUARD (2026-06-18, Tarik — SPEC-49 / SPEC-49e): the unified profile's
+// LEAD identity block. Replicates the interim /inbound accept screen's identity
+// block EXACTLY so a profile reads the same on the full page as on the request
+// preview. Structure for a Connector subject (Tarik's exact spec):
 //
-// A profile can be a SERVICE, a CONNECTOR, or BOTH. When it's both, we show both
-// facets and PRIORITIZE by the viewer (SPEC-48c, same rule as request previews):
-//   • viewer in CONSUMER mode (looking to book)   → SERVICE facet first
-//   • viewer in PROVIDER mode (marketing service)  → CONNECTOR facet first
+//   Connector                                  (badge)
+//   Fitness Pro and Creator..                  (headline)
+//   319 IG followers                           (reach line, IG icon)
+//   5 network on Cergio · 5 reco's made        (strength line)
+//   See Instagram                              (link)
+//   Creator in fitness sports … Love to surf   (bio)
+//   Plumber (0 recos received)                 (service facet, if they list one)
+//   You have no mutual friends with T yet.     (mutuals line)
 //
-// Example facets (Tarik 2026-06-16):
-//   Connector → "Connector"      · 319 IG · 5 network · 5 recos made · No mutuals
-//   Service   → "Hair Stylist · 0 recos received"  ·  No mutuals · 12.4K IG · 3.1K TikTok
+// A pure service (non-Connector) leads with the service facet instead. Data
+// comes from getInboxPartyCounts (the SAME source as the request previews) plus
+// the profile's bio / IG handle / name passed down. No fake data (SPEC-12).
 import { formatKeyCounts } from '../../hooks/usePartyCounts';
 
 function ShieldIcon({ size = 11 }) {
@@ -22,89 +25,114 @@ function ShieldIcon({ size = 11 }) {
   );
 }
 
-function ConnectorFacet({ counts, prominent, headline }) {
-  const line = formatKeyCounts(counts, { recoKind: 'made' });
+function IgGlyph() {
   return (
-    <div className={prominent ? '' : 'mt-2.5 pt-2.5 border-t border-bdr'}>
-      <span className="inline-flex items-center gap-1 bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
-        <ShieldIcon size={10} />Connector
-      </span>
-      {/* Headline — below the Connector badge, above the IG/counts line
-          (Tarik 2026-06-17). Only on the lead facet to avoid duplication. */}
-      {prominent && headline && (
-        <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
-      )}
-      {line && (
-        <p className={`mt-1 leading-snug ${prominent ? 'text-body-sm font-extrabold text-black' : 'text-meta text-b2 font-medium'}`}>
-          {line}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function ServiceFacet({ counts, role, prominent, headline }) {
-  const recos = counts?.recosReceived || 0;
-  // Always-on "N recos received" (service reputation signal) — suppress the
-  // duplicate reco chip in the sub-line via includeReco:false. includeReach:false
-  // + includeNetwork:false drop IG/TikTok AND the Cergio-network count here
-  // (SPEC-49b, Tarik 2026-06-17): reach + network are CONNECTOR signals shown
-  // around the connector badge, not relevant on a service (e.g. a plumber),
-  // and they were duplicating across both facets. The service facet keeps only
-  // the always-on mutuals line (trust) under its "role · N recos received".
-  const line = formatKeyCounts(counts, { recoKind: 'received', includeReco: false, includeReach: false, includeNetwork: false });
-  return (
-    <div className={prominent ? '' : 'mt-2.5 pt-2.5 border-t border-bdr'}>
-      <p className={`leading-snug ${prominent ? 'text-body-sm font-extrabold text-black' : 'text-meta text-b2 font-extrabold'}`}>
-        {role || 'Service'}
-        <span className="text-b3 font-medium"> · {recos} reco{recos === 1 ? '' : 's'} received</span>
-      </p>
-      {/* Headline under the lead identity (Tarik 2026-06-17), once. */}
-      {prominent && headline && (
-        <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
-      )}
-      {line && (
-        <p className={`mt-0.5 leading-snug ${prominent ? 'text-body-sm text-b2 font-medium' : 'text-meta text-b3 font-medium'}`}>
-          {line}
-        </p>
-      )}
-    </div>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
+    </svg>
   );
 }
 
 // counts: one entry from getInboxPartyCounts (igFollowers, ttFollowers,
 // networkCount, recosMade, recosReceived, mutualCount, isConnector).
 // isService / isConnector: the subject's roles. serviceMode: viewer is a
-// provider (true) vs consumer (false) — drives which facet leads.
-export function ProfileSignalBlock({ counts, role, isService, isConnector, serviceMode, headline }) {
+// provider (true) vs consumer (false) — retained for the booking nuance but a
+// Connector always leads with reach. bio / igHandle / name: from the profile.
+export function ProfileSignalBlock({ counts, role, isService, isConnector, serviceMode, headline, bio, igHandle, name }) {
   if (!counts || (!isService && !isConnector)) return null;
 
-  const connector = isConnector ? <ConnectorFacet key="c" counts={counts} prominent headline={headline} /> : null;
-  const service   = isService   ? <ServiceFacet   key="s" counts={counts} role={role} prominent headline={headline} /> : null;
-
-  // Only one role → render that facet alone.
-  if (!connector || !service) {
-    const only = connector || service;
-    return (
-      <div className="mx-5 mt-5 bg-white border border-bdr rounded-[16px] p-4">
-        {only}
-      </div>
-    );
-  }
-
-  // Both roles → the CONNECTOR facet LEADS (reach is the headline signal),
-  // exactly like the interim accept screen on /inbound (Tarik 2026-06-18:
-  // "not plumber then connector"). The headline sits under the Connector
-  // badge, the service facet drops below. serviceMode is retained for the
-  // pure consumer/booking nuance; whenever the subject IS a Connector, the
-  // Connector leads.
+  // A Connector subject ALWAYS leads with the Connector/reach identity, exactly
+  // like the interim /inbound screen ("not plumber then connector"). serviceMode
+  // is kept for the consumer/booking nuance but never demotes a Connector.
   const connectorLeads = isConnector || serviceMode;
-  const lead      = connectorLeads ? <ConnectorFacet counts={counts} prominent headline={headline} /> : <ServiceFacet counts={counts} role={role} prominent headline={headline} />;
-  const secondary = connectorLeads ? <ServiceFacet   counts={counts} role={role} /> : <ConnectorFacet counts={counts} />;
+
+  const igFollowers = counts.igFollowers || 0;
+  const ttFollowers = counts.ttFollowers || 0;
+  const networkCount = counts.networkCount || 0;
+  const recosMade = counts.recosMade || 0;
+  const recosReceived = counts.recosReceived || 0;
+  const mutualCount = counts.mutualCount || 0;
+  const firstName = (name || 'them').split(' ')[0];
+
+  // Reach line — "319 IG followers" (+ "1.2K TikTok"). Full count via formatter
+  // for K/M shaping; shown with the IG glyph, bold.
+  const reachLine = [
+    igFollowers > 0 ? `${Number(igFollowers).toLocaleString()} IG followers` : null,
+    ttFollowers > 0 ? `${formatKeyCounts({ ttFollowers }, { recoKind: 'made', includeMutual: false, includeReco: false, includeNetwork: false })}` : null,
+  ].filter(Boolean).join(' · ');
+
+  // Strength line — "5 network on Cergio · 5 reco's made" (omit zero parts).
+  const strength = [
+    networkCount > 0 ? `${networkCount} network on Cergio` : null,
+    recosMade > 0 ? `${recosMade} reco${recosMade === 1 ? '' : 's'} made` : null,
+  ].filter(Boolean).join(' · ');
+
+  const igLink = igHandle ? (
+    <a
+      href={`https://instagram.com/${String(igHandle).replace(/^@/, '')}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-0.5"
+    >
+      See Instagram
+    </a>
+  ) : null;
+
+  const bioEl = bio ? (
+    <p className="text-meta text-b3 leading-snug mt-1">{bio}</p>
+  ) : null;
+
+  const serviceLine = isService ? (
+    <p className="text-meta-sm text-b3 leading-snug mt-2">
+      <span className="font-extrabold text-b2">{role || 'Service'}</span>
+      {' '}({recosReceived} reco{recosReceived === 1 ? '' : 's'} received)
+    </p>
+  ) : null;
+
+  const mutualLine = (
+    <p className="text-meta text-b3 leading-snug mt-2">
+      {mutualCount > 0
+        ? `${mutualCount} mutual ${mutualCount === 1 ? 'friend' : 'friends'} in common`
+        : `You have no mutual friends with ${firstName} yet.`}
+    </p>
+  );
+
   return (
     <div className="mx-5 mt-5 bg-white border border-bdr rounded-[16px] p-4">
-      {lead}
-      {secondary}
+      {connectorLeads ? (
+        <>
+          <span className="inline-flex items-center gap-1 bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
+            <ShieldIcon size={10} />Connector
+          </span>
+          {headline && (
+            <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
+          )}
+          {reachLine && (
+            <p className="flex items-center gap-1 text-body-sm font-extrabold text-black mt-0.5">
+              <IgGlyph />{reachLine}
+            </p>
+          )}
+          {strength && <p className="text-meta-sm text-b3 mt-0.5">{strength}</p>}
+          {igLink}
+          {bioEl}
+          {serviceLine}
+          {mutualLine}
+        </>
+      ) : (
+        <>
+          <p className="text-body-sm font-extrabold text-black leading-snug">
+            {role || 'Service'}
+            <span className="text-b3 font-medium"> · {recosReceived} reco{recosReceived === 1 ? '' : 's'} received</span>
+          </p>
+          {headline && (
+            <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
+          )}
+          {bioEl}
+          {mutualLine}
+        </>
+      )}
     </div>
   );
 }

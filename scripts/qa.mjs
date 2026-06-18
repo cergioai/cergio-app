@@ -1909,6 +1909,18 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
   //    via the same source + tile as the interim screen.
   assert(/getConnectorSpotlights/.test(prof) && /IgPostTile/.test(prof),
     'PublicProfileScreen must render the spotlight track record (getConnectorSpotlights + IgPostTile) — SPEC-49e.');
+
+  // 7. SPEC-49e: the lead block replicates the interim /inbound identity block
+  //    EXACTLY — granular reach line ("IG followers"), strength ("network on
+  //    Cergio"), inline "See Instagram", bio + the explicit mutuals sentence.
+  assert(/IG followers/.test(block) && /network on Cergio/.test(block),
+    'ProfileSignalBlock must render the granular reach + strength lines (IG followers / network on Cergio) — SPEC-49e.');
+  assert(/See Instagram/.test(block) && /mutual friends with/.test(block),
+    'ProfileSignalBlock must include the inline See Instagram link + the "no mutual friends with {name}" sentence — SPEC-49e.');
+  // The bio + IG handle + name are folded INTO the block (no separate About
+  // section / View Instagram link on the profile).
+  assert(/bio=\{profile\?\.bio\}/.test(prof) && /igHandle=\{igHandle\}/.test(prof),
+    'PublicProfileScreen must pass bio + igHandle into ProfileSignalBlock (About + View Instagram folded in) — SPEC-49e.');
 });
 
 test('spec-53-recommend-from-booking', 'FROZEN: Recommendations come from a completed booking (rate+post); IG post optional when paid; no service-page button (SPEC-53)', '#53', async () => {

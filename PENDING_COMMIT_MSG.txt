@@ -1,19 +1,18 @@
-Full profile mirrors the interim accept screen (SPEC-49e)
+Full profile lead block = exact interim /inbound identity block (SPEC-49e)
 
-Tarik 2026-06-18 — "view full profile should show the same hierarchy as the
-interim accept screen (not plumber then connector)... show the service they
-spotlighted."
+Tarik 2026-06-18 — "follow this exact structure on the full profile (incl.
+See Instagram by the connector stats)."
 
-- ProfileSignalBlock: a Connector subject now ALWAYS leads with the Connector
-  facet (reach: badge → headline → "IG · network · recos made"), with the
-  service facet below — instead of "Plumber · 0 recos received" on top.
-  connectorLeads = isConnector || serviceMode (serviceMode retained for the
-  consumer/booking nuance, but never demotes a Connector below their service).
-- PublicProfileScreen: added a "Spotlights on Cergio" section — the Connector's
-  posted track record via getConnectorSpotlights, rendered as the same small
-  IgPostTiles (w-[76px], 4/5, ~70%) used on the interim /inbound screen. Real
-  post links only; collapses when none.
-- Hierarchy now: Connector/reach → View Instagram → About (bio) → Spotlights →
-  Services — matching /inbound.
-- FROZEN_SPEC SPEC-49 lead-facet rule updated + SPEC-49e added; qa #49 extended
-  (connector-leads + spotlight track record). All 57 qa flows green.
+ProfileSignalBlock rebuilt to replicate the interim accept screen's identity
+block 1:1 for a Connector subject:
+  Connector  →  headline  →  "319 IG followers"  →  "5 network on Cergio ·
+  5 reco's made"  →  See Instagram  →  bio  →  "Plumber (0 recos received)"
+  →  "You have no mutual friends with T yet."
+- Reach + strength are now separate lines (not the combined formatKeyCounts
+  one-liner); bio + See Instagram are folded INTO the block.
+- PublicProfileScreen drops the standalone "View Instagram" link and the
+  separate "About" section (now inside the block); passes bio + igHandle +
+  name down.
+- Data source unchanged (getInboxPartyCounts); no fake data.
+- FROZEN_SPEC SPEC-49e updated; qa #49 extended to lock the exact structure.
+  All 57 qa flows green.

@@ -677,6 +677,11 @@ export function PublicProfileScreen() {
 
       {/* Lead signal block — connector + service facets, ordered by viewer
           mode (consumer → service first; provider → connector first). */}
+      {/* Lead identity block — replicates the interim /inbound accept screen
+          EXACTLY (Tarik 2026-06-18, SPEC-49e): Connector badge → headline →
+          "319 IG followers" → "5 network · 5 reco's made" → See Instagram →
+          bio → "Plumber (0 recos received)" → mutuals line. The standalone
+          "View Instagram" link + "About" section are folded INTO this block. */}
       <ProfileSignalBlock
         counts={counts}
         role={role}
@@ -684,42 +689,10 @@ export function PublicProfileScreen() {
         isConnector={counts?.isConnector ?? isConnector}
         serviceMode={serviceMode}
         headline={profile?.headline}
+        bio={profile?.bio}
+        igHandle={igHandle}
+        name={name}
       />
-
-      {/* View Instagram — small link beneath the signal block, near the
-          Connector badge (SPEC-49, Tarik 2026-06-17). IG reach (followers ·
-          network) is shown in the connector facet above; the handle/count is
-          no longer printed as its own row — tap here to open the IG profile.
-          Re-adds the "See Instagram" affordance from the free-request
-          acceptance screen (SPEC-48), which had regressed off this profile. */}
-      {igHandle && (
-        <a
-          href={`https://instagram.com/${igHandle.replace(/^@/, '')}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mx-5 mt-3 inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold hover:underline"
-        >
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-md border-2 border-gd">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="5"/>
-              <circle cx="12" cy="12" r="4"/>
-              <circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none"/>
-            </svg>
-          </span>
-          View Instagram
-        </a>
-      )}
-
-      {/* About — bio moved to the TOP of the content (Tarik 2026-06-17), right
-          under the identity block, before Services. */}
-      <div className="px-5 mt-6">
-        <h2 className="text-heading-1 font-extrabold text-black">About</h2>
-        {profile?.bio ? (
-          <p className="text-body-sm text-b2 leading-relaxed mt-2">{profile.bio}</p>
-        ) : (
-          <p className="text-body-sm text-b3 leading-relaxed mt-2">No bio yet!</p>
-        )}
-      </div>
 
       {/* Spotlights on Cergio — the Connector's track record of posts they've
           made for other services (real IG/TikTok post links, small tiles ~70%,
