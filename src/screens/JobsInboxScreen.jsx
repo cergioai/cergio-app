@@ -145,7 +145,25 @@ function OverviewRow({ title, count, items = [], onView }) {
 // liner: headline (leads with $ when there's a real amount, else free/service
 // context) + a short sub-line + the PRIMARY action inline. Green tone = "needs
 // your review / your turn"; salmon = dispute; plain = neutral. No clutter copy.
-function ActionRow({ tone = 'plain', headline, sub, actionLabel, onAction, busy }) {
+// Compact relative timestamp for inbox events (Tarik 2026-06-17): "now",
+// "5m", "3h", "2d", "1w", then falls back to a Mon-D date.
+function timeAgo(iso) {
+  if (!iso) return '';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  if (ms < 60000) return 'now';
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.round(h / 24);
+  if (d < 7) return `${d}d`;
+  const w = Math.round(d / 7);
+  if (w < 5) return `${w}w`;
+  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return ''; }
+}
+
+function ActionRow({ tone = 'plain', headline, sub, actionLabel, onAction, busy, ts }) {
   const wrap =
     tone === 'green'  ? 'bg-gl border-2 border-g/40'
   : tone === 'salmon' ? 'bg-white border-2 border-salmon/40'
@@ -156,9 +174,12 @@ function ActionRow({ tone = 'plain', headline, sub, actionLabel, onAction, busy 
   return (
     <div className={`${wrap} rounded-[16px] p-3.5 flex items-center gap-3`}>
       <div className="min-w-0 flex-1">
-        <p className={`text-body font-extrabold leading-snug truncate ${tone === 'green' ? 'text-gd' : 'text-black'}`}>
-          {headline}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className={`text-body font-extrabold leading-snug truncate flex-1 ${tone === 'green' ? 'text-gd' : 'text-black'}`}>
+            {headline}
+          </p>
+          {ts && <span className="text-meta-sm text-b3 font-medium whitespace-nowrap flex-shrink-0">{timeAgo(ts)}</span>}
+        </div>
         {sub && <p className="text-meta text-b3 leading-snug truncate mt-0.5">{sub}</p>}
       </div>
       <button
@@ -594,6 +615,7 @@ export function JobsInboxScreen() {
             headline: 'Rating to resolve',
             sub: 'A below-4★ review needs your response',
             actionLabel: 'Open', onAction: () => setActiveTab('Requests'),
+            ts: d.dispute_escalated_at || d.created_at,
           }));
 
           // 2. Provider: a Connector posted your spotlight — review + accept (green).
@@ -604,6 +626,7 @@ export function JobsInboxScreen() {
               headline: `Review ${first(b.consumer)}'s spotlight`,
               sub: `${b.service?.title || 'Service'} · they posted your IG spotlight`,
               actionLabel: 'Accept post', onAction: () => handleConfirmPost(b), busy: jobBusy[b.id],
+              ts: b.posted_at,
             }));
 
           // 3. Consumer: provider marked complete — rate & post your spotlight (green).
@@ -614,6 +637,7 @@ export function JobsInboxScreen() {
               headline: 'Rate & post your spotlight',
               sub: `${first(b.provider)} marked ${b.service?.title || 'your service'} complete`,
               actionLabel: 'Rate & post', onAction: () => setPostTarget(b),
+              ts: b.completed_at,
             }));
 
           // 4. Consumer: confirmed paid booking, not yet paid — lead with $.
@@ -624,6 +648,7 @@ export function JobsInboxScreen() {
               headline: `${usd(b.total_cents)} · ${b.service?.title || 'your booking'}`,
               sub: `${first(b.provider)} confirmed your time — pay to lock it in`,
               actionLabel: 'Pay', onAction: () => payForBooking(b, { onPaid: refreshJobs }), busy: jobBusy[b.id],
+              ts: b.schedule_confirmed_at || b.created_at,
             }));
 
           // 5. Provider: new inbound requests — accept fast (bid-decay). Lead
@@ -633,6 +658,7 @@ export function JobsInboxScreen() {
             headline: `New request · ${r.service_type || r.category || 'service'}`,
             sub: `${first(r.requester)}${r.location_text ? ` · ${r.location_text}` : ''}`,
             actionLabel: 'View', onAction: () => navigate(`/inbound/${r.id}`),
+            ts: r.created_at,
           }));
 
           // 6. Consumer: a provider accepted your request — book a time (lead $ when offered).
@@ -643,7 +669,33 @@ export function JobsInboxScreen() {
               : `${resp.service?.title || r.service_type || 'Offer'} accepted`,
             sub: `${first(resp.responder)} accepted — book a time`,
             actionLabel: 'Book', onAction: () => setActiveTab('Requests'),
+            ts: resp.responded_at || resp.created_at,
           })));
+
+          // 7. Recently confirmed (last 48h) — surfaces a "just accepted/booked"
+          //    job in the action feed so it isn't only buried in Upcoming
+          //    (Tarik 2026-06-17). Free confirmed OR paid-up; not yet completed.
+          //    Time-boxed so the feed isn't flooded with every upcoming job.
+          {
+            const RECENT_MS = 48 * 60 * 60 * 1000;
+            const recent = [
+              ...asConsumer.map(b => ({ b, who: b.provider, role: 'consumer' })),
+              ...asProvider.map(b => ({ b, who: b.consumer, role: 'provider' })),
+            ].filter(({ b }) =>
+              b.status === 'confirmed' && !b.completed_at && (b.is_free_for_rainmaker || b.paid_at)
+              && b.schedule_confirmed_at
+              && (Date.now() - new Date(b.schedule_confirmed_at).getTime()) < RECENT_MS);
+            const fmtWhenShort = (iso) => iso
+              ? new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+              : 'a time';
+            recent.forEach(({ b, who }) => items.push({
+              key: 'confirmed-' + b.id, tone: 'plain', money: false,
+              headline: `Booked · ${b.service?.title || 'service'}`,
+              sub: `Confirmed with ${first(who)} for ${fmtWhenShort(b.scheduled_at)}`,
+              actionLabel: 'View', onAction: () => setActiveTab('Upcoming'),
+              ts: b.schedule_confirmed_at,
+            }));
+          }
 
           const filtered = items.filter(it =>
             actionFilter === 'all' ? true : actionFilter === 'money' ? it.money : !it.money);

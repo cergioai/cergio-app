@@ -1,12 +1,15 @@
-Profile: connector headline below badge + smaller spotlights
+Inbox: timestamps on Overview events + surface recently-confirmed bookings
 
-- Headline now renders BELOW the Connector badge and ABOVE the IG count,
-  on BOTH the /inbound connector tile and the full-profile signal block
-  (ProfileSignalBlock). Bio stays where it is (above the service line /
-  About). Headline is separated from bio on /inbound (getInboundRequest
-  already returns both); removed the duplicate name-header headline on the
-  full profile. Rendered once, under the lead facet.
-- "Previous spotlights" IgPostTiles shrunk ~70% (fixed ~76px tiles in a
-  wrapping row instead of full-width thirds).
-- Colors/fonts already follow design-spec (cream bg + DM Sans scale).
-- qa #48/#49/#53 green; all changed files compile.
+Tarik 2026-06-17:
+- Every Overview action row now shows a relative timestamp (now/5m/3h/2d/
+  1w, then a date) next to the headline (new timeAgo helper; ActionRow ts).
+- Added a "Booked · {service}" Overview row for bookings CONFIRMED in the
+  last 48h (consumer + provider, free or paid-up, not yet completed). This
+  surfaces a "just accepted/booked" job in the action feed instead of it
+  only living in Upcoming — which is why an accepted free booking looked
+  like it "wasn't showing" (it was in Upcoming; the action-first Overview
+  had no entry for a confirmed-with-nothing-pending job).
+
+Diagnosis note: the accept itself is CORRECT — verified the just-accepted
+free booking exists with consumer_id = the requester (T), status confirmed.
+No data bug; this is purely surfacing + timestamps. qa #50/#47 green.
