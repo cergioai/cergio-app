@@ -1921,6 +1921,13 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
   // section / View Instagram link on the profile).
   assert(/bio=\{profile\?\.bio\}/.test(prof) && /igHandle=\{igHandle\}/.test(prof),
     'PublicProfileScreen must pass bio + igHandle into ProfileSignalBlock (About + View Instagram folded in) — SPEC-49e.');
+
+  // 8. SPEC-49f: consolidated "Recommendations received" + "Services received"
+  //    sections on the full profile.
+  assert(/Recommendations received/.test(prof) && /servicesReceived/.test(prof),
+    'PublicProfileScreen must render the "Recommendations received" + "Services received" sections — SPEC-49f.');
+  assert(/consumer_id/.test(prof),
+    'Services-received must load completed bookings where the profile is the consumer — SPEC-49f.');
 });
 
 test('spec-53-recommend-from-booking', 'FROZEN: Recommendations come from a completed booking (rate+post); IG post optional when paid; no service-page button (SPEC-53)', '#53', async () => {

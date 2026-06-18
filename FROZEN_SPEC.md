@@ -250,6 +250,11 @@ qa.mjs #48 enforces this.
 - The full profile (`/u/:profileId`) mirrors the interim `/inbound` accept screen's information hierarchy: **Connector/reach leads** (badge → headline → "IG · network · recos made" → View Instagram), **then** About (bio), **then** the service facet/services. NOT "plumber then connector".
 - **Spotlights on Cergio** section added: the Connector's posted track record (`getConnectorSpotlights(profileId)` — free barters with a confirmed `post_url`), rendered as **small `IgPostTile`s (`w-[76px]`, aspect 4/5, ~70%)** in a wrapping row, labeled `Spotlight: {service title}`. Same source + tile as the interim screen. Real post links only — collapses silently when none (SPEC-12).
 
+**SPEC-49f · Recommendations-received + Services-received sections (FROZEN 2026-06-18, Tarik).**
+- **"Recommendations received"** — a consolidated header + list of every recommendation RECEIVED across the profile's services (`recosReceived`, rendered with `RecoRow`). This is the SPEC-49 "People who love {name}" surface as its own section, in addition to the per-service inline recos (SPEC-49c). Collapses when none.
+- **"Services {name} has received"** — services the profile has actually used on Cergio: completed/confirmed/in-progress bookings where they were the **consumer**, deduped, newest first, rendered with `ServiceTile`. Collapses when none. Real rows only (SPEC-12).
+- Section order on the full profile: signal block → Spotlights on Cergio → {name}'s Services → Recommendations received → Services received → {name}'s Go-Tos.
+
 qa.mjs #49 enforces this.
 
 ---

@@ -265,6 +265,10 @@ export function PublicProfileScreen() {
   const [reviews, setReviews] = useState([]);
   // Recommendations this profile has authored, joined to services + owners.
   const [recoServices, setRecoServices] = useState([]);
+  // Services this profile has RECEIVED — completed bookings where they were the
+  // consumer, joined to the service + its owner (provider). Social proof of what
+  // they've actually used on Cergio (Tarik 2026-06-18). Real rows only.
+  const [servicesReceived, setServicesReceived] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -542,6 +546,39 @@ export function PublicProfileScreen() {
         .filter(Boolean);
       if (!cancelled) setRecoServices(shapedRecos);
 
+      // Services RECEIVED — completed bookings where this profile is the
+      // consumer. Same readability path as getConnectorSpotlights (bookings are
+      // viewable to render a person's track record). Dedupe by service; collapse
+      // silently when none (no fake data, SPEC-12).
+      const { data: rcvBkgs } = await supabase
+        .from('bookings')
+        .select('service_id, status, completed_at, created_at')
+        .eq('consumer_id', profileId)
+        .in('status', ['completed', 'confirmed', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (cancelled) return;
+      const rcvIds = [...new Set((rcvBkgs || []).map(b => b.service_id).filter(Boolean))];
+      const { data: rcvSvcs } = rcvIds.length
+        ? await supabase
+            .from('services')
+            .select(`
+              id, title, category, description, location_text, photo_class, cover_url,
+              taxonomy_provider_type, owner_id,
+              offerings ( id, name, price_cents, is_default )
+            `)
+            .in('id', rcvIds)
+            .eq('status', 'listed')
+        : { data: [] };
+      if (cancelled) return;
+      // Keep booking recency order; map to the same shape ServiceTile expects.
+      const rcvSvcMap = Object.fromEntries((rcvSvcs || []).map(s => {
+        const def = (s.offerings || []).find(o => o.is_default) || s.offerings?.[0];
+        return [s.id, { ...s, price_cents: def?.price_cents ?? null }];
+      }));
+      const shapedReceived = rcvIds.map(id => rcvSvcMap[id]).filter(Boolean);
+      if (!cancelled) setServicesReceived(shapedReceived);
+
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -766,6 +803,41 @@ export function PublicProfileScreen() {
         </div>
       )}
 
+      {/* Recommendations received — consolidated testimonials across all of
+          {firstName}'s services (SPEC-49 "People who love {name}" = recos
+          RECEIVED). Header + individual reco rows (Tarik 2026-06-18). Real rows
+          only; collapses when none. */}
+      {recosReceived.length > 0 && (
+        <div className="px-5 mt-8">
+          <h2 className="text-heading-1 font-extrabold text-black">
+            Recommendations received <span className="text-b3 font-medium">· {recosReceived.length}</span>
+          </h2>
+          <p className="text-meta text-b3 font-medium mt-1">People who love {firstName}</p>
+          <div className="mt-4 flex flex-col gap-3">
+            {recosReceived.slice(0, 8).map(r => <RecoRow key={r.id} r={r} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Services received — services {firstName} has actually used on Cergio
+          (completed/confirmed bookings as the consumer). Social proof of what
+          they book. Reuses ServiceTile; collapses when none (Tarik 2026-06-18). */}
+      {servicesReceived.length > 0 && (
+        <div className="px-5 mt-8">
+          <h2 className="text-heading-1 font-extrabold text-black">Services {firstName} has received</h2>
+          <div className="mt-3 flex flex-col gap-4">
+            {servicesReceived.slice(0, 6).map(svc => (
+              <ServiceTile
+                key={svc.id}
+                svc={svc}
+                recoSummary={svcRecoSummary[svc.id]}
+                onOpen={() => navigate(`/service/${svc.id}`)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* {firstName}'s Go-Tos — services they've recommended.
           CERGIO-GUARD (2026-05-30 v2): card layout rebuilt to match
           the Jennifer Leighton mockup. Dropped the redundant
@@ -846,7 +918,7 @@ export function PublicProfileScreen() {
 
       {/* Empty state — no services + no recos authored. Surfaces gently
           rather than rendering a blank scroll area. */}
-      {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && (
+      {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && servicesReceived.length === 0 && spotlights.length === 0 && (
         <div className="px-5 mt-8 mb-8">
           <div className="bg-white border border-bdr rounded-[14px] p-5 text-center">
             <p className="text-body font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>

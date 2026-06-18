@@ -1,18 +1,16 @@
-Full profile lead block = exact interim /inbound identity block (SPEC-49e)
+Profile: Recommendations-received + Services-received sections (SPEC-49f)
 
-Tarik 2026-06-18 — "follow this exact structure on the full profile (incl.
-See Instagram by the connector stats)."
+Tarik 2026-06-18 — full-profile additions.
 
-ProfileSignalBlock rebuilt to replicate the interim accept screen's identity
-block 1:1 for a Connector subject:
-  Connector  →  headline  →  "319 IG followers"  →  "5 network on Cergio ·
-  5 reco's made"  →  See Instagram  →  bio  →  "Plumber (0 recos received)"
-  →  "You have no mutual friends with T yet."
-- Reach + strength are now separate lines (not the combined formatKeyCounts
-  one-liner); bio + See Instagram are folded INTO the block.
-- PublicProfileScreen drops the standalone "View Instagram" link and the
-  separate "About" section (now inside the block); passes bio + igHandle +
-  name down.
-- Data source unchanged (getInboxPartyCounts); no fake data.
-- FROZEN_SPEC SPEC-49e updated; qa #49 extended to lock the exact structure.
-  All 57 qa flows green.
+- "Recommendations received" — consolidated header + list of every reco
+  RECEIVED across the profile's services (recosReceived, RecoRow). The
+  SPEC-49 "People who love {name}" surface as its own section, alongside the
+  per-service inline recos. Collapses when none.
+- "Services {name} has received" — services the profile has used on Cergio
+  (completed/confirmed/in-progress bookings where they were the consumer,
+  deduped, newest first, ServiceTile). Collapses when none.
+- Section order: signal block → Spotlights → Services → Recommendations
+  received → Services received → Go-Tos.
+- All sections use design-spec tokens only (bg-cream / DM Sans scale / b3 /
+  bdr) — no arbitrary colors or fonts.
+- FROZEN_SPEC SPEC-49f added; qa #49 extended. All 57 flows green.
