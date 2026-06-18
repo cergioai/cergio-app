@@ -1768,6 +1768,31 @@ export async function deleteRecommendation(id) {
 }
 
 /**
+ * CERGIO-GUARD (2026-06-17, Tarik): recommend an ON-PLATFORM service from its
+ * page. Unlike the invite/reco form (which recommends a free-text type to a
+ * friend and stores service_id=null), this writes a recommendation LINKED to a
+ * real service_id — so it shows on the provider's profile ("People who love")
+ * AND the recommender's Go-Tos. `review` is the recommender's blurb. RLS pins
+ * recommender_id = auth.uid().
+ */
+export async function recommendService(serviceId, { review = '' } = {}) {
+  if (!supabaseReady) return { error: new Error('not ready') };
+  if (!serviceId) return { error: new Error('missing service') };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { error: new Error('not signed in') };
+  const { data, error } = await supabase
+    .from('recommendations')
+    .insert({
+      recommender_id: userRes.user.id,
+      service_id:     serviceId,
+      message:        (review || '').trim() || null,
+    })
+    .select('id')
+    .maybeSingle();
+  return { data: data || null, error: error || null };
+}
+
+/**
  * CERGIO-GUARD (2026-06-05): invite → reco service-type bridge.
  *
  * The `invites` table has no service_type column (pure referral

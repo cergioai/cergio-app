@@ -1900,6 +1900,28 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
   assert(/includeReco/.test(hook), 'formatKeyCounts must support includeReco (profile facet avoids double reco chip)');
 });
 
+test('spec-53-recommend-on-service', 'FROZEN: Recommend-on-service writes a service-linked recommendation + review boxes (SPEC-53)', '#53', async () => {
+  const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const pdp   = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/ServiceDetailScreen.jsx'), 'utf8');
+  const modalPath = path.join(REPO_ROOT, 'src/components/ui/RecommendProviderModal.jsx');
+  const postModal = fs.readFileSync(path.join(REPO_ROOT, 'src/components/ui/MarkBookingPostedModal.jsx'), 'utf8');
+
+  // 1. recommendService inserts a recommendation LINKED to the real service_id
+  //    (NOT null) so it surfaces on profiles.
+  assert(/export async function recommendService/.test(api), 'api must export recommendService');
+  const fn = api.slice(api.indexOf('export async function recommendService'), api.indexOf('export async function recommendService') + 700);
+  assert(/service_id:\s*serviceId/.test(fn), 'recommendService must store the real service_id (not null)');
+
+  // 2. The service page mounts the recommend popup.
+  assert(fs.existsSync(modalPath), 'RecommendProviderModal.jsx must exist');
+  assert(/RecommendProviderModal/.test(pdp), 'ServiceDetailScreen must mount RecommendProviderModal');
+  const modal = fs.readFileSync(modalPath, 'utf8');
+  assert(/recommendService/.test(modal) && /textarea/.test(modal), 'RecommendProviderModal must use recommendService + a review textarea');
+
+  // 3. Rate + IG-post popup carries a review box for 4★+ (saved via createReview).
+  assert(/stars\s*>=\s*4/.test(postModal) && /textarea/.test(postModal), 'MarkBookingPostedModal must show a review textarea for 4★+');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app only after the provider marks complete (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

@@ -140,6 +140,23 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
             </>
           ) : (
             <>
+              {/* Your review (Tarik 2026-06-17) — optional written review for a
+                  4★+ spotlight, saved alongside the rating via createReview. */}
+              {stars >= 4 && (
+                <div>
+                  <label className="block text-meta font-extrabold text-black mb-1">
+                    Write a review <span className="text-b3 font-medium">(optional)</span>
+                  </label>
+                  <textarea
+                    value={comment}
+                    onChange={e => setComment(e.target.value)}
+                    rows={3}
+                    placeholder={`What made ${providerFirst} great?`}
+                    className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-body-sm text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none"
+                  />
+                </div>
+              )}
+
               {/* Unique link + earnings hook */}
               {spotlightLink && (
                 <div className="bg-gl border border-g/30 rounded-[14px] p-3.5">

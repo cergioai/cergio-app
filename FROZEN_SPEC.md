@@ -287,6 +287,19 @@ qa.mjs #50 enforces this.
 
 ---
 
+## UI / BEHAVIOR — RECOMMEND A PROVIDER + REVIEWS
+
+### SPEC-53 · Recommend an on-platform service (service-linked) + review boxes
+**Status:** FROZEN — 2026-06-17 (Tarik)
+**Rule:**
+- A **"Recommend {name}"** button on the service page (`ServiceDetailScreen`) lets any signed-in viewer who is NOT the owner vouch for an **on-platform** service. It opens `RecommendProviderModal` (a **review** textarea) and writes a recommendation **LINKED to the real `service_id`** via `recommendService(serviceId, {review})` — so it surfaces on the provider's profile ("People who love {name}" / recos received) AND the recommender's Go-Tos (recos made). Contrast the invite/reco form (`RecommendServiceFormScreen`), which recommends a free-text type to a friend with `service_id = null` (counts but doesn't display — SPEC-49d).
+- The **rate + IG-post** popup (`MarkBookingPostedModal`) shows a **"Write a review (optional)"** textarea for **4★+** (saved via `createReview` alongside the rating). The existing **below-4★** required "what went wrong?" private-review flow is unchanged (SPEC-47c/47e).
+- No fake data (SPEC-12): the review text is the recommender's own words; the recommendation is a real row.
+
+qa.mjs #53 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder
