@@ -297,45 +297,62 @@ export function InviteFriendsScreen() {
       {/* CERGIO-GUARD (2026-06-12): contacts-book connect button.
           Real device contacts via the native picker — Cergio-network
           profiles below stay untouched (SPEC-43). */}
+      {/* CERGIO-GUARD (2026-06-18, Tarik — Gmail is the permanent web gold
+          standard; native iOS/Android picker comes post-launch): show ONE clear
+          PRIMARY import path for the device, plus at most one quiet fallback —
+          never two identical "upload a file" buttons.
+            • Android  → native phone-contacts picker (best on mobile).
+            • iOS/desktop + Gmail configured → one-tap Connect Gmail (primary).
+            • otherwise → a single clean contacts-file upload. */}
       <div className="px-5 pb-3 flex flex-col gap-2">
-        {/* Phone contacts (native picker) — the mobile gold standard. On
-            desktop the native API doesn't exist, so this opens the CSV/vCard
-            file picker instead. */}
-        <button
-          type="button"
-          onClick={importFromContacts}
-          className="w-full bg-g text-white rounded-[14px] py-3 px-4
-                     flex items-center justify-center gap-2 text-body-sm font-extrabold
-                     hover:opacity-90 active:scale-[.98] transition"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="4" y="3" width="16" height="18" rx="2"/>
-            <circle cx="12" cy="10" r="2.5"/>
-            <path d="M8.5 17c.7-1.8 2-2.5 3.5-2.5s2.8.7 3.5 2.5"/>
-          </svg>
-          {supportsContactPicker ? 'Pick from your phone contacts' : 'Upload a contacts file (.csv / .vcf)'}
-        </button>
-
-        {/* Connect Gmail — desktop gold standard. Hidden when not configured
-            AND the native picker is available (mobile), so mobile stays clean;
-            on desktop without config it still offers the file-upload fallback. */}
-        {(gmailReady || !supportsContactPicker) && (
+        {supportsContactPicker ? (
+          <button
+            type="button"
+            onClick={importFromContacts}
+            className="w-full bg-g text-white rounded-[14px] py-3 px-4 flex items-center justify-center gap-2 text-body-sm font-extrabold hover:opacity-90 active:scale-[.98] transition"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><path d="M8.5 17c.7-1.8 2-2.5 3.5-2.5s2.8.7 3.5 2.5"/>
+            </svg>
+            Pick from your phone contacts
+          </button>
+        ) : gmailReady ? (
           <button
             type="button"
             onClick={importFromGmail}
             disabled={gmailBusy}
-            className="w-full bg-white border-2 border-g text-g rounded-[14px] py-3 px-4
-                       flex items-center justify-center gap-2 text-body-sm font-extrabold
-                       hover:bg-gl transition-colors disabled:opacity-60"
+            className="w-full bg-g text-white rounded-[14px] py-3 px-4 flex items-center justify-center gap-2 text-body-sm font-extrabold hover:opacity-90 active:scale-[.98] transition disabled:opacity-60"
           >
             <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="#4285F4" d="M22 12.06c0-.7-.06-1.36-.18-2H12v3.83h5.6a4.8 4.8 0 0 1-2.08 3.15v2.62h3.36C20.85 17.9 22 15.27 22 12.06z"/>
-              <path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.36-2.62c-.93.62-2.12.99-3.26.99-2.5 0-4.62-1.69-5.38-3.96H3.15v2.6A10 10 0 0 0 12 22z"/>
-              <path fill="#FBBC05" d="M6.62 13.98a6 6 0 0 1 0-3.84v-2.6H3.15a10 10 0 0 0 0 9.04l3.47-2.6z"/>
-              <path fill="#EA4335" d="M12 6.18c1.47 0 2.79.5 3.83 1.5l2.87-2.87A10 10 0 0 0 12 2 10 10 0 0 0 3.15 7.54l3.47 2.6C7.38 7.87 9.5 6.18 12 6.18z"/>
+              <path fill="#fff" d="M22 12.06c0-.7-.06-1.36-.18-2H12v3.83h5.6a4.8 4.8 0 0 1-2.08 3.15v2.62h3.36C20.85 17.9 22 15.27 22 12.06z"/>
+              <path fill="#fff" d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.36-2.62c-.93.62-2.12.99-3.26.99-2.5 0-4.62-1.69-5.38-3.96H3.15v2.6A10 10 0 0 0 12 22z"/>
+              <path fill="#fff" d="M6.62 13.98a6 6 0 0 1 0-3.84v-2.6H3.15a10 10 0 0 0 0 9.04l3.47-2.6z"/>
+              <path fill="#fff" d="M12 6.18c1.47 0 2.79.5 3.83 1.5l2.87-2.87A10 10 0 0 0 12 2 10 10 0 0 0 3.15 7.54l3.47 2.6C7.38 7.87 9.5 6.18 12 6.18z"/>
             </svg>
-            {gmailBusy ? 'Connecting Gmail…' : gmailReady ? 'Connect Gmail' : 'Upload Gmail contacts (.csv)'}
+            {gmailBusy ? 'Connecting Gmail…' : 'Connect Gmail — import contacts'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={importFromContacts}
+            className="w-full bg-g text-white rounded-[14px] py-3 px-4 flex items-center justify-center gap-2 text-body-sm font-extrabold hover:opacity-90 active:scale-[.98] transition"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="2.5"/><path d="M8.5 17c.7-1.8 2-2.5 3.5-2.5s2.8.7 3.5 2.5"/>
+            </svg>
+            Upload a contacts file (.csv / .vcf)
+          </button>
+        )}
+
+        {/* Quiet fallback — ONLY when the primary above isn't already the file
+            upload (i.e. Android native, or Gmail). Never a duplicate. */}
+        {(supportsContactPicker || gmailReady) && (
+          <button
+            type="button"
+            onClick={importFromContacts}
+            className="w-full bg-white border border-bdr text-b2 rounded-[14px] py-2.5 px-4 flex items-center justify-center gap-2 text-meta font-extrabold hover:bg-bg5 transition-colors"
+          >
+            Or upload a contacts file (.csv / .vcf)
           </button>
         )}
 

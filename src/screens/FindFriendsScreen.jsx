@@ -19,6 +19,7 @@ import { supabase, supabaseReady } from '../lib/supabase';
 import { notifyUser } from '../lib/api';
 import { REWARDS, REWARD_COPY } from '../lib/rewards';
 import { buildInviteUrl } from '../lib/referral';
+import { importGoogleContacts, isGoogleContactsConfigured } from '../lib/googleContacts';
 
 export function FindFriendsScreen() {
   const navigate = useNavigate();
@@ -131,13 +132,28 @@ export function FindFriendsScreen() {
     }
   };
 
-  // ── 2. Instagram / TikTok — share-only (APIs don't expose following list).
-  // CERGIO-GUARD: a previous "Sync Google contacts" tile was removed.
-  // It was a lying button — the handler only toasted "coming soon"
-  // because the People API OAuth flow isn't wired yet. The Web
-  // Contact Picker (phone contacts row above) gives most users a
-  // real way to import. Google People OAuth integration is tracked
-  // as a real product gap in ROADMAP.md.
+  // ── 2. Gmail contacts — real OAuth + People API (lib/googleContacts.js).
+  // CERGIO-GUARD (2026-06-18, Tarik — Gmail is the permanent web gold standard;
+  // native iOS/Android picker comes post-launch): the OAuth flow IS wired now,
+  // so this is a REAL button (not the old "coming soon" stub). It's gated on
+  // isGoogleContactsConfigured() so it only appears once VITE_GOOGLE_CLIENT_ID
+  // is set — never a lying button. Returns the same {name,email,phone} rows the
+  // phone picker does, so matchAndShow handles both identically.
+  const gmailConfigured = isGoogleContactsConfigured();
+  const syncGmail = async () => {
+    setBusy('gmail');
+    try {
+      const rows = await importGoogleContacts();
+      if (!rows?.length) { showToast('No Google contacts found'); return; }
+      await matchAndShow(rows);
+    } catch (e) {
+      showToast(e?.message || 'Gmail connection cancelled');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // ── 3. Instagram / TikTok — share-only (APIs don't expose following list).
   const shareToInstagram = () => {
     // Best web-supported path: copy link, open IG, prompt user to paste.
     copyInvite();
@@ -272,6 +288,17 @@ export function FindFriendsScreen() {
         className="hidden"
         aria-hidden="true"
       />
+      {/* Gmail — one-tap import via Google OAuth + People API. Only shown when
+          configured (VITE_GOOGLE_CLIENT_ID set), so it's never a dead button. */}
+      {gmailConfigured && (
+        <SourceRow
+          icon={<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22 12.06c0-.7-.06-1.36-.18-2H12v3.83h5.6a4.8 4.8 0 0 1-2.08 3.15v2.62h3.36C20.85 17.9 22 15.27 22 12.06z"/><path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.36-2.62c-.93.62-2.12.99-3.26.99-2.5 0-4.62-1.69-5.38-3.96H3.15v2.6A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.62 13.98a6 6 0 0 1 0-3.84v-2.6H3.15a10 10 0 0 0 0 9.04l3.47-2.6z"/><path fill="#EA4335" d="M12 6.18c1.47 0 2.79.5 3.83 1.5l2.87-2.87A10 10 0 0 0 12 2 10 10 0 0 0 3.15 7.54l3.47 2.6C7.38 7.87 9.5 6.18 12 6.18z"/></svg>}
+          title="Connect Gmail"
+          sub="One tap — import your Google contacts to find friends"
+          onClick={syncGmail}
+          busy={busy === 'gmail'}
+        />
+      )}
       <SourceRow
         icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>}
         title="Share to Instagram"

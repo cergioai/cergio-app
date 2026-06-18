@@ -1,24 +1,19 @@
-Referral payout integrity + invite-loop notifications + tracking $ (SPEC-57)
+Contacts: Gmail is the primary web import; kill the duplicate file button (SPEC-52b)
 
-Tarik 2026-06-18 — "make sure users get paid for referrals"; invite tracking
-is the spine.
+Tarik 2026-06-18 — "do (b), it's a permanent web solution; native iOS/Android
+post-launch." iOS Safari has no native Contact Picker, so the picker now shows
+ONE clear PRIMARY per device + at most one quiet fallback — never two identical
+"upload a file" buttons.
 
-MONEY FIX:
-- A FREE ($0) first booking no longer BURNS the referral. creditInviterOnFirst
-  Booking returned early-stamped first_booking_at at $0, locking the inviter
-  out of ever earning from that friend's later PAID bookings. Now a $0 booking
-  is a no-op (no stamp, no row) so the 7%-capped reward lands on the friend's
-  first PAYING booking.
+- InviteFriendsScreen: Android → native picker; iOS/desktop with Gmail
+  configured → Connect Gmail (one-tap primary) + quiet "Or upload a file";
+  otherwise → a single clean file upload. Removed the confusing duplicate
+  "Upload Gmail contacts (.csv)" button.
+- FindFriendsScreen: replaced the old removed "coming soon" Google tile with a
+  REAL, config-gated Connect Gmail row (reuses importGoogleContacts +
+  matchAndShow). Only shows when configured — never a dead button.
+- Gmail flow itself (lib/googleContacts.js) was already built (GIS + People API,
+  contacts.readonly, env-gated). To go LIVE it needs VITE_GOOGLE_CLIENT_ID set +
+  Google restricted-scope verification (external).
 
-NOTIFICATIONS (templates existed, never fired):
-- recordInviteFromActiveRef fires invite_joined to the inviter when their
-  friend signs up.
-- creditInviterOnFirstBooking fires first_booking to the inviter when a real
-  credit is written. Both include data.deep_link.
-
-INVITE TRACKING (the spine, intuitive):
-- InviteTrackingScreen now leads with an earnings-at-a-glance header ($ earned
-  from referrals + invited/joined/booked funnel) and a per-row +$X reward badge
-  on booked friends.
-
-FROZEN_SPEC SPEC-57 added; qa #57 added. All 60 flows green.
+FROZEN_SPEC SPEC-52b added; qa #52 extended. All 60 flows green.

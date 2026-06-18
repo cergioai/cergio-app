@@ -1822,6 +1822,15 @@ test('spec-52-contacts-import', 'Contacts import: native phone picker + Gmail (P
   assert(/navigator\.contacts\.select/.test(screen), 'Native phone Contact Picker must remain wired');
   assert(/importFromGmail/.test(screen) && /importGoogleContacts/.test(screen), 'Connect-Gmail must be wired');
   assert(/accept=".csv,.vcf/.test(screen), 'CSV/vCard upload fallback must remain');
+  // SPEC-52 rev (Tarik 2026-06-18): Gmail is the permanent web gold standard.
+  // No confusing DUPLICATE file-upload button (the old "Upload Gmail contacts
+  // (.csv)" label is gone) — at most one quiet "Or upload a contacts file".
+  assert(!/Upload Gmail contacts/.test(screen),
+    'No duplicate "Upload Gmail contacts (.csv)" button — Gmail is the one-tap path (SPEC-52)');
+  // FindFriendsScreen offers the same real, config-gated Gmail import.
+  const find = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/FindFriendsScreen.jsx'), 'utf8');
+  assert(/syncGmail/.test(find) && /isGoogleContactsConfigured/.test(find),
+    'FindFriendsScreen must offer config-gated Gmail import (SPEC-52)');
 });
 
 test('spec-51-spotlight-clicks', 'IG post performance: clicks tracked per spotlight + totalled on Earnings (SPEC-51)', '#51', async () => {
