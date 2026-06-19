@@ -2436,6 +2436,36 @@ export async function broadcastSpotlightRequest({ serviceId = null, message = nu
   if (res.error) return { data: null, error: res.error };
   // Best-effort fan-out notify (never awaited, never blocks the UI).
   for (const r of (res.data || [])) fireSpotlightNotify(r.id, 'created');
+
+  // CERGIO-GUARD (2026-06-18, Tarik): on-demand INFLUENCER expansion. If we have
+  // no influencer coverage for this service's CITY, enqueue a crawl (5 best
+  // adjacent, 10k–200k). Best-effort + city-scoped; idempotent via the dedupe
+  // index. Wrapped so a missing leads_influencers column never breaks broadcast.
+  if (serviceId) {
+    try {
+      const { data: svc } = await supabase
+        .from('services')
+        .select('location_text, lat, lng, taxonomy_provider_type, category')
+        .eq('id', serviceId)
+        .maybeSingle();
+      const city = svc?.location_text || null;
+      if (city) {
+        const cityKey = city.split(',')[0].trim();
+        const { count, error: cErr } = await supabase
+          .from('leads_influencers')
+          .select('id', { count: 'exact', head: true })
+          .ilike('city', `%${cityKey}%`);
+        if (!cErr && (count || 0) === 0) {
+          enqueueCityCrawl({
+            kind: 'influencers', city, lat: svc?.lat ?? null, lng: svc?.lng ?? null,
+            serviceType: svc?.taxonomy_provider_type || svc?.category || null,
+            targetCount: 5,
+          }).catch(() => {});
+        }
+      }
+    } catch { /* leads_influencers may lack a city column — skip the trigger */ }
+  }
+
   return { data: { count: (res.data || []).length }, error: null };
 }
 
@@ -2952,6 +2982,46 @@ export async function notifyUser({ event, recipient, data = {} } = {}) {
  * CERGIO-GUARD: the only place in the app that may write to
  * notifications with kind='new_request'. Locked by qa #28.
  */
+/**
+ * CERGIO-GUARD (2026-06-18, Tarik): ON-DEMAND CITY EXPANSION. When a request
+ * lands in a city we have NO matching data for, enqueue a crawl_request so the
+ * separate crawler service sources + onboards the best providers (10 nearest)
+ * or influencers (5 adjacent, 10k–200k). The app NEVER crawls itself
+ * (CRAWLER_BRIEF.md). Best-effort + idempotent: the DB partial-unique index
+ * dedupes OPEN rows per (kind, city, service_type), so a duplicate insert is a
+ * benign "already queued".
+ */
+export async function enqueueCityCrawl({
+  kind, city = null, state = null, lat = null, lng = null,
+  serviceType = null, targetCount = null, triggerRequestId = null,
+} = {}) {
+  if (!supabaseReady) return { data: null, error: null };
+  if (kind !== 'services' && kind !== 'influencers') {
+    return { data: null, error: { message: 'enqueueCityCrawl: bad kind' } };
+  }
+  const { data: userRes } = await supabase.auth.getUser();
+  const uid = userRes?.user?.id || null;
+  if (!uid) return { data: null, error: null }; // RLS requires requested_by = self
+  const res = await supabase
+    .from('crawl_requests')
+    .insert({
+      kind,
+      city, state, lat, lng,
+      service_type: serviceType,
+      target_count: targetCount || (kind === 'influencers' ? 5 : 10),
+      trigger_request_id: triggerRequestId,
+      requested_by: uid,
+      status: 'new',
+    })
+    .select('id')
+    .maybeSingle();
+  // Open crawl already queued for this city+kind+type → benign dedupe.
+  if (res.error && /duplicate|unique/i.test(res.error.message || '')) {
+    return { data: { deduped: true }, error: null };
+  }
+  return res;
+}
+
 export async function createRequestAndFanOut({
   query,
   provider_type,
@@ -3024,7 +3094,18 @@ export async function createRequestAndFanOut({
   // not be fanned out their own request (CERGIO-GUARD 2026-06-18).
   const ownerIds = Array.from(new Set((provs || []).map(s => s.owner_id).filter(Boolean)))
     .filter(id => id !== uid);
-  if (ownerIds.length === 0) return { request, notified: 0, error: null };
+  if (ownerIds.length === 0) {
+    // CERGIO-GUARD (2026-06-18): no provider matched in radius → a city we don't
+    // cover yet. Enqueue an on-demand services crawl (10 best nearest) so the
+    // crawler sources + onboards them. Best-effort; never blocks the request.
+    if (provider_type && lat != null && lng != null) {
+      enqueueCityCrawl({
+        kind: 'services', city: where_text || null, lat, lng,
+        serviceType: provider_type, targetCount: 10, triggerRequestId: request.id,
+      }).catch(() => {});
+    }
+    return { request, notified: 0, error: null };
+  }
 
   // Build one row per recipient — the insert is bulk for atomicity.
   const rows = ownerIds.map(owner_id => ({

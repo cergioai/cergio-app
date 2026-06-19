@@ -1,13 +1,20 @@
-Profile brand pass v1 (re-skin, layout unchanged)
+On-demand city expansion: app enqueues crawl_requests for no-data cities (SPEC-58)
 
-Tarik 2026-06-18 — match the brand across both profiles.
+Tarik 2026-06-18 — when a request lands in a city we don't have data for, crawl
+the 10 best nearest services / 5 best adjacent influencers. Per CRAWLER_BRIEF
+the app never crawls itself — it REQUESTS; the crawler service fulfills.
 
-- PublicProfileScreen: premium brand hero — soft mint→cream gradient band
-  (design-spec `gl` token) behind the avatar + name; avatar enlarged 72→84
-  with a white ring + shadow. Layout/sections unchanged.
-- ProfileScreen (account hub): hero avatar now uses the brand green gradient
-  (g→gd) with a white ring, instead of a flat grey circle.
-- Fixed: account-hub "My earnings" drawer pill was hardcoded "$0 USD" — now
-  shows the real lifetime total (matches the card above it).
+- New table crawl_requests (migration 20260618000000) — queue with kind
+  (services|influencers), city/geo, service_type, target_count, status
+  (new→crawling→delivered), RLS (insert/select own; crawler uses service role),
+  partial-unique dedupe on OPEN (kind, city, service_type).
+- enqueueCityCrawl() helper (best-effort, idempotent, sign-in gated).
+- Services trigger: createRequestAndFanOut enqueues a 10-services crawl when no
+  provider matched in radius (uncovered city).
+- Influencers trigger: broadcastSpotlightRequest enqueues a 5-influencer crawl
+  when the service's city has zero leads_influencers (city-scoped, error-safe).
+- FROZEN_SPEC SPEC-58 added; qa #58 added. All 61 flows green.
 
-All 60 qa flows green.
+NOTE: run "Apply Crawl Requests Migration.command" to create the table; the
+external crawler then polls status='new'. The actual scraping + outreach lives
+in the separate crawler service (not this repo).

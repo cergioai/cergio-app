@@ -2071,6 +2071,24 @@ test('spec-57-referral-payout-integrity', 'FROZEN: free first booking does not b
     'InviteTrackingScreen must show referral $ earned + per-row reward badge — SPEC-57');
 });
 
+test('spec-58-on-demand-city-crawl', 'FROZEN: app enqueues crawl_requests for no-data cities (services 10 / influencers 5); never crawls itself (SPEC-58)', '#58', async () => {
+  const api = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const mig = path.join(REPO_ROOT, 'supabase/migrations/20260618000000_crawl_requests.sql');
+
+  assert(fs.existsSync(mig), 'crawl_requests migration must exist');
+  const m = fs.readFileSync(mig, 'utf8');
+  assert(/create table if not exists public\.crawl_requests/.test(m), 'migration must create crawl_requests');
+  assert(/crawl_requests_open_dedupe_idx/.test(m), 'crawl_requests must dedupe OPEN rows (partial unique index)');
+
+  assert(/export async function enqueueCityCrawl/.test(api), 'api must export enqueueCityCrawl');
+  // Services trigger: enqueue when no provider matched.
+  assert(/ownerIds\.length === 0[\s\S]{0,400}enqueueCityCrawl\(\{\s*[\s\S]{0,80}kind: 'services'/.test(api),
+    'createRequestAndFanOut must enqueue a services crawl when no provider matched — SPEC-58');
+  // Influencers trigger: city-scoped via leads_influencers coverage check.
+  assert(/leads_influencers[\s\S]{0,400}kind: 'influencers'/.test(api),
+    'broadcastSpotlightRequest must enqueue an influencers crawl when the city has no leads_influencers — SPEC-58');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

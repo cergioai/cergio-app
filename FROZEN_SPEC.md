@@ -362,6 +362,18 @@ qa.mjs #57 enforces this.
 
 ---
 
+### SPEC-58 · On-demand city expansion (app REQUESTS crawls; it never crawls)
+**Status:** FROZEN — 2026-06-18 (Tarik — "crawl 10 best services / 5 best influencers when we don't have data for a city"; reuse the crawl spec)
+**Rule:** Per `CRAWLER_BRIEF.md`, the app **consumes** crawl directories and **never crawls itself**. When a request lands in a city with no matching data, the app **enqueues a `crawl_requests` row**; the separate crawler service polls `status='new'`, sources the leads, ingests into `leads_services` / `leads_influencers`, fires outreach, and stamps `delivered`.
+- **`enqueueCityCrawl({ kind, city, lat, lng, serviceType, targetCount, triggerRequestId })`** inserts the queue row (best-effort; idempotent via a partial-unique index on `(kind, city, service_type)` for OPEN rows; requires sign-in for RLS).
+- **Services trigger:** `createRequestAndFanOut` — when `ownerIds.length === 0` (no provider matched in radius) with a known `provider_type` + coords → enqueue `kind:'services'`, `targetCount:10`.
+- **Influencers trigger:** `broadcastSpotlightRequest` — when the service's city has **0** `leads_influencers` → enqueue `kind:'influencers'`, `targetCount:5`, with the service's adjacency type. City-scoped, error-safe.
+- Migration `20260618000000_crawl_requests.sql` (RLS: insert/select own; crawler uses service role).
+
+qa.mjs #58 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder
