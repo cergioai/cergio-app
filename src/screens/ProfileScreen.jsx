@@ -335,7 +335,7 @@ export function ProfileScreen() {
             )}
           </div>
         </div>
-        <div className="w-12 h-12 rounded-full bg-bg5 flex items-center justify-center text-black text-body-lg font-extrabold flex-shrink-0 overflow-hidden">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-g to-gd flex items-center justify-center text-white text-body-lg font-extrabold flex-shrink-0 overflow-hidden ring-2 ring-white shadow-sm">
           {initials}
         </div>
       </div>
@@ -496,7 +496,7 @@ export function ProfileScreen() {
         <DrawerAction
           title="My earnings"
           subtitle="Balance, breakdown, history"
-          pill={<MintPill>$0 USD</MintPill>}
+          pill={<MintPill>${Math.round(earningsTotalCents / 100)} USD</MintPill>}
           onClick={() => nav('/earnings')}
         />
         <DrawerAction

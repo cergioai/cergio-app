@@ -668,9 +668,12 @@ export function PublicProfileScreen() {
           CERGIO-GUARD (2026-05-30 v2): avatar 64 → 72 + name 26 → 28
           to match the heavier hierarchy on the mockup. Badges drop a
           row below name so the line doesn't crowd. */}
-      <div className="px-5 pt-4">
-        <div className="flex items-center gap-3.5">
-          <AvatarLink id={profile?.id} name={name} size={72} clickable={false} className="ring-2 ring-white shadow-sm" />
+      {/* Brand hero band — soft mint→cream gradient behind the avatar + name
+          for a premium, on-brand header (design-spec gl token). Layout
+          unchanged (Tarik 2026-06-18 brand re-skin). */}
+      <div className="px-5 pt-5 pb-5 bg-gradient-to-b from-gl/60 to-transparent">
+        <div className="flex items-center gap-4">
+          <AvatarLink id={profile?.id} name={name} size={84} clickable={false} className="ring-4 ring-white shadow-md" />
           <div className="flex-1 min-w-0">
             <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">{name}</h1>
             {/* Headline moved into the signal block below the Connector badge

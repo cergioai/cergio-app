@@ -1,19 +1,13 @@
-Contacts: Gmail is the primary web import; kill the duplicate file button (SPEC-52b)
+Profile brand pass v1 (re-skin, layout unchanged)
 
-Tarik 2026-06-18 — "do (b), it's a permanent web solution; native iOS/Android
-post-launch." iOS Safari has no native Contact Picker, so the picker now shows
-ONE clear PRIMARY per device + at most one quiet fallback — never two identical
-"upload a file" buttons.
+Tarik 2026-06-18 — match the brand across both profiles.
 
-- InviteFriendsScreen: Android → native picker; iOS/desktop with Gmail
-  configured → Connect Gmail (one-tap primary) + quiet "Or upload a file";
-  otherwise → a single clean file upload. Removed the confusing duplicate
-  "Upload Gmail contacts (.csv)" button.
-- FindFriendsScreen: replaced the old removed "coming soon" Google tile with a
-  REAL, config-gated Connect Gmail row (reuses importGoogleContacts +
-  matchAndShow). Only shows when configured — never a dead button.
-- Gmail flow itself (lib/googleContacts.js) was already built (GIS + People API,
-  contacts.readonly, env-gated). To go LIVE it needs VITE_GOOGLE_CLIENT_ID set +
-  Google restricted-scope verification (external).
+- PublicProfileScreen: premium brand hero — soft mint→cream gradient band
+  (design-spec `gl` token) behind the avatar + name; avatar enlarged 72→84
+  with a white ring + shadow. Layout/sections unchanged.
+- ProfileScreen (account hub): hero avatar now uses the brand green gradient
+  (g→gd) with a white ring, instead of a flat grey circle.
+- Fixed: account-hub "My earnings" drawer pill was hardcoded "$0 USD" — now
+  shows the real lifetime total (matches the card above it).
 
-FROZEN_SPEC SPEC-52b added; qa #52 extended. All 60 flows green.
+All 60 qa flows green.
