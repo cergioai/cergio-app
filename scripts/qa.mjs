@@ -2118,6 +2118,18 @@ test('spec-60-no-duplicate-listings', 'FROZEN: createService de-dupes recent ide
     'ServiceListSetupScreen must guard the persist effect with a one-shot ref — SPEC-60');
 });
 
+test('spec-61-seo-document-meta', 'FROZEN: per-record document meta on profile + service PDP (SPEC-61)', '#61', async () => {
+  const hookPath = path.join(REPO_ROOT, 'src/hooks/useDocumentMeta.js');
+  assert(fs.existsSync(hookPath), 'useDocumentMeta hook must exist');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  assert(/og:title/.test(hook) && /canonical/.test(hook) && /twitter:card/.test(hook),
+    'useDocumentMeta must set OG + canonical + twitter tags — SPEC-61');
+  const prof = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/PublicProfileScreen.jsx'), 'utf8');
+  const pdp  = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/ServiceDetailScreen.jsx'), 'utf8');
+  assert(/useDocumentMeta\(/.test(prof), 'PublicProfileScreen must call useDocumentMeta — SPEC-61');
+  assert(/useDocumentMeta\(/.test(pdp), 'ServiceDetailScreen must call useDocumentMeta — SPEC-61');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

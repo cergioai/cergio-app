@@ -1,17 +1,14 @@
-PDP polish + free-form request + Go-Tos→Recommendations + no-duplicate-listings (SPEC-60)
+SEO part 1: per-record document meta on profile + service PDP (SPEC-61)
 
-Tarik 2026-06-19 — design audit + bug grind.
+Tarik 2026-06-19 — SEO (full prerender chosen; this is the safe Part 1).
 
-- DUPLICATE-SERVICES BUG: list flow double-fired createService (initial-verified
-  + post-gate + strict mode) → 2 identical rows. Fixed both layers:
-  ServiceListSetupScreen guards the persist effect with a one-shot submittedRef;
-  createService de-dupes (returns an existing same-title listing by this owner
-  from the last 2 min instead of inserting again).
-- PDP offerings: lighter/thinner selection (border-g/70 + faint mint fill,
-  border-line unselected) — no heavy 1.5px ring; matches the attached design.
-- PDP "Submit a request for a custom quote" now opens the homepage FREE-FORM
-  (/home with a prefill), not the structured quote sheet.
-- Terminology: profile "Go-Tos" → "Recommendations" ({name}'s Recommendations).
-  (GOAT→Connector / Romio→Cergio already in code; Activity copy already says
-  Connector.)
-- FROZEN_SPEC SPEC-60 added; qa #60 added. All 63 flows green.
+- New useDocumentMeta hook: sets per-record <title>, description, canonical,
+  Open Graph + Twitter tags; restores title on unmount; gated by `ready`.
+- Wired on /u/:profileId (name + headline/bio) and /service/:serviceId
+  (listing + owner + cover image). Hooks called before early returns.
+- index.html now carries default brand meta (description/OG/canonical) the
+  screens override.
+- Helps Google (renders JS) + correct tab/share titles. Full social-scraper
+  cards (FB/LinkedIn/iMessage) need SSR — Part 2, a separate build-verified
+  Vike pass (can't ship as client-only tags).
+- FROZEN_SPEC SPEC-61 added; qa #61 added. All 64 flows green.

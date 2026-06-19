@@ -22,6 +22,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'react-router-dom';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestQuoteSheet } from '../components/ui/RequestQuoteSheet';
 
@@ -386,6 +387,17 @@ export function ServiceDetailScreen() {
     const key = provider?.taxonomy_provider_type || provider?.category || '';
     return COMPARABLE_FALLBACK_CENTS[key] || null;
   }, [offerings, provider]);
+
+  // SEO (SPEC-61): per-record meta for the service PDP — title/description from
+  // the listing + owner, cover as the share image. Hook before the early return.
+  useDocumentMeta({
+    title: provider ? `${ownerProfile?.display_name || provider.name || provider.category || 'Service'}` : 'Service',
+    description: ownerProfile?.bio
+      || (provider ? `${provider.category || 'Service'}${provider.location_text ? ' · ' + provider.location_text : ''} on Cergio` : ''),
+    image: provider?.coverUrl || null,
+    ready: !!provider,
+    path: serviceId ? `/service/${serviceId}` : undefined,
+  });
 
   if (loading || !provider) {
     return (

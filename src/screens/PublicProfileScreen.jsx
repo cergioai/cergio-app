@@ -29,6 +29,7 @@ import { supabase, supabaseReady } from '../lib/supabase';
 import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds, getConnectorSpotlights } from '../lib/api';
 import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
 import { IgPostTile } from '../components/ui/IgPostTile';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -565,6 +566,15 @@ export function PublicProfileScreen() {
   }, [services]);
 
   const igHandle = profile?.instagram_handle || null;
+
+  // SEO (SPEC-61): per-record meta so Google + share previews use the person's
+  // real name/headline. Hook called before the loading/notFound early returns.
+  useDocumentMeta({
+    title: profile?.display_name || 'Profile',
+    description: profile?.headline || profile?.bio || (profile?.display_name ? `${profile.display_name} on Cergio` : ''),
+    ready: !!profile,
+    path: profileId ? `/u/${profileId}` : undefined,
+  });
 
   // Skeleton shell — keeps the close button + cream background visible
   // even while data is in-flight or missing, so the user always has a

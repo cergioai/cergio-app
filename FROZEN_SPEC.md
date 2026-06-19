@@ -396,6 +396,15 @@ qa.mjs #60 enforces this.
 
 ---
 
+### SPEC-61 · SEO part 1 — per-record document meta (SSR is part 2)
+**Status:** FROZEN — 2026-06-19 (Tarik — SEO; full prerender chosen)
+**Rule:** `useDocumentMeta` sets per-record `<title>`, description, canonical, Open Graph + Twitter tags from the record being viewed. Wired on **`/u/:profileId`** (person name + headline/bio) and **`/service/:serviceId`** (listing + owner + cover image). `index.html` carries default brand meta the screens override. The hook is called **before** any early return (rules-of-hooks) and gated by `ready` until the record loads; it restores the prior title on unmount.
+- This helps Google (which renders JS) + correct tab/share titles. **Full social-scraper coverage (FB/LinkedIn/iMessage) requires SSR/prerender — SEO part 2**, a separate build-verified pass (Vike), NOT shippable as client-only tags.
+
+qa.mjs #61 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder
