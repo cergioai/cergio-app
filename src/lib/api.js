@@ -2864,8 +2864,10 @@ export async function getMyCcStatus() {
     .maybeSingle();
 }
 
-/** Optimistic flip — frontend calls this after stripe.confirmSetup succeeds.
- *  Real source of truth is the setup_intent.succeeded webhook (future). */
+/** Optimistic flip — frontend calls this after stripe.confirmSetup succeeds
+ *  for a snappy UX. The CANONICAL flip is the setup_intent.succeeded webhook
+ *  (stripe-webhook), which sets cc_verified_at server-side once Stripe confirms
+ *  a real chargeable card. Both are idempotent. */
 export async function markCcVerified() {
   if (!supabaseReady) return NOT_WIRED;
   const { data: userRes } = await supabase.auth.getUser();

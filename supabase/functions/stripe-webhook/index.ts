@@ -4,6 +4,7 @@
 //   URL:     https://<project-ref>.functions.supabase.co/stripe-webhook
 //   Events:  payment_intent.succeeded
 //            payment_intent.payment_failed
+//            setup_intent.succeeded     (CC identity gate — canonical flip)
 //            account.updated
 //
 // Stripe POSTs each event here with a signature header. We verify the
@@ -215,6 +216,23 @@ serve(async (req: Request) => {
             onboarding_complete: !!(acct.details_submitted),
           })
           .eq('stripe_account_id', acct.id);
+        break;
+      }
+
+      case 'setup_intent.succeeded': {
+        // CC identity gate — canonical, server-verified flip of cc_verified_at.
+        // The frontend (CcGateModal) does an optimistic flip for snappy UX, but
+        // THIS is the source of truth: Stripe confirmed a real, chargeable card
+        // (CVV + 3DS) attached to the Customer. Only act on our own intents
+        // (purpose=identity_verification carries cergio_user_id in metadata).
+        const si = event.data.object as Stripe.SetupIntent;
+        const userId = si.metadata?.cergio_user_id;
+        if (!userId || si.metadata?.purpose !== 'identity_verification') break;
+        await supaAdmin
+          .from('profiles')
+          .update({ cc_verified_at: new Date().toISOString() })
+          .eq('id', userId)
+          .is('cc_verified_at', null); // idempotent: don't churn on re-delivery
         break;
       }
 

@@ -1,12 +1,8 @@
-SEO part 2: server-rendered link previews for crawlers (SPEC-62)
+Stripe go-live prep: server-canonical CC-verify via setup_intent.succeeded
 
-api/meta.js (Vercel serverless fn) renders full OG/Twitter/canonical meta +
-JSON-LD for /u/:id, /u/:id/services and /service/:id by fetching the record
-live from Supabase (public anon key, no new secrets). vercel.json UA-gates
-the rewrites so ONLY known crawlers (facebookexternalhit, Twitterbot,
-LinkedInBot, Slackbot, WhatsApp, Discord, Telegram, Googlebot, bingbot,
-Applebot, ...) hit the function; humans fall through to the SPA index.html
-catch-all -> zero risk to the live app. HTML-escaped output + cleanId UUID
-sanitiser (injection/SSRF guards); branded WebSite fallback at 200 on any
-miss. Not Vike/SSG because these pages are UGC that don't exist at build
-time. FROZEN_SPEC SPEC-62 + qa #62 (now 65 flows).
+stripe-webhook now handles setup_intent.succeeded — flips profiles.cc_verified_at
+server-side once Stripe confirms a real chargeable card (CVV+3DS), gated on
+metadata.purpose=identity_verification + cergio_user_id, idempotent on
+re-delivery. Closes the long-standing TODO where the CC identity gate trusted
+only the optimistic client flip (markCcVerified). Optimistic flip stays for snappy
+UX; webhook is the source of truth. Header + api.js comments updated. qa 65/65.
