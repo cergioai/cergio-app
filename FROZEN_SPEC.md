@@ -374,6 +374,17 @@ qa.mjs #58 enforces this.
 
 ---
 
+### SPEC-59 · Credit-card identity gate on POST (test accounts bypass)
+**Status:** FROZEN — 2026-06-19 (Tarik — "no Connector/user/service can initiate a post without verifying identity against a credit card; test accounts bypass")
+**Rule:**
+- **Publishing a spotlight post requires a verified card.** Both publish paths gate on it: `MarkBookingPostedModal` (barter rate+post — gates only the actual publish; a held <4★ rating and a paid no-post recommendation still pass) and `MarkPostedModal` (paid spotlight). If `cc_verified` is false they open `CcGateModal` (reason `post`, Stripe **SetupIntent** — no charge); on success the post proceeds.
+- **Single source of truth:** the gate reads `getMyCcStatus()`. **Test accounts bypass** — `getMyCcStatus` returns a synthetic `cc_verified_at` (+ `cc_bypass`) for `IDENTITY_BYPASS_EMAILS` (`t@cergio.ai`, `info@cergio.ai`), so they (and every other gate that reads it — request/listing/photos) pass without a real card.
+- Verification stamps `profiles.cc_verified_at` (`markCcVerified`); the `setup_intent.succeeded` webhook is the canonical confirm.
+
+qa.mjs #59 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

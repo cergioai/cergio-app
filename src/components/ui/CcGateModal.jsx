@@ -112,6 +112,10 @@ const REASON_COPY = {
     title: 'Verify your identity to add photos',
     body:  "A quick card check keeps fakes, spam, and inappropriate content off Cergio.",
   },
+  post: {
+    title: 'Verify your identity to post',
+    body:  "Before your spotlight goes live we need to confirm you're a real person. It keeps spam and fake posts off Cergio.",
+  },
 };
 
 export function CcGateModal({ onClose, onVerified, reason = 'photos' }) {

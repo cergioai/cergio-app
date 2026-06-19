@@ -2089,6 +2089,25 @@ test('spec-58-on-demand-city-crawl', 'FROZEN: app enqueues crawl_requests for no
     'broadcastSpotlightRequest must enqueue an influencers crawl when the city has no leads_influencers — SPEC-58');
 });
 
+test('spec-59-cc-identity-gate-on-post', 'FROZEN: spotlight POST gated on cc-verified; test accounts bypass via getMyCcStatus (SPEC-59)', '#59', async () => {
+  const api  = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const barter = fs.readFileSync(path.join(REPO_ROOT, 'src/components/ui/MarkBookingPostedModal.jsx'), 'utf8');
+  const paid   = fs.readFileSync(path.join(REPO_ROOT, 'src/components/ui/MarkPostedModal.jsx'), 'utf8');
+
+  // Test-account bypass is centralized in getMyCcStatus.
+  assert(/IDENTITY_BYPASS_EMAILS/.test(api) && /t@cergio\.ai/.test(api) && /info@cergio\.ai/.test(api),
+    'api must define IDENTITY_BYPASS_EMAILS with the test accounts — SPEC-59');
+  const gs = api.indexOf('export async function getMyCcStatus');
+  assert(/isIdentityBypassEmail/.test(api.slice(gs, gs + 600)),
+    'getMyCcStatus must short-circuit verified for bypass emails — SPEC-59');
+
+  // Both publish modals gate on cc verification via CcGateModal.
+  for (const [name, src] of [['MarkBookingPostedModal', barter], ['MarkPostedModal', paid]]) {
+    assert(/getMyCcStatus/.test(src) && /CcGateModal/.test(src) && /ccVerified === false/.test(src),
+      `${name} must gate the post on cc verification (CcGateModal when ccVerified===false) — SPEC-59`);
+  }
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

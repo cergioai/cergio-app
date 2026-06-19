@@ -5,8 +5,9 @@
 // and the provider can reply / escalate (module 2). markBookingPosted +
 // createReview in lib/api do the writes.
 import { useState, useEffect } from 'react';
-import { markBookingPosted, createReview, getMyEarningsSummary, recommendService } from '../../lib/api';
+import { markBookingPosted, createReview, getMyEarningsSummary, recommendService, getMyCcStatus } from '../../lib/api';
 import { buildInviteUrl } from '../../lib/referral';
+import { CcGateModal } from './CcGateModal';
 
 const fmtUsd = (cents) => `$${Math.round((cents || 0) / 100).toLocaleString()}`;
 
@@ -34,9 +35,15 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
   const [copied, setCopied]   = useState(false);
   const [showBio, setShowBio] = useState(false);
   const [earn, setEarn]       = useState(null);
+  // CERGIO-GUARD (2026-06-19, Tarik): credit-card identity gate — no one can
+  // PUBLISH a spotlight post without a verified card (anti-spam). null = loading
+  // (gate stays armed); test accounts auto-pass via getMyCcStatus bypass.
+  const [ccVerified, setCcVerified] = useState(null);
+  const [showCcGate, setShowCcGate] = useState(false);
   useEffect(() => {
     let cancelled = false;
     getMyEarningsSummary().then(({ data }) => { if (!cancelled) setEarn(data || null); });
+    getMyCcStatus().then(({ data }) => { if (!cancelled) setCcVerified(!!data?.cc_verified_at); });
     return () => { cancelled = true; };
   }, []);
   const providerFirst = (booking?.provider?.display_name || 'the provider').split(' ')[0];
@@ -68,6 +75,12 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
     // IG post is REQUIRED for free/barter (the barter obligation) but OPTIONAL
     // when the user paid (SPEC-54).
     if (!lowRating && !isPaid && !hasUrl) { setErr('Paste the public link to your Instagram post.'); return; }
+    // CERGIO-GUARD (2026-06-19, Tarik): publishing a spotlight post requires a
+    // verified card (identity / anti-spam). Only blocks the POST itself; a
+    // held <4★ rating (no publish) and paid no-post recommendations pass. Test
+    // accounts auto-pass via the getMyCcStatus bypass.
+    const willPublish = hasUrl && !lowRating;
+    if (willPublish && ccVerified === false) { setShowCcGate(true); return; }
     setBusy(true);
     setErr(null);
 
@@ -102,6 +115,13 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
 
   return (
     <div className="fixed inset-0 z-[10002] bg-black/40 flex items-end justify-center" onClick={onClose}>
+      {showCcGate && (
+        <CcGateModal
+          reason="post"
+          onClose={() => setShowCcGate(false)}
+          onVerified={() => { setCcVerified(true); setShowCcGate(false); setTimeout(() => submit(), 0); }}
+        />
+      )}
       <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-5 pb-7 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-4" />
         <h2 className="text-[20px] font-extrabold text-black leading-tight mb-1">

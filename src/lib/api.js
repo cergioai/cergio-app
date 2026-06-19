@@ -2818,11 +2818,24 @@ export async function createSetupIntent() {
   return { data, error: null };
 }
 
+// CERGIO-GUARD (2026-06-19, Tarik): test accounts bypass the credit-card
+// identity gate (post / request / listing / photos) — they're treated as
+// verified without a real card so QA isn't blocked. Single source of truth, so
+// EVERY gate that reads getMyCcStatus honors it.
+export const IDENTITY_BYPASS_EMAILS = ['t@cergio.ai', 'info@cergio.ai'];
+export function isIdentityBypassEmail(email) {
+  return IDENTITY_BYPASS_EMAILS.includes(String(email || '').trim().toLowerCase());
+}
+
 /** Read the signed-in user's CC verification state. */
 export async function getMyCcStatus() {
   if (!supabaseReady) return { data: null, error: null };
   const { data: userRes } = await supabase.auth.getUser();
   if (!userRes?.user) return { data: null, error: null };
+  // Test-account bypass — verified without a card (see IDENTITY_BYPASS_EMAILS).
+  if (isIdentityBypassEmail(userRes.user.email)) {
+    return { data: { stripe_customer_id: null, cc_verified_at: '2000-01-01T00:00:00Z', cc_bypass: true }, error: null };
+  }
   return await supabase
     .from('profiles')
     .select('stripe_customer_id, cc_verified_at')

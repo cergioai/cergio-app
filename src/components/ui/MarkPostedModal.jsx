@@ -1,13 +1,23 @@
 // Connector marks a spotlight as posted. Captures the public IG/TT URL
 // so the Provider can verify + dispute if needed. Fires markSpotlightPosted
 // which kicks off the "please confirm" email to the Provider.
-import { useState } from 'react';
-import { markSpotlightPosted } from '../../lib/api';
+import { useState, useEffect } from 'react';
+import { markSpotlightPosted, getMyCcStatus } from '../../lib/api';
+import { CcGateModal } from './CcGateModal';
 
 export function MarkPostedModal({ request, onClose, onPosted }) {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  // CERGIO-GUARD (2026-06-19, Tarik): publishing a spotlight requires a verified
+  // card (identity / anti-spam). null = loading; test accounts auto-pass.
+  const [ccVerified, setCcVerified] = useState(null);
+  const [showCcGate, setShowCcGate] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getMyCcStatus().then(({ data }) => { if (!cancelled) setCcVerified(!!data?.cc_verified_at); });
+    return () => { cancelled = true; };
+  }, []);
   const platformLabel = request.platform === 'instagram' ? 'Instagram' : 'TikTok';
   const placeholder = request.platform === 'instagram'
     ? 'https://www.instagram.com/p/...'
@@ -16,6 +26,7 @@ export function MarkPostedModal({ request, onClose, onPosted }) {
   const submit = async (e) => {
     e?.preventDefault?.();
     if (busy) return;
+    if (ccVerified === false) { setShowCcGate(true); return; }
     setBusy(true);
     setErr(null);
     const { error } = await markSpotlightPosted(request.id, { postedUrl: url });
@@ -27,6 +38,13 @@ export function MarkPostedModal({ request, onClose, onPosted }) {
 
   return (
     <div className="fixed inset-0 z-[10002] bg-black/40 flex items-end justify-center" onClick={onClose}>
+      {showCcGate && (
+        <CcGateModal
+          reason="post"
+          onClose={() => setShowCcGate(false)}
+          onVerified={() => { setCcVerified(true); setShowCcGate(false); setTimeout(() => submit(), 0); }}
+        />
+      )}
       <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-5 pb-7" onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-4" />
         <h2 className="text-[20px] font-extrabold text-black leading-tight mb-1">

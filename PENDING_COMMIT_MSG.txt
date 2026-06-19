@@ -1,20 +1,21 @@
-On-demand city expansion: app enqueues crawl_requests for no-data cities (SPEC-58)
+Credit-card identity gate on POST + test-account bypass (SPEC-59)
 
-Tarik 2026-06-18 — when a request lands in a city we don't have data for, crawl
-the 10 best nearest services / 5 best adjacent influencers. Per CRAWLER_BRIEF
-the app never crawls itself — it REQUESTS; the crawler service fulfills.
+Tarik 2026-06-19 — no one can publish a spotlight post without a verified card;
+test accounts bypass.
 
-- New table crawl_requests (migration 20260618000000) — queue with kind
-  (services|influencers), city/geo, service_type, target_count, status
-  (new→crawling→delivered), RLS (insert/select own; crawler uses service role),
-  partial-unique dedupe on OPEN (kind, city, service_type).
-- enqueueCityCrawl() helper (best-effort, idempotent, sign-in gated).
-- Services trigger: createRequestAndFanOut enqueues a 10-services crawl when no
-  provider matched in radius (uncovered city).
-- Influencers trigger: broadcastSpotlightRequest enqueues a 5-influencer crawl
-  when the service's city has zero leads_influencers (city-scoped, error-safe).
-- FROZEN_SPEC SPEC-58 added; qa #58 added. All 61 flows green.
+- Test-account bypass centralized in getMyCcStatus: returns a synthetic
+  cc_verified_at (+ cc_bypass) for IDENTITY_BYPASS_EMAILS (t@cergio.ai,
+  info@cergio.ai). Single source of truth — every gate that reads it
+  (post / request / listing / photos) now lets the test accounts through
+  without a real card.
+- POST gate: MarkBookingPostedModal (barter rate+post — gates only the actual
+  publish; held <4★ ratings and paid no-post recommendations still pass) and
+  MarkPostedModal (paid spotlight) now require cc-verified; if not, they open
+  CcGateModal (reason 'post', Stripe SetupIntent — no charge) and proceed on
+  success.
+- New 'post' reason copy in CcGateModal.
+- FROZEN_SPEC SPEC-59 added; qa #59 added. All 62 flows green.
 
-NOTE: run "Apply Crawl Requests Migration.command" to create the table; the
-external crawler then polls status='new'. The actual scraping + outreach lives
-in the separate crawler service (not this repo).
+NOTE: for REAL (non-bypass) users the card check needs the create-setup-intent
+edge function deployed + the Stripe secret set; that infra already exists in the
+repo (supabase/functions/create-setup-intent).
