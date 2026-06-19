@@ -39,6 +39,27 @@ export async function createService(draft) {
     return { data: null, error: { message: 'You must be signed in to list a service.' } };
   }
   const ownerId = userRes.user.id;
+  const title = makeTitle(draft.category, draft.location);
+
+  // CERGIO-GUARD (2026-06-19, Tarik — duplicate-listings bug): a double-tap /
+  // double effect was inserting two identical services microseconds apart
+  // (info@cergio had 2 identical Personal Chef rows). Before inserting, return
+  // any listing this owner already has with the SAME title created in the last
+  // 2 minutes — idempotent regardless of how the caller fires.
+  {
+    const since = new Date(Date.now() - 120000).toISOString();
+    const { data: dupes } = await supabase
+      .from('services')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .eq('title', title)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (dupes && dupes.length) {
+      return { data: dupes[0], error: null, deduped: true };
+    }
+  }
 
   // 1. Insert service. taxonomy_* fields are *optional* in the schema —
   //    older deployments don't have those columns yet (the PostgREST
@@ -48,7 +69,7 @@ export async function createService(draft) {
   //    just degrades to text category until the migration lands.
   const baseRow = {
     owner_id:     ownerId,
-    title:        makeTitle(draft.category, draft.location),
+    title:        title,
     category:     draft.category || null,
     description:  draft.description || null,
     location_text: draft.location || null,

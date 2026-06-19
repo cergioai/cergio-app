@@ -1,21 +1,17 @@
-Credit-card identity gate on POST + test-account bypass (SPEC-59)
+PDP polish + free-form request + Go-Tos→Recommendations + no-duplicate-listings (SPEC-60)
 
-Tarik 2026-06-19 — no one can publish a spotlight post without a verified card;
-test accounts bypass.
+Tarik 2026-06-19 — design audit + bug grind.
 
-- Test-account bypass centralized in getMyCcStatus: returns a synthetic
-  cc_verified_at (+ cc_bypass) for IDENTITY_BYPASS_EMAILS (t@cergio.ai,
-  info@cergio.ai). Single source of truth — every gate that reads it
-  (post / request / listing / photos) now lets the test accounts through
-  without a real card.
-- POST gate: MarkBookingPostedModal (barter rate+post — gates only the actual
-  publish; held <4★ ratings and paid no-post recommendations still pass) and
-  MarkPostedModal (paid spotlight) now require cc-verified; if not, they open
-  CcGateModal (reason 'post', Stripe SetupIntent — no charge) and proceed on
-  success.
-- New 'post' reason copy in CcGateModal.
-- FROZEN_SPEC SPEC-59 added; qa #59 added. All 62 flows green.
-
-NOTE: for REAL (non-bypass) users the card check needs the create-setup-intent
-edge function deployed + the Stripe secret set; that infra already exists in the
-repo (supabase/functions/create-setup-intent).
+- DUPLICATE-SERVICES BUG: list flow double-fired createService (initial-verified
+  + post-gate + strict mode) → 2 identical rows. Fixed both layers:
+  ServiceListSetupScreen guards the persist effect with a one-shot submittedRef;
+  createService de-dupes (returns an existing same-title listing by this owner
+  from the last 2 min instead of inserting again).
+- PDP offerings: lighter/thinner selection (border-g/70 + faint mint fill,
+  border-line unselected) — no heavy 1.5px ring; matches the attached design.
+- PDP "Submit a request for a custom quote" now opens the homepage FREE-FORM
+  (/home with a prefill), not the structured quote sheet.
+- Terminology: profile "Go-Tos" → "Recommendations" ({name}'s Recommendations).
+  (GOAT→Connector / Romio→Cergio already in code; Activity copy already says
+  Connector.)
+- FROZEN_SPEC SPEC-60 added; qa #60 added. All 63 flows green.

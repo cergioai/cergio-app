@@ -805,8 +805,8 @@ export function PublicProfileScreen() {
           tiny "reviewer" avatar on the mockup's gray quote box). */}
       {recoServices.length > 0 && (
         <div className="px-5 mt-8">
-          <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Go-Tos</h2>
-          <p className="text-meta text-b3 font-medium mt-1">See their top-rated service providers</p>
+          <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Recommendations</h2>
+          <p className="text-meta text-b3 font-medium mt-1">Services {firstName} recommends</p>
           <div className="mt-4 flex flex-col gap-3">
             {(showAllGoTos ? recoServices : recoServices.slice(0, 6)).map(r => (
               <div
@@ -875,7 +875,7 @@ export function PublicProfileScreen() {
             >
               {showAllGoTos
                 ? 'Show less'
-                : `See all of ${firstName}'s go-tos (${recoServices.length}) →`}
+                : `See all of ${firstName}'s recommendations (${recoServices.length}) →`}
             </button>
           )}
         </div>

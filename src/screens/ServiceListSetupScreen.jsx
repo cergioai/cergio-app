@@ -7,7 +7,7 @@
 // behind CcGateModal when the provider hasn't yet verified, so spam
 // listings never reach the marketplace. Already-verified providers
 // proceed immediately as before.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { createService, getMyCcStatus } from '../lib/api';
 import { CcGateModal } from '../components/ui/CcGateModal';
@@ -19,6 +19,10 @@ export function ServiceListSetupScreen() {
   const [gateOpen, setGateOpen]   = useState(false);
   const [gateDismissed, setGateDismissed] = useState(false);
   const [verified, setVerified]   = useState(null); // null = loading, bool once resolved
+  // CERGIO-GUARD (2026-06-19, Tarik — duplicate-listings bug): the persist
+  // effect can fire more than once (initial-verified + post-gate + strict mode).
+  // This one-shot ref guarantees createService runs ONCE; the API also dedupes.
+  const submittedRef = useRef(false);
 
   // Step 1: probe verification state on mount. Don't call createService
   // until we know whether to show the gate.
@@ -37,7 +41,8 @@ export function ServiceListSetupScreen() {
   // initial probe finds the user already verified AND after the gate
   // closes with onVerified.
   useEffect(() => {
-    if (verified !== true) return;
+    if (verified !== true || submittedRef.current) return;
+    submittedRef.current = true;
     let cancelled = false;
 
     (async () => {

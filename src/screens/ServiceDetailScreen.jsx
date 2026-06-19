@@ -647,10 +647,10 @@ export function ServiceDetailScreen() {
                 type="button"
                 onClick={() => setSelectedOfferingId(o.id)}
                 className={`snap-start text-left rounded-[16px] p-4 flex-shrink-0
-                            w-[78%] min-h-[150px] bg-white transition-all
+                            w-[78%] min-h-[150px] transition-all border
                             ${isSel
-                              ? 'border-[1.5px] border-g'
-                              : 'border border-line'}`}
+                              ? 'border-g/70 bg-gl/40'
+                              : 'border-line bg-white'}`}
               >
                 <p className="text-heading-2 font-extrabold text-black leading-tight">
                   {o.name || 'Service offering'}
@@ -716,18 +716,18 @@ export function ServiceDetailScreen() {
         </div>
       </div>
 
-      {/* "Don't see what you need?" cream callout — per mockup.
-          CERGIO-GUARD (2026-05-30): tapping "Submit a request" now
-          opens the RequestQuoteSheet (pre-filled with this provider +
-          category) instead of bouncing back to /home. After the
-          single-provider send, the sheet offers to cross-post to
-          other matching providers — same request thread, more
-          options. Tarik's spec. */}
+      {/* "Don't see what you need?" cream callout.
+          CERGIO-GUARD (2026-06-19, Tarik): "Submit a request" now opens the
+          homepage-style FREE-FORM (chat) entry — not the structured quote sheet.
+          The user describes their need in plain language like on Home. We carry
+          the provider's name as a starting hint so the free-form is pre-seeded. */}
       <div className="mx-5 mt-5 bg-gl rounded-[14px] p-3.5 text-center">
         <p className="text-meta text-b2 font-medium leading-snug">
           Don&apos;t see what you need?{' '}
           <button
-            onClick={() => setRequestSheetOpen(true)}
+            onClick={() => navigate('/home', {
+              state: { prefill: `I need ${provider.category || 'a service'} from ${firstName}: `, providerId: provider.ownerId || null },
+            })}
             className="text-gd font-extrabold underline"
           >
             Submit a request for a custom quote.

@@ -385,6 +385,17 @@ qa.mjs #59 enforces this.
 
 ---
 
+### SPEC-60 · No duplicate listings + PDP polish (terminology / lines / free-form request)
+**Status:** FROZEN — 2026-06-19 (Tarik — "one bug: duplicating services"; PDP design audit)
+**Rule:**
+- **No duplicate services.** The list flow was double-firing `createService` (initial-verified + post-gate + strict mode), inserting two identical rows microseconds apart. Fixed at two layers: `ServiceListSetupScreen` guards the persist effect with a one-shot `submittedRef`; **`createService` de-dupes** — before inserting it returns any listing this owner already has with the SAME `title` created in the last 2 minutes (`deduped:true`).
+- **PDP (`ServiceDetailScreen`) polish:** offering cards use **lighter/thinner selection** (`border-g/70 bg-gl/40` selected, `border-line` unselected — no heavy 1.5px ring). "Submit a request for a custom quote" opens the **homepage free-form** (`/home` with a prefill), not the structured quote sheet.
+- **Terminology (Cergio canon):** GOAT→Connector, Romio→Cergio, **Go-Tos→Recommendations** ("{name}'s Recommendations"). qa #60 + the screens enforce this.
+
+qa.mjs #60 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

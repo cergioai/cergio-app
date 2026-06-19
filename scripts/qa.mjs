@@ -2108,6 +2108,16 @@ test('spec-59-cc-identity-gate-on-post', 'FROZEN: spotlight POST gated on cc-ver
   }
 });
 
+test('spec-60-no-duplicate-listings', 'FROZEN: createService de-dupes recent identical listings; list flow is one-shot (SPEC-60)', '#60', async () => {
+  const api = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const setup = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/ServiceListSetupScreen.jsx'), 'utf8');
+  const fn = api.slice(api.indexOf('export async function createService'), api.indexOf('export async function createService') + 1500);
+  assert(/eq\('owner_id', ownerId\)[\s\S]{0,200}eq\('title', title\)/.test(fn) && /deduped: true/.test(fn),
+    'createService must return an existing recent same-title listing instead of inserting a duplicate — SPEC-60');
+  assert(/submittedRef/.test(setup),
+    'ServiceListSetupScreen must guard the persist effect with a one-shot ref — SPEC-60');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
