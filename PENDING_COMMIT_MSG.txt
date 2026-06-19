@@ -1,14 +1,12 @@
-SEO part 1: per-record document meta on profile + service PDP (SPEC-61)
+SEO part 2: server-rendered link previews for crawlers (SPEC-62)
 
-Tarik 2026-06-19 — SEO (full prerender chosen; this is the safe Part 1).
-
-- New useDocumentMeta hook: sets per-record <title>, description, canonical,
-  Open Graph + Twitter tags; restores title on unmount; gated by `ready`.
-- Wired on /u/:profileId (name + headline/bio) and /service/:serviceId
-  (listing + owner + cover image). Hooks called before early returns.
-- index.html now carries default brand meta (description/OG/canonical) the
-  screens override.
-- Helps Google (renders JS) + correct tab/share titles. Full social-scraper
-  cards (FB/LinkedIn/iMessage) need SSR — Part 2, a separate build-verified
-  Vike pass (can't ship as client-only tags).
-- FROZEN_SPEC SPEC-61 added; qa #61 added. All 64 flows green.
+api/meta.js (Vercel serverless fn) renders full OG/Twitter/canonical meta +
+JSON-LD for /u/:id, /u/:id/services and /service/:id by fetching the record
+live from Supabase (public anon key, no new secrets). vercel.json UA-gates
+the rewrites so ONLY known crawlers (facebookexternalhit, Twitterbot,
+LinkedInBot, Slackbot, WhatsApp, Discord, Telegram, Googlebot, bingbot,
+Applebot, ...) hit the function; humans fall through to the SPA index.html
+catch-all -> zero risk to the live app. HTML-escaped output + cleanId UUID
+sanitiser (injection/SSRF guards); branded WebSite fallback at 200 on any
+miss. Not Vike/SSG because these pages are UGC that don't exist at build
+time. FROZEN_SPEC SPEC-62 + qa #62 (now 65 flows).

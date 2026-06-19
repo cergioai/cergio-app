@@ -405,6 +405,17 @@ qa.mjs #61 enforces this.
 
 ---
 
+### SPEC-62 · SEO part 2 — server-rendered link previews for crawlers
+**Status:** FROZEN — 2026-06-19 (Tarik — SEO part 2)
+**Rule:** `api/meta.js` (Vercel serverless fn) server-renders a full HTML document — `<title>`, description, canonical, Open Graph, Twitter, and JSON-LD (`Person` for profiles, `Service` for listings) — by fetching the record live from Supabase via the public anon key (same RLS-gated read the public page does; **no new secrets**). `vercel.json` routes **`/u/:id`**, **`/u/:id/services`**, and **`/service/:id`** to this function **only when the `user-agent` header matches a known crawler** (facebookexternalhit, Twitterbot, LinkedInBot, Slackbot, WhatsApp, Discord, Telegram, Googlebot, bingbot, Applebot, etc.). **Humans never hit the function** — they fall through to the SPA `index.html` catch-all, so there is zero risk to the live app.
+- **Why not Vike/SSG:** these pages are user-generated and change constantly → they don't exist at build time, so SSG can't prerender them; a full Vike SSR migration would rewrite the 100-screen react-router shell (regression risk). This delivers full crawler-meta coverage at ~0 risk.
+- **Invariants:** all output is HTML-escaped (injection guard); the record `id` is sanitised via `cleanId` (UUID-ish only — SSRF/REST-injection guard); a missing/unreadable record returns a branded `WebSite` fallback at HTTP 200 (never a broken preview); responses set `s-maxage=300, stale-while-revalidate` for CDN caching. Every `/api/meta` rewrite MUST stay UA-gated and the SPA `/(.*)` → `index.html` catch-all MUST remain last.
+- **Deploy note:** needs `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` present in Vercel env (already set for the frontend build — serverless fns read all project env vars).
+
+qa.mjs #62 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

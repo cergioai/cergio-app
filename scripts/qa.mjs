@@ -2130,6 +2130,30 @@ test('spec-61-seo-document-meta', 'FROZEN: per-record document meta on profile +
   assert(/useDocumentMeta\(/.test(pdp), 'ServiceDetailScreen must call useDocumentMeta — SPEC-61');
 });
 
+test('spec-62-seo-ssr-meta-for-bots', 'FROZEN: serverless function server-renders OG/meta + JSON-LD for /u and /service to crawler UAs; vercel.json UA-gates the rewrites so humans fall through to the SPA (SPEC-62)', '#62', async () => {
+  const fnPath = path.join(REPO_ROOT, 'api/meta.js');
+  assert(fs.existsSync(fnPath), 'api/meta.js serverless function must exist — SPEC-62');
+  const fn = fs.readFileSync(fnPath, 'utf8');
+  assert(/og:title/.test(fn) && /canonical/.test(fn) && /twitter:card/.test(fn),
+    'api/meta.js must emit OG + canonical + twitter tags — SPEC-62');
+  assert(/application\/ld\+json/.test(fn), 'api/meta.js must emit JSON-LD — SPEC-62');
+  // HTML escaping is the injection guard — must escape both & and < at minimum.
+  assert(/&amp;/.test(fn) && /&lt;/.test(fn), 'api/meta.js must HTML-escape output — SPEC-62');
+  // id sanitiser prevents SSRF / REST query injection.
+  assert(/cleanId/.test(fn), 'api/meta.js must sanitise the record id (cleanId) — SPEC-62');
+  const vj = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'vercel.json'), 'utf8'));
+  const rw = vj.rewrites || [];
+  const botRules = rw.filter(r => /\/api\/meta/.test(r.destination || ''));
+  assert(botRules.length >= 2, 'vercel.json must route /u and /service to /api/meta — SPEC-62');
+  // Every bot rewrite MUST be UA-gated, else humans get the bot HTML (regression).
+  assert(botRules.every(r => Array.isArray(r.has) && r.has.some(h =>
+    h.type === 'header' && /user-agent/i.test(h.key) && /facebookexternalhit/i.test(h.value || ''))),
+    'every /api/meta rewrite must be gated on a bot user-agent header — SPEC-62');
+  // The SPA catch-all must still exist as the last/fallthrough rule.
+  assert(rw.some(r => r.source === '/(.*)' && /index\.html/.test(r.destination || '')),
+    'vercel.json must keep the SPA index.html catch-all — SPEC-62');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

@@ -1,6 +1,39 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    {
+      "source": "/service/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|facebot|Twitterbot|LinkedInBot|Slackbot|Slack-ImgProxy|WhatsApp|TelegramBot|Discordbot|Pinterest|redditbot|Applebot|SkypeUriPreview|vkShare|W3C_Validator|Googlebot|Google-InspectionTool|bingbot|DuckDuckBot|YandexBot|Embedly|Quora Link Preview|nuzzel|Iframely).*"
+        }
+      ],
+      "destination": "/api/meta?kind=service&id=:id"
+    },
+    {
+      "source": "/u/:id/services",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|facebot|Twitterbot|LinkedInBot|Slackbot|Slack-ImgProxy|WhatsApp|TelegramBot|Discordbot|Pinterest|redditbot|Applebot|SkypeUriPreview|vkShare|W3C_Validator|Googlebot|Google-InspectionTool|bingbot|DuckDuckBot|YandexBot|Embedly|Quora Link Preview|nuzzel|Iframely).*"
+        }
+      ],
+      "destination": "/api/meta?kind=profile_services&id=:id"
+    },
+    {
+      "source": "/u/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|facebot|Twitterbot|LinkedInBot|Slackbot|Slack-ImgProxy|WhatsApp|TelegramBot|Discordbot|Pinterest|redditbot|Applebot|SkypeUriPreview|vkShare|W3C_Validator|Googlebot|Google-InspectionTool|bingbot|DuckDuckBot|YandexBot|Embedly|Quora Link Preview|nuzzel|Iframely).*"
+        }
+      ],
+      "destination": "/api/meta?kind=profile&id=:id"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
