@@ -416,6 +416,31 @@ qa.mjs #62 enforces this.
 
 ---
 
+### SPEC-47g · Held funds + 3-hour auto-release for paid bookings
+**Status:** FROZEN — 2026-06-20 (Tarik — "do 2"; staged + flag-gated rollout)
+**Rule:** Paid bookings can be held in escrow and released to the provider 3 hours after the provider marks the job complete. **Gated by edge-function env `HOLD_RELEASE_ENABLED`:**
+- **OFF (default):** `create-payment-intent` uses a Stripe **destination charge** (`transfer_data` + `application_fee_amount`) → provider paid instantly. Legacy/live behavior; unchanged until the flag flips.
+- **ON:** `create-payment-intent` creates a **separate charge** to the platform under `transfer_group = booking_<id>` (no `transfer_data`); the webhook records `stripe_charge_id` and does **not** book earnings yet; the `release-funds` worker later transfers the provider share (total − 10%) from that charge and books earnings.
+- **Release window:** `markBookingComplete` sets `release_due_at = completed_at + 3h`. **GUARD:** if `completed_at < scheduled_at` (provider marked complete before the job started), it sets `release_requires_confirm = true` and **no** `release_due_at` — the consumer must call `confirmJobDone` (which sets `release_due_at = now`) before any release.
+- **release-funds worker** (service-role bearer only) transfers funds for bookings that are held (`transfer_group` set), unreleased (`stripe_transfer_id`/`released_at` null), have a charge, are due (`release_due_at <= now`), and not cancelled/refunded/disputed. Idempotent via `stripe_transfer_id` guard + Stripe `idempotencyKey: release_<id>`. Instant-mode bookings have no `transfer_group`, so they are never touched (no double-pay).
+- **Trigger:** `Release Due Funds.command` (manual, staged) or the documented pg_cron block in the migration (every 15 min) once enabled.
+
+qa.mjs #47g enforces this.
+
+---
+
+### SPEC-63 · Crawl pipeline monitoring + failure alerts (can't fail silently)
+**Status:** FROZEN — 2026-06-20 (Tarik — "need an automatic admin dashboard + alerts for crawls that don't deliver")
+**Rule:** The on-demand crawl pipeline must surface its own failures.
+- **`crawl-health-check`** edge fn (service-role only; cron + `Crawl Health Check.command`) classifies problems and **emails the admin** (Resend, `notify@cergio.ai` → `ADMIN_ALERT_EMAIL`, default t@cergio.ai) with a plain-English diagnosis + fix: **STALLED** (status new/crawling older than `CRAWL_STALE_HOURS`, default 2h → crawler not polling), **FAILED** (status='failed'), **EMPTY** (delivered with delivered_count=0). Emails only when issues exist (or `?force=1`).
+- **`admin-crawl-status`** edge fn (admin-gated by caller JWT email in `ADMIN_EMAILS`; reads via service role) returns the live dashboard JSON.
+- **`/admin/crawls`** (`AdminCrawlScreen`, admin-only, auto-refresh 60s) renders health banner, stalled/failed/empty issue cards, queue-by-status, recent requests, leads funnel — a live link.
+- Read-only **`Monitor Crawl + Outreach.command`** gives the same picture from the terminal. Automatic 15-min cron documented in the migration; manual launchers ship meanwhile.
+
+qa.mjs #63 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

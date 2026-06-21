@@ -1,8 +1,18 @@
-Stripe go-live prep: server-canonical CC-verify via setup_intent.succeeded
+SPEC-47g held-release (flag-gated) + SPEC-63 crawl monitoring & alerts
 
-stripe-webhook now handles setup_intent.succeeded — flips profiles.cc_verified_at
-server-side once Stripe confirms a real chargeable card (CVV+3DS), gated on
-metadata.purpose=identity_verification + cergio_user_id, idempotent on
-re-delivery. Closes the long-standing TODO where the CC identity gate trusted
-only the optimistic client flip (markCcVerified). Optimistic flip stays for snappy
-UX; webhook is the source of truth. Header + api.js comments updated. qa 65/65.
+SPEC-47g (staged, OFF behind HOLD_RELEASE_ENABLED): escrow money model —
+create-payment-intent branches instant (destination charge) vs held
+(transfer_group); webhook records charge + defers earnings in held mode;
+markBookingComplete sets release_due_at=+3h with early-completion guard
+(release_requires_confirm) + confirmJobDone; release-funds worker transfers
+provider share from the original charge, idempotent; migration adds columns
++ documented cron; Release Due Funds.command.
+
+SPEC-63 crawl pipeline self-monitoring (can't fail silently):
+- crawl-health-check edge fn (service-role; cron + Crawl Health Check.command)
+  classifies STALLED/FAILED/EMPTY and emails admin a diagnosis via Resend.
+- admin-crawl-status edge fn (admin-allowlist gated) + /admin/crawls
+  (AdminCrawlScreen, auto-refresh 60s) live dashboard via link.
+- Monitor Crawl + Outreach.command for terminal view.
+Deploy script ships all new fns. FROZEN_SPEC + qa (#47g, #63) → 67 flows pass.
+Not live until functions deployed (+ HOLD_RELEASE_ENABLED for 47g).

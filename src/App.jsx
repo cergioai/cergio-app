@@ -94,6 +94,7 @@ import { ServiceDetailProviderScreen }      from './screens/ServiceDetailProvide
 import { AuthScreen }                       from './screens/AuthScreen';
 import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
+import { AdminCrawlScreen }                 from './screens/AdminCrawlScreen';
 import { PublicProfileServicesScreen }      from './screens/PublicProfileServicesScreen';
 import { InviteLandingScreen }              from './screens/InviteLandingScreen';
 import { AboutScreen }                      from './screens/AboutScreen';
@@ -572,6 +573,7 @@ export default function App() {
               avatar across the app links here via /u/{profileId}. */}
           <Route path="/u/:profileId/services" element={<PublicProfileServicesScreen />} />
           <Route path="/u/:profileId"          element={<PublicProfileScreen />} />
+          <Route path="/admin/crawls"          element={<AdminCrawlScreen />} />
 
           {/* CERGIO-GUARD (2026-06-12): short invite links — /i/<code>
               expands to the inviter's profile + stores the referral.

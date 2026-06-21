@@ -145,7 +145,7 @@ serve(async (req: Request) => {
 
         if (!bookingId) break; // not one of ours
 
-        // ── Booking payment path (existing) ─────────────────────────────────
+        // ── Booking payment path ────────────────────────────────────────────
         await supaAdmin
           .from('bookings')
           .update({ status: 'confirmed' })
@@ -156,6 +156,22 @@ serve(async (req: Request) => {
           .from('payments')
           .update({ status: 'succeeded' })
           .eq('stripe_intent_id', pi.id);
+
+        // SPEC-47g held mode: funds are sitting on the platform. Record the
+        // charge id so the release worker can transfer FROM it later, and do
+        // NOT book earnings yet — that happens at release. (Instant mode falls
+        // through to the legacy earnings insert below.)
+        if (pi.metadata?.hold_release === 'true') {
+          const chargeId =
+            typeof pi.latest_charge === 'string'
+              ? pi.latest_charge
+              : (pi.latest_charge as any)?.id ?? null;
+          await supaAdmin
+            .from('bookings')
+            .update({ stripe_charge_id: chargeId })
+            .eq('id', bookingId);
+          break;
+        }
 
         const providerShare = (pi.amount ?? 0) - appFeeCents;
         if (providerId && providerShare > 0) {

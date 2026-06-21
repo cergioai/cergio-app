@@ -96,18 +96,45 @@ serve(async (req: Request) => {
     const totalCents     = booking.total_cents;
     const platformFeeCents = Math.floor(totalCents * (PLATFORM_FEE_BPS / 10000));
 
+    // SPEC-47g: HOLD_RELEASE_ENABLED gates the money model.
+    //  • OFF (default): DESTINATION charge — provider paid instantly (legacy).
+    //  • ON: SEPARATE charge — funds held on the PLATFORM under a transfer_group;
+    //    the release-funds worker transfers the provider's share 3h after the
+    //    job is marked complete (with the consumer-confirm guard). No
+    //    transfer_data / application_fee here; the platform simply keeps the fee
+    //    by transferring only the provider share at release time.
+    const holdRelease =
+      (Deno.env.get('HOLD_RELEASE_ENABLED') || '').toLowerCase() === 'true';
+    const transferGroup = `booking_${booking.id}`;
+
     const pi = await stripe.paymentIntents.create({
       amount:   totalCents,
       currency: 'usd',
       automatic_payment_methods: { enabled: true },
-      application_fee_amount: platformFeeCents,
-      transfer_data: { destination: stripeAcct.stripe_account_id },
+      ...(holdRelease
+        ? { transfer_group: transferGroup }
+        : {
+            application_fee_amount: platformFeeCents,
+            transfer_data: { destination: stripeAcct.stripe_account_id },
+          }),
       metadata: {
         booking_id:  booking.id,
         consumer_id: booking.consumer_id,
         provider_id: booking.provider_id,
+        hold_release: holdRelease ? 'true' : 'false',
+        platform_fee_cents: String(platformFeeCents),
       },
     });
+
+    // In held mode, stamp the transfer_group on the booking up front so the
+    // release worker can find it (and so we never mistake an instant-mode
+    // booking for a held one).
+    if (holdRelease) {
+      await supaAdmin
+        .from('bookings')
+        .update({ transfer_group: transferGroup })
+        .eq('id', booking.id);
+    }
 
     // ── Record the intent so we can correlate webhook events later ──────────
     // Upsert into payments — the webhook handler will flip status when

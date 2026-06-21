@@ -2154,6 +2154,62 @@ test('spec-62-seo-ssr-meta-for-bots', 'FROZEN: serverless function server-render
     'vercel.json must keep the SPA index.html catch-all — SPEC-62');
 });
 
+test('spec-63-crawl-monitoring', 'FROZEN: crawl pipeline self-monitors — health-check emails STALLED/FAILED/EMPTY diagnosis; admin-crawl-status + /admin/crawls live dashboard (SPEC-63)', '#63', async () => {
+  const hc = path.join(REPO_ROOT, 'supabase/functions/crawl-health-check/index.ts');
+  const ad = path.join(REPO_ROOT, 'supabase/functions/admin-crawl-status/index.ts');
+  assert(fs.existsSync(hc), 'crawl-health-check function must exist — SPEC-63');
+  assert(fs.existsSync(ad), 'admin-crawl-status function must exist — SPEC-63');
+  const hcSrc = fs.readFileSync(hc, 'utf8');
+  assert(/STALLED/.test(hcSrc) && /FAILED/.test(hcSrc) && /EMPTY/.test(hcSrc),
+    'health-check must classify STALLED/FAILED/EMPTY — SPEC-63');
+  assert(/resend\.com\/emails/.test(hcSrc), 'health-check must email alerts via Resend — SPEC-63');
+  assert(/SUPABASE_SERVICE_ROLE_KEY/.test(hcSrc) && /Unauthorized/.test(hcSrc),
+    'health-check must be service-role gated — SPEC-63');
+  const adSrc = fs.readFileSync(ad, 'utf8');
+  assert(/ADMIN_EMAILS|DEFAULT_ADMINS/.test(adSrc) && /Forbidden/.test(adSrc),
+    'admin-crawl-status must gate on an admin allowlist — SPEC-63');
+  const app = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
+  assert(/path="\/admin\/crawls"/.test(app), 'App must route /admin/crawls — SPEC-63');
+  assert(fs.existsSync(path.join(REPO_ROOT, 'src/screens/AdminCrawlScreen.jsx')),
+    'AdminCrawlScreen must exist — SPEC-63');
+  const api = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  assert(/getAdminCrawlStatus/.test(api) && /isAdminEmail/.test(api),
+    'api must expose getAdminCrawlStatus + isAdminEmail — SPEC-63');
+});
+
+test('spec-47g-held-release', 'FROZEN: held funds + 3h auto-release, flag-gated (HOLD_RELEASE_ENABLED); early-completion requires consumer confirm; release worker idempotent + held-only (SPEC-47g)', '#47g', async () => {
+  // create-payment-intent must branch instant vs held on the flag.
+  const cpi = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/create-payment-intent/index.ts'), 'utf8');
+  assert(/HOLD_RELEASE_ENABLED/.test(cpi), 'create-payment-intent must read HOLD_RELEASE_ENABLED — SPEC-47g');
+  assert(/transfer_group/.test(cpi) && /transfer_data/.test(cpi),
+    'create-payment-intent must support BOTH held (transfer_group) and instant (transfer_data) — SPEC-47g');
+  // release worker exists, is service-role gated, idempotent, held-only.
+  const rfPath = path.join(REPO_ROOT, 'supabase/functions/release-funds/index.ts');
+  assert(fs.existsSync(rfPath), 'release-funds function must exist — SPEC-47g');
+  const rf = fs.readFileSync(rfPath, 'utf8');
+  assert(/SUPABASE_SERVICE_ROLE_KEY/.test(rf) && /Unauthorized/.test(rf),
+    'release-funds must require the service-role bearer — SPEC-47g');
+  assert(/transfers\.create/.test(rf) && /idempotencyKey/.test(rf),
+    'release-funds must create Stripe transfers with an idempotency key — SPEC-47g');
+  assert(/source_transaction/.test(rf), 'release-funds must source the transfer from the original charge — SPEC-47g');
+  assert(/transfer_group/.test(rf) && /stripe_transfer_id/.test(rf),
+    'release-funds must only touch held, unreleased bookings — SPEC-47g');
+  // webhook defers earnings in held mode.
+  const wh = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/stripe-webhook/index.ts'), 'utf8');
+  assert(/hold_release/.test(wh) && /stripe_charge_id/.test(wh),
+    'webhook must record the charge id and skip earnings in held mode — SPEC-47g');
+  // app: completion sets the window with the early-completion guard, + consumer confirm.
+  const api = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  assert(/release_requires_confirm/.test(api) && /release_due_at/.test(api),
+    'markBookingComplete must set release window + early-completion guard — SPEC-47g');
+  assert(/export async function confirmJobDone/.test(api),
+    'confirmJobDone (consumer release confirm) must exist — SPEC-47g');
+  // migration adds the columns.
+  const mig = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations'))
+    .filter(f => /booking_held_release/.test(f));
+  assert(mig.length >= 1, 'held-release migration must exist — SPEC-47g');
+});
+
 test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Connector app once the service has happened (complete OR scheduled-passed) until they rate/post (SPEC-47i)', '#47i', async () => {
   const app   = fs.readFileSync(path.join(REPO_ROOT, 'src/App.jsx'), 'utf8');
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');

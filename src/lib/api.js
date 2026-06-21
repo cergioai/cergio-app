@@ -2848,6 +2848,22 @@ export function isIdentityBypassEmail(email) {
   return IDENTITY_BYPASS_EMAILS.includes(String(email || '').trim().toLowerCase());
 }
 
+// SPEC-63: admin allowlist — who can see the Admin → Crawls dashboard.
+export const ADMIN_EMAILS = ['t@cergio.ai', 'info@cergio.ai'];
+export function isAdminEmail(email) {
+  return ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
+}
+
+/** SPEC-63: live crawl + outreach dashboard data (admin-only; the edge fn
+ *  re-checks admin server-side). Returns health, queue, stalled/failed/empty,
+ *  recent requests, and the leads funnel. */
+export async function getAdminCrawlStatus() {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+  const { data, error } = await supabase.functions.invoke('admin-crawl-status', { body: {} });
+  if (error) return { data: null, error };
+  return { data, error: null };
+}
+
 /** Read the signed-in user's CC verification state. */
 export async function getMyCcStatus() {
   if (!supabaseReady) return { data: null, error: null };
@@ -3779,20 +3795,94 @@ export async function confirmBookingPost(bookingId) {
 export async function markBookingComplete(bookingId) {
   if (!supabaseReady) return NOT_WIRED;
   if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
-  // TODO (SPEC-47g, PLANNED — build after QA): paid 3-hr auto-release keys off
-  // completed_at. GUARD: if completed_at < scheduled_at (provider marked complete
-  // BEFORE the job's start time), DO NOT auto-release — require the consumer to
-  // CONFIRM the job was actually done first. Not yet wired (needs Stripe Connect
-  // transfer + scheduled edge function).
+
+  // SPEC-47g auto-release window. Read scheduled_at so we can apply the guard:
+  // if the provider marks complete BEFORE the job's start time, we do NOT start
+  // the 3h release clock — the consumer must confirm the job actually happened
+  // (confirmJobDone) first. These columns are inert for instant-mode bookings
+  // (no transfer_group), so the release worker ignores them there.
+  const RELEASE_HOURS = 3;
+  const completedAt = new Date();
+  const { data: existing } = await supabase
+    .from('bookings')
+    .select('scheduled_at')
+    .eq('id', bookingId)
+    .maybeSingle();
+  const scheduledAt = existing?.scheduled_at ? new Date(existing.scheduled_at) : null;
+  const completedEarly = scheduledAt ? completedAt < scheduledAt : false;
+
+  const patch = {
+    completed_at: completedAt.toISOString(),
+    updated_at:   completedAt.toISOString(),
+  };
+  if (completedEarly) {
+    // Suspicious early completion → hold until the consumer confirms.
+    patch.release_requires_confirm = true;
+    patch.release_due_at = null;
+  } else {
+    patch.release_requires_confirm = false;
+    patch.release_due_at = new Date(completedAt.getTime() + RELEASE_HOURS * 3600 * 1000).toISOString();
+  }
+
   const res = await supabase
     .from('bookings')
-    .update({ completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', bookingId)
     .is('completed_at', null)
     .select()
     .maybeSingle();
   if (!res.error && res.data?.id) fireBookingNotify(bookingId, 'job_complete');
   return res;
+}
+
+/**
+ * SPEC-47g — consumer confirms the job was actually done. Only meaningful when
+ * the provider marked the job complete BEFORE its scheduled start time, which
+ * holds the funds (release_requires_confirm). Confirming clears the hold and
+ * starts the release immediately (release_due_at = now). Only the consumer on
+ * the booking may call this (RLS enforces it; we also scope the update).
+ */
+export async function confirmJobDone(bookingId) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!bookingId) return { data: null, error: { message: 'bookingId required' } };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: { message: 'Not signed in' } };
+  const now = new Date().toISOString();
+  return await supabase
+    .from('bookings')
+    .update({
+      consumer_confirmed_at:    now,
+      release_requires_confirm: false,
+      release_due_at:           now, // eligible on the next release sweep
+      updated_at:               now,
+    })
+    .eq('id', bookingId)
+    .eq('consumer_id', userRes.user.id)
+    .select()
+    .maybeSingle();
+}
+
+/**
+ * SPEC-47g — bookings where I'm the consumer and the provider marked the job
+ * complete early, so my confirmation is required before their funds release.
+ * Drives the "Did this happen? Confirm to release payment" inbox action.
+ */
+export async function listBookingsAwaitingMyConfirm() {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  return await supabase
+    .from('bookings')
+    .select(`
+      id, scheduled_at, completed_at, total_cents,
+      service:services ( id, title ),
+      provider:profiles!bookings_provider_id_fkey ( id, display_name )
+    `)
+    .eq('consumer_id', userRes.user.id)
+    .eq('release_requires_confirm', true)
+    .is('consumer_confirmed_at', null)
+    .is('released_at', null)
+    .order('completed_at', { ascending: false });
 }
 
 /**
