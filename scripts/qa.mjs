@@ -2154,6 +2154,25 @@ test('spec-62-seo-ssr-meta-for-bots', 'FROZEN: serverless function server-render
     'vercel.json must keep the SPA index.html catch-all — SPEC-62');
 });
 
+test('spec-64-crawl-fulfillment', 'FROZEN: fulfill-crawl sources businesses via Google Places, saves leads, notifies the searcher, and QUEUES (never auto-sends) business outreach (SPEC-64)', '#64', async () => {
+  const fc = path.join(REPO_ROOT, 'supabase/functions/fulfill-crawl/index.ts');
+  assert(fs.existsSync(fc), 'fulfill-crawl function must exist — SPEC-64');
+  const src = fs.readFileSync(fc, 'utf8');
+  assert(/SUPABASE_SERVICE_ROLE_KEY/.test(src) && /Unauthorized/.test(src),
+    'fulfill-crawl must be service-role gated — SPEC-64');
+  assert(/GOOGLE_PLACES_API_KEY/.test(src) && /maps\.googleapis\.com\/maps\/api\/place\/textsearch/.test(src),
+    'fulfill-crawl must use the Google Places server key + Text Search — SPEC-64');
+  assert(/leads_localbiz/.test(src) && /place_id/.test(src),
+    'fulfill-crawl must upsert leads_localbiz deduped by place_id — SPEC-64');
+  assert(/delivered_count/.test(src) && /'delivered'/.test(src) && /'failed'/.test(src),
+    'fulfill-crawl must stamp delivered/failed + count on crawl_requests — SPEC-64');
+  assert(/notifySearcher/.test(src) && /resend\.com\/emails/.test(src),
+    'fulfill-crawl must notify the searcher — SPEC-64');
+  // Compliance: must NOT flip leads to a sent/queued-send state automatically.
+  assert(/outreach_status: 'new'/.test(src) && !/outreach_status:\s*'sent'/.test(src),
+    'fulfill-crawl must leave business leads at outreach_status=new (no auto cold-send) — SPEC-64');
+});
+
 test('spec-63-crawl-monitoring', 'FROZEN: crawl pipeline self-monitors — health-check emails STALLED/FAILED/EMPTY diagnosis; admin-crawl-status + /admin/crawls live dashboard (SPEC-63)', '#63', async () => {
   const hc = path.join(REPO_ROOT, 'supabase/functions/crawl-health-check/index.ts');
   const ad = path.join(REPO_ROOT, 'supabase/functions/admin-crawl-status/index.ts');

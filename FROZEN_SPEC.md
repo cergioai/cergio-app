@@ -441,6 +441,21 @@ qa.mjs #63 enforces this.
 
 ---
 
+### SPEC-64 · In-app crawl fulfillment (no crawl → no notify, fixed)
+**Status:** FROZEN — 2026-06-21 (Tarik chose "A — build in-app auto-fulfillment")
+**Supersedes** the `CRAWLER_BRIEF.md` "app never crawls itself" rule **for services**: fulfillment now runs as a background edge function (NOT in the user's live search path), which is the deliberate trade chosen to make no-data searches actually deliver.
+**Rule:** **`fulfill-crawl`** edge fn (service-role only; cron + `Fulfill Crawls.command`) processes `crawl_requests` where `kind='services'`, `status='new'`:
+1. Google Places **Text Search + Details** for `service_type` in `city, state` (server key `GOOGLE_PLACES_API_KEY`, must be unrestricted).
+2. Upsert businesses into `leads_localbiz` (dedupe by Google `place_id`), `data_source='google_places'`, **`outreach_status='new'`**.
+3. Stamp `crawl_requests` `status='delivered'` + `delivered_count` (or `failed` w/ notes; 0 results → delivered/0 → EMPTY alert via SPEC-63).
+4. **Email the searcher** (`requested_by`) so they're never left hanging.
+- **COMPLIANCE INVARIANT:** `fulfill-crawl` NEVER sends cold email/SMS to the sourced businesses — leads are QUEUED (`outreach_status='new'`) for operator review + send, because unsolicited business outreach is governed by CAN-SPAM / TCPA. Only the SEARCHER (an existing user) is emailed.
+- Influencer crawls (`kind='influencers'`) are out of scope here (Google Places is a business directory).
+
+qa.mjs #64 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

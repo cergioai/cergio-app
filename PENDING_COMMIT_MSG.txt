@@ -1,18 +1,15 @@
-SPEC-47g held-release (flag-gated) + SPEC-63 crawl monitoring & alerts
+SPEC-64: in-app crawl fulfillment — fixes "no crawl, no notify"
 
-SPEC-47g (staged, OFF behind HOLD_RELEASE_ENABLED): escrow money model —
-create-payment-intent branches instant (destination charge) vs held
-(transfer_group); webhook records charge + defers earnings in held mode;
-markBookingComplete sets release_due_at=+3h with early-completion guard
-(release_requires_confirm) + confirmJobDone; release-funds worker transfers
-provider share from the original charge, idempotent; migration adds columns
-+ documented cron; Release Due Funds.command.
-
-SPEC-63 crawl pipeline self-monitoring (can't fail silently):
-- crawl-health-check edge fn (service-role; cron + Crawl Health Check.command)
-  classifies STALLED/FAILED/EMPTY and emails admin a diagnosis via Resend.
-- admin-crawl-status edge fn (admin-allowlist gated) + /admin/crawls
-  (AdminCrawlScreen, auto-refresh 60s) live dashboard via link.
-- Monitor Crawl + Outreach.command for terminal view.
-Deploy script ships all new fns. FROZEN_SPEC + qa (#47g, #63) → 67 flows pass.
-Not live until functions deployed (+ HOLD_RELEASE_ENABLED for 47g).
+fulfill-crawl edge fn (service-role; cron + Fulfill Crawls.command) processes
+crawl_requests kind=services status=new:
+- Google Places Text Search + Details (server key GOOGLE_PLACES_API_KEY) for
+  service_type in city,state.
+- Upserts businesses into leads_localbiz (dedupe by place_id), outreach_status=
+  'new' — QUEUED for operator review, NEVER auto cold-emailed/texted (CAN-SPAM/
+  TCPA compliance invariant).
+- Stamps crawl_requests delivered/failed + delivered_count (0 -> EMPTY alert).
+- Emails the SEARCHER (requested_by) so no-data searches never dead-end silently.
+Supersedes CRAWLER_BRIEF "never crawl itself" for services (background job, not
+in the live search path) — Tarik chose option A. Deploy script ships the fn +
+pushes GOOGLE_PLACES_API_KEY. FROZEN_SPEC SPEC-64 + qa #64 -> 68 flows pass.
+Needs GOOGLE_PLACES_API_KEY (unrestricted server key) set to go live.
