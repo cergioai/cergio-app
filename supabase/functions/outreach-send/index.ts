@@ -45,6 +45,32 @@ serve(async (req: Request) => {
 
     const db = createClient(supabaseUrl, serviceKey);
 
+    // SAFETY: ?dry=1 reports how many would be contacted without sending; ?test=
+    // <email> sends ONE sample to that address only (no DB writes) so you can
+    // see exactly what businesses receive + check deliverability before any blast.
+    const url = new URL(req.url);
+    const dry = url.searchParams.get('dry') === '1';
+    const test = url.searchParams.get('test');
+    if (dry) {
+      const { count: emailable } = await db.from('leads_localbiz').select('id', { count: 'exact', head: true })
+        .eq('outreach_status', 'new').not('owner_email', 'is', null);
+      const { count: phoneOnly } = await db.from('leads_localbiz').select('id', { count: 'exact', head: true })
+        .eq('outreach_status', 'new').is('owner_email', null).not('phone', 'is', null);
+      const { count: suppressed } = await db.from('outreach_suppressions').select('id', { count: 'exact', head: true });
+      return json({ dry: true, emailable, sms_phone_only: phoneOnly, suppressed, batch_per_run: BATCH });
+    }
+    if (test) {
+      const sample = { name: 'Your Business', service_type: 'plumber', city: 'Miami' };
+      const token = await hmac(test, optoutSecret);
+      const optoutUrl = `${FUNCTIONS_BASE}/outreach-optout?c=email&a=${encodeURIComponent(test)}&k=${token}`;
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to: test, reply_to: replyTo, subject: '[TEST] Cergio outreach preview', html: renderEmail(sample, optoutUrl, postal) }),
+      });
+      return json({ test_sent_to: test, ok: r.ok });
+    }
+
     // Candidates: sourced, never-contacted, have an email.
     const { data: leads, error } = await db
       .from('leads_localbiz')
