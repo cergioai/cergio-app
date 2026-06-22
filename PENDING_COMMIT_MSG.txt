@@ -1,15 +1,15 @@
-SPEC-64: in-app crawl fulfillment — fixes "no crawl, no notify"
+SPEC-65: automated, compliant business outreach + opt-out
 
-fulfill-crawl edge fn (service-role; cron + Fulfill Crawls.command) processes
-crawl_requests kind=services status=new:
-- Google Places Text Search + Details (server key GOOGLE_PLACES_API_KEY) for
-  service_type in city,state.
-- Upserts businesses into leads_localbiz (dedupe by place_id), outreach_status=
-  'new' — QUEUED for operator review, NEVER auto cold-emailed/texted (CAN-SPAM/
-  TCPA compliance invariant).
-- Stamps crawl_requests delivered/failed + delivered_count (0 -> EMPTY alert).
-- Emails the SEARCHER (requested_by) so no-data searches never dead-end silently.
-Supersedes CRAWLER_BRIEF "never crawl itself" for services (background job, not
-in the live search path) — Tarik chose option A. Deploy script ships the fn +
-pushes GOOGLE_PLACES_API_KEY. FROZEN_SPEC SPEC-64 + qa #64 -> 68 flows pass.
-Needs GOOGLE_PLACES_API_KEY (unrestricted server key) set to go live.
+- outreach-send (service-role; cron + launcher): auto-emails sourced
+  leads_localbiz (status=new, has owner_email). CAN-SPAM compliant — sender
+  identity, legal postal address (Yogotoo, 14 W 23rd 5th Fl, NY NY 10010),
+  one-click unsubscribe (footer + List-Unsubscribe header). Suppression-checked,
+  send-once, throttled. Gated by OUTREACH_EMAIL_ENABLED (default true).
+- outreach-optout (PUBLIC, HMAC-verified): writes outreach_suppressions +
+  flips leads to do_not_contact. Every send checks suppressions first.
+- outreach_suppressions migration (permanent opt-out registry).
+- fulfill-crawl: best-effort capture public contact email from business website.
+- CHANNEL POLICY: email is the only auto first-contact channel. SMS NOT auto-sent
+  (needs 10DLC or carriers block; published # != TCPA consent). WhatsApp cold
+  prohibited by Meta (opt-in/templates only). Documented in FROZEN_SPEC.
+FROZEN_SPEC SPEC-65 + qa #65 -> 69 flows pass. Not live until functions deployed.

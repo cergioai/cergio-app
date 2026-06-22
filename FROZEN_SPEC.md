@@ -456,6 +456,18 @@ qa.mjs #64 enforces this.
 
 ---
 
+### SPEC-65 · Automated business outreach (compliant, opt-out enforced)
+**Status:** FROZEN — 2026-06-21 (Tarik — auto-notify sourced businesses)
+**Rule:** Sourced leads are contacted automatically, **compliantly**:
+- **`outreach-send`** (service-role; cron + `Send Outreach (email).command`) auto-emails `leads_localbiz` rows that are `outreach_status='new'` AND have an `owner_email`, gated by `OUTREACH_EMAIL_ENABLED` (default true). Every email has: honest sender identity, the **legal postal address** (Yogotoo, 14 West 23rd, 5th Floor, New York, NY 10010), and a **one-click unsubscribe** (footer link + RFC 8058 `List-Unsubscribe` header). Send-once (flips to `sent`), throttled (batch 40).
+- **`outreach-optout`** (PUBLIC, HMAC-verified) inserts into `outreach_suppressions` and flips matching leads to `do_not_contact`. **Every send checks `outreach_suppressions` first** — opt-outs are permanent + immediate.
+- **`fulfill-crawl`** best-effort captures a public contact email from each business website so email outreach has an address.
+- **CHANNEL POLICY (legal):** EMAIL is the only auto-enabled first-contact channel (CAN-SPAM-compliant as above). **SMS is NOT auto-sent** — US A2P requires 10DLC brand/campaign registration or carriers block it, and a published number is not TCPA consent (statutory damages per text). **WhatsApp cold outreach is prohibited by Meta** (opt-in + approved templates only; cold blasting → account ban) — reserve for replied/opted-in contacts. Do not enable SMS/WhatsApp cold without registration + counsel.
+
+qa.mjs #65 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

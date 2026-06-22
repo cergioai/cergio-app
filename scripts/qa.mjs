@@ -2154,6 +2154,25 @@ test('spec-62-seo-ssr-meta-for-bots', 'FROZEN: serverless function server-render
     'vercel.json must keep the SPA index.html catch-all — SPEC-62');
 });
 
+test('spec-65-compliant-outreach', 'FROZEN: auto email outreach is CAN-SPAM compliant (identity + postal address + one-click unsubscribe), suppression-checked, send-once; SMS/WhatsApp not auto-sent cold (SPEC-65)', '#65', async () => {
+  const os = path.join(REPO_ROOT, 'supabase/functions/outreach-send/index.ts');
+  const oo = path.join(REPO_ROOT, 'supabase/functions/outreach-optout/index.ts');
+  assert(fs.existsSync(os) && fs.existsSync(oo), 'outreach-send + outreach-optout must exist — SPEC-65');
+  const send = fs.readFileSync(os, 'utf8');
+  assert(/outreach_suppressions/.test(send), 'outreach-send must check the suppression list — SPEC-65');
+  assert(/List-Unsubscribe/.test(send) && /optoutUrl/.test(send), 'every email must carry a one-click unsubscribe — SPEC-65');
+  assert(/New York, NY 10010/.test(send), 'emails must include the legal postal address — SPEC-65');
+  assert(/outreach_status: 'sent'/.test(send), 'outreach-send must mark leads sent (send-once) — SPEC-65');
+  // EMAIL only auto-enabled; no cold SMS/WhatsApp send in this function.
+  assert(!/api\.twilio\.com/.test(send) && !/graph\.facebook\.com.*messages/.test(send),
+    'outreach-send must NOT cold-send SMS/WhatsApp — SPEC-65');
+  const opt = fs.readFileSync(oo, 'utf8');
+  assert(/outreach_suppressions/.test(opt) && /do_not_contact/.test(opt) && /hmac/i.test(opt),
+    'outreach-optout must suppress + flip leads, HMAC-verified — SPEC-65');
+  const mig = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations')).filter(f => /outreach_suppressions/.test(f));
+  assert(mig.length >= 1, 'outreach_suppressions migration must exist — SPEC-65');
+});
+
 test('spec-64-crawl-fulfillment', 'FROZEN: fulfill-crawl sources businesses via Google Places, saves leads, notifies the searcher, and QUEUES (never auto-sends) business outreach (SPEC-64)', '#64', async () => {
   const fc = path.join(REPO_ROOT, 'supabase/functions/fulfill-crawl/index.ts');
   assert(fs.existsSync(fc), 'fulfill-crawl function must exist — SPEC-64');

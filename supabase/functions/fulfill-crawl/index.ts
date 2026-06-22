@@ -71,7 +71,7 @@ serve(async (req: Request) => {
         // ── Details (phone + website) + upsert leads ──────────────────────────
         let saved = 0;
         for (const r of results) {
-          let phone = null, website = null;
+          let phone = null, website = null, email = null;
           try {
             const dUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${r.place_id}&fields=formatted_phone_number,website&key=${placesKey}`;
             const dRes = await fetch(dUrl);
@@ -80,12 +80,17 @@ serve(async (req: Request) => {
             website = d.result?.website ?? null;
           } catch { /* details best-effort */ }
 
+          // SPEC-65: best-effort capture of a PUBLIC contact email from the
+          // business's own website, so compliant email outreach has an address.
+          if (website) email = await scrapeEmail(website);
+
           const row = {
             id: r.place_id,
             name: r.name,
             service_type: job.service_type || null,
             phone, phone_origin: phone ? 'google_places' : null,
             website_url: website,
+            owner_email: email,
             address: r.formatted_address || null,
             city: job.city || null,
             state: job.state || 'FL',
@@ -147,6 +152,28 @@ async function notifySearcher(db: any, job: any, saved: number) {
       body: JSON.stringify({ from: FROM_EMAIL, to: email, subject, html: `<p>${body}</p>` }),
     });
   } catch { /* notify best-effort; never fail the crawl on it */ }
+}
+
+// Best-effort: fetch a business homepage and pull the first published contact
+// email. Skips role addresses that aren't useful and obvious junk. Times out
+// fast so one slow site can't stall the run. Returns null if none found.
+async function scrapeEmail(website: string): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(website, { signal: ctrl.signal, headers: { 'User-Agent': 'CergioBot/1.0 (+https://cergio.ai)' } });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    const htmlText = (await res.text()).slice(0, 200000);
+    const matches = htmlText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+    for (const m of matches) {
+      const e = m.toLowerCase();
+      if (/\.(png|jpg|jpeg|gif|webp|svg|css|js)$/.test(e)) continue; // asset filename false-positives
+      if (/(sentry|wixpress|example\.com|godaddy|squarespace)/.test(e)) continue;
+      return e;
+    }
+    return null;
+  } catch { return null; }
 }
 
 function json(body: unknown, status = 200) {
