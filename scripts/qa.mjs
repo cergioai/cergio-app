@@ -2163,9 +2163,11 @@ test('spec-65-compliant-outreach', 'FROZEN: auto email outreach is CAN-SPAM comp
   assert(/List-Unsubscribe/.test(send) && /optoutUrl/.test(send), 'every email must carry a one-click unsubscribe — SPEC-65');
   assert(/New York, NY 10010/.test(send), 'emails must include the legal postal address — SPEC-65');
   assert(/outreach_status: 'sent'/.test(send), 'outreach-send must mark leads sent (send-once) — SPEC-65');
-  // EMAIL only auto-enabled; no cold SMS/WhatsApp send in this function.
-  assert(!/api\.twilio\.com/.test(send) && !/graph\.facebook\.com.*messages/.test(send),
-    'outreach-send must NOT cold-send SMS/WhatsApp — SPEC-65');
+  // SMS (SPEC-66) is gated behind a flag, suppression-checked, with STOP opt-out;
+  // never on without explicit enable + Twilio creds. WhatsApp cold stays out.
+  assert(/OUTREACH_SMS_ENABLED/.test(send), 'SMS must be gated behind OUTREACH_SMS_ENABLED — SPEC-65/66');
+  assert(/Reply STOP/.test(send), 'SMS body must carry a STOP opt-out — SPEC-65/66');
+  assert(!/graph\.facebook\.com[^]*messages/.test(send), 'no cold WhatsApp send — SPEC-65');
   const opt = fs.readFileSync(oo, 'utf8');
   assert(/outreach_suppressions/.test(opt) && /do_not_contact/.test(opt) && /hmac/i.test(opt),
     'outreach-optout must suppress + flip leads, HMAC-verified — SPEC-65');

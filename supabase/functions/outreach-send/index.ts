@@ -91,11 +91,70 @@ serve(async (req: Request) => {
       }
     }
 
-    return json({ candidates: (leads ?? []).length, sent, suppressed, results });
+    // ── SMS channel (SPEC-66) ─────────────────────────────────────────────────
+    // Tarik's call: text services/influencers who published a number to receive
+    // client requests. SMS reaches leads we have a PHONE for but no email (so a
+    // lead gets exactly ONE channel — email preferred, SMS fallback). Gated by
+    // OUTREACH_SMS_ENABLED. It WILL NOT actually deliver until (a) Twilio creds
+    // are set AND (b) US A2P 10DLC brand+campaign is registered — carriers block
+    // unregistered traffic. Every text carries identity + "Reply STOP to opt
+    // out" (Twilio Messaging Service auto-honors STOP); we also check our own
+    // suppression list. TCPA risk is the operator's accepted business decision.
+    let smsSent = 0, smsResult: Array<Record<string, unknown>> = [];
+    const smsEnabled = (Deno.env.get('OUTREACH_SMS_ENABLED') || 'false').toLowerCase() === 'true';
+    const twSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const twTok = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const twFrom = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || Deno.env.get('TWILIO_FROM_NUMBER');
+    if (smsEnabled && twSid && twTok && twFrom) {
+      const { data: smsLeads } = await db
+        .from('leads_localbiz')
+        .select('id, name, service_type, city, phone')
+        .eq('outreach_status', 'new')
+        .is('owner_email', null)
+        .not('phone', 'is', null)
+        .limit(BATCH);
+      for (const lead of smsLeads ?? []) {
+        const e164 = toE164(lead.phone);
+        if (!e164) continue;
+        const { data: supp } = await db
+          .from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
+        if (supp) { await db.from('leads_localbiz').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id); continue; }
+        const body = `Hi${lead.name ? ' ' + lead.name : ''} — people near ${lead.city || 'you'} are looking for ${lead.service_type || 'your service'} on Cergio. Free to list & get local client requests: cergio.ai. Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const form = new URLSearchParams();
+        form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
+        form.set('To', e164); form.set('Body', body);
+        const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twSid}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Basic ' + btoa(`${twSid}:${twTok}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString(),
+        });
+        if (r.ok) {
+          await db.from('leads_localbiz').update({ outreach_status: 'sent', outreach_last_at: new Date().toISOString() }).eq('id', lead.id);
+          smsSent++; smsResult.push({ id: lead.id, to: e164 });
+        } else {
+          smsResult.push({ id: lead.id, to: e164, error: (await r.text().catch(() => '')).slice(0, 200) });
+        }
+      }
+    }
+
+    return json({
+      candidates: (leads ?? []).length, sent, suppressed, results,
+      sms: { enabled: smsEnabled, configured: !!(twSid && twTok && twFrom), sent: smsSent, results: smsResult },
+    });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
+
+// Best-effort US phone normalization to E.164. Returns null if it can't.
+function toE164(raw: string): string | null {
+  const d = String(raw || '').replace(/[^\d+]/g, '');
+  if (d.startsWith('+') && d.length >= 11) return d;
+  const digits = d.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return null;
+}
 
 function renderEmail(lead: any, optoutUrl: string, postal: string): string {
   const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

@@ -1,15 +1,12 @@
-SPEC-65: automated, compliant business outreach + opt-out
+SPEC-66: SMS outreach channel (gated, compliant) per Tarik override
 
-- outreach-send (service-role; cron + launcher): auto-emails sourced
-  leads_localbiz (status=new, has owner_email). CAN-SPAM compliant — sender
-  identity, legal postal address (Yogotoo, 14 W 23rd 5th Fl, NY NY 10010),
-  one-click unsubscribe (footer + List-Unsubscribe header). Suppression-checked,
-  send-once, throttled. Gated by OUTREACH_EMAIL_ENABLED (default true).
-- outreach-optout (PUBLIC, HMAC-verified): writes outreach_suppressions +
-  flips leads to do_not_contact. Every send checks suppressions first.
-- outreach_suppressions migration (permanent opt-out registry).
-- fulfill-crawl: best-effort capture public contact email from business website.
-- CHANNEL POLICY: email is the only auto first-contact channel. SMS NOT auto-sent
-  (needs 10DLC or carriers block; published # != TCPA consent). WhatsApp cold
-  prohibited by Meta (opt-in/templates only). Documented in FROZEN_SPEC.
-FROZEN_SPEC SPEC-65 + qa #65 -> 69 flows pass. Not live until functions deployed.
+outreach-send now also texts leads we have a phone for but no email (one
+channel per lead — email preferred, SMS fallback) via Twilio. Gated by
+OUTREACH_SMS_ENABLED (default false). Every text: identity + "Reply STOP to
+opt out" (Twilio Messaging Service auto-honors STOP), suppression-checked,
+send-once, E.164-normalized. Returns sms{enabled,configured,sent} for the
+dashboard. WhatsApp cold still excluded (Meta policy). Updated FROZEN_SPEC
+SPEC-65/66 + qa #65 -> 69 flows pass.
+HARD PREREQS to deliver: Twilio creds set + US A2P 10DLC brand/campaign
+registered (carriers block unregistered). TCPA risk accepted by operator;
+counsel recommended.
