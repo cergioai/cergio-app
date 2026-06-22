@@ -1,11 +1,13 @@
-SPEC-67: extend outreach engine to influencers (email + gated SMS)
+SPEC-68/69: influencer enrichment + self-running pipeline (cron)
 
-outreach-send now also processes leads_influencers (keyed by ig_handle):
-creator-flavored email where we have their public business email, gated SMS
-where we have a phone — same suppression/opt-out/send-once/compliance as
-businesses. Sourced Miami creators: 92% phone, 65% email, 100% reachable.
-No compliant scalable auto-DM exists (IG/TikTok have no cold-DM API; automation
-= bans) — reach is via published contact email/phone (what Modash et al.
-aggregate; Graph API does NOT return third-party contacts). Coverage raised by
-enrichment (provider or website/linktree scrape), not the Meta API.
-FROZEN_SPEC SPEC-67 + qa #65 -> 69 flows pass.
+- enrich-influencers edge fn: fills missing email/phone on leads_influencers
+  from bio + their external_url (link-in-bio/website) — never Instagram (IG
+  harvest stays in the clean-room external crawler). Fills-only-null,
+  suppression-aware, service-role gated.
+- periodic_workers_cron migration: pg_cron + pg_net run fulfill-crawl (15m),
+  enrich-influencers (30m), crawl-health-check (2h), release-funds (15m) using
+  a Vault-stored service bearer (no secret committed). outreach-send is NOT
+  auto-scheduled — cold send stays manual.
+- Launchers: Apply Pending Migrations, Enrich Influencers, Ingest Influencer
+  Contacts (external-crawler drop importer). Deploy script ships enrich-influencers.
+FROZEN_SPEC SPEC-68/69 + qa #68/#69 -> 71 flows pass.

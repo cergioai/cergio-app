@@ -470,6 +470,16 @@ qa.mjs #65 enforces this.
 
 ---
 
+### SPEC-68 · Influencer contact enrichment (safe, non-IG)
+**Status:** FROZEN — 2026-06-22 (Tarik). **Rule:** `enrich-influencers` edge fn (service-role; cron + launcher) raises email/phone coverage on `leads_influencers` by parsing `bio` and fetching the creator's own `external_url` (link-in-bio/website) — third-party public sites, **never Instagram** (IG harvesting stays in the clean-room external crawler per `CRAWLER_BRIEF_IG_contacts.md`). Fills only NULL fields, never overwrites, skips `do_not_contact` + suppressed. qa.mjs #68.
+
+### SPEC-69 · Periodic workers (self-running pipeline)
+**Status:** FROZEN — 2026-06-22 (Tarik). **Rule:** pg_cron (via pg_net + a Vault `edge_fn_bearer` service key) runs `fulfill-crawl` (15m), `enrich-influencers` (30m), `crawl-health-check` (2h), `release-funds` (15m). **`outreach-send` is deliberately NOT scheduled** — cold email/SMS stays manual until explicitly automated. qa.mjs #69.
+
+qa.mjs #65 enforces this.
+
+---
+
 ## CODE HEALTH — SUPABASE RPC
 
 ### SPEC-RPC1 · Never call `.catch()` on a supabase.rpc() builder

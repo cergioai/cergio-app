@@ -2176,6 +2176,26 @@ test('spec-65-compliant-outreach', 'FROZEN: auto email outreach is CAN-SPAM comp
   assert(mig.length >= 1, 'outreach_suppressions migration must exist — SPEC-65');
 });
 
+test('spec-68-influencer-enrichment', 'FROZEN: enrich-influencers fills email/phone from bio/external_url (never Instagram), fills-only-null, suppression-aware (SPEC-68)', '#68', async () => {
+  const f = path.join(REPO_ROOT, 'supabase/functions/enrich-influencers/index.ts');
+  assert(fs.existsSync(f), 'enrich-influencers function must exist — SPEC-68');
+  const s = fs.readFileSync(f, 'utf8');
+  assert(/leads_influencers/.test(s) && /external_url/.test(s), 'must enrich leads_influencers from external_url — SPEC-68');
+  assert(!/instagram\.com|graph\.facebook|i\.instagram/.test(s), 'enrich-influencers must NOT touch Instagram — SPEC-68');
+  assert(/outreach_suppressions/.test(s), 'must respect suppression list — SPEC-68');
+  assert(/SUPABASE_SERVICE_ROLE_KEY/.test(s) && /Unauthorized/.test(s), 'service-role gated — SPEC-68');
+});
+
+test('spec-69-periodic-workers', 'FROZEN: pg_cron runs fulfill-crawl/enrich/health/release via Vault bearer; outreach-send NOT auto-scheduled (SPEC-69)', '#69', async () => {
+  const migs = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations')).filter(f => /periodic_workers_cron/.test(f));
+  assert(migs.length >= 1, 'periodic workers cron migration must exist — SPEC-69');
+  const m = fs.readFileSync(path.join(REPO_ROOT, 'supabase/migrations', migs[0]), 'utf8');
+  assert(/cron\.schedule/.test(m) && /pg_net|net\.http_post/.test(m), 'must schedule via pg_cron + pg_net — SPEC-69');
+  assert(/edge_fn_bearer/.test(m) && /vault/.test(m), 'service key must come from Vault, not committed — SPEC-69');
+  assert(/fulfill-crawl/.test(m) && /crawl-health-check/.test(m) && /release-funds/.test(m), 'core workers scheduled — SPEC-69');
+  assert(!/schedule\([^)]*outreach-send/.test(m), 'outreach-send must NOT be auto-scheduled (manual cold-send) — SPEC-69');
+});
+
 test('spec-64-crawl-fulfillment', 'FROZEN: fulfill-crawl sources businesses via Google Places, saves leads, notifies the searcher, and QUEUES (never auto-sends) business outreach (SPEC-64)', '#64', async () => {
   const fc = path.join(REPO_ROOT, 'supabase/functions/fulfill-crawl/index.ts');
   assert(fs.existsSync(fc), 'fulfill-crawl function must exist — SPEC-64');
