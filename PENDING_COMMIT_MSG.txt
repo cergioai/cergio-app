@@ -1,6 +1,11 @@
-outreach-send: add dry-run + test-send safety modes (SPEC-65)
+SPEC-67: extend outreach engine to influencers (email + gated SMS)
 
-?dry=1 returns counts (emailable / sms-phone-only / suppressed) with no send;
-?test=<email> sends one sample to that address only (no DB writes) to verify
-content + deliverability before any real blast. Protects domain reputation —
-ramp gradually. qa 69 pass.
+outreach-send now also processes leads_influencers (keyed by ig_handle):
+creator-flavored email where we have their public business email, gated SMS
+where we have a phone — same suppression/opt-out/send-once/compliance as
+businesses. Sourced Miami creators: 92% phone, 65% email, 100% reachable.
+No compliant scalable auto-DM exists (IG/TikTok have no cold-DM API; automation
+= bans) — reach is via published contact email/phone (what Modash et al.
+aggregate; Graph API does NOT return third-party contacts). Coverage raised by
+enrichment (provider or website/linktree scrape), not the Meta API.
+FROZEN_SPEC SPEC-67 + qa #65 -> 69 flows pass.

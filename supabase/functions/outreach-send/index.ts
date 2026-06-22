@@ -117,6 +117,41 @@ serve(async (req: Request) => {
       }
     }
 
+    // ── Influencers — email (SPEC-67) ─────────────────────────────────────────
+    // Same compliant email, creator-flavored copy, to influencers whose public
+    // business contact email we have. Keyed by ig_handle.
+    let infEmail = 0;
+    {
+      const { data: infs } = await db
+        .from('leads_influencers')
+        .select('ig_handle, followers, email, city')
+        .eq('outreach_status', 'new')
+        .not('email', 'is', null)
+        .limit(BATCH);
+      for (const inf of infs ?? []) {
+        const email = String(inf.email).trim().toLowerCase();
+        if (!email || !email.includes('@')) continue;
+        const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'email').ilike('address', email).maybeSingle();
+        if (supp) { await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue; }
+        const token = await hmac(email, optoutSecret);
+        const optoutUrl = `${FUNCTIONS_BASE}/outreach-optout?c=email&a=${encodeURIComponent(email)}&k=${token}`;
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from, to: email, reply_to: replyTo,
+            subject: `@${inf.ig_handle} — get free local services for a shoutout on Cergio`,
+            html: renderInfluencerEmail(inf, optoutUrl, postal),
+            headers: { 'List-Unsubscribe': `<${optoutUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+          }),
+        });
+        if (r.ok) {
+          await db.from('leads_influencers').update({ outreach_status: 'sent', outreach_last_at: new Date().toISOString() }).eq('ig_handle', inf.ig_handle);
+          infEmail++;
+        }
+      }
+    }
+
     // ── SMS channel (SPEC-66) ─────────────────────────────────────────────────
     // Tarik's call: text services/influencers who published a number to receive
     // client requests. SMS reaches leads we have a PHONE for but no email (so a
@@ -161,10 +196,36 @@ serve(async (req: Request) => {
           smsResult.push({ id: lead.id, to: e164, error: (await r.text().catch(() => '')).slice(0, 200) });
         }
       }
+
+      // Influencers by SMS — have a phone, no email (SPEC-67).
+      const { data: smsInf } = await db
+        .from('leads_influencers')
+        .select('ig_handle, city, phone')
+        .eq('outreach_status', 'new').is('email', null).not('phone', 'is', null).limit(BATCH);
+      for (const inf of smsInf ?? []) {
+        const e164 = toE164(inf.phone);
+        if (!e164) continue;
+        const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
+        if (supp) { await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue; }
+        const body = `Hi @${inf.ig_handle} — Cergio connects creators with local businesses offering FREE services for a shoutout. Want in? cergio.ai. Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const form = new URLSearchParams();
+        form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
+        form.set('To', e164); form.set('Body', body);
+        const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twSid}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Basic ' + btoa(`${twSid}:${twTok}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString(),
+        });
+        if (r.ok) {
+          await db.from('leads_influencers').update({ outreach_status: 'sent', outreach_last_at: new Date().toISOString() }).eq('ig_handle', inf.ig_handle);
+          smsSent++; smsResult.push({ ig: inf.ig_handle, to: e164 });
+        }
+      }
     }
 
     return json({
       candidates: (leads ?? []).length, sent, suppressed, results,
+      influencers_emailed: infEmail,
       sms: { enabled: smsEnabled, configured: !!(twSid && twTok && twFrom), sent: smsSent, results: smsResult },
     });
   } catch (e) {
@@ -180,6 +241,25 @@ function toE164(raw: string): string | null {
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
   return null;
+}
+
+function renderInfluencerEmail(inf: any, optoutUrl: string, postal: string): string {
+  const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const handle = esc(inf.ig_handle || 'there');
+  const city = esc(inf.city || 'your city');
+  return `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;color:#1a1a1a;line-height:1.5">
+    <p>Hi @${handle},</p>
+    <p>I run <b>Cergio</b> — a network where local businesses offer creators <b>free services in exchange for a shoutout</b>, and where your followers can book services they actually trust through you.</p>
+    <p>Businesses in ${city} are already offering free work for spotlights. Want me to set you up so the offers come to you? Just reply and I'll send the details.</p>
+    <p>— The Cergio team</p>
+    <hr style="border:none;border-top:1px solid #eee;margin:18px 0" />
+    <p style="font-size:12px;color:#888">
+      You're receiving this because your creator account lists a public contact for partnerships.
+      Cergio is operated by Yogotoo. ${esc(postal)}.<br/>
+      <a href="${esc(optoutUrl)}" style="color:#888">Unsubscribe / don't contact me</a> — one click, honored immediately.
+    </p>
+  </div>`;
 }
 
 function renderEmail(lead: any, optoutUrl: string, postal: string): string {

@@ -2167,6 +2167,7 @@ test('spec-65-compliant-outreach', 'FROZEN: auto email outreach is CAN-SPAM comp
   // never on without explicit enable + Twilio creds. WhatsApp cold stays out.
   assert(/OUTREACH_SMS_ENABLED/.test(send), 'SMS must be gated behind OUTREACH_SMS_ENABLED — SPEC-65/66');
   assert(/Reply STOP/.test(send), 'SMS body must carry a STOP opt-out — SPEC-65/66');
+  assert(/leads_influencers/.test(send), 'outreach-send must also reach influencers (email+SMS) — SPEC-67');
   assert(!/graph\.facebook\.com[^]*messages/.test(send), 'no cold WhatsApp send — SPEC-65');
   const opt = fs.readFileSync(oo, 'utf8');
   assert(/outreach_suppressions/.test(opt) && /do_not_contact/.test(opt) && /hmac/i.test(opt),
