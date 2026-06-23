@@ -1,8 +1,8 @@
-chore(stripe): commit public live publishable key for prod build
+design(#50): PDP secondary CTA radius matches spec (rounded-[24px])
 
-- Add cergio-app/.env.production holding ONLY VITE_STRIPE_PUBLISHABLE_KEY
-  (pk_live_...). Publishable keys are public by design — safe to commit; it
-  already ships in the browser bundle. Vite loads it at `vite build` so Vercel
-  renders the live card/payment elements without a dashboard env var.
-- Secret keys (sk_*, service role, API secrets) stay out of git (.env.local
-  + Supabase/Vercel dashboards). Enables SPEC-58 checkout in production.
+- "Leave a go-to review" full-width button was rounded-pill; design-spec
+  reserves pill for chips/filter-pills and mandates rounded-[24px] for
+  full-width CTAs. Now matches the primary "Request ..." sticky CTA.
+- Audit pass: service PDP + public profile screens verified token-clean
+  (colors/typography per design-spec); SEO already covered (in-app
+  useDocumentMeta + SSR meta SPEC-61/62). All 71 qa flows pass.

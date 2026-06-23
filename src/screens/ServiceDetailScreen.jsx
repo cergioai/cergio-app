@@ -801,7 +801,7 @@ export function ServiceDetailScreen() {
                 creation is gated on a real booking). */}
             <button
               onClick={() => navigate('/inbox')}
-              className="mt-4 w-full bg-white border border-b2 text-black rounded-pill py-3 text-body font-extrabold
+              className="mt-4 w-full bg-white border border-b2 text-black rounded-[24px] py-3 text-body font-extrabold
                          hover:bg-bg5/30 active:scale-[.99] transition-all"
             >
               Leave a go-to review
