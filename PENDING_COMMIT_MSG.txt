@@ -1,13 +1,8 @@
-SPEC-68/69: influencer enrichment + self-running pipeline (cron)
+chore(stripe): commit public live publishable key for prod build
 
-- enrich-influencers edge fn: fills missing email/phone on leads_influencers
-  from bio + their external_url (link-in-bio/website) — never Instagram (IG
-  harvest stays in the clean-room external crawler). Fills-only-null,
-  suppression-aware, service-role gated.
-- periodic_workers_cron migration: pg_cron + pg_net run fulfill-crawl (15m),
-  enrich-influencers (30m), crawl-health-check (2h), release-funds (15m) using
-  a Vault-stored service bearer (no secret committed). outreach-send is NOT
-  auto-scheduled — cold send stays manual.
-- Launchers: Apply Pending Migrations, Enrich Influencers, Ingest Influencer
-  Contacts (external-crawler drop importer). Deploy script ships enrich-influencers.
-FROZEN_SPEC SPEC-68/69 + qa #68/#69 -> 71 flows pass.
+- Add cergio-app/.env.production holding ONLY VITE_STRIPE_PUBLISHABLE_KEY
+  (pk_live_...). Publishable keys are public by design — safe to commit; it
+  already ships in the browser bundle. Vite loads it at `vite build` so Vercel
+  renders the live card/payment elements without a dashboard env var.
+- Secret keys (sk_*, service role, API secrets) stay out of git (.env.local
+  + Supabase/Vercel dashboards). Enables SPEC-58 checkout in production.
