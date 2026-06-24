@@ -1,8 +1,7 @@
-design(#50): PDP secondary CTA radius matches spec (rounded-[24px])
+legal(terms): add SMS / A2P 10DLC program clause for carrier review
 
-- "Leave a go-to review" full-width button was rounded-pill; design-spec
-  reserves pill for chips/filter-pills and mandates rounded-[24px] for
-  full-width CTAs. Now matches the primary "Request ..." sticky CTA.
-- Audit pass: service PDP + public profile screens verified token-clean
-  (colors/typography per design-spec); SEO already covered (in-app
-  useDocumentMeta + SSR meta SPEC-61/62). All 71 qa flows pass.
+- New "17. SMS / text messaging program" section on /terms: program name
+  (Cergio/Yogotoo), "message and data rates may apply", frequency varies,
+  STOP/HELP in bold, support@cergio.ai, carrier-liability note, link to
+  Privacy. Required by Twilio/carrier A2P campaign vetting (Terms URL check).
+- All 71 qa flows pass.

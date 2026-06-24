@@ -214,6 +214,26 @@ export function TermsScreen() {
           for full detail.
         </Section>
 
+        <Section title="17. SMS / text messaging program">
+          By providing a phone number, or where you have publicly listed a
+          business contact inviting inquiries, you may receive SMS text
+          messages from <span className="font-extrabold">Cergio</span>{' '}
+          (operated by Yogotoo) about local client requests, partnership
+          offers, and related account notifications. Message frequency varies.{' '}
+          <span className="font-extrabold">Message and data rates may apply.</span>{' '}
+          Reply <span className="font-extrabold">STOP</span> at any time to
+          unsubscribe — you will receive one confirmation and no further
+          messages. Reply <span className="font-extrabold">HELP</span> for help,
+          or contact{' '}
+          <span className="font-extrabold">support@cergio.ai</span>. Carriers
+          are not liable for delayed or undelivered messages. We do not sell or
+          share your number for third-party marketing; see our{' '}
+          <Link to="/privacy" className="text-gd font-extrabold underline">
+            Privacy Policy
+          </Link>{' '}
+          for detail.
+        </Section>
+
       </div>
 
       <div className="mt-10 px-5">
