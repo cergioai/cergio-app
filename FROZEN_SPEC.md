@@ -516,7 +516,18 @@ Every `git push` runs `qa.mjs` via `Unlock and Push.command`. A failing test **b
 | SPEC-46 | #46 | Reco form: device contacts only, single-select, auto-populate |
 | SPEC-47 | #47 | Free barter loop: schedule confirm, no auto-confirm, post → accept gate |
 | SPEC-48 | #48 | Request screen: job details, approximate map, IG block, friends-in-common, no fake photos |
+| SPEC-67b | #67b | Reco RECEIVED surfaces as a "You were recommended" item in the Inbox Overview (reco dot must have a landing, not dead-end) |
 
 ---
 
-*Last updated: 2026-06-13 by Claude (Cowork session)*
+## SPEC-67b · Recommendation-received has an inbox landing
+**Status:** FROZEN — 2026-06-24
+**Rule:** The inbox dot (`useInboxUnread`) lights on a fresh recommendation received
+(`recoTimesOnMyServices`). That dot MUST land on something: `listRecosOnMyServices`
+fetches recos received on the signed-in user's own services, and the Inbox Overview
+action-feed renders a `reco-<id>` item ("<Recommender> recommended you · <service> ·
+\"<review>\""). Do not light the reco dot without this landing item.
+
+---
+
+*Last updated: 2026-06-24 by Claude (Cowork session)*

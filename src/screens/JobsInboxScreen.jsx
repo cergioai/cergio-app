@@ -15,6 +15,7 @@ import {
   markBookingComplete,
   rescheduleBooking,
   acceptRequestWithTime,
+  listRecosOnMyServices,
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
 import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
@@ -345,6 +346,18 @@ export function JobsInboxScreen() {
     // requests roll in without manually pulling.
     const t = setInterval(fetchOnce, 30000);
     return () => { cancelled = true; clearInterval(t); };
+  }, [auth?.isSignedIn]);
+
+  // Recommendations RECEIVED on my services — gives the reco dot a landing
+  // spot in the Overview (SPEC-67b, Tarik 2026-06-24).
+  const [recosReceived, setRecosReceived] = useState([]);
+  useEffect(() => {
+    if (!auth?.isSignedIn) { setRecosReceived([]); return; }
+    let cancelled = false;
+    listRecosOnMyServices({ limit: 10 }).then(({ data }) => {
+      if (!cancelled) setRecosReceived(data || []);
+    });
+    return () => { cancelled = true; };
   }, [auth?.isSignedIn]);
 
   // Open below-4★ disputes where I'm a party (provider or connector).
@@ -719,6 +732,19 @@ export function JobsInboxScreen() {
             onView: viewSvc(resp.service?.id),
             ts: resp.responded_at || resp.created_at,
           })));
+
+          // 6b. Recommendations RECEIVED on my services — give the reco dot a
+          //     landing spot so it isn't a dead end (SPEC-67b, Tarik 2026-06-24).
+          (recosReceived || []).forEach(rec => items.push({
+            key: 'reco-' + rec.id, tone: 'green', money: false,
+            headline: `${first({ display_name: rec.recommender_name })} recommended you`,
+            sub: rec.message
+              ? `${rec.service_title} · "${rec.message.slice(0, 80)}"`
+              : `${rec.service_title} · new recommendation`,
+            actionLabel: 'View', onAction: () => navigate(rec.recommender_id ? `/u/${rec.recommender_id}` : '/inbox'),
+            onView: viewSvc(rec.service_id),
+            ts: rec.sent_at,
+          }));
 
           // 7. Recently confirmed (last 48h) — surfaces a "just accepted/booked"
           //    job in the action feed so it isn't only buried in Upcoming

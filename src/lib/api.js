@@ -2099,6 +2099,58 @@ export async function recoTimesOnMyServices({ limit = 50 } = {}) {
   return { data: data || [], error: null };
 }
 
+/**
+ * listRecosOnMyServices — recommendations RECEIVED on the signed-in user's
+ * services, hydrated with recommender name + service title. Powers the
+ * "You were recommended" item in the Inbox Overview so the reco dot
+ * (useInboxUnread → recoTimesOnMyServices) has somewhere to land instead of
+ * dead-ending (SPEC-67b, Tarik 2026-06-24). Two-step (no FK-name embed) so it
+ * works across environments. Read-only; empty on signed-out / no services.
+ */
+export async function listRecosOnMyServices({ limit = 10, sinceDays = 45 } = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+  const { data: svcs } = await supabase
+    .from('services')
+    .select('id, title')
+    .eq('owner_id', userRes.user.id);
+  const svcMap = Object.fromEntries((svcs || []).map(s => [s.id, s.title]));
+  const ids = Object.keys(svcMap);
+  if (!ids.length) return { data: [], error: null };
+  const sinceIso = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data: recs, error } = await supabase
+    .from('recommendations')
+    .select('id, message, sent_at, service_id, recommender_id')
+    .in('service_id', ids)
+    .gte('sent_at', sinceIso)
+    .order('sent_at', { ascending: false })
+    .limit(limit);
+  if (error) return { data: [], error };
+  // Hydrate recommender display names in one follow-up query.
+  const recIds = [...new Set((recs || []).map(r => r.recommender_id).filter(Boolean))];
+  let nameMap = {};
+  if (recIds.length) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', recIds);
+    nameMap = Object.fromEntries((profs || []).map(p => [p.id, p.display_name]));
+  }
+  return {
+    data: (recs || []).map(r => ({
+      id:               r.id,
+      message:          r.message || null,
+      sent_at:          r.sent_at,
+      service_id:       r.service_id,
+      service_title:    svcMap[r.service_id] || 'your service',
+      recommender_id:   r.recommender_id || null,
+      recommender_name: nameMap[r.recommender_id] || 'Someone',
+    })),
+    error: null,
+  };
+}
+
 export async function getConnectorSpotlights(connectorId, { limit = 6 } = {}) {
   if (!supabaseReady || !connectorId) return { data: [], error: null };
   const { data, error } = await supabase

@@ -1,7 +1,9 @@
-legal(terms): add SMS / A2P 10DLC program clause for carrier review
+fix(inbox): reco-received dot now lands on a "You were recommended" item (SPEC-67b)
 
-- New "17. SMS / text messaging program" section on /terms: program name
-  (Cergio/Yogotoo), "message and data rates may apply", frequency varies,
-  STOP/HELP in bold, support@cergio.ai, carrier-liability note, link to
-  Privacy. Required by Twilio/carrier A2P campaign vetting (Terms URL check).
-- All 71 qa flows pass.
+- Bug from design audit: a provider with a recommendation on their service got
+  an inbox dot (useInboxUnread → recoTimesOnMyServices) but the inbox had no
+  item to land on → dead-end dot.
+- Add listRecosOnMyServices (owner-scoped, two-step hydrate of recommender name
+  + service title) and render each as a green "<Recommender> recommended you ·
+  <service> · \"<review>\"" item in the Inbox Overview action feed.
+- FROZEN_SPEC SPEC-67b + qa #67b → 72 flows pass.

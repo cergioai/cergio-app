@@ -2303,6 +2303,21 @@ test('spec-47i-forced-post-gate', 'FROZEN: Forced barter post-gate blocks the Co
     'Provider canMarkComplete must also gate on !posted_at (drops once connector posted)');
 });
 
+test('spec-67b-reco-inbox-landing', 'FROZEN: a recommendation RECEIVED surfaces as a "You were recommended" item in the Inbox Overview so the reco dot is not a dead end (SPEC-67b)', '#67b', async () => {
+  const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  const inbox = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/JobsInboxScreen.jsx'), 'utf8');
+  assert(/export async function listRecosOnMyServices/.test(api),
+    'api.js must export listRecosOnMyServices — SPEC-67b');
+  assert(/from\('recommendations'\)[\s\S]{0,220}in\('service_id'/.test(api),
+    'listRecosOnMyServices must scope recommendations to my own services — SPEC-67b');
+  assert(/listRecosOnMyServices/.test(inbox),
+    'JobsInboxScreen must use listRecosOnMyServices — SPEC-67b');
+  assert(/recosReceived/.test(inbox) && /key:\s*'reco-'/.test(inbox),
+    'Overview feed must push a "reco-" item so the reco dot has a landing — SPEC-67b');
+  assert(/recommended you/.test(inbox),
+    'Reco item must read "<name> recommended you" — SPEC-67b');
+});
+
 test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carries job details, approximate map, Connector status + IG, friends-in-common — no fake photos (SPEC-48)', '#48', async () => {
   // The CANONICAL screen a provider opens from "New requests near you".
   const screen = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RequestFromConnectorScreen.jsx'), 'utf8');
