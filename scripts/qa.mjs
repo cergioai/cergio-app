@@ -2318,6 +2318,22 @@ test('spec-67b-reco-inbox-landing', 'FROZEN: a recommendation RECEIVED surfaces 
     'Reco item must read "<name> recommended you" — SPEC-67b');
 });
 
+test('spec-67c-parser-ontology', 'FROZEN: resolver never emits the generic "Service Provider" type (derives the specific provider type from category); fan-out matches case-insensitively on provider_type OR category (SPEC-67c)', '#67c', async () => {
+  const resolver = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/chat-parse/resolver.ts'), 'utf8');
+  const api      = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
+  // 1. Resolver has the generic-type guard + pickType helper, and uses it.
+  assert(/GENERIC_PROVIDER_TYPES/.test(resolver) && /function pickType/.test(resolver),
+    'resolver.ts must define GENERIC_PROVIDER_TYPES + pickType — SPEC-67c');
+  assert(/return offering\.category/.test(resolver),
+    'pickType must fall back to offering.category when notify_as is generic — SPEC-67c');
+  // 2. No return site still emits the raw generic notify_as (must go via pickType).
+  assert(!/provider_type:\s*offering\.notify_as\s*\?\?\s*offering\.provider_type_singular/.test(resolver),
+    'resolver return sites must use pickType(), not raw notify_as — SPEC-67c');
+  // 3. Fan-out matcher is case-insensitive + matches type OR category.
+  assert(/allowLC/.test(api) && /norm\(s\.taxonomy_provider_type\)/.test(api) && /norm\(s\.category\)/.test(api),
+    'getProvidersForNotify must match case-insensitively on taxonomy_provider_type OR category — SPEC-67c');
+});
+
 test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carries job details, approximate map, Connector status + IG, friends-in-common — no fake photos (SPEC-48)', '#48', async () => {
   // The CANONICAL screen a provider opens from "New requests near you".
   const screen = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RequestFromConnectorScreen.jsx'), 'utf8');

@@ -1,9 +1,16 @@
-fix(inbox): reco-received dot now lands on a "You were recommended" item (SPEC-67b)
+fix(parser): stop generic "Service Provider" mislabel + tolerant matching (SPEC-67c)
 
-- Bug from design audit: a provider with a recommendation on their service got
-  an inbox dot (useInboxUnread → recoTimesOnMyServices) but the inbox had no
-  item to land on → dead-end dot.
-- Add listRecosOnMyServices (owner-scoped, two-step hydrate of recommender name
-  + service title) and render each as a green "<Recommender> recommended you ·
-  <service> · \"<review>\"" item in the Inbox Overview action feed.
-- FROZEN_SPEC SPEC-67b + qa #67b → 72 flows pass.
+ROOT CAUSE (Tarik audit): "personal chef" resolved to provider_type
+"Service Provider" — a generic catch-all on 450/932 offerings (48%) — which
+exact-, case-sensitively matched NO provider listing, so ~half of all searches
+silently notified nobody (chef request never reached the chef).
+
+- resolver.ts: pickType(offering) returns notify_as unless it's a generic value
+  ("Service Provider"/provider/general/…), else the offering's specific
+  `category` (the real ontology node). Applied at every return site. Verified:
+  "personal chef"→"Personal Chef", and 0/20 probe terms still emit the generic.
+- api.js getProvidersForNotify: match CASE-INSENSITIVELY on taxonomy_provider_type
+  OR category (was exact, case-sensitive, single-field — the silent dropper).
+- No-match still surfaces the SPEC-42 "we'll keep looking" state + enqueues a
+  crawl; never a silent mislabel.
+- FROZEN_SPEC SPEC-67c + qa #67c → 73 flows pass.

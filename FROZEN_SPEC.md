@@ -517,6 +517,7 @@ Every `git push` runs `qa.mjs` via `Unlock and Push.command`. A failing test **b
 | SPEC-47 | #47 | Free barter loop: schedule confirm, no auto-confirm, post → accept gate |
 | SPEC-48 | #48 | Request screen: job details, approximate map, IG block, friends-in-common, no fake photos |
 | SPEC-67b | #67b | Reco RECEIVED surfaces as a "You were recommended" item in the Inbox Overview (reco dot must have a landing, not dead-end) |
+| SPEC-67c | #67c | Resolver never emits generic "Service Provider" (derives specific type from category); fan-out matches case-insensitively on provider_type OR category |
 
 ---
 
@@ -528,6 +529,21 @@ fetches recos received on the signed-in user's own services, and the Inbox Overv
 action-feed renders a `reco-<id>` item ("<Recommender> recommended you · <service> ·
 \"<review>\""). Do not light the reco dot without this landing item.
 
+## SPEC-67c · Parser ontology — no generic mislabel, no silent no-match
+**Status:** FROZEN — 2026-06-25
+**Why:** 450/932 offerings (48%) were tagged `notify_as="Service Provider"` (generic
+catch-all) → e.g. "personal chef" resolved to "Service Provider", which exact-matched
+NO provider listing, so ~half of all searches silently notified nobody.
+**Rule:**
+- `resolveQuery` MUST return the specific provider type. `pickType(offering)` returns
+  `notify_as` unless it is a generic value (`Service Provider`/`provider`/etc.), in
+  which case it returns the offering's `category` (the granular ontology node). No
+  resolver return site may emit raw `notify_as` directly.
+- `getProvidersForNotify` matches **case-insensitively** on `taxonomy_provider_type`
+  **OR** `category` — never a single exact, case-sensitive field.
+- A request that matches no provider must NOT fail silently: it enqueues an on-demand
+  services crawl and the requester sees a "we'll keep looking" state.
+
 ---
 
-*Last updated: 2026-06-24 by Claude (Cowork session)*
+*Last updated: 2026-06-25 by Claude (Cowork session)*

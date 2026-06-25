@@ -284,13 +284,20 @@ export async function getProvidersForNotify({
   if (ids.length === 0) return { data: [], error: null };
   const { data: full, error: fullErr } = await supabase
     .from('services')
-    .select('id, owner_id, taxonomy_provider_type, status')
+    .select('id, owner_id, taxonomy_provider_type, category, status')
     .in('id', ids)
     .eq('status', 'listed');
   if (fullErr) return { data: null, error: fullErr };
 
+  // CERGIO-GUARD (2026-06-25): match CASE-INSENSITIVELY on taxonomy_provider_type
+  // OR category. The old exact, case-sensitive match on taxonomy_provider_type
+  // alone silently dropped providers whenever the request type and the listing
+  // differed only by case or sat one level apart (type vs category) — e.g. a
+  // "Personal Chef" request never reaching a chef listed under category "Food".
+  const allowLC = new Set(allow.map(s => s.toLowerCase()));
+  const norm = (v) => String(v || '').trim().toLowerCase();
   const filtered = (full || []).filter(s =>
-    allow.includes(s.taxonomy_provider_type || '')
+    allowLC.has(norm(s.taxonomy_provider_type)) || allowLC.has(norm(s.category))
   );
   return { data: filtered, error: null };
 }

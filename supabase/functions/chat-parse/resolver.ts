@@ -144,13 +144,30 @@ function applyStems(s: string): string[] {
   return Array.from(variants);
 }
 
+// CERGIO-GUARD (2026-06-25, Tarik — parser ontology audit): 450 of 932 offerings
+// (48%) are tagged notify_as/provider_type_singular = "Service Provider", a
+// generic catch-all that matches NO real provider listing (exact provider_type
+// match) — so ~half of all searches silently notified nobody (e.g. "personal
+// chef" → "Service Provider" instead of "Personal Chef"). Every such offering
+// DOES carry a specific `category`. pickType() returns the real provider type:
+// notify_as unless it's generic, in which case the offering's category.
+const GENERIC_PROVIDER_TYPES = new Set([
+  'service provider', 'service providers', 'provider', 'providers', 'general', '',
+]);
+function pickType(offering: any): string | null {
+  if (!offering) return null;
+  const na = offering.notify_as ?? offering.provider_type_singular ?? null;
+  if (na && !GENERIC_PROVIDER_TYPES.has(String(na).trim().toLowerCase())) return na;
+  return offering.category ?? na ?? null;
+}
+
 function buildResult(matchedTerm: string, entry: ForwardEntry, confidence: number, method: ResolverResult['method']): ResolverResult {
   const offeringId = entry.ids?.[0];
   const offering = offeringId ? OFFERINGS[offeringId] : null;
   return {
     offering_id:   offeringId ?? null,
     offering_name: offering?.name ?? null,
-    provider_type: offering?.notify_as ?? offering?.provider_type_singular ?? null,
+    provider_type: pickType(offering),
     domain:        offering?.domain,
     category:      offering?.category,
     confidence,
@@ -268,7 +285,7 @@ export function resolveQuery(rawMessage: string): ResolverResult {
     return {
       offering_id:   firstOff!,
       offering_name: offering.name ?? ip.intent ?? null,
-      provider_type: ip.provider_type ?? offering.notify_as ?? null,
+      provider_type: ip.provider_type ?? pickType(offering),
       domain:        offering.domain,
       category:      offering.category,
       confidence:    ip.confidence ?? 0.85,
@@ -294,7 +311,7 @@ export function resolveQuery(rawMessage: string): ResolverResult {
     return {
       offering_id:   offeringId,
       offering_name: offering.name,
-      provider_type: offering.notify_as ?? offering.provider_type_singular ?? null,
+      provider_type: pickType(offering),
       domain:        offering.domain,
       category:      offering.category,
       confidence:    0.86,
@@ -357,7 +374,7 @@ export function resolveQuery(rawMessage: string): ResolverResult {
       return {
         offering_id:   bestId,
         offering_name: offering.name,
-        provider_type: offering.notify_as ?? offering.provider_type_singular ?? null,
+        provider_type: pickType(offering),
         domain:        offering.domain,
         category:      offering.category,
         confidence:    conf,
