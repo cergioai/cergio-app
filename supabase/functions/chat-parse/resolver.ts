@@ -184,8 +184,16 @@ const UNIGRAM_STOPWORDS = new Set([
   'pro', 'professional', 'help', 'someone', 'today', 'tomorrow', 'now',
   'cerca', 'de', 'mi', 'mí', 'pour', 'avec',
 ]);
+// Generic action words that span domains ("trim": hedge vs beard; "fix"/"repair"/
+// "clean"/"cut"). They must NEVER decide a match (→ "beard trim"→Landscaper),
+// so they're excluded from BOTH the unigram index and the substring scan.
+const AMBIGUOUS_TOKENS = new Set([
+  'trim', 'fix', 'repair', 'install', 'clean', 'mount', 'wash', 'paint', 'build',
+  'move', 'haul', 'set', 'setup', 'cut', 'color', 'style', 'treatment', 'lesson',
+  'class', 'coach', 'session', 'job', 'work', 'quote', 'care', 'maintenance',
+]);
 for (const [phrase, entry] of Object.entries(MERGED)) {
-  const toks = normalizeTerm(phrase).split(/\s+/).filter(t => t.length >= 3 && !UNIGRAM_STOPWORDS.has(t));
+  const toks = normalizeTerm(phrase).split(/\s+/).filter(t => t.length >= 3 && !UNIGRAM_STOPWORDS.has(t) && !AMBIGUOUS_TOKENS.has(t));
   for (const tok of toks) {
     UNIGRAM_INDEX[tok] = UNIGRAM_INDEX[tok] || {};
     for (const id of (entry.ids || [])) {
@@ -495,24 +503,31 @@ export function resolveQuery(rawMessage: string): ResolverResult {
 
   // Step 8 — longest substring scan of forward_index. Try the typo-corrected
   // and apostrophe-fixed variants too so "plummer urgente" hits "plumber".
+  // (AMBIGUOUS_TOKENS is module-scope — a lone generic action word like "trim"
+  // must never decide a match. A multi-word phrase is inherently specific.)
   const scanSources = [lower, apostroFix, corrected].filter((v, i, a) => v && a.indexOf(v) === i);
   for (const source of scanSources) {
     for (const term of TERMS_BY_LEN) {
       if (term.length < 4) break;   // ≥4 + whole-word so "cat" never matches "caterer"
       const idx = source.indexOf(term);
-      if (idx !== -1 && isWholeWordMatch(source, term, idx)) {
-        return buildResult(term, FWD_LOWER[term], 0.78, 'substring');
-      }
+      if (idx === -1 || !isWholeWordMatch(source, term, idx)) continue;
+      const isPhrase = term.includes(' ');                 // multi-word = specific
+      if (!isPhrase && (AMBIGUOUS_TOKENS.has(term) || term.length < 5)) continue;
+      return buildResult(term, FWD_LOWER[term], isPhrase ? 0.82 : 0.74, 'substring');
     }
   }
 
   // Step 8a — normalized substring scan (accent/punct-insensitive; ES/PT).
+  // Same guard as step 8: multi-word phrases are specific; a lone generic/short
+  // token must not decide ("beard trim"→Landscaper via "trim").
   if (norm) {
     for (const term of NORM_TERMS_BY_LEN) {
-      if (term.length < 3) break;
-      if (norm.includes(term) && isWholeWordMatch(norm, term, norm.indexOf(term))) {
-        return buildResult(term, NORM_INDEX[term], 0.77, 'substring');
-      }
+      if (term.length < 4) break;
+      const idx = norm.indexOf(term);
+      if (idx === -1 || !isWholeWordMatch(norm, term, idx)) continue;
+      const isPhrase = term.includes(' ');
+      if (!isPhrase && (AMBIGUOUS_TOKENS.has(term) || term.length < 5)) continue;
+      return buildResult(term, NORM_INDEX[term], isPhrase ? 0.8 : 0.73, 'substring');
     }
   }
 
@@ -562,7 +577,7 @@ export function resolveQuery(rawMessage: string): ResolverResult {
   // Step 9 — misspelling (edit distance) on each content token, then the whole
   // single-word query. "plummer"→plumber, "massagge"→massage, "electrican"→…
   for (const tok of norm.split(' ')) {
-    if (tok.length < 4 || UNIGRAM_STOPWORDS.has(tok)) continue;
+    if (tok.length < 4 || UNIGRAM_STOPWORDS.has(tok) || AMBIGUOUS_TOKENS.has(tok)) continue;
     if (NORM_INDEX[tok]) return buildResult(tok, NORM_INDEX[tok], 0.9, 'exact_match');
     const near = nearestKey(tok);
     if (near) return buildResult(near.key, NORM_INDEX[near.key], near.conf, 'typo');
