@@ -74,28 +74,57 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
       href={`https://instagram.com/${String(igHandle).replace(/^@/, '')}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-0.5"
+      className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-1"
     >
       See Instagram
     </a>
   ) : null;
 
+  // Distinct type ramp (SPEC-49g): bio reads as body prose, clearly different
+  // from the metric lines (reach = bold black, strength/counts = light gray meta,
+  // mutuals = green). Tarik: "distinct fonts for service-type / #recos / headline / bio".
   const bioEl = bio ? (
-    <p className="text-meta text-b3 leading-snug mt-1">{bio}</p>
+    <p className="text-body-sm text-b2 leading-relaxed mt-2">{bio}</p>
   ) : null;
 
-  const serviceLine = isService ? (
-    <p className="text-meta-sm text-b3 leading-snug mt-2">
-      <span className="font-extrabold text-b2">{role || 'Service'}</span>
-      {' '}({recosReceived} reco{recosReceived === 1 ? '' : 's'} received)
+  // SOLID Connector badge (Tarik 2026-06-25: "make the Connector badge solid").
+  const connectorBadge = (
+    <span className="inline-flex items-center gap-1 bg-g text-white text-meta-sm font-extrabold px-2.5 py-1 rounded-pill leading-none">
+      <ShieldIcon size={10} />Connector
+    </span>
+  );
+
+  // Reach line — "319 IG followers" — bold black, the loudest metric.
+  const reachEl = reachLine ? (
+    <p className="flex items-center gap-1 text-body font-extrabold text-black mt-1.5">
+      <IgGlyph />{reachLine}
     </p>
   ) : null;
 
+  // Strength line — "5 network on Cergio · 5 recos made" — light gray meta.
+  const strengthEl = strength ? (
+    <p className="text-meta-sm text-b3 font-semibold mt-0.5">{strength}</p>
+  ) : null;
+
+  // Service-type line — green bold, its own distinct weight/color.
+  const serviceLine = isService ? (
+    <p className="text-body-sm leading-snug mt-2">
+      <span className="font-extrabold text-gd">{role || 'Service'}</span>
+      <span className="text-b3 font-medium"> · {recosReceived} reco{recosReceived === 1 ? '' : 's'} received</span>
+    </p>
+  ) : null;
+
+  // Headline — secondary identity, medium gray (distinct from bio prose).
+  const headlineEl = headline ? (
+    <p className="mt-1 text-meta text-b3 font-medium leading-snug">{headline}</p>
+  ) : null;
+
+  // Mutuals — GREEN, the trust signal (distinct from the gray metrics).
   const mutualLine = (
-    <p className="text-meta text-b3 leading-snug mt-2">
+    <p className="text-meta-sm font-semibold leading-snug mt-2 text-gd">
       {mutualCount > 0
         ? `${mutualCount} mutual ${mutualCount === 1 ? 'friend' : 'friends'} in common`
-        : `You have no mutual friends with ${firstName} yet.`}
+        : <span className="text-b3 font-medium">You have no mutual friends with {firstName} yet.</span>}
     </p>
   );
 
@@ -103,18 +132,10 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
     <div className="mx-5 mt-5 bg-white border border-bdr rounded-[16px] p-4">
       {connectorLeads ? (
         <>
-          <span className="inline-flex items-center gap-1 bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill">
-            <ShieldIcon size={10} />Connector
-          </span>
-          {headline && (
-            <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
-          )}
-          {reachLine && (
-            <p className="flex items-center gap-1 text-body-sm font-extrabold text-black mt-0.5">
-              <IgGlyph />{reachLine}
-            </p>
-          )}
-          {strength && <p className="text-meta-sm text-b3 mt-0.5">{strength}</p>}
+          {connectorBadge}
+          {headlineEl}
+          {reachEl}
+          {strengthEl}
           {igLink}
           {bioEl}
           {serviceLine}
@@ -122,13 +143,17 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
         </>
       ) : (
         <>
-          <p className="text-body-sm font-extrabold text-black leading-snug">
+          {/* Service facet leads with role, but ALWAYS carries the social-reach
+              stream now (Tarik 2026-06-25: "next to connectors add social data
+              — # Cergio network, IG if any"). reverses SPEC-49b. */}
+          <p className="text-heading-2 font-extrabold text-black leading-snug">
             {role || 'Service'}
-            <span className="text-b3 font-medium"> · {recosReceived} reco{recosReceived === 1 ? '' : 's'} received</span>
+            <span className="text-body-sm text-b3 font-medium"> · {recosReceived} reco{recosReceived === 1 ? '' : 's'} received</span>
           </p>
-          {headline && (
-            <p className="mt-1 text-body-sm text-b2 font-medium leading-snug">{headline}</p>
-          )}
+          {headlineEl}
+          {reachEl}
+          {strengthEl}
+          {igLink}
           {bioEl}
           {mutualLine}
         </>

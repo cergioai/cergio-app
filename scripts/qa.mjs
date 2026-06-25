@@ -1965,6 +1965,41 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
     'Go-Tos must flag isMutual from the viewer network (netSet) — mutuals on reco’d services.');
 });
 
+test('spec-49g-reputational-streams', 'FROZEN: reputational streams everywhere — solid Connector badge, social reach on both facets, recommender mutual+Connector+social on every reco row, trust-first byline, de-duped recos-received (SPEC-49g)', '#49', async () => {
+  const prof = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/PublicProfileScreen.jsx'), 'utf8');
+  const block = fs.readFileSync(path.join(REPO_ROOT, 'src/components/ui/ProfileSignalBlock.jsx'), 'utf8');
+
+  // 1. SOLID Connector badge (bg-g text-white), not the soft mint pill.
+  assert(/bg-g text-white[\s\S]{0,160}?Connector/.test(block),
+    'ProfileSignalBlock Connector badge must be SOLID (bg-g text-white) — SPEC-49g.');
+
+  // 2. Social reach renders on BOTH facets (reverses SPEC-49b): reachEl used in
+  //    the service branch too, not only the connector branch.
+  assert((block.match(/\{reachEl\}/g) || []).length >= 2,
+    'ProfileSignalBlock must render the reach line on BOTH facets — SPEC-49g.');
+
+  // 3. Trust-first reco byline names the viewer's connections first.
+  assert(/function recoByline/.test(prof) && /your friend/.test(prof),
+    'PublicProfileScreen must define recoByline that names mutual friends — SPEC-49g.');
+  assert(/recoByline\(recoSummary\)/.test(prof) && /recoByline\(goToSummary/.test(prof),
+    'recoByline must drive BOTH the service tile and the Go-To card bylines — SPEC-49g.');
+
+  // 4. Recommender rows carry social reach via SocialReachLine + recommenderCounts.
+  assert(/function SocialReachLine/.test(prof) && /<SocialReachLine/.test(prof),
+    'PublicProfileScreen must define + render SocialReachLine — SPEC-49g.');
+  assert(/getInboxPartyCounts\(recIds\)/.test(prof) && /recommenderCounts/.test(prof),
+    'Recommender social counts must load via getInboxPartyCounts(recIds) into recommenderCounts — SPEC-49g.');
+
+  // 5. Go-To cards carry provider Connector badge + social reach + per-service summary.
+  assert(/goToOwnerCounts/.test(prof) && /goToSummary/.test(prof),
+    'Go-To cards must load owner social counts + per-service reco summary — SPEC-49g.');
+
+  // 6. De-dup: RecoRow renders ONCE (the consolidated "Recommendations received"
+  //    section) — the inline per-service RecoRow list is removed.
+  assert((prof.match(/<RecoRow\b/g) || []).length === 1,
+    'RecoRow must render exactly once (consolidated section only — inline per-service list de-duped) — SPEC-49g.');
+});
+
 test('spec-53-recommend-from-booking', 'FROZEN: Recommendations come from a completed booking (rate+post); IG post optional when paid; no service-page button (SPEC-53)', '#53', async () => {
   const api   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/api.js'), 'utf8');
   const pdp   = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/ServiceDetailScreen.jsx'), 'utf8');

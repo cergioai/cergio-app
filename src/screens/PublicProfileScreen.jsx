@@ -109,6 +109,61 @@ function fmtMonthYear(iso) {
   } catch { return ''; }
 }
 
+function firstNameOf(n) { return (n || '').trim().split(/\s+/)[0] || ''; }
+
+// Compact follower/network count — 12.3K, 1.1M (SPEC-49g recommender social data).
+function compactN(n) {
+  n = Number(n) || 0;
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(n % 1_000 ? 1 : 0) + 'K';
+  return String(n);
+}
+
+// Trust-first reco byline (SPEC-49g): names the personal connection FIRST —
+// "You and your friend Jason", "your friends Jamie and Lee + 3 more" — falling
+// back to plain counts ("Reco'd by 5 friends and 1 Connector") when the viewer
+// shares no one. `s` = { total, friends, connectors, mutualNames[], viewerRecommended }.
+function recoByline(s) {
+  if (!s || !s.total) return null;
+  const mutuals = (s.mutualNames || []).map(firstNameOf).filter(Boolean);
+  const you = !!s.viewerRecommended;
+  if (you || mutuals.length) {
+    const named = (you ? 1 : 0) + mutuals.length;
+    const others = Math.max(0, s.total - named);
+    let core;
+    if (mutuals.length === 0) core = 'You';
+    else if (mutuals.length === 1) core = you ? `you and your friend ${mutuals[0]}` : `your friend ${mutuals[0]}`;
+    else {
+      const list = mutuals.length === 2
+        ? `${mutuals[0]} and ${mutuals[1]}`
+        : `${mutuals.slice(0, 2).join(', ')} and ${mutuals.length - 2} more`;
+      core = you ? `you, ${list}` : `your friends ${list}`;
+    }
+    let txt = `Reco'd by ${core}`;
+    if (others > 0) txt += ` + ${others} more`;
+    return txt;
+  }
+  const parts = [];
+  if (s.friends > 0) parts.push(`${s.friends} ${s.friends === 1 ? 'friend' : 'friends'}`);
+  if (s.connectors > 0) parts.push(`${s.connectors} ${s.connectors === 1 ? 'Connector' : 'Connectors'}`);
+  return `Reco'd by ${parts.join(' and ') || s.total}`;
+}
+
+// One-line social-reach signal for a recommender (SPEC-49g): "12.3K IG · 40 network".
+// Renders nothing when the recommender has no IG + no Cergio network.
+function SocialReachLine({ counts }) {
+  if (!counts) return null;
+  const ig = Number(counts.igFollowers) || 0;
+  const tt = Number(counts.ttFollowers) || 0;
+  const net = Number(counts.networkCount) || 0;
+  const parts = [];
+  if (ig > 0) parts.push(`${compactN(ig)} IG`);
+  else if (tt > 0) parts.push(`${compactN(tt)} TikTok`);
+  if (net > 0) parts.push(`${net} network`);
+  if (!parts.length) return null;
+  return <p className="text-meta-sm text-b3 font-semibold leading-none mt-0.5">{parts.join(' · ')}</p>;
+}
+
 // One service-card row (used in the "Their Services" + "Their Go-Tos"
 // sections). Cover image or photo-class gradient fallback. Tap → PDP.
 export function ServiceTile({ svc, recoSummary, onOpen }) {
@@ -162,10 +217,7 @@ export function ServiceTile({ svc, recoSummary, onOpen }) {
               <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
             </svg>
             <p className="text-meta-sm text-gd font-extrabold leading-none">
-              Reco&apos;d by {recoSummary.friends || 0} {(recoSummary.friends === 1) ? 'friend' : 'friends'}
-              {recoSummary.connectors > 0 && (
-                <> and {recoSummary.connectors} {recoSummary.connectors === 1 ? 'Connector' : 'Connectors'}</>
-              )}
+              {recoByline(recoSummary)}
             </p>
           </div>
         )}
@@ -178,17 +230,18 @@ export function ServiceTile({ svc, recoSummary, onOpen }) {
 // (SPEC-49c). Leads with the recommender (linked) + trust badges: "In your
 // network" when the VIEWER knows them (mutual), and "Connector" when they're
 // a verified Connector. Their note sits in a soft bubble below.
-function RecoRow({ r }) {
+function RecoRow({ r, counts, showService }) {
   return (
     <div className="bg-white border border-bdr rounded-[14px] p-3.5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <AvatarLink id={r.recommender?.id} name={r.recommender?.name} size={36} clickable={!!r.recommender?.id} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <AvatarLink id={r.recommender?.id} name={r.recommender?.name} size={38} clickable={!!r.recommender?.id} />
           <div className="min-w-0">
-            <p className="text-body font-extrabold text-black truncate">
+            <p className="text-body font-extrabold text-black truncate leading-tight">
               {r.recommender?.name || 'A friend'}
             </p>
-            <div className="flex items-center gap-2 flex-wrap">
+            {/* Trust badges (SPEC-49g): mutual-with-viewer + Connector, side by side. */}
+            <div className="flex items-center gap-2 flex-wrap mt-0.5">
               {r.isMutual && (
                 <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -198,18 +251,23 @@ function RecoRow({ r }) {
                 </span>
               )}
               {r.recommender?.is_connector && (
-                <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
+                <span className="inline-flex items-center gap-1 bg-g text-white text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
                   Connector
                 </span>
               )}
             </div>
+            {/* Social reach (SPEC-49g): "12.3K IG · 40 network". */}
+            <SocialReachLine counts={counts} />
           </div>
         </div>
-        <p className="text-meta-sm text-b3 font-medium whitespace-nowrap">
+        <p className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-0.5">
           {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
         </p>
       </div>
+      {showService && r.serviceTitle && (
+        <p className="text-meta-sm text-b3 font-semibold mt-2">on {r.serviceTitle}</p>
+      )}
       {r.message && (
         <div className="mt-2 bg-bg5 rounded-[12px] p-3">
           <p className="text-meta text-b2 leading-snug">{r.message}</p>
@@ -230,6 +288,7 @@ export function PublicProfileScreen() {
   // CERGIO-GUARD (2026-06-03): viewer's auth context — needed for Follow.
   const outlet = useOutletContext() || {};
   const auth = outlet.auth;
+  const viewerId = auth?.user?.id || null;
   // Viewer priority (SPEC-49/48c): consumer mode (false) → service facet leads;
   // provider mode (true) → connector facet leads. Same rule as request previews.
   const serviceMode = !!outlet.serviceMode;
@@ -260,8 +319,17 @@ export function PublicProfileScreen() {
   // record — free barters with a confirmed post). Same source as the interim
   // /inbound screen (getConnectorSpotlights), rendered as small post tiles.
   const [spotlights, setSpotlights] = useState([]);
-  // svcId → { total, friends, connectors, mutuals }
+  // svcId → { total, friends, connectors, mutuals, mutualNames[], viewerRecommended }
   const [svcRecoSummary, setSvcRecoSummary] = useState({});
+  // recommenderId → { igFollowers, ttFollowers, networkCount, ... } — social reach
+  // shown next to each recommender on the "who loves {name}" rows (SPEC-49g).
+  const [recommenderCounts, setRecommenderCounts] = useState({});
+  // Go-To serviceId → reco summary across ALL recommenders (trust byline on each
+  // recommended-service card: "Reco'd by you and your friend Jason" — SPEC-49g).
+  const [goToSummary, setGoToSummary] = useState({});
+  // Go-To ownerId → social counts (IG/network) — reputational reach on the
+  // recommended-service card (SPEC-49g).
+  const [goToOwnerCounts, setGoToOwnerCounts] = useState({});
   // Reviews on services this profile owns: { id, stars, comment, reviewer:{id,name}, booked_at }
   const [reviews, setReviews] = useState([]);
   // Recommendations this profile has authored, joined to services + owners.
@@ -408,10 +476,11 @@ export function PublicProfileScreen() {
           const rp = profMap[r.recommender_id];
           const isConnector = !!rp?.cc_verified_at;
           const isMutual = !!(rp && netSet.has(rp.id));
-          if (!summary[k]) summary[k] = { total: 0, friends: 0, connectors: 0, mutuals: 0 };
+          if (!summary[k]) summary[k] = { total: 0, friends: 0, connectors: 0, mutuals: 0, mutualNames: [], viewerRecommended: false };
           summary[k].total += 1;
           if (isConnector) summary[k].connectors += 1; else summary[k].friends += 1;
-          if (isMutual) summary[k].mutuals += 1;
+          if (isMutual) { summary[k].mutuals += 1; if (rp?.display_name) summary[k].mutualNames.push(rp.display_name); }
+          if (viewerId && r.recommender_id === viewerId) summary[k].viewerRecommended = true;
           (byService[k] ||= []).push({
             id: r.id,
             message: r.message || '',
@@ -437,10 +506,20 @@ export function PublicProfileScreen() {
             message: r.message || '',
             sent_at: r.sent_at,
             serviceTitle: svcTitleMap[r.service_id] || '',
+            isMutual: !!(rp && netSet.has(rp.id)),
             recommender: rp ? { id: rp.id, name: rp.display_name, is_connector: !!rp.cc_verified_at } : null,
           };
         });
         if (!cancelled) setRecosReceived(shapedReceived);
+
+        // Recommender social reach (SPEC-49g): "Users who love {name}" rows show
+        // each recommender's IG/network — same source as the request previews.
+        if (recIds.length) {
+          const { data: rcCounts } = await getInboxPartyCounts(recIds);
+          if (!cancelled) setRecommenderCounts(rcCounts || {});
+        } else if (!cancelled) {
+          setRecommenderCounts({});
+        }
 
         // Reviews for those services — go reviews → bookings join.
         // Schema (verified against api.js): reviews(id, booking_id,
@@ -520,6 +599,14 @@ export function PublicProfileScreen() {
         : { data: [] };
       const ownerProfMap = Object.fromEntries((ownerProfs || []).map(p => [p.id, p]));
 
+      // Owner social reach for the Go-To cards (SPEC-49g) — same source as previews.
+      if (ownerIds.length) {
+        const { data: ocounts } = await getInboxPartyCounts(ownerIds);
+        if (!cancelled) setGoToOwnerCounts(ocounts || {});
+      } else if (!cancelled) {
+        setGoToOwnerCounts({});
+      }
+
       const shapedRecos = myRecRows
         .map(r => {
           const s = recoSvcMap[r.service_id];
@@ -552,10 +639,42 @@ export function PublicProfileScreen() {
         .filter(Boolean);
       if (!cancelled) setRecoServices(shapedRecos);
 
+      // Go-To trust byline (SPEC-49g): for each recommended service, how many
+      // people reco it — naming the viewer's own connections first ("you and
+      // your friend Jason"). Counts ALL recommenders on that service, then flags
+      // which are in the viewer's network / are the viewer themselves.
+      if (recoSvcIds.length) {
+        const { data: goToRecs } = await supabase
+          .from('recommendations')
+          .select('id, service_id, recommender_id')
+          .in('service_id', recoSvcIds);
+        const gRows = goToRecs || [];
+        const gRecIds = [...new Set(gRows.map(r => r.recommender_id).filter(Boolean))];
+        const { data: gProfs } = gRecIds.length
+          ? await supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', gRecIds)
+          : { data: [] };
+        const gProfMap = Object.fromEntries((gProfs || []).map(p => [p.id, p]));
+        const gSummary = {};
+        for (const r of gRows) {
+          const k = r.service_id;
+          const rp = gProfMap[r.recommender_id];
+          const isConnector = !!rp?.cc_verified_at;
+          const isMutual = !!(rp && netSet.has(rp.id));
+          if (!gSummary[k]) gSummary[k] = { total: 0, friends: 0, connectors: 0, mutuals: 0, mutualNames: [], viewerRecommended: false };
+          gSummary[k].total += 1;
+          if (isConnector) gSummary[k].connectors += 1; else gSummary[k].friends += 1;
+          if (isMutual) { gSummary[k].mutuals += 1; if (rp?.display_name) gSummary[k].mutualNames.push(rp.display_name); }
+          if (viewerId && r.recommender_id === viewerId) gSummary[k].viewerRecommended = true;
+        }
+        if (!cancelled) setGoToSummary(gSummary);
+      } else if (!cancelled) {
+        setGoToSummary({});
+      }
+
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [profileId]);
+  }, [profileId, viewerId]);
 
   // Role for the badge row — pulled from the first listed service's
   // taxonomy_provider_type (e.g. "Housekeeper"). Falls back to null
@@ -736,45 +855,25 @@ export function PublicProfileScreen() {
         </div>
       )}
 
-      {/* {firstName}'s Services — each service LEADS its own recommendations
-          (SPEC-49c, Tarik 2026-06-17): up to 3 services inline, each followed
-          by its top-3 recommenders (mutuals-with-viewer + Connectors first),
-          with a per-service "See all" expand. More than 3 services → the rest
-          live on the dedicated /u/:id/services page via "View all services".
-          A pure Connector/curator with no services skips this whole block and
-          only shows Recommendations Made below. */}
+      {/* {firstName}'s Services — up to 3 service tiles inline, each carrying its
+          own reco byline (SPEC-49g: "Reco'd by you and your friend Jason"). The
+          full per-recommender testimonials (with mutual/Connector badges + social
+          reach) live ONCE in the consolidated "Recommendations received" section
+          below — the inline per-service reco list was a duplicate and is removed
+          (Tarik 2026-06-25: "remove the upper ones"). More than 3 services → the
+          rest live on /u/:id/services. A pure Connector/curator skips this block. */}
       {services.length > 0 && (
         <div className="px-5 mt-8">
           <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Services</h2>
-          <div className="mt-3 flex flex-col gap-8">
-            {services.slice(0, INLINE_SERVICES).map(svc => {
-              const recos = recosByService[svc.id] || [];
-              const expanded = openRecoSvcs.has(svc.id);
-              const shown = expanded ? recos : recos.slice(0, 3);
-              return (
-                <div key={svc.id} className="flex flex-col gap-3">
-                  <ServiceTile
-                    svc={svc}
-                    recoSummary={svcRecoSummary[svc.id]}
-                    onOpen={() => navigate(`/service/${svc.id}`)}
-                  />
-                  {recos.length > 0 && (
-                    <div className="flex flex-col gap-3">
-                      {shown.map(r => <RecoRow key={r.id} r={r} />)}
-                      {recos.length > 3 && (
-                        <button
-                          type="button"
-                          onClick={() => toggleRecoSvc(svc.id)}
-                          className="inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline self-start"
-                        >
-                          {expanded ? 'Show less' : `See all ${recos.length} recommendations →`}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="mt-3 flex flex-col gap-5">
+            {services.slice(0, INLINE_SERVICES).map(svc => (
+              <ServiceTile
+                key={svc.id}
+                svc={svc}
+                recoSummary={svcRecoSummary[svc.id]}
+                onOpen={() => navigate(`/service/${svc.id}`)}
+              />
+            ))}
           </div>
           {services.length > INLINE_SERVICES && (
             <button
@@ -799,7 +898,14 @@ export function PublicProfileScreen() {
           </h2>
           <p className="text-meta text-b3 font-medium mt-1">People who love {firstName}</p>
           <div className="mt-4 flex flex-col gap-3">
-            {recosReceived.slice(0, 8).map(r => <RecoRow key={r.id} r={r} />)}
+            {recosReceived.slice(0, 8).map(r => (
+              <RecoRow
+                key={r.id}
+                r={r}
+                counts={r.recommender?.id ? recommenderCounts[r.recommender.id] : null}
+                showService={services.length > 1}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -840,22 +946,44 @@ export function PublicProfileScreen() {
                       >
                         {r.owner?.name || r.service?.title || 'A provider'}
                       </span>
-                      <p className="inline-flex items-center gap-1 text-meta text-gd font-extrabold mt-0.5">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-                          <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-                          <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                        </svg>
-                        {r.service?.taxonomy_provider_type || r.service?.category || 'Service'}
-                      </p>
-                      {/* Mutual badge — viewer is connected to this provider. */}
-                      {r.isMutual && (
-                        <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold mt-0.5">
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        <span className="inline-flex items-center gap-1 text-meta text-gd font-extrabold">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
+                            <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
+                            <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                           </svg>
-                          In your network
+                          {r.service?.taxonomy_provider_type || r.service?.category || 'Service'}
                         </span>
-                      )}
+                        {/* Connector badge — recommended provider is a verified Connector. */}
+                        {r.owner?.is_connector && (
+                          <span className="inline-flex items-center gap-1 bg-g text-white text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
+                            Connector
+                          </span>
+                        )}
+                      </div>
+                      {/* Reputational reach — provider's IG / Cergio network (SPEC-49g). */}
+                      <SocialReachLine counts={r.owner?.id ? goToOwnerCounts[r.owner.id] : null} />
+                      {/* Reputational stream — who reco's this service, viewer's
+                          connections named first ("you and your friend Jason"). */}
+                      {(() => {
+                        const byline = recoByline(goToSummary[r.service?.id]);
+                        return byline ? (
+                          <p className="inline-flex items-center gap-1 text-meta-sm text-gd font-extrabold mt-1">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
+                              <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
+                            </svg>
+                            {byline}
+                          </p>
+                        ) : r.isMutual ? (
+                          <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold mt-0.5">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                              <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
+                            </svg>
+                            In your network
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                   <p className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-1">

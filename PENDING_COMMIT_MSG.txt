@@ -1,7 +1,26 @@
-fix(services): provider service page back-button dead route + UX note
+feat(profile): reputational streams everywhere — trust, mutuals, reach (SPEC-49g)
 
-- ServiceDetailProviderScreen "Back to my services" pointed at /profile/services,
-  which is NOT a route → catch-all bounced it to home. Now → /services/manage.
-- (Context: tapping a service in Manage correctly opens its manage page; the
-  separate "+ List another service" button is the new-listing entry. The page
-  loads fine for the owner — this was a stray dead route, not a load failure.)
+The trust graph is Cergio's differentiator, so surface it wherever a person or
+recommendation appears. On the unified profile + signal block:
+
+- SOLID Connector badge (bg-g/white) replaces the soft mint pill; same solid
+  treatment on recommender rows + Go-To cards.
+- Distinct type ramp: service-type (green bold), reach/IG (bold black), strength
+  counts (gray meta), headline (gray meta), bio (body prose), mutuals (green) —
+  each a visibly different size/weight/color (no more "everything same font").
+- Social reach (IG/TikTok followers + Cergio network) now renders on the SERVICE
+  facet too, not only the Connector facet (reverses SPEC-49b per Tarik).
+- Every "People who love {name}" row carries the recommender's mutual badge
+  ("In your network") + Connector badge + social counts ("12.3K IG · 40 network",
+  SocialReachLine from getInboxPartyCounts -> recommenderCounts).
+- Trust-first reco byline (recoByline) on every service tile + Go-To card names
+  the viewer's own connections FIRST: "Reco'd by you and your friend Jason + 4
+  more", falling back to plain counts when no shared connections. Go-To cards
+  also show the provider's Connector badge + SocialReachLine (goToOwnerCounts) +
+  per-service reco summary (goToSummary, all recommenders, flags mutuals/viewer).
+- De-dup: removed the inline per-service RecoRow list (duplicated the consolidated
+  "Recommendations received" section); per-service trust now reads via the tile
+  byline; consolidated rows gain an "on {service}" line for multi-service owners.
+
+FROZEN_SPEC: SPEC-49g added (supersedes 49c inline list, reverses 49b reach rule).
+qa.mjs: #49g added. All 75 flows pass; both files esbuild-clean.
