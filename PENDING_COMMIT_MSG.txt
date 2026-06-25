@@ -1,12 +1,21 @@
-feat(ontology): depth supplement batch 2 + eval gate (the standard)
+fix(notify): chef requests reach chefs — kill stale/null provider_type (spine)
 
-- SUPPLEMENT batch 2: locksmith, pest control, window/carpet cleaning, mobile
-  mechanic, tailor/seamstress, bartender, arborist, wedding/event planner,
-  interior designer, tax prep, bookkeeping, web dev, graphic design (EN + ES).
-  All map to verified-existing provider types.
-- THE STANDARD: scripts/eval-ontology.ts — labeled coverage+precision gate.
-  Hard rule: FAILS on any phrase resolving >=0.60 to the WRONG type (zero
-  confident-wrong). Tracks local-coverage %. Launcher: "Eval Ontology.command".
-- Current eval: 89 cases, 100% correct local, 0 confident-wrong. 74 qa flows pass.
-- Pattern is now repeatable: add a batch to SUPPLEMENT → run the eval gate →
-  ship. Ready to run the full catalog (the remaining ~580 thin types) in batches.
+Root cause of "Marco/info@ didn't get Maya's chef request": the request was
+fanned out as provider_type "Immigration Consultant". Diagnosis (live edge fn +
+DB): the chef providers were fine (info@ + Marco both Personal Chef, listed,
+Miami). The break was the request's provider_type:
+  1. When a turn went to Claude (sub-0.60), chat-parse returned NO provider_type
+     (Claude gives a service name, never mapped back to a type) → client kept a
+     STALE provider_type from an earlier turn.
+  2. Bare "chef" phrases weren't resolving locally.
+
+Fixes:
+- resolver: SUPPLEMENT chef terms (chef / need a chef / dinner party chef /
+  cocinero …) → Personal Chef; single-word substring guard 5→4 so "chef" (4)
+  resolves inside phrases. "need a chef tonight" & "chef who can cook ecuadorian
+  food" now → Personal Chef locally.
+- chat-parse: the Claude path now RE-RESOLVES Claude's answer so
+  _resolver.provider_type is ALWAYS set (never null → never stale).
+- HomeScreen: RE-RESOLVE the service fresh at submit (authoritative over chat
+  state) + notifySafe when a type is present, so a stale type can never fan out.
+- Eval gate: 89/89 correct, 0 confident-wrong. 74 qa flows pass.

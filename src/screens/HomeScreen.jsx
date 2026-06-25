@@ -656,8 +656,22 @@ export function HomeScreen() {
       let requestId = null;
       let notified  = 0;
       try {
-        const { createRequestAndFanOut } = await import('../lib/api');
+        const { createRequestAndFanOut, resolveOffering } = await import('../lib/api');
         const s = chat?.state || {};
+        // CERGIO-GUARD (2026-06-25, Tarik — chef-notify bug): RE-RESOLVE the
+        // final service text to a FRESH provider_type at submit. The chat state
+        // can carry a STALE provider_type from an earlier turn (a chef request
+        // fanned out as "Immigration Consultant" → no chef ever matched). The
+        // fresh resolve is authoritative; fall back to state only if it's empty.
+        let providerType = s.provider_type || null;
+        let category     = s.category || null;
+        try {
+          const fresh = await resolveOffering(s.what || submittedText);
+          if (fresh?.data?.provider_type) {
+            providerType = fresh.data.provider_type;
+            category     = fresh.data.category || category;
+          }
+        } catch { /* keep state values */ }
         // Budget comes from the chat parser's `s.budget` — captured via
         // the chat prompt flow (what → when → where → budget).
         const budgetStr = String(s.budget || '');
@@ -665,15 +679,15 @@ export function HomeScreen() {
         const budgetCents = m ? parseInt(m[1], 10) * 100 : null;
         const res = await createRequestAndFanOut({
           query:         submittedText,
-          provider_type: s.provider_type || null,
-          category:      s.category || null,
+          provider_type: providerType,
+          category:      category,
           what:          s.what || null,
           when_text:     s.when || null,
           where_text:    s.where || locationText || null,
           lat:           locationCoords?.lat ?? null,
           lng:           locationCoords?.lng ?? null,
           budget_cents:  budgetCents,
-          notifySafe:    !!s.notifySafe,
+          notifySafe:    !!providerType || !!s.notifySafe,
         });
         if (res?.request?.id) requestId = res.request.id;
         if (typeof res?.notified === 'number') notified = res.notified;

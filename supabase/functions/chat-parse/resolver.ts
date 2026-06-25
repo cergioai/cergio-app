@@ -229,6 +229,8 @@ const SUPPLEMENT: Record<string, string> = {
   // Tutors / coaches / misc gaps
   'math tutoring':'Math Tutor','math tutor':'Math Tutor','life coach':'Life Coach','accountability coach':'Life Coach',
   'face painting':'Face Painter','meal prep':'Personal Chef','personal chef':'Personal Chef',
+  'chef':'Personal Chef','need a chef':'Personal Chef','hire a chef':'Personal Chef','book a chef':'Personal Chef',
+  'private chef':'Personal Chef','in home chef':'Personal Chef','dinner party chef':'Personal Chef','cocinero':'Personal Chef',
   // Cleaning (depth)
   'move out cleaning':'Housekeeper','deep cleaning':'Housekeeper','airbnb cleaning':'Housekeeper','limpieza de casa':'Housekeeper',
   // Landscaper depth (note: "trim" alone is blocked as ambiguous; full phrases here win as exact)
@@ -619,7 +621,7 @@ export function resolveQuery(rawMessage: string): ResolverResult {
       const idx = source.indexOf(term);
       if (idx === -1 || !isWholeWordMatch(source, term, idx)) continue;
       const isPhrase = term.includes(' ');                 // multi-word = specific
-      if (!isPhrase && (AMBIGUOUS_TOKENS.has(term) || term.length < 5)) continue;
+      if (!isPhrase && (AMBIGUOUS_TOKENS.has(term) || term.length < 4)) continue;
       return buildResult(term, FWD_LOWER[term], isPhrase ? 0.82 : 0.74, 'substring');
     }
   }
@@ -633,7 +635,7 @@ export function resolveQuery(rawMessage: string): ResolverResult {
       const idx = norm.indexOf(term);
       if (idx === -1 || !isWholeWordMatch(norm, term, idx)) continue;
       const isPhrase = term.includes(' ');
-      if (!isPhrase && (AMBIGUOUS_TOKENS.has(term) || term.length < 5)) continue;
+      if (!isPhrase && (AMBIGUOUS_TOKENS.has(term) || term.length < 4)) continue;
       return buildResult(term, NORM_INDEX[term], isPhrase ? 0.8 : 0.73, 'substring');
     }
   }

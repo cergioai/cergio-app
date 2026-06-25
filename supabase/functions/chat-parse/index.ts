@@ -256,6 +256,13 @@ serve(async (req: Request) => {
       });
     }
 
+    // CERGIO-GUARD (2026-06-25, Tarik — chef-notify bug): when Claude handles a
+    // turn it returns a service NAME but no provider_type. Re-resolve that name
+    // through the ontology so _resolver.provider_type is ALWAYS set. Without
+    // this the client kept a STALE provider_type from an earlier turn (a chef
+    // request fanned out as "Immigration Consultant"), so providers never matched.
+    const claudeWhat = parsedJson?.parsed?.what ?? merged.what;
+    const reRes = claudeWhat ? resolveQuery(String(claudeWhat)) : null;
     const result = {
       parsed: {
         what:    parsedJson?.parsed?.what    ?? merged.what,
@@ -270,7 +277,14 @@ serve(async (req: Request) => {
       bot_reply:        parsedJson?.bot_reply        ?? composeBotReply(merged, missing, local),
       quick_replies:    Array.isArray(parsedJson?.quick_replies) ? parsedJson.quick_replies.slice(0, 4) : defaultQuickReplies(missing),
       switch_to_form:   !!parsedJson?.switch_to_form,
-      _resolver:        { method: 'claude', confidence: local.confidence, top_candidates: local.candidates },
+      _resolver:        {
+        method:        'claude',
+        confidence:    Math.max(local.confidence, reRes?.confidence ?? 0),
+        provider_type: reRes?.provider_type ?? local.provider_type ?? null,
+        offering_id:   reRes?.offering_id   ?? local.offering_id   ?? null,
+        category:      reRes?.category      ?? null,
+        top_candidates: local.candidates,
+      },
       _usage:           anthropicJson?.usage ?? null,
     };
     return json(result);
