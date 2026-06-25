@@ -238,6 +238,34 @@ const SUPPLEMENT: Record<string, string> = {
   'lash lift':'Esthetician','lash extensions':'Esthetician','eyebrow threading':'Esthetician','brow lamination':'Esthetician',
   // Pet waste
   'pooper scooper':'Dog Walker','dog waste removal':'Dog Walker','poop scooping':'Dog Walker',
+  // ── BATCH 2 — more high-demand domains (types verified to exist) ──────────
+  // Locksmith
+  'locked out':'Locksmith','rekey locks':'Locksmith','change locks':'Locksmith','car key replacement':'Locksmith',
+  'lockout':'Locksmith','cerrajero':'Locksmith',
+  // Pest Control
+  'bed bugs':'Pest Control Technician','termite treatment':'Pest Control Technician','roach extermination':'Pest Control Technician',
+  'exterminator':'Pest Control Technician','ant problem':'Pest Control Technician','mice infestation':'Pest Control Technician',
+  'fumigacion':'Pest Control Technician',
+  // Window / Carpet cleaning
+  'window cleaning':'Window Cleaner','window washing':'Window Cleaner',
+  'carpet cleaning':'Carpet Cleaner','rug cleaning':'Carpet Cleaner','steam clean carpet':'Carpet Cleaner',
+  // Mobile Mechanic
+  'car wont start':'Mobile Mechanic','brake replacement':'Mobile Mechanic','check engine light':'Mobile Mechanic',
+  'mobile mechanic':'Mobile Mechanic','mecanico':'Mobile Mechanic',
+  // Tailor / Seamstress
+  'hem pants':'Tailor','alterations':'Tailor','dress alterations':'Seamstress','tailor':'Tailor','sastre':'Tailor',
+  // Bartender
+  'bartender':'Bartender','cocktail service':'Bartender','event bartender':'Bartender',
+  // Arborist (tree specialty)
+  'arborist':'Arborist','tree pruning':'Arborist','tree health':'Arborist',
+  // Planners / design
+  'wedding planner':'Wedding Planner','day of coordinator':'Wedding Planner','event planner':'Event Planner',
+  'party planner':'Event Planner','interior designer':'Interior Designer','home staging':'Interior Designer',
+  // Money / digital
+  'tax preparation':'Tax Preparer','tax prep':'Tax Preparer','file my taxes':'Tax Preparer',
+  'bookkeeping':'Bookkeeper','quickbooks help':'Bookkeeper',
+  'build a website':'Web Developer','web developer':'Web Developer','wordpress help':'Web Developer',
+  'logo design':'Graphic Designer','graphic designer':'Graphic Designer',
 };
 // Merge supplement terms as exact, high-confidence matches → the type's
 // most-established offering (via TYPE_INDEX / CAT_INDEX). Skip any type we

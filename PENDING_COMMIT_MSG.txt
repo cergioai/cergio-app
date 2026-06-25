@@ -1,21 +1,12 @@
-feat(ontology): depth supplement (batch 1) + ontology-first / Haiku-only-on-miss
+feat(ontology): depth supplement batch 2 + eval gate (the standard)
 
-Audit finding: the v3 taxonomy is WIDE (612 provider types) but SHALLOW — 73%
-have a single offering — so popular phrases ("beard trim", "change a lightbulb",
-"replace outlet", "hot towel shave") missed the right offering and the fuzzy
-layers emitted confident-WRONG types.
-
-- ONTOLOGY DEPTH SUPPLEMENT: a curated, growable map of high-traffic phrases →
-  provider type (EN/ES/PT), merged as exact high-confidence matches. Batch 1
-  covers the top consumer domains + every gap the audit surfaced (Barber,
-  Hair Stylist, Nail, Esthetician, Handyman, Electrician, Plumber, HVAC,
-  Appliance, Pet Sitter, Mover, Painter, Auto, Landscaper, Math Tutor, …).
-  This is the BRIDGE: "beard trim" → Barber → notifies registered Barbers.
-- Haiku-only-on-miss: the unigram (scattered-token) layer is now sub-0.60 — the
-  ontology emits high confidence only when it genuinely understands (exact /
-  type / category / synonym / curated / phrase / supplement); everything else
-  goes to Claude. NO confident cross-domain wrong answers.
-- Coverage on a 51-phrase popular battery: 88% (with mislabels) → 96% (zero
-  mislabels); remaining 2 ("life coach", "face painting") have no offering yet
-  and correctly defer to Haiku. 74 qa flows pass.
-- See "Ontology Matching — Design & Audit.md" for the full model + roadmap.
+- SUPPLEMENT batch 2: locksmith, pest control, window/carpet cleaning, mobile
+  mechanic, tailor/seamstress, bartender, arborist, wedding/event planner,
+  interior designer, tax prep, bookkeeping, web dev, graphic design (EN + ES).
+  All map to verified-existing provider types.
+- THE STANDARD: scripts/eval-ontology.ts — labeled coverage+precision gate.
+  Hard rule: FAILS on any phrase resolving >=0.60 to the WRONG type (zero
+  confident-wrong). Tracks local-coverage %. Launcher: "Eval Ontology.command".
+- Current eval: 89 cases, 100% correct local, 0 confident-wrong. 74 qa flows pass.
+- Pattern is now repeatable: add a batch to SUPPLEMENT → run the eval gate →
+  ship. Ready to run the full catalog (the remaining ~580 thin types) in batches.
