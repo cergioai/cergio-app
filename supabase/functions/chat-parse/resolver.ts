@@ -174,6 +174,85 @@ function typeOrCategoryHit(n: string, conf: number): ResolverResult | null {
   };
 }
 
+// ── ONTOLOGY DEPTH SUPPLEMENT (Tarik 2026-06-25 — "Ferrari" coverage) ─────────
+// The v3 taxonomy is WIDE (612 provider types) but SHALLOW (73% have a single
+// offering), so popular phrases ("beard trim", "change a lightbulb") missed the
+// right offering and the fuzzy fallbacks emitted confident-WRONG types. This is
+// a CURATED, growable map of high-traffic phrases → the provider type that
+// should be notified. Each term is merged below as an exact, high-confidence
+// match (the bridge: a "beard trim" request notifies registered Barbers).
+// EN + ES + PT. Batch 1 = top consumer domains + every gap the audit surfaced.
+// Grow this type-by-type toward full coverage; it overrides the fuzzy layers.
+const SUPPLEMENT: Record<string, string> = {
+  // Barber
+  'beard trim':'Barber','beard lineup':'Barber','beard line up':'Barber','line up':'Barber',
+  'fade':'Barber','fade haircut':'Barber','skin fade':'Barber','taper':'Barber','taper fade':'Barber',
+  'buzz cut':'Barber','hot towel shave':'Barber','straight razor shave':'Barber','mens haircut':'Barber',
+  'kids haircut':'Barber','edge up':'Barber','recorte de barba':'Barber','afeitado':'Barber',
+  // Hair Stylist
+  'blowout':'Hair Stylist','blow dry':'Hair Stylist','balayage':'Hair Stylist','highlights':'Hair Stylist',
+  'root touch up':'Hair Stylist','keratin treatment':'Hair Stylist','updo':'Hair Stylist','hair extensions':'Hair Stylist',
+  // Nail Technician
+  'gel manicure':'Nail Technician','dip powder':'Nail Technician','acrylics':'Nail Technician',
+  'acrylic nails':'Nail Technician','pedicure':'Nail Technician','manicure':'Nail Technician',
+  // Esthetician
+  'facial':'Esthetician','microdermabrasion':'Esthetician','dermaplaning':'Esthetician','chemical peel':'Esthetician',
+  // Handyman
+  'change a lightbulb':'Handyman','change lightbulb':'Handyman','replace lightbulb':'Handyman',
+  'mount tv':'Handyman','mount my tv':'Handyman','tv mounting':'Handyman','wall mount tv':'Handyman',
+  'hang pictures':'Handyman','hang shelves':'Handyman','hang a mirror':'Handyman','assemble furniture':'Handyman',
+  'furniture assembly':'Handyman','childproofing':'Handyman','caulking':'Handyman','honey do list':'Handyman',
+  'cambiar bombilla':'Handyman','montar tv':'Handyman','armar muebles':'Handyman',
+  // Electrician
+  'replace outlet':'Electrician','install outlet':'Electrician','add outlet':'Electrician',
+  'install light fixture':'Electrician','replace breaker':'Electrician','install dimmer':'Electrician',
+  'ev charger install':'Electrician','install ev charger':'Electrician','recessed lighting':'Electrician',
+  'cambiar enchufe':'Electrician','instalar luz':'Electrician',
+  // Plumber (depth)
+  'garbage disposal':'Plumber','water heater':'Plumber','sump pump':'Plumber','install faucet':'Plumber',
+  'running toilet':'Plumber','unclog drain':'Plumber','calentador de agua':'Plumber',
+  // HVAC
+  'thermostat install':'HVAC Technician','install thermostat':'HVAC Technician','mini split install':'HVAC Technician',
+  // Appliance Repair Technician
+  'dryer not heating':'Appliance Repair Technician','washer leaking':'Appliance Repair Technician',
+  'fridge not cooling':'Appliance Repair Technician','dishwasher repair':'Appliance Repair Technician',
+  'oven repair':'Appliance Repair Technician',
+  // Pet Sitter
+  'cat sitting':'Pet Sitter','cat sitter':'Pet Sitter','pet sitting':'Pet Sitter','pet sitter':'Pet Sitter',
+  'overnight pet care':'Pet Sitter','cuidado de gatos':'Pet Sitter','cuidador de mascotas':'Pet Sitter',
+  // Mover
+  'help me move':'Mover','moving help':'Mover','load truck':'Mover','furniture moving':'Mover','ayuda para mudanza':'Mover',
+  // Painter (depth)
+  'accent wall':'Painter','cabinet painting':'Painter','paint a room':'Painter','interior painting':'Painter',
+  // Auto Detailer
+  'interior detail':'Auto Detailer','ceramic coating':'Auto Detailer','car detailing':'Auto Detailer',
+  // Tutors / coaches / misc gaps
+  'math tutoring':'Math Tutor','math tutor':'Math Tutor','life coach':'Life Coach','accountability coach':'Life Coach',
+  'face painting':'Face Painter','meal prep':'Personal Chef','personal chef':'Personal Chef',
+  // Cleaning (depth)
+  'move out cleaning':'Housekeeper','deep cleaning':'Housekeeper','airbnb cleaning':'Housekeeper','limpieza de casa':'Housekeeper',
+  // Landscaper depth (note: "trim" alone is blocked as ambiguous; full phrases here win as exact)
+  'tree trimming':'Landscaper','tree removal':'Landscaper','stump grinding':'Landscaper','hedge trimming':'Landscaper',
+  'sod installation':'Landscaper','mulching':'Landscaper','poda de arboles':'Landscaper',
+  // Esthetician / lash depth
+  'lash lift':'Esthetician','lash extensions':'Esthetician','eyebrow threading':'Esthetician','brow lamination':'Esthetician',
+  // Pet waste
+  'pooper scooper':'Dog Walker','dog waste removal':'Dog Walker','poop scooping':'Dog Walker',
+};
+// Merge supplement terms as exact, high-confidence matches → the type's
+// most-established offering (via TYPE_INDEX / CAT_INDEX). Skip any type we
+// don't yet carry an offering for (logged once at cold start).
+const SUPP_MISSING: string[] = [];
+for (const [term, type] of Object.entries(SUPPLEMENT)) {
+  const tn = normalizeTerm(type);
+  const rep = TYPE_INDEX[tn] || (CAT_INDEX[tn] ? { id: CAT_INDEX[tn].id } : null);
+  if (!rep) { SUPP_MISSING.push(type); continue; }
+  const key = normalizeTerm(term);
+  if (!key) continue;
+  FWD_LOWER[key]  = { ids: [rep.id], originalKey: term };
+  NORM_INDEX[key] = { ids: [rep.id] };
+}
+
 // Derived UNIGRAM_INDEX (bare-token → { offering_id → frequency }) over the
 // COMPLETE merged set — catches bare tokens inside multi-word phrases.
 const UNIGRAM_INDEX: Record<string, Record<string, number>> = {};
@@ -559,7 +638,11 @@ export function resolveQuery(rawMessage: string): ResolverResult {
       // strict substring (0.78) when score is low, equal when it's clear.
       const runners = Object.entries(scoreById).sort((a, b) => b[1] - a[1]);
       const margin = runners.length > 1 ? runners[0][1] / (runners[0][1] + runners[1][1]) : 1;
-      const conf = Math.min(0.78, 0.55 + 0.23 * margin);
+      // Sub-threshold by design: a unigram vote is the ontology GUESSING from
+      // scattered tokens, not understanding. Pass it to Claude as a candidate
+      // rather than emitting a confident cross-domain wrong answer (Tarik:
+      // "only default to haiku if the ontology doesn't understand").
+      const conf = Math.min(0.58, 0.40 + 0.18 * margin);
       return {
         offering_id:   bestId,
         offering_name: offering.name,

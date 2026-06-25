@@ -1,15 +1,21 @@
-fix(parser): kill cross-domain fragment mislabels (SPEC-68 hardening)
+feat(ontology): depth supplement (batch 1) + ontology-first / Haiku-only-on-miss
 
-Follow-up to the spine audit. Generic action words that span domains ("trim"
-= hedge vs beard, "fix", "repair", "clean", "cut") were letting the substring
-/ unigram / token-exact steps emit confident-WRONG matches — e.g.
-"beard trim" → Landscaper, "fix my ac" → Handyman.
+Audit finding: the v3 taxonomy is WIDE (612 provider types) but SHALLOW — 73%
+have a single offering — so popular phrases ("beard trim", "change a lightbulb",
+"replace outlet", "hot towel shave") missed the right offering and the fuzzy
+layers emitted confident-WRONG types.
 
-- AMBIGUOUS_TOKENS blocklist applied at the index build (unigram never indexes
-  them) AND in every fallback scan (substring step 8 / normalized 8a / token
-  step 9). A lone generic/short token can no longer decide a match; multi-word
-  phrases (inherently specific) and provider-type/category terms still win.
-- Net: high-confidence (≥0.60) emissions are correct; ambiguous phrases
-  ("beard trim", "fix my ac") route to Claude instead of mislabeling.
-- Verified: chef/plumber/cleaning/ES/PT bridges intact; "i need a chef who can
-  cook ecuadorian food tonight" → Personal Chef. 74 qa flows pass.
+- ONTOLOGY DEPTH SUPPLEMENT: a curated, growable map of high-traffic phrases →
+  provider type (EN/ES/PT), merged as exact high-confidence matches. Batch 1
+  covers the top consumer domains + every gap the audit surfaced (Barber,
+  Hair Stylist, Nail, Esthetician, Handyman, Electrician, Plumber, HVAC,
+  Appliance, Pet Sitter, Mover, Painter, Auto, Landscaper, Math Tutor, …).
+  This is the BRIDGE: "beard trim" → Barber → notifies registered Barbers.
+- Haiku-only-on-miss: the unigram (scattered-token) layer is now sub-0.60 — the
+  ontology emits high confidence only when it genuinely understands (exact /
+  type / category / synonym / curated / phrase / supplement); everything else
+  goes to Claude. NO confident cross-domain wrong answers.
+- Coverage on a 51-phrase popular battery: 88% (with mislabels) → 96% (zero
+  mislabels); remaining 2 ("life coach", "face painting") have no offering yet
+  and correctly defer to Haiku. 74 qa flows pass.
+- See "Ontology Matching — Design & Audit.md" for the full model + roadmap.
