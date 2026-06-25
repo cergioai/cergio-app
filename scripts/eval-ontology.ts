@@ -49,6 +49,12 @@ const CASES: [string, string][] = [
   ['hem pants','Tailor'],['dress alterations','Seamstress'],['bartender','Bartender'],
   ['wedding planner','Wedding Planner'],['event planner','Event Planner'],['interior designer','Interior Designer'],
   ['tax preparation','Tax Preparer'],['bookkeeping','Bookkeeper'],['build a website','Web Developer'],['logo design','Graphic Designer'],
+  // batch 3 depth
+  ['no hot water','Plumber'],['burst pipe','Plumber'],['panel upgrade','Electrician'],['flickering lights','Electrician'],
+  ['ac install','HVAC Technician'],['furnace not working','HVAC Technician'],['tv wall mount','Handyman'],['weatherstripping','Handyman'],
+  ['office cleaning','Housekeeper'],['yard cleanup','Landscaper'],['dog bath','Dog Groomer'],['deshedding','Dog Groomer'],
+  ['exterior painting','Painter'],['paint correction','Auto Detailer'],['piano moving','Mover'],['headshots','Photographer'],
+  ['bridal makeup','Makeup Artist'],['nail art','Nail Art'],['strength training','Personal Trainer'],['chef','Personal Chef'],
 ];
 
 let correct = 0, miss = 0, wrong = 0;

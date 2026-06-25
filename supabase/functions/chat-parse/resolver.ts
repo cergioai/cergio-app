@@ -240,6 +240,21 @@ const SUPPLEMENT: Record<string, string> = {
   'lash lift':'Esthetician','lash extensions':'Esthetician','eyebrow threading':'Esthetician','brow lamination':'Esthetician',
   // Pet waste
   'pooper scooper':'Dog Walker','dog waste removal':'Dog Walker','poop scooping':'Dog Walker',
+  // ── BATCH 3 — depth on confirmed high-traffic types ──────────────────────
+  'no hot water':'Plumber','burst pipe':'Plumber','pipe leak':'Plumber','sewer backup':'Plumber','sump pump install':'Plumber',
+  'panel upgrade':'Electrician','generator install':'Electrician','flickering lights':'Electrician','ev charger':'Electrician',
+  'ac install':'HVAC Technician','heat pump':'HVAC Technician','furnace not working':'HVAC Technician','duct cleaning':'HVAC Technician',
+  'door wont close':'Handyman','weatherstripping':'Handyman','tv wall mount':'Handyman','picture hanging':'Handyman','shelf install':'Handyman',
+  'one time cleaning':'Housekeeper','post construction cleaning':'Housekeeper','office cleaning':'Housekeeper','recurring cleaning':'Housekeeper',
+  'yard cleanup':'Landscaper','weeding':'Landscaper','garden maintenance':'Landscaper','lawn edging':'Landscaper','sod install':'Landscaper',
+  'puppy visits':'Dog Walker','midday walk':'Dog Walker','dog bath':'Dog Groomer','deshedding':'Dog Groomer','nail trim for dog':'Dog Groomer',
+  'weight loss coach':'Personal Trainer','strength training':'Personal Trainer','in home training':'Personal Trainer',
+  'exterior painting':'Painter','trim painting':'Painter','deck staining':'Painter','fence painting':'Painter',
+  'paint correction':'Auto Detailer','headlight restoration':'Auto Detailer','mobile detailing':'Auto Detailer',
+  'apartment move':'Mover','piano moving':'Mover','packing service':'Mover','loading help':'Mover',
+  'headshots':'Photographer','family photos':'Photographer','real estate photography':'Photographer','newborn photos':'Photographer',
+  'bridal makeup':'Makeup Artist','wedding makeup':'Makeup Artist','airbrush makeup':'Makeup Artist',
+  'dip nails':'Nail Technician','nail art':'Nail Technician','gel x':'Nail Technician',
   // ── BATCH 2 — more high-demand domains (types verified to exist) ──────────
   // Locksmith
   'locked out':'Locksmith','rekey locks':'Locksmith','change locks':'Locksmith','car key replacement':'Locksmith',
