@@ -1,16 +1,28 @@
-fix(parser): stop generic "Service Provider" mislabel + tolerant matching (SPEC-67c)
+fix(parser): first-class ontology matching + address-step never loops (SPEC-68)
 
-ROOT CAUSE (Tarik audit): "personal chef" resolved to provider_type
-"Service Provider" — a generic catch-all on 450/932 offerings (48%) — which
-exact-, case-sensitively matched NO provider listing, so ~half of all searches
-silently notified nobody (chef request never reached the chef).
+Spine audit (Tarik). Two foundational failures fixed:
 
-- resolver.ts: pickType(offering) returns notify_as unless it's a generic value
-  ("Service Provider"/provider/general/…), else the offering's specific
-  `category` (the real ontology node). Applied at every return site. Verified:
-  "personal chef"→"Personal Chef", and 0/20 probe terms still emit the generic.
-- api.js getProvidersForNotify: match CASE-INSENSITIVELY on taxonomy_provider_type
-  OR category (was exact, case-sensitive, single-field — the silent dropper).
-- No-match still surfaces the SPEC-42 "we'll keep looking" state + enqueues a
-  crawl; never a silent mislabel.
-- FROZEN_SPEC SPEC-67c + qa #67c → 73 flows pass.
+A) "haircut"-class misses + mislabels. The resolver queried a forward_index
+   that was MISSING 52% (2,937) of offering search terms. Rebuilt the index
+   from offering_master.search_terms (authoritative + multilingual). New
+   matching pipeline, precision-first:
+     0. provider-type / category exact match (bare noun = the type itself:
+        "photographer"→Photographer, "caterer"→Caterer, "landscaper"→Landscaper)
+     1-2. exact + accent-normalized exact (ES/PT: niñera, plomero, jardinero)
+     3-6. curated typo / synonym / bundle / intent
+     7-8. stem + whole-word substring (≥4 chars; "cat" never matches "caterer")
+     9.  edit-distance misspelling — emitted SUB-0.60 as a HINT so Claude Haiku
+         adjudicates; a real word that merely resembles another is NEVER a
+         confident wrong answer ("caterer"≠"career").
+     10. parent/category fallback (sub-0.60).
+   chooseBestId() disambiguates multi-offering terms by name/category/prefix.
+   Net: every high-confidence (≥0.60) emission is correct; everything fuzzy
+   routes to the Claude safety net. Verified across EN/ES/PT/typos.
+
+B) Address step looped ("6700 collins avenue" asked 3×). ADDR_STRICT lacked
+   the full word "avenue"; ADDR_LOOSE required an uppercase first letter
+   (lowercase failed). Fixed both + chat-parse now accepts the reply AS the
+   address/time when it's clearly answering that step (guarded against a
+   service course-change). The spine cannot loop.
+
+FROZEN_SPEC SPEC-68 + qa #68 -> 74 flows pass.

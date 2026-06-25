@@ -518,6 +518,7 @@ Every `git push` runs `qa.mjs` via `Unlock and Push.command`. A failing test **b
 | SPEC-48 | #48 | Request screen: job details, approximate map, IG block, friends-in-common, no fake photos |
 | SPEC-67b | #67b | Reco RECEIVED surfaces as a "You were recommended" item in the Inbox Overview (reco dot must have a landing, not dead-end) |
 | SPEC-67c | #67c | Resolver never emits generic "Service Provider" (derives specific type from category); fan-out matches case-insensitively on provider_type OR category |
+| SPEC-68 | #68 | Resolver: complete index from offering_master; provider-type/category matched FIRST; accent-normalized (ES/PT); fuzzy guesses routed to Claude (<0.60, never confident-wrong); where-step accepts any reply as address (no re-ask loop) |
 
 ---
 

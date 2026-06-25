@@ -97,6 +97,24 @@ serve(async (req: Request) => {
       whereResolved = defaultAddress;
     }
 
+    // ── Awaiting-field fallback — THE SPINE MUST NOT LOOP (Tarik 2026-06-25).
+    // Addresses/areas are free-form ("6700 collins avenue", "miami beach",
+    // "near brickell") and won't always hit a street regex. If the bot was
+    // clearly awaiting WHERE (service already captured) or WHEN, accept the
+    // user's reply as that field rather than re-asking forever. Guarded: only
+    // when this message did NOT resolve to a NEW service (a course-change),
+    // so "actually I need a plumber" still switches instead of becoming a city.
+    const switchingService = local.confidence >= CONFIDENCE_THRESHOLD && !!local.offering_id;
+    let whenResolved = extras.when ?? state.when ?? null;
+    const reply = userMessage.trim();
+    if (!switchingService && reply) {
+      if (state.what && whenResolved && !whereResolved && reply.length <= 140) {
+        whereResolved = reply;                 // answering "where?"
+      } else if (state.what && !whenResolved && reply.length <= 80) {
+        whenResolved = reply;                  // answering "when?"
+      }
+    }
+
     // Merge what comes from the resolver with what the user already had.
     // Bundles don't carry an offering_id but DO have an offering_name —
     // use that too so the user sees "Wedding Bundle ✓" instead of falling
@@ -106,7 +124,7 @@ serve(async (req: Request) => {
       !!local.offering_name;
     const merged = {
       what:    (haveLocalWhat ? local.offering_name : null) ?? state.what ?? null,
-      when:    extras.when ?? state.when ?? null,
+      when:    whenResolved,
       where:   whereResolved,
       budget:  extras.budget ?? state.budget ?? null,
       details: state.details ?? null,

@@ -2334,6 +2334,28 @@ test('spec-67c-parser-ontology', 'FROZEN: resolver never emits the generic "Serv
     'getProvidersForNotify must match case-insensitively on taxonomy_provider_type OR category — SPEC-67c');
 });
 
+test('spec-68-first-class-matching', 'FROZEN: resolver builds a COMPLETE index from offering_master (not the partial forward_index), matches provider-type/category first, normalizes accents (ES/PT), routes fuzzy guesses to Claude (<0.60), and the where-step accepts any reply as the address (SPEC-68)', '#68', async () => {
+  const resolver = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/chat-parse/resolver.ts'), 'utf8');
+  const index    = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/chat-parse/index.ts'), 'utf8');
+  // Complete index built from offering_master.search_terms (fixes the 52% gap).
+  assert(/const MERGED/.test(resolver) && /OFFERINGS\)[\s\S]{0,120}search_terms/.test(resolver),
+    'resolver must build a complete index from offering_master.search_terms — SPEC-68');
+  // Provider-type / category-first matching (Step 0).
+  assert(/TYPE_INDEX/.test(resolver) && /typeOrCategoryHit/.test(resolver),
+    'resolver must match provider-type/category vocabulary first — SPEC-68');
+  // Accent-insensitive normalization for ES/PT.
+  assert(/function normalizeTerm/.test(resolver) && /normalize\('NFD'\)/.test(resolver),
+    'resolver must normalize accents (NFD) for ES/PT — SPEC-68');
+  // Misspelling edit-distance hint routed sub-threshold (Claude adjudicates).
+  assert(/function nearestKey/.test(resolver) && /conf: 0\.58/.test(resolver),
+    'edit-distance guesses must be sub-0.60 so Claude adjudicates — SPEC-68');
+  // Address regex covers full "avenue"; where-step accepts the reply.
+  assert(/avenue/.test(resolver),
+    'ADDR regex must include the full word "avenue" — SPEC-68');
+  assert(/whereResolved = reply/.test(index) && /switchingService/.test(index),
+    'chat-parse must accept the reply as the address when awaiting where (no re-ask loop) — SPEC-68');
+});
+
 test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carries job details, approximate map, Connector status + IG, friends-in-common — no fake photos (SPEC-48)', '#48', async () => {
   // The CANONICAL screen a provider opens from "New requests near you".
   const screen = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RequestFromConnectorScreen.jsx'), 'utf8');
