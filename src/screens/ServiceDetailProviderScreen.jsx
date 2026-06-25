@@ -131,7 +131,7 @@ export function ServiceDetailProviderScreen() {
           or you may not have permission to view it.
         </p>
         <button
-          onClick={() => navigate('/profile/services')}
+          onClick={() => navigate('/services/manage')}
           className="bg-black text-white rounded-pill px-5 py-2.5 text-body font-extrabold"
         >
           Back to my services

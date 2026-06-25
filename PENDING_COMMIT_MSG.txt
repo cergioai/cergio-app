@@ -1,13 +1,7 @@
-feat(ontology): depth supplement batch 3 (high-traffic type depth)
+fix(services): provider service page back-button dead route + UX note
 
-- SUPPLEMENT batch 3: deeper offerings for the top confirmed types — plumber
-  (burst pipe, no hot water, sewer backup), electrician (panel upgrade,
-  flickering lights, ev charger), HVAC (ac install, heat pump, duct cleaning),
-  handyman (tv wall mount, weatherstripping, shelf install), housekeeper
-  (office/one-time/post-construction), landscaper (yard cleanup, weeding,
-  edging), dog groomer (dog bath, deshedding), trainer, painter (exterior,
-  deck staining), auto detailer (paint correction), mover (piano, packing),
-  photographer (headshots, real estate), makeup, nails.
-- Eval gate: 108 cases, 100% correct local, 0 confident-wrong. 74 qa flows pass.
-- The gate caught a label mismatch ("nail art" is its own type) — fixed the
-  expectation; this is the gate working as designed.
+- ServiceDetailProviderScreen "Back to my services" pointed at /profile/services,
+  which is NOT a route → catch-all bounced it to home. Now → /services/manage.
+- (Context: tapping a service in Manage correctly opens its manage page; the
+  separate "+ List another service" button is the new-listing entry. The page
+  loads fine for the owner — this was a stray dead route, not a load failure.)
