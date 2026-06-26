@@ -43,12 +43,32 @@ export function recoByline(s) {
   const parts = [];
   if (s.friends > 0) parts.push(`${s.friends} ${s.friends === 1 ? 'friend' : 'friends'}`);
   if (s.connectors > 0) parts.push(`${s.connectors} ${s.connectors === 1 ? 'Connector' : 'Connectors'}`);
-  return `Reco'd by ${parts.join(' and ') || s.total}`;
+  let txt = `Reco'd by ${parts.join(' and ') || s.total}`;
+  // Even without a viewer-mutual, NAME a recommender ("…including Jane") so the
+  // signal is never a faceless count (Tarik 2026-06-25).
+  if (s.leadName && s.total > 0) txt += `, including ${s.leadName}`;
+  return txt;
+}
+
+// Mutual-friends sentence that NAMES the people ("1 mutual friend in common —
+// Jane"), not just a count (Tarik 2026-06-25). `names` = display names of the
+// shared friends; `count` = total mutuals.
+export function mutualNamesText(names, count) {
+  const n = count || (names?.length || 0);
+  if (!n) return null;
+  const first = (names || []).map(firstNameOf).filter(Boolean);
+  const label = `${n} mutual ${n === 1 ? 'friend' : 'friends'} in common`;
+  if (!first.length) return label;
+  const extra = n - Math.min(first.length, 2);
+  const namePart = extra > 0
+    ? `${first.slice(0, 2).join(', ')} +${extra} more`
+    : first.slice(0, 2).join(' and ');
+  return `${label} — ${namePart}`;
 }
 
 // One-line social reach for a person — "12.3K IG · 40 network". Collapses when
 // the person has no IG/TikTok and no Cergio network.
-export function SocialReachLine({ counts, className = '' }) {
+export function SocialReachLine({ counts, className = '', includeNetwork = true }) {
   if (!counts) return null;
   const ig = Number(counts.igFollowers) || 0;
   const tt = Number(counts.ttFollowers) || 0;
@@ -56,7 +76,7 @@ export function SocialReachLine({ counts, className = '' }) {
   const parts = [];
   if (ig > 0) parts.push(`${compactN(ig)} IG`);
   else if (tt > 0) parts.push(`${compactN(tt)} TikTok`);
-  if (net > 0) parts.push(`${net} network`);
+  if (includeNetwork && net > 0) parts.push(`${net} network`);
   if (!parts.length) return null;
   return <p className={`text-meta-sm text-b3 font-semibold leading-none mt-0.5 ${className}`}>{parts.join(' · ')}</p>;
 }

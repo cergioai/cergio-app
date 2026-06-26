@@ -16,6 +16,7 @@
 // comes from getInboxPartyCounts (the SAME source as the request previews) plus
 // the profile's bio / IG handle / name passed down. No fake data (SPEC-12).
 import { formatKeyCounts } from '../../hooks/usePartyCounts';
+import { mutualNamesText } from './reputation';
 
 function ShieldIcon({ size = 11 }) {
   return (
@@ -40,7 +41,7 @@ function IgGlyph() {
 // isService / isConnector: the subject's roles. serviceMode: viewer is a
 // provider (true) vs consumer (false) — retained for the booking nuance but a
 // Connector always leads with reach. bio / igHandle / name: from the profile.
-export function ProfileSignalBlock({ counts, role, isService, isConnector, serviceMode, headline, bio, igHandle, name }) {
+export function ProfileSignalBlock({ counts, role, isService, isConnector, serviceMode, headline, bio, igHandle, name, mutualNames }) {
   if (!counts || (!isService && !isConnector)) return null;
 
   // A Connector subject ALWAYS leads with the Connector/reach identity, exactly
@@ -119,17 +120,18 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
     <p className="mt-1 text-meta text-b3 font-medium leading-snug">{headline}</p>
   ) : null;
 
-  // Mutuals — GREEN, the trust signal (distinct from the gray metrics).
+  // Mutuals — GREEN, the trust signal. NAMES the people ("1 mutual friend in
+  // common — Jane") rather than a bare count (Tarik 2026-06-25).
   const mutualLine = (
     <p className="text-meta-sm font-semibold leading-snug mt-2 text-gd">
       {mutualCount > 0
-        ? `${mutualCount} mutual ${mutualCount === 1 ? 'friend' : 'friends'} in common`
+        ? (mutualNamesText(mutualNames, mutualCount) || `${mutualCount} mutual ${mutualCount === 1 ? 'friend' : 'friends'} in common`)
         : <span className="text-b3 font-medium">You have no mutual friends with {firstName} yet.</span>}
     </p>
   );
 
   return (
-    <div className="mx-5 mt-5 bg-white border border-bdr rounded-[16px] p-4">
+    <div className="mx-5 mt-2 bg-white border border-bdr rounded-[16px] p-4">
       {connectorLeads ? (
         <>
           {connectorBadge}

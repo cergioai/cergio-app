@@ -25,8 +25,8 @@ import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'rea
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestQuoteSheet } from '../components/ui/RequestQuoteSheet';
-import { getInboxPartyCounts, getMyNetworkIds } from '../lib/api';
-import { TrustStream, SocialReachLine, ConnectorChip, MutualBadge } from '../components/ui/reputation';
+import { getInboxPartyCounts, getMyNetworkIds, getMutualConnections } from '../lib/api';
+import { TrustStream, SocialReachLine, ConnectorChip, MutualBadge, mutualNamesText } from '../components/ui/reputation';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -198,6 +198,7 @@ export function ServiceDetailScreen() {
   // Reputational streams (SPEC-49g): the provider's headline trust signal + the
   // social reach of everyone who reco's them. Same source as profiles/previews.
   const [ownerCounts, setOwnerCounts] = useState(null);
+  const [ownerMutuals, setOwnerMutuals] = useState(null); // { count, names[] }
   const [recommenderCounts, setRecommenderCounts] = useState({});
   // The actual provider type (e.g. "Hair Stylist") — replaces the vague category
   // ("Beauty"). Seeded from state if present, else hydrated from the row.
@@ -345,10 +346,15 @@ export function ServiceDetailScreen() {
   // received · mutuals with the viewer. Same source as profiles/previews.
   useEffect(() => {
     const oid = ownerProfile?.id || provider?.ownerId || null;
-    if (!oid) { setOwnerCounts(null); return; }
+    if (!oid) { setOwnerCounts(null); setOwnerMutuals(null); return; }
     let cancelled = false;
     getInboxPartyCounts([oid]).then(({ data }) => {
       if (!cancelled) setOwnerCounts((data || {})[oid] || null);
+    });
+    // Mutual friends WITH THE VIEWER — named, so the provider's trust reads
+    // "you and your friend Jane" not just a count (SPEC-49g).
+    getMutualConnections(oid).then(({ data: m }) => {
+      if (!cancelled) setOwnerMutuals({ count: m?.count || 0, names: (m?.sample || []).map(x => x.name).filter(Boolean) });
     });
     return () => { cancelled = true; };
   }, [ownerProfile?.id, provider?.ownerId]);
@@ -587,11 +593,24 @@ export function ServiceDetailScreen() {
 
         {/* Reputational stream — the headline trust signal (mutuals · on-Cergio ·
             recos), big and bold so it POPS (SPEC-49g: the key differentiator).
-            Sits right under the provider identity. Real numbers only — collapses
-            when the provider has no signal yet. */}
-        <TrustStream counts={ownerCounts} recoKind="received" className="mt-4" />
-        {/* Provider's own social reach — IG / Cergio network. */}
-        <SocialReachLine counts={ownerCounts} className="mt-2 !text-body-sm !text-b2" />
+            Real numbers only — collapses when the provider has no signal yet. */}
+        <TrustStream counts={ownerCounts} recoKind="received" className="mt-3" />
+        {/* Provider's IG reach (network already shown in the TrustStream above —
+            don't double it). */}
+        <SocialReachLine counts={ownerCounts} includeNetwork={false} className="mt-2 !text-body-sm !text-b2" />
+        {/* Named mutuals with the viewer — "1 mutual friend in common — Jane". */}
+        {ownerMutuals && ownerMutuals.count > 0 && (
+          <p className="text-meta-sm text-gd font-extrabold mt-1.5">{mutualNamesText(ownerMutuals.names, ownerMutuals.count)}</p>
+        )}
+        {/* Bio / headline — RIGHT under the identity, not buried below the CTA
+            (Tarik 2026-06-25: "where's the headline / BIO"). */}
+        {ownerProfile?.bio && (
+          <p className="text-body-sm text-b2 leading-relaxed mt-3">{ownerProfile.bio}</p>
+        )}
+        {ownerProfile?.instagram_handle && (
+          <a href={`https://instagram.com/${String(ownerProfile.instagram_handle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
+            className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-2">See Instagram</a>
+        )}
       </div>
 
       {/* Recommend button REMOVED (Tarik 2026-06-17, SPEC-54): a recommendation
@@ -793,26 +812,9 @@ export function ServiceDetailScreen() {
         </p>
       </div>
 
-      {/* About the provider — owner's own bio (mockup shows this below
-          the offering cards, before the sticky CTA). */}
-      {(ownerProfile?.bio || ownerProfile?.instagram_handle || ownerProfile?.tiktok_handle) && (
-        <div className="mx-5 mt-6">
-          <h2 className="text-heading-1 font-extrabold text-black mb-2">About {firstName}</h2>
-          {ownerProfile?.bio && (
-            <p className="text-body-sm text-b2 leading-relaxed">{ownerProfile.bio}</p>
-          )}
-          {(ownerProfile?.instagram_handle || ownerProfile?.tiktok_handle) && (
-            <div className="flex items-center gap-3 mt-3">
-              {ownerProfile?.instagram_handle && (
-                <span className="text-meta-sm text-b3 font-medium">IG @{ownerProfile.instagram_handle}</span>
-              )}
-              {ownerProfile?.tiktok_handle && (
-                <span className="text-meta-sm text-b3 font-medium">TikTok @{ownerProfile.tiktok_handle}</span>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {/* "About {firstName}" moved UP into the identity block (bio + See
+          Instagram now sit directly under the name, not buried below the CTA)
+          — Tarik 2026-06-25. The separate section is removed (dedupe). */}
 
       {/* CERGIO-GUARD (2026-05-31 — Phase 3b): "★ N go-to reviews"
           section per Jennifer Leighton mockup. Real review rows

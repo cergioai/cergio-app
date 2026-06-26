@@ -1,15 +1,28 @@
-fix(inbound): popping TrustStream + mutuals on the connector-request screen (SPEC-49g)
+fix(profile,pdp): NAME the mutuals + connectors, consolidate PDP identity (SPEC-49g)
 
-The /inbound request screen showed the key reputational stream in tiny text
-("3 network on Cergio · 3 reco's made") and buried mutuals below the services
-list. Now it uses the shared TrustStream so the differentiator pops, and mutuals
-LEAD the stream.
+Reputational signals must name people, not show faceless counts, and the PDP
+identity was scattered. Both fixed.
 
-- Replaced the small strength line with the shared <TrustStream> (big bold
-  mutuals · network · recos numerals), full-width under the identity.
-- Mutuals are now part of the headline stream (mutualCount), not buried — the
-  named mutual faces stay below as the detail.
-- recoKind="made" (a Connector requesting a free service is judged on recos made).
+Profile (/u):
+- Mutuals line now NAMES them: "1 mutual friend in common — Jane" (shared
+  mutualNamesText; mutual sample fetched via getMutualConnections).
+- Go-To / service-tile byline names a lead recommender even without a viewer
+  mutual: "Reco'd by 2 Connectors, including Maya Rivera" (summary.leadName).
+- Tightened the gap between the name and the signal block (hero pb-5->pb-2,
+  signal block mt-5->mt-2).
 
-qa.mjs: #49g already covers the shared module. All 75 flows pass; screen
-esbuild-clean.
+PDP (/service):
+- Consolidated the identity: TrustStream, IG reach, NAMED mutuals, and the
+  bio/headline now sit together directly under the name (Tarik: "where's the
+  headline / BIO", "signals all spread out").
+- Killed the orphan "2 network" line — network already shows in the TrustStream
+  (SocialReachLine gains includeNetwork=false; PDP shows IG only).
+- Named mutuals with the viewer surfaced (getMutualConnections(ownerId)).
+- Removed the separate lower "About" section (bio deduped up top); See Instagram
+  folded into the identity.
+
+Shared: reputation.jsx gains mutualNamesText + leadName naming in recoByline +
+includeNetwork option on SocialReachLine.
+
+qa.mjs #49g extended (named mutuals/connectors + PDP bio-up-top). All 75 flows
+pass; all files esbuild-clean.

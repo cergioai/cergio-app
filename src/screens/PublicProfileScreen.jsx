@@ -26,7 +26,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds, getConnectorSpotlights } from '../lib/api';
+import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds, getConnectorSpotlights, getMutualConnections } from '../lib/api';
 import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
 import { IgPostTile } from '../components/ui/IgPostTile';
 import { recoByline, SocialReachLine } from '../components/ui/reputation';
@@ -256,6 +256,9 @@ export function PublicProfileScreen() {
   // previews (getInboxPartyCounts → formatKeyCounts) so a profile is judged
   // with identical data + ordering (SPEC-49).
   const [counts, setCounts] = useState(null);
+  // Names of the viewer's mutual friends with this profile — so the mutuals line
+  // NAMES them ("1 mutual friend in common — Jane") instead of a bare count.
+  const [mutualNames, setMutualNames] = useState([]);
   // Recommendations RECEIVED on this profile's services — "People who love
   // {name}" (Tarik 2026-06-16: recos received, not the bookings-review table).
   const [recosReceived, setRecosReceived] = useState([]);
@@ -319,6 +322,16 @@ export function PublicProfileScreen() {
     let cancelled = false;
     getInboxPartyCounts([profileId]).then(({ data }) => {
       if (!cancelled) setCounts((data || {})[profileId] || null);
+    });
+    return () => { cancelled = true; };
+  }, [profileId]);
+
+  // Mutual-friend NAMES (sample) with this profile — for the named mutuals line.
+  useEffect(() => {
+    if (!profileId) { setMutualNames([]); return; }
+    let cancelled = false;
+    getMutualConnections(profileId).then(({ data: m }) => {
+      if (!cancelled) setMutualNames((m?.sample || []).map(x => x.name).filter(Boolean));
     });
     return () => { cancelled = true; };
   }, [profileId]);
@@ -444,6 +457,11 @@ export function PublicProfileScreen() {
             const rank = (x) => (x.isMutual ? 0 : x.recommender?.is_connector ? 1 : 2);
             return rank(a) - rank(b);
           });
+          // Lead name for the count-fallback byline ("…including Jane"): prefer a
+          // Connector, else the first recommender.
+          const arr = byService[k];
+          const lead = arr.find(x => x.recommender?.is_connector) || arr[0];
+          if (summary[k]) summary[k].leadName = lead?.recommender?.name || null;
         }
         if (!cancelled) { setSvcRecoSummary(summary); setRecosByService(byService); }
 
@@ -609,12 +627,16 @@ export function PublicProfileScreen() {
           const rp = gProfMap[r.recommender_id];
           const isConnector = !!rp?.cc_verified_at;
           const isMutual = !!(rp && netSet.has(rp.id));
-          if (!gSummary[k]) gSummary[k] = { total: 0, friends: 0, connectors: 0, mutuals: 0, mutualNames: [], viewerRecommended: false };
+          if (!gSummary[k]) gSummary[k] = { total: 0, friends: 0, connectors: 0, mutuals: 0, mutualNames: [], viewerRecommended: false, _leadC: null, _leadA: null };
           gSummary[k].total += 1;
           if (isConnector) gSummary[k].connectors += 1; else gSummary[k].friends += 1;
           if (isMutual) { gSummary[k].mutuals += 1; if (rp?.display_name) gSummary[k].mutualNames.push(rp.display_name); }
           if (viewerId && r.recommender_id === viewerId) gSummary[k].viewerRecommended = true;
+          const nm = rp?.display_name;
+          if (nm) { if (isConnector && !gSummary[k]._leadC) gSummary[k]._leadC = nm; if (!gSummary[k]._leadA) gSummary[k]._leadA = nm; }
         }
+        // Lead name for the count-fallback byline ("…including Jane").
+        for (const k of Object.keys(gSummary)) gSummary[k].leadName = gSummary[k]._leadC || gSummary[k]._leadA;
         if (!cancelled) setGoToSummary(gSummary);
       } else if (!cancelled) {
         setGoToSummary({});
@@ -749,7 +771,7 @@ export function PublicProfileScreen() {
       {/* Brand hero band — soft mint→cream gradient behind the avatar + name
           for a premium, on-brand header (design-spec gl token). Layout
           unchanged (Tarik 2026-06-18 brand re-skin). */}
-      <div className="px-5 pt-5 pb-5 bg-gradient-to-b from-gl/60 to-transparent">
+      <div className="px-5 pt-5 pb-2 bg-gradient-to-b from-gl/60 to-transparent">
         <div className="flex items-center gap-4">
           <AvatarLink id={profile?.id} name={name} size={84} clickable={false} className="ring-4 ring-white shadow-md" />
           <div className="flex-1 min-w-0">
@@ -782,6 +804,7 @@ export function PublicProfileScreen() {
         bio={profile?.bio}
         igHandle={igHandle}
         name={name}
+        mutualNames={mutualNames}
       />
 
       {/* Spotlights on Cergio — the Connector's track record of posts they've

@@ -1979,6 +1979,13 @@ test('spec-49g-reputational-streams', 'FROZEN: reputational streams everywhere �
     'reputation.jsx must export recoByline that names mutual friends — SPEC-49g.');
   assert(/export function SocialReachLine/.test(rep) && /export function TrustStream/.test(rep),
     'reputation.jsx must export SocialReachLine + TrustStream — SPEC-49g.');
+  // Mutuals + connectors are NAMED, never a faceless count.
+  assert(/export function mutualNamesText/.test(rep),
+    'reputation.jsx must export mutualNamesText (names the mutual friends) — SPEC-49g.');
+  assert(/including \$\{s\.leadName\}/.test(rep),
+    'recoByline must name a lead recommender ("…including Jane") even without a viewer-mutual — SPEC-49g.');
+  assert(/mutualNamesText/.test(block) && /mutualNames/.test(prof),
+    'Profile must pass + render NAMED mutuals (mutualNamesText) on the signal block — SPEC-49g.');
 
   // 1. SOLID Connector badge (bg-g text-white), not the soft mint pill.
   assert(/bg-g text-white[\s\S]{0,160}?Connector/.test(block),
@@ -2014,8 +2021,8 @@ test('spec-49g-reputational-streams', 'FROZEN: reputational streams everywhere �
     'ServiceDetailScreen must render the shared TrustStream on the provider identity — SPEC-49g.');
   assert(/displayType/.test(pdp) && /taxonomy_provider_type/.test(pdp),
     'PDP must show the real provider type (taxonomy_provider_type), not the vague category — SPEC-49g.');
-  assert(/About \{firstName\}/.test(pdp),
-    'PDP "About" header must be personalized to the provider\'s first name — SPEC-49g.');
+  assert(/ownerProfile\?\.bio/.test(pdp) && /mutualNamesText/.test(pdp),
+    'PDP must show the provider bio up in the identity block + NAMED mutuals (mutualNamesText) — SPEC-49g.');
   assert(/heroImages\.length > 1/.test(pdp),
     'PDP hero story-ruler must reflect the ACTUAL image count (no fake multi-page hint) — SPEC-49g / SPEC-12.');
   assert(/<MutualBadge/.test(pdp) && /<SocialReachLine/.test(pdp),
