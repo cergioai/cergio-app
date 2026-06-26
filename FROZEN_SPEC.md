@@ -554,6 +554,18 @@ NO provider listing, so ~half of all searches silently notified nobody.
   resolver return site may emit raw `notify_as` directly.
 - `getProvidersForNotify` matches **case-insensitively** on `taxonomy_provider_type`
   **OR** `category` — never a single exact, case-sensitive field.
+
+**Ontology precision standard (2026-06-26).** Two gates protect "Ferrari" quality:
+`scripts/eval-ontology.ts` (109 labeled phrases — 100% local, 0 confident-wrong)
+and `scripts/audit-ontology-coverage.ts` (the FULL catalogue — every real search
+term, 7,285 across 932 offerings). Full-catalogue audit: 79% correct, 20%
+ambiguous-OK (cross-listed across types), 0% miss, **0.73% (53) TRUE
+confident-wrong — all intentional parent/synonym bridges** (notify the broader
+populated type, e.g. "EV charger"→Electrician, "balayage"→Hair Stylist; several
+are *more* correct than the taxonomy label). The audit is a regression gate
+(budget 60). Parent-bridge mappings are INTENDED — do NOT "fix" them toward the
+hyper-niche child type, which would notify nobody. Run via "Audit Ontology
+Coverage.command".
 - A request that matches no provider must NOT fail silently: it enqueues an on-demand
   services crawl and the requester sees a "we'll keep looking" state.
 
