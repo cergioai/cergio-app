@@ -8,7 +8,6 @@
 // Free-text URLs with hand-typed refs will not attribute correctly.
 
 import { supabase, supabaseReady } from './supabase';
-import { REWARDS } from './rewards';
 import { notifyUser } from './api';
 
 const REF_STORAGE_KEY = 'cergio.ref';
@@ -198,233 +197,29 @@ export async function recordInviteFromActiveRef(inviteeUserId) {
  *  inviter (friend-of-friend bonus). See that function below.
  */
 export async function creditInviterOnFirstBooking(consumerId, bookingId) {
-  if (!supabaseReady) return { error: null };
-  if (!consumerId)    return { error: null };
-
-  // Find a pending invite where this consumer is the invitee + no
-  // first_booking_at recorded yet.
-  const { data: invite, error: findErr } = await supabase
-    .from('invites')
-    .select('id, inviter_id, first_booking_at, reward_cents')
-    .eq('invitee_id', consumerId)
-    .is('first_booking_at', null)
-    .limit(1)
-    .maybeSingle();
-  if (findErr || !invite) return { error: findErr };
-
-  // CERGIO-GUARD (2026-06-05 v7): credit a REAL 7% slice of the
-  // booking, capped at $250 per friend — not the lump $250-on-first-
-  // booking that the previous implementation used. Tarik:
-  //   "data is hardcoded — can't have $250 max reached for several
-  //    rows when only one user invited."
-  // That symptom came from this function writing a single $250 row
-  // for every new invitee's first booking, ignoring the actual
-  // booking total.
-  //
-  // New behaviour:
-  //   1. Look up the booking total.
-  //   2. Sum prior direct earnings for this (inviter, invitee) pair.
-  //   3. Credit min(7% × total, $250 - prior).
-  //   4. Also resolve the invitee's display name so the cap-walk
-  //      logic in EarningsScreen buckets the rows correctly.
-  const SHARE_PERCENT = REWARDS.referrerSharePercent; // 7
-  const PER_FRIEND_CAP_CENTS = REWARDS.perFriend * 100;
-
-  // 1. Booking total.
-  let bookingTotalCents = 0;
-  if (bookingId) {
-    const { data: bkRow } = await supabase
-      .from('bookings')
-      .select('total_cents')
-      .eq('id', bookingId)
-      .maybeSingle();
-    bookingTotalCents = bkRow?.total_cents || 0;
-  }
-
-  // CERGIO-GUARD (2026-06-18, Tarik — referrals must actually pay out): a FREE
-  // ($0) first booking earns 7%×$0 = $0. If we stamped first_booking_at here,
-  // the referral would be BURNED — the inviter could never earn from this
-  // friend's later PAID bookings (the finder below filters first_booking_at IS
-  // NULL). So a free first booking is a NO-OP: leave the invite OPEN so the
-  // reward lands on the friend's first paying booking. (Re-firing on more free
-  // bookings just no-ops again — idempotent.)
-  if (bookingTotalCents <= 0) {
-    return { error: null };
-  }
-
-  // 2. Prior credit toward this friend's cap (sum existing tier='direct'
-  //    earnings rows for the same invitee_id).
-  let priorCents = 0;
-  const { data: priorRows } = await supabase
-    .from('earnings')
-    .select('amount_cents')
-    .eq('profile_id', invite.inviter_id)
-    .eq('kind', 'invite')
-    .contains('meta', { invitee_id: consumerId, tier: 'direct' });
-  if (Array.isArray(priorRows)) {
-    priorCents = priorRows.reduce((s, r) => s + (r.amount_cents || 0), 0);
-  }
-
-  // 3. Compute this row's actual credit.
-  const grossCents  = Math.round(bookingTotalCents * (SHARE_PERCENT / 100));
-  const roomCents   = Math.max(0, PER_FRIEND_CAP_CENTS - priorCents);
-  const creditCents = Math.min(grossCents, roomCents);
-
-  // 4. Invitee display name (so EarningsScreen's cap-walk groups by
-  //    friend name — see rowCapState in EarningsScreen.jsx).
-  let inviteeName = null;
-  const { data: invteePr } = await supabase
-    .from('profiles')
-    .select('display_name')
-    .eq('id', consumerId)
-    .maybeSingle();
-  inviteeName = invteePr?.display_name || null;
-
-  // Stamp first_booking_at + the ACTUAL credit (not the cap).
-  await supabase
-    .from('invites')
-    .update({ first_booking_at: new Date().toISOString(), reward_cents: creditCents })
-    .eq('id', invite.id);
-
-  // Skip the insert when there's no credit to write (booking $0 or
-  // cap already reached). We still stamped first_booking_at above so
-  // we don't re-fire endlessly.
-  let earnErr = null;
-  if (creditCents > 0) {
-    const result = await supabase
-      .from('earnings')
-      .insert({
-        profile_id:   invite.inviter_id,
-        kind:         'invite',
-        source_id:    invite.id,
-        amount_cents: creditCents,
-        status:       'pending',
-        meta:         {
-          booking_id:        bookingId || null,
-          booking_total_cents: bookingTotalCents,
-          invitee_id:        consumerId,
-          tier:              'direct',
-          friend:            inviteeName,
-        },
-      });
-    earnErr = result.error;
-  }
-  if (earnErr) {
+  // SERVER-AUTHORITATIVE settlement (Tarik 2026-06-26): the canonical credit
+  // math now lives in the `credit_referral_for_booking` Postgres RPC, called
+  // from the Stripe webhook (the reliable path) AND here as a safe redundant
+  // trigger. The RPC is idempotent (one row per earner/booking/tier) and guards
+  // on the booking being PAID, so this client call can never double-credit or
+  // credit an unpaid booking. Economics: 1st tier 7%/booking cap $250 per
+  // friend; 2nd tier 0.5%/booking cap $12.50 per friend-of-friend; both
+  // ACCUMULATING across bookings; status 'cleared' (counts as earned, not stuck
+  // pending). This replaces the old best-effort client-side math (which could
+  // silently drop credit and was one-shot, never reaching the cap).
+  if (!supabaseReady || !bookingId) return { error: null };
+  const { error } = await supabase.rpc('credit_referral_for_booking', { p_booking: bookingId });
+  if (error) {
     // eslint-disable-next-line no-console
-    console.warn('[referral] could not write earnings:', earnErr.message);
-  } else if (creditCents > 0) {
-    // CERGIO-GUARD (2026-06-18, Tarik): tell the inviter they just EARNED from
-    // their referral. The notify-user `first_booking` template existed but was
-    // never fired — referrers never knew they got paid. Best-effort.
-    try {
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
-      notifyUser({
-        event: 'first_booking',
-        recipient: invite.inviter_id,
-        data: {
-          amount_cents: creditCents, invitee_id: consumerId, friend: inviteeName,
-          booking_id: bookingId || null, deep_link: `${origin}/earnings`,
-        },
-      });
-    } catch { /* best-effort */ }
+    console.warn('[referral] credit_referral_for_booking failed:', error.message);
   }
-
-  // 2nd-hop: walk the chain and credit the grandparent inviter with the
-  // friend-of-friend bonus. Fire-and-forget — failure here doesn't
-  // affect the direct earnings write above.
-  creditChainOnFirstBooking({
-    invite,
-    consumerId,
-    bookingId,
-  }).catch((e) => {
-    // eslint-disable-next-line no-console
-    console.warn('[referral] chain credit failed:', e?.message || e);
-  });
-
-  return { error: earnErr };
+  return { error: error || null };
 }
 
-/** 2-degree (friend-of-friend) credit. CERGIO-GUARD (2026-06-01): the
- *  REWARDS contract since 2026-05-28 promises a 5% chain bonus
- *  (`friendOfFriendBonus` = $12.50) to the inviter's inviter when a
- *  3rd-hop user makes their first booking — but no code path actually
- *  wrote those earnings rows. EarningsScreen.jsx had the "Chain +5%"
- *  tier badge wired but `meta.tier='fof'` rows were never produced.
- *  This function closes that gap.
- *
- *  Contract:
- *    • Cap at depth 2: the great-grandparent (3rd hop) does NOT earn.
- *    • Bonus is a FLAT $12.50, not a % of the booking — keeps the math
- *      consistent with rewards.js `friendOfFriendBonus`.
- *    • Best-effort: a missing chain (invitee at depth 1 has no inviter)
- *      is a silent no-op, not an error.
- *    • Idempotent: keyed off the booking_id + earner so re-firing
- *      doesn't double-credit. The audit verifies this.
- *
- *  Args:
- *    invite       — the direct invite row (already loaded by caller)
- *    consumerId   — the invitee (3rd-hop user) — only used for telemetry
- *    bookingId    — the booking that triggered the credit
- */
-export async function creditChainOnFirstBooking({ invite, consumerId, bookingId }) {
-  if (!supabaseReady) return { error: null };
-  if (!invite?.inviter_id) return { error: null };
-
-  // Look up the GRANDPARENT invite — the row where the direct inviter
-  // is the invitee. If none exists, the chain stops at depth 1 and
-  // there's no fof bonus to write.
-  const { data: gpInvite, error: gpErr } = await supabase
-    .from('invites')
-    .select('id, inviter_id, joined_at')
-    .eq('invitee_id', invite.inviter_id)
-    .limit(1)
-    .maybeSingle();
-  if (gpErr || !gpInvite?.inviter_id) return { error: gpErr || null };
-  if (gpInvite.inviter_id === invite.inviter_id) {
-    // Self-loop guard. Should never happen if invites are well-formed.
-    return { error: null };
-  }
-
-  // Idempotency: check whether we already credited this earner for
-  // this booking with the fof tier. The earnings table doesn't have a
-  // hard unique constraint on (profile_id, booking_id, tier), so the
-  // client enforces it.
-  const { data: dupes } = await supabase
-    .from('earnings')
-    .select('id')
-    .eq('profile_id', gpInvite.inviter_id)
-    .eq('kind', 'invite')
-    .contains('meta', { booking_id: bookingId, tier: 'fof' })
-    .limit(1);
-  if (Array.isArray(dupes) && dupes.length > 0) {
-    // Already credited — silent no-op.
-    return { error: null };
-  }
-
-  // CERGIO-GUARD (2026-06-05): pull from REWARDS so the chain bonus
-  // tracks canonical (was a hardcoded 1250 with "must match" comment).
-  const FOF_BONUS_CENTS = Math.round(REWARDS.friendOfFriendBonus * 100);
-
-  const { error: earnErr } = await supabase
-    .from('earnings')
-    .insert({
-      profile_id:   gpInvite.inviter_id,
-      kind:         'invite',
-      source_id:    gpInvite.id,
-      amount_cents: FOF_BONUS_CENTS,
-      status:       'pending',
-      meta:         {
-        booking_id:           bookingId || null,
-        invitee_id:           consumerId,
-        // The DIRECT inviter (depth-1) of this booking's consumer.
-        // Useful for the Earnings UI to render "via {direct_inviter}".
-        via_inviter_id:       invite.inviter_id,
-        tier:                 'fof',
-      },
-    });
-  if (earnErr) {
-    // eslint-disable-next-line no-console
-    console.warn('[referral] could not write fof earnings:', earnErr.message);
-  }
-  return { error: earnErr };
+/** DEPRECATED (2026-06-26): the 2nd-tier (friend-of-friend) credit is now part
+ *  of the server-authoritative `credit_referral_for_booking` RPC (0.5%/booking,
+ *  cap $12.50, accumulating). Kept as a no-op shim for any stale importer.
+ *  Do not call — `creditInviterOnFirstBooking` (→ the RPC) handles both tiers. */
+export async function creditChainOnFirstBooking() {
+  return { error: null };
 }

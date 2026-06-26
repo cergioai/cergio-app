@@ -2116,21 +2116,30 @@ test('spec-56-notify-coverage', 'FROZEN: recommendService + acceptRequestWithTim
     "acceptRequestWithTime must fire fireBookingNotify(data, 'accepted') — SPEC-56");
 });
 
-test('spec-57-referral-payout-integrity', 'FROZEN: free first booking does not burn the referral; invite_joined + first_booking fire; tracking shows $ (SPEC-57)', '#57', async () => {
-  const ref = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/referral.js'), 'utf8');
+test('spec-57-referral-payout-integrity', 'FROZEN: referral credit is SERVER-AUTHORITATIVE — credit_referral_for_booking RPC (7%/$250 direct + 0.5%/$12.50 fof, accumulating, cleared), called by the Stripe webhook; invite_joined fires; tracking shows $ (SPEC-57)', '#57', async () => {
+  const ref   = fs.readFileSync(path.join(REPO_ROOT, 'src/lib/referral.js'), 'utf8');
   const track = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/InviteTrackingScreen.jsx'), 'utf8');
+  const hook  = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/stripe-webhook/index.ts'), 'utf8');
+  const migPath = path.join(REPO_ROOT, 'supabase/migrations/20260626020000_referral_settlement.sql');
 
-  // 1. Free ($0) first booking is a no-op — does NOT stamp first_booking_at.
-  assert(/bookingTotalCents\s*<=\s*0[\s\S]{0,120}return\s*\{\s*error:\s*null\s*\}/.test(ref),
-    'creditInviterOnFirstBooking must return early when bookingTotalCents <= 0 (do not burn the referral) — SPEC-57');
+  // 1. Canonical, server-authoritative settlement RPC exists with the confirmed
+  //    economics + idempotency + paid guard.
+  assert(fs.existsSync(migPath), 'referral settlement migration must exist — SPEC-57');
+  const mig = fs.readFileSync(migPath, 'utf8');
+  assert(/function public\.credit_referral_for_booking/.test(mig), 'must define credit_referral_for_booking — SPEC-57');
+  assert(/0\.07/.test(mig) && /25000/.test(mig), 'direct tier = 7% capped $250 — SPEC-57');
+  assert(/0\.005/.test(mig) && /1250/.test(mig), 'fof tier = 0.5% capped $12.50 — SPEC-57');
+  assert(/v_paid is null or v_total <= 0/.test(mig), 'RPC must guard on PAID + non-zero (free booking never burns/credits) — SPEC-57');
+  assert(/meta->>'booking_id' = p_booking::text and meta->>'tier'/.test(mig), 'RPC must be idempotent per (earner, booking, tier) — SPEC-57');
+  assert(/'cleared'/.test(mig), "referral credit lands 'cleared' (counts as earned, not stuck pending) — SPEC-57");
 
-  // 2. The invite loop fires its notifications.
-  assert(/event:\s*'invite_joined'/.test(ref),
-    "recordInviteFromActiveRef must fire notifyUser invite_joined — SPEC-57");
-  assert(/event:\s*'first_booking'/.test(ref),
-    "creditInviterOnFirstBooking must fire notifyUser first_booking on a real credit — SPEC-57");
+  // 2. The Stripe webhook (reliable path) settles on payment; client is a safe
+  //    redundant trigger via the same idempotent RPC.
+  assert(/credit_referral_for_booking/.test(hook), 'stripe-webhook must call credit_referral_for_booking on payment — SPEC-57');
+  assert(/credit_referral_for_booking/.test(ref), 'client creditInviterOnFirstBooking must call the same RPC — SPEC-57');
 
-  // 3. Invite tracking surfaces the $ (earned summary + per-row reward badge).
+  // 3. invite_joined still fires; tracking surfaces the $.
+  assert(/event:\s*'invite_joined'/.test(ref), 'recordInviteFromActiveRef must fire notifyUser invite_joined — SPEC-57');
   assert(/earned from referrals/.test(track) && /reward_cents\s*>\s*0/.test(track),
     'InviteTrackingScreen must show referral $ earned + per-row reward badge — SPEC-57');
 });

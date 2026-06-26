@@ -363,12 +363,15 @@ qa.mjs #56 enforces this.
 
 ---
 
-### SPEC-57 · Referral payout integrity + invite-loop notifications (the spine)
-**Status:** FROZEN — 2026-06-18 (Tarik — "make sure users get paid for referrals"; "invite tracking is the spine, very tight + intuitive")
+### SPEC-57 · Referral settlement — SERVER-AUTHORITATIVE (the growth-engine money path)
+**Status:** FROZEN — 2026-06-26 (Tarik — "the heart of the growth engine; a disaster if users can't get paid / receive credits / track invites"). **Supersedes the 2026-06-18 client-side version.**
 **Rule:**
-- **A FREE ($0) first booking must NOT consume the referral.** `creditInviterOnFirstBooking` returns early when `bookingTotalCents <= 0` — it does NOT stamp `first_booking_at` and writes no $0 row — so the reward stays OPEN and lands on the friend's first PAYING booking (7% of total, capped `REWARDS.perFriend`). Previously a free first booking burned the referral at $0 forever.
-- **The invite loop fires its notifications** (the notify-user edge fn already had the templates, but they were never called): `recordInviteFromActiveRef` fires **`invite_joined`** to the inviter when the friend signs up; `creditInviterOnFirstBooking` fires **`first_booking`** to the inviter when a real credit is written. Both include `data.deep_link` (qa #9).
-- **InviteTrackingScreen shows the $:** an earnings-at-a-glance header (total referral $ earned + the invited/joined/booked funnel) and a per-row **+$X** reward badge on booked friends. Status: Invited → Joined → Booked (first paying booking).
+- **Canonical credit lives in ONE Postgres RPC `credit_referral_for_booking(booking)`** (migration `20260626020000`), SECURITY DEFINER. The **Stripe webhook** calls it on `payment_intent.succeeded` (the reliable path, both held + instant modes, after stamping `paid_at`); the client `creditInviterOnFirstBooking` calls the SAME RPC as a safe redundant trigger. No more best-effort client-side math.
+- **Economics (Tarik-confirmed):** 1st tier (direct) = **7% of each paid booking, ACCUMULATING, cap $250 per friend**; 2nd tier (fof/chain) = **0.5% of each paid booking, ACCUMULATING, cap $12.50 per friend-of-friend** (= 5% of the $250 tier). Depth 2 only (great-grandparent never earns). All from `REWARDS` (referrerSharePercent 7 / perFriend 250 / chainSharePercent 0.5 / friendOfFriendBonus 12.5).
+- **Idempotent + guarded:** at most one earnings row per (earner, booking, tier); only credits when the booking is `paid_at`-stamped and `total_cents > 0` — so a FREE booking never credits and never burns the referral, and re-firing (webhook retry + client) can't double-credit.
+- **Status `cleared`** — referral credit is platform credit owed once the booking is paid, so it counts as EARNED immediately (`getMyEarningsSummary` counts `cleared`); it is NOT stuck `pending`. (Cash-out for Connectors stays the payout request.)
+- **invite_joined still fires** on signup (`recordInviteFromActiveRef`). **InviteTrackingScreen shows the $** (earned header + per-row reward badge). *(Follow-up: server-side "you earned" notify on credit — was client-side, now owed by the webhook.)*
+- qa.mjs #57 enforces the RPC economics + guard + idempotency + webhook wiring.
 
 qa.mjs #57 enforces this.
 

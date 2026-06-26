@@ -1,23 +1,31 @@
-feat(claim): real claim-profile flow for recommended providers (#1)
+feat(referral): server-authoritative settlement — the growth-engine money path (SPEC-57)
 
-The "Claim your profile" link wrongly pointed at the recommender's /u/ page with
-no claim UI. Now it lands on a real claim flow:
+Tarik: "the heart of the growth engine; a disaster if users can't get paid /
+receive credits / track invites." Rebuilt referral credit from best-effort
+client math to ONE canonical, idempotent, server-driven RPC.
 
-- RecommendServiceFormScreen: reco-by-phone deep_link → /claim?by=<recommender>&
-  as=<serviceType> (was buildInviteUrl(recommender)).
-- New ClaimProfileScreen + /claim route: "you were reco'd as X by Y → Claim your
-  profile". Signed out → /auth (signup; phone mandatory) with returnTo back to
-  /claim. Signed in → auto-attaches the pending recommendations made to this
-  phone and lands them on their profile / list-a-service.
-- api.claimRecommendations() → claim_recommendations() RPC (migration
-  20260626010000): SECURITY DEFINER, phone-matched (last-10 digits, format-
-  insensitive) — sets recipient_id on recommendations where recipient_phone
-  matches the caller's signup phone and recipient_id is NULL. Scoped to the
-  caller's own phone.
+Economics (Tarik-confirmed): 1st tier 7%/booking cap $250 per friend; 2nd tier
+0.5%/booking cap $12.50 per friend-of-friend (= 5% of the $250 tier); BOTH
+ACCUMULATING across bookings; depth 2 only.
 
-Requires "Apply Pending Migrations" for the RPC (TWO pending now: claim_
-recommendations + connector_invite_grant). All 75 qa flows pass; files
-esbuild-clean.
+- migration 20260626020000_referral_settlement.sql: credit_referral_for_booking
+  RPC. SECURITY DEFINER, idempotent (one row per earner/booking/tier), GUARDED
+  (only credits when booking is paid_at + total>0 → free bookings never
+  credit/burn; webhook-retry + client can't double-credit). Writes status
+  'cleared' (counts as earned, not stuck pending).
+- stripe-webhook: on payment_intent.succeeded, stamp paid_at then call the RPC
+  (held + instant modes). The reliable settlement path (was: client-only,
+  best-effort, could silently drop credit).
+- referral.js: creditInviterOnFirstBooking now just calls the RPC (idempotent
+  redundant trigger); old one-shot 7% math + flat-$12.50 fof removed;
+  creditChainOnFirstBooking → deprecated no-op (RPC handles both tiers).
+- api.getMyEarningsSummary: count 'cleared' as earned (referral + provider
+  earnings were wrongly shown as perpetually pending).
 
-Batch status: #1 ✓ #2 ✓(deployed) #3 ✓(already) #4 ✓(deployed) #5 ✓ #6 ✓.
-Held: #75 Home/Inbox Airbnb — pending a proper profile Airbnb redo (#84).
+Fixes audit F1 (settlement/cleared), F2 (server-authoritative), F3 (accumulate to
+cap, not one-shot). FROZEN_SPEC SPEC-57 rewritten; qa #57 asserts the RPC
+economics + guard + idempotency + webhook wiring. All 75 flows pass.
+
+Requires "Apply Pending Migrations" (3 now: referral_settlement, claim_
+recommendations, connector_invite_grant) + "Deploy Edge Functions" (stripe-
+webhook). Then verify with "E2E Multi-Degree Referral.command".

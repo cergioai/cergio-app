@@ -3012,7 +3012,10 @@ export async function getMyEarningsSummary() {
   let earnedCents = 0, pendingCents = 0;
   for (const r of (data || [])) {
     const c = r.amount_cents || 0;
-    if (['paid', 'released', 'completed', 'confirmed'].includes(r.status)) earnedCents += c;
+    // 'cleared' = settled/available (provider booking share + referral credit
+    // once the booking is paid). Was missing here, so referral + provider
+    // earnings showed as perpetually pending (Tarik 2026-06-26).
+    if (['paid', 'released', 'completed', 'confirmed', 'cleared'].includes(r.status)) earnedCents += c;
     else pendingCents += c;
   }
   return { data: { earnedCents, pendingCents }, error: null };

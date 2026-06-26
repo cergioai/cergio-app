@@ -157,6 +157,26 @@ serve(async (req: Request) => {
           .update({ status: 'succeeded' })
           .eq('stripe_intent_id', pi.id);
 
+        // Stamp paid_at on the actual consumer payment (lifecycle: pending →
+        // confirmed → paid). Drives the referral-credit guard below.
+        await supaAdmin
+          .from('bookings')
+          .update({ paid_at: new Date().toISOString() })
+          .eq('id', bookingId)
+          .is('paid_at', null);
+
+        // ── Referral settlement (server-authoritative, idempotent) ──────────
+        // Credits the inviter (7%/booking, cap $250) + grandparent (0.5%/booking,
+        // cap $12.50) — accumulating, status 'cleared'. Runs for BOTH held and
+        // instant modes (consumer has paid either way). The RPC self-guards on
+        // paid_at + total, and de-dupes per (earner, booking, tier), so it's safe
+        // even if the client also calls it. THE growth-engine money path.
+        try {
+          await supaAdmin.rpc('credit_referral_for_booking', { p_booking: bookingId });
+        } catch (e) {
+          console.warn('[stripe-webhook] referral credit failed:', e instanceof Error ? e.message : String(e));
+        }
+
         // SPEC-47g held mode: funds are sitting on the platform. Record the
         // charge id so the release worker can transfer FROM it later, and do
         // NOT book earnings yet — that happens at release. (Instant mode falls
