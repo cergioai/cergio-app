@@ -1,25 +1,15 @@
-feat(pdp): reputational streams on the service page + shared primitives (SPEC-49g)
+fix(inbound): popping TrustStream + mutuals on the connector-request screen (SPEC-49g)
 
-Extract the reputational-stream treatment into ONE shared module and apply it to
-the PDP so trust/mutuals/reach read identically across the app.
+The /inbound request screen showed the key reputational stream in tiny text
+("3 network on Cergio · 3 reco's made") and buried mutuals below the services
+list. Now it uses the shared TrustStream so the differentiator pops, and mutuals
+LEAD the stream.
 
-- New src/components/ui/reputation.jsx: recoByline, SocialReachLine, compactN,
-  firstNameOf, ConnectorChip (solid), MutualBadge, and TrustStream (the headline
-  strip — big bold mutuals/on-Cergio/recos numerals that POP, leads with mutuals
-  with the viewer). PublicProfileScreen now imports these (no local dupes).
-- ServiceDetailScreen (PDP):
-  - TrustStream on the provider identity, right under the name/badges ("next to
-    connector"), big and bold so the network/recos/mutuals pop. Plus the
-    provider's own SocialReachLine. Counts from getInboxPartyCounts(ownerId).
-  - Identity line shows the REAL provider type (taxonomy_provider_type, e.g.
-    "Hair Stylist"), not the vague category ("Beauty").
-  - "About the provider" -> personalized "About {firstName}".
-  - "What people say" rows now carry each recommender's mutual badge ("In your
-    network") + solid Connector chip + social reach (recommenderCounts).
-  - Hero story-ruler reflects the ACTUAL image count (heroImages.length > 1) —
-    a single cover no longer fakes a 5-segment "more to scroll" ruler; removed
-    the hardcoded fake caption (SPEC-12 no-fake-data).
+- Replaced the small strength line with the shared <TrustStream> (big bold
+  mutuals · network · recos numerals), full-width under the identity.
+- Mutuals are now part of the headline stream (mutualCount), not buried — the
+  named mutual faces stay below as the detail.
+- recoKind="made" (a Connector requesting a free service is judged on recos made).
 
-FROZEN_SPEC: SPEC-49g extended (shared module + PDP + cross-app rollout target).
-qa.mjs: #49g extended to assert the shared module + PDP coverage. All 75 flows
-pass; reputation.jsx + both screens esbuild-clean.
+qa.mjs: #49g already covers the shared module. All 75 flows pass; screen
+esbuild-clean.

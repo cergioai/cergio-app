@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
 import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime, listMyServices } from '../lib/api';
 import { IgPostTile } from '../components/ui/IgPostTile';
+import { TrustStream } from '../components/ui/reputation';
 
 const QUICK_QS = [
   'Who buys the ingredients?',
@@ -250,11 +251,15 @@ export function RequestFromConnectorScreen() {
     data.ttFollowers > 0 ? `${Number(data.ttFollowers).toLocaleString()} TikTok` : null,
   ].filter(Boolean);
   const reachLine = reachBits.join(' · ');
-  const strength = [
-    stats && stats.networkCount > 0 ? `${stats.networkCount} network on Cergio` : null,
-    stats && stats.recommended > 0 ? `${stats.recommended} reco's made` : null,
-  ].filter(Boolean).join(' · ');
   const services = (stats && stats.services) || [];
+  // Headline reputational stream (SPEC-49g): mutuals · network · recos, rendered
+  // BIG via the shared TrustStream so it pops. Mutuals are part of the stream
+  // (not buried) — Tarik 2026-06-25 ("where are the MUTUALS").
+  const trustCounts = {
+    networkCount: stats?.networkCount || 0,
+    recosMade:    stats?.recommended || 0,
+    mutualCount:  mutuals?.count || 0,
+  };
 
   const providerName = myName
     || auth?.user?.user_metadata?.display_name
@@ -432,7 +437,6 @@ export function RequestFromConnectorScreen() {
                     {reachLine}
                   </p>
                 )}
-                {strength && <p className="text-meta-sm text-b3 mt-0.5">{strength}</p>}
                 {data.igHandle && (
                   <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
                     className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-0.5">See Instagram</a>
@@ -440,6 +444,10 @@ export function RequestFromConnectorScreen() {
                 {data.bio && <p className="text-meta text-b3 leading-snug mt-1 line-clamp-3">{data.bio}</p>}
               </div>
             </div>
+
+            {/* Headline reputational stream — mutuals · network · recos, BIG so it
+                pops (SPEC-49g). The key platform differentiator; mutuals lead. */}
+            <TrustStream counts={trustCounts} recoKind="made" className="mt-3" />
 
             {/* services offered — each with its own reco count (no "Services:" word) */}
             {services.length > 0 && (
