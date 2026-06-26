@@ -1,29 +1,22 @@
-test(ontology): full-catalogue precision gate — proves "Ferrari" coverage (SPEC-68)
+fix(notify): SMS send for A2P 10DLC + claim-email referral copy
 
-The catalogue was already effectively complete; this proves it and locks a
-regression gate. NO resolver/taxonomy change → no edge-function redeploy needed;
-this is tooling only (live matching behavior is unchanged).
+Item 2 (reco sent no text) — root cause + fix:
+- notify-user only sent SMS via TWILIO_FROM_NUMBER (a plain long code). A2P
+  10DLC requires the Messaging Service SID, and the deployed secret may be named
+  TWILIO_FROM / TWILIO_MESSAGING_SERVICE_SID. Now: prefer MessagingServiceSid
+  (TWILIO_MESSAGING_SERVICE_SID | TWILIO_MESSAGING_SID), fall back to a From
+  number (TWILIO_FROM_NUMBER | TWILIO_FROM). Can't be silently disabled by an
+  env-name mismatch.
+- The skip/error result now reports WHICH secret is missing and surfaces
+  Twilio's error body, so a PENDING 10DLC campaign is diagnosable from the
+  function response instead of a silent no-op.
+  NOTE: actual delivery still requires the 10DLC campaign to be APPROVED at
+  Twilio (it was PENDING vetting) and the From/Service registered to it.
 
-scripts/audit-ontology-coverage.ts (new): runs EVERY real search term in the
-taxonomy — 7,285 terms across 932 offerings — through resolveQuery and classifies
-each: correct / ambiguous-OK (cross-listed across types) / →Claude / TRUE
-confident-wrong. Excludes generic "Service Provider"-intended terms (the resolver
-deliberately emits a specific type, SPEC-67c) and cross-listed ambiguous terms.
+Item 4 — claim email (service_recommended) gains the referral pitch:
+  "invite your own clients to recommend you — earn $250 per friend… turn your
+  social network into a referral network… asset participation income tied to
+  Cergio's growth. Cergio — built so we prosper together."
 
-Result (2026-06-26):
-  correct (≥.60, right type):  5,765  (79%)
-  ambiguous-OK (cross-listed): 1,467  (20%)
-  →Claude (miss):                  0
-  TRUE confident-wrong:           53  (0.73%)
-
-All 53 are intentional parent/synonym BRIDGES — the resolver notifies the broader,
-populated provider type instead of a hyper-niche child with no registered
-providers (e.g. "EV charger"→Electrician, "piano moving"→Mover, "duct cleaning"→
-HVAC, "balayage"→Hair Stylist, "lash extensions"→Esthetician). Several are MORE
-correct than the taxonomy's label (e.g. "photographer"→Photographer, which the
-taxonomy filed under "Gender Reveal Coordinator"). Zero harmful "caterer→cat".
-
-The audit is a regression gate (budget 60; exits 1 if confident-wrong climbs,
-catching a NEW harmful match without failing on the known-good 53). Run via the
-new top-folder "Audit Ontology Coverage.command" (add --wrong to list all).
-The labeled eval (scripts/eval-ontology.ts) stays green: 109/109, 0 confident-wrong.
+Edge-function change → requires "Deploy Edge Functions.command" after push.
+notify-user esbuild-clean.

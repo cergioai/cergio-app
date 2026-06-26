@@ -69,11 +69,18 @@ serve(async (req: Request) => {
 
     // ── SMS via Twilio ────────────────────────────────────────────────────
     if (recipient.phone) {
-      const sid   = Deno.env.get('TWILIO_ACCOUNT_SID');
-      const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-      const from  = Deno.env.get('TWILIO_FROM_NUMBER');
-      if (sid && token && from) {
+      const sid    = Deno.env.get('TWILIO_ACCOUNT_SID');
+      const token  = Deno.env.get('TWILIO_AUTH_TOKEN');
+      // A2P 10DLC: prefer the Messaging Service SID (required for registered
+      // campaign sending); fall back to a plain From number. Accept both env
+      // names we've used (TWILIO_FROM_NUMBER / TWILIO_FROM) so a naming mismatch
+      // can't silently disable SMS (Tarik 2026-06-26: reco sent no text).
+      const msgSid = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || Deno.env.get('TWILIO_MESSAGING_SID');
+      const from   = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_FROM');
+      if (sid && token && (msgSid || from)) {
         const auth = btoa(`${sid}:${token}`);
+        const params: Record<string, string> = { To: recipient.phone, Body: rendered.sms };
+        if (msgSid) params.MessagingServiceSid = msgSid; else params.From = from!;
         const r = await fetch(
           `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
           {
@@ -82,16 +89,14 @@ serve(async (req: Request) => {
               'Authorization': `Basic ${auth}`,
               'Content-Type':  'application/x-www-form-urlencoded',
             },
-            body: new URLSearchParams({
-              From: from,
-              To:   recipient.phone,
-              Body: rendered.sms,
-            }),
+            body: new URLSearchParams(params),
           },
         );
-        results.sms = r.ok ? 'sent' : `error ${r.status}: ${(await r.text()).slice(0, 200)}`;
+        // Surface Twilio's error body so a PENDING 10DLC campaign / unverified
+        // number is diagnosable from the function response (not a silent skip).
+        results.sms = r.ok ? 'sent' : `error ${r.status}: ${(await r.text()).slice(0, 240)}`;
       } else {
-        results.sms = 'skipped (Twilio secrets not configured)';
+        results.sms = `skipped (Twilio not configured: sid=${!!sid} token=${!!token} msgSid=${!!msgSid} from=${!!from})`;
       }
     }
 
@@ -216,7 +221,12 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
           <li>Turn every booking into cash <strong>+</strong> recurring referrals from your own social graph.</li>
         </ul>
         ${safeBlurb ? `<p style="font-size:14px;color:#1A1A1A;background:#F3FFEA;border-left:3px solid #3D8B00;padding:10px 14px;margin:0 0 14px;border-radius:6px;font-style:italic;">“${safeBlurb}” <span style="color:#7A7A7A;font-style:normal;">— ${safeRec}</span></p>` : ''}
-        <p style="font-size:13px;color:#5F5E5A;margin:0 0 4px;">AI-driven service discovery that expands your earnings + clients. Human impact, shared prosperity.</p>`,
+        <p style="font-size:14px;color:#3A3A3A;margin:0 0 12px;">
+          And invite your own clients to recommend you — <strong>earn $250 per friend</strong> who joins and books.
+          Turn your social network into a referral network, and earn bonuses tied to Cergio's growth through
+          <strong>asset participation income</strong>.
+        </p>
+        <p style="font-size:14px;color:#2C5D21;font-weight:700;margin:0 0 4px;">Cergio — built so we prosper together.</p>`,
       cta_label: 'Claim your profile →',
       cta_link:  link,
       // SMS — short + captivating per Tarik. Single line, under 160 chars.
