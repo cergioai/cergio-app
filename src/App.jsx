@@ -97,6 +97,7 @@ import { PublicProfileScreen }              from './screens/PublicProfileScreen'
 import { AdminCrawlScreen }                 from './screens/AdminCrawlScreen';
 import { PublicProfileServicesScreen }      from './screens/PublicProfileServicesScreen';
 import { InviteLandingScreen }              from './screens/InviteLandingScreen';
+import { ClaimProfileScreen }               from './screens/ClaimProfileScreen';
 import { AboutScreen }                      from './screens/AboutScreen';
 import { ContactScreen }                    from './screens/ContactScreen';
 import { TermsScreen }                      from './screens/TermsScreen';
@@ -580,6 +581,7 @@ export default function App() {
               Replaces the long ?ref=<uuid> link that dumped invitees
               on the login page. */}
           <Route path="/i/:code"               element={<InviteLandingScreen />} />
+          <Route path="/claim"                 element={<ClaimProfileScreen />} />
 
           {/* CERGIO-GUARD (2026-05-31): company surfaces — About,
               Contact (single form, ?subject= pre-fills), Terms of

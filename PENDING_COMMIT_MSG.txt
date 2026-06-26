@@ -1,24 +1,23 @@
-feat(invite): Connectors-invite-Connectors + captivating invite copy (#5, #6)
+feat(claim): real claim-profile flow for recommended providers (#1)
 
-#6 — never share a bare link. The "copy link" buttons now copy a captivating
-message + link (InviteFriendPopup, FindFriends, Rainmakers). Share sheets
-already had copy; the bare clipboard copies were the gap Tarik hit.
+The "Claim your profile" link wrongly pointed at the recommender's /u/ page with
+no claim UI. Now it lands on a real claim flow:
 
-#5 — Connectors invite Connectors (explicit, guarded):
-- buildConnectorInviteUrl() → the short link + `?c=1`. Capture persists a
-  `connector` flag (captureRefFromUrl + storeRef); isConnectorInvite() reads it.
-- On signup, recordInviteFromActiveRef calls grant_connector_from_invite(inviter)
-  when the flag is set. SECURITY DEFINER migration
-  (20260626000000_connector_invite_grant.sql) GUARDS it: grants Connector to the
-  caller ONLY IF the inviter is a verified Connector (a forged ?c=1 from a
-  non-Connector grants nothing) and the caller isn't already one.
-- "Invite a Connector →" button on RainmakersScreen, shown only to verified
-  Connectors (getMyCcStatus), copies the connector-invite message + link.
+- RecommendServiceFormScreen: reco-by-phone deep_link → /claim?by=<recommender>&
+  as=<serviceType> (was buildInviteUrl(recommender)).
+- New ClaimProfileScreen + /claim route: "you were reco'd as X by Y → Claim your
+  profile". Signed out → /auth (signup; phone mandatory) with returnTo back to
+  /claim. Signed in → auto-attaches the pending recommendations made to this
+  phone and lands them on their profile / list-a-service.
+- api.claimRecommendations() → claim_recommendations() RPC (migration
+  20260626010000): SECURITY DEFINER, phone-matched (last-10 digits, format-
+  insensitive) — sets recipient_id on recommendations where recipient_phone
+  matches the caller's signup phone and recipient_id is NULL. Scoped to the
+  caller's own phone.
 
-Also shipped this batch (separate concerns): #2 SMS-send fix + #4 claim-email
-referral copy (notify-user, already deployed); #3 phone-mandatory verified as
-already implemented (required tel field + phoneValid gate + signUp stores it).
+Requires "Apply Pending Migrations" for the RPC (TWO pending now: claim_
+recommendations + connector_invite_grant). All 75 qa flows pass; files
+esbuild-clean.
 
-Requires migration apply ("Apply Pending Migrations") for the grant RPC.
-All 75 qa flows pass; changed files esbuild-clean.
-Remaining from the batch: #1 claim-profile flow (largest — next increment).
+Batch status: #1 ✓ #2 ✓(deployed) #3 ✓(already) #4 ✓(deployed) #5 ✓ #6 ✓.
+Held: #75 Home/Inbox Airbnb — pending a proper profile Airbnb redo (#84).

@@ -2939,6 +2939,17 @@ export async function getMyCcStatus() {
     .maybeSingle();
 }
 
+/** Claim-profile flow (2026-06-26): attach pending recommendations made to the
+ *  signed-in user's PHONE (recipient_phone, recipient_id NULL) to their account.
+ *  Server-side, phone-matched (claim_recommendations RPC). Returns { data: N }. */
+export async function claimRecommendations() {
+  if (!supabaseReady) return { data: 0, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: 0, error: null };
+  const { data, error } = await supabase.rpc('claim_recommendations');
+  return { data: data ?? 0, error: error || null };
+}
+
 /** Optimistic flip — frontend calls this after stripe.confirmSetup succeeds
  *  for a snappy UX. The CANONICAL flip is the setup_intent.succeeded webhook
  *  (stripe-webhook), which sets cc_verified_at server-side once Stripe confirms

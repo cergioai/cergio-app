@@ -20,7 +20,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
 import { notifyUser } from '../lib/api';
-import { buildInviteUrl } from '../lib/referral';
 import { supabase, supabaseReady } from '../lib/supabase';
 
 const supportsContactPicker = typeof navigator !== 'undefined' &&
@@ -153,7 +152,10 @@ export function RecommendServiceFormScreen() {
           recommender_name: auth?.user?.user_metadata?.display_name || 'A friend',
           recommender_id:   auth?.user?.id || '',
           service_title:    svcType || 'a service on Cergio',
-          deep_link:        buildInviteUrl(auth?.user?.id),
+          // Claim flow (2026-06-26): land the recommended provider on a real
+          // CLAIM page (signup attaches their pending recos by phone), NOT the
+          // recommender's profile. by=recommender, as=service type for the copy.
+          deep_link:        `${typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai'}/claim?by=${encodeURIComponent(auth?.user?.id || '')}&as=${encodeURIComponent(svcType || '')}`,
           blurb:            blurb.trim(),
         },
       });
