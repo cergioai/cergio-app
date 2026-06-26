@@ -1,14 +1,29 @@
-style: Airbnb elegance standard + Results-card pass (SPEC-49g)
+style: Airbnb deep pass — profile + interim request-reply screen (SPEC-49g)
 
-Define the standard once, then apply to the highest-traffic surface.
+Encoded Airbnb host/review measurements in design-spec and applied to the two
+screens Tarik named. Trust-streams model kept; only the craft changed.
 
-- design-spec.md: new "Airbnb elegance standard" section — reading size is 16 not
-  12 (meta is for microcopy only), real type-hierarchy jumps, whitespace over
-  boxes, spacing rhythm (mt-8 / mt-4 / gap-6), numbers+names lead the signal,
-  one green accent. Every screen pass follows this.
-- ResultsScreen / ProviderCard: subtitle now shows the REAL provider type
-  ("Hair Stylist") not the vague category ("Beauty"); bio bumped from meta(12)
-  to body-sm(13) for readability. mapServiceToProvider carries
-  taxonomy_provider_type.
+design-spec.md — "Airbnb component specs": exact avatar sizes (72 hero / 48
+review-author / 40 inline / 28 meta; 12px avatar→text gap), section rhythm (mt-8
++ hairline border-t divider on big sections; mt-4 header→body), the review-row
+spec (no card/bubble; 48px avatar; name+date line; trust line; body-lg text;
+gap-6 rows), and the lead identity-card spec.
 
-All 75 flows pass; files esbuild-clean.
+PublicProfileScreen:
+- RecoRow rebuilt to the Airbnb review row: no box/bubble, 48px author avatar,
+  name + date on one line, trust line (mutual/Connector/reach), review text at
+  body-lg leading-relaxed; rows separated by gap-6.
+- Section rhythm: hairline border-t dividers + mt-8/pt-8 on Services,
+  Recommendations received, Go-Tos; subheads bumped to body-sm; header avatar
+  84→72.
+- Go-To note: dropped the gray bubble for plain readable body-sm text.
+
+RequestFromConnectorScreen (interim reply):
+- Identity card → white + border-line + p-5; lead avatar 36→48; name body→
+  heading-2; solid ConnectorChip; headline/bio bumped to body-sm leading-relaxed;
+  reach line to body.
+- Mutuals row: body-sm text, 32px faces, more breathing room.
+- Connector's message: body-lg with a 36px avatar.
+- Removed the now-unused ShieldIcon.
+
+All 75 flows pass; both screens esbuild-clean.

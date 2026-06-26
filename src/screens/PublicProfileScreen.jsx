@@ -179,49 +179,47 @@ export function ServiceTile({ svc, recoSummary, onOpen }) {
 // (SPEC-49c). Leads with the recommender (linked) + trust badges: "In your
 // network" when the VIEWER knows them (mutual), and "Connector" when they're
 // a verified Connector. Their note sits in a soft bubble below.
+// Airbnb-style review row (design-spec "Review / recommendation row"): no card,
+// no bubble. 48px author avatar, name + date on one line, trust line, then the
+// review text at body-lg. Rows separated by gap-6 by the parent.
 function RecoRow({ r, counts, showService }) {
   return (
-    <div className="bg-white border border-bdr rounded-[14px] p-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5 min-w-0">
-          <AvatarLink id={r.recommender?.id} name={r.recommender?.name} size={38} clickable={!!r.recommender?.id} />
-          <div className="min-w-0">
-            <p className="text-body font-extrabold text-black truncate leading-tight">
-              {r.recommender?.name || 'A friend'}
-            </p>
-            {/* Trust badges (SPEC-49g): mutual-with-viewer + Connector, side by side. */}
-            <div className="flex items-center gap-2 flex-wrap mt-0.5">
-              {r.isMutual && (
-                <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
-                  </svg>
-                  In your network
-                </span>
-              )}
-              {r.recommender?.is_connector && (
-                <span className="inline-flex items-center gap-1 bg-g text-white text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
-                  Connector
-                </span>
-              )}
-            </div>
-            {/* Social reach (SPEC-49g): "12.3K IG · 40 network". */}
-            <SocialReachLine counts={counts} />
-          </div>
+    <div className="flex gap-3">
+      <AvatarLink id={r.recommender?.id} name={r.recommender?.name} size={48} clickable={!!r.recommender?.id} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-body font-extrabold text-black truncate">
+            {r.recommender?.name || 'A friend'}
+          </p>
+          <p className="text-meta text-b3 font-medium whitespace-nowrap shrink-0">
+            {fmtMonthYear(r.sent_at)}
+          </p>
         </div>
-        <p className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-0.5">
-          {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
-        </p>
+        {/* Trust line (SPEC-49g): mutual + Connector + reach. */}
+        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+          {r.isMutual && (
+            <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
+              </svg>
+              In your network
+            </span>
+          )}
+          {r.recommender?.is_connector && (
+            <span className="inline-flex items-center gap-1 bg-g text-white text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
+              Connector
+            </span>
+          )}
+          <SocialReachLine counts={counts} className="!mt-0" />
+        </div>
+        {showService && r.serviceTitle && (
+          <p className="text-meta-sm text-b3 font-semibold mt-1">on {r.serviceTitle}</p>
+        )}
+        {r.message && (
+          <p className="text-body-lg text-b2 leading-relaxed mt-2">{r.message}</p>
+        )}
       </div>
-      {showService && r.serviceTitle && (
-        <p className="text-meta-sm text-b3 font-semibold mt-2">on {r.serviceTitle}</p>
-      )}
-      {r.message && (
-        <div className="mt-2 bg-bg5 rounded-[12px] p-3">
-          <p className="text-meta text-b2 leading-snug">{r.message}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -773,7 +771,7 @@ export function PublicProfileScreen() {
           unchanged (Tarik 2026-06-18 brand re-skin). */}
       <div className="px-5 pt-5 pb-2 bg-gradient-to-b from-gl/60 to-transparent">
         <div className="flex items-center gap-4">
-          <AvatarLink id={profile?.id} name={name} size={84} clickable={false} className="ring-4 ring-white shadow-md" />
+          <AvatarLink id={profile?.id} name={name} size={72} clickable={false} className="ring-4 ring-white shadow-md" />
           <div className="flex-1 min-w-0">
             <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">{name}</h1>
             {/* Headline moved into the signal block below the Connector badge
@@ -835,9 +833,9 @@ export function PublicProfileScreen() {
           (Tarik 2026-06-25: "remove the upper ones"). More than 3 services → the
           rest live on /u/:id/services. A pure Connector/curator skips this block. */}
       {services.length > 0 && (
-        <div className="px-5 mt-8">
+        <div className="mx-5 mt-8 border-t border-line pt-8">
           <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Services</h2>
-          <div className="mt-3 flex flex-col gap-5">
+          <div className="mt-4 flex flex-col gap-5">
             {services.slice(0, INLINE_SERVICES).map(svc => (
               <ServiceTile
                 key={svc.id}
@@ -864,12 +862,12 @@ export function PublicProfileScreen() {
           RECEIVED). Header + individual reco rows (Tarik 2026-06-18). Real rows
           only; collapses when none. */}
       {recosReceived.length > 0 && (
-        <div className="px-5 mt-8">
+        <div className="mx-5 mt-8 border-t border-line pt-8">
           <h2 className="text-heading-1 font-extrabold text-black">
             Recommendations received <span className="text-b3 font-medium">· {recosReceived.length}</span>
           </h2>
-          <p className="text-meta text-b3 font-medium mt-1">People who love {firstName}</p>
-          <div className="mt-4 flex flex-col gap-3">
+          <p className="text-body-sm text-b3 font-medium mt-1">People who love {firstName}</p>
+          <div className="mt-5 flex flex-col gap-6">
             {recosReceived.slice(0, 8).map(r => (
               <RecoRow
                 key={r.id}
@@ -892,10 +890,10 @@ export function PublicProfileScreen() {
           below with the profile-owner's avatar inside (matches the
           tiny "reviewer" avatar on the mockup's gray quote box). */}
       {recoServices.length > 0 && (
-        <div className="px-5 mt-8">
+        <div className="mx-5 mt-8 border-t border-line pt-8">
           <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Recommendations</h2>
-          <p className="text-meta text-b3 font-medium mt-1">Services {firstName} recommends</p>
-          <div className="mt-4 flex flex-col gap-3">
+          <p className="text-body-sm text-b3 font-medium mt-1">Services {firstName} recommends</p>
+          <div className="mt-5 flex flex-col gap-3">
             {(showAllGoTos ? recoServices : recoServices.slice(0, 6)).map(r => (
               <div
                 key={r.id}
@@ -963,7 +961,7 @@ export function PublicProfileScreen() {
                   </p>
                 </div>
                 {r.message && (
-                  <div className="w-full mt-3 bg-bg5 rounded-[14px] p-3 flex items-start gap-2.5">
+                  <div className="w-full mt-3 flex items-start gap-2.5">
                     <AvatarLink
                       id={profile?.id}
                       name={name}
@@ -971,7 +969,7 @@ export function PublicProfileScreen() {
                       clickable={false}
                       className="ring-2 ring-white"
                     />
-                    <p className="flex-1 text-meta text-b2 leading-snug pt-1">{r.message}</p>
+                    <p className="flex-1 text-body-sm text-b2 leading-relaxed">{r.message}</p>
                   </div>
                 )}
               </div>

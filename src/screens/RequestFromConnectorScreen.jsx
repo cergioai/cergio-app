@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
 import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime, listMyServices } from '../lib/api';
 import { IgPostTile } from '../components/ui/IgPostTile';
-import { TrustStream } from '../components/ui/reputation';
+import { TrustStream, ConnectorChip } from '../components/ui/reputation';
 
 const QUICK_QS = [
   'Who buys the ingredients?',
@@ -38,20 +38,14 @@ function mutualSummaryText({ count, connectors }) {
   return `${parts.join(' and ')} in common`;
 }
 
-// Green shield (Free for Connectors) — matches the Figma inline treatment.
-function ShieldIcon({ size = 16 }) {
+// Initials avatar. Default 36px (message rows); pass size for the lead identity
+// (48px per the Airbnb review/identity spec).
+function Avatar({ name, size = 36 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="#4AA901" aria-hidden="true">
-      <path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" />
-      <path d="M10.5 13.2l-1.9-1.9-1.2 1.2 3.1 3.1 5-5-1.2-1.2z" fill="#fff" />
-    </svg>
-  );
-}
-
-// Small initials avatar for the message bubble.
-function Avatar({ name }) {
-  return (
-    <div className="w-9 h-9 min-w-9 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white text-meta-sm font-extrabold">
+    <div
+      className="rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white font-extrabold shrink-0"
+      style={{ width: size, height: size, minWidth: size, fontSize: Math.max(11, Math.round(size * 0.3)) }}
+    >
       {getInitials(name)}
     </div>
   );
@@ -409,29 +403,24 @@ export function RequestFromConnectorScreen() {
           mutual friends BELOW the IG box (Tarik 2026-06-14). */}
       {(data.isConnector || data.igHandle || data.bio) && (
         <div className="px-5 pb-3">
-          <div className="bg-bg4 rounded-[18px] p-3.5">
+          <div className="bg-white border border-line rounded-[16px] p-5">
             {/* identity: avatar + name + Connector badge + IG counts + bio */}
             <div className="flex items-start gap-3">
-              <Avatar name={data.requesterName} />
+              <Avatar name={data.requesterName} size={48} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-body font-extrabold text-black truncate">{data.requesterName}</p>
-                  {data.isConnector && (
-                    <span className="inline-flex items-center gap-0.5 bg-gl text-gd text-[10px] font-extrabold px-1.5 py-0.5 rounded-pill">
-                      <ShieldIcon size={9} />Connector
-                    </span>
-                  )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-heading-2 font-extrabold text-black truncate">{data.requesterName}</p>
+                  {data.isConnector && <ConnectorChip />}
                 </div>
-                {/* Headline — below the Connector badge, above the IG count
-                    (Tarik 2026-06-17). The bio stays below, above services. */}
+                {/* Headline — below the Connector badge, above the IG count. */}
                 {data.headline && (
-                  <p className="text-meta text-b2 font-medium leading-snug mt-0.5">{data.headline}</p>
+                  <p className="text-body-sm text-b3 font-medium leading-snug mt-1">{data.headline}</p>
                 )}
-                {/* LEAD with reach: IG followers (prominent), then network ·
-                    reco's made, then See Instagram, then bio. */}
+                {/* LEAD with reach: IG followers (prominent), then See Instagram,
+                    then bio. Network/recos/mutuals live in the TrustStream below. */}
                 {reachLine && (
-                  <p className="flex items-center gap-1 text-body-sm font-extrabold text-black mt-0.5">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
+                  <p className="flex items-center gap-1.5 text-body font-extrabold text-black mt-1.5">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2" aria-hidden="true" className="shrink-0">
                       <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="#3D8B00" stroke="none" />
                     </svg>
                     {reachLine}
@@ -439,15 +428,15 @@ export function RequestFromConnectorScreen() {
                 )}
                 {data.igHandle && (
                   <a href={`https://instagram.com/${String(data.igHandle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
-                    className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-0.5">See Instagram</a>
+                    className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-1">See Instagram</a>
                 )}
-                {data.bio && <p className="text-meta text-b3 leading-snug mt-1 line-clamp-3">{data.bio}</p>}
+                {data.bio && <p className="text-body-sm text-b2 leading-relaxed mt-2 line-clamp-3">{data.bio}</p>}
               </div>
             </div>
 
-            {/* Headline reputational stream — mutuals · network · recos, BIG so it
-                pops (SPEC-49g). The key platform differentiator; mutuals lead. */}
-            <TrustStream counts={trustCounts} recoKind="made" className="mt-3" />
+            {/* Headline reputational stream — mutuals · network · recos, inline so
+                it's clean (SPEC-49g). The key differentiator; mutuals lead. */}
+            <TrustStream counts={trustCounts} recoKind="made" className="mt-4" />
 
             {/* services offered — each with its own reco count (no "Services:" word) */}
             {services.length > 0 && (
@@ -458,17 +447,17 @@ export function RequestFromConnectorScreen() {
               </p>
             )}
 
-            {/* mutual friends — directly under the services offered (Tarik) */}
-            <div className="mt-2.5">
+            {/* mutual friends — directly under the trust stream (Tarik) */}
+            <div className="mt-3">
               {mutuals === null ? null : hasMutuals ? (
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   <div className="flex -space-x-2 shrink-0">
                     {mutuals.sample.map(m => (
                       <button key={m.id} onClick={() => navigate(`/u/${m.id}`)} title={m.name}
-                        className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
+                        className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[11px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
                     ))}
                   </div>
-                  <p className="text-meta text-b2 leading-snug min-w-0">
+                  <p className="text-body-sm text-b2 leading-snug min-w-0">
                     <span className="font-extrabold text-black">{mutualSummaryText(mutuals)}</span>{' — '}
                     {mutuals.sample.map((m, i) => (
                       <span key={m.id}>{i > 0 ? ', ' : ''}<button onClick={() => navigate(`/u/${m.id}`)} className="text-gd font-extrabold hover:underline">{m.name}</button></span>
@@ -477,7 +466,7 @@ export function RequestFromConnectorScreen() {
                   </p>
                 </div>
               ) : (
-                <p className="text-meta text-b3">You have no mutual friends with {data.requesterName} yet.</p>
+                <p className="text-body-sm text-b3">You have no mutual friends with {data.requesterName} yet.</p>
               )}
             </div>
 
@@ -529,12 +518,10 @@ export function RequestFromConnectorScreen() {
 
       {/* personalized message from the Connector (composed from the request) */}
       <div className="px-5 pb-3">
-        <div className="bg-soft rounded-[18px] p-4">
-          <div className="flex items-start gap-2.5">
-            <div className="w-6 h-6 min-w-6 mt-0.5 rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white text-[10px] font-extrabold">
-              {getInitials(data.requesterName)}
-            </div>
-            <p className="text-body text-black leading-relaxed flex-1">{note}</p>
+        <div className="bg-soft rounded-[16px] p-4">
+          <div className="flex items-start gap-3">
+            <Avatar name={data.requesterName} size={36} />
+            <p className="text-body-lg text-black leading-relaxed flex-1">{note}</p>
           </div>
         </div>
       </div>
