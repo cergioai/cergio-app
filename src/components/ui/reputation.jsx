@@ -104,11 +104,10 @@ export function MutualBadge({ className = '' }) {
   );
 }
 
-// TrustStream — the HEADLINE reputational strip (mutuals · on-Cergio · recos).
-// THE differentiator, styled like Airbnb's understated stat bar (the "Guest
-// favorite" header): ONE rounded card, hairline dividers between equal segments,
-// centered number-over-label, refined type (not chunky). Mutuals lead and read
-// in brand green. Each stat collapses when zero; the strip collapses when empty.
+// TrustStream — the HEADLINE reputational signal (mutuals · on-Cergio · recos).
+// Airbnb-clean: NO boxes, just one inline line of text — bold number + muted
+// label, middot-separated (like "★ 4.92 · 128 reviews"). Mutuals lead, in brand
+// green. Each stat collapses when zero; the line collapses when empty.
 // `counts` = one entry from getInboxPartyCounts. `recoKind`: 'received' (a
 // provider — people who reco them) or 'made' (a connector — recos they've made).
 export function TrustStream({ counts, recoKind = 'received', className = '' }) {
@@ -122,13 +121,14 @@ export function TrustStream({ counts, recoKind = 'received', className = '' }) {
   if (recos > 0) stats.push({ n: recos, label: recoKind === 'made' ? (recos === 1 ? 'reco made' : 'recos made') : (recos === 1 ? 'reco' : 'recos') });
   if (!stats.length) return null;
   return (
-    <div className={`flex items-stretch rounded-[14px] border border-line bg-white overflow-hidden ${className}`}>
+    <p className={`flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-body ${className}`}>
       {stats.map((s, i) => (
-        <div key={i} className={`flex-1 px-3 py-2.5 text-center ${i > 0 ? 'border-l border-line' : ''}`}>
-          <p className={`text-heading-2 font-extrabold leading-none ${s.hot ? 'text-g' : 'text-black'}`}>{compactN(s.n)}</p>
-          <p className="text-meta-sm text-b3 font-medium mt-1 leading-tight">{s.label}</p>
-        </div>
+        <span key={i} className="inline-flex items-baseline gap-1">
+          {i > 0 && <span className="text-b3 mr-1.5" aria-hidden="true">·</span>}
+          <span className={`font-extrabold ${s.hot ? 'text-g' : 'text-black'}`}>{compactN(s.n)}</span>
+          <span className={`${s.hot ? 'text-gd font-semibold' : 'text-b3 font-medium'}`}>{s.label}</span>
+        </span>
       ))}
-    </div>
+    </p>
   );
 }

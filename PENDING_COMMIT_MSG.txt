@@ -1,11 +1,12 @@
-style(reputation): Airbnb-style TrustStream — refined segmented stat bar (SPEC-49g)
+style(reputation,pdp): remove TrustStream boxes → inline text; bigger review type (SPEC-49g)
 
-Tarik didn't like the chunky 3-card TrustStream. Restyled toward Airbnb's
-understated "Guest favorite" stat bar while keeping our brand:
-- ONE rounded card with hairline dividers between equal segments (was three
-  separate bordered cards).
-- Centered number-over-label; refined type (heading-2 numerals, not the chunky
-  display-2 black). Mutuals lead and read in brand green.
+Airbnb-clean elegance pass on the reputational + review surfaces.
 
-Shared component, so both /inbound and the PDP update at once. All 75 flows pass;
-reputation.jsx esbuild-clean.
+- TrustStream: removed the boxes entirely — now ONE inline line of text, bold
+  number + muted label, middot-separated ("1 mutual with you · 3 on Cergio · 3
+  recos made"), mutuals in brand green. Shared, so /inbound + PDP both update.
+- PDP "What people say": readable Airbnb sizing — name at body, quote at body-lg
+  leading-relaxed (was tiny meta italic), avatar 36→40, generous 24px row gaps,
+  no card borders. Header bumped to heading-1.
+
+All 75 flows pass; files esbuild-clean.

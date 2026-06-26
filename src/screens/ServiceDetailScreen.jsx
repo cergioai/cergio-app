@@ -877,16 +877,19 @@ export function ServiceDetailScreen() {
       {/* Recommender blurbs — kept but moved BELOW About so the headline
           area stays clean per mockup. Hidden if no recommenders. */}
       {recommenders.length > 0 && (
-        <div className="mx-5 mt-6">
-          <h2 className="text-heading-2 font-extrabold text-black mb-3">What people say</h2>
-          <div className="flex flex-col gap-3">
+        <div className="mx-5 mt-8">
+          <h2 className="text-heading-1 font-extrabold text-black mb-4">What people say</h2>
+          {/* Airbnb-clean review rows: no boxes, generous spacing, readable body
+              text. Avatar + name/badges, the named mutual + social reach, then
+              the quote at full body size. */}
+          <div className="flex flex-col gap-6">
             {recommenders.slice(0, 3).map((r, i) => {
-              const avatarCls = `w-9 h-9 rounded-full text-white text-meta-sm font-extrabold flex-shrink-0
+              const avatarCls = `w-10 h-10 rounded-full text-white text-body-sm font-extrabold flex-shrink-0
                                  flex items-center justify-center ${AV_GRADS[i % AV_GRADS.length]}`;
               const rc = r.id ? recommenderCounts[r.id] : null;
               const rm = r.id ? recommenderMutuals[r.id] : null;
               return (
-                <div key={r.id} className="flex gap-2.5 bg-white border border-line rounded-[14px] p-3.5">
+                <div key={r.id} className="flex gap-3">
                   {r.id ? (
                     <Link to={`/u/${r.id}`} aria-label={`View ${r.name || 'profile'}`} className={avatarCls}>
                       {initialsOf(r.name)}
@@ -898,11 +901,11 @@ export function ServiceDetailScreen() {
                     {/* Name + trust badges (SPEC-49g): mutual-with-you + solid Connector. */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {r.id ? (
-                        <Link to={`/u/${r.id}`} className="text-body-sm font-extrabold text-black hover:underline">
+                        <Link to={`/u/${r.id}`} className="text-body font-extrabold text-black hover:underline">
                           {r.name}
                         </Link>
                       ) : (
-                        <span className="text-body-sm font-extrabold text-black">{r.name}</span>
+                        <span className="text-body font-extrabold text-black">{r.name}</span>
                       )}
                       {(r.isMutual || (rm && rm.count > 0)) && <MutualBadge />}
                       {r.is_connector && <ConnectorChip />}
@@ -914,7 +917,7 @@ export function ServiceDetailScreen() {
                     )}
                     {/* Recommender's social reach — IG / Cergio network. */}
                     <SocialReachLine counts={rc} />
-                    <p className="text-meta text-b2 leading-snug mt-1.5 italic">&quot;{r.message}&quot;</p>
+                    <p className="text-body-lg text-b2 leading-relaxed mt-2">{r.message}</p>
                   </div>
                 </div>
               );
