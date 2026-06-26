@@ -72,7 +72,7 @@ function FriendAvatars({ friends, recommenders }) {
 }
 
 export function ProviderCard({ provider, onBook, onSave, onOpen }) {
-  const { name, category, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl,
+  const { name, category, taxonomy_provider_type, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl,
           friendCount = 0, connectorCount = 0, leadFriendName = null,
           // CERGIO-GUARD (2026-05-30): full recommender objects (id+name)
           // — used to render the FriendAvatars as Links to /u/{id}.
@@ -213,12 +213,13 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
           <span className="text-body-sm font-extrabold text-black">{recos} Recos</span>
         </div>
 
-        {/* ROW 2 — Category · Price.
+        {/* ROW 2 — Provider type · Price. Show the REAL provider type
+            (e.g. "Hair Stylist"), not the vague category ("Beauty") — SPEC-49g.
             CERGIO-GUARD (2026-06-03): when the provider countered with
             a price, strike through the official rate and show the
             counter in green so the user sees the offer they got. */}
         <div className="flex justify-between items-baseline mb-1">
-          <span className="text-body-sm text-b3 font-medium">{category}</span>
+          <span className="text-body-sm text-b3 font-medium">{taxonomy_provider_type || category}</span>
           {hasCounter ? (
             <span className="flex items-baseline gap-2">
               <span className="text-body-sm text-b3 font-extrabold line-through">${officialPrice || price}</span>
@@ -236,7 +237,7 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
 
         {/* ROW 3 — Bio · Savings */}
         <div className="flex justify-between items-start mb-2">
-          <span className="text-meta text-b3 font-normal flex-1 pr-3 leading-snug">{bio}</span>
+          <span className="text-body-sm text-b3 font-normal flex-1 pr-3 leading-snug">{bio}</span>
           <SavingsLabel savings={savings} />
         </div>
 

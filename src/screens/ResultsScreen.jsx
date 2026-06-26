@@ -306,6 +306,9 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     responderFirstName: responseDetail?.responderFirstName || null,
     name:        svc.title || 'Untitled',
     category:    svc.category || 'Service',
+    // Real provider type (e.g. "Hair Stylist") for the card subtitle — not the
+    // vague category ("Beauty"). Falls back to category when absent (SPEC-49g).
+    taxonomy_provider_type: svc.taxonomy_provider_type || null,
     bio:         svc.description || '',
     price:       counterCents != null ? effectivePrice : (price || 0),
     officialPrice: price || 0,
