@@ -1,13 +1,11 @@
-fix(pdp): mutuals on "What people say" use friends-in-common, not raw network (SPEC-49g)
+style(reputation): Airbnb-style TrustStream — refined segmented stat bar (SPEC-49g)
 
-The PDP recommender rows checked raw network membership (getMyNetworkIds) for the
-mutual signal, while the profile uses friends-in-common (getMutualConnections) —
-so the profile showed "1 mutual friend in common" but the PDP showed nothing for
-the same people. Unified to the friends-in-common signal.
+Tarik didn't like the chunky 3-card TrustStream. Restyled toward Airbnb's
+understated "Guest favorite" stat bar while keeping our brand:
+- ONE rounded card with hairline dividers between equal segments (was three
+  separate bordered cards).
+- Centered number-over-label; refined type (heading-2 numerals, not the chunky
+  display-2 black). Mutuals lead and read in brand green.
 
-- Fetch getMutualConnections for the displayed (top-3) recommenders →
-  recommenderMutuals { count, names }.
-- Each "What people say" row now shows the NAMED mutual line ("1 mutual friend in
-  common — Jane", mutualNamesText) and the MutualBadge whenever count > 0.
-
-All 75 flows pass; screen esbuild-clean.
+Shared component, so both /inbound and the PDP update at once. All 75 flows pass;
+reputation.jsx esbuild-clean.

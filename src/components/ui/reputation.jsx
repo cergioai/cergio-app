@@ -105,9 +105,10 @@ export function MutualBadge({ className = '' }) {
 }
 
 // TrustStream — the HEADLINE reputational strip (mutuals · on-Cergio · recos).
-// This is THE differentiator, so it uses a superior type scale (big numerals
-// that POP) and leads with mutuals-with-the-viewer. Each stat collapses when
-// zero; the whole strip collapses when there's no signal at all.
+// THE differentiator, styled like Airbnb's understated stat bar (the "Guest
+// favorite" header): ONE rounded card, hairline dividers between equal segments,
+// centered number-over-label, refined type (not chunky). Mutuals lead and read
+// in brand green. Each stat collapses when zero; the strip collapses when empty.
 // `counts` = one entry from getInboxPartyCounts. `recoKind`: 'received' (a
 // provider — people who reco them) or 'made' (a connector — recos they've made).
 export function TrustStream({ counts, recoKind = 'received', className = '' }) {
@@ -121,14 +122,11 @@ export function TrustStream({ counts, recoKind = 'received', className = '' }) {
   if (recos > 0) stats.push({ n: recos, label: recoKind === 'made' ? (recos === 1 ? 'reco made' : 'recos made') : (recos === 1 ? 'reco' : 'recos') });
   if (!stats.length) return null;
   return (
-    <div className={`flex items-stretch gap-2 ${className}`}>
+    <div className={`flex items-stretch rounded-[14px] border border-line bg-white overflow-hidden ${className}`}>
       {stats.map((s, i) => (
-        <div
-          key={i}
-          className={`flex-1 rounded-[14px] px-3 py-2.5 border text-left ${s.hot ? 'bg-gl border-g/30' : 'bg-white border-line'}`}
-        >
-          <p className={`text-display-2 font-black leading-none ${s.hot ? 'text-g' : 'text-black'}`}>{compactN(s.n)}</p>
-          <p className="text-meta-sm text-b3 font-semibold mt-1 leading-tight">{s.label}</p>
+        <div key={i} className={`flex-1 px-3 py-2.5 text-center ${i > 0 ? 'border-l border-line' : ''}`}>
+          <p className={`text-heading-2 font-extrabold leading-none ${s.hot ? 'text-g' : 'text-black'}`}>{compactN(s.n)}</p>
+          <p className="text-meta-sm text-b3 font-medium mt-1 leading-tight">{s.label}</p>
         </div>
       ))}
     </div>
