@@ -1,22 +1,24 @@
-fix(notify): SMS send for A2P 10DLC + claim-email referral copy
+feat(invite): Connectors-invite-Connectors + captivating invite copy (#5, #6)
 
-Item 2 (reco sent no text) — root cause + fix:
-- notify-user only sent SMS via TWILIO_FROM_NUMBER (a plain long code). A2P
-  10DLC requires the Messaging Service SID, and the deployed secret may be named
-  TWILIO_FROM / TWILIO_MESSAGING_SERVICE_SID. Now: prefer MessagingServiceSid
-  (TWILIO_MESSAGING_SERVICE_SID | TWILIO_MESSAGING_SID), fall back to a From
-  number (TWILIO_FROM_NUMBER | TWILIO_FROM). Can't be silently disabled by an
-  env-name mismatch.
-- The skip/error result now reports WHICH secret is missing and surfaces
-  Twilio's error body, so a PENDING 10DLC campaign is diagnosable from the
-  function response instead of a silent no-op.
-  NOTE: actual delivery still requires the 10DLC campaign to be APPROVED at
-  Twilio (it was PENDING vetting) and the From/Service registered to it.
+#6 — never share a bare link. The "copy link" buttons now copy a captivating
+message + link (InviteFriendPopup, FindFriends, Rainmakers). Share sheets
+already had copy; the bare clipboard copies were the gap Tarik hit.
 
-Item 4 — claim email (service_recommended) gains the referral pitch:
-  "invite your own clients to recommend you — earn $250 per friend… turn your
-  social network into a referral network… asset participation income tied to
-  Cergio's growth. Cergio — built so we prosper together."
+#5 — Connectors invite Connectors (explicit, guarded):
+- buildConnectorInviteUrl() → the short link + `?c=1`. Capture persists a
+  `connector` flag (captureRefFromUrl + storeRef); isConnectorInvite() reads it.
+- On signup, recordInviteFromActiveRef calls grant_connector_from_invite(inviter)
+  when the flag is set. SECURITY DEFINER migration
+  (20260626000000_connector_invite_grant.sql) GUARDS it: grants Connector to the
+  caller ONLY IF the inviter is a verified Connector (a forged ?c=1 from a
+  non-Connector grants nothing) and the caller isn't already one.
+- "Invite a Connector →" button on RainmakersScreen, shown only to verified
+  Connectors (getMyCcStatus), copies the connector-invite message + link.
 
-Edge-function change → requires "Deploy Edge Functions.command" after push.
-notify-user esbuild-clean.
+Also shipped this batch (separate concerns): #2 SMS-send fix + #4 claim-email
+referral copy (notify-user, already deployed); #3 phone-mandatory verified as
+already implemented (required tel field + phoneValid gate + signUp stores it).
+
+Requires migration apply ("Apply Pending Migrations") for the grant RPC.
+All 75 qa flows pass; changed files esbuild-clean.
+Remaining from the batch: #1 claim-profile flow (largest — next increment).

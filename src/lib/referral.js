@@ -39,16 +39,37 @@ export function buildInviteUrl(inviterId) {
   return `${base}/i/${code}`;
 }
 
+/** Connector-invite link (SPEC: Connectors invite Connectors, 2026-06-26).
+ *  Same short link with `?c=1` — when a VERIFIED Connector shares THIS link,
+ *  the invitee is auto-granted Connector status on signup (server-guarded:
+ *  the grant RPC verifies the inviter is actually a Connector). A normal
+ *  invite link never grants Connector. Only surface this on the connector hub. */
+export function buildConnectorInviteUrl(inviterId) {
+  const base = buildInviteUrl(inviterId);
+  if (!base.includes('/i/')) return base; // non-attributable fallback
+  return `${base}${base.includes('?') ? '&' : '?'}c=1`;
+}
+
 /** Persist a known inviter UUID directly (used by the /i/:code short-link
  *  landing after the RPC expands the code). Same storage + TTL contract
  *  as captureRefFromUrl. */
-export function storeRef(inviterId) {
+export function storeRef(inviterId, { connector = false } = {}) {
   if (typeof window === 'undefined') return null;
   if (!inviterId || !UUID_RE.test(String(inviterId))) return null;
   try {
-    localStorage.setItem(REF_STORAGE_KEY, JSON.stringify({ inviter: inviterId, capturedAt: Date.now() }));
+    localStorage.setItem(REF_STORAGE_KEY, JSON.stringify({ inviter: inviterId, capturedAt: Date.now(), connector: !!connector }));
   } catch { /* private mode — ignore */ }
   return inviterId;
+}
+
+/** True when the stored ref came from a Connector-invite link (`?c=1`). */
+export function isConnectorInvite() {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem(REF_STORAGE_KEY);
+    if (!raw) return false;
+    return !!JSON.parse(raw).connector;
+  } catch { return false; }
 }
 
 // ─── Capture (runs on app boot) ─────────────────────────────────────────────
@@ -67,7 +88,8 @@ export function captureRefFromUrl() {
       console.warn('[referral] ignoring non-UUID ref:', ref);
       return null;
     }
-    const payload = { inviter: ref, capturedAt: Date.now() };
+    const connector = u.searchParams.get('c') === '1';
+    const payload = { inviter: ref, capturedAt: Date.now(), connector };
     try {
       localStorage.setItem(REF_STORAGE_KEY, JSON.stringify(payload));
     } catch { /* private mode — ignore */ }
@@ -118,6 +140,7 @@ export function clearActiveRef() {
 export async function recordInviteFromActiveRef(inviteeUserId) {
   if (!supabaseReady) return { error: null };
   const inviter = getActiveRef();
+  const connectorInvite = isConnectorInvite();
   if (!inviter) return { error: null };
   if (!inviteeUserId)       return { error: null };
   if (inviter === inviteeUserId) {
@@ -151,6 +174,14 @@ export async function recordInviteFromActiveRef(inviteeUserId) {
         data: { invitee_id: inviteeUserId, deep_link: `${origin}/earnings/invites` },
       });
     } catch { /* best-effort */ }
+  }
+  // Connectors invite Connectors (2026-06-26): when the ref came from a
+  // Connector-invite link, auto-grant the new user Connector status. The RPC is
+  // SECURITY DEFINER + GUARDED — it only grants if the inviter is actually a
+  // verified Connector, so a forged ?c=1 from a non-connector does nothing.
+  if (connectorInvite) {
+    try { await supabase.rpc('grant_connector_from_invite', { p_inviter: inviter }); }
+    catch (e) { /* best-effort */ /* eslint-disable-next-line no-console */ console.warn('[referral] connector grant failed:', e?.message || e); }
   }
   return { error };
 }

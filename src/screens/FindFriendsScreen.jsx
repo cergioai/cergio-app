@@ -202,10 +202,12 @@ export function FindFriendsScreen() {
   };
 
   // ── 5. Share invite (native share + clipboard fallback) ──────────────────
+  // Captivating message + link — never a bare URL (Tarik 2026-06-26).
+  const inviteMsg = `I'm on Cergio: the services your friends actually trust. Join with my link + book your first one 👇 ${inviteUrl}`;
   const copyInvite = async () => {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      showToast('Invite link copied');
+      await navigator.clipboard.writeText(inviteMsg);
+      showToast('Invite copied ✓');
     } catch {
       showToast(inviteUrl);
     }
@@ -215,7 +217,7 @@ export function FindFriendsScreen() {
       try {
         await navigator.share({
           title: 'Join me on Cergio',
-          text:  'Find trusted services through your network on Cergio.',
+          text:  inviteMsg,
           url:   inviteUrl,
         });
       } catch {/* user cancelled */}

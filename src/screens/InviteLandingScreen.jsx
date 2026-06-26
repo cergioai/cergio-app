@@ -57,7 +57,10 @@ export function InviteLandingScreen() {
       if (cancelled) return;
       const rows = data || [];
       if (!error && rows.length === 1 && rows[0]?.id) {
-        storeRef(rows[0].id);
+        // ?c=1 → Connector-invite link: persist the flag so signup auto-grants
+        // Connector status (server-guarded). Normal links never grant.
+        const connector = new URLSearchParams(window.location.search).get('c') === '1';
+        storeRef(rows[0].id, { connector });
         navigate(`/u/${rows[0].id}`, { replace: true });
       } else {
         // Unknown or ambiguous code — still land them on Cergio.

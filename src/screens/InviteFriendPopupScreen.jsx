@@ -31,10 +31,11 @@ export function InviteFriendPopupScreen() {
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
+      // Copy the captivating message + link, never a bare URL (Tarik 2026-06-26).
+      await navigator.clipboard.writeText(buildInviteMessage(REWARDS.perFriendUser, inviteUrl));
       showToast(auth?.isSignedIn
-        ? 'Invite link copied ✓'
-        : 'Link copied — sign in to earn from invites.');
+        ? 'Invite copied ✓'
+        : 'Copied — sign in to earn from invites.');
     } catch {
       showToast('Copy unavailable on this device.');
     }

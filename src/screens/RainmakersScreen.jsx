@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { buildInviteUrl } from '../lib/referral';
+import { buildInviteUrl, buildConnectorInviteUrl } from '../lib/referral';
+import { getMyCcStatus } from '../lib/api';
 import { REWARDS } from '../lib/rewards';
 
 // CERGIO-GUARD: NEVER hardcode the reward amounts in user-facing copy.
@@ -65,6 +67,21 @@ function CashCell({ val }) {
 export function RainmakersScreen() {
   const navigate = useNavigate();
   const { showToast, auth } = useOutletContext();
+  // Connector status — gates the "Invite a Connector" action (only verified
+  // Connectors can auto-grant Connector status to those they invite). 2026-06-26.
+  const [isConnector, setIsConnector] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!auth?.isSignedIn) { setIsConnector(false); return; }
+    getMyCcStatus().then(({ data }) => { if (!cancelled) setIsConnector(!!data?.cc_verified_at); });
+    return () => { cancelled = true; };
+  }, [auth?.isSignedIn]);
+  const copyConnectorInvite = async () => {
+    const url = buildConnectorInviteUrl(auth?.user?.id);
+    const msg = `Join me as a Connector on Cergio — get paid to spotlight local services to your network. You're set up as a Connector the moment you join with my link 👇 ${url}`;
+    try { await navigator.clipboard.writeText(msg); showToast('Connector invite copied ✓'); }
+    catch { showToast(url); }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-cr pb-20">
@@ -218,11 +235,13 @@ export function RainmakersScreen() {
             // a lying toast. Falls back to navigate(/invite/friends-popup)
             // when the clipboard API isn't available.
             const url = buildInviteUrl(auth?.user?.id);
+            // Copy a captivating message + link, never a bare URL (Tarik 2026-06-26).
+            const msg = `I'm on Cergio: the services your friends actually trust. Join with my link + book your first one 👇 ${url}`;
             try {
-              await navigator.clipboard.writeText(url);
+              await navigator.clipboard.writeText(msg);
               showToast(auth?.isSignedIn
-                ? 'Invite link copied ✓'
-                : 'Link copied — sign in to earn from invites.');
+                ? 'Invite copied ✓'
+                : 'Copied — sign in to earn from invites.');
             } catch {
               navigate('/invite/friends-popup');
             }
@@ -232,6 +251,15 @@ export function RainmakersScreen() {
         >
           Invite my friends
         </button>
+        {isConnector && (
+          <button
+            onClick={copyConnectorInvite}
+            className="w-full mt-3 bg-white/10 text-white border border-white/30 rounded-pill py-3
+                       text-body font-extrabold hover:bg-white/15 active:scale-[.97] transition-all"
+          >
+            Invite a Connector →
+          </button>
+        )}
         <p className="text-center mt-3 text-meta text-white/55 font-semibold">
           0/10 invites joined and completed booking
         </p>
