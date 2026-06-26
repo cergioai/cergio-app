@@ -200,6 +200,10 @@ export function ServiceDetailScreen() {
   const [ownerCounts, setOwnerCounts] = useState(null);
   const [ownerMutuals, setOwnerMutuals] = useState(null); // { count, names[] }
   const [recommenderCounts, setRecommenderCounts] = useState({});
+  // recommenderId → { count, names[] } — friends-in-common between the VIEWER
+  // and each recommender (the SAME signal the profile uses, not raw network
+  // membership). Surfaces "1 mutual friend in common — Jane" on each row.
+  const [recommenderMutuals, setRecommenderMutuals] = useState({});
   // The actual provider type (e.g. "Hair Stylist") — replaces the vague category
   // ("Beauty"). Seeded from state if present, else hydrated from the row.
   const [serviceType, setServiceType] = useState(
@@ -295,9 +299,21 @@ export function ServiceDetailScreen() {
           is_connector: !!profMap[r.recommender_id]?.cc_verified_at,
           isMutual:     netSet.has(r.recommender_id),
         })));
+        // Friends-in-common with the viewer for the displayed recommenders
+        // (top 3) — the SAME signal the profile uses. Bounded to what's shown.
+        const top = recs.slice(0, 3).map(r => r.recommender_id).filter(Boolean);
+        const mres = await Promise.all(top.map(id => getMutualConnections(id)));
+        if (cancelled) return;
+        const mmap = {};
+        top.forEach((id, i) => {
+          const m = mres[i]?.data;
+          mmap[id] = { count: m?.count || 0, names: (m?.sample || []).map(x => x.name).filter(Boolean) };
+        });
+        setRecommenderMutuals(mmap);
       } else {
         setRecommenders([]);
         setRecommenderCounts({});
+        setRecommenderMutuals({});
       }
 
       // CERGIO-GUARD (2026-05-31 — Phase 3b): hydrate review rows.
@@ -868,6 +884,7 @@ export function ServiceDetailScreen() {
               const avatarCls = `w-9 h-9 rounded-full text-white text-meta-sm font-extrabold flex-shrink-0
                                  flex items-center justify-center ${AV_GRADS[i % AV_GRADS.length]}`;
               const rc = r.id ? recommenderCounts[r.id] : null;
+              const rm = r.id ? recommenderMutuals[r.id] : null;
               return (
                 <div key={r.id} className="flex gap-2.5 bg-white border border-line rounded-[14px] p-3.5">
                   {r.id ? (
@@ -887,9 +904,14 @@ export function ServiceDetailScreen() {
                       ) : (
                         <span className="text-body-sm font-extrabold text-black">{r.name}</span>
                       )}
-                      {r.isMutual && <MutualBadge />}
+                      {(r.isMutual || (rm && rm.count > 0)) && <MutualBadge />}
                       {r.is_connector && <ConnectorChip />}
                     </div>
+                    {/* Friends-in-common with the viewer — NAMED ("1 mutual friend
+                        in common — Jane"). Same signal as the profile. */}
+                    {rm && rm.count > 0 && (
+                      <p className="text-meta-sm text-gd font-extrabold mt-0.5">{mutualNamesText(rm.names, rm.count)}</p>
+                    )}
                     {/* Recommender's social reach — IG / Cergio network. */}
                     <SocialReachLine counts={rc} />
                     <p className="text-meta text-b2 leading-snug mt-1.5 italic">&quot;{r.message}&quot;</p>
