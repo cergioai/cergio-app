@@ -25,6 +25,8 @@ import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'rea
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestQuoteSheet } from '../components/ui/RequestQuoteSheet';
+import { getInboxPartyCounts, getMyNetworkIds } from '../lib/api';
+import { TrustStream, SocialReachLine, ConnectorChip, MutualBadge } from '../components/ui/reputation';
 
 function initialsOf(name) {
   if (!name) return '?';
@@ -193,6 +195,15 @@ export function ServiceDetailScreen() {
   // Leighton mockup. Reviews come from bookings → reviews join
   // (reviews.rater_id = reviewer; reviews.booking_id → service_id).
   const [reviews, setReviews] = useState([]);
+  // Reputational streams (SPEC-49g): the provider's headline trust signal + the
+  // social reach of everyone who reco's them. Same source as profiles/previews.
+  const [ownerCounts, setOwnerCounts] = useState(null);
+  const [recommenderCounts, setRecommenderCounts] = useState({});
+  // The actual provider type (e.g. "Hair Stylist") — replaces the vague category
+  // ("Beauty"). Seeded from state if present, else hydrated from the row.
+  const [serviceType, setServiceType] = useState(
+    location.state?.provider?.taxonomy_provider_type || location.state?.provider?.category || null
+  );
 
   useEffect(() => {
     if (!supabaseReady || !serviceId) return;
@@ -205,7 +216,7 @@ export function ServiceDetailScreen() {
         const { data: svc } = await supabase
           .from('services')
           .select(`
-            id, title, category, description, location_text, photo_class,
+            id, title, category, taxonomy_provider_type, description, location_text, photo_class,
             cover_url, owner_id, rating_count,
             offerings ( id, name, description, kind, price_cents, duration_minutes, is_default )
           `)
@@ -215,6 +226,8 @@ export function ServiceDetailScreen() {
         if (!svc) { setLoading(false); return; }
         const offs = svc.offerings || [];
         const def  = offs.find(o => o.is_default) || offs[0];
+        // Real provider type (not the vague category) for the identity line.
+        if (!cancelled) setServiceType(svc.taxonomy_provider_type || svc.category || null);
         if (!seeded) {
           setProvider({
             id:         svc.id,
@@ -261,20 +274,29 @@ export function ServiceDetailScreen() {
       if (cancelled) return;
       if (recs?.length) {
         const ids = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, display_name, cc_verified_at')
-          .in('id', ids);
+        // Recommender profiles + viewer network (mutuals) + social reach in one
+        // pass (SPEC-49g): every "what people say" row carries the recommender's
+        // mutual badge + Connector badge + IG/network counts.
+        const [{ data: profs }, netRes, { data: rc }] = await Promise.all([
+          supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', ids),
+          getMyNetworkIds(),
+          getInboxPartyCounts(ids),
+        ]);
+        if (cancelled) return;
         const profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+        const netSet = new Set(netRes?.data || []);
+        setRecommenderCounts(rc || {});
         setRecommenders(recs.map(r => ({
           id:           r.recommender_id,
           name:         profMap[r.recommender_id]?.display_name || 'A friend',
           message:      r.message,
           created_at:   r.sent_at,
           is_connector: !!profMap[r.recommender_id]?.cc_verified_at,
+          isMutual:     netSet.has(r.recommender_id),
         })));
       } else {
         setRecommenders([]);
+        setRecommenderCounts({});
       }
 
       // CERGIO-GUARD (2026-05-31 — Phase 3b): hydrate review rows.
@@ -318,6 +340,18 @@ export function ServiceDetailScreen() {
     })();
     return () => { cancelled = true; };
   }, [seeded, serviceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Provider's headline trust stream (SPEC-49g) — network on Cergio · recos
+  // received · mutuals with the viewer. Same source as profiles/previews.
+  useEffect(() => {
+    const oid = ownerProfile?.id || provider?.ownerId || null;
+    if (!oid) { setOwnerCounts(null); return; }
+    let cancelled = false;
+    getInboxPartyCounts([oid]).then(({ data }) => {
+      if (!cancelled) setOwnerCounts((data || {})[oid] || null);
+    });
+    return () => { cancelled = true; };
+  }, [ownerProfile?.id, provider?.ownerId]);
 
   // Bucketed reco summary — Jennifer Leighton mockup format:
   //   "Reco'd by 4 friends and 30 Connectors, including Jennifer Connery"
@@ -409,6 +443,10 @@ export function ServiceDetailScreen() {
 
   const coverFallback = 'bg-gradient-to-br from-[#e8dcc8] via-[#b89870] to-[#604030]';
   const firstName = (ownerProfile?.display_name || provider.name).split(' ')[0];
+  // Real hero images only — drives the story ruler (no fake multi-page hint).
+  const heroImages = [provider.coverUrl].filter(Boolean);
+  // The provider type to show (e.g. "Hair Stylist"), never the vague category.
+  const displayType = serviceType || provider.taxonomy_provider_type || provider.category;
   const selectedOffering = (offerings || []).find(o => o.id === selectedOfferingId) || offerings?.[0] || null;
   const selectedPrice = selectedOffering ? Math.round((selectedOffering.price_cents ?? 0) / 100) : provider.price;
 
@@ -492,21 +530,20 @@ export function ServiceDetailScreen() {
           </svg>
         </button>
 
-        {/* Caption — sits just above the ruler */}
-        <p className="absolute bottom-7 left-16 right-5 text-white text-meta font-extrabold drop-shadow">
-          Running all the errands you need
-        </p>
-
-        {/* Story-progress ruler at BOTTOM (5 segments). First segment
-            full white indicates "leading" position. */}
-        <div className="absolute bottom-2 left-4 right-4 flex items-center gap-1.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className={`flex-1 h-[2.5px] rounded-full ${i === 0 ? 'bg-white' : 'bg-white/55'}`}
-            />
-          ))}
-        </div>
+        {/* Story-progress ruler — ONE segment per ACTUAL image (SPEC-49g /
+            no-fake-data SPEC-12). A single cover image used to show a fake
+            5-segment ruler implying more to scroll; now it reflects reality and
+            collapses entirely for a single image. */}
+        {heroImages.length > 1 && (
+          <div className="absolute bottom-2 left-4 right-4 flex items-center gap-1.5">
+            {heroImages.map((_, i) => (
+              <div
+                key={i}
+                className={`flex-1 h-[2.5px] rounded-full ${i === 0 ? 'bg-white' : 'bg-white/55'}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Big name + badges row — matches Jennifer Leighton mockup.
@@ -535,8 +572,9 @@ export function ServiceDetailScreen() {
               <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
               <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
             </svg>
-            {provider.category}
+            {displayType}
           </span>
+          {ownerProfile?.cc_verified_at && <ConnectorChip />}
           {hasFreeOffering && (
             <span className="inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
@@ -546,6 +584,14 @@ export function ServiceDetailScreen() {
             </span>
           )}
         </div>
+
+        {/* Reputational stream — the headline trust signal (mutuals · on-Cergio ·
+            recos), big and bold so it POPS (SPEC-49g: the key differentiator).
+            Sits right under the provider identity. Real numbers only — collapses
+            when the provider has no signal yet. */}
+        <TrustStream counts={ownerCounts} recoKind="received" className="mt-4" />
+        {/* Provider's own social reach — IG / Cergio network. */}
+        <SocialReachLine counts={ownerCounts} className="mt-2 !text-body-sm !text-b2" />
       </div>
 
       {/* Recommend button REMOVED (Tarik 2026-06-17, SPEC-54): a recommendation
@@ -738,7 +784,7 @@ export function ServiceDetailScreen() {
           Don&apos;t see what you need?{' '}
           <button
             onClick={() => navigate('/home', {
-              state: { prefill: `I need ${provider.category || 'a service'} from ${firstName}: `, providerId: provider.ownerId || null },
+              state: { prefill: `I need ${displayType || 'a service'} from ${firstName}: `, providerId: provider.ownerId || null },
             })}
             className="text-gd font-extrabold underline"
           >
@@ -751,7 +797,7 @@ export function ServiceDetailScreen() {
           the offering cards, before the sticky CTA). */}
       {(ownerProfile?.bio || ownerProfile?.instagram_handle || ownerProfile?.tiktok_handle) && (
         <div className="mx-5 mt-6">
-          <h2 className="text-heading-1 font-extrabold text-black mb-2">About the provider</h2>
+          <h2 className="text-heading-1 font-extrabold text-black mb-2">About {firstName}</h2>
           {ownerProfile?.bio && (
             <p className="text-body-sm text-b2 leading-relaxed">{ownerProfile.bio}</p>
           )}
@@ -817,10 +863,11 @@ export function ServiceDetailScreen() {
           <h2 className="text-heading-2 font-extrabold text-black mb-3">What people say</h2>
           <div className="flex flex-col gap-3">
             {recommenders.slice(0, 3).map((r, i) => {
-              const avatarCls = `w-8 h-8 rounded-full text-white text-meta-sm font-extrabold flex-shrink-0
+              const avatarCls = `w-9 h-9 rounded-full text-white text-meta-sm font-extrabold flex-shrink-0
                                  flex items-center justify-center ${AV_GRADS[i % AV_GRADS.length]}`;
+              const rc = r.id ? recommenderCounts[r.id] : null;
               return (
-                <div key={r.id} className="flex gap-2.5">
+                <div key={r.id} className="flex gap-2.5 bg-white border border-line rounded-[14px] p-3.5">
                   {r.id ? (
                     <Link to={`/u/${r.id}`} aria-label={`View ${r.name || 'profile'}`} className={avatarCls}>
                       {initialsOf(r.name)}
@@ -829,16 +876,21 @@ export function ServiceDetailScreen() {
                     <div className={avatarCls}>{initialsOf(r.name)}</div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-meta text-b2 leading-snug">
+                    {/* Name + trust badges (SPEC-49g): mutual-with-you + solid Connector. */}
+                    <div className="flex items-center gap-2 flex-wrap">
                       {r.id ? (
-                        <Link to={`/u/${r.id}`} className="font-extrabold text-black underline">
-                          {r.name}{r.is_connector ? ' · Connector' : ''}:
+                        <Link to={`/u/${r.id}`} className="text-body-sm font-extrabold text-black hover:underline">
+                          {r.name}
                         </Link>
                       ) : (
-                        <span className="font-extrabold text-black">{r.name}{r.is_connector ? ' · Connector' : ''}:</span>
-                      )}{' '}
-                      <span className="italic">&quot;{r.message}&quot;</span>
-                    </p>
+                        <span className="text-body-sm font-extrabold text-black">{r.name}</span>
+                      )}
+                      {r.isMutual && <MutualBadge />}
+                      {r.is_connector && <ConnectorChip />}
+                    </div>
+                    {/* Recommender's social reach — IG / Cergio network. */}
+                    <SocialReachLine counts={rc} />
+                    <p className="text-meta text-b2 leading-snug mt-1.5 italic">&quot;{r.message}&quot;</p>
                   </div>
                 </div>
               );
@@ -875,7 +927,7 @@ export function ServiceDetailScreen() {
             ownerId:                provider.ownerId,
             name:                   provider.name,
             category:               provider.category,
-            taxonomy_provider_type: provider.category, // best available signal
+            taxonomy_provider_type: displayType || provider.category, // real provider type
             location_text:          provider.location_text || null,
             lat:                    provider.lat || null,
             lng:                    provider.lng || null,

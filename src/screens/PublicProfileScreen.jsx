@@ -29,6 +29,7 @@ import { supabase, supabaseReady } from '../lib/supabase';
 import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds, getConnectorSpotlights } from '../lib/api';
 import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
 import { IgPostTile } from '../components/ui/IgPostTile';
+import { recoByline, SocialReachLine } from '../components/ui/reputation';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 function initialsOf(name) {
@@ -109,60 +110,8 @@ function fmtMonthYear(iso) {
   } catch { return ''; }
 }
 
-function firstNameOf(n) { return (n || '').trim().split(/\s+/)[0] || ''; }
-
-// Compact follower/network count — 12.3K, 1.1M (SPEC-49g recommender social data).
-function compactN(n) {
-  n = Number(n) || 0;
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(n % 1_000 ? 1 : 0) + 'K';
-  return String(n);
-}
-
-// Trust-first reco byline (SPEC-49g): names the personal connection FIRST —
-// "You and your friend Jason", "your friends Jamie and Lee + 3 more" — falling
-// back to plain counts ("Reco'd by 5 friends and 1 Connector") when the viewer
-// shares no one. `s` = { total, friends, connectors, mutualNames[], viewerRecommended }.
-function recoByline(s) {
-  if (!s || !s.total) return null;
-  const mutuals = (s.mutualNames || []).map(firstNameOf).filter(Boolean);
-  const you = !!s.viewerRecommended;
-  if (you || mutuals.length) {
-    const named = (you ? 1 : 0) + mutuals.length;
-    const others = Math.max(0, s.total - named);
-    let core;
-    if (mutuals.length === 0) core = 'You';
-    else if (mutuals.length === 1) core = you ? `you and your friend ${mutuals[0]}` : `your friend ${mutuals[0]}`;
-    else {
-      const list = mutuals.length === 2
-        ? `${mutuals[0]} and ${mutuals[1]}`
-        : `${mutuals.slice(0, 2).join(', ')} and ${mutuals.length - 2} more`;
-      core = you ? `you, ${list}` : `your friends ${list}`;
-    }
-    let txt = `Reco'd by ${core}`;
-    if (others > 0) txt += ` + ${others} more`;
-    return txt;
-  }
-  const parts = [];
-  if (s.friends > 0) parts.push(`${s.friends} ${s.friends === 1 ? 'friend' : 'friends'}`);
-  if (s.connectors > 0) parts.push(`${s.connectors} ${s.connectors === 1 ? 'Connector' : 'Connectors'}`);
-  return `Reco'd by ${parts.join(' and ') || s.total}`;
-}
-
-// One-line social-reach signal for a recommender (SPEC-49g): "12.3K IG · 40 network".
-// Renders nothing when the recommender has no IG + no Cergio network.
-function SocialReachLine({ counts }) {
-  if (!counts) return null;
-  const ig = Number(counts.igFollowers) || 0;
-  const tt = Number(counts.ttFollowers) || 0;
-  const net = Number(counts.networkCount) || 0;
-  const parts = [];
-  if (ig > 0) parts.push(`${compactN(ig)} IG`);
-  else if (tt > 0) parts.push(`${compactN(tt)} TikTok`);
-  if (net > 0) parts.push(`${net} network`);
-  if (!parts.length) return null;
-  return <p className="text-meta-sm text-b3 font-semibold leading-none mt-0.5">{parts.join(' · ')}</p>;
-}
+// Reputational-stream primitives are SHARED across the app (SPEC-49g) so every
+// surface reads identically — see components/ui/reputation.jsx.
 
 // One service-card row (used in the "Their Services" + "Their Go-Tos"
 // sections). Cover image or photo-class gradient fallback. Tap → PDP.
