@@ -122,7 +122,7 @@ export function ServiceTile({ svc, recoSummary, onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className="w-full text-left bg-white border border-bdr rounded-[16px] overflow-hidden hover:border-g/40 cg-tap"
+      className="w-full text-left bg-white border border-line rounded-[16px] overflow-hidden hover:border-g/40 cg-tap"
     >
       <div className={`relative h-[160px] bg-gradient-to-br ${grad}`}>
         {svc.cover_url && (
@@ -158,7 +158,7 @@ export function ServiceTile({ svc, recoSummary, onOpen }) {
           </p>
         )}
         {svc.description && (
-          <p className="text-meta text-b3 leading-snug mt-1.5 line-clamp-2">{svc.description}</p>
+          <p className="text-body-sm text-b3 leading-relaxed mt-1.5 line-clamp-2">{svc.description}</p>
         )}
         {recoSummary && recoSummary.total > 0 && (
           <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
@@ -810,9 +810,9 @@ export function PublicProfileScreen() {
           matching the interim /inbound screen — Tarik 2026-06-18). Gated on real
           data; collapses silently when none. */}
       {spotlights.length > 0 && (
-        <div className="px-5 mt-8">
+        <div className="mx-5 mt-8 border-t border-line pt-8">
           <h2 className="text-heading-1 font-extrabold text-black">Spotlights on Cergio</h2>
-          <p className="text-meta text-b3 font-medium mt-1">
+          <p className="text-body-sm text-b3 font-medium mt-1">
             Services {firstName} has spotlighted on Instagram
           </p>
           <div className="flex flex-wrap gap-2 mt-3">
@@ -898,7 +898,7 @@ export function PublicProfileScreen() {
               <div
                 key={r.id}
                 onClick={() => navigate(`/service/${r.service.id}`)}
-                className="cursor-pointer bg-white border border-bdr rounded-[16px] p-4 cg-tap"
+                className="cursor-pointer bg-white border border-line rounded-[16px] p-5 cg-tap"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -969,7 +969,7 @@ export function PublicProfileScreen() {
                       clickable={false}
                       className="ring-2 ring-white"
                     />
-                    <p className="flex-1 text-body-sm text-b2 leading-relaxed">{r.message}</p>
+                    <p className="flex-1 text-body text-b2 leading-relaxed">{r.message}</p>
                   </div>
                 )}
               </div>
@@ -993,9 +993,9 @@ export function PublicProfileScreen() {
           rather than rendering a blank scroll area. */}
       {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && spotlights.length === 0 && (
         <div className="px-5 mt-8 mb-8">
-          <div className="bg-white border border-bdr rounded-[14px] p-5 text-center">
-            <p className="text-body font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>
-            <p className="text-meta text-b3 font-medium mt-1 leading-snug">
+          <div className="bg-white border border-line rounded-[16px] p-5 text-center">
+            <p className="text-body-lg font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>
+            <p className="text-body-sm text-b3 font-medium mt-1.5 leading-relaxed">
               Their recommendations + listed services will appear here.
             </p>
           </div>

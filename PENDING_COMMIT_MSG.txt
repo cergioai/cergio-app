@@ -1,31 +1,22 @@
-feat(referral): server-authoritative settlement — the growth-engine money path (SPEC-57)
+SPEC-84: redo profile Airbnb pass (lead identity card + card surfaces)
 
-Tarik: "the heart of the growth engine; a disaster if users can't get paid /
-receive credits / track invites." Rebuilt referral credit from best-effort
-client math to ONE canonical, idempotent, server-driven RPC.
+Tarik flagged the profile's Airbnb application as poor / "very far from
+Airbnb fonts, distances, UI". Rebuilt the lead identity card
+(ProfileSignalBlock) and softened the card surfaces to match the
+design-spec "Airbnb elegance standard".
 
-Economics (Tarik-confirmed): 1st tier 7%/booking cap $250 per friend; 2nd tier
-0.5%/booking cap $12.50 per friend-of-friend (= 5% of the $250 tier); BOTH
-ACCUMULATING across bookings; depth 2 only.
+- Lead identity card: heavy border-bdr/p-4 -> hairline border-line/p-5,
+  mt-2 -> mt-3.
+- Readable type ramp: headline + bio now body (14), not meta (12/13);
+  reach stays body-bold black; mt-3 (12px) rhythm between distinct blocks.
+- Replaced the cramped meta-sm network/recos line with the SHARED inline
+  TrustStream primitive (bold number + quiet label) so the profile reads
+  identically to the PDP / request previews. Mutuals stay the one NAMED
+  green trust line below.
+- "See Instagram", service-type and mutuals lines bumped to body-sm.
+- ServiceTile + Go-To cards + empty state: border-bdr -> hairline
+  border-line, reading text 12 -> 14, p-4 -> p-5; Spotlights section gets
+  the hairline top divider for consistent section rhythm.
 
-- migration 20260626020000_referral_settlement.sql: credit_referral_for_booking
-  RPC. SECURITY DEFINER, idempotent (one row per earner/booking/tier), GUARDED
-  (only credits when booking is paid_at + total>0 → free bookings never
-  credit/burn; webhook-retry + client can't double-credit). Writes status
-  'cleared' (counts as earned, not stuck pending).
-- stripe-webhook: on payment_intent.succeeded, stamp paid_at then call the RPC
-  (held + instant modes). The reliable settlement path (was: client-only,
-  best-effort, could silently drop credit).
-- referral.js: creditInviterOnFirstBooking now just calls the RPC (idempotent
-  redundant trigger); old one-shot 7% math + flat-$12.50 fof removed;
-  creditChainOnFirstBooking → deprecated no-op (RPC handles both tiers).
-- api.getMyEarningsSummary: count 'cleared' as earned (referral + provider
-  earnings were wrongly shown as perpetually pending).
-
-Fixes audit F1 (settlement/cleared), F2 (server-authoritative), F3 (accumulate to
-cap, not one-shot). FROZEN_SPEC SPEC-57 rewritten; qa #57 asserts the RPC
-economics + guard + idempotency + webhook wiring. All 75 flows pass.
-
-Requires "Apply Pending Migrations" (3 now: referral_settlement, claim_
-recommendations, connector_invite_grant) + "Deploy Edge Functions" (stripe-
-webhook). Then verify with "E2E Multi-Degree Referral.command".
+No data/behavior change (same fields, same order, same primitives).
+QA: all 75 flows pass.

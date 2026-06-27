@@ -16,7 +16,7 @@
 // comes from getInboxPartyCounts (the SAME source as the request previews) plus
 // the profile's bio / IG handle / name passed down. No fake data (SPEC-12).
 import { formatKeyCounts } from '../../hooks/usePartyCounts';
-import { mutualNamesText } from './reputation';
+import { mutualNamesText, TrustStream } from './reputation';
 
 function ShieldIcon({ size = 11 }) {
   return (
@@ -64,28 +64,27 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
     ttFollowers > 0 ? `${formatKeyCounts({ ttFollowers }, { recoKind: 'made', includeMutual: false, includeReco: false, includeNetwork: false })}` : null,
   ].filter(Boolean).join(' · ');
 
-  // Strength line — "5 network on Cergio · 5 reco's made" (omit zero parts).
-  const strength = [
-    networkCount > 0 ? `${networkCount} network on Cergio` : null,
-    recosMade > 0 ? `${recosMade} reco${recosMade === 1 ? '' : 's'} made` : null,
-  ].filter(Boolean).join(' · ');
-
   const igLink = igHandle ? (
     <a
       href={`https://instagram.com/${String(igHandle).replace(/^@/, '')}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-1"
+      className="inline-block text-body-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-3"
     >
       See Instagram
     </a>
   ) : null;
 
-  // Distinct type ramp (SPEC-49g): bio reads as body prose, clearly different
-  // from the metric lines (reach = bold black, strength/counts = light gray meta,
-  // mutuals = green). Tarik: "distinct fonts for service-type / #recos / headline / bio".
+  // Airbnb type ramp (design-spec "Lead identity card"): readable sizes, real
+  // jumps, 12px (mt-3) between distinct blocks. Reading content (headline, bio)
+  // is body (14/16) — NEVER meta — so it doesn't read as "too small". Metrics use
+  // the shared inline TrustStream (bold number + quiet label). Mutuals are the one
+  // green trust line, NAMED.
+
+  // Bio — primary reading prose at body (14), relaxed. (Was body-sm/13 — too small
+  // per Tarik's Airbnb feedback.)
   const bioEl = bio ? (
-    <p className="text-body-sm text-b2 leading-relaxed mt-2">{bio}</p>
+    <p className="text-body text-b2 leading-relaxed mt-3">{bio}</p>
   ) : null;
 
   // SOLID Connector badge (Tarik 2026-06-25: "make the Connector badge solid").
@@ -97,33 +96,38 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
 
   // Reach line — "319 IG followers" — bold black, the loudest metric.
   const reachEl = reachLine ? (
-    <p className="flex items-center gap-1 text-body font-extrabold text-black mt-1.5">
+    <p className="flex items-center gap-1.5 text-body font-extrabold text-black mt-3">
       <IgGlyph />{reachLine}
     </p>
   ) : null;
 
-  // Strength line — "5 network on Cergio · 5 recos made" — light gray meta.
-  const strengthEl = strength ? (
-    <p className="text-meta-sm text-b3 font-semibold mt-0.5">{strength}</p>
-  ) : null;
+  // Trust stream — "5 on Cergio · 5 recos made" via the SHARED primitive so it
+  // reads identically to the PDP / request previews (no per-screen restyle). The
+  // mutual stat is stripped here because it gets its own NAMED green line below.
+  const trustEl = (
+    <div className="mt-2">
+      <TrustStream counts={{ ...counts, mutualCount: 0 }} recoKind="made" />
+    </div>
+  );
 
-  // Service-type line — green bold, its own distinct weight/color.
+  // Service-type line — green bold, its own distinct weight/color, body size.
   const serviceLine = isService ? (
-    <p className="text-body-sm leading-snug mt-2">
+    <p className="text-body leading-snug mt-3">
       <span className="font-extrabold text-gd">{role || 'Service'}</span>
       <span className="text-b3 font-medium"> · {recosReceived} reco{recosReceived === 1 ? '' : 's'} received</span>
     </p>
   ) : null;
 
-  // Headline — secondary identity, medium gray (distinct from bio prose).
+  // Headline — secondary identity at body (14), medium-gray (distinct from the
+  // black name above and the bio prose). Was meta/12 — read as cramped.
   const headlineEl = headline ? (
-    <p className="mt-1 text-meta text-b3 font-medium leading-snug">{headline}</p>
+    <p className="mt-2 text-body text-b2 font-medium leading-snug">{headline}</p>
   ) : null;
 
-  // Mutuals — GREEN, the trust signal. NAMES the people ("1 mutual friend in
-  // common — Jane") rather than a bare count (Tarik 2026-06-25).
+  // Mutuals — GREEN, the trust signal, at body-sm. NAMES the people ("1 mutual
+  // friend in common — Jane") rather than a bare count (Tarik 2026-06-25).
   const mutualLine = (
-    <p className="text-meta-sm font-semibold leading-snug mt-2 text-gd">
+    <p className="text-body-sm font-semibold leading-snug mt-3 text-gd">
       {mutualCount > 0
         ? (mutualNamesText(mutualNames, mutualCount) || `${mutualCount} mutual ${mutualCount === 1 ? 'friend' : 'friends'} in common`)
         : <span className="text-b3 font-medium">You have no mutual friends with {firstName} yet.</span>}
@@ -131,13 +135,13 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
   );
 
   return (
-    <div className="mx-5 mt-2 bg-white border border-bdr rounded-[16px] p-4">
+    <div className="mx-5 mt-3 bg-white border border-line rounded-[16px] p-5">
       {connectorLeads ? (
         <>
           {connectorBadge}
           {headlineEl}
           {reachEl}
-          {strengthEl}
+          {trustEl}
           {igLink}
           {bioEl}
           {serviceLine}
@@ -154,7 +158,7 @@ export function ProfileSignalBlock({ counts, role, isService, isConnector, servi
           </p>
           {headlineEl}
           {reachEl}
-          {strengthEl}
+          {trustEl}
           {igLink}
           {bioEl}
           {mutualLine}
