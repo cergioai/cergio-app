@@ -63,12 +63,56 @@ serve(async (req: Request) => {
       const sample = { name: 'Your Business', service_type: 'plumber', city: 'Miami' };
       const token = await hmac(test, optoutSecret);
       const optoutUrl = `${FUNCTIONS_BASE}/outreach-optout?c=email&a=${encodeURIComponent(test)}&k=${token}`;
+      const optinUrl  = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(test)}&k=${token}`;
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to: test, reply_to: replyTo, subject: '[TEST] Cergio outreach preview', html: renderEmail(sample, optoutUrl, postal) }),
+        body: JSON.stringify({ from, to: test, reply_to: replyTo, subject: '[TEST] Cergio soft-launch preview', html: renderEmail(sample, optinUrl, optoutUrl, postal) }),
       });
       return json({ test_sent_to: test, ok: r.ok });
+    }
+
+    // ── Manual WhatsApp generator (?wa=1) ────────────────────────────────────
+    // FREE, COMPLIANT soft-launch channel: returns tap-to-send wa.me click-to-chat
+    // links (message pre-filled, incl. the per-recipient opt-in link) for phone
+    // leads. The FOUNDER taps each one and sends personally from WhatsApp — no
+    // bulk send, no API, no ban risk. Read-only: does NOT change lead status or
+    // send anything. `limit` (default 50) caps the batch so daily volume stays
+    // human. Excludes do_not_contact + already opted_in.
+    if (url.searchParams.get('wa') === '1') {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200);
+      const waLink = (e164: string, msg: string) =>
+        `https://wa.me/${e164.replace(/[^\d]/g, '')}?text=${encodeURIComponent(msg)}`;
+      const out: Array<Record<string, unknown>> = [];
+
+      const { data: bizs } = await db.from('leads_localbiz')
+        .select('id, name, service_type, city, phone, outreach_status')
+        .not('phone', 'is', null).neq('outreach_status', 'do_not_contact').neq('outreach_status', 'opted_in')
+        .limit(limit);
+      for (const b of bizs ?? []) {
+        const e164 = toE164(b.phone); if (!e164) continue;
+        const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
+        if (supp) continue;
+        const tok = await hmac(e164, optoutSecret);
+        const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(e164)}&k=${tok}`;
+        const msg = `Hi${b.name ? ' ' + b.name : ''} — Tarik, founder of Cergio (soft launch). Give 1 free ${b.service_type || 'service'} to a local creator who'll spotlight you on IG/TikTok — new clients, no ad spend. Grab a free launch spot: ${optinUrl}`;
+        out.push({ type: 'business', name: b.name, phone: e164, wa_url: waLink(e164, msg) });
+      }
+
+      const { data: infs } = await db.from('leads_influencers')
+        .select('ig_handle, city, phone, outreach_status')
+        .not('phone', 'is', null).neq('outreach_status', 'do_not_contact').neq('outreach_status', 'opted_in')
+        .limit(limit);
+      for (const inf of infs ?? []) {
+        const e164 = toE164(inf.phone); if (!e164) continue;
+        const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
+        if (supp) continue;
+        const tok = await hmac(e164, optoutSecret);
+        const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=inf&a=${encodeURIComponent(e164)}&k=${tok}`;
+        const msg = `Hi @${inf.ig_handle} — Tarik at Cergio (soft launch). Free local services for an IG/TikTok spotlight to your followers. Claim your spot: ${optinUrl}`;
+        out.push({ type: 'creator', handle: inf.ig_handle, phone: e164, wa_url: waLink(e164, msg) });
+      }
+      return json({ whatsapp_manual: true, count: out.length, links: out });
     }
 
     // Candidates: sourced, never-contacted, have an email.
@@ -97,8 +141,9 @@ serve(async (req: Request) => {
 
       const token = await hmac(email, optoutSecret);
       const optoutUrl = `${FUNCTIONS_BASE}/outreach-optout?c=email&a=${encodeURIComponent(email)}&k=${token}`;
-      const html = renderEmail(lead, optoutUrl, postal);
-      const subject = `${lead.name ? lead.name + ' — ' : ''}get more local clients through Cergio`;
+      const optinUrl  = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(email)}&k=${token}`;
+      const html = renderEmail(lead, optinUrl, optoutUrl, postal);
+      const subject = `${lead.name ? lead.name + ' — ' : ''}free local exposure (Cergio soft launch)`;
 
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -135,13 +180,14 @@ serve(async (req: Request) => {
         if (supp) { await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue; }
         const token = await hmac(email, optoutSecret);
         const optoutUrl = `${FUNCTIONS_BASE}/outreach-optout?c=email&a=${encodeURIComponent(email)}&k=${token}`;
+        const optinUrl  = `${FUNCTIONS_BASE}/outreach-optin?t=inf&a=${encodeURIComponent(email)}&k=${token}`;
         const r = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from, to: email, reply_to: replyTo,
-            subject: `@${inf.ig_handle} — get free local services for a shoutout on Cergio`,
-            html: renderInfluencerEmail(inf, optoutUrl, postal),
+            subject: `@${inf.ig_handle} — free local services for a shoutout (Cergio soft launch)`,
+            html: renderInfluencerEmail(inf, optinUrl, optoutUrl, postal),
             headers: { 'List-Unsubscribe': `<${optoutUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
           }),
         });
@@ -184,7 +230,9 @@ serve(async (req: Request) => {
         const { data: supp } = await db
           .from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
         if (supp) { await db.from('leads_localbiz').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id); continue; }
-        const body = `Hi${lead.name ? ' ' + lead.name : ''} — people near ${lead.city || 'you'} are looking for ${lead.service_type || 'your service'} on Cergio. Free to list & get local client requests: cergio.ai. Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const smsTok = await hmac(e164, optoutSecret);
+        const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(e164)}&k=${smsTok}`;
+        const body = `Hi${lead.name ? ' ' + lead.name : ''} — Tarik, founder of Cergio (soft launch). Give 1 free ${lead.service_type || 'service'} to a local creator who'll spotlight you on IG/TikTok. New clients, no ad spend. Claim a free spot: ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
         const form = new URLSearchParams();
         form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
         form.set('To', e164); form.set('Body', body);
@@ -211,7 +259,9 @@ serve(async (req: Request) => {
         if (!e164) continue;
         const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
         if (supp) { await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue; }
-        const body = `Hi @${inf.ig_handle} — Cergio connects creators with local businesses offering FREE services for a shoutout. Want in? cergio.ai. Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const smsTok = await hmac(e164, optoutSecret);
+        const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=inf&a=${encodeURIComponent(e164)}&k=${smsTok}`;
+        const body = `Hi @${inf.ig_handle} — Tarik at Cergio (soft launch). Get free local services for an IG/TikTok spotlight to your followers. Claim your spot: ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
         const form = new URLSearchParams();
         form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
         form.set('To', e164); form.set('Body', body);
@@ -247,16 +297,30 @@ function toE164(raw: string): string | null {
   return null;
 }
 
-function renderInfluencerEmail(inf: any, optoutUrl: string, postal: string): string {
+// Big green tap target — the opt-in CTA. Tapping it records consent + drops the
+// lead into the right "free" directory (see outreach-optin).
+function ctaButton(url: string, label: string): string {
+  const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<p style="margin:20px 0">
+    <a href="${esc(url)}" style="display:inline-block;background:#4AA901;color:#fff;text-decoration:none;
+       font-weight:800;font-size:15px;padding:13px 22px;border-radius:24px">${esc(label)}</a>
+  </p>`;
+}
+
+// Soft-launch CREATOR invite (SPEC-70): free services in exchange for an IG/TikTok
+// spotlight. Sharp, founder-voiced, one tap to opt in.
+function renderInfluencerEmail(inf: any, optinUrl: string, optoutUrl: string, postal: string): string {
   const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const handle = esc(inf.ig_handle || 'there');
   const city = esc(inf.city || 'your city');
   return `
   <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;color:#1a1a1a;line-height:1.5">
     <p>Hi @${handle},</p>
-    <p>I run <b>Cergio</b> — a network where local businesses offer creators <b>free services in exchange for a shoutout</b>, and where your followers can book services they actually trust through you.</p>
-    <p>Businesses in ${city} are already offering free work for spotlights. Want me to set you up so the offers come to you? Just reply and I'll send the details.</p>
-    <p>— The Cergio team</p>
+    <p>I'm Tarik, founder of <b>Cergio</b> — we're soft-launching now.</p>
+    <p>Local businesses in ${city} are offering <b>free services to creators</b> who'll post them. Want free services in exchange for an <b>Instagram / TikTok spotlight</b> to your followers?</p>
+    ${ctaButton(optinUrl, 'Claim my spot →')}
+    <p style="color:#555">Tap above to grab a launch spot, or just reply — I read every message.</p>
+    <p>— Tarik, founder, Cergio</p>
     <hr style="border:none;border-top:1px solid #eee;margin:18px 0" />
     <p style="font-size:12px;color:#888">
       You're receiving this because your creator account lists a public contact for partnerships.
@@ -266,17 +330,21 @@ function renderInfluencerEmail(inf: any, optoutUrl: string, postal: string): str
   </div>`;
 }
 
-function renderEmail(lead: any, optoutUrl: string, postal: string): string {
+// Soft-launch BUSINESS invite (SPEC-70): give one free service to a local creator
+// in exchange for a spotlight to their network.
+function renderEmail(lead: any, optinUrl: string, optoutUrl: string, postal: string): string {
   const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const name = esc(lead.name || 'there');
-  const type = esc(lead.service_type || 'local service');
+  const type = esc(lead.service_type || 'service');
   const city = esc(lead.city || 'your area');
   return `
   <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;color:#1a1a1a;line-height:1.5">
     <p>Hi ${name},</p>
-    <p>People in ${city} are searching for ${type} on <b>Cergio</b> — a network where neighbors book services their friends actually trust. A search for your category came up with no local provider yet, so I wanted to reach out.</p>
-    <p>Listing is free, you only hear from real nearby clients, and connectors can spotlight you to their audience. If that's useful, just reply and I'll get you set up.</p>
-    <p>— The Cergio team</p>
+    <p>I'm Tarik, founder of <b>Cergio</b> — we're soft-launching in ${city}.</p>
+    <p>The idea: give <b>one free ${type}</b> to a vetted local creator, and they'll <b>spotlight you to their followers on Instagram &amp; TikTok</b>. New clients, zero ad spend.</p>
+    ${ctaButton(optinUrl, 'Claim a free launch spot →')}
+    <p style="color:#555">Tap above to grab a spot, or just reply — I read every message.</p>
+    <p>— Tarik, founder, Cergio</p>
     <hr style="border:none;border-top:1px solid #eee;margin:18px 0" />
     <p style="font-size:12px;color:#888">
       You're receiving this because your business is publicly listed as a ${type} in ${city}.

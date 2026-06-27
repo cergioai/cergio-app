@@ -586,4 +586,19 @@ Coverage.command".
 
 ---
 
-*Last updated: 2026-06-25 by Claude (Cowork session)*
+### SPEC-70 · Soft-launch opt-in barter outreach (the seam into the growth system)
+**Status:** FROZEN — 2026-06-27 (Tarik soft launch).
+**The pitch (both sides, sharpened, founder-voiced):**
+- **To businesses:** give ONE free service to a vetted local creator → they spotlight you to their followers on IG/TikTok. New clients, zero ad spend.
+- **To creators/connectors:** get free local services in exchange for an IG/TikTok spotlight to your followers.
+
+**Rules:**
+- **Email** (`outreach-send`, CAN-SPAM, already live) carries the barter copy + a prominent **per-recipient opt-in CTA** (`ctaButton` → `outreach-optin?t=biz|inf&a=<addr>&k=<hmac>`). Opt-out footer stays.
+- **`outreach-optin`** (new, PUBLIC, HMAC-verified, no auth): marks the matching lead `outreach_status='opted_in'` (+ timestamp) and **302-redirects into the app** (`/auth?src=soft_launch&role=service|connector`). Tapping the link = the recipient's consent — this is the seam that migrates a personal launch convo into the permanent product (claim → request → referrals).
+- **Free WhatsApp channel:** `outreach-send?wa=1&limit=N` is a **read-only generator** returning `wa.me` click-to-chat links (message + opt-in link pre-filled) for phone leads. The **"Generate WhatsApp Outreach.command"** builds a clickable page; the FOUNDER taps each to send **personally** — no bulk send, no API, no ban risk. Keep ~20–40/day, personalize line 1.
+- **SMS** bodies updated to the same barter copy + opt-in link, but stay gated behind `OUTREACH_SMS_ENABLED` + Twilio funding/10DLC (SPEC-66). Cold SMS is NOT auto-sent.
+- No cold WhatsApp bulk send, ever (ban + ToS). qa.mjs #70 enforces the opt-in link + function + wa.me generator.
+
+---
+
+*Last updated: 2026-06-27 by Claude (Cowork session)*

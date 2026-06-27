@@ -2249,6 +2249,22 @@ test('spec-65-compliant-outreach', 'FROZEN: auto email outreach is CAN-SPAM comp
   assert(mig.length >= 1, 'outreach_suppressions migration must exist — SPEC-65');
 });
 
+test('spec-70-softlaunch-optin', 'FROZEN: soft-launch outreach is opt-in barter — emails carry a per-recipient opt-in link; outreach-optin (HMAC, no auth) marks opted_in + redirects into the app; a free wa.me manual generator exists (SPEC-70)', '#70', async () => {
+  const send = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/outreach-send/index.ts'), 'utf8');
+  // Email barter copy + opt-in CTA links for both audiences.
+  assert(/outreach-optin\?t=biz/.test(send) && /outreach-optin\?t=inf/.test(send), 'emails must include per-recipient opt-in links (biz + inf) — SPEC-70');
+  assert(/ctaButton/.test(send) && /spotlight/i.test(send), 'soft-launch email must have an opt-in CTA + barter (spotlight) copy — SPEC-70');
+  // Free manual WhatsApp generator (no bulk send).
+  assert(/wa\.me\//.test(send) && /get\('wa'\)/.test(send), 'must expose a wa.me manual-generator mode — SPEC-70');
+  // Opt-in capture function.
+  const oi = path.join(REPO_ROOT, 'supabase/functions/outreach-optin/index.ts');
+  assert(fs.existsSync(oi), 'outreach-optin function must exist — SPEC-70');
+  const opt = fs.readFileSync(oi, 'utf8');
+  assert(/hmac/i.test(opt), 'outreach-optin must HMAC-verify the link — SPEC-70');
+  assert(/opted_in/.test(opt), 'outreach-optin must mark the lead opted_in — SPEC-70');
+  assert(/302/.test(opt) && /cergio\.ai/.test(opt), 'outreach-optin must redirect into the app (migration seam) — SPEC-70');
+});
+
 test('spec-68-influencer-enrichment', 'FROZEN: enrich-influencers fills email/phone from bio/external_url (never Instagram), fills-only-null, suppression-aware (SPEC-68)', '#68', async () => {
   const f = path.join(REPO_ROOT, 'supabase/functions/enrich-influencers/index.ts');
   assert(fs.existsSync(f), 'enrich-influencers function must exist — SPEC-68');
