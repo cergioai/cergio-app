@@ -71,7 +71,8 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
     e?.preventDefault?.();
     if (busy) return;
     if (!stars) { setErr('Please rate the service first.'); return; }
-    if (lowRating && !comment.trim()) { setErr('Please explain what went wrong.'); return; }
+    // A written review is MANDATORY regardless of star count (Tarik 2026-06-27).
+    if (!comment.trim()) { setErr(lowRating ? 'Please explain what went wrong.' : 'Please write a quick review.'); return; }
     // IG post is REQUIRED for free/barter (the barter obligation) but OPTIONAL
     // when the user paid (SPEC-54).
     if (!lowRating && !isPaid && !hasUrl) { setErr('Paste the public link to your Instagram post.'); return; }
@@ -165,9 +166,10 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
               </div>
               <div className="bg-cr2 border border-bdr rounded-[12px] px-3.5 py-3">
                 <p className="text-meta text-b2 leading-snug">
-                  Your review will be shared with the provider and analyzed by Cergio. The
-                  Instagram post is on hold until the rating is resolved — providers need a
-                  4★+ rating for the spotlight to go live.
+                  This stays <span className="font-extrabold">private</span> — shared only with the
+                  provider and Cergio to help them improve. It is <span className="font-extrabold">not</span> a
+                  public recommendation. Only a 4★+ rating becomes a recommendation and lets the
+                  Instagram spotlight go live.
                 </p>
                 <p className="text-meta-sm text-b3 leading-snug mt-1.5">
                   These reviews are <span className="font-extrabold">private, not public</span>.
@@ -179,14 +181,14 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
           ) : (
             <>
               {/* Your review (Tarik 2026-06-27): HIDDEN until the user picks a
-                  rating, then exposed. At 4★+ this optional written review
+                  rating, then exposed — and REQUIRED. At 4★+ this written review
                   shows; at 1–3★ the lowRating branch shows its own required
                   "what went wrong" box; at 0★ (not yet rated) no box. Saved via
                   createReview. */}
               {stars >= 4 && (
                 <div>
                   <label className="block text-meta font-extrabold text-black mb-1">
-                    Write a review <span className="text-b3 font-medium">(optional)</span>
+                    Write a review
                   </label>
                   <textarea
                     value={comment}

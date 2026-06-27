@@ -145,11 +145,18 @@ Enforced in `influencer_crawler.py` via `MIN_FOLLOWERS` / `MAX_FOLLOWERS` consta
   comment), shown as PRIVATE ("truthful reviews from trusted friends, not gamed reviews from
   strangers"), shared with the provider; the spotlight does NOT go live until resolved. Provider
   reply / escalate / admin dispute = the next module.
-- **The written-review textarea appears once the user picks a rating** (Tarik 2026-06-27:
-  "keep hidden until the user picks a star, then expose"). At **0★** (not yet rated) no box; at
-  **1–3★** the held path shows its REQUIRED "what went wrong" textarea; at **4★+** the optional
-  "Write a review" textarea shows. All saved via `createReview`. (NB: don't remove the box
-  entirely — that's the regression Tarik flagged; it must reappear the moment a star is tapped.)
+- **The written-review textarea appears once the user picks a rating, and is MANDATORY**
+  (Tarik 2026-06-27: "keep hidden until the user picks a star, then expose" + "review is
+  mandatory regardless of stars"). At **0★** (not yet rated) no box; at **1–3★** the held path
+  shows its required "what went wrong" textarea; at **4★+** the required "Write a review"
+  textarea shows. Submit is blocked with an error until `comment.trim()` is non-empty for ANY
+  star count. All saved via `createReview`. (NB: don't remove the box or make it optional —
+  both are regressions Tarik flagged.)
+- **Only 4★+ becomes a public recommendation** (Tarik 2026-06-27). 4★+ → `recommendService`
+  writes a service-linked recommendation that surfaces on profiles (provider's "Recommendations
+  received" + recommender's Go-Tos), and the IG spotlight may publish. **1–3★ is a PRIVATE
+  review** — saved to `reviews` only, shared with the provider + Cergio admin to help them
+  improve, never public and never a recommendation; no `recommendService`, no `markBookingPosted`.
 - Easy surfacing: the Jobs **Overview** shows action rows — "Post your IG spotlight · N" (you're
   the Connector, provider marked complete) and "Spotlights to review · N" (you're the provider,
   Connector posted).

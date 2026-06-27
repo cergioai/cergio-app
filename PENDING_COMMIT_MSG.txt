@@ -1,7 +1,13 @@
-fix(reco): review box on IG rate+post appears once a star is picked (SPEC-47c)
+fix(reco): mandatory review; 4★+ = public reco, 1–3★ = private (SPEC-47c)
 
-Tarik flagged the IG recommend+post screen had no review box. Behavior is
-now: hidden at 0★ (not yet rated), then revealed once the user picks a
-rating — 1–3★ shows the required "what went wrong" box, 4★+ shows the
-optional "Write a review" box (both saved via createReview). FROZEN_SPEC
-SPEC-47c updated to lock this in. QA: 75/75 pass.
+Tarik clarifications on the IG rate+post flow:
+- The written review is MANDATORY regardless of stars — submit is blocked
+  until the comment is non-empty (1–3★ "what went wrong" was already
+  required; 4★+ review dropped its "(optional)" label and is now enforced).
+- Only 4★+ counts as a public recommendation (recommendService → surfaces
+  on profiles + lets the IG spotlight publish). 1–3★ stays a PRIVATE review
+  shared only with the provider + Cergio admin to help them improve — never
+  public, never a recommendation. (This was already the data behavior;
+  tightened the in-app copy to say so + locked it in FROZEN_SPEC.)
+
+Box still hidden until a star is picked. QA: 75/75 pass.
