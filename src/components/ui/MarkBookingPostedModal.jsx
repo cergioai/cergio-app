@@ -178,8 +178,11 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
             </>
           ) : (
             <>
-              {/* Your review (Tarik 2026-06-17) — optional written review for a
-                  4★+ spotlight, saved alongside the rating via createReview. */}
+              {/* Your review (Tarik 2026-06-27): HIDDEN until the user picks a
+                  rating, then exposed. At 4★+ this optional written review
+                  shows; at 1–3★ the lowRating branch shows its own required
+                  "what went wrong" box; at 0★ (not yet rated) no box. Saved via
+                  createReview. */}
               {stars >= 4 && (
                 <div>
                   <label className="block text-meta font-extrabold text-black mb-1">
