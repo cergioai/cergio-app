@@ -117,7 +117,7 @@ function RescheduleInline({ booking, openId, setOpenId, value, setValue, onSave,
 // Overview digest row — folder title + count + a couple of preview lines + View all.
 function OverviewRow({ title, count, items = [], onView }) {
   return (
-    <div className="bg-white border border-bdr rounded-[18px] p-4">
+    <div className="bg-white border border-line rounded-[18px] p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-body-lg font-extrabold text-black">
           {title}{count > 0 && <span className="text-g"> · {count}</span>}
@@ -813,7 +813,7 @@ export function JobsInboxScreen() {
               {filtered.length > 0 ? (
                 filtered.map(it => <ActionRow key={it.key} {...it} />)
               ) : (
-                <div className="bg-white border border-bdr rounded-[18px] p-6 text-center">
+                <div className="bg-white border border-line rounded-[18px] p-6 text-center">
                   <p className="text-body font-extrabold text-black">You're all caught up.</p>
                   <p className="text-meta text-b3 mt-1">New requests and jobs that need you will show up here.</p>
                 </div>
@@ -821,11 +821,11 @@ export function JobsInboxScreen() {
 
               {/* slim folder shortcuts below the action feed */}
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <button onClick={() => setActiveTab('Upcoming')} className="bg-white border border-bdr rounded-[16px] p-3.5 text-left">
+                <button onClick={() => setActiveTab('Upcoming')} className="bg-white border border-line rounded-[16px] p-3.5 text-left">
                   <p className="text-heading-1 font-extrabold text-black leading-none">{upcomingCount}</p>
                   <p className="text-meta text-b3 font-extrabold mt-1">Upcoming</p>
                 </button>
-                <button onClick={() => setActiveTab('Past')} className="bg-white border border-bdr rounded-[16px] p-3.5 text-left">
+                <button onClick={() => setActiveTab('Past')} className="bg-white border border-line rounded-[16px] p-3.5 text-left">
                   <p className="text-heading-1 font-extrabold text-black leading-none">{pastCount}</p>
                   <p className="text-meta text-b3 font-extrabold mt-1">Past</p>
                 </button>
@@ -1053,11 +1053,11 @@ export function JobsInboxScreen() {
                         Free service request · {minutesAgo === 0 ? 'just now' : `${minutesAgo}m ago`}
                       </p>
                       {/* Ask line — mirror of the spotlight side's offer line. */}
-                      <p className="text-body-sm text-black leading-snug mt-2">
+                      <p className="text-body text-black leading-relaxed mt-2">
                         <strong>{senderName.split(' ')[0]}</strong> is looking for a <strong>free {req.service_type}</strong> — they'll spotlight you in return.
                       </p>
                       {req.description && (
-                        <p className="text-meta text-b2 italic leading-snug mt-2 line-clamp-3">
+                        <p className="text-body-sm text-b2 leading-relaxed mt-2 line-clamp-3">
                           &ldquo;{req.description}&rdquo;
                         </p>
                       )}
@@ -1238,7 +1238,7 @@ export function JobsInboxScreen() {
               Awaiting their schedule
             </p>
             {sentOffers.map(o => (
-              <div key={o.id} className="bg-white border border-bdr rounded-[20px] p-4">
+              <div key={o.id} className="bg-white border border-line rounded-[20px] p-4">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-body-sm font-extrabold text-black leading-snug">
                     You offered <span className="text-gd">{o.serviceType}</span> to {o.requesterName}
@@ -1296,7 +1296,7 @@ export function JobsInboxScreen() {
             </div>
           ) : (
             /* Generic empty state — no prior action this session */
-            <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
+            <div className="bg-white border border-line rounded-[20px] p-8 text-center">
               <p className="text-body font-extrabold text-black">No requests yet</p>
               <p className="text-meta text-b3 font-medium mt-1 leading-snug">
                 Booking requests from Cergio users show up here. List a service to get found.
@@ -1316,7 +1316,7 @@ export function JobsInboxScreen() {
             onClick={() => req.real
               ? navigate(`/request/${req.id}`)
               : showToast(`Open ${req.sender}'s request — demo card, no real booking attached`)}
-            className="bg-white border border-bdr rounded-[20px] p-4 flex gap-3 cursor-pointer
+            className="bg-white border border-line rounded-[20px] p-4 flex gap-3 cursor-pointer
                        transition-shadow hover:shadow-card"
           >
             <Avatar name={req.sender} idx={i} />
@@ -1352,7 +1352,7 @@ export function JobsInboxScreen() {
                 {req.isFreeForRainmakers ? 'Free service request' : 'Booking request'} · {req.date}
               </p>
 
-              <p className="text-body-sm text-black leading-snug mt-2">
+              <p className="text-body text-black leading-relaxed mt-2">
                 {req.isFreeForRainmakers ? (
                   <><strong>{req.sender.split(' ')[0]}</strong> is looking for a <strong>free {req.serviceTitle}</strong> — they'll spotlight you in return.</>
                 ) : (
@@ -1361,7 +1361,7 @@ export function JobsInboxScreen() {
               </p>
 
               {req.note && (
-                <p className="text-meta text-b2 italic leading-snug mt-2 line-clamp-3">
+                <p className="text-body-sm text-b2 leading-relaxed mt-2 line-clamp-3">
                   &ldquo;{req.note}&rdquo;
                 </p>
               )}
@@ -1375,7 +1375,7 @@ export function JobsInboxScreen() {
             Connectors. Each row tappable, routes to the full Connector
             inbox where they can manage / counter / pay. */}
         {activeTab === 'Sent' && sent !== null && sent.length === 0 && (
-          <div className="bg-white border border-bdr rounded-[20px] p-6 text-center">
+          <div className="bg-white border border-line rounded-[20px] p-6 text-center">
             <p className="text-body font-extrabold text-black">No spotlight requests sent yet</p>
             <p className="text-meta text-b3 font-medium mt-1 leading-snug">
               Ask a Connector to spotlight your service on Instagram or TikTok.
@@ -1405,7 +1405,7 @@ export function JobsInboxScreen() {
             <button
               key={s.id}
               onClick={() => navigate('/connectors/requests')}
-              className="bg-white border border-bdr rounded-[20px] p-4 flex items-center gap-3 text-left
+              className="bg-white border border-line rounded-[20px] p-4 flex items-center gap-3 text-left
                          hover:border-g/40 transition-colors"
             >
               <div className="w-12 h-12 rounded-full bg-gl flex items-center justify-center flex-shrink-0">
@@ -1448,7 +1448,7 @@ export function JobsInboxScreen() {
           const providerJobs = myJobs.asProvider.filter(pick);
           if (consumerJobs.length === 0 && providerJobs.length === 0) {
             return (
-              <div className="bg-white border border-bdr rounded-[20px] p-8 text-center">
+              <div className="bg-white border border-line rounded-[20px] p-8 text-center">
                 <p className="text-body text-b3 font-medium">
                   No {activeTab.toLowerCase()} jobs yet.
                 </p>
@@ -1494,7 +1494,7 @@ export function JobsInboxScreen() {
                 const paymentDue  = !b.is_free_for_rainmaker && b.status === 'confirmed' && !b.paid_at;
                 const totalDollars = b.total_cents ? `$${(b.total_cents / 100).toFixed(0)}` : null;
                 return (
-                  <div key={b.id} className="bg-white border border-bdr rounded-[20px] p-4">
+                  <div key={b.id} className="bg-white border border-line rounded-[20px] p-4">
                     <div className="flex items-start gap-3">
                       <Avatar name={otherName} idx={i} />
                       <div className="flex-1 min-w-0">
@@ -1615,7 +1615,7 @@ export function JobsInboxScreen() {
                 // review/accept-post CTA shows (Tarik 2026-06-16).
                 const canMarkComplete = !b.completed_at && !b.posted_at && !b.post_confirmed_at && b.status !== 'cancelled';
                 return (
-                  <div key={b.id} className="bg-white border border-bdr rounded-[20px] p-4">
+                  <div key={b.id} className="bg-white border border-line rounded-[20px] p-4">
                     <div className="flex items-start gap-3">
                       <Avatar name={otherName} idx={i + 2} />
                       <div className="flex-1 min-w-0">

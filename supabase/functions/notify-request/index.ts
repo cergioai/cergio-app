@@ -352,9 +352,13 @@ async function sendToProfile(supaAdmin: any, profileId: string, msg: {
   if (phone) {
     const sid   = Deno.env.get('TWILIO_ACCOUNT_SID');
     const token = Deno.env.get('TWILIO_AUTH_TOKEN');
+    // Prefer API Key auth (username = API Key SID, password = Secret); AccountSid
+    // stays in the URL. Falls back to AccountSid:AuthToken (Tarik 2026-06-26).
+    const authUser = Deno.env.get('TWILIO_API_KEY_SID') || sid;
+    const authPass = Deno.env.get('TWILIO_API_KEY_SECRET') || token;
     const from  = Deno.env.get('TWILIO_FROM_NUMBER');
-    if (sid && token && from) {
-      const auth = btoa(`${sid}:${token}`);
+    if (sid && authUser && authPass && from) {
+      const auth = btoa(`${authUser}:${authPass}`);
       const r = await fetch(
         `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
         {

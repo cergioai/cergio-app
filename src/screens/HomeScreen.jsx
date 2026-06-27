@@ -988,7 +988,7 @@ export function HomeScreen() {
         <>
           <div className="px-5 py-2">
             <div
-              className="bg-white border border-bdr rounded-[24px] transition-all relative
+              className="bg-white border border-line rounded-[24px] transition-all relative
                          focus-within:border-g/60 focus-within:shadow-[0_0_0_3px_#F3FFEA]"
             >
               {/* Rotating example overlay — sits over the textarea when
@@ -1354,7 +1354,7 @@ export function HomeScreen() {
         <>
           {/* SUMMARY — sits at top of the post-submit area, doesn't scroll. */}
           <div className="px-5 pt-2 pb-1 flex-shrink-0">
-            <div className="bg-white border border-bdr rounded-[14px] px-3 py-2.5 flex items-start gap-3">
+            <div className="bg-white border border-line rounded-[14px] px-3 py-2.5 flex items-start gap-3">
               <div className="w-8 h-8 rounded-[10px] bg-gl flex items-center justify-center flex-shrink-0 mt-0.5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="2"
                      strokeLinecap="round" strokeLinejoin="round">
@@ -1558,7 +1558,7 @@ export function HomeScreen() {
         <div className="px-5 mt-1 mb-6">
           <button
             onClick={() => navigate('/rainmaker/apply')}
-            className="w-full bg-cr2 text-b2 border border-bdr rounded-[16px] px-4 py-3 flex items-center gap-3 text-left
+            className="w-full bg-cr2 text-b2 border border-line rounded-[16px] px-4 py-3 flex items-center gap-3 text-left
                        hover:bg-bg5/30 active:scale-[.99] transition-all"
           >
             {/* Earthy sprout — softened to match the user-side ad. */}

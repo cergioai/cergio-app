@@ -71,14 +71,22 @@ serve(async (req: Request) => {
     if (recipient.phone) {
       const sid    = Deno.env.get('TWILIO_ACCOUNT_SID');
       const token  = Deno.env.get('TWILIO_AUTH_TOKEN');
+      // Auth: prefer an API Key (recommended) — username = API Key SID, password =
+      // API Key Secret; the AccountSid still goes in the URL. Falls back to the
+      // legacy AccountSid:AuthToken pair (Tarik 2026-06-26: old Auth Token was
+      // rotated/dead → 20003; switched to a fresh API Key).
+      const apiKeySid    = Deno.env.get('TWILIO_API_KEY_SID');
+      const apiKeySecret = Deno.env.get('TWILIO_API_KEY_SECRET');
+      const authUser = apiKeySid || sid;
+      const authPass = apiKeySecret || token;
       // A2P 10DLC: prefer the Messaging Service SID (required for registered
       // campaign sending); fall back to a plain From number. Accept both env
       // names we've used (TWILIO_FROM_NUMBER / TWILIO_FROM) so a naming mismatch
       // can't silently disable SMS (Tarik 2026-06-26: reco sent no text).
       const msgSid = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || Deno.env.get('TWILIO_MESSAGING_SID');
       const from   = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_FROM');
-      if (sid && token && (msgSid || from)) {
-        const auth = btoa(`${sid}:${token}`);
+      if (sid && authUser && authPass && (msgSid || from)) {
+        const auth = btoa(`${authUser}:${authPass}`);
         const params: Record<string, string> = { To: recipient.phone, Body: rendered.sms };
         if (msgSid) params.MessagingServiceSid = msgSid; else params.From = from!;
         const r = await fetch(
@@ -96,7 +104,7 @@ serve(async (req: Request) => {
         // number is diagnosable from the function response (not a silent skip).
         results.sms = r.ok ? 'sent' : `error ${r.status}: ${(await r.text()).slice(0, 240)}`;
       } else {
-        results.sms = `skipped (Twilio not configured: sid=${!!sid} token=${!!token} msgSid=${!!msgSid} from=${!!from})`;
+        results.sms = `skipped (Twilio not configured: sid=${!!sid} auth=${!!authPass} apiKey=${!!apiKeySid} msgSid=${!!msgSid} from=${!!from})`;
       }
     }
 

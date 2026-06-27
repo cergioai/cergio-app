@@ -1,22 +1,29 @@
-SPEC-84: redo profile Airbnb pass (lead identity card + card surfaces)
+SPEC-75 + Twilio API-key auth: Home/Inbox Airbnb pass + SMS auth fallback
 
-Tarik flagged the profile's Airbnb application as poor / "very far from
-Airbnb fonts, distances, UI". Rebuilt the lead identity card
-(ProfileSignalBlock) and softened the card surfaces to match the
-design-spec "Airbnb elegance standard".
+Two things in one push (frontend deploys via Vercel; the edge-function
+changes are committed but NOT deployed yet — Twilio is parked on account
+funding, ~8 days).
 
-- Lead identity card: heavy border-bdr/p-4 -> hairline border-line/p-5,
-  mt-2 -> mt-3.
-- Readable type ramp: headline + bio now body (14), not meta (12/13);
-  reach stays body-bold black; mt-3 (12px) rhythm between distinct blocks.
-- Replaced the cramped meta-sm network/recos line with the SHARED inline
-  TrustStream primitive (bold number + quiet label) so the profile reads
-  identically to the PDP / request previews. Mutuals stay the one NAMED
-  green trust line below.
-- "See Instagram", service-type and mutuals lines bumped to body-sm.
-- ServiceTile + Go-To cards + empty state: border-bdr -> hairline
-  border-line, reading text 12 -> 14, p-4 -> p-5; Spotlights section gets
-  the hairline top divider for consistent section rhythm.
+SPEC-75 — Home + Inbox Airbnb pass (fonts/spacing/surfaces):
+- Card surfaces softened from heavy border-bdr to hairline border-line on
+  cream (matches the approved profile pass): all Inbox cards (overview,
+  request/booking/offer rows, empty states) + Home's search composer,
+  "Your request" summary card, and the spotlight CTA card. Interactive
+  chrome (inputs, chat bubbles, folder tabs) left as-is by design.
+- Reading content sized up to be readable, not microcopy: the request/
+  booking "ask" line meta/body-sm -> body (14); the requester's actual
+  message/note 12px -> body-sm (13), de-italicized (Airbnb-plain). Applied
+  consistently to both the Requests card and the inbound-spotlight card.
 
-No data/behavior change (same fields, same order, same primitives).
-QA: all 75 flows pass.
+Twilio — API Key auth with safe fallback (notify-user, notify-request,
+outreach-send):
+- All three SMS senders now authenticate with an API Key when present
+  (username = TWILIO_API_KEY_SID, password = TWILIO_API_KEY_SECRET; the
+  AccountSid stays in the request URL) and FALL BACK to AccountSid:
+  AuthToken. No-op until valid creds exist, so safe to land now.
+- Root cause of the SMS 20003: the Twilio account needs funds; the old
+  Auth Token is dead and API-key creation is blocked until funded. Resume
+  steps recorded in memory; deploy edge functions + push secrets after the
+  account is topped up.
+
+No data/behavior change to the app. QA: all 75 flows pass.

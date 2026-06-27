@@ -165,8 +165,12 @@ serve(async (req: Request) => {
     const smsEnabled = (Deno.env.get('OUTREACH_SMS_ENABLED') || 'false').toLowerCase() === 'true';
     const twSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const twTok = Deno.env.get('TWILIO_AUTH_TOKEN');
+    // Prefer API Key auth (username = API Key SID, password = Secret); AccountSid
+    // stays in the URL. Falls back to AccountSid:AuthToken (Tarik 2026-06-26).
+    const twAuthUser = Deno.env.get('TWILIO_API_KEY_SID') || twSid;
+    const twAuthPass = Deno.env.get('TWILIO_API_KEY_SECRET') || twTok;
     const twFrom = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || Deno.env.get('TWILIO_FROM_NUMBER');
-    if (smsEnabled && twSid && twTok && twFrom) {
+    if (smsEnabled && twSid && twAuthUser && twAuthPass && twFrom) {
       const { data: smsLeads } = await db
         .from('leads_localbiz')
         .select('id, name, service_type, city, phone')
@@ -186,7 +190,7 @@ serve(async (req: Request) => {
         form.set('To', e164); form.set('Body', body);
         const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twSid}/Messages.json`, {
           method: 'POST',
-          headers: { 'Authorization': 'Basic ' + btoa(`${twSid}:${twTok}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: { 'Authorization': 'Basic ' + btoa(`${twAuthUser}:${twAuthPass}`), 'Content-Type': 'application/x-www-form-urlencoded' },
           body: form.toString(),
         });
         if (r.ok) {
@@ -213,7 +217,7 @@ serve(async (req: Request) => {
         form.set('To', e164); form.set('Body', body);
         const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twSid}/Messages.json`, {
           method: 'POST',
-          headers: { 'Authorization': 'Basic ' + btoa(`${twSid}:${twTok}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: { 'Authorization': 'Basic ' + btoa(`${twAuthUser}:${twAuthPass}`), 'Content-Type': 'application/x-www-form-urlencoded' },
           body: form.toString(),
         });
         if (r.ok) {
