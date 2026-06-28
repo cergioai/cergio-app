@@ -318,7 +318,8 @@ function renderInfluencerEmail(inf: any, optinUrl: string, optoutUrl: string, po
     <p>Hi @${handle},</p>
     <p>I'm Tarik, founder of <b>Cergio</b> — we're soft-launching now.</p>
     <p>Local businesses in ${city} are offering <b>free services to creators</b> who'll post them. Want free services in exchange for an <b>Instagram / TikTok spotlight</b> to your followers?</p>
-    ${ctaButton(optinUrl, 'Claim my spot →')}
+    <p>We're hand-picking a small <b>founding group of creators</b> — founding members get <b>insider perks</b>: first pick of free services, early access to new features, and founding-creator status.</p>
+    ${ctaButton(optinUrl, 'Claim my founding spot →')}
     <p style="color:#555">Tap above to grab a launch spot, or just reply — I read every message.</p>
     <p>— Tarik, founder, Cergio</p>
     <hr style="border:none;border-top:1px solid #eee;margin:18px 0" />
@@ -342,7 +343,8 @@ function renderEmail(lead: any, optinUrl: string, optoutUrl: string, postal: str
     <p>Hi ${name},</p>
     <p>I'm Tarik, founder of <b>Cergio</b> — we're soft-launching in ${city}.</p>
     <p>The idea: give <b>one free ${type}</b> to a vetted local creator, and they'll <b>spotlight you to their followers on Instagram &amp; TikTok</b>. New clients, zero ad spend.</p>
-    ${ctaButton(optinUrl, 'Claim a free launch spot →')}
+    <p>We're hand-picking a small <b>founding group</b> of ${city} businesses. Founding members get <b>insider perks</b> — priority placement, early access to new features, and lifetime founding status.</p>
+    ${ctaButton(optinUrl, 'Claim a free founding spot →')}
     <p style="color:#555">Tap above to grab a spot, or just reply — I read every message.</p>
     <p>— Tarik, founder, Cergio</p>
     <hr style="border:none;border-top:1px solid #eee;margin:18px 0" />

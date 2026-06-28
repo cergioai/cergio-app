@@ -1,24 +1,15 @@
-feat(soft-launch): opt-in barter outreach + free WhatsApp channel (SPEC-70)
+feat(soft-launch): public free-barter landing + founding-cohort copy (SPEC-70)
 
-Soft launch tooling — turn cold-ish outreach into opt-in barter that migrates
-seamlessly into the permanent growth system.
+- New PUBLIC landing at /free (FreeBarterLandingScreen): two browsable tabs —
+  "Free services" (listed services with a $0 offering) and "Creators for
+  spotlights" (profiles with an IG/TikTok handle, biggest reach first). Real DB
+  rows only; honest empty states; rows tap into the existing PDP (/service/:id)
+  and profile (/u/:id) flows; footer CTA -> /auth?src=soft_launch. This is where
+  opted-in founding members become visible + reachable, closing the loop:
+  outreach -> opt-in -> claim/list -> discoverable here -> direct request.
+- Outreach email copy: added founding-cohort / insider-perks framing on both
+  the business and creator emails (CTA -> "Claim a free founding spot").
 
-- Sharpened, founder-voiced barter copy on both sides: businesses give one free
-  service to a local creator who spotlights them on IG/TikTok; creators get free
-  services for a spotlight. Applied to the CAN-SPAM email pipeline (biz +
-  influencer renderers) with a prominent opt-in CTA button.
-- New `outreach-optin` edge function (public, HMAC-verified): tapping a
-  per-recipient opt-in link marks the lead opted_in and 302-redirects into the
-  app (/auth?src=soft_launch&role=…) — the seam from a personal convo to claim →
-  request → referrals. Tapping = consent (keeps follow-ups compliant).
-- Free WhatsApp channel: `outreach-send?wa=1` read-only generator returns wa.me
-  click-to-chat links (message + opt-in link pre-filled); "Generate WhatsApp
-  Outreach.command" builds a clickable page the founder taps to send personally
-  (no bulk, no API, no ban risk; ~20–40/day).
-- SMS bodies updated to the same barter + opt-in link (still gated on Twilio
-  funding/10DLC — no cold auto-send).
-
-FROZEN_SPEC SPEC-70 added; qa #70 enforces it. All 76 flows pass.
-
-Deploy note: run "Deploy Edge Functions.command" (outreach-optin is new;
-outreach-send changed). Frontend unaffected.
+Frontend deploys via Vercel on push. The email-copy change is in outreach-send
+(edge fn) — needs a redeploy (zzz RUN ME - Deploy.command) to show in live emails.
+QA: all 76 flows pass.

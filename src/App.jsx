@@ -35,6 +35,7 @@ import { CrossPostScreen }  from './screens/CrossPostScreen';
 import { BookingScreen }    from './screens/BookingScreen';
 import { RainmakersScreen } from './screens/RainmakersScreen';
 import { BrowseConnectorsScreen } from './screens/BrowseConnectorsScreen';
+import { FreeBarterLandingScreen } from './screens/FreeBarterLandingScreen';
 import { ConnectorRequestsScreen } from './screens/ConnectorRequestsScreen';
 import { FindFriendsScreen } from './screens/FindFriendsScreen';
 import { PrivacyPolicyScreen } from './screens/PrivacyPolicyScreen';
@@ -477,6 +478,7 @@ export default function App() {
           {/* Service-side: providers browse Connectors who set a spotlight
               rate card. Phase 2 will add request + counter-offer flow. */}
           <Route path="/connectors/browse" element={<BrowseConnectorsScreen />} />
+          <Route path="/free" element={<FreeBarterLandingScreen />} />
           {/* Two-tab inbox for spotlight requests — inbound for Connectors,
               outbound for providers. Counter-offer modal lives inside. */}
           <Route path="/connectors/requests" element={<ConnectorRequestsScreen />} />
