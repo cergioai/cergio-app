@@ -81,8 +81,8 @@ export function FreeBarterLandingScreen() {
         <p className="text-meta-sm font-extrabold text-gd uppercase tracking-wide">Cergio · Founding launch</p>
         <h1 className="text-display-2 font-extrabold text-black leading-[1.1] mt-1">Free services ↔ free spotlights</h1>
         <p className="text-body text-b2 leading-relaxed mt-2">
-          Local businesses offer a service free; creators spotlight them to their followers on Instagram &amp; TikTok.
-          Browse the founding group below and connect directly.
+          Independent &amp; mobile providers offer a service free; creators spotlight them to their followers on
+          Instagram &amp; TikTok. Browse the founding group and connect directly.
         </p>
       </div>
 
@@ -185,7 +185,7 @@ export function FreeBarterLandingScreen() {
         <div className="bg-white border border-line rounded-[16px] p-5 text-center">
           <p className="text-body-lg font-extrabold text-black">Want in on the founding group?</p>
           <p className="text-body-sm text-b3 leading-relaxed mt-1">
-            List your service free-for-a-spotlight, or join as a creator and get free local services.
+            Offer a service free for a spotlight, or join as a creator for first access to free local services.
           </p>
           <button
             type="button"

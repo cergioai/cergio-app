@@ -1,15 +1,21 @@
-feat(soft-launch): public free-barter landing + founding-cohort copy (SPEC-70)
+fix(outreach): target the real services bucket + approved-only gate; truthful copy
 
-- New PUBLIC landing at /free (FreeBarterLandingScreen): two browsable tabs —
-  "Free services" (listed services with a $0 offering) and "Creators for
-  spotlights" (profiles with an IG/TikTok handle, biggest reach first). Real DB
-  rows only; honest empty states; rows tap into the existing PDP (/service/:id)
-  and profile (/u/:id) flows; footer CTA -> /auth?src=soft_launch. This is where
-  opted-in founding members become visible + reachable, closing the loop:
-  outreach -> opt-in -> claim/list -> discoverable here -> direct request.
-- Outreach email copy: added founding-cohort / insider-perks framing on both
-  the business and creator emails (CTA -> "Claim a free founding spot").
+Data reset GO (per DATA QUALITY STANDARD & RESET PLAN):
+- Repoint all outreach (email + WhatsApp gen + SMS) from leads_localbiz
+  (brick-and-mortar, Phase 2) to **leads_services** (the real mobile/independent
+  provider bucket). leads_localbiz is no longer contacted.
+- Outreach now sends ONLY outreach_status='queued' (gate-APPROVED). Raw 'new'
+  leads are never contacted — so ungraded/garbage can't be blasted, and the bad
+  creator bucket (leads_influencers, all 'new') is inert until rebuilt + graded.
+- Messaging integrity (per feedback_outreach_messaging_principles): never
+  misrepresent — creators invited to a "founding group → first access as we
+  onboard providers" (no claim services exist yet); "independent & mobile
+  providers", not "local businesses" (Phase 2); signed "Tarik, Cergio".
+- /free landing copy aligned to the same.
 
-Frontend deploys via Vercel on push. The email-copy change is in outreach-send
-(edge fn) — needs a redeploy (zzz RUN ME - Deploy.command) to show in live emails.
-QA: all 76 flows pass.
+Companion (not in repo): "zzz RUN ME - Grade & Approve Services.command" (the
+gate: approves reachable mobile/home providers → queued, quarantines off-values/
+food/retail/storefront → do_not_contact) and "CREATOR RE-SOURCE BRIEF" (fix the
+creator source: social discovery of real individuals, not map data).
+
+QA: all 76 flows pass. Deploy edge functions after push so the repoint goes live.
