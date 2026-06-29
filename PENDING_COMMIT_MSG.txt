@@ -1,21 +1,21 @@
-fix(outreach): target the real services bucket + approved-only gate; truthful copy
+fix(crawl): multi-city services crawl feeds the real bucket + grades correctly
 
-Data reset GO (per DATA QUALITY STANDARD & RESET PLAN):
-- Repoint all outreach (email + WhatsApp gen + SMS) from leads_localbiz
-  (brick-and-mortar, Phase 2) to **leads_services** (the real mobile/independent
-  provider bucket). leads_localbiz is no longer contacted.
-- Outreach now sends ONLY outreach_status='queued' (gate-APPROVED). Raw 'new'
-  leads are never contacted — so ungraded/garbage can't be blasted, and the bad
-  creator bucket (leads_influencers, all 'new') is inert until rebuilt + graded.
-- Messaging integrity (per feedback_outreach_messaging_principles): never
-  misrepresent — creators invited to a "founding group → first access as we
-  onboard providers" (no claim services exist yet); "independent & mobile
-  providers", not "local businesses" (Phase 2); signed "Tarik, Cergio".
-- /free landing copy aligned to the same.
+2026-06-28 data reset, part 2 (crawl pipeline):
+- fulfill-crawl now upserts Google-Places service leads into **leads_services**
+  (was leads_localbiz, the dormant brick-and-mortar Phase 2 bucket) and drops
+  columns absent from leads_services (rating/review_count/connector_candidate),
+  which would have made the upsert fail silently. Without this, every lead the
+  multi-city metro crawl produces was landing where nothing contacts it.
+- DATA-QUALITY GATE rewritten to ROBUST case-insensitive regex matching so the
+  live crawl's service_type strings ("Plumber","House Cleaner","Dog Walker"...)
+  actually grade — the old exact-string list ("plumbers"...) matched none of them,
+  silently leaving all crawled leads ungraded/unsendable.
+- Gate also: (a) SALVAGES this run's leads from leads_localbiz into leads_services,
+  (b) PURGES+RESETS the contaminated creator bucket — all leads_influencers ->
+  do_not_contact (soft, no delete), rebuild via CREATOR RE-SOURCE BRIEF.
+- FROZEN_SPEC SPEC-64/65 updated to the new bucket + queued-only-is-sendable
+  invariant; qa.mjs #64 updated. All 76 flows pass.
 
-Companion (not in repo): "zzz RUN ME - Grade & Approve Services.command" (the
-gate: approves reachable mobile/home providers → queued, quarantines off-values/
-food/retail/storefront → do_not_contact) and "CREATOR RE-SOURCE BRIEF" (fix the
-creator source: social discovery of real individuals, not map data).
-
-QA: all 76 flows pass. Deploy edge functions after push so the repoint goes live.
+Pipeline now: search/no-data OR metro wave -> crawl_requests -> fulfill-crawl
+(Google Places) -> leads_services 'new' -> gate -> 'queued' (mobile, reachable)
+-> outreach-send (queued-only). Creators stay firewalled per CRAWLER_BRIEF_IG.

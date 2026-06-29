@@ -2293,8 +2293,8 @@ test('spec-64-crawl-fulfillment', 'FROZEN: fulfill-crawl sources businesses via 
     'fulfill-crawl must be service-role gated — SPEC-64');
   assert(/GOOGLE_PLACES_API_KEY/.test(src) && /maps\.googleapis\.com\/maps\/api\/place\/textsearch/.test(src),
     'fulfill-crawl must use the Google Places server key + Text Search — SPEC-64');
-  assert(/leads_localbiz/.test(src) && /place_id/.test(src),
-    'fulfill-crawl must upsert leads_localbiz deduped by place_id — SPEC-64');
+  assert(/leads_services/.test(src) && /place_id/.test(src),
+    'fulfill-crawl must upsert leads_services deduped by place_id (2026-06-28 reset) — SPEC-64');
   assert(/delivered_count/.test(src) && /'delivered'/.test(src) && /'failed'/.test(src),
     'fulfill-crawl must stamp delivered/failed + count on crawl_requests — SPEC-64');
   assert(/notifySearcher/.test(src) && /resend\.com\/emails/.test(src),

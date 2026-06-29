@@ -4,7 +4,7 @@
 // providers, the app enqueues a crawl_request. This worker FULFILLS it:
 //   1. Find real local businesses via the Google Places API (Text Search +
 //      Details for phone/website) for the city + service_type.
-//   2. Upsert them into leads_localbiz (dedupe by Google place_id), staged at
+//   2. Upsert them into leads_services (dedupe by Google place_id), staged at
 //      outreach_status='new'. NOTE: we DO NOT send any cold email/SMS here —
 //      contacting businesses that never opted in is governed by CAN-SPAM / TCPA,
 //      so leads are QUEUED for the operator to review + send. (See FROZEN_SPEC.)
@@ -98,13 +98,14 @@ serve(async (req: Request) => {
             lon: r.geometry?.location?.lng ?? null,
             data_source: 'google_places',
             fetched_at: new Date().toISOString(),
-            rating: r.rating ?? null,
-            review_count: r.user_ratings_total ?? null,
-            connector_candidate: 0,
-            outreach_status: 'new', // QUEUED for operator review — NOT auto-sent
+            outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'; never auto-sent
             outreach_notes: `auto-sourced via Google Places (${job.city || '?'}) ${new Date().toISOString().slice(0,10)}`,
           };
-          const { error: upErr } = await db.from('leads_localbiz').upsert(row, { onConflict: 'id' });
+          // 2026-06-28 reset: service crawls feed leads_services (the real mobile
+          // provider bucket that outreach + the gate read). leads_localbiz is
+          // dormant (brick-and-mortar Phase 2). The gate quarantines storefront/
+          // off-target rows; only mobile/reachable types are promoted to 'queued'.
+          const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
           if (!upErr) saved++;
         }
 
