@@ -123,35 +123,25 @@ serve(async (req: Request) => {
       // across users because open_id is unique per app+user).
       const synthEmail = `tiktok-${openId}@users.cergio.ai`;
 
-      // Find or create the auth user. We try sign-in by email first so
-      // repeat sign-ins from the same TikTok account land on the same row.
-      let userId: string | null = null;
-      const { data: existing } = await supaAdmin.auth.admin.listUsers();
-      const found = existing?.users?.find(u => u.email?.toLowerCase() === synthEmail);
-      if (found) {
-        userId = found.id;
-      } else {
-        const { data: created, error: cErr } = await supaAdmin.auth.admin.createUser({
-          email:         synthEmail,
-          email_confirm: true,                 // skip verification — TikTok already proved identity
-          user_metadata: {
-            display_name:    me.display_name || handle,
-            tiktok_open_id:  openId,
-            signin_provider: 'tiktok',
-          },
-        });
-        if (cErr || !created?.user) throw new Error(`User create failed: ${cErr?.message}`);
-        userId = created.user.id;
-      }
-
-      // Stamp TikTok handle + followers on the profile (idempotent upsert).
-      await supaAdmin.from('profiles').upsert({
-        id:                 userId,
-        tiktok_handle:      handle,
-        tiktok_followers:   followers,
-        tiktok_connected_at: new Date().toISOString(),
-        tiktok_verified_at:  new Date().toISOString(),
-      }, { onConflict: 'id' });
+      // Find-or-create the auth user — ROBUSTLY. The previous approach used
+      // admin.listUsers() which is PAGINATED (first ~50 users only): once the
+      // project had more users, a returning TikTok account on a later page was
+      // missed, so we tried to createUser again and Supabase rejected it with
+      // "A user with this email address has already been registered". Fix: try
+      // to create, TOLERATE the already-exists error, and read the user id back
+      // from generateLink (which returns the user for this email whether it was
+      // just created or already existed). No pagination, no false "create".
+      const { data: created, error: cErr } = await supaAdmin.auth.admin.createUser({
+        email:         synthEmail,
+        email_confirm: true,                 // skip verification — TikTok already proved identity
+        user_metadata: {
+          display_name:    me.display_name || handle,
+          tiktok_open_id:  openId,
+          signin_provider: 'tiktok',
+        },
+      });
+      const alreadyExists = !!cErr && /already|exist|registered/i.test(cErr.message || '');
+      if (cErr && !alreadyExists) throw new Error(`User create failed: ${cErr.message}`);
 
       // Generate a magic link the opener can use to complete the session.
       // Override redirectTo to match the opener's origin if we got it through
@@ -174,6 +164,21 @@ serve(async (req: Request) => {
       });
       if (linkErr || !linkData?.properties?.action_link) {
         throw new Error(`Magic link generation failed: ${linkErr?.message}`);
+      }
+
+      // user id comes from the just-created row OR the existing row that
+      // generateLink resolved for this email.
+      const userId: string | null = created?.user?.id ?? linkData.user?.id ?? null;
+
+      // Stamp TikTok handle + followers on the profile (idempotent upsert).
+      if (userId) {
+        await supaAdmin.from('profiles').upsert({
+          id:                 userId,
+          tiktok_handle:      handle,
+          tiktok_followers:   followers,
+          tiktok_connected_at: new Date().toISOString(),
+          tiktok_verified_at:  new Date().toISOString(),
+        }, { onConflict: 'id' });
       }
 
       return html(popupResultPage({

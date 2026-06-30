@@ -95,7 +95,7 @@ serve(async (req: Request) => {
         if (supp) continue;
         const tok = await hmac(e164, optoutSecret);
         const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(e164)}&k=${tok}`;
-        const msg = `Hi${b.name ? ' ' + b.name : ''} — Tarik at Cergio (soft launch). Offer 1 free ${b.service_type || 'service'} to a local creator who'll spotlight you on IG/TikTok — new clients, no ad spend. Founding providers get insider perks. Grab a free founding spot: ${optinUrl}`;
+        const msg = `Hi${b.name ? ' ' + b.name : ''} — Tarik, founder of Cergio. Vetted local creators will spotlight your ${b.service_type || 'business'} to their followers, free — new clients, no ad spend. I'm picking 25 founding providers${b.city ? ' in ' + b.city : ''}; founders get the most referrals. One service to one creator. Want a spot? ${optinUrl}`;
         out.push({ type: 'business', name: b.name, phone: e164, wa_url: waLink(e164, msg) });
       }
 
@@ -109,7 +109,7 @@ serve(async (req: Request) => {
         if (supp) continue;
         const tok = await hmac(e164, optoutSecret);
         const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=inf&a=${encodeURIComponent(e164)}&k=${tok}`;
-        const msg = `Hi @${inf.ig_handle} — Tarik at Cergio (soft launch). Join our founding creators — first access to free local services in exchange for an IG/TikTok spotlight to your followers (as we onboard providers). Claim your spot: ${optinUrl}`;
+        const msg = `Hi @${inf.ig_handle} — Tarik, founder of Cergio. Your followers book trusted local pros through you, and you earn on every booking — your income grows as your network grows. Hand-picking 5 founding creators${inf.city ? ' in ' + inf.city : ''}: free services + founding status. Want the first spot? ${optinUrl}`;
         out.push({ type: 'creator', handle: inf.ig_handle, phone: e164, wa_url: waLink(e164, msg) });
       }
       return json({ whatsapp_manual: true, count: out.length, links: out });
@@ -143,7 +143,7 @@ serve(async (req: Request) => {
       const optoutUrl = `${FUNCTIONS_BASE}/outreach-optout?c=email&a=${encodeURIComponent(email)}&k=${token}`;
       const optinUrl  = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(email)}&k=${token}`;
       const html = renderEmail(lead, optinUrl, optoutUrl, postal);
-      const subject = `${lead.name ? lead.name + ' — ' : ''}free local exposure (Cergio soft launch)`;
+      const subject = `Founding ${lead.service_type || 'provider'}${lead.city ? ' — ' + lead.city : ''} (free creator spotlights)`;
 
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -186,7 +186,7 @@ serve(async (req: Request) => {
           headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from, to: email, reply_to: replyTo,
-            subject: `@${inf.ig_handle} — free local services for a shoutout (Cergio soft launch)`,
+            subject: `Founding creator${inf.city ? ' — ' + inf.city : ''} (only 5)`,
             html: renderInfluencerEmail(inf, optinUrl, optoutUrl, postal),
             headers: { 'List-Unsubscribe': `<${optoutUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
           }),
@@ -232,7 +232,7 @@ serve(async (req: Request) => {
         if (supp) { await db.from('leads_services').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id); continue; }
         const smsTok = await hmac(e164, optoutSecret);
         const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(e164)}&k=${smsTok}`;
-        const body = `Hi${lead.name ? ' ' + lead.name : ''} — Tarik at Cergio (soft launch). Offer 1 free ${lead.service_type || 'service'} to a local creator who'll spotlight you on IG/TikTok. New clients, no ad spend. Founding providers get perks — claim a free spot: ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const body = `Hi${lead.name ? ' ' + lead.name : ''} — Tarik, founder of Cergio. A vetted local creator will spotlight your ${lead.service_type || 'business'} to their followers, free — new clients, no ad spend. Picking 25 founding providers; one service to one creator. Want a spot? ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
         const form = new URLSearchParams();
         form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
         form.set('To', e164); form.set('Body', body);
@@ -261,7 +261,7 @@ serve(async (req: Request) => {
         if (supp) { await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue; }
         const smsTok = await hmac(e164, optoutSecret);
         const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=inf&a=${encodeURIComponent(e164)}&k=${smsTok}`;
-        const body = `Hi @${inf.ig_handle} — Tarik at Cergio (soft launch). Founding creators get first access to free local services in exchange for an IG/TikTok spotlight to your followers — claim your spot: ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const body = `Hi @${inf.ig_handle} — Tarik, founder of Cergio. Your followers book trusted local pros through you & you earn on every booking — income grows as your network grows. Picking 5 founding creators: free services + founding status. Want in? ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
         const form = new URLSearchParams();
         form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
         form.set('To', e164); form.set('Body', body);
@@ -316,9 +316,9 @@ function renderInfluencerEmail(inf: any, optinUrl: string, optoutUrl: string, po
   return `
   <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;color:#1a1a1a;line-height:1.5">
     <p>Hi @${handle},</p>
-    <p>I'm Tarik at <b>Cergio</b> — we're soft-launching now.</p>
-    <p>We're building a <b>founding group of ${city} creators</b> who'll get <b>first access to free local services</b> — from independent &amp; mobile providers — in exchange for an <b>Instagram / TikTok spotlight</b> to your followers, as we bring providers on.</p>
-    <p>Founding members get <b>insider perks</b>: first pick of free services, early access to new features, and founding-creator status.</p>
+    <p>I'm Tarik, founder of <b>Cergio</b> — we turn friend recommendations into income.</p>
+    <p>Your followers book trusted local pros through you, and you <b>earn a referral fee on every booking</b> — your income grows as your network grows.</p>
+    <p>I'm hand-picking just <b>5 founding creators</b> to launch ${city}. You'd get <b>free services</b> from our top local providers, earnings on every booking your network drives, and <b>founding-member status</b> with first access as we open new cities.</p>
     ${ctaButton(optinUrl, 'Claim my founding spot →')}
     <p style="color:#555">Tap above to grab a launch spot, or just reply — I read every message.</p>
     <p>— Tarik, Cergio</p>
@@ -341,10 +341,10 @@ function renderEmail(lead: any, optinUrl: string, optoutUrl: string, postal: str
   return `
   <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;color:#1a1a1a;line-height:1.5">
     <p>Hi ${name},</p>
-    <p>I'm Tarik at <b>Cergio</b> — we're soft-launching in ${city}.</p>
-    <p>We're inviting independent &amp; mobile providers to <b>offer one free ${type}</b> to a local creator, who'll <b>spotlight you to their followers on Instagram &amp; TikTok</b>. New clients, zero ad spend.</p>
-    <p>We're hand-picking a small <b>founding group</b> of ${city} providers. Founding members get <b>insider perks</b> — priority placement, early access to new features, and lifetime founding status.</p>
-    ${ctaButton(optinUrl, 'Claim a free founding spot →')}
+    <p>I'm Tarik, founder of <b>Cergio</b>. We connect local creators with great providers.</p>
+    <p>A vetted local creator will <b>spotlight your ${type} to their followers</b> — new clients, zero ad spend — in exchange for <b>one</b> service.</p>
+    <p>I'm selecting <b>25 founding ${type}s</b> in ${city}. Founding members get free creator spotlights, <b>priority</b> (we drive the most bookings to our most-recommended founders), and a <b>referral fee</b> when you send clients to other, non-competing services.</p>
+    ${ctaButton(optinUrl, 'Claim my founding spot →')}
     <p style="color:#555">Tap above to grab a spot, or just reply — I read every message.</p>
     <p>— Tarik, Cergio</p>
     <hr style="border:none;border-top:1px solid #eee;margin:18px 0" />
