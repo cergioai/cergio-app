@@ -181,11 +181,12 @@ serve(async (req: Request) => {
         }, { onConflict: 'id' });
       }
 
-      return html(popupResultPage({
-        ok: true, handle, followers, verified: true,
-        mode: 'signin',
-        signin_link: linkData.properties.action_link,
-      }, mode));
+      // Full-page redirect flow (NOT a popup/postMessage page). Send the browser
+      // straight to the Supabase magic link, which verifies and redirects to
+      // <origin>/home, logged in. This avoids returning an HTML page that the
+      // gateway can serve as text/plain — which stopped the old sign-in script
+      // from ever running (raw code shown, login never completed).
+      return Response.redirect(linkData.properties.action_link, 302);
     } catch (e) {
       return html(popupResultPage({
         ok: false, error: e instanceof Error ? e.message : String(e),

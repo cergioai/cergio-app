@@ -192,24 +192,13 @@ export function AuthScreen() {
         }
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         const state = `${crypto.randomUUID()}.signin.${btoa(origin)}`;
-        const w = 540, h = 720;
-        const left = window.screenX + Math.max(0, (window.outerWidth  - w) / 2);
-        const top  = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
-        ttPopupRef.current = window.open(
-          buildTikTokSigninUrl(state),
-          'cergio-tt-signin',
-          `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no`,
-        );
-        if (!ttPopupRef.current) {
-          showToast('Popup blocked. Allow popups for this site and try again.');
-          return;
-        }
-        const poll = setInterval(() => {
-          if (ttPopupRef.current?.closed) {
-            clearInterval(poll);
-            setSocialBusy(null);
-          }
-        }, 600);
+        // Full-page redirect (NOT a popup). The popup callback returned an HTML
+        // page whose script did the sign-in + window close, but the gateway
+        // served that page as text/plain, so the script never ran and login
+        // never completed. A top-level redirect is gateway-independent:
+        // TikTok consent → our callback → 302 to the Supabase magic link → /home.
+        window.location.href = buildTikTokSigninUrl(state);
+        return;
       }
     } finally {
       setSocialBusy(null);

@@ -1,16 +1,20 @@
-fix(tiktok-oauth): sign in returning TikTok users instead of failing
+fix(tiktok-signin): full-page redirect flow (popup callback was served as text/plain)
 
-TikTok login failed with "User create failed: A user with this email address
-has already been registered" for returning users. Root cause: the find-or-create
-logic used admin.listUsers() which is PAGINATED (first ~50 users). Once the
-project grew past one page, a returning TikTok account on a later page was
-missed, so the code tried to createUser again → Supabase rejected the duplicate.
+Root cause of "TikTok login doesn't work": the popup callback returned an HTML
+page whose inline script completed sign-in (postMessage to opener + window.close).
+But the Supabase gateway served that page as text/plain, so the browser showed
+raw source (garbled, mojibake) and NEVER executed the script — sign-in never
+completed even though the OAuth + user lookup succeeded (ok:true in the payload).
 
-Fix: stop relying on a paginated first-page lookup. Attempt createUser, tolerate
-the "already exists" error, and read the user id back from generateLink (which
-resolves the user for the synthetic email whether just-created or pre-existing).
-Profiles upsert guarded on a resolved userId. Login now works for both new and
-returning TikTok accounts regardless of total user count.
+Fix — switch TikTok sign-in to a standard top-level redirect (gateway-independent,
+like Google sign-in):
+- AuthScreen: click "Continue with TikTok" → window.location.href = TikTok auth
+  URL (no popup, no postMessage dependency).
+- tiktok-oauth callback (signin mode): instead of returning the HTML/JS page,
+  302-redirect the browser straight to the Supabase magic link, which verifies
+  and lands on <origin>/home logged in.
 
-(Also in this batch: founding-cohort outreach copy; TikTok app Login-Kit form
-fields filled in the portal.)
+(Prior commit baae65a fixed the paginated listUsers create-vs-signin bug; this
+commit fixes the page-never-rendered/script-never-ran bug that was the actual
+blocker.) Note: TikTok "link/connect" mode still uses the popup page — separate,
+lower-priority; can get the same treatment later.
