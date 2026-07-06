@@ -1,0 +1,44 @@
+# Cergio CI gate — runs on every push/PR to main. If ANY job fails, the commit
+# is marked failed; with branch protection + Vercel "wait for CI" enabled, a red
+# check BLOCKS the deploy. This is the machine-enforced quality gate: broken code
+# cannot reach users, and the pass/fail is a check, not a claim.
+name: Cergio CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Build (must compile — catches JSX/syntax/import breaks)
+        run: npm run build
+      - name: Flow QA (qa.mjs — the spec journey checks)
+        run: node qa.mjs
+
+  # NEXT LAYER — E2E (Playwright) real-browser journeys against spec.
+  # Requires a one-time `npm install -D @playwright/test` on the Mac (updates the
+  # lockfile), then e2e/*.spec.ts per spec journey (search→request address holds,
+  # instant/scheduled messaging, no false paid banner, no dead-ends). Once the
+  # dep + specs are in, uncomment the job below and it gates every deploy.
+  #
+  # e2e:
+  #   runs-on: ubuntu-latest
+  #   needs: build-and-qa
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: '20', cache: 'npm' }
+  #     - run: npm ci
+  #     - run: npx playwright install --with-deps chromium
+  #     - run: npx playwright test
