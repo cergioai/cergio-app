@@ -3,7 +3,7 @@
 // getMyEarnings(). Defaults to $0 + zero counters when there's no data.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { getMyEarnings } from '../lib/api';
+import { getMyEarnings, getMyInviteCounts, listMyRecommendations } from '../lib/api';
 import { fmtDollars } from '../lib/fees';
 
 export function EarningsBreakdownScreen() {
@@ -11,9 +11,14 @@ export function EarningsBreakdownScreen() {
   const { auth } = useOutletContext() || {};
 
   const [earnings, setEarnings] = useState([]);
+  // Real headline counters (read-only). Default 0 until loaded / when no data.
+  const [friendsInvited, setFriendsInvited] = useState(0);
+  const [servicesRecoed, setServicesRecoed] = useState(0);
   useEffect(() => {
     if (!auth?.isSignedIn) return;
     getMyEarnings({ limit: 200 }).then(({ data }) => setEarnings(data || []));
+    getMyInviteCounts().then(({ data }) => setFriendsInvited(data?.invited || 0));
+    listMyRecommendations({ limit: 200 }).then(({ data }) => setServicesRecoed((data || []).length));
   }, [auth?.isSignedIn]);
 
   // Roll up cleared earnings by kind. We don't have invited / reco
@@ -31,9 +36,6 @@ export function EarningsBreakdownScreen() {
     { label: 'Spotlight payouts',     cents: totals.spotlight || 0 },
     { label: 'Friend joins + first booking', cents: totals.invite || 0 },
   ];
-
-  const friendsInvited = 0;
-  const servicesRecoed = 0;
 
   return (
     <div className="flex-1 flex flex-col bg-cream pb-8 overflow-y-auto">

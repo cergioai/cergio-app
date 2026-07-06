@@ -588,6 +588,22 @@ export function useChat({ wantFree = false } = {}) {
       }
     }
 
+    // CERGIO-GUARD (2026-07-05, Tarik): local ADDRESS capture. The cloud
+    // parser intermittently drops a newly-typed address, so the merge fell
+    // back to the STALE previous where — user entered "134 Henry St, New
+    // York" and the search reverted to "Miami Beach". If the user's message
+    // contains a clear street address and the parser didn't capture it, the
+    // typed address wins so an explicit address ALWAYS holds.
+    if (userInput) {
+      const addrMatch = userInput.trim().match(/\b\d{1,6}\s+[A-Za-z0-9.'\-]+(?:\s+[A-Za-z0-9.'\-]+){1,7}/);
+      const typedAddr = addrMatch ? addrMatch[0].replace(/[.,;:!?]+$/, '').trim() : null;
+      if (typedAddr && (!fields.where || !String(fields.where).toLowerCase().includes(typedAddr.toLowerCase()))) {
+        fields.where = typedAddr;
+        // eslint-disable-next-line no-console
+        console.info('[useChat] local address capture: "%s" → where', typedAddr);
+      }
+    }
+
     const merged = {
       what:           fields.what          ?? prevState.what          ?? whatFromTaxonomy ?? null,
       when:           fields.when          ?? prevState.when          ?? null,

@@ -461,6 +461,24 @@ export function ResultsScreen() {
   const requestId = chatState.request_id || location.state?.requestId || null;
   const { notified: liveNotified, replied: liveReplied } = useRequestActivity(requestId);
 
+  // CERGIO-GUARD (2026-07-05, Tarik): instant vs scheduled request.
+  // A job is "scheduled" only when it's clearly beyond ~32h out (24h + 8h
+  // window). Everything near-term (now / today / tonight / tomorrow) is
+  // "instant": allow up to 15 minutes for nearby services to confirm +
+  // reply, then honestly say no one is available yet — we keep matching.
+  const isScheduled = /\b(next\s+(week|month)|in\s+\d+\s+days?|in\s+\d+\s+weeks?|\d+\s+weeks?|\bmonths?\b)\b/i.test(String(when || ''));
+  const isInstant   = !isScheduled;
+  const [instantTimedOut, setInstantTimedOut] = useState(false);
+  useEffect(() => {
+    if (!isInstant) { setInstantTimedOut(false); return; }
+    const t = setTimeout(() => setInstantTimedOut(true), 15 * 60 * 1000);
+    return () => clearTimeout(t);
+  }, [isInstant, requestId]);
+  // "Resolved" = real offers landed, OR (instant) the 15-min confirm window
+  // elapsed, OR it's a scheduled long-wait. Only AFTER resolution do we
+  // surface Forward-to-friends + the secondary paid status.
+  const searchResolved = (liveReplied > 0) || instantTimedOut || isScheduled;
+
   // CERGIO-GUARD (2026-06-03): poll request_responses for the active
   // request so the results list reflects who's actually offered. We
   // poll every 4s while the screen is open; future iteration moves
@@ -1013,7 +1031,11 @@ export function ResultsScreen() {
               <p className="text-meta-sm text-b3 font-normal leading-snug">
                 {liveReplied > 0
                   ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
-                  : "We'll let you know when offers land."}
+                  : isInstant
+                    ? (instantTimedOut
+                        ? "No one's available right now — we'll keep matching and notify you the moment someone can."
+                        : "Allow up to 15 minutes for nearby services to confirm and reply.")
+                    : "We'll notify you — it can take up to 24 hours to locate and negotiate the best offers."}
               </p>
               {requestId && (
                 <CancelRequestLink
@@ -1039,7 +1061,7 @@ export function ResultsScreen() {
           banner so the user understands why these aren't free yet.
           Click "Pay full price" → flips freeServices off so future
           searches go straight to paid mode. */}
-      {!isLoading && paidFallback && services && services.length > 0 && (() => {
+      {!isLoading && !requestId && paidFallback && services && services.length > 0 && (() => {
         const ptLabel = safeProviderTypePlural
           ? safeProviderTypePlural.toLowerCase()
           : (userNoun ? `${userNoun}s` : 'options');
@@ -1083,7 +1105,7 @@ export function ResultsScreen() {
           honest move: don't pretend zero plumbers exist just because
           your $20 budget is unrealistic — show what's there, mark it
           clearly, let the user adjust. */}
-      {!isLoading && overBudgetFallback && services && services.length > 0 && (() => {
+      {!isLoading && !requestId && overBudgetFallback && services && services.length > 0 && (() => {
         const ptLabel = safeProviderTypePlural
           ? safeProviderTypePlural.toLowerCase()
           : (userNoun ? `${userNoun}s` : 'options');
@@ -1130,7 +1152,7 @@ export function ResultsScreen() {
           headline copy depending on whether we have matches yet:
             no matches  → "No {type}s yet — ask friends to help find one"
             has matches → "Want better picks? Ask friends" */}
-      {!isLoading && (() => {
+      {!isLoading && (providers.length > 0 || searchResolved) && (() => {
         // CERGIO-GUARD (2026-05-27): headline + share message LEAD with the
         // canonical provider_type (Plumber, House Cleaner, Nanny) — NOT
         // the user's verb-phrase. Old copy "No unclog my toilets yet" was

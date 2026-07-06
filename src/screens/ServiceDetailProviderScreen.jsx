@@ -295,7 +295,7 @@ export function ServiceDetailProviderScreen() {
                   const { error } = await deleteService(svc.id);
                   if (error) { showToast(`Couldn't delete: ${error.message}`); setDeleteArmed(false); return; }
                   showToast('Service deleted ✓');
-                  navigate('/account/services');
+                  navigate('/services/manage');
                 }}
                 className="text-body-sm font-extrabold text-danger underline underline-offset-2 bg-transparent border-none p-0 cursor-pointer"
               >
