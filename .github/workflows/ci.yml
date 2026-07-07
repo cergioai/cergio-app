@@ -24,7 +24,7 @@ jobs:
       - name: Build (must compile — catches JSX/syntax/import breaks)
         run: npm run build
       - name: Flow QA (qa.mjs — the spec journey checks)
-        run: node qa.mjs
+        run: node scripts/qa.mjs
 
   # NEXT LAYER — E2E (Playwright) real-browser journeys against spec.
   # Requires a one-time `npm install -D @playwright/test` on the Mac (updates the
