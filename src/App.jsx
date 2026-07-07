@@ -96,6 +96,7 @@ import { AuthScreen }                       from './screens/AuthScreen';
 import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
 import { AdminCrawlScreen }                 from './screens/AdminCrawlScreen';
+import { OpsConsoleScreen }                 from './screens/OpsConsoleScreen';
 import { PublicProfileServicesScreen }      from './screens/PublicProfileServicesScreen';
 import { InviteLandingScreen }              from './screens/InviteLandingScreen';
 import { ClaimProfileScreen }               from './screens/ClaimProfileScreen';
@@ -115,6 +116,7 @@ const HIDE_NAV_PATHS_EXTRA = [
   '/enable-free-offers', '/confirm-submit', '/roaming',
   '/earnings/breakdown', '/earnings/network', '/earnings/transactions',
   '/earnings/how', '/earnings/track',
+  '/ops',                             // founder console — renders its own full shell
 ];
 
 // Re-exported so screens can grab shared state with one named import.
@@ -577,6 +579,11 @@ export default function App() {
           <Route path="/u/:profileId/services" element={<PublicProfileServicesScreen />} />
           <Route path="/u/:profileId"          element={<PublicProfileScreen />} />
           <Route path="/admin/crawls"          element={<AdminCrawlScreen />} />
+          {/* Ops & Growth Console — founder/admin-only in-product ops surface.
+              Increment 1: the OUTREACH module (audience builder + campaign
+              composer). Auth is gated inside the screen via isAdminEmail,
+              matching AdminCrawlScreen. */}
+          <Route path="/ops"                   element={<OpsConsoleScreen />} />
 
           {/* CERGIO-GUARD (2026-06-12): short invite links — /i/<code>
               expands to the inviter's profile + stores the referral.

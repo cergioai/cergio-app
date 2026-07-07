@@ -24,7 +24,17 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
-const MAX_REQUESTS_PER_RUN = 5;
+// Throughput (TUNABLE). Raised so the full YellowPages matrix drains in hours,
+// not days. Google Places jobs cost API quota + $ per Details call, so they stay
+// modest; YP jobs are free page fetches, so they get a much larger budget. Also
+// overridable per-run via ?limit=N (service-role only).
+//   NOTE (cron cadence): the pipeline cron runs fulfill-crawl every 15 min
+//   (20260622180000_periodic_workers_cron.sql, job 'cergio_fulfill_crawl'). To
+//   drain the ~5k-job YP matrix faster, tighten that schedule to '*/2 * * * *'
+//   (every 2 min) or '* * * * *' (every minute). At limit=40 jobs/run × 30/min
+//   that is ~1,200 jobs/min-cron-hour → the whole matrix in a few hours.
+const MAX_REQUESTS_PER_RUN = 40;
+const YP_FETCH_JITTER_MS = 1200; // polite pacing between YP page fetches (+ random)
 
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
@@ -35,19 +45,33 @@ serve(async (req: Request) => {
       || Deno.env.get('GOOGLE_MAPS_KEY') || '';
     const auth = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!auth || auth !== serviceKey) return json({ error: 'Unauthorized' }, 401);
-    if (!placesKey) return json({ error: 'GOOGLE_PLACES_API_KEY not set (server key, no referrer restriction)' }, 500);
+    // NOTE: Places key is validated conditionally below (only google_places jobs
+    // need it; yellowpages jobs are keyless free page fetches).
 
     const db = createClient(supabaseUrl, serviceKey);
 
-    // Pick up unworked service crawls.
+    // Per-run batch size: default high, overridable via ?limit=N (clamped).
+    const url = new URL(req.url);
+    const limitParam = parseInt(url.searchParams.get('limit') || '', 10);
+    const perRun = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : MAX_REQUESTS_PER_RUN, 1), 200);
+
+    // Pick up unworked service crawls. `source` (nullable) routes fulfillment:
+    // 'yellowpages' → free page-scrape parser; NULL/'google_places' → Places API.
     const { data: jobs, error: jobsErr } = await db
       .from('crawl_requests')
-      .select('id, kind, city, state, service_type, target_count, requested_by, status')
+      .select('id, kind, city, state, service_type, target_count, requested_by, status, source, notes')
       .eq('kind', 'services')
       .eq('status', 'new')
       .order('created_at', { ascending: true })
-      .limit(MAX_REQUESTS_PER_RUN);
+      .limit(perRun);
     if (jobsErr) throw jobsErr;
+
+    // Google Places jobs need the key; YP jobs don't. Only hard-fail if we have
+    // Places jobs and no key.
+    const havePlacesJobs = (jobs ?? []).some((j) => (j.source ?? 'google_places') !== 'yellowpages');
+    if (havePlacesJobs && !placesKey) {
+      return json({ error: 'GOOGLE_PLACES_API_KEY not set (needed for google_places jobs; yellowpages jobs are unaffected)' }, 500);
+    }
 
     const out: Array<Record<string, unknown>> = [];
     for (const job of jobs ?? []) {
@@ -55,69 +79,84 @@ serve(async (req: Request) => {
       await db.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
 
       try {
-        const want = Math.min(Math.max(job.target_count || 10, 1), 20);
-        const where = [job.city, job.state].filter(Boolean).join(', ');
-        const query = `${job.service_type || 'local service'} in ${where || 'United States'}`;
-
-        // ── Google Places Text Search ─────────────────────────────────────────
-        const tsUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${placesKey}`;
-        const tsRes = await fetch(tsUrl);
-        const ts = await tsRes.json();
-        if (ts.status && ts.status !== 'OK' && ts.status !== 'ZERO_RESULTS') {
-          throw new Error(`Places: ${ts.status}${ts.error_message ? ' — ' + ts.error_message : ''}`);
-        }
-        const results = (ts.results || []).slice(0, want);
-
-        // ── Details (phone + website) + upsert leads ──────────────────────────
+        const source = (job.source ?? 'google_places') as string;
         let saved = 0;
-        for (const r of results) {
-          let phone = null, website = null, email = null;
-          try {
-            const dUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${r.place_id}&fields=formatted_phone_number,website&key=${placesKey}`;
-            const dRes = await fetch(dUrl);
-            const d = await dRes.json();
-            phone = d.result?.formatted_phone_number ?? null;
-            website = d.result?.website ?? null;
-          } catch { /* details best-effort */ }
+        let found = 0;
+        let query = '';
 
-          // SPEC-65: best-effort capture of a PUBLIC contact email from the
-          // business's own website, so compliant email outreach has an address.
-          if (website) email = await scrapeEmail(website);
+        if (source === 'yellowpages') {
+          // ── YellowPages page-scrape path (free, keyless) ────────────────────
+          const r = await fulfillYellowPages(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
+        } else {
+          // ── Google Places path (unchanged legacy behaviour) ─────────────────
+          const want = Math.min(Math.max(job.target_count || 10, 1), 20);
+          const where = [job.city, job.state].filter(Boolean).join(', ');
+          query = `${job.service_type || 'local service'} in ${where || 'United States'}`;
 
-          const row = {
-            id: r.place_id,
-            name: r.name,
-            service_type: job.service_type || null,
-            phone, phone_origin: phone ? 'google_places' : null,
-            website_url: website,
-            owner_email: email,
-            address: r.formatted_address || null,
-            city: job.city || null,
-            state: job.state || 'FL',
-            lat: r.geometry?.location?.lat ?? null,
-            lon: r.geometry?.location?.lng ?? null,
-            data_source: 'google_places',
-            fetched_at: new Date().toISOString(),
-            outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'; never auto-sent
-            outreach_notes: `auto-sourced via Google Places (${job.city || '?'}) ${new Date().toISOString().slice(0,10)}`,
-          };
-          // 2026-06-28 reset: service crawls feed leads_services (the real mobile
-          // provider bucket that outreach + the gate read). leads_localbiz is
-          // dormant (brick-and-mortar Phase 2). The gate quarantines storefront/
-          // off-target rows; only mobile/reachable types are promoted to 'queued'.
-          const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
-          if (!upErr) saved++;
+          const tsUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${placesKey}`;
+          const tsRes = await fetch(tsUrl);
+          const ts = await tsRes.json();
+          if (ts.status && ts.status !== 'OK' && ts.status !== 'ZERO_RESULTS') {
+            throw new Error(`Places: ${ts.status}${ts.error_message ? ' — ' + ts.error_message : ''}`);
+          }
+          const results = (ts.results || []).slice(0, want);
+          found = results.length;
+
+          for (const r of results) {
+            let phone = null, website = null, email = null;
+            try {
+              const dUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${r.place_id}&fields=formatted_phone_number,website&key=${placesKey}`;
+              const dRes = await fetch(dUrl);
+              const d = await dRes.json();
+              phone = d.result?.formatted_phone_number ?? null;
+              website = d.result?.website ?? null;
+            } catch { /* details best-effort */ }
+
+            // SPEC-65: best-effort capture of a PUBLIC contact email from the
+            // business's own website, so compliant email outreach has an address.
+            if (website) email = await scrapeEmail(website);
+
+            const row = {
+              id: r.place_id,
+              name: r.name,
+              service_type: job.service_type || null,
+              phone, phone_origin: phone ? 'google_places' : null,
+              website_url: website,
+              owner_email: email,
+              address: r.formatted_address || null,
+              city: job.city || null,
+              state: job.state || 'FL',
+              lat: r.geometry?.location?.lat ?? null,
+              lon: r.geometry?.location?.lng ?? null,
+              data_source: 'google_places',
+              fetched_at: new Date().toISOString(),
+              outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'; never auto-sent
+              outreach_notes: `auto-sourced via Google Places (${job.city || '?'}) ${new Date().toISOString().slice(0,10)}`,
+            };
+            // 2026-06-28 reset: service crawls feed leads_services (the real mobile
+            // provider bucket that outreach + the gate read). leads_localbiz is
+            // dormant (brick-and-mortar Phase 2). The gate quarantines storefront/
+            // off-target rows; only mobile/reachable types are promoted to 'queued'.
+            const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+            if (!upErr) saved++;
+          }
+
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: saved === 0 ? 'no Google Places results for this city/type' : null,
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         }
-
-        await db.from('crawl_requests').update({
-          status: 'delivered', delivered_count: saved,
-          notes: saved === 0 ? 'no Google Places results for this city/type' : null,
-          updated_at: new Date().toISOString(),
-        }).eq('id', job.id);
 
         // ── Notify the searcher ───────────────────────────────────────────────
         await notifySearcher(db, job, saved);
-        out.push({ id: job.id, query, found: results.length, saved });
+        out.push({ id: job.id, source, query, found, saved });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         await db.from('crawl_requests').update({ status: 'failed', notes: msg.slice(0, 500), updated_at: new Date().toISOString() }).eq('id', job.id);
@@ -176,6 +215,287 @@ async function scrapeEmail(website: string): Promise<string | null> {
     return null;
   } catch { return null; }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YellowPages fulfillment: parse real business listings from YP search result
+// pages and upsert into leads_services — SAME columns / staging / gate as the
+// Google Places path. No API, no key. Free page fetches with polite pacing.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const YP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const YP_RESULTS_PER_PAGE = 30; // YP renders ~30 organic results per page
+
+// BLOCKED categories (SECOND safety net — the seeder never enqueues these, but a
+// stray hand-inserted job or an ad/sponsored slot could still surface one).
+// Word-bounded where a bare token would false-match ("bar" in "barber").
+const YP_BLOCKED = new RegExp(
+  '(massage|tattoo|makeup|\\bpersonal chef\\b|private chef' +
+  '|plastic surgery|cosmetic surgery|\\bsurgeon\\b' +
+  '|\\bdrug\\b|pharmac|cannabis|dispensary|marijuana' +
+  '|liquor|\\bwine\\b|brewery|winery|distillery|\\bwine bar\\b|cocktail bar' +
+  '|tobacco|smoke shop|\\bvape\\b|\\bcigar\\b' +
+  '|casino|gambling|\\bbetting\\b|firearm|\\bgun\\b|\\bammo\\b' +
+  '|\\bescort\\b|strip club|nightclub|night club|disc jockey|\\bdj\\b)',
+  'i',
+);
+
+// name↔service_type plausibility: reject "restaurant-as-plumber" garbage. If we
+// have a keyword profile for the requested type, the business name (or its YP
+// category text) must contain at least one on-topic token. Types with no profile
+// fall through as accepted (we can't disprove them). Mirrors the DB gate's guard.
+const YP_TYPE_KEYWORDS: Record<string, RegExp> = {
+  plumber:          /(plumb|drain|\bpipe|rooter|leak|sewer|septic|water heater|faucet|rooterman)/i,
+  electrician:      /(electric|electr|wiring|lighting|generator|\bvolt)/i,
+  hvac:             /(hvac|heating|cooling|\bair\b|\bac\b|furnace|refrigerat|climate|mechanical)/i,
+  handyman:         /(handy|handyman|repair|remodel|home improve|fix)/i,
+  'house cleaning': /(clean|maid|housekeep|janitor)/i,
+  'maid service':   /(clean|maid|housekeep)/i,
+  landscaping:      /(landscap|lawn|garden|yard|\bturf|irrigation|hardscap)/i,
+  'lawn care':      /(lawn|landscap|turf|mow|garden|yard)/i,
+  'tree service':   /(tree|arborist|stump|\btrim)/i,
+  'pest control':   /(pest|extermin|termite|bug|rodent|mosquito|wildlife)/i,
+  mover:            /(mov|moving|relocat|hauling|\bhaul|transport)/i,
+  'junk removal':   /(junk|haul|debris|removal|clean out|dumpster)/i,
+  painter:          /(paint|coating|finish)/i,
+  roofing:          /(roof|shingle|gutter)/i,
+  flooring:         /(floor|tile|carpet|hardwood|laminate)/i,
+  'window cleaning':/(window|glass|pane)/i,
+  'pressure washing':/(pressure wash|power wash|soft wash|\bwash)/i,
+  'gutter cleaning':/(gutter|downspout|roof)/i,
+  'pool cleaning':  /(pool|spa|aquatic)/i,
+  'appliance repair':/(appliance|repair|refrigerat|washer|dryer|\boven|dishwasher)/i,
+  locksmith:        /(lock|key|security|safe)/i,
+  'garage door repair':/(garage|door|opener)/i,
+  fencing:          /(fenc|gate|railing)/i,
+  drywall:          /(drywall|sheetrock|plaster|texture)/i,
+  'carpet cleaning':/(carpet|rug|upholstery|steam|clean)/i,
+  photographer:     /(photo|foto|studio|imag|portrait)/i,
+  videographer:     /(video|film|cinema|media|product)/i,
+  'personal trainer':/(train|fitness|gym|coach|wellness|strength)/i,
+  'yoga instructor':/(yoga|studio|wellness|namaste)/i,
+  'pilates instructor':/(pilates|studio|reformer|wellness)/i,
+  'nutrition coach':/(nutrition|dietit|wellness|diet|health)/i,
+  'hair stylist':   /(hair|salon|stylist|beauty|blow|color)/i,
+  barber:           /(barber|cuts|grooming|shave|fade)/i,
+  'nail technician':/(nail|manicure|pedicure|salon|spa)/i,
+  'lash technician':/(lash|brow|beauty|extension)/i,
+  'dog walker':     /(dog|pet|paw|canine|walk)/i,
+  'dog grooming':   /(groom|dog|pet|paw|canine|mobile)/i,
+  'pet sitting':    /(pet|sit|dog|cat|paw|boarding)/i,
+  'mobile mechanic':/(mechanic|auto|car|repair|mobile|service)/i,
+  'auto detailing': /(detail|auto|car|wash|mobile|ceramic)/i,
+  'car wash':       /(wash|auto|car|detail|mobile)/i,
+  tutor:            /(tutor|learn|academ|educat|prep|teach|math|reading)/i,
+  'music teacher':  /(music|piano|guitar|voice|lesson|studio|academy)/i,
+  bookkeeping:      /(bookkeep|account|tax|financ|ledger|payroll)/i,
+  'tax preparation':/(tax|account|financ|prep|cpa)/i,
+  'computer repair':/(computer|\bpc\b|tech|it\b|laptop|repair|geek)/i,
+  'tech support':   /(tech|\bit\b|computer|support|network|geek)/i,
+  'interior designer':/(interior|design|decor|home|stag)/i,
+  'home staging':   /(stag|design|interior|home|real estate)/i,
+  'solar installer':/(solar|energy|panel|photovolt|renewable)/i,
+  'window tinting': /(tint|window|auto|film|glass)/i,
+  'wedding planner':/(wedding|event|planner|bridal|celebrat)/i,
+  'event planner':  /(event|planner|party|celebrat|wedding)/i,
+};
+
+function ypPlausible(serviceType: string, name: string, category: string): boolean {
+  const kw = YP_TYPE_KEYWORDS[serviceType.toLowerCase()];
+  if (!kw) return true; // no profile → can't disprove; accept
+  const hay = `${name} ${category}`;
+  return kw.test(hay);
+}
+
+async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; found: number; query: string }> {
+  const type = String(job.service_type || 'local service');
+  const city = String(job.city || '');
+  const state = String(job.state || '');
+  const want = Math.min(Math.max(job.target_count || 30, 1), 60);
+  const query = `${type} in ${[city, state].filter(Boolean).join(', ') || 'United States'} (YellowPages)`;
+
+  const pages = Math.max(1, Math.ceil(want / YP_RESULTS_PER_PAGE));
+  const seenIds = new Set<string>();
+  let saved = 0, found = 0;
+
+  for (let page = 1; page <= pages; page++) {
+    const url = `https://www.yellowpages.com/search?search_terms=${encodeURIComponent(type)}&geo_location_terms=${encodeURIComponent(`${city}, ${state}`)}${page > 1 ? `&page=${page}` : ''}`;
+    // Polite jitter between fetches to avoid IP bans.
+    if (page > 1) await sleep(YP_FETCH_JITTER_MS + Math.floor(Math.random() * YP_FETCH_JITTER_MS));
+
+    let html = '';
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': YP_UA, 'Accept': 'text/html' } });
+      clearTimeout(t);
+      if (!res.ok) break; // 403/429 → stop hitting this domain for this job
+      html = await res.text();
+    } catch { break; }
+
+    const listings = parseYellowPages(html);
+    if (listings.length === 0) break; // no more results / structure changed
+    found += listings.length;
+
+    for (const b of listings) {
+      if (saved >= want) break;
+      if (!b.name) continue;
+
+      // Safety net 2: never ingest a blocked category.
+      if (YP_BLOCKED.test(`${type} ${b.name} ${b.category || ''}`)) continue;
+      // Plausibility: reject name↔service_type mismatches (restaurant-as-plumber).
+      if (!ypPlausible(type, b.name, b.category || '')) continue;
+
+      // Stable dedupe id (YP has no place_id): normalized name+city+state+type.
+      const id = `yp:${slug(`${b.name}|${city}|${state}|${type}`)}`;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      let email: string | null = null;
+      if (b.website) { try { email = await scrapeEmail(b.website); } catch { /* best-effort */ } }
+
+      const row = {
+        id,
+        name: b.name,
+        service_type: type,
+        phone: b.phone,
+        phone_origin: b.phone ? 'yellowpages' : null,
+        website_url: b.website,
+        owner_email: email,
+        address: b.address,
+        city: city || null,
+        state: state || 'FL',
+        lat: null,
+        lon: null,
+        data_source: 'yellowpages',
+        fetched_at: new Date().toISOString(),
+        outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'; never auto-sent
+        outreach_notes: `auto-sourced via YellowPages (${city || '?'}) ${new Date().toISOString().slice(0, 10)}`,
+      };
+      const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+      if (!upErr) saved++;
+    }
+    if (saved >= want) break;
+  }
+
+  return { saved, found, query };
+}
+
+type YpListing = { name: string | null; phone: string | null; address: string | null; website: string | null; category: string | null };
+
+// Parse a YellowPages search-results HTML page. Two strategies, both regex-based
+// (Deno edge has no DOM): (1) JSON-LD blocks YP embeds per listing (most robust —
+// survives class renames); (2) HTML class fallback for the classic markup. We
+// merge/dedupe by name so a listing found by either path counts once.
+function parseYellowPages(html: string): YpListing[] {
+  const out: YpListing[] = [];
+  const byName = new Map<string, YpListing>();
+
+  const add = (l: YpListing) => {
+    if (!l.name) return;
+    const key = l.name.trim().toLowerCase();
+    const prev = byName.get(key);
+    if (!prev) { byName.set(key, l); out.push(l); return; }
+    // Merge missing fields from the second sighting.
+    prev.phone   = prev.phone   || l.phone;
+    prev.address = prev.address || l.address;
+    prev.website = prev.website || l.website;
+    prev.category = prev.category || l.category;
+  };
+
+  // ── Strategy 1: JSON-LD (LocalBusiness / Organization) ─────────────────────
+  const ldMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+  for (const block of ldMatches) {
+    const jsonText = block.replace(/^<script[^>]*>/i, '').replace(/<\/script>$/i, '').trim();
+    let parsed: any;
+    try { parsed = JSON.parse(jsonText); } catch { continue; }
+    const nodes: any[] = Array.isArray(parsed) ? parsed : (parsed['@graph'] || [parsed]);
+    for (const n of nodes) {
+      if (!n || typeof n !== 'object') continue;
+      const t = n['@type'];
+      const types = Array.isArray(t) ? t : [t];
+      const isBiz = types.some((x) => typeof x === 'string' && /(LocalBusiness|Organization|Store|ProfessionalService|HomeAndConstructionBusiness)/i.test(x));
+      if (!isBiz || !n.name) continue;
+      const addr = n.address && typeof n.address === 'object'
+        ? [n.address.streetAddress, n.address.addressLocality, n.address.addressRegion, n.address.postalCode].filter(Boolean).join(', ')
+        : (typeof n.address === 'string' ? n.address : null);
+      add({
+        name: cleanText(String(n.name)),
+        phone: n.telephone ? normPhone(String(n.telephone)) : null,
+        address: addr ? cleanText(addr) : null,
+        website: pickWebsite(n.url),
+        category: null,
+      });
+    }
+  }
+
+  // ── Strategy 2: classic HTML result cards ──────────────────────────────────
+  // Split the page into result blocks, then pull each field with tolerant regex.
+  const cards = html.split(/<div\s+class=["']result[\s"']/i).slice(1);
+  for (const raw of cards) {
+    const card = raw.slice(0, 6000); // bound the block
+    const name = firstMatch(card, [
+      /class=["']business-name["'][^>]*>(?:\s*<span[^>]*>)?\s*([^<]{2,120})/i,
+      /<a[^>]*class=["'][^"']*business-name[^"']*["'][^>]*>\s*(?:<[^>]+>)?\s*([^<]{2,120})/i,
+    ]);
+    if (!name) continue;
+    const phone = firstMatch(card, [
+      /class=["']phones?[^"']*["'][^>]*>\s*([0-9()+\-.\s]{7,20})/i,
+      /class=["'][^"']*phone[^"']*["'][^>]*>\s*([0-9()+\-.\s]{7,20})/i,
+    ]);
+    const street = firstMatch(card, [
+      /class=["']street-address["'][^>]*>\s*([^<]{3,120})/i,
+    ]);
+    const locality = firstMatch(card, [
+      /class=["']locality["'][^>]*>\s*([^<]{2,80})/i,
+    ]);
+    const website = firstMatch(card, [
+      /class=["'][^"']*track-visit-website[^"']*["'][^>]*href=["']([^"']+)["']/i,
+      /href=["']([^"']+)["'][^>]*class=["'][^"']*track-visit-website/i,
+    ]);
+    const category = firstMatch(card, [
+      /class=["']categories["'][^>]*>([\s\S]{0,200}?)<\/div>/i,
+    ]);
+    add({
+      name: cleanText(name),
+      phone: phone ? normPhone(phone) : null,
+      address: cleanText([street, locality].filter(Boolean).join(', ')) || null,
+      website: pickWebsite(website),
+      category: category ? cleanText(category.replace(/<[^>]+>/g, ' ')) : null,
+    });
+  }
+
+  return out;
+}
+
+function firstMatch(s: string, patterns: RegExp[]): string | null {
+  for (const p of patterns) { const m = s.match(p); if (m && m[1]) return m[1]; }
+  return null;
+}
+function cleanText(s: string | null): string | null {
+  if (!s) return null;
+  const t = s.replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"')
+    .replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  return t || null;
+}
+function normPhone(s: string): string | null {
+  const digits = s.replace(/[^\d]/g, '');
+  if (digits.length < 10) return null;
+  const d = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits.slice(0, 10);
+  if (d.length !== 10) return null;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
+function pickWebsite(url: unknown): string | null {
+  if (!url) return null;
+  const u = Array.isArray(url) ? String(url[0] || '') : String(url);
+  // Skip YP-internal links; only keep the business's own site.
+  if (!/^https?:\/\//i.test(u)) return null;
+  if (/yellowpages\.com|yextcdn|mip\/|\/listings\//i.test(u)) return null;
+  return u;
+}
+function slug(s: string): string {
+  return s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9|]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 200);
+}
+function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

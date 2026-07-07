@@ -4522,3 +4522,158 @@ export async function crosspost({ serviceId, channel, asset = {} } = {}) {
   if (data?.error && data?.status !== 'error') return { data: null, error: { message: data.error } };
   return { data, error: null };
 }
+
+// ─── OPS & GROWTH CONSOLE — OUTREACH module (increment 1: build, no send) ─────
+//
+// The /ops console lets the founder BUILD an outreach audience from the SAME
+// real lead tables the outreach-send edge function reads (leads_influencers for
+// creators, leads_services for services) and compose a campaign off the SAME
+// founding copy — WITHOUT sending. Increment 2 wires the gated dry-run + send.
+//
+// SENDABILITY INVARIANT (matches outreach-send + ops-metrics): only rows with
+// outreach_status='queued' are ever contactable, so every count/preview here is
+// scoped to 'queued'. No fake data — an empty audience returns count 0 + null
+// sample, and the screen shows an honest empty state.
+//
+// These are AUTHENTICATED reads via the shared anon-key client (the same client
+// pattern the app already uses to count leads_influencers in broadcastSpotlight-
+// Request). They never touch the service-role key.
+
+const OUTREACH_QUEUED = 'queued';
+
+// The exact merge-field-relevant columns that exist on each lead table (verified
+// against creator-harvest / fulfill-crawl / outreach-send). We NEVER select a
+// column that isn't written by the pipeline.
+const CREATOR_COLS = 'ig_handle, display_name, category, city, followers, email, phone';
+const SERVICE_COLS = 'name, service_type, city, has_instagram, owner_email, phone';
+
+/** Build a filtered, queued-only creator (leads_influencers) query. `sel` is the
+ *  select spec + options (so counts and row fetches share one filter path);
+ *  applies only the filters the caller set — empty filters are no-ops so the base
+ *  is "all sendable creators". */
+function creatorQuery(sel, filters = {}, selOpts) {
+  let q = supabase.from('leads_influencers').select(sel, selOpts).eq('outreach_status', OUTREACH_QUEUED);
+  if (filters.city)  q = q.ilike('city', `%${String(filters.city).trim()}%`);
+  if (filters.niche) q = q.ilike('category', `%${String(filters.niche).trim()}%`);
+  // Creators are sourced by IG handle, so has_instagram is intrinsic; a
+  // hasInstagram:true filter simply requires a non-null ig_handle.
+  if (filters.hasInstagram) q = q.not('ig_handle', 'is', null);
+  if (Number.isFinite(filters.minFollowers)) q = q.gte('followers', filters.minFollowers);
+  if (Number.isFinite(filters.maxFollowers)) q = q.lte('followers', filters.maxFollowers);
+  return q;
+}
+
+/** Build a filtered, queued-only service (leads_services) query. */
+function serviceQuery(sel, filters = {}, selOpts) {
+  let q = supabase.from('leads_services').select(sel, selOpts).eq('outreach_status', OUTREACH_QUEUED);
+  if (filters.city)        q = q.ilike('city', `%${String(filters.city).trim()}%`);
+  if (filters.serviceType) q = q.ilike('service_type', `%${String(filters.serviceType).trim()}%`);
+  if (filters.hasInstagram) q = q.eq('has_instagram', true);
+  return q;
+}
+
+/** LIVE COUNT of sendable matches for the audience builder.
+ *  @param audience 'creators' | 'services'
+ *  @returns { data: { count }, error } — count is queued-only (sendable) rows. */
+export async function countOutreachAudience(audience, filters = {}) {
+  if (!supabaseReady) return { data: { count: 0 }, error: NOT_WIRED.error };
+  try {
+    const q = audience === 'services'
+      ? serviceQuery('id', filters, { count: 'exact', head: true })
+      : creatorQuery('id', filters, { count: 'exact', head: true });
+    const { count, error } = await q;
+    if (error) return { data: { count: 0 }, error };
+    return { data: { count: count || 0 }, error: null };
+  } catch (e) {
+    return { data: { count: 0 }, error: { message: e?.message || 'count failed' } };
+  }
+}
+
+/** One REAL sample recipient for the composer's live preview. Returns the first
+ *  matching queued lead, normalized to merge fields {name, city, service_type,
+ *  ig_handle}. Returns { data: null } (not an error) when the audience is empty —
+ *  the screen then shows an honest "no sample" state instead of fake data. */
+export async function sampleOutreachRecipient(audience, filters = {}) {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+  try {
+    if (audience === 'services') {
+      const { data, error } = await serviceQuery(SERVICE_COLS, filters).limit(1).maybeSingle();
+      if (error) return { data: null, error };
+      if (!data) return { data: null, error: null };
+      return {
+        data: {
+          name:         data.name || '',
+          city:         data.city || '',
+          service_type: data.service_type || '',
+          ig_handle:    '', // services are keyed by business, not an IG handle
+          _channel:     data.owner_email ? 'email' : (data.phone ? 'sms/whatsapp' : 'no contact'),
+        },
+        error: null,
+      };
+    }
+    const { data, error } = await creatorQuery(CREATOR_COLS, filters).order('followers', { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: null };
+    return {
+      data: {
+        name:         data.display_name || data.ig_handle || '',
+        city:         data.city || '',
+        service_type: data.category || '', // for creators, "niche" maps to service_type merge field
+        ig_handle:    data.ig_handle || '',
+        followers:    Number.isFinite(data.followers) ? data.followers : null,
+        _channel:     data.email ? 'email' : (data.phone ? 'sms/whatsapp' : 'no contact'),
+      },
+      error: null,
+    };
+  } catch (e) {
+    return { data: null, error: { message: e?.message || 'sample failed' } };
+  }
+}
+
+/** Real, distinct filter OPTIONS (cities + niches/service types) for the audience
+ *  builder dropdowns — derived from a capped scan of queued rows so the founder
+ *  filters against values that actually exist. No hardcoded lists. */
+export async function getOutreachFilterOptions(audience) {
+  if (!supabaseReady) return { data: { cities: [], niches: [] }, error: NOT_WIRED.error };
+  try {
+    const SCAN = 1000;
+    if (audience === 'services') {
+      const { data, error } = await supabase.from('leads_services')
+        .select('city, service_type').eq('outreach_status', OUTREACH_QUEUED).limit(SCAN);
+      if (error) return { data: { cities: [], niches: [] }, error };
+      return {
+        data: {
+          cities: uniqSorted((data || []).map(r => r.city)),
+          niches: uniqSorted((data || []).map(r => r.service_type)),
+        },
+        error: null,
+      };
+    }
+    const { data, error } = await supabase.from('leads_influencers')
+      .select('city, category').eq('outreach_status', OUTREACH_QUEUED).limit(SCAN);
+    if (error) return { data: { cities: [], niches: [] }, error };
+    return {
+      data: {
+        cities: uniqSorted((data || []).map(r => r.city)),
+        niches: uniqSorted((data || []).map(r => r.category)),
+      },
+      error: null,
+    };
+  } catch (e) {
+    return { data: { cities: [], niches: [] }, error: { message: e?.message || 'options failed' } };
+  }
+}
+
+function uniqSorted(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const v of arr) {
+    const s = String(v ?? '').trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out.sort((a, b) => a.localeCompare(b));
+}
