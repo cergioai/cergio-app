@@ -106,12 +106,15 @@ const INSERT_BATCH   = 250;  // rows per insert round-trip
 
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
+  const started = Date.now();
+  let dbRef: any = null;
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const auth = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!auth || auth !== serviceKey) return json({ error: 'Unauthorized' }, 401);
     const db = createClient(supabaseUrl, serviceKey);
+    dbRef = db;
 
     // Build the full matrix, dropping any blocked type up front (safety net 1).
     const types = SERVICE_TYPES.filter((t) => !isBlocked(t) && t !== 'dj-free');
@@ -175,6 +178,16 @@ serve(async (req: Request) => {
       }
     }
 
+    // BACKBONE: unified agent_runs ledger. raw_found = new candidates to enqueue,
+    // rows_written = rows actually inserted. When candidates=0 (matrix already
+    // fully open) that is a legitimate no-op, NOT a silent collision (the watchdog
+    // only flags raw_found>0 AND rows_written=0), so mark 'ok' unless we truly had
+    // candidates but wrote none.
+    await logAgentRun(db, 'crawl-seed-yellowpages', {
+      started, raw_found: toInsert.length, rows_written: inserted,
+      status: (toInsert.length > 0 && inserted === 0) ? 'empty' : 'ok', error: null,
+      meta: { matrix: CITIES.length * types.length, already_open: seen.size, skipped_race_dupes: skipped },
+    });
     return json({
       cities: CITIES.length,
       service_types: types.length,
@@ -186,9 +199,35 @@ serve(async (req: Request) => {
       source: 'yellowpages',
     });
   } catch (e) {
+    await logAgentRun(dbRef, 'crawl-seed-yellowpages', {
+      started, raw_found: null, rows_written: 0,
+      status: 'error', error: e instanceof Error ? e.message : String(e),
+    });
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
+
+// BACKBONE helper — write ONE agent_runs row per invocation. NEVER throws.
+async function logAgentRun(
+  db: any,
+  agent: string,
+  o: { started: number; raw_found?: number | null; rows_written?: number | null;
+       status?: string; error?: string | null; meta?: unknown },
+): Promise<void> {
+  if (!db) return;
+  try {
+    await db.from('agent_runs').insert({
+      agent,
+      started_at: new Date(o.started).toISOString(),
+      finished_at: new Date().toISOString(),
+      raw_found: o.raw_found ?? null,
+      rows_written: o.rows_written ?? null,
+      status: o.status ?? 'ok',
+      error: o.error ? String(o.error).slice(0, 1000) : null,
+      meta: o.meta ?? null,
+    });
+  } catch (_e) { /* best-effort */ }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
