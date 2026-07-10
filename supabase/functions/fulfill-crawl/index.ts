@@ -268,6 +268,10 @@ async function scrapeEmail(website: string): Promise<string | null> {
 
 const YP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const YP_RESULTS_PER_PAGE = 30; // YP renders ~30 organic results per page
+// Max bytes of a YP page we hold in memory. Bounds against a pathological/OOM
+// response (the HTTP-546 crash) WITHOUT slicing off the (late-in-document) JSON-LD
+// listing block on a normal ~1.5–2.5 MB YP results page. See the fetch site.
+const YP_MAX_PAGE_BYTES = 4_000_000;
 
 // BLOCKED categories (SECOND safety net — the seeder never enqueues these, but a
 // stray hand-inserted job or an ad/sponsored slot could still surface one).
@@ -373,10 +377,14 @@ async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; f
       const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': YP_UA, 'Accept': 'text/html' } });
       clearTimeout(t);
       if (!res.ok) break; // 403/429 → stop hitting this domain for this job
-      // BOUND the page. An unbounded YP page (multi-MB) run through the JSON-LD +
-      // per-card regexes in a memory-capped Deno isolate can OOM → HTTP 546 crash
-      // (the whole run dies, cron reports "succeeded"). Cap like scrapeEmail does.
-      html = (await res.text()).slice(0, 600000);
+      // BOUND the page against a pathological/unbounded response (OOM → HTTP 546),
+      // but the cap MUST clear a full real YP results page. A live plumber/Miami
+      // page is ~1.5–2.5 MB and the schema.org JSON-LD listing block is emitted
+      // LATE in the document — a tight 600 KB cap sliced that block (and the tail
+      // result cards) clean off, so parse yielded 0 listings and every job stamped
+      // delivered-with-0 (raw_found 0 / rows_written 0). 4 MB holds a full page
+      // with headroom while still bounding memory in the Deno isolate.
+      html = (await res.text()).slice(0, YP_MAX_PAGE_BYTES);
     } catch { break; }
 
     // PER-PAGE PARSE GUARD: a single malformed page (bad JSON-LD, pathological

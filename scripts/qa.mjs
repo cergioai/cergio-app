@@ -2304,6 +2304,61 @@ test('spec-64-crawl-fulfillment', 'FROZEN: fulfill-crawl sources businesses via 
     'fulfill-crawl must leave business leads at outreach_status=new (no auto cold-send) — SPEC-64');
 });
 
+// ─── REGRESSION LOCK: REQ-P10-crawl-yp-drain ─────────────────────────────────
+// fulfill-crawl MUST actually drain queued YellowPages jobs (source='yellowpages',
+// status='new') into leads_services rows. It went RED when the HTTP-546 defensive
+// fix capped each fetched page at 600 KB: a real YP results page is ~1.5–2.5 MB
+// and its schema.org JSON-LD listing block is emitted LATE, so a tight slice cut
+// the listings off → parse yielded 0 → every job stamped delivered-with-0 →
+// agent_runs.raw_found 0 / rows_written 0 forever. This invariant fails on the old
+// cap and passes on the fix, and also locks the selection + parse contract so the
+// drain path can't silently regress again.
+test('p10-crawl-yp-drain', 'REQ-P10-crawl-yp-drain: fulfill-crawl drains queued YellowPages jobs (source=yellowpages/status=new) into leads_services — page cap must clear a full YP page, not slice its listings off', '#64', async () => {
+  const fc = path.join(REPO_ROOT, 'supabase/functions/fulfill-crawl/index.ts');
+  const src = fs.readFileSync(fc, 'utf8');
+
+  // 1) SELECTION must pick up YP jobs: filter on kind='services' + status='new'
+  //    and MUST NOT hard-filter source to google_places (that would skip YP rows).
+  assert(/\.eq\(\s*['"]kind['"]\s*,\s*['"]services['"]\s*\)/.test(src),
+    'job SELECT must filter kind=services — REQ-P10');
+  assert(/\.eq\(\s*['"]status['"]\s*,\s*['"]new['"]\s*\)/.test(src),
+    'job SELECT must filter status=new (so queued rows are picked up) — REQ-P10');
+  assert(!/\.eq\(\s*['"]source['"]\s*,\s*['"](google_places|yellowpages)['"]\s*\)/.test(src),
+    'job SELECT must stay source-agnostic — a source= filter would starve YP (or Places) jobs — REQ-P10');
+  assert(/source\s*===\s*'yellowpages'/.test(src) && /fulfillYellowPages\(/.test(src),
+    'YP jobs must route to the fulfillYellowPages drain path — REQ-P10');
+
+  // 2) THE BUG: the fetched-page byte cap must clear a full real YP page. The old
+  //    600 KB cap sliced the (late) JSON-LD listing block off → 0 listings. Require
+  //    the cap to be >= 2 MB so a normal YP page's listings survive truncation.
+  const capM = src.match(/YP_MAX_PAGE_BYTES\s*=\s*([0-9_]+)/);
+  assert(capM, 'YP page cap must be a named constant (YP_MAX_PAGE_BYTES) at the fetch site — REQ-P10');
+  const capBytes = parseInt(capM[1].replace(/_/g, ''), 10);
+  assert(capBytes >= 2_000_000,
+    `YP page cap too small (${capBytes}B): a real YP page is ~1.5–2.5MB and its JSON-LD listings sit late — a tight cap slices them off → raw_found 0. Must be >= 2MB — REQ-P10`);
+  // The YP fetch must bound its page via that generous named cap — NOT a tight
+  // inline literal like the old .slice(0, 600000) that truncated the listings.
+  assert(/await res\.text\(\)\)\.slice\(\s*0\s*,\s*YP_MAX_PAGE_BYTES\s*\)/.test(src),
+    'YP fetch must bound the page via YP_MAX_PAGE_BYTES (546 safety, no tight literal) — REQ-P10');
+
+  // 3) PARSE PATH must not silently continue-past-ALL: both extraction strategies
+  //    present, and the per-page/parse guards must fall through to the NEXT page,
+  //    not abandon the whole job — while good pages still yield rows.
+  assert(/ld\\?\+json/.test(src), 'YP parser must keep the JSON-LD strategy — REQ-P10');
+  assert(/business-name/.test(src), 'YP parser must keep the classic-card HTML strategy fallback — REQ-P10');
+  assert(/parseYellowPagesInner\(/.test(src) && /catch\s*\([^)]*\)\s*\{[\s\S]{0,400}?return \[\]/.test(src),
+    'parse must keep the 546 safety net (bad page → [] for THAT page, never throw) — REQ-P10');
+
+  // 4) WRITE CONTRACT: YP path upserts leads_services with the SAME staging as the
+  //    Google Places path, and the run logs REAL raw_found/rows_written to agent_runs.
+  assert(/data_source: 'yellowpages'/.test(src) && /from\('leads_services'\)\.upsert/.test(src),
+    'YP path must upsert leads_services (data_source=yellowpages) — REQ-P10');
+  assert(/outreach_status: 'new'/.test(src),
+    'YP leads stage at outreach_status=new (gate promotes; never auto-sent) — REQ-P10');
+  assert(/logAgentRun\(db, 'fulfill-crawl'[\s\S]*?raw_found: totFound[\s\S]*?rows_written: totSaved/.test(src),
+    'run must log REAL raw_found/rows_written to agent_runs — REQ-P10');
+});
+
 test('spec-63-crawl-monitoring', 'FROZEN: crawl pipeline self-monitors — health-check emails STALLED/FAILED/EMPTY diagnosis; admin-crawl-status + /admin/crawls live dashboard (SPEC-63)', '#63', async () => {
   const hc = path.join(REPO_ROOT, 'supabase/functions/crawl-health-check/index.ts');
   const ad = path.join(REPO_ROOT, 'supabase/functions/admin-crawl-status/index.ts');
@@ -2535,6 +2590,78 @@ test('spec-48-connector-request-screen', 'FROZEN: Connector-request screen carri
     'getInboxPartyCounts must expose isConnector (via isConnectorProfile) so cards can lead with the badge (SPEC-48c)');
   assert(/\?\.isConnector/.test(inbox) && /Connector\b/.test(inbox),
     'Inbox cards (service viewing a Connector) must lead with the Connector badge (SPEC-48c)');
+});
+
+// ─── A1 launch-critical: scheduled-vs-instant messaging (date-aware) ───────
+test('a1-scheduled-detection', 'FROZEN: scheduled-vs-instant detection is DATE-AWARE — calendar dates/weekdays/ordinals >32h show the "up to 24 hours" copy, near-term stays 15-min (A1)', '#A1', async () => {
+  const screen = readFile('src/screens/ResultsScreen.jsx');
+  // Results must delegate to the date-aware helper, not an inline relative-only regex.
+  assert(/isScheduledWhen\s*\(\s*when\s*\)/.test(screen),
+    'ResultsScreen must derive isScheduled via isScheduledWhen(when) — the date-aware helper (A1)');
+  assert(/from '\.\.\/lib\/whenHorizon'/.test(screen),
+    'ResultsScreen must import isScheduledWhen from lib/whenHorizon (A1)');
+
+  // The helper itself must resolve the previously-missed cases correctly.
+  assert(fs.existsSync(path.join(REPO_ROOT, 'src/lib/whenHorizon.js')),
+    'src/lib/whenHorizon.js must exist (A1 scheduled detection)');
+  const { isScheduledWhen } = await import(path.join(REPO_ROOT, 'src/lib/whenHorizon.js'));
+  const NOW = new Date(2026, 6, 8, 14, 0, 0, 0); // Wed 2026-07-08 14:00
+  const sched = (w) => assert(isScheduledWhen(w, NOW) === true,  `"${w}" must be SCHEDULED (>32h) — A1`);
+  const inst  = (w) => assert(isScheduledWhen(w, NOW) === false, `"${w}" must be INSTANT (near-term) — A1`);
+  // Previously missed → must now be scheduled:
+  sched('august 5th'); sched('on the 20th'); sched('next friday'); sched('this weekend'); sched('5th of august');
+  // Relative far-future still scheduled:
+  sched('next week'); sched('in two weeks'); sched('a couple weeks');
+  // Near-term must remain instant:
+  inst('now'); inst('today'); inst('tonight'); inst('tomorrow'); inst('this evening'); inst('');
+});
+
+// ─── INVARIANT #QA1: the CONTINUOUS QA layer itself can't silently break ──────
+// The live QA system (seed world + live suites + findings/requirements wiring)
+// is the layer that guarantees user journeys work. If any of its parts vanish or
+// its ledger contract drifts, the whole guarantee goes dark silently. This test
+// locks the CODE contract: the seed runner, the live runner, the edge fn, and the
+// migration must all exist and keep their key wiring. (It does NOT hit the DB —
+// the live outcomes are exercised by scripts/qa-live.mjs + the qa-suite edge fn.)
+test('qa-system-intact', 'Continuous QA layer (seed + live suites + ledger wiring) is intact', '#QA1', async () => {
+  // 1) Seed world runner exists + tags rows seed=true + has a teardown path.
+  const seed = readFile('scripts/seed-test-world.mjs');
+  assert(/seed:\s*true/.test(seed), 'seed-test-world.mjs must tag rows seed:true (production-metric isolation)');
+  assert(/--teardown/.test(seed) && /seed=eq\.true/.test(seed),
+    'seed-test-world.mjs must have a teardown that deletes strictly seed=eq.true rows');
+
+  // 2) Live runner exists + covers both P1 (search) and P2 (responses) suites and
+  //    wires findings + requirements + suite-run rows.
+  const live = readFile('scripts/qa-live.mjs');
+  assert(/suiteSearch/.test(live) && /suiteResponses/.test(live),
+    'qa-live.mjs must define the P1 search + P2 responses suites');
+  assert(/cergio_qa_check/.test(live), 'qa-live.mjs must open/resolve findings via cergio_qa_check');
+  assert(/cergio_verify_requirement/.test(live), 'qa-live.mjs must verify requirements on pass');
+  assert(/cergio_record_qa_run/.test(live), 'qa-live.mjs must record per-suite runs for the dashboard');
+  // Isolation: the live runner must only ever write seed=true rows.
+  assert(!/insert\([^)]*\)[\s\S]{0,400}?seed:\s*false/.test(live),
+    'qa-live.mjs must never insert a non-seed (seed:false) row');
+
+  // 3) Edge fn exists (cron/dashboard-callable) with the same check contract.
+  const edge = readFile('supabase/functions/qa-suite/index.ts');
+  assert(/cergio_qa_check/.test(edge) && /cergio_record_qa_run/.test(edge),
+    'qa-suite edge fn must wire the same findings + suite-run ledger');
+  assert(/\.eq\(\s*['"]seed['"]\s*,\s*true\s*\)/.test(edge),
+    'qa-suite edge fn must read ONLY seed=true fixtures (never real rows)');
+
+  // 4) Migration installs the requirements ledger + qa summary the dashboard reads.
+  const mig = readFile('supabase/migrations/20260710000000_qa_seed_and_requirements.sql');
+  assert(/create table if not exists public\.requirements/.test(mig),
+    'the QA migration must create the requirements ledger');
+  assert(/function public\.cergio_qa_summary/.test(mig),
+    'the QA migration must expose cergio_qa_summary() for the dashboard');
+  assert(/add column if not exists seed boolean/.test(mig),
+    'the QA migration must add the seed tag column for isolation');
+
+  // 5) ops-metrics merges the QA summary so the dashboard QA tab has data.
+  const ops = readFile('supabase/functions/ops-metrics/index.ts');
+  assert(/cergio_qa_summary/.test(ops),
+    'ops-metrics must merge cergio_qa_summary() into the snapshot for the dashboard QA tab');
 });
 
 main().catch(e => {
