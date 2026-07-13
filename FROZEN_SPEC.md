@@ -601,4 +601,21 @@ Coverage.command".
 
 ---
 
-*Last updated: 2026-06-27 by Claude (Cowork session)*
+---
+
+### SPEC-71 · Founder-frozen decisions (2026-07-09) — authoritative, testable
+**Status:** FROZEN — 2026-07-09 (Tarik). Principle: **founder decisions live HERE, in the frozen spec — not in memory or chat.** Each item below is a fixed target the acceptance-test suite asserts against.
+
+1. **Rolling-wave dispatcher numbers (FROZEN, no longer "tunable"):** first wave at request time, next waves at **T+2 minutes** each, **10 providers per wave**, **60-minute overall cap**, and **stop conditions: 1 booking OR 2 responses** received. Each wave writes `request_wave_N` notification rows. Tests assert these exact numbers.
+2. **Search Results = ONLY confirmed responses.** The `request_responses` path is canonical: Results shows only providers who have **confirmed** a response to the request. The live `listServices`/rank path is used for *dispatch/discovery*, NOT rendered as the requester's Results list. Tests assert Results never shows unconfirmed providers.
+3. **CONNECTOR_MIN_FOLLOWERS = 300 for testing; lifts to 5000 at soft launch.** The Connector badge/eligibility asserts against the currently-active value (300 now → 5000 at launch flip).
+4. **Escrow (SPEC-47g) = ON (FROZEN).** Customer's payment is HELD in escrow, not paid through at checkout. Release rules:
+   - **Default auto-release: 6 hours after the job START time.**
+   - **(a) Expedited early release** when ALL of: the **service confirms the job done**, AND the **user rates** the service, AND the **user confirms** completion → funds release immediately (before the 6h).
+   - **(b) Challenge/hold:** if the **user rejects the "done"** and submits the problem → funds are **held** and the case **escalates to support** (dispute thread), not released on the 6h timer until resolved.
+   - Tests assert: funds held at checkout; auto-release at start+6h with no challenge; early release on the (service-done + rated + confirmed) triple; and hold+escalate on a challenge.
+5. **Blocked categories (FROZEN, authoritative — supersedes memory):** massage, tattoo, makeup, personal chef, PLUS SHAFT — plastic surgery, drugs, alcohol, tobacco, gambling, firearms, adult, nightclub/DJ. These never resolve to a provider_type and never sit sendable in `leads_services`. Tests assert none ever surface.
+
+---
+
+*Last updated: 2026-07-09 by Claude (Cowork session) — founder-frozen decisions SPEC-71*
