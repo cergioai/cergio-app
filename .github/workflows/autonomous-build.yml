@@ -1,0 +1,219 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cergio — AUTONOMOUS FEATURE-BUILD LOOP (open requirement → RED spec-test →
+# implementation → CI gate → merge → VERIFIED ledger).
+#
+# The sibling of autonomous-fix.yml. That one FIXES bugs the tests already catch;
+# this one BUILDS the features that don't exist yet — the 16 OPEN requirements a
+# bug-fixer can never close.
+#
+# THREE jobs:
+#   • build (every 3h + manual) — scripts/auto-build.mjs picks ONE open requirement,
+#     has Claude author a SPEC-DERIVED acceptance test WITHOUT ever seeing the
+#     implementation, proves it goes RED on current code (a test that can't fail is
+#     rejected outright), then has Claude implement against that RED test. The build
+#     is kept only if the new test goes GREEN and NOT ONE existing test regresses.
+#     Then this workflow re-runs the gate independently (npm ci + build + qa.mjs)
+#     before it pushes anything.
+#       plan.mode = "auto"   → PR opened + auto-merge ARMED (GitHub merges only
+#                              after the real required checks in ci.yml go green).
+#       plan.mode = "review" → PR opened, auto-merge NEVER armed, coo_proposal
+#                              (requires_approval=true) raised → FOUNDER decides.
+#                              This is the path for payments/Stripe/escrow, auth/
+#                              RLS/tokens/sessions, secrets, access control,
+#                              data-altering migrations, ANY UX change, anything
+#                              off-spec, and anything over the size caps.
+#       anything else        → nothing is written, nothing is pushed.
+#
+#   • verify-ledger (on push to main) — the ONLY thing allowed to flip a requirement
+#     to `verified`. It re-runs qa.mjs ON MAIN and marks a requirement verified iff
+#     its spec-derived acceptance test is green there, right now, with the check name
+#     + timestamp + commit sha as evidence. A red spec-test re-opens its requirement.
+#     SPEC-72: verified means a machine-checked test result, never a claim.
+#
+# THE MERGE IS NEVER DONE HERE. `gh pr merge --auto` only ARMS GitHub auto-merge,
+# which fires after branch protection's required checks (ci.yml: build + full qa.mjs)
+# pass. Review-mode PRs never get that call at all.
+#
+# SECRETS (referenced, never inlined) — the same three autonomous-fix.yml already uses:
+#   ANTHROPIC_API_KEY · SUPABASE_SERVICE_ROLE_KEY · VITE_SUPABASE_URL
+#   (+ VITE_SUPABASE_ANON_KEY for the qa gate). The built-in GITHUB_TOKEN opens the PR.
+#
+# REVERSIBLE: delete this file + scripts/auto-build.mjs to fully revert. Nothing
+# here is irreversible; nothing merges except through the CI gate.
+name: Cergio Autonomous Build
+
+on:
+  schedule:
+    - cron: '37 */3 * * *'     # every 3h — build ONE open requirement
+  push:
+    branches: [main]           # a build landed → re-prove it on main, then flip the ledger
+  workflow_dispatch:
+    inputs:
+      requirement:
+        description: 'force a specific requirement id (blank = pick the smallest on-spec open one)'
+        required: false
+        default: ''
+      dry:
+        description: 'dry run — select + plan only, no model call, no write'
+        type: boolean
+        default: false
+
+# Least privilege: write code (branch/commit) + open PRs. Nothing else.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: autonomous-build
+  cancel-in-progress: false
+
+jobs:
+  # ── A. BUILD ONE OPEN REQUIREMENT (spec-test first) ─────────────────────────
+  build:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+
+      - name: Sanity — scripts parse
+        run: |
+          node --check scripts/auto-build.mjs
+          node --check scripts/qa.mjs
+
+      - name: Rails self-check (offline, no secrets, no writes)
+        run: node scripts/auto-build.mjs --self-check
+
+      - name: Baseline gate — the suite must be GREEN before we touch anything
+        run: node scripts/qa.mjs
+
+      # auto-build.mjs runs qa.mjs itself (RED gate, then GREEN gate). It writes the
+      # spec-test + the implementation to disk ONLY if the test went RED→GREEN with
+      # zero regressions; on any abort it restores the tree exactly as it found it.
+      - name: Build ONE requirement (spec-derived RED test → implementation)
+        id: build
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          set -o pipefail
+          FLAGS=""
+          if [ "${{ inputs.dry }}" = "true" ]; then FLAGS="$FLAGS --dry"; fi
+          if [ -n "${{ inputs.requirement }}" ]; then FLAGS="$FLAGS --req=${{ inputs.requirement }}"; fi
+          # stdout = machine plan (one JSON line); stderr = human log.
+          node scripts/auto-build.mjs $FLAGS 1> plan.json 2> build.log || true
+          cat build.log || true
+          echo "plan<<EOF" >> "$GITHUB_OUTPUT"
+          cat plan.json >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          MODE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('plan.json','utf8')).mode||'none')")
+          BRANCH=$(node -e "console.log(JSON.parse(require('fs').readFileSync('plan.json','utf8')).branch||'')")
+          REQ=$(node -e "const p=JSON.parse(require('fs').readFileSync('plan.json','utf8'));console.log((p.requirement&&p.requirement.id)||'')")
+          echo "mode=$MODE"     >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "req=$REQ"       >> "$GITHUB_OUTPUT"
+          if [ "$MODE" = "auto" ] || [ "$MODE" = "review" ]; then echo "built=true" >> "$GITHUB_OUTPUT"; else echo "built=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Install deps (for the independent gate)
+        if: steps.build.outputs.built == 'true'
+        run: npm ci
+
+      # INDEPENDENT re-gate. auto-build already proved RED→GREEN + no regressions,
+      # but nothing ships on the builder's own say-so.
+      - name: GATE — build must compile
+        if: steps.build.outputs.built == 'true'
+        run: npm run build
+
+      - name: GATE — full flow QA (qa.mjs, incl. the new spec-derived test)
+        if: steps.build.outputs.built == 'true'
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/qa.mjs
+
+      - name: Push branch + open PR
+        if: steps.build.outputs.built == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.build.outputs.branch }}"
+          MODE="${{ steps.build.outputs.mode }}"
+          REQ="${{ steps.build.outputs.req }}"
+          git config user.name  "cergio-autobuild[bot]"
+          git config user.email "autobuild@cergio.ai"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "auto-build($MODE): $REQ — spec-derived test RED→GREEN, 0 regressions
+
+          Built by scripts/auto-build.mjs. The acceptance test in scripts/qa.mjs was
+          authored from the FROZEN_SPEC/requirement text ONLY (the author never saw the
+          implementation), proven RED on the previous code, and is GREEN on this commit.
+          Local gate: npm run build + full node scripts/qa.mjs.
+          mode=$MODE (auto = auto-merge armed after ci.yml; review = founder approval).
+          Plan: $(cat plan.json)"
+          git push origin "$BRANCH"
+          if [ "$MODE" = "auto" ]; then
+            TITLE="auto-build: $REQ (on-spec, spec-test RED→GREEN)"
+            BODY="Autonomous feature build for open requirement \`$REQ\`.
+
+          **Anti-circularity:** the acceptance test was authored from the frozen spec / requirement text ONLY — the author never saw the implementation — and was proven **RED** on the previous code before a single line was written. It is **GREEN** on this commit, with **zero regressions** across the full \`qa.mjs\` suite.
+
+          **Auto-merge armed** — merges only after the required checks (ci.yml: build + full qa) go green.
+
+          \`\`\`json
+          $(cat plan.json)
+          \`\`\`"
+          else
+            TITLE="FOUNDER APPROVAL — auto-build: $REQ (built, NOT auto-merged)"
+            BODY="Autonomous feature build for open requirement \`$REQ\`.
+
+          **This PR will NOT auto-merge.** It touches a founder-reserved surface (payments/auth/access-control/migrations, a UX change, something off-spec, or it exceeds the size caps), so it is held for your review. A matching approval item was raised on the dashboard (\`coo_proposals\`, requires_approval=true).
+
+          The spec-derived acceptance test went **RED → GREEN** with **zero regressions**, and \`npm run build\` + full \`qa.mjs\` are green — but the decision to ship is yours.
+
+          \`\`\`json
+          $(cat plan.json)
+          \`\`\`"
+          fi
+          PR_URL=$(gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "$BODY")
+          echo "opened $PR_URL"
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+          if [ "$MODE" = "auto" ]; then
+            gh pr merge --auto --squash "$PR_URL" \
+              || echo "auto-merge not enabled (needs branch protection + required checks + 'Allow auto-merge') — PR left open for review"
+          else
+            echo "review mode → auto-merge intentionally NOT armed. Founder approval required."
+          fi
+
+      - name: Nothing built → report honestly
+        if: steps.build.outputs.built != 'true'
+        run: |
+          echo "No requirement was built this run."
+          echo "Reasons are in plan.json (.abort): the spec-test did not go RED (vacuous/already met),"
+          echo "the spec was ambiguous, the patch hit a hard rail, the gate went red, or the requirement"
+          echo "was decomposed into micro-requirements. Founder-review items were opened in-DB."
+          cat plan.json || true
+
+  # ── B. CLOSE THE LOOP — flip the ledger ONLY on evidence, on main ────────────
+  # Runs after a build actually lands on main (push). Re-runs qa.mjs there and marks
+  # a requirement `verified` iff its spec-derived acceptance test is green ON MAIN.
+  # A red spec-test re-opens its requirement. Nothing else can flip the ledger.
+  verify-ledger:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - name: Verify spec-derived tests on main → flip the requirements ledger
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: node scripts/auto-build.mjs --verify-ledger
