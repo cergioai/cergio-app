@@ -38,6 +38,8 @@ const YP_FETCH_JITTER_MS = 1200; // polite pacing between YP page fetches (+ ran
 
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
+  const started = Date.now();
+  let dbRef: any = null;
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -49,6 +51,7 @@ serve(async (req: Request) => {
     // need it; yellowpages jobs are keyless free page fetches).
 
     const db = createClient(supabaseUrl, serviceKey);
+    dbRef = db;
 
     // Per-run batch size: default high, overridable via ?limit=N (clamped).
     const url = new URL(req.url);
@@ -164,11 +167,52 @@ serve(async (req: Request) => {
       }
     }
 
+    // BACKBONE: unified agent_runs ledger. raw_found = businesses parsed across
+    // all jobs this run, rows_written = rows actually upserted to leads_services.
+    // 'error' if any job failed; 'empty' if we processed jobs but wrote nothing;
+    // 'ok' if we saved rows OR there were simply no jobs to do (idle is not a
+    // silent collision — the watchdog only flags raw_found>0 AND rows_written=0).
+    const totFound = out.reduce((a, r: any) => a + (Number(r.found) || 0), 0);
+    const totSaved = out.reduce((a, r: any) => a + (Number(r.saved) || 0), 0);
+    const anyErr   = out.some((r: any) => r.error);
+    await logAgentRun(db, 'fulfill-crawl', {
+      started, raw_found: totFound, rows_written: totSaved,
+      status: anyErr ? 'error'
+              : (out.length > 0 && totSaved === 0 && totFound > 0) ? 'empty' : 'ok',
+      error: anyErr ? out.filter((r: any) => r.error).map((r: any) => r.error).join(' | ').slice(0, 500) : null,
+      meta: { processed: out.length },
+    });
     return json({ processed: out.length, results: out });
   } catch (e) {
+    await logAgentRun(dbRef, 'fulfill-crawl', {
+      started, raw_found: null, rows_written: 0,
+      status: 'error', error: e instanceof Error ? e.message : String(e),
+    });
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
+
+// BACKBONE helper — write ONE agent_runs row per invocation. NEVER throws.
+async function logAgentRun(
+  db: any,
+  agent: string,
+  o: { started: number; raw_found?: number | null; rows_written?: number | null;
+       status?: string; error?: string | null; meta?: unknown },
+): Promise<void> {
+  if (!db) return;
+  try {
+    await db.from('agent_runs').insert({
+      agent,
+      started_at: new Date(o.started).toISOString(),
+      finished_at: new Date().toISOString(),
+      raw_found: o.raw_found ?? null,
+      rows_written: o.rows_written ?? null,
+      status: o.status ?? 'ok',
+      error: o.error ? String(o.error).slice(0, 1000) : null,
+      meta: o.meta ?? null,
+    });
+  } catch (_e) { /* best-effort */ }
+}
 
 async function notifySearcher(db: any, job: any, saved: number) {
   try {
@@ -329,10 +373,21 @@ async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; f
       const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': YP_UA, 'Accept': 'text/html' } });
       clearTimeout(t);
       if (!res.ok) break; // 403/429 → stop hitting this domain for this job
-      html = await res.text();
+      // BOUND the page. An unbounded YP page (multi-MB) run through the JSON-LD +
+      // per-card regexes in a memory-capped Deno isolate can OOM → HTTP 546 crash
+      // (the whole run dies, cron reports "succeeded"). Cap like scrapeEmail does.
+      html = (await res.text()).slice(0, 600000);
     } catch { break; }
 
-    const listings = parseYellowPages(html);
+    // PER-PAGE PARSE GUARD: a single malformed page (bad JSON-LD, pathological
+    // markup, regex edge case) must never crash the whole run. Isolate the parse
+    // + processing of THIS page; on any error, skip to the next page.
+    let listings: YpListing[] = [];
+    try {
+      listings = parseYellowPages(html);
+    } catch (_e) {
+      continue; // bad page → try the next page rather than 546 the function
+    }
     if (listings.length === 0) break; // no more results / structure changed
     found += listings.length;
 
@@ -387,6 +442,16 @@ type YpListing = { name: string | null; phone: string | null; address: string | 
 // survives class renames); (2) HTML class fallback for the classic markup. We
 // merge/dedupe by name so a listing found by either path counts once.
 function parseYellowPages(html: string): YpListing[] {
+  try {
+    return parseYellowPagesInner(html);
+  } catch (_e) {
+    // Final safety net: any unexpected parse error yields "no listings" for this
+    // page instead of throwing up the stack (which was crashing the isolate → 546).
+    return [];
+  }
+}
+
+function parseYellowPagesInner(html: string): YpListing[] {
   const out: YpListing[] = [];
   const byName = new Map<string, YpListing>();
 
@@ -408,7 +473,13 @@ function parseYellowPages(html: string): YpListing[] {
     const jsonText = block.replace(/^<script[^>]*>/i, '').replace(/<\/script>$/i, '').trim();
     let parsed: any;
     try { parsed = JSON.parse(jsonText); } catch { continue; }
-    const nodes: any[] = Array.isArray(parsed) ? parsed : (parsed['@graph'] || [parsed]);
+    // GUARD: a ld+json block can legally be a primitive/null/array. Accessing
+    // parsed['@graph'] on null/undefined throws → previously this uncaught
+    // TypeError crashed the whole run (HTTP 546). Only object graphs have @graph.
+    if (parsed === null || typeof parsed !== 'object') continue;
+    const nodes: any[] = Array.isArray(parsed)
+      ? parsed
+      : (Array.isArray(parsed['@graph']) ? parsed['@graph'] : [parsed]);
     for (const n of nodes) {
       if (!n || typeof n !== 'object') continue;
       const t = n['@type'];

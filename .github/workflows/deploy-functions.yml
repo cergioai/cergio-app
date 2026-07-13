@@ -1,0 +1,98 @@
+# Off-Mac Supabase edge-function deploy.
+#
+# WHY: deploying edge functions used to require the Mac (supabase CLI + login).
+# This runs the SAME deploy in GitHub CI on every push to main that touches an
+# edge function or a migration, so shipping a function never needs the laptop.
+#
+# ONE HUMAN STEP (once): add a repo secret SUPABASE_ACCESS_TOKEN
+#   GitHub → repo Settings → Secrets and variables → Actions → New repository secret
+#   Name: SUPABASE_ACCESS_TOKEN
+#   Value: a Supabase personal access token (Supabase dashboard → Account → Access Tokens)
+# After that, every push that changes supabase/functions/** deploys automatically.
+#
+# NO SECRET VALUE LIVES IN THIS FILE — only the ${{ secrets.* }} reference.
+#
+# MIGRATIONS: this workflow deploys FUNCTIONS only. Schema migrations under
+# supabase/migrations/** still need to be applied separately (run the migration
+# .command on the Mac, or `supabase db push` with the DB password). We do NOT run
+# `db push` here on purpose: it needs the database password (a second secret) and
+# an unreviewed auto-migrate on every push is riskier than a function deploy.
+# Leave migrations MANUAL for now.
+name: Deploy Supabase Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'   # trigger a run so the log reminds us to apply migrations
+  workflow_dispatch: {}            # allow a manual run from the Actions tab
+
+# Project ref is public (it's in every function URL); only the access token is secret.
+env:
+  SUPABASE_PROJECT_REF: vjmwnbftfquyquwaklue
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy edge functions (--no-verify-jwt)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF="$SUPABASE_PROJECT_REF"
+          # Full function set (from supabase/functions/). --no-verify-jwt because
+          # these are called by cron/webhooks/service-role, not end-user JWTs.
+          FUNCS=(
+            admin-crawl-status
+            agent-ops
+            cergio-health
+            cergio-orchestrator
+            cergio-watchdog
+            chat-parse
+            coo-brain
+            coo-execute
+            crawl-health-check
+            crawl-seed-yellowpages
+            create-payment-intent
+            create-setup-intent
+            create-spotlight-payment-intent
+            creator-harvest
+            crosspost
+            enrich-influencers
+            fulfill-crawl
+            google-business-oauth
+            instagram-oauth
+            notify-provider
+            notify-request
+            notify-spotlight
+            notify-user
+            ops-metrics
+            outreach-optin
+            outreach-optout
+            outreach-send
+            release-funds
+            stripe-connect-onboard
+            stripe-webhook
+            tiktok-oauth
+          )
+          for fn in "${FUNCS[@]}"; do
+            echo "::group::deploy $fn"
+            supabase functions deploy "$fn" --project-ref "$REF" --no-verify-jwt
+            echo "::endgroup::"
+          done
+
+      - name: Migration reminder
+        if: ${{ contains(github.event.head_commit.message, 'migration') || true }}
+        run: |
+          echo "Functions deployed. NOTE: any new files under supabase/migrations/**"
+          echo "are NOT applied by this workflow — apply them separately (Mac .command"
+          echo "or supabase db push with the DB password)."

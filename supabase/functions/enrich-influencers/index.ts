@@ -17,12 +17,15 @@ const BATCH = 40;
 
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
+  const started = Date.now();
+  let dbRef: any = null;
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const auth = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!auth || auth !== serviceKey) return json({ error: 'Unauthorized' }, 401);
     const db = createClient(supabaseUrl, serviceKey);
+    dbRef = db;
 
     // Creators missing an email but with a link to mine (or a bio to parse).
     const { data: rows, error } = await db
@@ -71,11 +74,45 @@ serve(async (req: Request) => {
         enriched++; results.push({ ig: r.ig_handle, email: !!patch.email, phone: !!patch.phone });
       }
     }
+    // BACKBONE: unified agent_runs ledger. raw_found = candidates checked,
+    // rows_written = rows actually enriched. 'empty' when checked but 0 enriched
+    // (a real state — no new contacts found — not a failure).
+    await logAgentRun(db, 'enrich-influencers', {
+      started, raw_found: (rows ?? []).length, rows_written: enriched,
+      status: enriched === 0 ? 'empty' : 'ok', error: null,
+      meta: { checked: (rows ?? []).length },
+    });
     return json({ checked: (rows ?? []).length, enriched, results });
   } catch (e) {
+    await logAgentRun(dbRef, 'enrich-influencers', {
+      started, raw_found: null, rows_written: 0,
+      status: 'error', error: e instanceof Error ? e.message : String(e),
+    });
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
+
+// BACKBONE helper — write ONE agent_runs row per invocation. NEVER throws.
+async function logAgentRun(
+  db: any,
+  agent: string,
+  o: { started: number; raw_found?: number | null; rows_written?: number | null;
+       status?: string; error?: string | null; meta?: unknown },
+): Promise<void> {
+  if (!db) return;
+  try {
+    await db.from('agent_runs').insert({
+      agent,
+      started_at: new Date(o.started).toISOString(),
+      finished_at: new Date().toISOString(),
+      raw_found: o.raw_found ?? null,
+      rows_written: o.rows_written ?? null,
+      status: o.status ?? 'ok',
+      error: o.error ? String(o.error).slice(0, 1000) : null,
+      meta: o.meta ?? null,
+    });
+  } catch (_e) { /* best-effort */ }
+}
 
 async function fetchText(url: string): Promise<string | null> {
   try {
