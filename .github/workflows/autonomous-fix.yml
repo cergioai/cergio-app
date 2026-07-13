@@ -1,0 +1,231 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cergio — AUTONOMOUS ENGINEERING LOOP (find bug → fix → prove → ship → re-test).
+#
+# TWO jobs, both fail-safe:
+#   • code-fix (hourly)   — scripts/auto-fix.mjs reads OPEN code-root-cause
+#                           qa_findings, has Claude author a MINIMAL on-spec patch,
+#                           GATES it locally (npm ci + build + node scripts/qa.mjs),
+#                           and ONLY on GREEN pushes a branch + opens a PR with
+#                           auto-merge armed. Risky/off-spec/large/security patches
+#                           never reach here — they become founder-approval items.
+#   • coverage (daily)    — scripts/expand-coverage.mjs authors ONE new on-spec
+#                           live-QA test for the highest-priority UNCOVERED spec
+#                           journey, gates it the SAME way, opens an auto-merge PR.
+#
+# THE MERGE IS NEVER DONE HERE DIRECTLY. `gh pr merge --auto` only enables
+# GitHub's auto-merge, which fires ONLY after the real required checks (ci.yml:
+# build + full qa.mjs) go green under branch protection. A red gate blocks the
+# merge; the branch is left as an open PR for a human. This is the machine-
+# enforced gate — pass/fail is a check, not a claim.
+#
+# SECRETS (referenced, never inlined):
+#   ANTHROPIC_API_KEY            — the model that authors patches/tests
+#   SUPABASE_SERVICE_ROLE_KEY    — read findings, open approval items, log requirements
+#   VITE_SUPABASE_URL            — REST base (project ref is public)
+# ONE-TIME human step: add these three as GitHub repo secrets
+#   (Settings → Secrets and variables → Actions → New repository secret).
+# The built-in GITHUB_TOKEN opens/merges the PR (no extra secret).
+#
+# REVERSIBLE: delete this file (+ scripts/auto-fix.mjs, scripts/expand-coverage.mjs)
+# to fully revert. Nothing here is irreversible; nothing merges except through CI.
+name: Cergio Autonomous Fix
+
+on:
+  schedule:
+    - cron: '17 * * * *'      # hourly — code-fix pass
+    - cron: '43 6 * * *'      # daily 06:43 UTC — coverage-expansion pass
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'which pass to run'
+        type: choice
+        options: [code-fix, coverage, both]
+        default: code-fix
+
+# Least privilege: write code (branch/commit) + open/merge PRs. Nothing else.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: autonomous-fix
+  cancel-in-progress: false
+
+jobs:
+  # ── A. AUTONOMOUS CODE-FIX ──────────────────────────────────────────────────
+  code-fix:
+    # hourly cron OR a manual code-fix/both run.
+    if: >-
+      github.event_name == 'schedule' && github.event.schedule == '17 * * * *'
+      || github.event_name == 'workflow_dispatch' && (inputs.mode == 'code-fix' || inputs.mode == 'both')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+
+      - name: Sanity — scripts parse
+        run: |
+          node --check scripts/auto-fix.mjs
+          node --check scripts/qa.mjs
+
+      - name: Rails self-check (offline, no secrets)
+        run: node scripts/auto-fix.mjs --self-check
+
+      - name: Author patch(es) for code-root-cause findings
+        id: fix
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          set -o pipefail
+          # stdout = machine plan (single JSON line); stderr = human log.
+          node scripts/auto-fix.mjs 1> plan.json 2> fix.log || true
+          cat fix.log || true
+          echo "plan<<EOF" >> "$GITHUB_OUTPUT"
+          cat plan.json >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          # did it write any files? (applied array non-empty). Use fs (not require)
+          # because the repo is an ESM package ("type":"module").
+          if node -e "const p=JSON.parse(require('fs').readFileSync('plan.json','utf8'));process.exit((p.applied&&p.applied.length)?0:1)"; then
+            echo "applied=true" >> "$GITHUB_OUTPUT"
+            echo "branch=$(node -e "console.log(JSON.parse(require('fs').readFileSync('plan.json','utf8')).branch||'')")" >> "$GITHUB_OUTPUT"
+          else
+            echo "applied=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install deps (for the local gate)
+        if: steps.fix.outputs.applied == 'true'
+        run: npm ci
+
+      - name: LOCAL GATE — build (must compile)
+        if: steps.fix.outputs.applied == 'true'
+        run: npm run build
+
+      - name: LOCAL GATE — full flow QA (qa.mjs)
+        if: steps.fix.outputs.applied == 'true'
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/qa.mjs
+
+      - name: GREEN → push branch + open auto-merge PR
+        if: steps.fix.outputs.applied == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.fix.outputs.branch }}"
+          git config user.name  "cergio-autofix[bot]"
+          git config user.email "autofix@cergio.ai"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "auto-fix: on-spec patch for open code findings (gated: build+qa green)
+
+          Authored by scripts/auto-fix.mjs, passed local build + qa.mjs.
+          Merges ONLY after ci.yml (build + full qa) goes green under branch protection.
+          Plan: $(cat plan.json)"
+          git push origin "$BRANCH"
+          PR_URL=$(gh pr create --base main --head "$BRANCH" \
+            --title "auto-fix: on-spec code-root-cause fix" \
+            --body "Autonomous fix for open code-root-cause qa_findings. Local gate (build + qa.mjs) passed. **Auto-merge armed — merges only after CI (ci.yml) is green.** Every fix retains a regression test. Plan:\n\n\`\`\`json\n$(cat plan.json)\n\`\`\`" \
+            --label "auto-fix" 2>/dev/null || \
+            gh pr create --base main --head "$BRANCH" \
+              --title "auto-fix: on-spec code-root-cause fix" \
+              --body "Autonomous fix for open code-root-cause qa_findings. Local gate passed. Auto-merge armed — merges only after CI is green.")
+          echo "opened $PR_URL"
+          # Arm auto-merge: GitHub merges ONLY when required checks (CI) pass.
+          gh pr merge --auto --squash "$PR_URL" || echo "auto-merge not enabled (needs branch protection with required checks + 'Allow auto-merge') — PR left open for review"
+
+      - name: No auto-mergeable fix → report (approvals were opened in-DB)
+        if: steps.fix.outputs.applied != 'true'
+        run: |
+          echo "No auto-merge-eligible code fix this run."
+          echo "Risky/off-spec/large/no-test findings were routed to founder approval (coo_proposals, requires_approval=true)."
+          cat fix.log || true
+
+  # ── B. RECURSIVE COVERAGE EXPANSION ─────────────────────────────────────────
+  coverage:
+    if: >-
+      github.event_name == 'schedule' && github.event.schedule == '43 6 * * *'
+      || github.event_name == 'workflow_dispatch' && (inputs.mode == 'coverage' || inputs.mode == 'both')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+
+      - name: Sanity — scripts parse + self-check
+        run: |
+          node --check scripts/expand-coverage.mjs
+          node scripts/expand-coverage.mjs --self-check
+
+      - name: Author ONE new on-spec test for the top uncovered journey
+        id: cov
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          set -o pipefail
+          node scripts/expand-coverage.mjs 1> cov.json 2> cov.log || true
+          cat cov.log || true
+          if node -e "const p=JSON.parse(require('fs').readFileSync('cov.json','utf8'));process.exit((p.added&&p.added.length)?0:1)"; then
+            echo "added=true" >> "$GITHUB_OUTPUT"
+            echo "branch=$(node -e "console.log(JSON.parse(require('fs').readFileSync('cov.json','utf8')).branch||'')")" >> "$GITHUB_OUTPUT"
+          else
+            echo "added=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Gate the new test parses
+        if: steps.cov.outputs.added == 'true'
+        run: node --check scripts/qa-live.mjs
+
+      - name: Install deps (for the local gate)
+        if: steps.cov.outputs.added == 'true'
+        run: npm ci
+
+      - name: LOCAL GATE — build + qa.mjs (new test must not break the gate)
+        if: steps.cov.outputs.added == 'true'
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          npm run build
+          node scripts/qa.mjs
+
+      - name: GREEN → push branch + open auto-merge PR
+        if: steps.cov.outputs.added == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.cov.outputs.branch }}"
+          git config user.name  "cergio-autofix[bot]"
+          git config user.email "autofix@cergio.ai"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "auto-coverage: new on-spec live-QA test for an uncovered journey
+
+          Authored by scripts/expand-coverage.mjs, passed local build + qa.mjs parse.
+          Merges ONLY after ci.yml goes green. Plan: $(cat cov.json)"
+          git push origin "$BRANCH"
+          PR_URL=$(gh pr create --base main --head "$BRANCH" \
+            --title "auto-coverage: new on-spec spec-journey test" \
+            --body "Autonomous coverage expansion. Local gate passed. Auto-merge armed — merges only after CI is green. Plan:\n\n\`\`\`json\n$(cat cov.json)\n\`\`\`" \
+            --label "auto-coverage" 2>/dev/null || \
+            gh pr create --base main --head "$BRANCH" \
+              --title "auto-coverage: new on-spec spec-journey test" \
+              --body "Autonomous coverage expansion. Local gate passed. Auto-merge armed — merges only after CI is green.")
+          echo "opened $PR_URL"
+          gh pr merge --auto --squash "$PR_URL" || echo "auto-merge not enabled — PR left open for review"
+
+      - name: Nothing to add (or all routed to approval) → report
+        if: steps.cov.outputs.added != 'true'
+        run: |
+          echo "No auto-added test this run (coverage may be complete, or the top gap was off-spec → founder approval)."
+          cat cov.log || true
