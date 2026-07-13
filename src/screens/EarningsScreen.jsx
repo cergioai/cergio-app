@@ -435,7 +435,7 @@ export function EarningsScreen() {
                 Invite your first friend — earn ${REWARDS.perFriendUser} when they book.
               </p>
               <p className="text-meta text-b3 font-medium mt-1.5 leading-snug">
-                Plus ${REWARDS.friendOfFriendBonus} chain bonus when their friends book too. <span className="text-gd font-extrabold">Send invite →</span>
+                Plus ${REWARDS.friendOfFriendBonusStr} chain bonus when their friends book too. <span className="text-gd font-extrabold">Send invite →</span>
               </p>
             </button>
           );
@@ -649,7 +649,7 @@ export function EarningsScreen() {
                         }
                         const tierLabel  = tier === 'direct' ? 'Tier 1' : tier === 'chain' ? 'Tier 2' : null;
                         const tierRate   = tier === 'direct' ? tier1Rate : tier2Rate;
-                        const tierCapStr = tier === 'direct' ? `${REWARDS.perFriend}` : `${REWARDS.friendOfFriendBonus}`;
+                        const tierCapStr = tier === 'direct' ? `${REWARDS.perFriend}` : `${REWARDS.friendOfFriendBonusStr}`;
                         // CERGIO-GUARD (2026-06-04): pull the running
                         // total from the CORRECT bucket per tier.
                         // Direct row → directByFriend[friend].total
@@ -724,18 +724,18 @@ export function EarningsScreen() {
                                 {capReachedBefore && tier === 'direct'
                                   ? <>${REWARDS.perFriend} Tier 1 cap from {friendShort || 'this friend'} was already maxed — $0 paid on this booking</>
                                   : capReachedBefore && tier === 'chain'
-                                  ? <>${REWARDS.friendOfFriendBonus} Tier 2 chain cap via {friendShort || 'this friend'} was already maxed — $0 paid on this booking</>
+                                  ? <>${REWARDS.friendOfFriendBonusStr} Tier 2 chain cap via {friendShort || 'this friend'} was already maxed — $0 paid on this booking</>
                                   : atTier1Cap
                                   ? <>${REWARDS.perFriend} Tier 1 cap maxed out by this booking — no further Tier 1 credit from {friendShort || 'this friend'}</>
                                   : atTier2Cap
-                                  ? <>${REWARDS.friendOfFriendBonus} Tier 2 chain cap maxed out by this booking — no further chain credit from {fofShort || 'this friend-of-friend'}</>
+                                  ? <>${REWARDS.friendOfFriendBonusStr} Tier 2 chain cap maxed out by this booking — no further chain credit from {fofShort || 'this friend-of-friend'}</>
                                   : tier === 'direct' && inferredBookingCents
                                   ? <>{tier1Rate}% of {friendShort || 'their'} ${(inferredBookingCents / 100).toFixed(0)} booking</>
                                   : tier === 'chain' && inferredBookingCents
                                   ? <>{tier2Rate}% of {fofShort || 'a friend-of-friend'}&apos;s ${(inferredBookingCents / 100).toFixed(0)} booking</>
                                   : tier === 'direct'
                                   ? <>Tier 1 — {tier1Rate}% per booking up to ${REWARDS.perFriend}</>
-                                  : <>Tier 2 — {tier2Rate}% per booking up to ${REWARDS.friendOfFriendBonus}</>}
+                                  : <>Tier 2 — {tier2Rate}% per booking up to ${REWARDS.friendOfFriendBonusStr}</>}
                               </p>
                             )}
                             <p className="text-meta-sm text-b3 mt-0.5 leading-snug">
@@ -864,7 +864,7 @@ export function EarningsScreen() {
           </p>
           {/* Friend-of-friend kicker — a calm extra line, not a card. */}
           <p className="text-meta-sm text-b3 mt-1.5 leading-snug">
-            <span className="font-extrabold text-black">+{REWARDS.friendOfFriendPercent}%</span> when your friends invite their friends — <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonus}</span> per second-tier signup.
+            <span className="font-extrabold text-black">+{REWARDS.friendOfFriendPercent}%</span> when your friends invite their friends — <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonusStr}</span> per second-tier signup.
           </p>
 
           {/* Connector upsell — visible to users (not providers, who are
@@ -1073,7 +1073,7 @@ function ReferralsSummary({ referralRows, inviteCounts, recsCount, sortMode, onS
         />
       </div>
       <p className="text-meta-sm text-b3 font-medium mt-1.5 leading-snug">
-        {REWARDS.referrerSharePercent}% per friend booking up to ${REWARDS.perFriend}, plus ${REWARDS.friendOfFriendBonus} chain bonus per friend-of-friend.
+        {REWARDS.referrerSharePercent}% per friend booking up to ${REWARDS.perFriend}, plus ${REWARDS.friendOfFriendBonusStr} chain bonus per friend-of-friend.
       </p>
 
       {/* 2. Funnel — Invited → Joined → Booked */}
