@@ -140,7 +140,7 @@ serve(async (req: Request) => {
     const rows: Array<Record<string, unknown>> = [];
     let siteFetches = 0;
     // Skip-reason tally so the watchdog can see WHY a run found nothing new.
-    const skips = { known_handle: 0, no_handle: 0, no_contact_no_link: 0, blocked: 0, suppressed: 0 };
+    const skips = { known_handle: 0, no_handle: 0, no_contact_no_link: 0, blocked: 0, suppressed: 0, non_creator: 0 };
 
     for (const item of queries) {
       if (Date.now() - started > DEADLINE_MS) break;
@@ -202,6 +202,12 @@ serve(async (req: Request) => {
         // letting non-creator emails in (e.g. billing@wordfence.com, business
         // front desks). enrich-influencers cannot add a handle, so skip these.
         if (!handle) { skips.no_handle++; continue; }
+        // NON-CREATOR GUARD (Forensic Auditor 2026-07-08): listicles & news
+        // pages link to media-outlet / wiki / aggregator IG handles
+        // (foxbusiness, eatermiami, tampabaytimes, thefashionspot, wikipedia…).
+        // Those are NOT individual creators and were polluting the sendable
+        // pool ~20-25%. enrich/gate can't fix identity, so drop at the source.
+        if (isBadHandle(handle)) { skips.non_creator++; continue; }
         const id = `harv:${handle.replace(/[^a-z0-9]+/gi, '').slice(0, 60).toLowerCase()}`;
         rows.push({
           id, ig_handle: handle, display_name: cleanTitle(r.title),
@@ -212,12 +218,21 @@ serve(async (req: Request) => {
       }
     }
 
+    // Dedupe by PRIMARY KEY before upserting. Two distinct handles can collapse
+    // to the SAME id after stripping non-alphanumerics + slicing to 60 chars,
+    // which puts duplicate ids in one chunk → Postgres "ON CONFLICT DO UPDATE
+    // command cannot affect row a second time", aborting the whole chunk
+    // (Forensic Auditor 2026-07-08 — creator_harvest_last_error). Keep first.
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const r of rows) { const k = r.id as string; if (!byId.has(k)) byId.set(k, r); }
+    const uniqueRows = [...byId.values()];
+
     let inserted = 0; let upsertError: string | null = null;
-    if (rows.length) {
+    if (uniqueRows.length) {
       stage = 'upsert';
       // Insert in small chunks; capture (don't throw) so one bad row can't abort all.
-      for (let i = 0; i < rows.length; i += 25) {
-        const chunk = rows.slice(i, i + 25);
+      for (let i = 0; i < uniqueRows.length; i += 25) {
+        const chunk = uniqueRows.slice(i, i + 25);
         const { error } = await db.from('leads_influencers')
           .upsert(chunk, { onConflict: 'id', ignoreDuplicates: false });
         if (error) {
@@ -302,12 +317,38 @@ async function logAgentRun(
   } catch (_e) { /* logging is best-effort; swallow */ }
 }
 
+// ── CANONICAL ERROR SERIALIZER — DO NOT FORK ─────────────────────────────────
+// Supabase/PostgREST rejects with a PLAIN OBJECT ({message, details, hint, code}),
+// NOT an Error. `String(e)` on that object yields the opaque "[object Object]" —
+// which is exactly how 11/11 failed autonomous actions recorded an unreadable
+// `result` and the loop went blind (Forensic Auditor 2026-07-13). Always extract a
+// REAL message + code (+ 2 stack frames) so every failure is diagnosable.
+// qa.mjs #73 asserts every copy of this helper is byte-identical, unit-tests it
+// against a PostgREST-shaped rejection, and fails the push if it can ever emit
+// "[object Object]".
 function serr(e: unknown): string {
-  if (!e) return 'unknown';
-  if (e instanceof Error) return e.message;
-  if (typeof e === 'string') return e;
-  const o = e as Record<string, unknown>;
-  return String(o.message || o.error_description || o.msg || o.details || o.hint || o.code || JSON.stringify(e));
+  if (e === null || e === undefined) return 'unknown error (null)';
+  if (typeof e === 'string') return e || 'unknown error (empty string)';
+  const o = e as any;
+  const msg = (e instanceof Error ? e.message : null)
+    || o?.message || o?.error?.message || o?.error_description || o?.msg
+    || o?.details || o?.hint || null;
+  const code = o?.code ?? o?.error?.code ?? o?.status ?? o?.statusCode ?? null;
+  const parts: string[] = [];
+  if (msg) parts.push(String(msg));
+  if (code !== null && code !== undefined && String(code) !== '') parts.push('[' + String(code) + ']');
+  if (o?.details && String(o.details) !== String(msg)) parts.push('- ' + String(o.details));
+  if (o?.hint && String(o.hint) !== String(msg)) parts.push('(hint: ' + String(o.hint) + ')');
+  if (parts.length === 0) {
+    let dump = '';
+    try { dump = JSON.stringify(e); } catch (_j) { dump = ''; }
+    parts.push(dump && dump !== '{}' ? dump : 'unhandled ' + (typeof e) + ' thrown with no message/code/details fields');
+  }
+  if (e instanceof Error && e.stack) {
+    const frames = String(e.stack).split('\n').slice(1, 3).map((s) => s.trim()).filter(Boolean).join(' <- ');
+    if (frames) parts.push('| ' + frames);
+  }
+  return parts.join(' ').trim().slice(0, 900);
 }
 
 // ---- DuckDuckGo keyless HTML search ----
@@ -361,6 +402,17 @@ function igHandle(url: string): string | null {
   const h = m[1].toLowerCase();
   if (['p', 'reel', 'reels', 'explore', 'stories', 'tv', 'accounts'].includes(h)) return null;
   return h;
+}
+
+// Media outlets / publications / wikis / directories whose IG handle shows up on
+// listicles and news results but is NOT an individual creator we can onboard.
+// (Forensic Auditor 2026-07-08 — the 386 sendable pool was ~20-25% these.)
+const BAD_HANDLE = /(news|nytimes|thetimes|herald|gazette|tribune|magazine|eater|thrillist|timeout|refinery29|buzzfeed|voguemagazine|foxbusiness|foxnews|^fox\d|cnn|nbc|abcnews|cbsnews|msnbc|wikipedia|wikimedia|tampabay|miamiherald|miaminewtimes|thefashionspot|forbes|businessinsider|bloomberg|reuters|yelp|tripadvisor|thumbtack|nextdoor|groupon|realtor|zillow|apartments|official_?news|dot_?com)/i;
+function isBadHandle(h: string | null): boolean {
+  if (!h) return true;
+  if (h.length < 3) return true;      // too short to be a real handle
+  if (/^\d+$/.test(h)) return true;   // purely numeric = not a creator handle
+  return BAD_HANDLE.test(h);
 }
 
 function cleanTitle(t: string): string {

@@ -51,12 +51,14 @@ function sqlIsSafe(raw: string): { ok: boolean; why?: string } {
 
 // Edge calls the executor may re-run: read-only / enrich / harvest workers that
 // are idempotent and NEVER message a human or move money.
+// NOTE: 'crawl-seed-yellowpages' was REMOVED 2026-07-13 — YellowPages is
+// permanently 403-blocked from datacenter IPs, so re-invoking the seeder only
+// refills a queue that can never drain. Google Places is the live services path.
 const EDGE_ALLOW = new Set([
   'fulfill-crawl',
   'enrich-influencers',
   'crawl-health-check',
   'creator-harvest',
-  'crawl-seed-yellowpages',
 ]);
 // Explicit deny-list of families that message humans or move money (belt & braces).
 const EDGE_DENY = [/^outreach-/i, /^notify/i, /^stripe-/i, /release-funds/i, /^outbound/i];
@@ -133,7 +135,7 @@ serve(async (req: Request) => {
         }
       } catch (e) {
         status = 'failed';
-        result = e instanceof Error ? e.message : String(e);
+        result = serr(e);
       }
 
       // Per-action audit row (append log) — always written, executed OR failed.
@@ -180,11 +182,45 @@ serve(async (req: Request) => {
   } catch (e) {
     await logAgentRun(dbRef, 'coo-execute', {
       started, raw_found: null, rows_written: 0,
-      status: 'error', error: e instanceof Error ? e.message : String(e),
+      status: 'error', error: serr(e),
     });
-    return j({ error: e instanceof Error ? e.message : String(e), ms: Date.now() - started }, 500);
+    return j({ error: serr(e), ms: Date.now() - started }, 500);
   }
 });
+
+// ── CANONICAL ERROR SERIALIZER — DO NOT FORK ─────────────────────────────────
+// Supabase/PostgREST rejects with a PLAIN OBJECT ({message, details, hint, code}),
+// NOT an Error. `String(e)` on that object yields the opaque "[object Object]" —
+// which is exactly how 11/11 failed autonomous actions recorded an unreadable
+// `result` and the loop went blind (Forensic Auditor 2026-07-13). Always extract a
+// REAL message + code (+ 2 stack frames) so every failure is diagnosable.
+// qa.mjs #73 asserts every copy of this helper is byte-identical, unit-tests it
+// against a PostgREST-shaped rejection, and fails the push if it can ever emit
+// "[object Object]".
+function serr(e: unknown): string {
+  if (e === null || e === undefined) return 'unknown error (null)';
+  if (typeof e === 'string') return e || 'unknown error (empty string)';
+  const o = e as any;
+  const msg = (e instanceof Error ? e.message : null)
+    || o?.message || o?.error?.message || o?.error_description || o?.msg
+    || o?.details || o?.hint || null;
+  const code = o?.code ?? o?.error?.code ?? o?.status ?? o?.statusCode ?? null;
+  const parts: string[] = [];
+  if (msg) parts.push(String(msg));
+  if (code !== null && code !== undefined && String(code) !== '') parts.push('[' + String(code) + ']');
+  if (o?.details && String(o.details) !== String(msg)) parts.push('- ' + String(o.details));
+  if (o?.hint && String(o.hint) !== String(msg)) parts.push('(hint: ' + String(o.hint) + ')');
+  if (parts.length === 0) {
+    let dump = '';
+    try { dump = JSON.stringify(e); } catch (_j) { dump = ''; }
+    parts.push(dump && dump !== '{}' ? dump : 'unhandled ' + (typeof e) + ' thrown with no message/code/details fields');
+  }
+  if (e instanceof Error && e.stack) {
+    const frames = String(e.stack).split('\n').slice(1, 3).map((s) => s.trim()).filter(Boolean).join(' <- ');
+    if (frames) parts.push('| ' + frames);
+  }
+  return parts.join(' ').trim().slice(0, 900);
+}
 
 // BACKBONE helper — write ONE agent_runs row per invocation. NEVER throws.
 async function logAgentRun(

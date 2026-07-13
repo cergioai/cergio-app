@@ -24,7 +24,7 @@ const TABLE_ROWS = [
     label: "Per friend's invite",
     desc:  "Earn when friends you invited invite their own friends",
     users: null,
-    connectors: { amount: `$${REWARDS.friendOfFriendBonus}`, type: 'cash' },
+    connectors: { amount: `$${REWARDS.friendOfFriendBonusStr}`, type: 'cash' },
   },
   {
     label: '200 friends milestone',

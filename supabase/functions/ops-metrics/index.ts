@@ -11,10 +11,34 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, content-type, apikey',
 };
 
+// ── NEVER CACHE THIS RESPONSE ────────────────────────────────────────────────
+// ROOT CAUSE of the stale dashboard: cergio_ops_snapshot() computes live
+// (generated_at = now()) and this fn calls it fresh every request, but the 200
+// response carried NO Cache-Control header, so Supabase's edge/CDN served a
+// cached copy for the bare URL (proof: appending ?nc=<x> returned fully live
+// data while the plain URL was hours old). These headers make every load hit
+// the function and recompute the snapshot. `Vary: *` + no-store defeat any
+// intermediate cache; the timestamp is now within ~1s of now() on each load.
+const NO_CACHE = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  'CDN-Cache-Control': 'no-store',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Vary': '*',
+};
+const JSON_HEADERS = { ...CORS, ...NO_CACHE, 'Content-Type': 'application/json' };
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
     const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+    // ── SELF-HEAL: close findings whose fix is now verified in agent_runs ──────
+    // Idempotent + gated on live signals (see migration). Runs before the
+    // snapshot so the qa_findings the dashboard reads are already reconciled.
+    // Best-effort: if the fn isn't deployed yet, the snapshot still serves.
+    try { await db.rpc('cergio_reconcile_findings'); } catch (_e) { /* additive */ }
+
     const { data, error } = await db.rpc('cergio_ops_snapshot');
     if (error) throw error;
     const snap: any = (data && typeof data === 'object') ? data : {};
@@ -27,6 +51,17 @@ serve(async (req: Request) => {
     try {
       const { data: oh } = await db.rpc('cergio_org_health');
       if (oh && typeof oh === 'object') snap.org_health = oh;
+    } catch (_e) { /* additive; never break the snapshot on this */ }
+
+    // ── CONTINUOUS QA: per-suite pass/fail + requirements ledger ───────────────
+    // Merged in at read time (same pattern as org_health) so the dashboard QA tab
+    // shows: latest pass/fail per suite (search / responses), open QA findings,
+    // and the requirements ledger (unfulfilled founder instructions stay OPEN
+    // until verified). Best-effort — if the fn isn't deployed yet, the snapshot
+    // still serves without it.
+    try {
+      const { data: qa } = await db.rpc('cergio_qa_summary');
+      if (qa && typeof qa === 'object') snap.qa = qa;
     } catch (_e) { /* additive; never break the snapshot on this */ }
 
     // ── Autonomous-execution split ────────────────────────────────────────────
@@ -80,9 +115,9 @@ serve(async (req: Request) => {
       awaiting_approval: (needRows ?? []).length,
     };
 
-    return new Response(JSON.stringify(snap), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(snap), { headers: JSON_HEADERS });
   } catch (e) {
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
-      { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      { status: 500, headers: JSON_HEADERS });
   }
 });

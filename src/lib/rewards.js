@@ -44,7 +44,11 @@ export const REWARDS = {
   // the network, locks viral momentum. Keep the % in sync with
   // perFriend so the math stays clean if perFriend ever moves.
   friendOfFriendPercent:   5,
-  friendOfFriendBonus:     12.5,  // dollars = perFriend × percent / 100
+  friendOfFriendBonus:     12.5,  // dollars = perFriend × percent / 100 (NUMBER — used in math)
+  // Currency-formatted display string for the same value. Use this in
+  // user-facing copy so the bonus never renders as "$12.5" (a raw
+  // Number drops the trailing zero). Keep in sync with friendOfFriendBonus.
+  friendOfFriendBonusStr:  '12.50',
   // CERGIO-GUARD (2026-05-28): Connector barter — providers offer
   // Connectors free services worth this much per month in exchange
   // for IG/TikTok spotlights. The range is canonical: the animation,
@@ -116,8 +120,8 @@ export const REWARD_COPY = {
   // Friend-of-friend bonus — second-tier kicker that makes the network
   // compound on its own. Same phrasing everywhere it appears so users
   // see one consistent number.
-  friendOfFriendOneLine: `Plus ${REWARDS.friendOfFriendPercent}% when your friend invites a friend who joins + books — $${REWARDS.friendOfFriendBonus} per second-tier signup. The chain pays you.`,
-  friendOfFriendShort:   `+${REWARDS.friendOfFriendPercent}% ($${REWARDS.friendOfFriendBonus}) when your friends bring in friends`,
+  friendOfFriendOneLine: `Plus ${REWARDS.friendOfFriendPercent}% when your friend invites a friend who joins + books — $${REWARDS.friendOfFriendBonusStr} per second-tier signup. The chain pays you.`,
+  friendOfFriendShort:   `+${REWARDS.friendOfFriendPercent}% ($${REWARDS.friendOfFriendBonusStr}) when your friends bring in friends`,
 
   // Connector barter — providers trade free services for IG/TikTok
   // spotlights. The numeric range ($1K-$10K/mo) is an estimate, not a

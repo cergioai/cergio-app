@@ -667,7 +667,7 @@ export function ActivityScreen() {
             Every friend who joins + books earns you {' '}
             <span className="font-extrabold text-black">${REWARDS.perFriendUser} credit</span>{' '}
             (up to ${REWARDS.perFriend}) — plus {' '}
-            <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonus}</span>{' '}
+            <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonusStr}</span>{' '}
             per friend-of-friend signup.
           </p>
         </div>

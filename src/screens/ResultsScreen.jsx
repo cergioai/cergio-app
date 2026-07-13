@@ -34,6 +34,7 @@ import { pluralProviderTypeLocal, resolveProviderTypeLocal } from '../lib/servic
 import { REWARDS } from '../lib/rewards';
 import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivity';
 import { rankResults, applyPickFlag } from '../lib/rankResults';
+import { isScheduledWhen } from '../lib/whenHorizon';
 
 // Status lines shown while the leaf is rotating + Supabase is searching.
 // Each line dwells for STATUS_STEP_MS; the last one stays until real
@@ -466,7 +467,22 @@ export function ResultsScreen() {
   // window). Everything near-term (now / today / tonight / tomorrow) is
   // "instant": allow up to 15 minutes for nearby services to confirm +
   // reply, then honestly say no one is available yet — we keep matching.
-  const isScheduled = /\b(next\s+(week|month)|in\s+\d+\s+days?|in\s+\d+\s+weeks?|\d+\s+weeks?|\bmonths?\b)\b/i.test(String(when || ''));
+  // CERGIO-GUARD (2026-07-07, QA): the parsed `when` phrase uses SPELLED-OUT
+  // numbers ("in two weeks") as often as digits. The old regex only matched
+  // \d+, so "in two weeks" fell through to the 15-min instant copy — a
+  // scheduled-messaging regression the nightly walk reproduced live. Extend
+  // the number token to spelled-out numbers + "a few / couple / several" so
+  // far-future jobs get the honest "up to 24 hours" message. (Weekday /
+  // "this weekend" phrasing is deliberately NOT added — it can fall inside
+  // the ~32h window near its boundary and would risk a false scheduled.)
+  // CERGIO-GUARD (2026-07-08, QA): scheduled-vs-instant detection is now
+  // DATE-AWARE (src/lib/whenHorizon.js). The old inline regex only caught
+  // relative phrases, so calendar dates ("august 5th"), ordinal-of-month
+  // ("on the 12th") and weekday names ("friday") fell through to the 15-min
+  // INSTANT copy — the launch-critical A1 miss the nightly walk reproduced.
+  // isScheduledWhen resolves the real horizon and only flips to scheduled when
+  // it can confidently place the job >32h out; otherwise it stays instant.
+  const isScheduled = isScheduledWhen(when);
   const isInstant   = !isScheduled;
   const [instantTimedOut, setInstantTimedOut] = useState(false);
   useEffect(() => {
