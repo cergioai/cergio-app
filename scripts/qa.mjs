@@ -2304,59 +2304,173 @@ test('spec-64-crawl-fulfillment', 'FROZEN: fulfill-crawl sources businesses via 
     'fulfill-crawl must leave business leads at outreach_status=new (no auto cold-send) — SPEC-64');
 });
 
-// ─── REGRESSION LOCK: REQ-P10-crawl-yp-drain ─────────────────────────────────
-// fulfill-crawl MUST actually drain queued YellowPages jobs (source='yellowpages',
-// status='new') into leads_services rows. It went RED when the HTTP-546 defensive
-// fix capped each fetched page at 600 KB: a real YP results page is ~1.5–2.5 MB
-// and its schema.org JSON-LD listing block is emitted LATE, so a tight slice cut
-// the listings off → parse yielded 0 → every job stamped delivered-with-0 →
-// agent_runs.raw_found 0 / rows_written 0 forever. This invariant fails on the old
-// cap and passes on the fix, and also locks the selection + parse contract so the
-// drain path can't silently regress again.
-test('p10-crawl-yp-drain', 'REQ-P10-crawl-yp-drain: fulfill-crawl drains queued YellowPages jobs (source=yellowpages/status=new) into leads_services — page cap must clear a full YP page, not slice its listings off', '#64', async () => {
+// ─── REGRESSION LOCK: YELLOWPAGES IS RETIRED (supersedes REQ-P10-crawl-yp-drain)
+// 2026-07-13. The old invariant demanded fulfill-crawl DRAIN queued YellowPages
+// jobs. It cannot: YP answers every request from a datacenter IP with HTTP 403
+// (`yp-blocked: http=403` on every run), so the drain errored the agent every 15
+// minutes, flooded agent_runs, and held org_health red — while Google Places, the
+// path that actually works, kept growing services. The requirement is retired in
+// migration 20260713000000 and the invariant is INVERTED: YP jobs must never be
+// FETCHED again, the dead queue is quarantined ONCE (never retried), and the
+// parser survives dormant behind YP_ENABLED so this is one env var to reverse.
+test('p10-crawl-yp-retired', 'YellowPages is permanently 403-blocked from edge: fulfill-crawl must never fetch a YP job again (quarantine once, never retry); Google Places stays the live services path', '#64', async () => {
   const fc = path.join(REPO_ROOT, 'supabase/functions/fulfill-crawl/index.ts');
   const src = fs.readFileSync(fc, 'utf8');
 
-  // 1) SELECTION must pick up YP jobs: filter on kind='services' + status='new'
-  //    and MUST NOT hard-filter source to google_places (that would skip YP rows).
+  // 1) The job SELECT must EXCLUDE yellowpages rows (PostgREST `.or()` form, which
+  //    — unlike .neq() — still admits the NULL/google_places rows we do want).
   assert(/\.eq\(\s*['"]kind['"]\s*,\s*['"]services['"]\s*\)/.test(src),
-    'job SELECT must filter kind=services — REQ-P10');
+    'job SELECT must still filter kind=services');
   assert(/\.eq\(\s*['"]status['"]\s*,\s*['"]new['"]\s*\)/.test(src),
-    'job SELECT must filter status=new (so queued rows are picked up) — REQ-P10');
-  assert(!/\.eq\(\s*['"]source['"]\s*,\s*['"](google_places|yellowpages)['"]\s*\)/.test(src),
-    'job SELECT must stay source-agnostic — a source= filter would starve YP (or Places) jobs — REQ-P10');
-  assert(/source\s*===\s*'yellowpages'/.test(src) && /fulfillYellowPages\(/.test(src),
-    'YP jobs must route to the fulfillYellowPages drain path — REQ-P10');
+    'job SELECT must still filter status=new');
+  assert(/\.or\(\s*['"]source\.is\.null,source\.neq\.yellowpages['"]\s*\)/.test(src),
+    'job SELECT must EXCLUDE source=yellowpages (and keep NULL/google_places) — YP is permanently 403');
 
-  // 2) THE BUG: the fetched-page byte cap must clear a full real YP page. The old
-  //    600 KB cap sliced the (late) JSON-LD listing block off → 0 listings. Require
-  //    the cap to be >= 2 MB so a normal YP page's listings survive truncation.
-  const capM = src.match(/YP_MAX_PAGE_BYTES\s*=\s*([0-9_]+)/);
-  assert(capM, 'YP page cap must be a named constant (YP_MAX_PAGE_BYTES) at the fetch site — REQ-P10');
-  const capBytes = parseInt(capM[1].replace(/_/g, ''), 10);
-  assert(capBytes >= 2_000_000,
-    `YP page cap too small (${capBytes}B): a real YP page is ~1.5–2.5MB and its JSON-LD listings sit late — a tight cap slices them off → raw_found 0. Must be >= 2MB — REQ-P10`);
-  // The YP fetch must bound its page via that generous named cap — NOT a tight
-  // inline literal like the old .slice(0, 600000) that truncated the listings.
-  assert(/await res\.text\(\)\)\.slice\(\s*0\s*,\s*YP_MAX_PAGE_BYTES\s*\)/.test(src),
-    'YP fetch must bound the page via YP_MAX_PAGE_BYTES (546 safety, no tight literal) — REQ-P10');
+  // 2) The dead queue is quarantined ONCE with a permanent, non-retryable reason.
+  assert(/yp-blocked-permanent/.test(src),
+    'YP jobs must be stamped with the permanent reason yp-blocked-permanent (not a retryable error)');
+  assert(/\.eq\(\s*['"]source['"]\s*,\s*['"]yellowpages['"]\s*\)[\s\S]{0,160}?\.in\(\s*['"]status['"]\s*,\s*\[\s*['"]new['"]\s*,\s*['"]crawling['"]\s*\]\s*\)/.test(src),
+    'a sweep must move leftover new/crawling YP jobs to failed so the queue cannot refill a dead path');
+  assert(/status:\s*'failed'/.test(src),
+    'quarantined YP jobs must land in status=failed (never delivered-0, never retried)');
 
-  // 3) PARSE PATH must not silently continue-past-ALL: both extraction strategies
-  //    present, and the per-page/parse guards must fall through to the NEXT page,
-  //    not abandon the whole job — while good pages still yield rows.
-  assert(/ld\\?\+json/.test(src), 'YP parser must keep the JSON-LD strategy — REQ-P10');
-  assert(/business-name/.test(src), 'YP parser must keep the classic-card HTML strategy fallback — REQ-P10');
-  assert(/parseYellowPagesInner\(/.test(src) && /catch\s*\([^)]*\)\s*\{[\s\S]{0,400}?return \[\]/.test(src),
-    'parse must keep the 546 safety net (bad page → [] for THAT page, never throw) — REQ-P10');
+  // 3) REVERSIBLE, not deleted: the parser stays, gated OFF by default.
+  const flag = src.match(/const YP_ENABLED\s*=\s*\(Deno\.env\.get\('YP_ENABLED'\)\s*\|\|\s*'([a-z]+)'\)/);
+  assert(flag, 'YP must be behind a named YP_ENABLED env flag (reversible in one variable)');
+  assert(flag[1] === 'false', 'YP_ENABLED must default to FALSE — YP is blocked from datacenter IPs');
+  assert(/source\s*===\s*'yellowpages'\s*&&\s*!YP_ENABLED/.test(src),
+    'a YP job reaching the loop must be quarantined WITHOUT a fetch (defense in depth)');
+  assert(/fulfillYellowPages\(/.test(src),
+    'the YP parser stays in the tree (dormant) so re-enabling is one env var, not a rewrite');
 
-  // 4) WRITE CONTRACT: YP path upserts leads_services with the SAME staging as the
-  //    Google Places path, and the run logs REAL raw_found/rows_written to agent_runs.
-  assert(/data_source: 'yellowpages'/.test(src) && /from\('leads_services'\)\.upsert/.test(src),
-    'YP path must upsert leads_services (data_source=yellowpages) — REQ-P10');
-  assert(/outreach_status: 'new'/.test(src),
-    'YP leads stage at outreach_status=new (gate promotes; never auto-sent) — REQ-P10');
+  // 4) The working path is untouched, and the quarantine is bookkeeping — it must
+  //    NOT colour the run red (that error flood is exactly what we are removing).
+  assert(/maps\.googleapis\.com\/maps\/api\/place\/textsearch/.test(src) && /GOOGLE_PLACES_API_KEY/.test(src),
+    'the Google Places drain (the live path) must remain');
+  assert(/yp_quarantined/.test(src),
+    'the quarantine count must be reported in agent_runs.meta (visible, not silent)');
   assert(/logAgentRun\(db, 'fulfill-crawl'[\s\S]*?raw_found: totFound[\s\S]*?rows_written: totSaved/.test(src),
-    'run must log REAL raw_found/rows_written to agent_runs — REQ-P10');
+    'run must still log REAL raw_found/rows_written to agent_runs');
+
+  // 5) The COO executor must not be able to re-invoke the dead seeder.
+  const coo = readFile('supabase/functions/coo-execute/index.ts');
+  const allow = coo.match(/const EDGE_ALLOW = new Set\(\[([\s\S]*?)\]\)/);
+  assert(allow, 'coo-execute must keep its edge allowlist');
+  assert(!/crawl-seed-yellowpages/.test(allow[1]),
+    'crawl-seed-yellowpages must be OUT of the COO edge allowlist — re-running it only refills a dead queue');
+
+  // 6) The migration must stop the seeder cron + quarantine the queue server-side.
+  const mig = readFile('supabase/migrations/20260713000000_visibility_escalation_and_yp_shutdown.sql');
+  assert(/cron\.unschedule/.test(mig) && /crawl-seed-yellowpages/.test(mig),
+    'the migration must unschedule the YP seeder cron (stop refilling a dead queue)');
+  assert(/update public\.crawl_requests[\s\S]*?yp-blocked-permanent/.test(mig),
+    'the migration must quarantine the queued YP jobs once');
+});
+
+// ─── REGRESSION LOCK: REQ-crawl-throughput ───────────────────────────────────
+// The crawl MUST be able to produce NEW services rows. It went RED again when
+// YellowPages started serving an anti-bot / block / empty page to Supabase's
+// datacenter IPs: fulfill-crawl's YP path parsed 0 listings and (before this fix)
+// stamped every job 'delivered' with count 0 — silently draining the whole queue
+// while services_new stayed frozen (12,087, nothing new in >24h). This invariant
+// locks the two things that keep rows moving:
+//   (A) BLOCK DETECTION — a block/empty fetch is NOT masked as a delivered-0. It is
+//       surfaced ('failed' + 'yp-blocked', counted in agent_runs.meta.blocked),
+//       AND a real normal page still parses to listings.
+//   (B) A WORKING SERVER-SIDE THROUGHPUT PATH — the proven google_places path
+//       (GOOGLE_PLACES_API_KEY) is wired via crawl-seed-google-places so rows grow
+//       without depending on YP being reachable.
+// The behavioural half actually EXECUTES fulfill-crawl's own ypLooksBlocked() +
+// parse against a synthetic normal page and a synthetic block page, so it fails on
+// the pre-fix behaviour (block masked as delivery / no detection) and passes on the
+// fix. Wired to REQ-crawl-throughput (crack-crawl-throughput ledger row).
+test('crawl-throughput', 'REQ-crawl-throughput: fulfill-crawl produces NEW services — a block/empty fetch is surfaced (not masked as delivered-0), a normal page parses to listings, and a working server-side throughput path (google_places) is wired', '#64', async () => {
+  const fc = path.join(REPO_ROOT, 'supabase/functions/fulfill-crawl/index.ts');
+  const src = fs.readFileSync(fc, 'utf8');
+
+  // ── (A) BLOCK DETECTION is present and wired ────────────────────────────────
+  assert(/function ypLooksBlocked\(/.test(src),
+    'fulfill-crawl must have block-page detection (ypLooksBlocked) — REQ-crawl-throughput');
+  assert(/YpBlockedError/.test(src) && /throw new YpBlockedError\(/.test(src),
+    'a block page must THROW (YpBlockedError), so it routes to the failed/not-delivered path — REQ-crawl-throughput');
+  // The blocked job must be stamped 'failed' with a yp-blocked note, NOT 'delivered'.
+  assert(/status:\s*'failed'[\s\S]{0,200}?yp-blocked/.test(src) || /yp-blocked[\s\S]{0,200}?status:\s*'failed'/.test(src) || /blocked\s*\?\s*`yp-blocked/.test(src),
+    'a blocked fetch must be stamped failed with a yp-blocked note (never delivered-0) — REQ-crawl-throughput');
+  // The block count must be surfaced in the agent_runs ledger meta.
+  assert(/meta:\s*\{[^}]*blocked/.test(src),
+    'agent_runs meta must carry the blocked count so a block flood cannot hide behind delivered-0 — REQ-crawl-throughput');
+
+  // ── (B) A WORKING SERVER-SIDE THROUGHPUT PATH exists ────────────────────────
+  const gp = path.join(REPO_ROOT, 'supabase/functions/crawl-seed-google-places/index.ts');
+  assert(fs.existsSync(gp), 'crawl-seed-google-places seeder must exist (proven throughput path) — REQ-crawl-throughput');
+  const gpSrc = fs.readFileSync(gp, 'utf8');
+  assert(/source:\s*'google_places'/.test(gpSrc),
+    'the throughput seeder must enqueue source=google_places jobs (the proven drain path) — REQ-crawl-throughput');
+  assert(/kind:\s*'services'/.test(gpSrc) && /status:\s*'new'/.test(gpSrc),
+    'the throughput seeder must enqueue kind=services/status=new so fulfill-crawl drains them — REQ-crawl-throughput');
+  // And fulfill-crawl must still have the working Places drain the seeder feeds.
+  assert(/maps\.googleapis\.com\/maps\/api\/place\/textsearch/.test(src) && /GOOGLE_PLACES_API_KEY/.test(src),
+    'fulfill-crawl must keep the working Google Places drain (Text Search + key) — REQ-crawl-throughput');
+
+  // ── (C) BEHAVIOURAL: execute the real block-detection + parse logic ─────────
+  // Extract fulfill-crawl's own helpers and run them, so this test exercises the
+  // ACTUAL shipped behaviour (not just greps). Fails on the pre-fix code.
+  const pick = (name, kind = 'function') => {
+    // grab a top-level `function name(...) { ... }` by brace-matching
+    const re = new RegExp(`${kind === 'const' ? 'const' : 'function'}\\s+${name}\\b`);
+    const m = src.match(re);
+    assert(m, `could not locate ${name} in fulfill-crawl for behavioural test — REQ-crawl-throughput`);
+    const start = m.index;
+    let i = src.indexOf('{', start), depth = 0, end = -1;
+    for (; i < src.length; i++) {
+      if (src[i] === '{') depth++;
+      else if (src[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+    }
+    return src.slice(start, end);
+  };
+  // Dependencies of ypLooksBlocked / parse path (pure, DOM-free).
+  const helperNames = ['ypLooksBlocked', 'parseYellowPages', 'parseYellowPagesInner',
+    'firstMatch', 'cleanText', 'normPhone', 'pickWebsite'];
+  const markerConst = (src.match(/const YP_BLOCK_MARKERS\s*=\s*\/[\s\S]*?\/[a-z]*;/) || [''])[0];
+  // These helpers are TypeScript in the .ts source — strip the (few, simple) type
+  // annotations so they run under new Function (plain JS). Targeted, not a full TS
+  // transpiler: enough for the pure DOM-free parse/detection helpers.
+  // Generic (targeted) TS-annotation stripper for these DOM-free helpers. Order
+  // matters: kill generics, then param/return/var annotations. The type grammar
+  // here is simple (string|number|boolean|any|YpListing, arrays, unions), so a
+  // couple of passes suffice — this is NOT a general TS transpiler.
+  const TYPE = '(?:string|number|boolean|any|unknown|void|YpListing|RegExp)(?:\\s*\\[\\])?(?:\\s*\\|\\s*(?:string|number|boolean|any|unknown|null|YpListing|RegExp)(?:\\s*\\[\\])?)*';
+  const stripTs = (s) => s
+    .replace(/new Map<[^>]*>/g, 'new Map')             // new Map<string, YpListing>
+    .replace(new RegExp(`\\)\\s*:\\s*${TYPE}\\s*\\{`, 'g'), ') {')   // fn return type before body
+    .replace(new RegExp(`:\\s*${TYPE}(?=\\s*[,)=;\\n])`, 'g'), '');  // param + var annotations
+  const body = markerConst + '\n' + helperNames.map(n => stripTs(pick(n))).join('\n');
+  // eslint-disable-next-line no-new-func
+  const factory = new Function(`${body}\n return { ypLooksBlocked, parseYellowPages };`);
+  const { ypLooksBlocked, parseYellowPages } = factory();
+
+  // A synthetic BLOCK page: 403 status → blocked. And a tiny/empty 200 body →
+  // blocked. And a 200 body carrying a captcha marker w/ no listings → blocked.
+  assert(ypLooksBlocked(403, '<html>Access Denied</html>') === true,
+    'a 403 fetch must be detected as blocked (not 0-results) — REQ-crawl-throughput');
+  assert(ypLooksBlocked(200, '') === true,
+    'an empty 200 body must be detected as blocked/empty — REQ-crawl-throughput');
+  assert(ypLooksBlocked(200, '<html><body>Please verify you are a human (captcha)</body></html>' + ' '.repeat(1500)) === true,
+    'a captcha/verify body with no listings must be detected as blocked — REQ-crawl-throughput');
+
+  // A synthetic NORMAL page: a full-size body with a JSON-LD LocalBusiness block
+  // must NOT be flagged blocked, and must PARSE to >=1 listing (rows can be written).
+  const jsonLd = `<script type="application/ld+json">${JSON.stringify({
+    '@type': 'LocalBusiness', name: 'Acme Plumbing Co', telephone: '(305) 555-0100',
+    address: { streetAddress: '1 Main St', addressLocality: 'Miami', addressRegion: 'FL', postalCode: '33101' },
+    url: 'https://acmeplumbing.example',
+  })}</script>`;
+  const normalPage = '<html><body>' + 'x'.repeat(2000) + jsonLd + '</body></html>';
+  assert(ypLooksBlocked(200, normalPage) === false,
+    'a full normal page with listing structure must NOT be flagged blocked — REQ-crawl-throughput');
+  const listings = parseYellowPages(normalPage);
+  assert(Array.isArray(listings) && listings.length >= 1 && /acme plumbing/i.test(listings[0].name || ''),
+    'a normal YP page must parse to >=1 real listing (rows_written > 0 on a normal response) — REQ-crawl-throughput');
 });
 
 test('spec-63-crawl-monitoring', 'FROZEN: crawl pipeline self-monitors — health-check emails STALLED/FAILED/EMPTY diagnosis; admin-crawl-status + /admin/crawls live dashboard (SPEC-63)', '#63', async () => {
@@ -2662,6 +2776,228 @@ test('qa-system-intact', 'Continuous QA layer (seed + live suites + ledger wirin
   const ops = readFile('supabase/functions/ops-metrics/index.ts');
   assert(/cergio_qa_summary/.test(ops),
     'ops-metrics must merge cergio_qa_summary() into the snapshot for the dashboard QA tab');
+});
+
+// ─── #73 · THE LOOP MUST NEVER GO BLIND AGAIN ────────────────────────────────
+// 11 of 11 autonomous actions failed with result "[object Object]" — the reason was
+// destroyed at write time, so five days of failures taught us nothing. Cause:
+// Supabase/PostgREST rejects with a PLAIN OBJECT ({message, details, hint, code}),
+// NOT an Error, and `String(e)` on a plain object is literally "[object Object]".
+// This test (a) locks ONE canonical serr() across every worker that writes a failure
+// to the DB, and (b) actually EXECUTES the shipped helper against a PostgREST-shaped
+// rejection. It fails on the old code and passes on the fix.
+const SERR_WORKERS = [
+  'coo-execute', 'creator-harvest', 'enrich-influencers', 'fulfill-crawl',
+  'cergio-watchdog', 'cergio-orchestrator', 'qa-suite',
+];
+test('loop-visibility', 'FROZEN: every worker that writes a failure to the DB serializes it with the canonical serr() — a thrown PostgREST error records its REAL message + code, never "[object Object]"', '#73', async () => {
+  const bodies = new Map();
+  for (const w of SERR_WORKERS) {
+    const src = readFile(`supabase/functions/${w}/index.ts`);
+    // 1) The banned pattern is gone: String(e) on a possibly-plain-object throw.
+    assert(!/e instanceof Error \? e\.message : String\(e\)/.test(src),
+      `${w}: "e instanceof Error ? e.message : String(e)" DESTROYS a PostgREST error (plain object → "[object Object]"). Use serr(e).`);
+    assert(!/\bString\(\s*e\s*\)/.test(stripComments(src).replace(/String\(e\.stack\)/g, '')),
+      `${w}: raw String(e) on a thrown value is banned — it is how the loop went blind. Use serr(e).`);
+    // 2) The canonical helper is present.
+    const i = src.indexOf('function serr(e: unknown): string {');
+    assert(i > -1, `${w}: must define the canonical serr(e) helper`);
+    const m = /\n\}\n/.exec(src.slice(i));
+    bodies.set(w, src.slice(i, i + m.index + m[0].length));
+  }
+
+  // 3) ANTI-DRIFT: every copy is byte-identical (they are deployed separately, so a
+  //    fork would silently re-blind one worker).
+  const [first, ...rest] = [...bodies.entries()];
+  for (const [w, body] of rest) {
+    assert(body === first[1],
+      `${w}: its serr() has drifted from the canonical copy in ${first[0]} — one forked serializer is one blind agent`);
+  }
+
+  // 4) BEHAVIOURAL: run the SHIPPED helper. Strip the (three) TS annotations.
+  const js = first[1]
+    .replace('function serr(e: unknown): string {', 'function serr(e) {')
+    .replace('const o = e as any;', 'const o = e;')
+    .replace('const parts: string[] = [];', 'const parts = [];');
+  assert(!/:\s*unknown|:\s*string\[\]|\bas any\b/.test(js),
+    'serr() gained a TS annotation this test does not strip — update the stripper');
+  const serr = new Function(`${js}\nreturn serr;`)();
+
+  // The exact shape supabase-js rejects with (a PLAIN OBJECT, not an Error).
+  const pgErr = {
+    message: 'null value in column "ig_handle" of relation "leads_influencers" violates not-null constraint',
+    details: 'Failing row contains (harv:x, null, …).',
+    hint: null,
+    code: '23502',
+  };
+  // Sanity: reproduce the ACTUAL bug, so this test proves it is fixed rather than assumed.
+  assert(String(pgErr) === '[object Object]',
+    'fixture is wrong: a plain object must stringify to "[object Object]"');
+
+  const out = serr(pgErr);
+  assert(!/\[object Object\]/.test(out), `serr() still emits "[object Object]": ${out}`);
+  assert(/violates not-null constraint/.test(out), `serr() must carry the REAL Postgres message — got: ${out}`);
+  assert(/23502/.test(out), `serr() must carry the SQLSTATE code — got: ${out}`);
+  assert(/Failing row contains/.test(out), `serr() must carry the Postgres details — got: ${out}`);
+
+  // Nested (fetch/PostgREST envelope), Error, string, empty object, null.
+  assert(/REQUEST_DENIED/.test(serr({ error: { message: 'Places: REQUEST_DENIED', code: 403 } })),
+    'serr() must reach a nested error.message');
+  assert(serr(new Error('boom')).startsWith('boom'), 'serr(Error) must start with its message');
+  assert(/serr|qa\.mjs|Function/.test(serr(new Error('boom'))) || true, 'stack frames are best-effort');
+  assert(serr('plain reason') === 'plain reason', 'serr(string) must pass through');
+  const empty = serr({});
+  assert(empty && !/\[object Object\]/.test(empty) && empty.length > 3,
+    `serr({}) must still say something legible — got: ${empty}`);
+  assert(serr(null).length > 3, 'serr(null) must be legible');
+  assert(serr(undefined).length > 3, 'serr(undefined) must be legible');
+  assert(serr(pgErr).length <= 900, 'serr() must bound its output (DB column safety)');
+
+  // 5) The COO executor must RECORD that reason on the failed proposal + log row.
+  const coo = readFile('supabase/functions/coo-execute/index.ts');
+  assert(/status = 'failed';\s*\n\s*result = serr\(e\);/.test(coo),
+    "coo-execute's failure branch must set result = serr(e) (the string written to coo_proposals.result + coo_execution_log.result)");
+  assert(/from\('coo_proposals'\)\s*\n?\s*\.update\(\{ status, executed_at[^}]*result: result\.slice/.test(coo.replace(/\s+/g, ' ').replace(/ /g, ' ')) ||
+         /result: result\.slice\(0, 1000\)/.test(coo),
+    'coo-execute must persist the human-readable result on the proposal');
+});
+
+// ─── #74 · ENRICH-INFLUENCERS: NO SILENT COLLISION ───────────────────────────
+// "found 40 but wrote 0 rows", open since 2026-07-08. It was never an upsert
+// collision: the candidate query had no cursor and no ordering, so every 30-minute
+// run re-picked the SAME head-of-table 40 rows, re-mined the same dead links, and
+// wrote 0. A livelock. This locks the three fixes: a cursor that guarantees forward
+// progress, proof-of-write on every update, and a 0-written run that must state WHY.
+test('enrich-no-silent-collision', 'FROZEN: enrich-influencers advances a cursor (never re-mines the same head-of-table 40), proves every write with .select(), and a 0-written run reports an explicit reason — never a silent success', '#74', async () => {
+  const src = readFile('supabase/functions/enrich-influencers/index.ts');
+
+  // 1) CURSOR — least-recently-attempted first, and stamped on EVERY candidate
+  //    (hit OR miss). Without the miss-stamp the livelock returns.
+  assert(/\.order\(\s*'enrich_attempted_at'\s*,\s*\{\s*ascending:\s*true\s*,\s*nullsFirst:\s*true\s*\}\s*\)/.test(src),
+    'candidate query must order by enrich_attempted_at (nulls first) — otherwise it re-picks the same rows forever');
+  assert(/enrich_attempted_at\.is\.null,enrich_attempted_at\.lt\./.test(src),
+    'candidate query must skip rows already attempted inside the retry window');
+  assert(/\.update\(\{\s*enrich_attempted_at:[\s\S]{0,120}?\.in\('id', attempted\)/.test(src),
+    'EVERY candidate looked at must be stamped attempted (hit or miss) — the stamp IS the cursor');
+  assert(/attempted\.push\(r\.id\)/.test(src),
+    'the attempted list must be built from every row entering the loop, not just the ones that wrote');
+
+  // 2) PROOF OF WRITE — an update that errors OR matches 0 rows is a FAILURE.
+  assert(/\.update\(patch\)\.eq\('id', r\.id\)\.select\('id'\)/.test(src),
+    "the update must end in .select('id') — a 0-row write must be provable, not assumed");
+  assert(/if \(uErr \|\| !\(wrote \?\? \[\]\)\.length\)/.test(src),
+    'an update error OR a 0-row match must route to the failure path (never enriched++)');
+  assert(/write_failed/.test(src) && /writeErrors\.push/.test(src),
+    'write failures must be counted and their real reasons captured (serr) for agent_runs');
+
+  // 3) NO SILENT SUCCESS — 0 written with N found must be an explicit 'empty'
+  //    (or 'error') carrying the per-reason breakdown.
+  assert(/const skips = \{[^}]*no_source[^}]*mined_no_contact[^}]*suppressed_only[^}]*nothing_new[^}]*write_failed/.test(src),
+    'the run must tally WHY each candidate produced no write (the missing diagnosis)');
+  assert(/status:\s*skips\.write_failed > 0 \? 'error' : \(enriched === 0 \? 'empty' : 'ok'\)|const status = skips\.write_failed > 0 \? 'error' : \(enriched === 0 \? 'empty' : 'ok'\)/.test(src),
+    "0 written → status 'empty' (or 'error' on a write failure) — never 'ok'");
+  assert(/error:\s*skips\.write_failed > 0[\s\S]{0,200}?: reason/.test(src),
+    'the agent_runs row must carry the reason string, so the dashboard shows WHY it wrote nothing');
+  assert(/meta:\s*\{ checked, enriched, skips, cursor/.test(src),
+    'agent_runs.meta must carry checked/enriched/skips/cursor (the creator-harvest pattern)');
+
+  // 4) The cursor column must actually be created, and a missing migration must
+  //    degrade LOUDLY (legacy query + a cursor note), never silently.
+  const mig = readFile('supabase/migrations/20260713000000_visibility_escalation_and_yp_shutdown.sql');
+  assert(/add column if not exists enrich_attempted_at timestamptz/.test(mig),
+    'the migration must add leads_influencers.enrich_attempted_at (the cursor)');
+  assert(/legacy-head-of-table/.test(src),
+    'if the cursor column is missing the worker must SAY it is running hobbled, not pretend to be healthy');
+});
+
+// ─── #75 · STALENESS ESCALATION ──────────────────────────────────────────────
+// A finding could be opened, re-opened, re-opened… forever, and nothing changed:
+// enrich-influencers sat SILENT for 5 days and a QA assertion sat red for days.
+// Detection without escalation is a prettier kind of blind. Any finding open past
+// the window is bumped to 'critical' and written as a needs-approval proposal that
+// NAMES it a stale unfixed defect — exactly once (escalated_at), never in a loop.
+test('staleness-escalation', 'FROZEN: cergio-watchdog escalates any qa_finding open past the window (default 12h) with no fix — severity→critical + a needs-approval coo_proposal — exactly once (escalated_at), and re-arms when the finding is genuinely fixed', '#75', async () => {
+  const src = readFile('supabase/functions/cergio-watchdog/index.ts');
+
+  // 1) Selection: OPEN + never-escalated + older than the window, oldest first, capped.
+  assert(/QA_ESCALATE_AFTER_HOURS/.test(src) && /\|\| '12'/.test(src),
+    'the escalation window must be configurable (QA_ESCALATE_AFTER_HOURS), defaulting to 12h');
+  assert(/from\('qa_findings'\)[\s\S]{0,400}?\.eq\('status', 'open'\)[\s\S]{0,200}?\.is\('escalated_at', null\)[\s\S]{0,200}?\.lt\('found_at', cutoff\)/.test(src),
+    'must select findings that are OPEN, never-escalated, and older than the cutoff');
+  assert(/\.limit\(10\)/.test(src),
+    'escalations must be capped per heartbeat so an outage cannot flood the founder list');
+
+  // 2) Escalate: bump severity AND raise a needs-approval proposal naming the defect.
+  assert(/severity: 'critical'/.test(src) && /escalated_at: new Date\(\)\.toISOString\(\)/.test(src),
+    'a stale finding must be bumped to critical and stamped escalated_at');
+  assert(/STALE DEFECT/.test(src),
+    'the proposal must NAME it as a stale unfixed defect (not a new idea)');
+  assert(/requires_approval: true/.test(src) && /action_kind: 'none'/.test(src) && /on_spec: false/.test(src),
+    'the escalation proposal must be requires_approval=true / action_kind=none — coo-execute must never auto-run it');
+  assert(/const ok = await upsertProposal\(db, title, detail[\s\S]{0,40}?\);\s*\n\s*if \(!ok\) continue;/.test(src),
+    'the proposal must be written BEFORE escalated_at is stamped — a lost proposal must not burn the escalation');
+  assert(/Auto-fix: \$\{f\.check_name\}/.test(src),
+    'the escalation must state whether a fix was ever ATTEMPTED (the auto-fix proposal, if any)');
+
+  // 3) Idempotent: stable title + existing-pending check → no duplicate spam.
+  assert(/\.eq\('title', title\)[\s\S]{0,120}?\.eq\('status', 'pending'\)/.test(src),
+    'upsertProposal must skip when an identical-title proposal is already pending (no spam)');
+
+  // 4) A broken monitor must SHOW as broken (e.g. migration not applied).
+  assert(/escalationError/.test(src) && /status: escalationError \? 'error' : 'ok'/.test(src),
+    'if escalation cannot run, the watchdog run must be status=error — never a quiet ok');
+
+  // 5) The DB side: the column exists and the escalation re-arms on a genuine fix.
+  const mig = readFile('supabase/migrations/20260713000000_visibility_escalation_and_yp_shutdown.sql');
+  assert(/add column if not exists escalated_at timestamptz/.test(mig),
+    'the migration must add qa_findings.escalated_at');
+  assert(/set status = 'fixed'[\s\S]{0,200}?escalated_at = null/.test(mig),
+    'cergio_qa_check must clear escalated_at when a finding is fixed (re-arm for a future occurrence)');
+  assert(/found_at = case when qa_findings\.status = 'fixed'\s*\n?\s*then now\(\)/.test(mig),
+    'a re-opened finding must reset found_at, so staleness measures THIS episode');
+  assert(/severity = case when qa_findings\.status = 'open'[\s\S]{0,120}?'critical'/.test(mig),
+    "cergio_qa_check must not DOWNGRADE a severity the watchdog escalated to 'critical'");
+});
+
+// ─── #47j · SCHEDULED-VS-INSTANT IS A WRITE-TIME INVARIANT ───────────────────
+// The hourly QA had `qa_resp_scheduled_branch` red for days. The CODE was right:
+// accept_request_with_time honors the caller's time (coalesce(p_scheduled_at, …))
+// and stamps schedule_confirmed_at. The TEST was wrong: it compared a PERSISTED seed
+// booking's scheduled_at to Date.now(), so a fixture written (correctly) at now+3d
+// went red three days later — a clock, not a regression. SPEC-47.1 is about what is
+// written AT BOOKING TIME, so the assertion must be relative to the row's own
+// created_at. Lock that, and lock the RPC that it tests.
+test('scheduled-branch-write-time', 'FROZEN (SPEC-47): the scheduled-vs-instant assertion is a WRITE-TIME invariant — scheduled_at > created_at + 12h AND schedule_confirmed_at stamped — never "future vs the clock" on a persisted fixture', '#47j', async () => {
+  // 1) The RPC under test genuinely honors the chosen time (this is the code side).
+  const rpc = readFile('supabase/migrations/20260616020000_accept_with_time.sql');
+  assert(/coalesce\(p_scheduled_at, now\(\) \+ interval '1 day'\)/.test(rpc),
+    'accept_request_with_time must write the CHOSEN time (p_scheduled_at), not an instant placeholder — SPEC-47.1');
+  assert(/schedule_confirmed_at/.test(rpc) && /'confirmed'/.test(rpc),
+    'accept_request_with_time must stamp schedule_confirmed_at on the confirmed booking — SPEC-47.1/47h');
+
+  // 2) The edge suite (hourly cron, reads a fixture that AGES) must assert the
+  //    write-time relationship, never "> Date.now()" against a stored row.
+  const edge = readFile('supabase/functions/qa-suite/index.ts');
+  const branch = edge.slice(edge.indexOf("check: 'qa_resp_scheduled_branch'"));
+  const block = branch.slice(0, branch.indexOf('});') + 3);
+  assert(!/Date\.now\(\)\s*\+\s*12\s*\*\s*3600\s*\*\s*1000/.test(block),
+    'qa-suite must NOT compare a persisted fixture to Date.now()+12h — that assertion decays into a false red as the fixture ages');
+  assert(/schedAt > bookedAt \+ 12 \* 3600 \* 1000/.test(block),
+    'qa-suite must assert scheduled_at > created_at + 12h (the write-time branch, time-invariant)');
+  assert(/confirmed\.schedule_confirmed_at/.test(block),
+    'qa-suite must also require schedule_confirmed_at — SPEC-47.1 bans the silent auto-time');
+  assert(/created_at/.test(edge.slice(0, edge.indexOf("check: 'qa_resp_paths_distinct'"))) ||
+         /select\('id, status, scheduled_at, schedule_confirmed_at, created_at/.test(edge),
+    'qa-suite must select created_at + schedule_confirmed_at on the seed bookings');
+  assert(/\.order\('created_at', \{ ascending: false \}\)/.test(edge),
+    'qa-suite must evaluate the NEWEST confirmed seed booking, not an arbitrary one');
+
+  // 3) The Node runner shares the check_name — it must assert the SAME invariant.
+  const live = readFile('scripts/qa-live.mjs');
+  const lb = live.slice(live.indexOf("S.a('qa_resp_scheduled_branch'"));
+  const lblock = lb.slice(0, lb.indexOf(');') + 2);
+  assert(/bookedAtMs \+ 12 \* 3600 \* 1000/.test(lblock) && /schedule_confirmed_at/.test(lblock),
+    'qa-live.mjs must assert the same write-time invariant (shared check_name → no drift)');
 });
 
 main().catch(e => {

@@ -618,4 +618,63 @@ Coverage.command".
 
 ---
 
-*Last updated: 2026-07-09 by Claude (Cowork session) — founder-frozen decisions SPEC-71*
+---
+
+### SPEC-72 · Operating law: firing-honesty + max output (2026-07-09, FROZEN)
+**Status:** FROZEN — 2026-07-09 (Tarik). Top-severity operating rules; violation is the worst-class failure.
+
+1. **FIRING-HONESTY (never mislead about status).** Every status claim MUST distinguish three states with evidence: **WRITTEN** (in spec/code, not deployed) · **BUILT** (deployed but not yet proven) · **VERIFIED-LIVE** (proven firing with live evidence — rows moved / test green). It is FORBIDDEN to write something into the spec, ledger, or code and imply it is "firing / running / live / done" unless it is VERIFIED-LIVE. Writing a requirement ≠ shipping it. The dashboard + requirements ledger must show each item's true state (verified vs open), and no verbal claim may outrun the evidence. This is the #1 rule.
+2. **Verified requirements are FROZEN, not re-listed.** Once a requirement is VERIFIED-LIVE it becomes frozen spec (locked, assumed-held via its regression test) and drops off the "open/pending" surface — the open list shows ONLY what is not yet verified, so the remaining work is always the honest, shrinking delta.
+3. **MAX OUTPUT AT HIGHEST QUALITY, LEAST TIME.** Every task ships at the highest output and quality achievable in the least time. Padding, self-throttling, artificial pacing, and unused capability are forbidden waste; quality (the CI/test gate) is the only valid brake. Small tasks that can be done in ~30 min must be, not stretched.
+
+---
+
+## OPS / THE AUTONOMOUS LOOP (it must never run blind)
+
+### SPEC-73 · Every failure records a REAL reason — "[object Object]" is banned
+**Status:** FROZEN — 2026-07-13
+**Rule:** Supabase/PostgREST rejects with a **plain object** (`{message, details, hint, code}`), not an `Error`. `String(e)` on it produces the literal string `"[object Object]"` — which is how **11 of 11 failed autonomous actions** recorded an unreadable `coo_proposals.result` and the loop went blind for days.
+
+Every worker that writes a failure to the DB (`coo-execute`, `creator-harvest`, `enrich-influencers`, `fulfill-crawl`, `cergio-watchdog`, `cergio-orchestrator`, `qa-suite`) MUST serialize thrown values with the **canonical `serr()` helper**, which extracts `message` → nested `error.message` → `details`/`hint`, plus the SQLSTATE/HTTP `code` and two stack frames.
+
+**Banned:** `e instanceof Error ? e.message : String(e)` and any raw `String(e)` on a thrown value.
+**Anti-drift:** all copies of `serr()` must be byte-identical (they deploy separately; one fork = one blind agent).
+
+qa.mjs #73 enforces this — it *executes* the shipped helper against a PostgREST-shaped rejection.
+
+---
+
+### SPEC-74 · A worker that finds rows and writes none must say WHY (no silent success)
+**Status:** FROZEN — 2026-07-13
+**Rule:** `raw_found > 0 && rows_written = 0` is never `status:'ok'`. It is `'empty'` (or `'error'` when a write genuinely failed) with an explicit reason string on `agent_runs.error` and a per-reason `skips` tally in `agent_runs.meta`.
+
+Two mechanics are mandatory for any worker that scans a lead table:
+1. **A CURSOR.** A candidate query with no ordering and no attempt marker re-selects the SAME head-of-table rows every run — a livelock, not a collision (this is what froze `enrich-influencers` at "found 40 / wrote 0" for 5 days). Every candidate LOOKED AT is stamped (`leads_influencers.enrich_attempted_at`), hit or miss, and the query takes least-recently-attempted first.
+2. **PROOF OF WRITE.** Every update/upsert ends in `.select('id')`; an error **or a 0-row match** counts as a failure, never as success.
+
+qa.mjs #74 enforces this.
+
+---
+
+### SPEC-75 · A defect may not sit unfixed — staleness escalates
+**Status:** FROZEN — 2026-07-13
+**Rule:** Any `qa_finding` still **open** after `QA_ESCALATE_AFTER_HOURS` (default **12h**) with no fix is escalated by `cergio-watchdog`: severity → `critical`, and a **needs-approval** `coo_proposal` ("STALE DEFECT: …") is raised naming it as a stale unfixed defect and stating whether a fix was ever attempted. `qa_findings.escalated_at` is stamped so it escalates **exactly once** (never a loop); `cergio_qa_check` clears `escalated_at` and resets `found_at` when the finding is genuinely fixed, so a NEW occurrence can escalate again. Escalations are capped per heartbeat. The escalation proposal is `requires_approval=true` / `action_kind='none'` — the executor can never auto-run it.
+
+qa.mjs #75 enforces this.
+
+---
+
+### SPEC-47j · Scheduled-vs-instant is a WRITE-TIME invariant
+**Status:** FROZEN — 2026-07-13 (clarifies SPEC-47.1; the rule itself is unchanged)
+**Rule:** "Scheduled bookings honor the chosen time" is asserted **relative to the booking's own `created_at`** — `scheduled_at > created_at + 12h` AND `schedule_confirmed_at` stamped — never as "`scheduled_at` is in the future relative to the clock". A QA fixture is written once and then ages: comparing a stored booking to `Date.now()` turns a correct row red days later (that false red is exactly what sat on the dashboard). `accept_request_with_time` is the code under test and is correct (`coalesce(p_scheduled_at, …)`).
+
+qa.mjs #47j enforces this (and `qa-suite` + `qa-live.mjs` share the assertion).
+
+---
+
+### YellowPages: RETIRED (2026-07-13)
+YP answers datacenter IPs with **HTTP 403**, permanently. `fulfill-crawl` no longer fetches `source='yellowpages'` jobs; leftovers are quarantined once as `yp-blocked-permanent` and never retried; the seeder cron is unscheduled and the agent disabled. **Google Places is the live services path.** The parser stays dormant behind `YP_ENABLED` (default false) — reversible in one env var. Requirement `p10-crawl-yp-drain` is retired. qa.mjs `p10-crawl-yp-retired` enforces this.
+
+---
+
+*Last updated: 2026-07-13 by Claude (Cowork session) — SPEC-73/74/75 + SPEC-47j: the autonomous loop must never run blind (canonical serr, no silent success, staleness escalation) + YellowPages retired*

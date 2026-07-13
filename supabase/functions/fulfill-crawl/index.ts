@@ -58,13 +58,41 @@ serve(async (req: Request) => {
     const limitParam = parseInt(url.searchParams.get('limit') || '', 10);
     const perRun = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : MAX_REQUESTS_PER_RUN, 1), 200);
 
+    // ── YELLOWPAGES IS DEAD FROM EDGE — QUARANTINE, DON'T RETRY ───────────────
+    // YP answers every request from a datacenter IP with HTTP 403 (verified: every
+    // run errored `yp-blocked: http=403`). Retrying it forever flooded agent_runs
+    // with errors and held org_health red while the working path (Google Places)
+    // was quietly growing services. So: YP jobs are no longer FETCHED. Any that are
+    // still queued get stamped 'failed' ONCE with a permanent reason and are never
+    // picked up again. The parser below is kept but dormant behind YP_ENABLED, so
+    // this is reversible in one env var if we ever crawl from a residential egress.
+    const YP_ENABLED = (Deno.env.get('YP_ENABLED') || 'false').toLowerCase() === 'true';
+    const YP_DEAD_NOTE = 'yp-blocked-permanent: YellowPages returns HTTP 403 to datacenter IPs. ' +
+      'Not retried. Google Places is the live services path (set YP_ENABLED=true only from a residential/proxy egress).';
+
+    let ypQuarantined = 0;
+    let ypSweepError: string | null = null;
+    if (!YP_ENABLED) {
+      const { data: swept, error: sErr } = await db
+        .from('crawl_requests')
+        .update({ status: 'failed', notes: YP_DEAD_NOTE, updated_at: new Date().toISOString() })
+        .eq('kind', 'services')
+        .eq('source', 'yellowpages')
+        .in('status', ['new', 'crawling'])
+        .select('id');
+      if (sErr) ypSweepError = serr(sErr); else ypQuarantined = (swept ?? []).length;
+    }
+
     // Pick up unworked service crawls. `source` (nullable) routes fulfillment:
-    // 'yellowpages' → free page-scrape parser; NULL/'google_places' → Places API.
-    const { data: jobs, error: jobsErr } = await db
+    // NULL/'google_places' → Places API. 'yellowpages' rows are EXCLUDED here (see
+    // above) so a dead queue can never be fetched or re-errored.
+    let jobQ = db
       .from('crawl_requests')
       .select('id, kind, city, state, service_type, target_count, requested_by, status, source, notes')
       .eq('kind', 'services')
-      .eq('status', 'new')
+      .eq('status', 'new');
+    if (!YP_ENABLED) jobQ = jobQ.or('source.is.null,source.neq.yellowpages');
+    const { data: jobs, error: jobsErr } = await jobQ
       .order('created_at', { ascending: true })
       .limit(perRun);
     if (jobsErr) throw jobsErr;
@@ -87,8 +115,23 @@ serve(async (req: Request) => {
         let found = 0;
         let query = '';
 
-        if (source === 'yellowpages') {
-          // ── YellowPages page-scrape path (free, keyless) ────────────────────
+        if (source === 'yellowpages' && !YP_ENABLED) {
+          // Defense in depth: the query above already excludes YP jobs. If one
+          // reaches here (a race with the seeder), stamp it permanently failed
+          // WITHOUT a fetch — no 403, no error flood, no retry.
+          await db.from('crawl_requests').update({
+            status: 'failed', notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
+          ypQuarantined++;
+          continue;
+        } else if (source === 'yellowpages') {
+          // ── YellowPages page-scrape path (free, keyless) — DORMANT ──────────
+          // Only reachable with YP_ENABLED=true (a residential/proxy egress).
+          // A BLOCK page (anti-bot / empty response to datacenter IPs) is NOT a
+          // successful delivery: fulfillYellowPages throws YpBlockedError, which
+          // is caught below and stamps the job 'failed' (note 'yp-blocked') so the
+          // queue is not silently drained to delivered-0 and the block surfaces in
+          // agent_runs. Only a real fetch that parsed the page marks 'delivered'.
           const r = await fulfillYellowPages(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await db.from('crawl_requests').update({
@@ -161,9 +204,17 @@ serve(async (req: Request) => {
         await notifySearcher(db, job, saved);
         out.push({ id: job.id, source, query, found, saved });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await db.from('crawl_requests').update({ status: 'failed', notes: msg.slice(0, 500), updated_at: new Date().toISOString() }).eq('id', job.id);
-        out.push({ id: job.id, error: msg });
+        const msg = serr(e);
+        const blocked = e instanceof YpBlockedError || /^yp-blocked/i.test(msg);
+        // A block page is stamped 'failed' with a distinct 'yp-blocked' note — NOT
+        // 'delivered' — so the queue is not silently drained to delivered-0 and the
+        // health-check/watchdog can see the anti-bot block for what it is.
+        await db.from('crawl_requests').update({
+          status: 'failed',
+          notes: (blocked ? `yp-blocked: ${msg}` : msg).slice(0, 500),
+          updated_at: new Date().toISOString(),
+        }).eq('id', job.id);
+        out.push({ id: job.id, error: msg, blocked });
       }
     }
 
@@ -175,22 +226,69 @@ serve(async (req: Request) => {
     const totFound = out.reduce((a, r: any) => a + (Number(r.found) || 0), 0);
     const totSaved = out.reduce((a, r: any) => a + (Number(r.saved) || 0), 0);
     const anyErr   = out.some((r: any) => r.error);
+    const blockedCount = out.filter((r: any) => r.blocked).length;
+    // SURFACE the block: if every processed job was a source block (e.g. YP anti-bot
+    // on datacenter IPs) with zero rows written, this run is NOT 'ok' — it's 'error'
+    // so the watchdog/health-check flags it instead of the block hiding behind a
+    // silent delivered-0. Meta carries the block count for the crawl dashboard.
+    // Quarantining dead YP jobs is BOOKKEEPING, not a failure: it must not colour
+    // the run red (that is the error flood we are removing). It is reported in meta.
     await logAgentRun(db, 'fulfill-crawl', {
       started, raw_found: totFound, rows_written: totSaved,
       status: anyErr ? 'error'
               : (out.length > 0 && totSaved === 0 && totFound > 0) ? 'empty' : 'ok',
-      error: anyErr ? out.filter((r: any) => r.error).map((r: any) => r.error).join(' | ').slice(0, 500) : null,
-      meta: { processed: out.length },
+      error: anyErr ? out.filter((r: any) => r.error).map((r: any) => r.error).join(' | ').slice(0, 500)
+             : (ypSweepError ? `yp-quarantine sweep failed: ${ypSweepError}` : null),
+      meta: {
+        processed: out.length, blocked: blockedCount,
+        yp_enabled: YP_ENABLED, yp_quarantined: ypQuarantined, yp_sweep_error: ypSweepError,
+      },
     });
-    return json({ processed: out.length, results: out });
+    return json({
+      processed: out.length, yp_quarantined: ypQuarantined, yp_enabled: YP_ENABLED, results: out,
+    });
   } catch (e) {
     await logAgentRun(dbRef, 'fulfill-crawl', {
       started, raw_found: null, rows_written: 0,
-      status: 'error', error: e instanceof Error ? e.message : String(e),
+      status: 'error', error: serr(e),
     });
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return json({ error: serr(e) }, 500);
   }
 });
+
+// ── CANONICAL ERROR SERIALIZER — DO NOT FORK ─────────────────────────────────
+// Supabase/PostgREST rejects with a PLAIN OBJECT ({message, details, hint, code}),
+// NOT an Error. `String(e)` on that object yields the opaque "[object Object]" —
+// which is exactly how 11/11 failed autonomous actions recorded an unreadable
+// `result` and the loop went blind (Forensic Auditor 2026-07-13). Always extract a
+// REAL message + code (+ 2 stack frames) so every failure is diagnosable.
+// qa.mjs #73 asserts every copy of this helper is byte-identical, unit-tests it
+// against a PostgREST-shaped rejection, and fails the push if it can ever emit
+// "[object Object]".
+function serr(e: unknown): string {
+  if (e === null || e === undefined) return 'unknown error (null)';
+  if (typeof e === 'string') return e || 'unknown error (empty string)';
+  const o = e as any;
+  const msg = (e instanceof Error ? e.message : null)
+    || o?.message || o?.error?.message || o?.error_description || o?.msg
+    || o?.details || o?.hint || null;
+  const code = o?.code ?? o?.error?.code ?? o?.status ?? o?.statusCode ?? null;
+  const parts: string[] = [];
+  if (msg) parts.push(String(msg));
+  if (code !== null && code !== undefined && String(code) !== '') parts.push('[' + String(code) + ']');
+  if (o?.details && String(o.details) !== String(msg)) parts.push('- ' + String(o.details));
+  if (o?.hint && String(o.hint) !== String(msg)) parts.push('(hint: ' + String(o.hint) + ')');
+  if (parts.length === 0) {
+    let dump = '';
+    try { dump = JSON.stringify(e); } catch (_j) { dump = ''; }
+    parts.push(dump && dump !== '{}' ? dump : 'unhandled ' + (typeof e) + ' thrown with no message/code/details fields');
+  }
+  if (e instanceof Error && e.stack) {
+    const frames = String(e.stack).split('\n').slice(1, 3).map((s) => s.trim()).filter(Boolean).join(' <- ');
+    if (frames) parts.push('| ' + frames);
+  }
+  return parts.join(' ').trim().slice(0, 900);
+}
 
 // BACKBONE helper — write ONE agent_runs row per invocation. NEVER throws.
 async function logAgentRun(
@@ -354,6 +452,27 @@ function ypPlausible(serviceType: string, name: string, category: string): boole
   return kw.test(hay);
 }
 
+// BLOCK-PAGE DETECTION — YellowPages serves an anti-bot / block / empty page to
+// datacenter IPs (Supabase edge egress). A blocked fetch (403/429/503, an empty
+// body, or an HTML body that contains ZERO listing structure AND a known block
+// marker) is NOT "0 results" — it must NOT be masked as delivered-0. We surface
+// it: the job is stamped 'failed' with a 'yp-blocked' note so the queue is not
+// silently drained and the watchdog/health-check can see the real reason.
+const YP_BLOCK_MARKERS = /(access denied|captcha|are you a human|verify you are|unusual traffic|px-captcha|perimeterx|distil|cloudflare|request unsuccessful|reference #|bot detection|blocked)/i;
+function ypLooksBlocked(status: number, html: string): boolean {
+  if (status === 403 || status === 429 || status === 503) return true;
+  const body = (html || '').trim();
+  if (body.length < 1000) return true; // real YP results page is ~1.5–2.5 MB; a tiny body = block/empty
+  // A body with a block marker AND no listing structure is a block page, not results.
+  const hasListingStructure = /application\/ld\+json|business-name/i.test(body);
+  if (!hasListingStructure && YP_BLOCK_MARKERS.test(body.slice(0, 20000))) return true;
+  return false;
+}
+
+class YpBlockedError extends Error {
+  constructor(public reason: string) { super(`yp-blocked: ${reason}`); this.name = 'YpBlockedError'; }
+}
+
 async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; found: number; query: string }> {
   const type = String(job.service_type || 'local service');
   const city = String(job.city || '');
@@ -371,12 +490,13 @@ async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; f
     if (page > 1) await sleep(YP_FETCH_JITTER_MS + Math.floor(Math.random() * YP_FETCH_JITTER_MS));
 
     let html = '';
+    let httpStatus = 0;
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 15000);
       const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': YP_UA, 'Accept': 'text/html' } });
       clearTimeout(t);
-      if (!res.ok) break; // 403/429 → stop hitting this domain for this job
+      httpStatus = res.status;
       // BOUND the page against a pathological/unbounded response (OOM → HTTP 546),
       // but the cap MUST clear a full real YP results page. A live plumber/Miami
       // page is ~1.5–2.5 MB and the schema.org JSON-LD listing block is emitted
@@ -384,8 +504,22 @@ async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; f
       // result cards) clean off, so parse yielded 0 listings and every job stamped
       // delivered-with-0 (raw_found 0 / rows_written 0). 4 MB holds a full page
       // with headroom while still bounding memory in the Deno isolate.
+      // NOTE: read the body even on !res.ok so block detection can inspect it.
       html = (await res.text()).slice(0, YP_MAX_PAGE_BYTES);
-    } catch { break; }
+    } catch {
+      // A network error / abort on page 1 is indistinguishable from a block at the
+      // egress → surface it, don't mask. On a later page it just ends pagination.
+      if (page === 1) throw new YpBlockedError('fetch-error');
+      break;
+    }
+
+    // BLOCK DETECTION (page 1 only — if the first page is a block page the whole
+    // job is blocked; a later blocked/empty page just ends pagination for a job
+    // that already produced rows). On block: surface, never mask as delivered-0.
+    if (page === 1 && ypLooksBlocked(httpStatus, html)) {
+      throw new YpBlockedError(`http=${httpStatus} bytes=${(html || '').length}`);
+    }
+    if (!(httpStatus >= 200 && httpStatus < 300)) break; // non-2xx on a later page → stop
 
     // PER-PAGE PARSE GUARD: a single malformed page (bad JSON-LD, pathological
     // markup, regex edge case) must never crash the whole run. Isolate the parse

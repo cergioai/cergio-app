@@ -62,7 +62,7 @@ serve(async (req: Request) => {
           const { error: cErr } = await db.rpc('cergio_call_edge', { fn: a.agent });
           healed.push({ agent: a.agent, rerun: !cErr, error: cErr ? cErr.message : null });
         } catch (e) {
-          healed.push({ agent: a.agent, rerun: false, error: e instanceof Error ? e.message : String(e) });
+          healed.push({ agent: a.agent, rerun: false, error: serr(e) });
         }
       }
     }
@@ -113,7 +113,7 @@ serve(async (req: Request) => {
       ms: Date.now() - started,
     });
   } catch (e) {
-    return j({ error: e instanceof Error ? e.message : String(e), ms: Date.now() - started }, 500);
+    return j({ error: serr(e), ms: Date.now() - started }, 500);
   }
 });
 
@@ -148,4 +148,38 @@ async function upsertProposal(db: any, title: string, detail: string, agent: str
   } catch (_e) {
     return false;
   }
+}
+
+// ── CANONICAL ERROR SERIALIZER — DO NOT FORK ─────────────────────────────────
+// Supabase/PostgREST rejects with a PLAIN OBJECT ({message, details, hint, code}),
+// NOT an Error. `String(e)` on that object yields the opaque "[object Object]" —
+// which is exactly how 11/11 failed autonomous actions recorded an unreadable
+// `result` and the loop went blind (Forensic Auditor 2026-07-13). Always extract a
+// REAL message + code (+ 2 stack frames) so every failure is diagnosable.
+// qa.mjs #73 asserts every copy of this helper is byte-identical, unit-tests it
+// against a PostgREST-shaped rejection, and fails the push if it can ever emit
+// "[object Object]".
+function serr(e: unknown): string {
+  if (e === null || e === undefined) return 'unknown error (null)';
+  if (typeof e === 'string') return e || 'unknown error (empty string)';
+  const o = e as any;
+  const msg = (e instanceof Error ? e.message : null)
+    || o?.message || o?.error?.message || o?.error_description || o?.msg
+    || o?.details || o?.hint || null;
+  const code = o?.code ?? o?.error?.code ?? o?.status ?? o?.statusCode ?? null;
+  const parts: string[] = [];
+  if (msg) parts.push(String(msg));
+  if (code !== null && code !== undefined && String(code) !== '') parts.push('[' + String(code) + ']');
+  if (o?.details && String(o.details) !== String(msg)) parts.push('- ' + String(o.details));
+  if (o?.hint && String(o.hint) !== String(msg)) parts.push('(hint: ' + String(o.hint) + ')');
+  if (parts.length === 0) {
+    let dump = '';
+    try { dump = JSON.stringify(e); } catch (_j) { dump = ''; }
+    parts.push(dump && dump !== '{}' ? dump : 'unhandled ' + (typeof e) + ' thrown with no message/code/details fields');
+  }
+  if (e instanceof Error && e.stack) {
+    const frames = String(e.stack).split('\n').slice(1, 3).map((s) => s.trim()).filter(Boolean).join(' <- ');
+    if (frames) parts.push('| ' + frames);
+  }
+  return parts.join(' ').trim().slice(0, 900);
 }

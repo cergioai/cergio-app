@@ -77,6 +77,76 @@ serve(async (req: Request) => {
       }
     }
 
+    // ── STALENESS ESCALATION ───────────────────────────────────────────────────
+    // The gap that let enrich-influencers sit SILENT for 5 days and a QA regression
+    // sit red for days: a finding could be opened, re-opened, re-opened… forever,
+    // and nothing ever changed. Detection without escalation is just a nicer way to
+    // be blind. So: any finding still OPEN after ESCALATE_AFTER_HOURS with no fix
+    // is (1) bumped to severity 'critical' and (2) written as a needs-approval
+    // coo_proposal that NAMES it as a stale unfixed defect. `escalated_at` is
+    // stamped so it can never re-escalate in a loop; cergio_qa_check clears it when
+    // the finding is genuinely fixed, so a NEW occurrence can escalate again.
+    // Reversible + read-mostly: it never fixes anything itself and never sends.
+    const ESCALATE_AFTER_HOURS = Math.max(1, Number(Deno.env.get('QA_ESCALATE_AFTER_HOURS') || '12'));
+    const escalated: any[] = [];
+    let escalationError: string | null = null;
+    try {
+      const cutoff = new Date(Date.now() - ESCALATE_AFTER_HOURS * 3600_000).toISOString();
+      const { data: stale, error: sErr } = await db
+        .from('qa_findings')
+        .select('id, area, check_name, severity, detail, found_at, escalated_at, status')
+        .eq('status', 'open')
+        .is('escalated_at', null)
+        .lt('found_at', cutoff)
+        .order('found_at', { ascending: true })
+        .limit(10);   // cap per heartbeat so an outage can't flood the founder's list
+      if (sErr) throw sErr;
+
+      for (const f of stale ?? []) {
+        const hours = Math.max(0, Math.floor((Date.now() - new Date(f.found_at).getTime()) / 3600_000));
+        // STABLE title → the dedupe below (and the founder's list) never duplicates.
+        const title = `STALE DEFECT: ${f.check_name} — open > ${ESCALATE_AFTER_HOURS}h with no fix`;
+
+        // Was anything even ATTEMPTED? qa-suite writes 'Auto-fix: <check>' proposals
+        // for the auto-fixable class; say so plainly either way.
+        let attempted = 'none — no auto-fix proposal was ever written for this check';
+        try {
+          const { data: fix } = await db.from('coo_proposals')
+            .select('id, status, result, executed_at')
+            .eq('title', `Auto-fix: ${f.check_name}`)
+            .order('id', { ascending: false }).limit(1).maybeSingle();
+          if (fix) {
+            attempted = `auto-fix proposal #${fix.id} is '${fix.status}'` +
+              (fix.result ? ` — last result: ${String(fix.result).slice(0, 200)}` : '') +
+              (fix.status === 'executed' ? ' (it ran and the finding STILL did not clear)' : '');
+          }
+        } catch (_e) { /* diagnostic only */ }
+
+        const detail = [
+          `${f.check_name} (area '${f.area}', severity '${f.severity}') has been OPEN for ${hours}h `,
+          `(since ${String(f.found_at).slice(0, 16)}) and is still failing.`,
+          `\nFINDING: ${String(f.detail || '').slice(0, 400)}`,
+          `\nFIX ATTEMPTED: ${attempted}.`,
+          `\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, `,
+          `not an approval to run something. Escalated automatically after ${ESCALATE_AFTER_HOURS}h.`,
+        ].join('');
+
+        // Write the escalation FIRST; only stamp escalated_at if it landed — a lost
+        // proposal must not silently consume the one escalation this finding gets.
+        const ok = await upsertProposal(db, title, detail.slice(0, 1800));
+        if (!ok) continue;
+
+        const { error: uErr } = await db.from('qa_findings')
+          .update({ severity: 'critical', escalated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', f.id).eq('status', 'open');
+        escalated.push({ check: f.check_name, hours, stamped: !uErr, error: uErr ? serr(uErr) : null });
+      }
+    } catch (e) {
+      // Most likely cause: migration 20260713000000 (qa_findings.escalated_at) not
+      // applied yet. Surface it — never swallow the monitor's own breakage.
+      escalationError = serr(e);
+    }
+
     // Log the watchdog's own run so IT can never silently die either.
     try {
       await db.from('agent_runs').insert({
@@ -85,16 +155,61 @@ serve(async (req: Request) => {
         finished_at: new Date().toISOString(),
         raw_found: (rows ?? []).length,
         rows_written: findings.length,
-        status: 'ok',
-        meta: { open_findings: findings.length },
+        status: escalationError ? 'error' : 'ok',
+        error: escalationError ? `staleness escalation unavailable: ${escalationError}` : null,
+        meta: {
+          open_findings: findings.length,
+          escalate_after_hours: ESCALATE_AFTER_HOURS,
+          escalated: escalated.length, escalations: escalated,
+        },
       });
     } catch (_e) { /* best-effort */ }
 
-    return j({ ok: true, checked: (rows ?? []).length, open_findings: findings.length, findings, ms: Date.now() - started });
+    return j({
+      ok: true, checked: (rows ?? []).length, open_findings: findings.length, findings,
+      escalate_after_hours: ESCALATE_AFTER_HOURS, escalated, escalation_error: escalationError,
+      ms: Date.now() - started,
+    });
   } catch (e) {
-    return j({ error: e instanceof Error ? e.message : String(e), ms: Date.now() - started }, 500);
+    return j({ error: serr(e), ms: Date.now() - started }, 500);
   }
 });
+
+// Write a needs-approval COO proposal, idempotently (same contract the
+// orchestrator uses): skip if an identical-title proposal is already pending.
+// requires_approval=true + on_spec=false + action_kind='none' means coo-execute
+// will NEVER auto-run it — it only surfaces on the founder's approve list.
+// Returns true if a NEW proposal was created (or one already exists and is open —
+// in which case the finding is already escalated and must still be stamped).
+// NEVER throws.
+async function upsertProposal(db: any, title: string, detail: string): Promise<boolean> {
+  try {
+    const { data: existing } = await db
+      .from('coo_proposals')
+      .select('id')
+      .eq('title', title)
+      .eq('status', 'pending')
+      .limit(1)
+      .maybeSingle();
+    if (existing) return true;   // already on the founder's list — don't duplicate
+
+    const { error } = await db.from('coo_proposals').insert({
+      division: 'qa',
+      title,
+      detail,
+      expected_lift: 'closes a defect the loop has been carrying unfixed',
+      effort: 'engineering',
+      requires_approval: true,
+      on_spec: false,
+      action_kind: 'none',
+      status: 'pending',
+      run_date: new Date().toISOString().slice(0, 10),
+    });
+    return !error;
+  } catch (_e) {
+    return false;
+  }
+}
 
 // Idempotent open-or-resolve of ONE finding, keyed by check_name (unique).
 // count>0 opens/updates; count=0 flips a prior open finding to 'fixed'. NEVER
@@ -105,4 +220,38 @@ async function qaCheck(db: any, checkName: string, severity: string, count: numb
       p_area: 'watchdog', p_check: checkName, p_sev: severity, p_count: count, p_detail: detail,
     });
   } catch (_e) { /* best-effort */ }
+}
+
+// ── CANONICAL ERROR SERIALIZER — DO NOT FORK ─────────────────────────────────
+// Supabase/PostgREST rejects with a PLAIN OBJECT ({message, details, hint, code}),
+// NOT an Error. `String(e)` on that object yields the opaque "[object Object]" —
+// which is exactly how 11/11 failed autonomous actions recorded an unreadable
+// `result` and the loop went blind (Forensic Auditor 2026-07-13). Always extract a
+// REAL message + code (+ 2 stack frames) so every failure is diagnosable.
+// qa.mjs #73 asserts every copy of this helper is byte-identical, unit-tests it
+// against a PostgREST-shaped rejection, and fails the push if it can ever emit
+// "[object Object]".
+function serr(e: unknown): string {
+  if (e === null || e === undefined) return 'unknown error (null)';
+  if (typeof e === 'string') return e || 'unknown error (empty string)';
+  const o = e as any;
+  const msg = (e instanceof Error ? e.message : null)
+    || o?.message || o?.error?.message || o?.error_description || o?.msg
+    || o?.details || o?.hint || null;
+  const code = o?.code ?? o?.error?.code ?? o?.status ?? o?.statusCode ?? null;
+  const parts: string[] = [];
+  if (msg) parts.push(String(msg));
+  if (code !== null && code !== undefined && String(code) !== '') parts.push('[' + String(code) + ']');
+  if (o?.details && String(o.details) !== String(msg)) parts.push('- ' + String(o.details));
+  if (o?.hint && String(o.hint) !== String(msg)) parts.push('(hint: ' + String(o.hint) + ')');
+  if (parts.length === 0) {
+    let dump = '';
+    try { dump = JSON.stringify(e); } catch (_j) { dump = ''; }
+    parts.push(dump && dump !== '{}' ? dump : 'unhandled ' + (typeof e) + ' thrown with no message/code/details fields');
+  }
+  if (e instanceof Error && e.stack) {
+    const frames = String(e.stack).split('\n').slice(1, 3).map((s) => s.trim()).filter(Boolean).join(' <- ');
+    if (frames) parts.push('| ' + frames);
+  }
+  return parts.join(' ').trim().slice(0, 900);
 }
