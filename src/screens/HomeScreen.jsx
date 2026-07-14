@@ -993,8 +993,28 @@ export function HomeScreen() {
             >
               {/* Rotating example overlay — sits over the textarea when
                   it's empty, cycles through ROTATING_*_EXAMPLES every
-                  ~4.5s with a fade in/out. Tap to populate the input.
-                  Disappears the moment the user starts typing. */}
+                  ~4.5s with a fade in/out. Disappears the moment the user
+                  starts typing.
+
+                  CERGIO-GUARD (QA 2026-07-13, A1 regression): this used to
+                  be a full-width <button> layered ON TOP of the textarea
+                  (z-10) whose onClick did setQuery(cur.task). It reads as a
+                  placeholder, so tapping the box to place a caret — the most
+                  ordinary thing a user does — silently injected the ENTIRE
+                  example task into the request, and whatever they typed next
+                  was CONCATENATED onto it with no separator. Live repro:
+                  tapping the box and typing "plumber right now" submitted
+                  "Need a babysitter who speaks Spanish Tuesday night under
+                  $55plumber right now" → the resolver matched BABYSITTERS
+                  and invented a $55 budget. Same class as the "$40plumber"
+                  (dog-walker example) corruption seen the night before.
+                  A request the user never typed is fake data in the
+                  launch-critical A1 flow, so the overlay is now inert
+                  (pointer-events-none, aria-hidden): it is a placeholder and
+                  nothing else, and a tap lands in the textarea where it
+                  belongs. Tap-to-use returns only as an explicit chip BELOW
+                  the box, where a tap is unambiguous (UX proposal → Tarik).
+                  Do not re-add setQuery to anything overlaying the input. */}
               {!query && (() => {
                 const list = intent === 'spotlight' ? ROTATING_SPOTLIGHT_EXAMPLES : ROTATING_FIND_EXAMPLES;
                 const idx = Math.min(exampleIdx, list.length - 1);
@@ -1004,11 +1024,9 @@ export function HomeScreen() {
                 // fade-out) so the next one can swap in cleanly.
                 const isLast = idx === list.length - 1;
                 return (
-                  <button
-                    type="button"
-                    onClick={() => { setQuery(cur.task); inputRef.current?.focus(); }}
-                    aria-label="Use this example"
-                    className="absolute top-3 left-4 right-4 text-left z-10 cursor-text"
+                  <div
+                    aria-hidden="true"
+                    className="absolute top-3 left-4 right-4 text-left z-10 pointer-events-none select-none"
                   >
                     <span
                       key={`${intent}-${idx}`}
@@ -1016,7 +1034,7 @@ export function HomeScreen() {
                     >
                       {cur.hint}
                     </span>
-                  </button>
+                  </div>
                 );
               })()}
               {/* Textarea — empty placeholder so it doesn't compete with

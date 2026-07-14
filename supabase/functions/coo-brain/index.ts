@@ -97,6 +97,36 @@ For EACH proposal you MUST also emit an executable classification so an untruste
       · Fix a mislabeled service_type / category / city on leads_services or leads_influencers via UPDATE ... SET ... WHERE ... .
       · Set an intrinsic flag such as has_instagram, or clear/set another reversible boolean/text flag: UPDATE ... SET has_instagram=true WHERE ... .
       · Re-queue a city / re-seed a lead status: UPDATE ... SET outreach_status='queued'/'new' WHERE ... .
+
+    ┌─ SCHEMA CONTRACT — THESE ARE THE ONLY COLUMNS THAT EXIST ─────────────────┐
+    │ Referencing any column not listed here raises 42703 and the action FAILS. │
+    │ Do NOT guess or invent column names. There is no "website", no "handle".  │
+    │                                                                            │
+    │ public.leads_services:                                                     │
+    │   id, name, service_type, phone, phone_origin, website_url, address,       │
+    │   city, state, zip, lat, lon, osm_id, yelp_url, cl_post_url, instagram,    │
+    │   facebook, owner_email, data_source, fetched_at, has_instagram,           │
+    │   outreach_status, outreach_last_at, outreach_notes                        │
+    │   → the site URL is website_url (NOT "website")                            │
+    │   → there is NO "category" column; the category lives in service_type      │
+    │   → the IG handle is instagram; has_instagram is the derived boolean flag  │
+    │                                                                            │
+    │ public.leads_influencers:                                                  │
+    │   id, ig_handle, display_name, bio, category, city, state, followers,      │
+    │   tier, email, email_verified, phone, phone_verified_level, external_url,  │
+    │   is_business, osm_id, discovered_via, outreach_status                     │
+    │   → the IG handle is ig_handle (NOT "handle")                              │
+    │   → the link-in-bio / site URL is external_url (NOT "website")             │
+    └────────────────────────────────────────────────────────────────────────────┘
+
+    Before you emit an sql payload, check EVERY column you named against the
+    contract above. If the column you want does not exist, the fix is a code
+    change (action_kind="none", requires_approval=true) — NOT a guessed name.
+
+    The snapshot includes "execution_failures". If a proposal you are about to
+    make already appears there, DO NOT re-emit the same payload: it has already
+    failed. Either correct it against the schema contract, or gate it.
+
     HARD RULES for sql payloads (the executor will REJECT anything else, so match exactly):
       (a) exactly ONE statement, no ';' except an optional trailing one;
       (b) it MUST start with UPDATE and target ONLY public.leads_services OR public.leads_influencers;
@@ -116,9 +146,9 @@ For EACH proposal you MUST also emit an executable classification so an untruste
 
 WORKED EXAMPLES (emit payloads in exactly this shape):
   · Back-fill has_instagram on services that have an instagram URL → AUTO-RUN:
-    {"action_kind":"sql","action_payload":"UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND coalesce(website,'') ~* 'instagram\\\\.com/'","requires_approval":false}
+    {"action_kind":"sql","action_payload":"UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\\\.com/')","requires_approval":false}
   · Quarantine restaurant-mislabeled rows via do_not_contact → AUTO-RUN:
-    {"action_kind":"sql","action_payload":"UPDATE public.leads_services SET outreach_status='do_not_contact' WHERE outreach_status IN ('queued','new') AND lower(coalesce(service_type,'')||' '||coalesce(category,'')) ~ 'restaurant|cafe|diner|eatery'","requires_approval":false}
+    {"action_kind":"sql","action_payload":"UPDATE public.leads_services SET outreach_status='do_not_contact' WHERE outreach_status IN ('queued','new') AND lower(coalesce(service_type,'')||' '||coalesce(name,'')) ~ 'restaurant|cafe|diner|eatery'","requires_approval":false}
   · Re-run the crawl fulfiller (idempotent) → AUTO-RUN:
     {"action_kind":"edge_call","action_payload":"fulfill-crawl","requires_approval":false}
   · Change the bookings headline on the live metrics endpoint (code + metrics endpoint) → GATE:

@@ -58,6 +58,25 @@ export function getGoogleMapsStatus() {
   };
 }
 
+// CERGIO-GUARD (A1d): a GEOCODE error belongs to the one search that
+// produced it — not to the rest of the app. Without this, a single
+// unresolvable address pins `status.lastError`, and SetupCheckBanner
+// (mounted at root, fixed to the top) rides with the user across
+// /results → /home → /earnings → /inbox, covering screen headers with a
+// raw provider string. Callers clear it when the user navigates away.
+//
+// AUTH errors are deliberately NOT clearable here — SPEC-44 freezes that
+// distinction: an auth failure affects far more than one geocode and must
+// stay visible until it's actually fixed.
+export function clearGeocodeError() {
+  if (status.lastError?.kind === 'geocode') {
+    status.lastError = null;
+    emit();
+    return true;
+  }
+  return false;
+}
+
 function recordError(kind, code, message) {
   status.lastError = { kind, code: code || null, message: message || '', when: Date.now() };
   // eslint-disable-next-line no-console

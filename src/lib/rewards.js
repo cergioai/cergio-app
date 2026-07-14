@@ -120,8 +120,15 @@ export const REWARD_COPY = {
   // Friend-of-friend bonus — second-tier kicker that makes the network
   // compound on its own. Same phrasing everywhere it appears so users
   // see one consistent number.
-  friendOfFriendOneLine: `Plus ${REWARDS.friendOfFriendPercent}% when your friend invites a friend who joins + books — $${REWARDS.friendOfFriendBonusStr} per second-tier signup. The chain pays you.`,
-  friendOfFriendShort:   `+${REWARDS.friendOfFriendPercent}% ($${REWARDS.friendOfFriendBonusStr}) when your friends bring in friends`,
+  // CERGIO-GUARD (QA 2026-07-13, A1h): the chain bonus pays on BOOKINGS, never
+  // on a signup, and the per-booking share is chainSharePercent (0.5%) — NOT
+  // friendOfFriendPercent (5), which is the bonus expressed as a % of the $250
+  // per-friend CAP, not of a booking. Rendering "+5% … per second-tier signup"
+  // promised a 10x-overstated rate for an event that credits $0 (SPEC-57:
+  // 0.5% of each paid booking, accumulating, cap $12.50 per friend-of-friend).
+  // Any user-facing chain copy MUST use chainSharePercent + "as they book".
+  friendOfFriendOneLine: `Plus ${REWARDS.chainSharePercent}% of every booking when your friend invites a friend who joins + books — up to $${REWARDS.friendOfFriendBonusStr} each. The chain pays you.`,
+  friendOfFriendShort:   `+${REWARDS.chainSharePercent}% of each booking (up to $${REWARDS.friendOfFriendBonusStr}) when your friends bring in friends`,
 
   // Connector barter — providers trade free services for IG/TikTok
   // spotlights. The numeric range ($1K-$10K/mo) is an estimate, not a

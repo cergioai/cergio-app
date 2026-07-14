@@ -715,7 +715,8 @@ export function ProfileScreen() {
               <p className="text-meta font-extrabold text-gd leading-snug mb-1.5">As a Connector you earn:</p>
               <ul className="text-meta text-gd/90 leading-snug space-y-1">
                 <li>• ${REWARDS.perFriendConnector} <span className="font-extrabold">cash</span> per friend who joins + books</li>
-                <li>• <span className="font-extrabold">{REWARDS.friendOfFriendPercent}% = ${REWARDS.friendOfFriendBonusStr}</span> when your friends bring in friends</li>
+                {/* A1h (2026-07-13, SPEC-57): 0.5% of each BOOKING, accumulating to $12.50. */}
+                <li>• <span className="font-extrabold">{REWARDS.chainSharePercent}% of each booking, up to ${REWARDS.friendOfFriendBonusStr}</span> when your friends bring in friends</li>
                 <li>• Free services from providers who pay you in spotlights</li>
                 <li>• Growth Participation Income — your earnings drive a bigger bonus as Cergio grows</li>
               </ul>

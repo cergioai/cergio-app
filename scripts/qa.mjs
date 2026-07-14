@@ -2730,6 +2730,261 @@ test('a1-scheduled-detection', 'FROZEN: scheduled-vs-instant detection is DATE-A
   inst('now'); inst('today'); inst('tonight'); inst('tomorrow'); inst('this evening'); inst('');
 });
 
+// ─── INVARIANT #A1b: tapping the search box NEVER injects text the user didn't type ──
+// The rotating example that sits over the empty composer reads as a placeholder. It
+// used to be a full-width <button> (z-10) layered ON TOP of the textarea whose onClick
+// ran setQuery(example.task). So the most ordinary gesture there is — tap the box to
+// place a caret — silently loaded a whole example request, and the words the user then
+// typed were CONCATENATED onto it with no separator. Live repro (2026-07-13): tap +
+// "plumber right now" submitted "…Spanish Tuesday night under $55plumber right now" and
+// the resolver matched BABYSITTERS with an invented $55 budget. A request the user never
+// typed is fake data in the launch-critical A1 flow. The overlay must stay INERT.
+test('a1-example-overlay-inert', 'FROZEN: the rotating example over the composer is an inert placeholder (pointer-events-none) — tapping the search box never injects example text into the user\'s request (A1b)', '#A1b', () => {
+  const home = readFile('src/screens/HomeScreen.jsx');
+  // Isolate the overlay block that renders when the composer is empty.
+  const m = home.match(/\{!query && \(\(\) => \{[\s\S]*?\}\)\(\)\}/);
+  assert(m, 'HomeScreen must still render the rotating example overlay block (A1b)');
+  const overlay = m[0];
+  assert(/pointer-events-none/.test(overlay),
+    'the example overlay must be pointer-events-none so a tap lands in the textarea, not on the example (A1b)');
+  assert(!/<button/.test(overlay),
+    'the example overlay must NOT be a <button> layered over the input — it reads as a placeholder (A1b)');
+  assert(!/setQuery\s*\(/.test(overlay),
+    'nothing overlaying the composer may call setQuery — that injects a request the user never typed (A1b)');
+});
+
+// ─── INVARIANT #A1c: a BUDGET or a DATE is never mistaken for the user's ADDRESS ──
+// The 07-05 anti-revert guard ("an explicit typed address always wins") matched a
+// raw `\d{1,6}\s+<word>{1,7}` — but a budget followed by a date is also "a number
+// followed by words." Live repro (2026-07-13): "deep cleaning under $200 this
+// tuesday" captured "200 this tuesday" as the address, OVERWROTE the user's real
+// persisted address, and Google returned REQUEST_DENIED — surfacing a raw "Setup
+// needed / geocoder denied" error on an ordinary query. Worse than cosmetic: a
+// request whose `where` is a date phrase has no lat/lng, so services_near matches
+// NOBODY and the request is silently unroutable. Both extraction paths in useChat
+// must go through the guard, and the guard must keep the anti-revert guarantee.
+test('a1-where-guard', 'FROZEN: budgets and dates can never become the address — useChat routes both address paths through extractTypedAddress, which still lets an explicitly typed street address win (A1c)', '#A1c', async () => {
+  assert(fs.existsSync(path.join(REPO_ROOT, 'src/lib/whereGuard.js')),
+    'src/lib/whereGuard.js must exist (A1c address guard)');
+  const chat = readFile('src/hooks/useChat.js');
+  assert(/from '\.\.\/lib\/whereGuard'/.test(chat),
+    'useChat must import the guard from lib/whereGuard (A1c)');
+  // Neither extraction path may hand-roll the old "number + words" matcher again.
+  assert(!/\\d\{1,6\}\\s\+\[A-Za-z0-9/.test(chat),
+    'useChat must NOT re-introduce the raw number+words address regex — it captures budgets/dates (A1c)');
+  const capture = chat.match(/if \(userInput\) \{[\s\S]{0,400}?\}/);
+  assert(capture && /extractTypedAddress\(userInput\)/.test(capture[0]),
+    'the local address-capture path must call extractTypedAddress(userInput) (A1c)');
+
+  const { extractTypedAddress } = await import(path.join(REPO_ROOT, 'src/lib/whereGuard.js'));
+  // Budgets/dates are NOT addresses (the live bug).
+  const notAddr = (s) => assert(extractTypedAddress(s) === null, `"${s}" must NOT be captured as an address (A1c)`);
+  notAddr('deep cleaning under $200 this tuesday');   // the exact live repro
+  notAddr('deep cleaning under 200 this tuesday');
+  notAddr('babysitter Tuesday night under $55');
+  notAddr('dog walker after 5pm under $40');
+  notAddr('house cleaning on August 5th');
+  // The 07-05 guarantee still holds: an explicit typed address wins.
+  const addr = (s, want) => assert(extractTypedAddress(s) === want, `"${s}" must capture "${want}" (A1c anti-revert)`);
+  // The CITY holds too (QA 2026-07-13): the old guard stopped at the comma and
+  // geocoded a BARE STREET, which Google resolves against its own bias — the
+  // request can silently land in the wrong city. Same user-visible bug ("my
+  // address reverted"), different route. A WHEN or the job itself is never a city.
+  addr('134 Henry St, New York', '134 Henry St, New York');
+  addr('5701 collins ave miami', '5701 collins ave miami');
+  addr('5701 collins ave, miami beach tomorrow', '5701 collins ave, miami beach');
+  addr('deep cleaning at 134 Henry St under $200 this tuesday', '134 Henry St');
+  addr('deep cleaning at 134 Henry St, New York under $200 this tuesday', '134 Henry St, New York');
+  addr('134 Henry St, this tuesday', '134 Henry St');
+  addr('134 Henry St, cleaning', '134 Henry St');
+});
+
+// ─── INVARIANT #A1i: an ADDRESS answered at the WHEN step is never the time ───
+// Live 2026-07-13 (v680457c), found by the UX walk: the chat pre-filled a stale
+// saved address, so it never asked WHERE — it asked WHEN. The user answered with
+// the address they actually wanted ("134 Henry St, New York"). The cloud parser
+// echoed that reply back as `when`, so /results rendered a STREET ADDRESS in the
+// time pill, the request was written with an address as its schedule, and — the
+// real damage — `when` counted as satisfied, so the user was never asked for a
+// time at all. The address-capture guard (A1c) only watched the `where` side of
+// the leak. `when` must refuse a value that reads as an address and carries no
+// time signal, on the incoming fields AND on the carried-over prevState.
+test('a1-when-not-an-address', 'FROZEN: an address typed at the WHEN step never becomes the time — useChat drops a when that is a street address with no time signal, and never carries a leaked one forward (A1i)', '#A1i', async () => {
+  const chat = readFile('src/hooks/useChat.js');
+  assert(/import \{[^}]*isAddressNotATime[^}]*\} from '\.\.\/lib\/whereGuard'/.test(chat),
+    'useChat must import isAddressNotATime from lib/whereGuard (A1i)');
+  assert(/if \(fields\.when && isAddressNotATime\(fields\.when\)\)/.test(chat),
+    'useChat must drop an incoming `when` that is really an address (A1i)');
+  assert(/isAddressNotATime\(prevState\.when\)/.test(chat),
+    'the merge must not carry a leaked address forward as `when` (A1i)');
+
+  const { isAddressNotATime, hasTimeSignal } = await import(path.join(REPO_ROOT, 'src/lib/whereGuard.js'));
+  // The live repro + address shapes: these are NOT times.
+  const notTime = (s) => assert(isAddressNotATime(s) === true, `"${s}" must be refused as a when (A1i)`);
+  notTime('134 Henry St, New York');
+  notTime('134 Henry St');
+  notTime('5701 collins ave miami');
+  // Real answers to "when do you need this?" must all SURVIVE.
+  const isTime = (s) => assert(isAddressNotATime(s) === false, `"${s}" must survive as a when (A1i)`);
+  isTime('ASAP');
+  isTime('tomorrow');
+  isTime('this week');
+  isTime('flexible');
+  isTime('Tuesday at 2pm');
+  isTime('next friday morning');
+  isTime('august 5th');
+  isTime('6/20');
+  isTime('in 2 weeks');
+  isTime('134 Henry St tomorrow 2pm');   // says when → keep it
+  assert(hasTimeSignal('tomorrow') && !hasTimeSignal('134 Henry St'),
+    'hasTimeSignal must separate a time phrase from a bare address (A1i)');
+});
+
+// ─── INVARIANT #A1d: a geocode error is scoped to the search, not the app ─────
+// Live 2026-07-13: one unresolvable address on /results pinned status.lastError,
+// and SetupCheckBanner (root-mounted, fixed to the top) rode with the user to
+// /home, /earnings and /inbox — covering the Jobs header with a raw provider
+// string ("REQUEST_DENIED for '200 this tuesday'"). A geocode failure belongs to
+// the one search that caused it. AUTH errors stay (SPEC-44 freezes that split).
+test('a1-geocode-banner-scoped', 'FROZEN: a geocode error never follows the user across screens — the banner drops kind:geocode on navigation; auth errors are untouched (A1d)', '#A1d', async () => {
+  const g = readFile('src/lib/google.js');
+  assert(/export function clearGeocodeError/.test(g),
+    'lib/google.js must export clearGeocodeError() (A1d)');
+  const fn = g.slice(g.indexOf('export function clearGeocodeError'));
+  const body = fn.slice(0, fn.indexOf('\n}') + 2);
+  assert(/kind === 'geocode'/.test(body),
+    'clearGeocodeError must clear ONLY kind:geocode — an auth error must survive (SPEC-44 / A1d)');
+  assert(!/kind === 'auth'/.test(body),
+    'clearGeocodeError must never clear an auth error (SPEC-44)');
+
+  const b = readFile('src/components/ui/SetupCheckBanner.jsx');
+  assert(/clearGeocodeError/.test(b) && /useLocation/.test(b),
+    'SetupCheckBanner must clear the geocode error on route change (A1d)');
+  assert(/\[pathname\]/.test(b),
+    'the clear effect must be keyed on the pathname so it fires on every navigation (A1d)');
+});
+
+// ─── INVARIANT #A1e: the user's own search request has a home ─────────────────
+// Live 2026-07-13: 33 pending `requests` rows for the test account and not ONE
+// was visible anywhere in the product. Activity's "Your open requests" — which
+// calls itself the user's outgoing pile — read only `bookings` +
+// `spotlight_requests`. A search request existed on /results and nowhere else:
+// navigate away and the thing the entire A1 flow exists to create was gone. The
+// core loop may not dead-end (QA STANDARD A3).
+test('a1-open-requests-surface', "FROZEN: a submitted search request surfaces in Activity's open-requests pile — the requester can always find the request they made (A1e)", '#A1e', async () => {
+  const api = readFile('src/lib/api.js');
+  assert(/export async function listMyOpenSearchRequests/.test(api),
+    'api.js must expose listMyOpenSearchRequests() — the read side of the user\'s own request pile (A1e)');
+  const fn = api.slice(api.indexOf('export async function listMyOpenSearchRequests'));
+  const body = fn.slice(0, fn.indexOf('\n}') + 2);
+  assert(/\.from\('requests'\)/.test(body), 'listMyOpenSearchRequests must read the requests table (A1e)');
+  assert(/requester_id/.test(body), 'it must scope to the signed-in requester (A1e)');
+  assert(/'status',\s*'pending'/.test(body), 'only PENDING requests are "open" (A1e)');
+
+  const act = readFile('src/screens/ActivityScreen.jsx');
+  assert(/listMyOpenSearchRequests/.test(act),
+    'ActivityScreen must load the user\'s own open search requests (A1e)');
+  assert(/function SearchRequestRow/.test(act),
+    'ActivityScreen must render a row for each open search request (A1e)');
+  assert(/openSearchReqs\.length > 0/.test(act),
+    'hasOpen must count search requests — otherwise the pile still reads "No open requests" while requests are pending (A1e)');
+  assert(/openSearchReqs\.map/.test(act),
+    'the open-requests block must render the search-request rows (A1e)');
+  // SPEC-12: the row states only what is true — no invented provider, no fake ETA.
+  const row = act.slice(act.indexOf('function SearchRequestRow'));
+  const rowBody = row.slice(0, row.indexOf('\n}') + 2);
+  assert(/We'll let you know when offers land/.test(rowBody),
+    'the row must use the canonical waiting copy (SPEC-42) — never a fabricated status (A1e)');
+});
+
+// ─── INVARIANT #A1f: a RESCUED geocode failure is never shown to the user ─────
+// Live 2026-07-13 (cergio.ai @680457c): the production Google key has the
+// Geocoding API disabled, so every single search recorded REQUEST_DENIED and
+// flashed a red "Setup needed — geocoder returned REQUEST_DENIED for '134,
+// Henry Street, Two Bridges, ...'" banner across the results header — then it
+// disappeared ~1s later, because the Nominatim fallback resolved the address
+// and cleared the error. The search worked; the user was shown a raw provider
+// error anyway, on every search. A geocode error is only real if nothing
+// rescued it: hold it for a grace window, show it only if it's still set.
+// AUTH/LOAD errors keep shouting instantly (SPEC-44).
+test('a1-geocode-banner-grace', 'FROZEN: a geocode error that the Nominatim fallback rescues is NEVER rendered — geocode errors are held for a grace window; auth/load errors still show immediately (A1f)', '#A1f', async () => {
+  const b = readFile('src/components/ui/SetupCheckBanner.jsx');
+  assert(/GEOCODE_GRACE_MS/.test(b),
+    'SetupCheckBanner must hold geocode errors for a grace window (GEOCODE_GRACE_MS) before rendering them (A1f)');
+  assert(/getGoogleMapsStatus/.test(b),
+    'after the grace window the banner must RE-READ the live status — a cleared error must not be shown (A1f)');
+  assert(/kind === 'geocode'/.test(b),
+    'the grace window must apply ONLY to kind:geocode (A1f)');
+  assert(/setTimeout\(/.test(b) && /clearTimeout\(/.test(b),
+    'the deferred geocode banner must be cancellable so a rescued error never fires (A1f)');
+  // auth/load must NOT be deferred — a broken key still shouts immediately.
+  const sub = b.slice(b.indexOf('onGoogleMapsStatusChange'));
+  const subBody = sub.slice(0, sub.indexOf('return () =>'));
+  assert(/show\(s\.lastError\)/.test(subBody),
+    'non-geocode errors (auth/load) must be shown immediately, not deferred (SPEC-44 / A1f)');
+});
+
+// ─── INVARIANT #A1g: earnings copy never promises money for a non-paying event ─
+// Live 2026-07-13 (/earnings @680457c): "+5% when your friends invite their
+// friends — $12.50 per second-tier signup." SPEC-57 pays the chain bonus on
+// PAID BOOKINGS (0.5%, accumulating, cap $12.50 per friend-of-friend) — a
+// signup pays nothing. The screen promised cash for an event that credits $0.
+// Money copy must match the money engine.
+test('earnings-chain-copy-truthful', 'FROZEN: the friend-of-friend line pays on BOOKINGS (accumulating, capped) — never "per signup" (SPEC-57 / A1g)', '#A1g', async () => {
+  const e = readFile('src/screens/EarningsScreen.jsx');
+  assert(!/per second-tier signup/i.test(e),
+    'EarningsScreen must not promise the chain bonus "per second-tier signup" — SPEC-57 credits it on paid bookings (A1g)');
+  assert(/as each of them books/i.test(e),
+    'the chain-bonus line must state that it accrues as the second-tier friends BOOK (A1g)');
+  assert(/up to <span[^>]*>\$\{?REWARDS\.friendOfFriendBonusStr\}?/.test(e) || /up to <span/.test(e),
+    'the chain bonus is a CAP, not a flat payment — the line must read "up to $12.50" (SPEC-57 / A1g)');
+});
+
+// ─── INVARIANT #A1h: EVERY money surface states the real rate + the cap ───────
+// Live 2026-07-13 (@680457c) the A1g defect was only patched on ONE line, while
+// three other user-facing surfaces still stated the wrong economics:
+//   /earnings  "Invite your first friend — earn $250 when they book."   → reads as
+//              $250 on the first booking; SPEC-57 pays 7% of EACH booking up to a
+//              $250 CAP per friend.
+//   /earnings, RainmakerApply (x2), Profile: "+5% … per second-tier signup".
+// REWARDS.friendOfFriendPercent (5) is the bonus as a % of the $250 CAP — it is
+// NOT the booking share (chainSharePercent = 0.5%). Rendering it as a booking
+// percentage overstates the rate 10x, and "per signup" promises money for an
+// event that credits $0 (credit_referral_for_booking only fires on a PAID
+// booking). Money copy is a promise; it must match the money engine exactly.
+// RULE: no user-facing surface may render friendOfFriendPercent as a rate, may
+// say "per second-tier signup"/"on second-tier signups", or may state a flat
+// per-friend payout without "up to".
+test('referral-money-copy-matches-engine', 'FROZEN: every referral surface states the REAL rate (chainSharePercent, per BOOKING) and the cap — never friendOfFriendPercent-as-a-rate, never "per signup" (SPEC-57 / A1h)', '#A1h', async () => {
+  // Comments explain the defect (and quote the banned strings) — scan CODE only.
+  const codeOf = (f) => readFile(f)
+    .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, '')   // JSX comment blocks
+    .replace(/\/\*[\s\S]*?\*\//g, '')             // block comments
+    .replace(/^\s*\/\/.*$/gm, '');                // line comments
+  const surfaces = [
+    'src/screens/EarningsScreen.jsx',
+    'src/screens/RainmakerApplyScreen.jsx',
+    'src/screens/ProfileScreen.jsx',
+    'src/lib/rewards.js',
+  ];
+  for (const f of surfaces) {
+    const src = codeOf(f);
+    assert(!/second-tier signups?/i.test(src),
+      `${f}: a second-tier SIGNUP credits $0 — the chain bonus accrues on their BOOKINGS (SPEC-57 / A1h)`);
+    assert(!/REWARDS\.friendOfFriendPercent/.test(src),
+      `${f}: friendOfFriendPercent (5) is a % of the $250 CAP, not the booking share — user-facing rate copy must use REWARDS.chainSharePercent (0.5%) (SPEC-57 / A1h)`);
+  }
+  // The chain rate that IS shown must be the engine's rate.
+  const earn = codeOf('src/screens/EarningsScreen.jsx');
+  assert(/REWARDS\.chainSharePercent/.test(earn),
+    'EarningsScreen must render the chain rate from REWARDS.chainSharePercent (the value credit_referral_for_booking actually pays) (A1h)');
+  // The per-friend hero on the "start earning" CTA is a CAP, not a flat payout.
+  assert(!/earn \$\{REWARDS\.perFriendUser\} when they book/.test(earn),
+    'the first-friend CTA must not promise a flat $250 on a booking — it accumulates 7% per booking up to the $250 cap ("up to … as they book") (SPEC-57 / A1h)');
+  assert(/up to \$\{REWARDS\.perFriendUser\} as they book/.test(earn),
+    'the first-friend CTA must read "up to $250 as they book" (SPEC-57 / A1h)');
+});
+
 // ─── INVARIANT #QA1: the CONTINUOUS QA layer itself can't silently break ──────
 // The live QA system (seed world + live suites + findings/requirements wiring)
 // is the layer that guarantees user journeys work. If any of its parts vanish or
