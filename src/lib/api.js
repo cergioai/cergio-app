@@ -3766,6 +3766,31 @@ export async function listConsumerBookings() {
     .order('scheduled_at', { ascending: false });
 }
 
+// CERGIO-GUARD (A1e, 2026-07-13 QA walk): the requester's OWN search
+// requests (`requests` rows created by createRequestAndFanOut) had NO
+// surface anywhere in the app. Activity's "Your open requests" block —
+// which calls itself "the user's own outgoing pile" — only read
+// `bookings` + `spotlight_requests`, so a search request was visible for
+// exactly as long as the user stayed on /results. Live evidence: 33
+// pending `requests` rows for the test account, every one of them
+// invisible in the product. Leaving /results meant losing the request.
+//
+// This is the read side of that pile. Pending-only (a matched/cancelled
+// request is not "open"), newest first, never mocked (SPEC-12).
+export async function listMyOpenSearchRequests({ limit = 20 } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: [], error: null };
+
+  return await supabase
+    .from('requests')
+    .select('id, created_at, status, service_type, description, scheduled_at, city, lat, lng')
+    .eq('requester_id', userRes.user.id)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+}
+
 // ─── Free-service barter loop (2026-06-12) ──────────────────────────────────
 // Tarik's flow board: Connector books a free service (calendar-confirmed
 // time) → provider accepts → job happens → Connector posts on Instagram

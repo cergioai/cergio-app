@@ -432,10 +432,13 @@ export function EarningsScreen() {
             >
               <p className="text-meta-sm font-extrabold uppercase tracking-widest text-gd">Start earning</p>
               <p className="text-body-lg font-extrabold text-black leading-snug mt-1">
-                Invite your first friend — earn ${REWARDS.perFriendUser} when they book.
+                {/* A1h (2026-07-13): "$250 when they book" read as $250 on the FIRST
+                    booking. SPEC-57 pays 7% of EACH paid booking, accumulating to a
+                    $250 cap per friend. "up to … as they book" is the honest promise. */}
+                Invite your first friend — earn up to ${REWARDS.perFriendUser} as they book.
               </p>
               <p className="text-meta text-b3 font-medium mt-1.5 leading-snug">
-                Plus ${REWARDS.friendOfFriendBonusStr} chain bonus when their friends book too. <span className="text-gd font-extrabold">Send invite →</span>
+                Plus up to ${REWARDS.friendOfFriendBonusStr} chain bonus as their friends book too. <span className="text-gd font-extrabold">Send invite →</span>
               </p>
             </button>
           );
@@ -864,7 +867,14 @@ export function EarningsScreen() {
           </p>
           {/* Friend-of-friend kicker — a calm extra line, not a card. */}
           <p className="text-meta-sm text-b3 mt-1.5 leading-snug">
-            <span className="font-extrabold text-black">+{REWARDS.friendOfFriendPercent}%</span> when your friends invite their friends — <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonusStr}</span> per second-tier signup.
+            {/* CERGIO-GUARD (QA 2026-07-13, A1g): the chain bonus is paid on BOOKINGS,
+                accumulating up to the cap — never on a signup. This line used to promise
+                the $12.50 on a second-tier SIGNUP, i.e. money for an event that credits
+                nothing (SPEC-57: 0.5% of each paid booking, cap $12.50 per fof). */}
+            {/* A1h (2026-07-13): the RATE is chainSharePercent (0.5% of each booking).
+                friendOfFriendPercent (5) is the bonus as a % of the $250 CAP — rendering
+                it as "+5%" overstated the booking share 10x. */}
+            <span className="font-extrabold text-black">+{REWARDS.chainSharePercent}%</span> of every booking when your friends invite their friends — up to <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonusStr}</span> as each of them books.
           </p>
 
           {/* Connector upsell — visible to users (not providers, who are

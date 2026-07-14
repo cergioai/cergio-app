@@ -124,6 +124,7 @@ const SERVICE_MAP = [
 // Pure-JS dependency-free taxonomy — keeps qa.mjs invariant #13
 // importable without React/Vite resolution.
 import { PROVIDER_TYPE_MAP, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
+import { extractTypedAddress, isAddressNotATime } from '../lib/whereGuard';
 
 const MONTHS = [
   'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
@@ -215,15 +216,12 @@ function naiveParse(text, state = {}) {
     if (m && parseInt(m[1], 10) >= 10) budget = `$${m[1]}`;
   }
 
-  // Where: street number + words. Loosened from strict suffix list so things
-  // like "5701 collins ave miami" or "1145 Broadway" both catch.
+  // Where: street number + words ("5701 collins ave miami", "1145 Broadway").
+  // CERGIO-GUARD (QA 2026-07-13, A1c): routed through extractTypedAddress so a
+  // BUDGET or a DATE can never be mistaken for an address (see lib/whereGuard).
   let where = state.where;
   if (!where) {
-    // Try "<num> <words> <suffix>" first, then "<num> <words>" loose.
-    const strict = text.match(/\b\d{1,6}\s+[A-Za-z][A-Za-z .'-]+(st|ave|av|blvd|rd|dr|lane|court|place|street|hwy|highway|way)\b[^,.\n]*/i);
-    const loose  = text.match(/\b\d{2,6}\s+[A-Z][A-Za-z][A-Za-z .'-]+/);
-    where = (strict?.[0] || loose?.[0] || null);
-    if (where) where = where.trim();
+    where = extractTypedAddress(text);
   }
 
   const flexible = /\bflexible\b|\bany (?:time|day|evening|morning|afternoon)\b|\bwhenever\b|\bopen\b/i.test(text);
@@ -594,9 +592,18 @@ export function useChat({ wantFree = false } = {}) {
     // York" and the search reverted to "Miami Beach". If the user's message
     // contains a clear street address and the parser didn't capture it, the
     // typed address wins so an explicit address ALWAYS holds.
+    //
+    // CERGIO-GUARD (QA 2026-07-13, A1c): the matcher below used to be a raw
+    // `\d{1,6}\s+<word>{1,7}` — "a number followed by words." A BUDGET followed
+    // by a DATE is also a number followed by words, so "deep cleaning under $200
+    // this tuesday" captured "200 this tuesday" as the address and — because the
+    // typed address WINS — overwrote the user's real persisted address. Live:
+    // the /results chip read "200 this tuesday", Google returned REQUEST_DENIED,
+    // and the request became unroutable (no lat/lng → services_near matches
+    // nobody). extractTypedAddress keeps the 07-05 guarantee (an explicit typed
+    // address always holds) while refusing budgets and date phrases.
     if (userInput) {
-      const addrMatch = userInput.trim().match(/\b\d{1,6}\s+[A-Za-z0-9.'\-]+(?:\s+[A-Za-z0-9.'\-]+){1,7}/);
-      const typedAddr = addrMatch ? addrMatch[0].replace(/[.,;:!?]+$/, '').trim() : null;
+      const typedAddr = extractTypedAddress(userInput);
       if (typedAddr && (!fields.where || !String(fields.where).toLowerCase().includes(typedAddr.toLowerCase()))) {
         fields.where = typedAddr;
         // eslint-disable-next-line no-console
@@ -604,9 +611,28 @@ export function useChat({ wantFree = false } = {}) {
       }
     }
 
+    // CERGIO-GUARD (QA 2026-07-13, A1i): an ADDRESS answered at the WHEN step
+    // must never become the `when`. Live on v680457c: the chat asked "When do
+    // you need this?" (it had pre-filled a stale saved address and never asked
+    // WHERE), the user replied "134 Henry St, New York", and the cloud parser
+    // echoed that reply back as `when`. Result: /results showed a street address
+    // in the TIME pill and the request was written with an address as its
+    // schedule — and because `when` was now "satisfied", the chat never asked
+    // for a time at all. The capture above has already routed the text to
+    // `where`; dropping it here re-opens the when-step so the user is asked
+    // once, cleanly. Conservative: only fires when the value reads as a typed
+    // street address AND carries no time signal whatsoever.
+    if (fields.when && isAddressNotATime(fields.when)) {
+      // eslint-disable-next-line no-console
+      console.warn('[useChat] when "%s" is an address, not a time — dropped (A1i)', fields.when);
+      fields.when = null;
+    }
+
     const merged = {
       what:           fields.what          ?? prevState.what          ?? whatFromTaxonomy ?? null,
-      when:           fields.when          ?? prevState.when          ?? null,
+      // A1i: a leaked address must not survive in prevState either — a stale
+      // "when: 134 Henry St" would otherwise ride every subsequent turn.
+      when:           fields.when          ?? (isAddressNotATime(prevState.when) ? null : prevState.when) ?? null,
       where:          fields.where         ?? prevState.where         ?? null,
       budget:         fields.budget        ?? prevState.budget        ?? null,
       details:        fields.details       ?? prevState.details       ?? null,

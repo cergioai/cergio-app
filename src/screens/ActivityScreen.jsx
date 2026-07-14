@@ -13,7 +13,7 @@
 // is the consumer's view only.
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
-import { listConsumerBookings, listMyOutboundSpotlightRequests, listSocialFeed, getMyFollowedIds, getMyInviteCounts, getMyInvitesDetailed, followProfile, unfollowProfile } from '../lib/api';
+import { listConsumerBookings, listMyOutboundSpotlightRequests, listMyOpenSearchRequests, listSocialFeed, getMyFollowedIds, getMyInviteCounts, getMyInvitesDetailed, followProfile, unfollowProfile } from '../lib/api';
 import { stampActivitySeen } from '../hooks/useActivityUnread';
 import { IgPostTile } from '../components/ui/IgPostTile';
 import { supabase, supabaseReady } from '../lib/supabase';
@@ -96,6 +96,35 @@ function BookingRow({ booking, onClick }) {
       </div>
       <span className="text-b3 text-base">›</span>
     </button>
+  );
+}
+
+// CERGIO-GUARD (A1e, 2026-07-13 QA walk): the user's own SEARCH request —
+// the thing the whole A1 flow exists to create — had no home. It lived on
+// /results and nowhere else; navigating away lost it. This row is that
+// missing surface. It states the truth and nothing more (SPEC-42 copy:
+// "We'll let you know when offers land." / SPEC-12: no invented status,
+// no fake providers, no fabricated ETA).
+function SearchRequestRow({ req }) {
+  const what = req.service_type || 'Service request';
+  const when = req.scheduled_at ? fmtDate(req.scheduled_at) : 'As soon as possible';
+  return (
+    <div className="w-full bg-white border border-bdr rounded-[14px] p-3.5 flex items-center gap-3 text-left">
+      <div className="w-9 h-9 rounded-full bg-gl flex items-center justify-center flex-shrink-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3D8B00" strokeWidth="1.8">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-meta-sm font-extrabold leading-none mb-0.5 text-b3">
+          LOOKING FOR YOU
+        </p>
+        <p className="text-body-sm font-extrabold text-black leading-tight truncate">{what}</p>
+        <p className="text-meta-sm text-b3 mt-0.5 leading-snug">
+          {when} · sent {timeAgo(req.created_at)} · We'll let you know when offers land.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -515,6 +544,9 @@ export function ActivityScreen() {
   // Real data — loaded lazily on auth flip.
   const [bookings, setBookings]     = useState(null); // null = loading
   const [spotlights, setSpotlights] = useState(null);
+  // CERGIO-GUARD (A1e): the user's own pending SEARCH requests — the
+  // missing third leg of "Your open requests" (see SearchRequestRow).
+  const [searchReqs, setSearchReqs] = useState(null);
   const [inviteCounts, setInviteCounts]   = useState({ invited: 0, joined: 0, booked: 0 });
   const [invitesDetailed, setInvitesDetailed] = useState(null);
   const [connectors, setConnectors] = useState(null);
@@ -532,12 +564,16 @@ export function ActivityScreen() {
   const [followedIds, setFollowedIds] = useState(new Set());
   useEffect(() => {
     if (!isSignedIn) {
-      setBookings([]); setSpotlights([]); setFollowedIds(new Set());
+      setBookings([]); setSpotlights([]); setSearchReqs([]); setFollowedIds(new Set());
       setInviteCounts({ invited: 0, joined: 0, booked: 0 });
       setInvitesDetailed([]); setConnectors([]);
     } else {
       listConsumerBookings().then(({ data }) => setBookings(data || []));
       listMyOutboundSpotlightRequests({ limit: 50 }).then(({ data }) => setSpotlights(data || []));
+      // A1e: never let a failed read blank the screen — default to [].
+      listMyOpenSearchRequests({ limit: 20 })
+        .then(({ data }) => setSearchReqs(data || []))
+        .catch(() => setSearchReqs([]));
       getMyFollowedIds().then(({ data }) => setFollowedIds(new Set(data || [])));
       getMyInviteCounts().then(({ data }) => setInviteCounts(data || { invited: 0, joined: 0, booked: 0 }));
       getMyInvitesDetailed({ limit: 100 }).then(({ data }) => setInvitesDetailed(data || []));
@@ -566,7 +602,10 @@ export function ActivityScreen() {
   const TERMINAL = ['completed', 'cleared', 'confirmed', 'declined', 'cancelled', 'expired'];
   const openBookings   = (bookings   || []).filter(b => !TERMINAL.includes(b.status));
   const openSpotlights = (spotlights || []).filter(s => !TERMINAL.includes(s.status));
-  const hasOpen        = openBookings.length > 0 || openSpotlights.length > 0;
+  // A1e: pending search requests are open requests too — they were the
+  // one outgoing thing this pile never showed.
+  const openSearchReqs = (searchReqs || []).filter(r => !TERMINAL.includes(r.status));
+  const hasOpen        = openBookings.length > 0 || openSpotlights.length > 0 || openSearchReqs.length > 0;
 
   // Friend graph aggregates for Summary tab.
   const recsAuthored = (invitesDetailed || []).filter(i => !!i.recipient_phone_for_reco || i.kind === 'reco').length;
@@ -855,7 +894,7 @@ export function ActivityScreen() {
         <span>Your open requests</span>
         {hasOpen && (
           <span className="text-g normal-case tracking-normal">
-            {openBookings.length + openSpotlights.length} active
+            {openBookings.length + openSpotlights.length + openSearchReqs.length} active
           </span>
         )}
       </p>
@@ -875,7 +914,7 @@ export function ActivityScreen() {
         </div>
       )}
 
-      {isSignedIn && !hasOpen && bookings !== null && spotlights !== null && (
+      {isSignedIn && !hasOpen && bookings !== null && spotlights !== null && searchReqs !== null && (
         <div className="mx-5 bg-white border border-bdr rounded-[14px] p-4">
           <p className="text-body-sm font-extrabold text-black">No open requests right now</p>
           <p className="text-meta-sm text-b3 mt-1 leading-snug">
@@ -892,6 +931,11 @@ export function ActivityScreen() {
 
       {isSignedIn && hasOpen && (
         <div className="px-5 flex flex-col gap-2">
+          {/* A1e: search requests lead — they're the freshest thing the
+              user did and the only pile that had no home before. */}
+          {openSearchReqs.map(r => (
+            <SearchRequestRow key={r.id} req={r} />
+          ))}
           {openBookings.map(b => (
             <BookingRow key={b.id} booking={b} onClick={() => navigate(`/request/${b.id}`)} />
           ))}

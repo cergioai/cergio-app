@@ -5,12 +5,21 @@
 // a load-bearing piece of infra gets added so the user never has to
 // guess what's missing.
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase, supabaseReady } from '../../lib/supabase';
 import {
   getGoogleMapsKey,
+  getGoogleMapsStatus,
   onGoogleMapsStatusChange,
   describeGoogleError,
+  clearGeocodeError,
 } from '../../lib/google';
+
+// How long a geocode error is held before it's shown to the user. The
+// Nominatim fallback inside verifyAddress() clears a rescued error well
+// inside this window (measured live: ~700ms round-trip), so a rescued
+// failure is never rendered. See the A1f guard below.
+const GEOCODE_GRACE_MS = 4000;
 
 async function probeTable(name) {
   if (!supabaseReady) return { ok: true }; // can't probe without supabase wired
@@ -31,24 +40,62 @@ export function SetupCheckBanner() {
   const [dismissed, setDismissed] = useState(() => {
     try { return !!sessionStorage.getItem(DISMISS_KEY); } catch { return false; }
   });
+  const { pathname } = useLocation();
+
+  // CERGIO-GUARD (A1d): a geocode error is scoped to the search that
+  // produced it. Live 2026-07-13: one unresolvable address on /results
+  // pinned the banner and it FOLLOWED the user to /home, /earnings and
+  // /inbox — covering the Jobs tab header with a raw "REQUEST_DENIED"
+  // string on screens that never geocode anything. On navigation we drop
+  // the geocode-kind error (config problems + auth errors are untouched,
+  // so a genuinely broken deploy still shouts — SPEC-44).
+  useEffect(() => {
+    clearGeocodeError();
+    setGoogleProblem(p => (p?.key === 'google_runtime_geocode' ? null : p));
+  }, [pathname]);
 
   // Listen for live Google Maps load/auth/geocode errors. This is what
   // surfaces "key rejected", "Places API not enabled", "billing
   // disabled" etc. without the user having to crack open devtools.
+  //
+  // CERGIO-GUARD (A1f, QA 2026-07-13): a GEOCODE error is only worth
+  // showing if nothing rescued it. Live: the production Google key has
+  // the Geocoding API disabled, so EVERY search recorded REQUEST_DENIED,
+  // flashed a red "Setup needed — geocoder returned REQUEST_DENIED for
+  // '134, Henry Street, ...'" banner over the results header, and then
+  // vanished ~1s later when the Nominatim fallback resolved the address
+  // and cleared the error. Every user, every search, saw a raw provider
+  // error string for a search that in fact worked. A geocode error is
+  // therefore held for GEOCODE_GRACE_MS: if the fallback clears it (the
+  // normal case) the user never sees it; if it's still set after the
+  // grace window the address genuinely failed and the banner shows.
+  // AUTH + LOAD errors are untouched — they still shout immediately
+  // (SPEC-44: a genuinely broken deploy must never be silent).
   useEffect(() => {
+    let geoTimer = null;
+    const show = (err) => {
+      const d = describeGoogleError(err) || {};
+      setGoogleProblem({
+        key:   `google_runtime_${err.kind}`,
+        label: d.title || 'Google Maps error',
+        fix:   d.detail || err.message || '',
+      });
+    };
     const off = onGoogleMapsStatusChange((s) => {
-      if (s.lastError) {
-        const d = describeGoogleError(s.lastError) || {};
-        setGoogleProblem({
-          key:   `google_runtime_${s.lastError.kind}`,
-          label: d.title || 'Google Maps error',
-          fix:   d.detail || s.lastError.message || '',
-        });
-      } else {
-        setGoogleProblem(null);
+      if (geoTimer) { clearTimeout(geoTimer); geoTimer = null; }
+      if (!s.lastError) { setGoogleProblem(null); return; }
+      if (s.lastError.kind === 'geocode') {
+        const when = s.lastError.when;
+        geoTimer = setTimeout(() => {
+          const still = getGoogleMapsStatus().lastError;
+          // Still the same unrescued geocode failure → it's real, show it.
+          if (still?.kind === 'geocode' && still.when === when) show(still);
+        }, GEOCODE_GRACE_MS);
+        return;
       }
+      show(s.lastError);
     });
-    return off;
+    return () => { if (geoTimer) clearTimeout(geoTimer); off(); };
   }, []);
 
   useEffect(() => {
