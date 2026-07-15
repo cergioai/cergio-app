@@ -27,34 +27,20 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 
-// ── Target metros: top US metros (city + USPS state). Mirrors the YP seeder. ──
+// ── FOUNDER-FROZEN TARGETS (2026-07-14): Miami (home) + the TOP 10 US DMAs by
+// households. NOT "top cities by population" — DMA reach is what matters. ──
 const CITIES: Array<[string, string]> = [
-  ['New York', 'NY'], ['Los Angeles', 'CA'], ['Chicago', 'IL'], ['Houston', 'TX'],
-  ['Phoenix', 'AZ'], ['Philadelphia', 'PA'], ['San Antonio', 'TX'], ['San Diego', 'CA'],
-  ['Dallas', 'TX'], ['San Jose', 'CA'], ['Austin', 'TX'], ['Jacksonville', 'FL'],
-  ['Fort Worth', 'TX'], ['Columbus', 'OH'], ['Charlotte', 'NC'], ['Indianapolis', 'IN'],
-  ['San Francisco', 'CA'], ['Seattle', 'WA'], ['Denver', 'CO'], ['Washington', 'DC'],
-  ['Boston', 'MA'], ['Nashville', 'TN'], ['El Paso', 'TX'], ['Detroit', 'MI'],
-  ['Oklahoma City', 'OK'], ['Portland', 'OR'], ['Las Vegas', 'NV'], ['Memphis', 'TN'],
-  ['Louisville', 'KY'], ['Baltimore', 'MD'], ['Milwaukee', 'WI'], ['Albuquerque', 'NM'],
-  ['Tucson', 'AZ'], ['Fresno', 'CA'], ['Sacramento', 'CA'], ['Kansas City', 'MO'],
-  ['Mesa', 'AZ'], ['Atlanta', 'GA'], ['Omaha', 'NE'], ['Colorado Springs', 'CO'],
-  ['Raleigh', 'NC'], ['Long Beach', 'CA'], ['Virginia Beach', 'VA'], ['Miami', 'FL'],
-  ['Oakland', 'CA'], ['Minneapolis', 'MN'], ['Tulsa', 'OK'], ['Bakersfield', 'CA'],
-  ['Wichita', 'KS'], ['Arlington', 'TX'], ['Aurora', 'CO'], ['Tampa', 'FL'],
-  ['New Orleans', 'LA'], ['Cleveland', 'OH'], ['Honolulu', 'HI'], ['Anaheim', 'CA'],
-  ['Lexington', 'KY'], ['Stockton', 'CA'], ['Corpus Christi', 'TX'], ['Henderson', 'NV'],
-  ['Riverside', 'CA'], ['Newark', 'NJ'], ['Saint Paul', 'MN'], ['Santa Ana', 'CA'],
-  ['Cincinnati', 'OH'], ['Irvine', 'CA'], ['Orlando', 'FL'], ['Pittsburgh', 'PA'],
-  ['St. Louis', 'MO'], ['Greensboro', 'NC'], ['Jersey City', 'NJ'], ['Anchorage', 'AK'],
-  ['Lincoln', 'NE'], ['Plano', 'TX'], ['Durham', 'NC'], ['Buffalo', 'NY'],
-  ['Chandler', 'AZ'], ['Chula Vista', 'CA'], ['Toledo', 'OH'], ['Madison', 'WI'],
-  ['Gilbert', 'AZ'], ['Reno', 'NV'], ['Fort Wayne', 'IN'], ['North Las Vegas', 'NV'],
-  ['St. Petersburg', 'FL'], ['Lubbock', 'TX'], ['Irving', 'TX'], ['Laredo', 'TX'],
-  ['Winston-Salem', 'NC'], ['Chesapeake', 'VA'], ['Glendale', 'AZ'], ['Scottsdale', 'AZ'],
-  ['Norfolk', 'VA'], ['Fremont', 'CA'], ['Garland', 'TX'], ['Boise', 'ID'],
-  ['Richmond', 'VA'], ['Baton Rouge', 'LA'], ['Spokane', 'WA'], ['Salt Lake City', 'UT'],
-  ['Fort Lauderdale', 'FL'], ['Charleston', 'SC'], ['Providence', 'RI'], ['Knoxville', 'TN'],
+  ['Miami', 'FL'],            // home market
+  ['New York', 'NY'],         // DMA 1
+  ['Los Angeles', 'CA'],      // DMA 2
+  ['Chicago', 'IL'],          // DMA 3
+  ['Dallas', 'TX'],           // DMA 4 (Dallas–Fort Worth)
+  ['Philadelphia', 'PA'],     // DMA 5
+  ['Houston', 'TX'],          // DMA 6
+  ['Atlanta', 'GA'],          // DMA 7
+  ['Washington', 'DC'],       // DMA 8
+  ['Boston', 'MA'],           // DMA 9
+  ['San Francisco', 'CA'],    // DMA 10
 ];
 
 // ── Service types: mobile / independent / at-home providers ONLY. Mirrors YP. ──

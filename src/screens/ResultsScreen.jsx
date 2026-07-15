@@ -116,6 +116,21 @@ function buildStatusSteps(providerType /* , opts = {} */) {
 
 const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 
+// CERGIO-GUARD (2026-07-14, launch-02 — SPEC-78): THE canonical post-request
+// waiting copy, dictated verbatim by Tarik. It is the ONE sentence a requester
+// reads while no offer has landed, and it replaces the old split between the
+// "Allow up to 15 minutes…" (instant) and "…up to 24 hours…" (scheduled) lines —
+// the new promise spans both horizons ("15 minutes to a few hours"), so the copy
+// no longer forks on the when-horizon. The horizon logic itself (whenHorizon /
+// isScheduledWhen) is UNCHANGED and still drives booking behaviour; only the
+// sentence is unified.
+//
+// Exported so the screen and the tests read the SAME string — copy asserted by
+// grep against a literal can drift; asserted against the export it cannot.
+// Do not reword without an explicit instruction from Tarik.
+export const WAIT_COPY =
+  "This may take 15 minutes to a few hours to locate and get you a solid offer. We'll notify you the moment we have a match.";
+
 // CERGIO-GUARD (2026-06-03): three calmly cycling dots beside the
 // roaming headline per Tarik — never reads as "stuck." Pure CSS via
 // inline keyframes so we don't need a Tailwind config change.
@@ -164,7 +179,10 @@ function ShareRequestRow({ previewLead, shareMsg, onForward, onCopy }) {
       >
         Forward to friends →
       </button>
-      <span className="text-b3 font-medium">· earn ${REWARDS.perFriendUser} per friend</span>
+      {/* A1h (QA 2026-07-14, SPEC-57): $250 is a CAP that accrues at 7% of each
+          PAID booking — not a flat bounty for forwarding. "up to … as they book"
+          is the only honest short form. */}
+      <span className="text-b3 font-medium">· earn up to ${REWARDS.perFriendUser} as they book</span>
     </div>
   );
 }
@@ -178,15 +196,21 @@ function ShareRequestRow({ previewLead, shareMsg, onForward, onCopy }) {
 // window.confirm; now two-state inline:
 //   default → "Cancel request" (calm green)
 //   armed   → "Confirm cancel  ·  Keep roaming" (red + neutral pair)
-// Auto-disarms after 4 seconds so a stale armed state doesn't trigger
-// an accidental cancel later.
+// Auto-disarms so a stale armed state doesn't trigger an accidental
+// cancel later — but NOT in 4s. QA UX walk (2026-07-13 22:30) could not
+// cancel a live request twice in a row: the "Confirm cancel" affordance
+// expired before a human could read it and move the cursor to it, so a
+// user is stuck with a dead request. 12s is still far too short to arm
+// an accidental cancel, and long enough to actually be usable.
+const CANCEL_DISARM_MS = 12000;
+
 function CancelRequestLink({ requestId, onCancelled }) {
   const [pending, setPending] = useState(false);
   const [armed,   setArmed]   = useState(false);
 
   useEffect(() => {
     if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 4000);
+    const t = setTimeout(() => setArmed(false), CANCEL_DISARM_MS);
     return () => clearTimeout(t);
   }, [armed]);
 
@@ -1044,14 +1068,15 @@ export function ResultsScreen() {
           <div className="flex items-center gap-3">
             <LeafLogo working={true} size={48} intensity={liveStatus.intensity} />
             <div className="flex-1 min-w-0">
+              {/* CERGIO-GUARD (2026-07-14, launch-02 / SPEC-78): while nothing has
+                  landed, the user reads exactly ONE promise — WAIT_COPY. Real
+                  progress ("2 replies in — 8 notified.") still supersedes it,
+                  because that is a fact, not a promise. The old instant/scheduled
+                  copy fork is retired; do not reintroduce it. */}
               <p className="text-meta-sm text-b3 font-normal leading-snug">
                 {liveReplied > 0
                   ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
-                  : isInstant
-                    ? (instantTimedOut
-                        ? "No one's available right now — we'll keep matching and notify you the moment someone can."
-                        : "Allow up to 15 minutes for nearby services to confirm and reply.")
-                    : "We'll notify you — it can take up to 24 hours to locate and negotiate the best offers."}
+                  : WAIT_COPY}
               </p>
               {requestId && (
                 <CancelRequestLink

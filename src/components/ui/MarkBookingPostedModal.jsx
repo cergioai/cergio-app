@@ -211,8 +211,10 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
                       {copied ? 'Copied ✓' : 'Copy'}
                     </button>
                   </div>
+                  {/* A1h (QA 2026-07-14, SPEC-57): a signup through the link credits $0.
+                      The 7% accrues on each PAID booking, up to the $250 per-friend cap. */}
                   <p className="text-meta-sm text-b2 mt-1.5 leading-snug">
-                    Every signup through your link earns you <span className="font-extrabold text-gd">7% of their spend, up to $250</span>.
+                    Every friend who books through your link earns you <span className="font-extrabold text-gd">7% of their spend, up to $250</span>.
                   </p>
                   {earn && (earn.earnedCents > 0 || earn.pendingCents > 0) && (
                     <p className="text-meta-sm text-gd font-extrabold mt-1.5 pt-1.5 border-t border-g/20">

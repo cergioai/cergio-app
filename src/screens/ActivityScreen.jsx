@@ -702,12 +702,17 @@ export function ActivityScreen() {
             </button>
           </div>
 
+          {/* A1g/A1h (QA 2026-07-14, SPEC-57): a friend-of-friend SIGNUP credits $0 —
+              credit_referral_for_booking only fires on a PAID booking, accruing
+              chainSharePercent (0.5%) up to the $12.50 cap. This line promised the
+              $12.50 on a signup, i.e. money for an event that pays nothing. Chain
+              copy must always read as a booking share + a cap, never a signup bounty. */}
           <p className="text-meta-sm text-b3 leading-snug mt-1">
             Every friend who joins + books earns you {' '}
             <span className="font-extrabold text-black">${REWARDS.perFriendUser} credit</span>{' '}
             (up to ${REWARDS.perFriend}) — plus {' '}
             <span className="font-extrabold text-black">${REWARDS.friendOfFriendBonusStr}</span>{' '}
-            per friend-of-friend signup.
+            as each friend-of-friend books ({REWARDS.chainSharePercent}% of every booking).
           </p>
         </div>
       )}

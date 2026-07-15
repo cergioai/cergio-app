@@ -433,6 +433,38 @@ async function fetchRecommendersByServiceId(serviceIds) {
   return map;
 }
 
+/**
+ * rankProviders — THE best-match order for a covered area (launch-03, SPEC-78).
+ *
+ * Tarik 2026-07-14: "best match = highest rating + closest distance."
+ *
+ * Deterministic and total, so the same three providers always come back in the
+ * same order (a ranking that ties non-deterministically is a ranking you cannot
+ * test, and a user who reloads and sees a different "best match" does not trust
+ * the list):
+ *   1. RATING first  — rating_avg descending. Quality is the primary signal.
+ *   2. DISTANCE next — distance_miles ascending. Closest wins the tie.
+ *   3. rating_count, then id — final tie-breakers so the order is stable across
+ *      runs even when rating AND distance are identical.
+ *
+ * Unrated (null rating) sorts BELOW any rated provider rather than pretending to
+ * be a 0.0 — an unrated provider is unknown, not bad. Missing distance sorts last.
+ *
+ * Pure: takes rows, returns a NEW sorted array. Exported so qa.mjs can assert the
+ * order directly on known fixtures, with no DB and no browser.
+ */
+export function rankProviders(rows = []) {
+  const rating = (s) => (typeof s?.rating_avg === 'number' ? s.rating_avg : -1);
+  const dist   = (s) => (typeof s?.distance_miles === 'number' ? s.distance_miles : 9e9);
+  const count  = (s) => (typeof s?.rating_count === 'number' ? s.rating_count : 0);
+  return [...rows].sort((a, b) =>
+    (rating(b) - rating(a)) ||
+    (dist(a)   - dist(b))   ||
+    (count(b)  - count(a))  ||
+    String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
+  );
+}
+
 export async function listServices({
   category = null,
   offering_id = null,
@@ -521,13 +553,11 @@ export async function listServices({
     const offMap = {};
     (offs || []).forEach(o => { (offMap[o.service_id] ||= []).push(o); });
 
-    let filtered = (full || [])
-      .map(s => ({
-        ...s,
-        distance_miles: distById[s.id],
-        offerings: offMap[s.id] || [],
-      }))
-      .sort((a, b) => (a.distance_miles ?? 9e9) - (b.distance_miles ?? 9e9));
+    let filtered = rankProviders((full || []).map(s => ({
+      ...s,
+      distance_miles: distById[s.id],
+      offerings: offMap[s.id] || [],
+    })));
     // CERGIO-GUARD: matching is STRICT on provider_type — this is the
     // trust model from the spec. Users asking for "unclog toilet"
     // expect ONLY plumbers to surface (and be notified). Showing a
@@ -878,6 +908,32 @@ export async function saveAddress({ label, formattedAddress, lat, lng, placeId, 
 
   // ─── Path 1: bulletproof user_metadata write ──────────────────────────
   // This ALWAYS works for any signed-in user — no table required.
+  //
+  // CERGIO-GUARD (2026-07-14, launch-06 — THE ADDRESS THAT VANISHED OVERNIGHT):
+  // this function's own docblock promises "returns success as long as path 1
+  // succeeded". The code did not honour that in EITHER direction:
+  //   • A path-1 FAILURE was only console.warn'd, then path 2's missing-table
+  //     branch returned `{ error: null }` — i.e. the app reported SAVED while
+  //     NOTHING had persisted server-side. The address lived only in
+  //     localStorage, and the next storage eviction / other device / other
+  //     browser lost it. That is precisely "saved last night, gone this
+  //     morning": no server row ever existed to restore from.
+  //   • A path-2 error (RLS, constraint, anything not a missing table) MASKED a
+  //     perfectly good path-1 write and surfaced "Server sync failed" for an
+  //     address that was, in fact, durably saved.
+  // Both are fixed by tracking whether the durable write actually landed, and
+  // telling the truth about it. `persisted` is the honest signal for callers.
+  let metaOk = false;
+  const metaRow = makeDefault ? {
+    id:                'meta',
+    formatted_address: formattedAddress,
+    lat:               lat ?? null,
+    lng:               lng ?? null,
+    place_id:          placeId ?? null,
+    label:             label || 'Home',
+    is_default:        true,
+  } : null;
+
   if (makeDefault) {
     const metaPayload = {
       formatted_address: formattedAddress,
@@ -894,9 +950,7 @@ export async function saveAddress({ label, formattedAddress, lat, lng, placeId, 
       // eslint-disable-next-line no-console
       console.warn('[saveAddress] user_metadata write failed:', metaErr.message);
     } else {
-      // Path 1 succeeded — capture for caller. Path 2 is best-effort below.
-      // Even if Path 2 fails entirely (no migration), we return success.
-      // The metadata copy is the canonical source going forward.
+      metaOk = true; // the address is now DURABLE — it survives storage clears.
     }
   }
 
@@ -939,19 +993,29 @@ export async function saveAddress({ label, formattedAddress, lat, lng, placeId, 
     .select()
     .single();
 
-  // Schema-cache miss (table not yet migrated): swallow + warn so the
-  // local chip + localStorage path still works without a red toast.
+  // Schema-cache miss (table not yet migrated): the metadata path is the
+  // canonical store anyway, so this is only fatal if path 1 ALSO failed.
   if (isMissingAddressesTable(error)) {
     logMissingAddresses('saveAddress', error);
-    return { data: null, error: null };
+    if (metaOk) return { data: metaRow, error: null, persisted: 'metadata' };
+    return {
+      data: null,
+      persisted: 'none',
+      error: { message: 'Could not save your address — you may be signed out. Sign in and try again.' },
+    };
   }
-  if (error) return { data: null, error };
+  // A real table error (RLS / constraint / network) must NOT mask a durable
+  // path-1 write. If the address is safely in user_metadata, this succeeded.
+  if (error) {
+    if (metaOk) return { data: metaRow, error: null, persisted: 'metadata' };
+    return { data: null, error, persisted: 'none' };
+  }
 
   if (shouldBeDefault) {
     await supabase.rpc('set_default_address', { target_id: data.id });
     data.is_default = true;
   }
-  return { data, error: null };
+  return { data, error: null, persisted: metaOk ? 'metadata+table' : 'table' };
 }
 
 /** Flip the given row to default; clears default on every other row. */
@@ -3166,6 +3230,30 @@ export async function createRequestAndFanOut({
   }
   const uid = userRes.user.id;
 
+  // CERGIO-GUARD (2026-07-14, QA live walk — DUPLICATE REQUESTS): one submit
+  // wrote TWO identical `requests` rows 753ms apart (verified live: two
+  // "Electrician …" rows at 16:08:04.127 and 16:08:04.880). Same class as the
+  // SPEC-60 duplicate-listings bug, same fix: before inserting, return any
+  // PENDING request this user already made with the SAME query in the last 2
+  // minutes — idempotent no matter how the caller fires (re-rendered effect,
+  // double-tap, retry). Fan-out is skipped for the dupe: the first row already
+  // notified the providers, so re-fanning would double-notify them.
+  {
+    const since = new Date(Date.now() - 120000).toISOString();
+    const { data: dupes } = await supabase
+      .from('requests')
+      .select('*')
+      .eq('requester_id', uid)
+      .eq('status', 'pending')
+      .eq('query', (query || '').slice(0, 500))
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (dupes && dupes.length) {
+      return { request: dupes[0], notified: 0, error: null, deduped: true };
+    }
+  }
+
   // 1) Anchor the search as a real row so notifications + bids can
   //    point at it. RLS check (`auth.uid()=requester_id`) is satisfied
   //    by the insert payload.
@@ -3317,6 +3405,13 @@ export async function createRequestToProvider({
   // provider's inbox renders it identically.
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
   const deep_link = `${origin}/results?req=${request.id}`;
+  // CERGIO-GUARD (2026-07-14, launch-05 — SELF-NOTIFY): requesting your OWN
+  // listing (own PDP, or a stale owner id) must never notify you as the
+  // provider. The request row still stands; only the self-notification is
+  // suppressed. SPEC-78.
+  if (toProviderOwnerId === uid) {
+    return { request, error: null, selfNotifySuppressed: true };
+  }
   await supabase.from('notifications').insert({
     profile_id: toProviderOwnerId,
     kind:       'new_request',
@@ -3374,11 +3469,18 @@ export async function crossPostRequest({
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://cergio.ai';
   const deep_link = `${origin}/results?req=${requestId}`;
+  // CERGIO-GUARD (2026-07-14, launch-05 — SELF-NOTIFY): a requester who also
+  // owns a matching listed service in radius was fanned out their OWN request
+  // ("you have a new request near you" for a request they just made). The
+  // fan-out path (createRequestAndFanOut) already excluded `uid`; this one only
+  // excluded the originally-targeted provider, so the requester leaked back in.
+  // The requester is NEVER a recipient of their own request — SPEC-78.
   const ownerIds = Array.from(new Set(
     (provs || [])
       .map(s => s.owner_id)
       .filter(Boolean)
       .filter(id => id !== excludeOwnerId)
+      .filter(id => id !== uid)
   ));
   if (ownerIds.length === 0) return { notified: 0, error: null };
 
@@ -3782,9 +3884,20 @@ export async function listMyOpenSearchRequests({ limit = 20 } = {}) {
   const { data: userRes } = await supabase.auth.getUser();
   if (!userRes?.user) return { data: [], error: null };
 
+  // CERGIO-GUARD (2026-07-14, QA live walk — A1e was DEAD in production):
+  // this select asked for `requests.city`, a column that DOES NOT EXIST
+  // (verified live: PostgREST 400 / SQLSTATE 42703 "column requests.city
+  // does not exist"). PostgREST rejects the WHOLE query on one unknown
+  // column, so every user's "Your open requests" pile came back empty —
+  // a request you just made never appeared, exactly the A1e failure the
+  // spec forbids. The caller's .catch() swallowed it (SPEC-73/74: a
+  // failure must never read as an empty success). Only columns verified
+  // to exist on `requests` may be named here; the row renderer
+  // (SearchRequestRow) needs service_type + scheduled_at + created_at.
+  // `location_text` is the real column — there is no `city`.
   return await supabase
     .from('requests')
-    .select('id, created_at, status, service_type, description, scheduled_at, city, lat, lng')
+    .select('id, created_at, status, service_type, description, scheduled_at, location_text, lat, lng')
     .eq('requester_id', userRes.user.id)
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
