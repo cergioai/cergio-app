@@ -159,6 +159,18 @@ export const PROVIDER_TYPE_MAP = [
   // (lives in OUT_OF_SCOPE_PROVIDER_TYPES in data/providerTypes.js).
 
   // ── fitness / wellness ───────────────────────────────────────────────
+  // CERGIO-GUARD (2026-07-14, QA live walk — SPEC-67c confident-wrong):
+  // "need dog trainer tuesday" resolved to Personal Trainer (the bare
+  // 'trainer' key), so a dog-training request notified gym trainers and no
+  // dog trainer ever saw it. 'Dog Trainer' / 'Puppy Trainer' are real
+  // provider types (src/data/providerTypes.js) — the longer key wins the
+  // longest-match pass, so these must sit alongside the generic one.
+  ['dog trainer',          'Dog Trainer'],
+  ['dog training',         'Dog Trainer'],
+  ['puppy trainer',        'Dog Trainer'],
+  ['puppy training',       'Dog Trainer'],
+  ['train my dog',         'Dog Trainer'],
+  ['obedience training',   'Dog Trainer'],
   ['personal trainer',     'Personal Trainer'],
   ['trainer',              'Personal Trainer'],
   ['fitness trainer',      'Personal Trainer'],

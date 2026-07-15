@@ -18,6 +18,7 @@ import { AddressAutocomplete } from '../components/ui/AddressAutocomplete';
 import { LocationEditModal } from '../components/ui/LocationEditModal';
 import { ServiceAreaMapPicker } from '../components/ui/ServiceAreaMapPicker';
 import { getMyCcStatus, getDefaultAddress, saveAddress, listMyServices } from '../lib/api';
+import { resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
 import { REWARDS, REWARD_COPY } from '../lib/rewards';
 
 // Rotating example overlays — shown one at a time inside the search box
@@ -320,6 +321,10 @@ export function HomeScreen() {
   const [planDone, setPlanDone] = useState(false);
   const [engineStarted, setEngineStarted] = useState(false);
   const timersRef = useRef([]);
+  // CERGIO-GUARD (2026-07-14, QA): one submitted query = at most one
+  // `requests` row. Holds the query text already written (see the fan-out
+  // effect below) so a re-rendered effect can never double-insert.
+  const firedQueryRef = useRef(null);
 
   // Mode-aware plan reference — rebuilt on each submit so the inline log
   // reflects the latest intent and any seeded data.
@@ -404,22 +409,41 @@ export function HomeScreen() {
     (async () => {
       const { verifyAddress } = await import('../lib/google');
       const v = await verifyAddress(where);
-      if (!v.ok) return; // unverified — don't promote to canonical default
-      setLocationText(v.address);
-      setLocationCoords({ lat: v.lat, lng: v.lng });
-      try {
-        localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
-          address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId,
-        }));
-      } catch { /* ignore */ }
+
+      // CERGIO-GUARD (2026-07-14, launch-06 — THE ADDRESS THAT VANISHED):
+      // this used to `return` when the geocoder could not verify the address,
+      // so an UNVERIFIED address was never handed to saveAddress and lived in
+      // localStorage ALONE. With Google geocoding degraded (and Nominatim
+      // missing plenty of real apartment addresses), that is the common case,
+      // not the edge case — and the moment the browser evicted localStorage
+      // (ITP's 7-day cap, a cleared cache, a second device) the address the
+      // user "saved last night" was gone by morning, with no server copy to
+      // restore from.
+      //
+      // The user's address is the user's address. We persist it either way.
+      // What verification controls is the COORDS, not whether we remember it:
+      // an unverified address is stored as typed with null coords, and a later
+      // successful verification upgrades it in place. Search re-verifies before
+      // it needs lat/lng, so a coordless default can never silently mis-target
+      // a search (the geocode-required-on-list invariant is untouched).
+      if (v.ok) {
+        setLocationText(v.address);
+        setLocationCoords({ lat: v.lat, lng: v.lng });
+        try {
+          localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+            address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId,
+          }));
+        } catch { /* ignore */ }
+      }
       if (auth?.isSignedIn) {
         saveAddress({
           label: 'Home',
-          formattedAddress: v.address,
-          lat: v.lat, lng: v.lng,
-          placeId: v.placeId,
+          formattedAddress: v.ok ? v.address : where,
+          lat:     v.ok ? v.lat     : null,
+          lng:     v.ok ? v.lng     : null,
+          placeId: v.ok ? v.placeId : null,
           makeDefault: true,
-        }).catch(() => { /* metadata write path 1 succeeds anyway */ });
+        }).catch(() => { /* best-effort; localStorage still holds it this session */ });
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -653,6 +677,14 @@ export function HomeScreen() {
     if (chat?.phase !== 'ready') return;
     let cancelled = false;
     const t = setTimeout(async () => {
+      // CERGIO-GUARD (2026-07-14, QA live walk — DUPLICATE REQUESTS): this
+      // effect re-runs whenever `chat.state` re-renders while `submitted` is
+      // still true. The cleanup cancels the NAVIGATE but not an in-flight
+      // create, so a second timeout fired a second createRequestAndFanOut →
+      // two identical `requests` rows (and a double provider fan-out). One
+      // submit = one write: fire at most once per submitted query text.
+      if (firedQueryRef.current === submittedText) return;
+      firedQueryRef.current = submittedText;
       let requestId = null;
       let notified  = 0;
       try {
@@ -672,6 +704,25 @@ export function HomeScreen() {
             category     = fresh.data.category || category;
           }
         } catch { /* keep state values */ }
+        // CERGIO-GUARD (2026-07-14, QA live walk — SPEC-67c confident-wrong):
+        // the LOCAL taxonomy is primary at the WRITE, not just for display.
+        // useChat already overrides a wrong cloud provider_type on screen, but
+        // THIS path re-resolved through resolveOffering and wrote the cloud's
+        // answer into requests.service_type + the fan-out filter. Live proof:
+        // "Deep house cleaning at 134 Henry St" was written as
+        // "Data Entry Specialist" (and "need dog trainer" as "Personal
+        // Trainer") — a confident-wrong type notifies the WRONG providers,
+        // i.e. nobody who can do the job. resolveProviderTypeLocal returns the
+        // EXACT string providers register under (taxonomy_provider_type), so
+        // when it has an answer it wins; the cloud resolver stays the long-tail
+        // fallback for everything it doesn't know.
+        const localPT = resolveProviderTypeLocal(s.what || submittedText || '');
+        if (localPT && localPT !== providerType) {
+          // eslint-disable-next-line no-console
+          console.info('[CERGIO/request] local taxonomy override at write: "%s" → "%s" (cloud="%s")',
+            s.what || submittedText, localPT, providerType);
+          providerType = localPT;
+        }
         // Budget comes from the chat parser's `s.budget` — captured via
         // the chat prompt flow (what → when → where → budget).
         const budgetStr = String(s.budget || '');

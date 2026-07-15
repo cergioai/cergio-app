@@ -2961,18 +2961,34 @@ test('referral-money-copy-matches-engine', 'FROZEN: every referral surface state
     .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, '')   // JSX comment blocks
     .replace(/\/\*[\s\S]*?\*\//g, '')             // block comments
     .replace(/^\s*\/\/.*$/gm, '');                // line comments
-  const surfaces = [
-    'src/screens/EarningsScreen.jsx',
-    'src/screens/RainmakerApplyScreen.jsx',
-    'src/screens/ProfileScreen.jsx',
-    'src/lib/rewards.js',
-  ];
+  // QA 2026-07-14 (A1h widening): this test used to scan FOUR hand-listed files.
+  // The live UX walk then found the SAME defect class on two surfaces the list
+  // never covered — /activity ("$12.50 per friend-of-friend signup") and the
+  // spotlight-link modal ("Every signup through your link earns you 7% …").
+  // A money-copy invariant enforced on a hand-picked subset is not an invariant.
+  // Scan EVERY user-facing surface: all screens + all UI components + rewards.js.
+  const walk = (rel) => {
+    const abs = path.join(REPO_ROOT, rel);
+    if (!fs.existsSync(abs)) return [];
+    return fs.readdirSync(abs, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(path.join(rel, e.name))
+        : /\.jsx?$/.test(e.name) ? [path.join(rel, e.name)] : []);
+  };
+  const surfaces = [...walk('src/screens'), ...walk('src/components'), 'src/lib/rewards.js'];
+  assert(surfaces.length >= 20, 'A1h must scan every user-facing surface, not a hand-picked few');
   for (const f of surfaces) {
     const src = codeOf(f);
     assert(!/second-tier signups?/i.test(src),
       `${f}: a second-tier SIGNUP credits $0 — the chain bonus accrues on their BOOKINGS (SPEC-57 / A1h)`);
     assert(!/REWARDS\.friendOfFriendPercent/.test(src),
       `${f}: friendOfFriendPercent (5) is a % of the $250 CAP, not the booking share — user-facing rate copy must use REWARDS.chainSharePercent (0.5%) (SPEC-57 / A1h)`);
+    // No surface may promise money for a SIGNUP: credit_referral_for_booking
+    // only fires on a PAID booking. Covers "per friend-of-friend signup",
+    // "per second-tier signup", "Every signup … earns you 7%".
+    assert(!/(?:friend-of-friend|friend of friend|second-tier|2nd-tier)\s+sign-?ups?/i.test(src),
+      `${f}: the chain bonus accrues on a friend-of-friend's BOOKINGS, never on their signup (SPEC-57 / A1h)`);
+    assert(!/every\s+sign-?up[^.]{0,60}(?:earn|credit|\$)/i.test(src),
+      `${f}: "every signup … earns" promises money for an event that credits $0 — say "every friend who books" (SPEC-57 / A1h)`);
   }
   // The chain rate that IS shown must be the engine's rate.
   const earn = codeOf('src/screens/EarningsScreen.jsx');
@@ -3253,6 +3269,429 @@ test('scheduled-branch-write-time', 'FROZEN (SPEC-47): the scheduled-vs-instant 
   const lblock = lb.slice(0, lb.indexOf(');') + 2);
   assert(/bookedAtMs \+ 12 \* 3600 \* 1000/.test(lblock) && /schedule_confirmed_at/.test(lblock),
     'qa-live.mjs must assert the same write-time invariant (shared check_name → no drift)');
+});
+
+// ─── #76 · THE COO MAY NOT INVENT COLUMNS ────────────────────────────────────
+// 12 autonomous actions failed with Postgres 42703 — `column "handle" does not
+// exist (hint: perhaps you meant "leads_influencers.ig_handle")` and `column
+// "website" does not exist`. coo-brain authored SQL against a HALLUCINATED schema
+// and nothing between the model and Postgres ever checked the column names: the
+// allowlist only asked "single reversible UPDATE of a lead table with a WHERE?",
+// which a doomed statement passes perfectly. Shape was checked; meaning was not.
+//
+// This test locks the fix: (a) ONE canonical schema contract, byte-identical in
+// coo-brain and coo-execute; (b) the REAL column lists, with the hallucinated
+// names provably absent; (c) the prompt actually CARRIES the real columns; and
+// (d) the shipped validator, EXECUTED against the two payloads that really died —
+// they must be rejected, and honest payloads must still pass.
+const SCHEMA_CONTRACT_WORKERS = ['coo-brain', 'coo-execute'];
+const CONTRACT_START = '// ─── LEAD-TABLE SCHEMA CONTRACT — DO NOT FORK ─';
+const CONTRACT_END   = '// ─── END LEAD-TABLE SCHEMA CONTRACT ─';
+
+test('coo-schema-contract', 'FROZEN: coo-brain/coo-execute carry ONE byte-identical schema contract with the REAL lead-table columns, the prompt is built from it, and any SQL payload naming a column that does not exist is REJECTED before it runs (the 42703 that killed 12 actions)', '#76', async () => {
+  // 1) ONE contract, present in both, byte-identical (they deploy separately — a
+  //    fork would re-open the hole in whichever copy drifted).
+  const blocks = new Map();
+  for (const w of SCHEMA_CONTRACT_WORKERS) {
+    const src = readFile(`supabase/functions/${w}/index.ts`);
+    const i = src.indexOf(CONTRACT_START);
+    assert(i > -1, `${w}: must define the canonical LEAD-TABLE SCHEMA CONTRACT block (the real column lists + the pre-flight validator)`);
+    const jEnd = src.indexOf(CONTRACT_END, i);
+    assert(jEnd > -1, `${w}: schema contract block is not terminated by the END marker`);
+    blocks.set(w, src.slice(i, jEnd));
+  }
+  const [first, ...rest] = [...blocks.entries()];
+  for (const [w, body] of rest) {
+    assert(body === first[1],
+      `${w}: its schema contract has drifted from the canonical copy in ${first[0]} — one forked column list is one hallucinating agent`);
+  }
+
+  // 2) Strip the (eight) TS annotations and EXECUTE the shipped code.
+  const js = first[1]
+    .replace('type LeadColumns = { leads_services: string[]; leads_influencers: string[] };', '')
+    .replace('const LEAD_COLUMNS_FALLBACK: LeadColumns = {', 'const LEAD_COLUMNS_FALLBACK = {')
+    .replace('function sqlColumnsOk(raw: string, cols: LeadColumns): { ok: boolean; why?: string } {', 'function sqlColumnsOk(raw, cols) {')
+    .replace('const unknown: string[] = [];', 'const unknown = [];')
+    .replace('const LEAD_BOOLEAN_COLUMNS: Record<string, string[]> = {', 'const LEAD_BOOLEAN_COLUMNS = {')
+    .replace('function typesOk(stmt: string, table: string): { ok: boolean; why?: string } {', 'function typesOk(stmt, table) {')
+    .replace('const bad: string[] = [];', 'const bad = [];')
+    .replace('async function liveLeadColumns(url: string, key: string): Promise<LeadColumns> {', 'async function liveLeadColumns(url, key) {');
+  assert(!/:\s*LeadColumns|:\s*string\b|string\[\]|Record<|Promise</.test(js),
+    'the schema contract gained a TS annotation this test does not strip — update the stripper');
+  const { sqlColumnsOk, LEAD_COLUMNS_FALLBACK, liveLeadColumns, LEAD_BOOLEAN_COLUMNS } =
+    new Function(`${js}\nreturn { sqlColumnsOk, LEAD_COLUMNS_FALLBACK, liveLeadColumns, LEAD_BOOLEAN_COLUMNS };`)();
+  assert(typeof sqlColumnsOk === 'function', 'sqlColumnsOk must be a function');
+  assert(typeof liveLeadColumns === 'function',
+    'the contract must also read the LIVE column list (an un-applied ALTER must not produce a doomed payload)');
+
+  // 3) The column lists are the REAL ones — and the hallucinations are provably absent.
+  const S = LEAD_COLUMNS_FALLBACK.leads_services;
+  const I = LEAD_COLUMNS_FALLBACK.leads_influencers;
+  for (const c of ['id', 'name', 'service_type', 'website_url', 'instagram', 'has_instagram', 'city', 'outreach_status'])
+    assert(S.includes(c), `leads_services column list is missing the real column "${c}"`);
+  for (const c of ['id', 'ig_handle', 'external_url', 'category', 'followers', 'discovered_via', 'outreach_status'])
+    assert(I.includes(c), `leads_influencers column list is missing the real column "${c}"`);
+  assert(!I.includes('handle'), 'leads_influencers must NOT list "handle" — the real column is ig_handle (this exact guess failed 42703 in production)');
+  assert(!S.includes('website') && !I.includes('website'), 'neither table has a "website" column — services use website_url, creators use external_url');
+  assert(!S.includes('category'), 'leads_services has NO "category" column — the category lives in service_type');
+
+  // 4) THE REGRESSION, EXECUTED. The two payloads that actually died must be rejected.
+  const bogusHandle = "UPDATE public.leads_influencers SET outreach_status='do_not_contact' WHERE handle ilike '%news%'";
+  const r1 = sqlColumnsOk(bogusHandle, LEAD_COLUMNS_FALLBACK);
+  assert(r1.ok === false, 'a payload referencing leads_influencers.handle MUST be rejected — it is column-does-not-exist [42703]');
+  assert(/handle/.test(r1.why) && /ig_handle/.test(r1.why),
+    `the rejection must NAME the bad column and the real one (Postgres gave us that hint only after it failed) — got: ${r1.why}`);
+
+  // 4b) THE 42804 REGRESSION (action #97, 2026-07-14). The name check passed and
+  // the statement STILL died: `IS NOT TRUE` on an integer column — "argument of IS
+  // TRUE must be type boolean, not type integer". A real column with the wrong TYPE
+  // is the same class of hallucination as a fake column; it must be caught BEFORE it
+  // runs, and the refusal must say which columns actually are boolean.
+  assert(LEAD_BOOLEAN_COLUMNS && Array.isArray(LEAD_BOOLEAN_COLUMNS.leads_services),
+    'the contract must declare which lead columns are boolean — a type nobody states is a type the model invents');
+  const badType = "UPDATE public.leads_influencers SET outreach_status='queued' WHERE outreach_status='new' AND phone_verified_level IS NOT TRUE";
+  const rT = sqlColumnsOk(badType, LEAD_COLUMNS_FALLBACK);
+  assert(rT.ok === false,
+    'IS NOT TRUE on a non-boolean column MUST be rejected — this is Postgres 42804, the error that killed autonomous action #97');
+  assert(/phone_verified_level/.test(rT.why) && /42804/.test(rT.why),
+    `the rejection must name the offending column and the error class — got: ${rT.why}`);
+  // ...and a LEGITIMATE boolean comparison must still sail through untouched.
+  assert(sqlColumnsOk("UPDATE public.leads_services SET outreach_status='queued' WHERE has_instagram IS TRUE", LEAD_COLUMNS_FALLBACK).ok === true,
+    'has_instagram IS TRUE is valid (it really is boolean) — the type guard must not block good SQL');
+
+  const bogusWebsite = "UPDATE public.leads_services SET website='x' WHERE id='1'";
+  const r2 = sqlColumnsOk(bogusWebsite, LEAD_COLUMNS_FALLBACK);
+  assert(r2.ok === false, 'a payload referencing leads_services.website MUST be rejected — the real column is website_url [42703]');
+  assert(/website/.test(r2.why), `the rejection must name the bad column — got: ${r2.why}`);
+
+  // A bogus column ANYWHERE (SET side, WHERE side, or a made-up flag) is caught.
+  assert(sqlColumnsOk("UPDATE public.leads_services SET is_mobile=true WHERE city='Miami'", LEAD_COLUMNS_FALLBACK).ok === false,
+    'an invented boolean flag (is_mobile) must be rejected');
+  assert(sqlColumnsOk("UPDATE public.leads_influencers SET category='fitness' WHERE follower_count > 1000", LEAD_COLUMNS_FALLBACK).ok === false,
+    'follower_count does not exist (the real column is followers) — must be rejected');
+
+  // 5) HONEST payloads must still auto-run — a validator that rejects everything is
+  //    just a slower outage. These are the worked examples from the COO prompt.
+  const good = [
+    "UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\.com/')",
+    "UPDATE public.leads_services SET outreach_status='do_not_contact' WHERE outreach_status IN ('queued','new') AND lower(coalesce(service_type,'')||' '||coalesce(name,'')) ~ 'restaurant|cafe|diner|eatery'",
+    "UPDATE public.leads_influencers SET outreach_status='queued' WHERE outreach_status='new' AND email IS NOT NULL AND city='Miami'",
+    "UPDATE leads_influencers SET tier='Micro' WHERE followers < 10000 AND tier IS NULL",
+    "UPDATE public.leads_services SET service_type='mobile detailing' WHERE lower(name) LIKE '%detail%' AND service_type IS NULL",
+  ];
+  for (const g of good) {
+    const v = sqlColumnsOk(g, LEAD_COLUMNS_FALLBACK);
+    assert(v.ok === true, `an on-spec payload using only REAL columns must pass — rejected "${g.slice(0, 60)}…" with: ${v.why}`);
+  }
+
+  // 6) NOT A DUMB GREP: words that merely appear inside a string literal, a cast, a
+  //    comment or a function name are not column references. If this fails, the
+  //    validator would gate honest work and the founder's queue fills with noise.
+  const literalTrap = "UPDATE public.leads_services SET outreach_status='do_not_contact' WHERE lower(coalesce(service_type,'')||' '||coalesce(name,'')) ~ 'website|handle|category'";
+  assert(sqlColumnsOk(literalTrap, LEAD_COLUMNS_FALLBACK).ok === true,
+    'a bad column NAME inside a string literal is not a column reference — the validator must tokenize, not grep');
+  assert(sqlColumnsOk("UPDATE public.leads_services s SET s.outreach_status='queued' WHERE s.city='Miami'", LEAD_COLUMNS_FALLBACK).ok === true,
+    'a table alias must be understood, not reported as an unknown column');
+  assert(sqlColumnsOk("UPDATE public.leads_influencers SET outreach_status='queued' WHERE created_at::date = current_date", LEAD_COLUMNS_FALLBACK).ok === true,
+    'a ::cast type name is not a column reference');
+
+  // 7) THE PROMPT CARRIES THE REAL COLUMNS. The model can only stop guessing if it
+  //    is given the list — so the system prompt is BUILT from the live schema.
+  const brain = readFile('supabase/functions/coo-brain/index.ts');
+  assert(/const leadCols = await liveLeadColumns\(supabaseUrl, serviceKey\)/.test(brain),
+    'coo-brain must read the LIVE column list on every run');
+  assert(/system: buildSystem\(leadCols\)/.test(brain),
+    'coo-brain must build the system prompt FROM the live column list (not a hard-coded guess)');
+  const si = brain.indexOf('function schemaContract(cols: LeadColumns): string {');
+  assert(si > -1, 'coo-brain must render the column lists into the prompt via schemaContract(cols)');
+  const sEnd = /\n\}\n/.exec(brain.slice(si));
+  // The prompt is rendered from the CONTRACT's own data (column list + the boolean
+  // set), so it is evaluated with LEAD_BOOLEAN_COLUMNS injected from the contract
+  // we just executed — one source of truth, no second hard-coded copy to drift.
+  const scJs = `const LEAD_BOOLEAN_COLUMNS = ${JSON.stringify(LEAD_BOOLEAN_COLUMNS)};\n`
+    + brain.slice(si, si + sEnd.index + sEnd[0].length)
+      .replace('function schemaContract(cols: LeadColumns): string {', 'function schemaContract(cols) {');
+  const schemaContract = new Function(`${scJs}\nreturn schemaContract;`)();
+  const prompt = schemaContract(LEAD_COLUMNS_FALLBACK);
+  for (const c of ['ig_handle', 'website_url', 'external_url', 'service_type', 'has_instagram', 'discovered_via'])
+    assert(prompt.includes(c), `the model prompt must NAME the real column "${c}"`);
+  assert(/NO "handle"/.test(prompt) && /NO "website"/.test(prompt),
+    'the prompt must explicitly kill the two hallucinations that failed live ("handle" / "website")');
+  // The TYPE hallucination (42804, action #97) must be killed in the prompt too —
+  // the model can only stop writing `IS NOT TRUE` on an integer if it is told which
+  // columns are actually boolean.
+  assert(/42804/.test(prompt) && /IS TRUE/.test(prompt),
+    'the prompt must warn about 42804 — IS TRUE/IS NOT TRUE on a non-boolean column (how action #97 died)');
+  for (const b of LEAD_BOOLEAN_COLUMNS.leads_services)
+    assert(prompt.includes(b), `the prompt must list the real boolean column "${b}"`);
+
+  // 8) coo-brain re-checks what the model hands back, and DOWNGRADES a doomed
+  //    payload to requires_approval instead of shipping it.
+  assert(/payloadVerdict\(action_kind, action_payload, leadCols\)/.test(brain),
+    "coo-brain must re-verify the model's payload against the live columns before allowing auto-run");
+  assert(/const schemaBad = action_kind === 'sql' && !verdict\.ok/.test(brain),
+    'coo-brain must detect a schema-invalid SQL payload specifically');
+  assert(/if \(schemaBad\) \{ action_kind = 'none'; action_payload = ''; \}/.test(brain),
+    'a payload naming a non-existent column must be STRIPPED (approving it would just re-ship the 42703) — not left runnable');
+  assert(/\[GATED — \$\{verdict\.why\}/.test(brain),
+    'the gate must record WHY, on the proposal the founder reads');
+
+  // 9) coo-execute re-checks AGAIN (defense in depth) and never runs a doomed
+  //    statement: it hands it back to the founder instead of failing it into the
+  //    execution log for the 13th time.
+  const exec = readFile('supabase/functions/coo-execute/index.ts');
+  assert(/const leadCols = await liveLeadColumns\(supabaseUrl, serviceKey\)/.test(exec),
+    'coo-execute must read the live column list too (never trust the brain)');
+  const sqlBranch = exec.slice(exec.indexOf("if (kind === 'sql') {"), exec.indexOf("} else if (kind === 'edge_call')"));
+  assert(/const c = sqlColumnsOk\(payload, leadCols\);/.test(sqlBranch),
+    'coo-execute must run the pre-flight schema check on the SQL payload');
+  assert(sqlBranch.indexOf('sqlColumnsOk') < sqlBranch.indexOf('cergio_coo_exec_sql'),
+    'the schema check must happen BEFORE the statement is sent to Postgres');
+  assert(/gated = true;/.test(sqlBranch),
+    'a schema-invalid payload must be GATED, not executed');
+  assert(/if \(gated\) \{[\s\S]{0,600}?requires_approval: true, status: 'pending'/.test(exec),
+    'a gated payload must go back to the founder (requires_approval=true) — and, since the executor only picks up requires_approval=false, it can never loop');
+  assert(/status: 'refused'/.test(exec),
+    "the execution log must record the refusal (status='refused') so a still-hallucinating brain stays visible");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LAUNCH BLOCKERS — founder-reported on the live URL, 2026-07-14 (SPEC-78).
+//
+// Five defects Tarik hit walking his own product. Each test below is the
+// regression guard for one of them and is named `spec-<requirementId>` — the
+// id prefix auto-build.mjs:447 reads to flip the ledger row
+// (cergio_verify_requirement) from open → verified once it is green on main.
+// Requirement rows are seeded by
+// supabase/migrations/20260714000000_req_launch_blockers.sql.
+//
+// Strip comments but KEEP template literals + strings: these tests assert on
+// JSX handlers (navigate(`/u/${id}`)) and on user-facing copy, both of which
+// the global stripComments() would erase.
+// ═══════════════════════════════════════════════════════════════════════════
+function codeNoComments(rel) {
+  return readFile(rel)
+    .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, '')  // JSX comment blocks
+    .replace(/\/\*[\s\S]*?\*\//g, '')            // block comments
+    .replace(/^\s*\/\/.*$/gm, '');               // line comments
+}
+
+// ─── launch-02: THE waiting copy, verbatim ──────────────────────────────
+// Tarik dictated one sentence for the post-request wait. The screen used to
+// fork between "Allow up to 15 minutes…" (instant) and "…up to 24 hours…"
+// (scheduled); neither is what he asked for.
+const WAIT_COPY_REQUIRED =
+  "This may take 15 minutes to a few hours to locate and get you a solid offer. We'll notify you the moment we have a match.";
+
+test('spec-launch-02', 'FROZEN: post-request wait copy is Tarik\'s exact sentence', 'launch-02', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  // 1) The copy is a single exported constant, so screen + test read ONE string.
+  const m = src.match(/export const WAIT_COPY\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*;/);
+  assert(m, 'ResultsScreen must export a WAIT_COPY string constant (one source of truth for the wait sentence)');
+  const shipped = new Function(`return ${m[1]};`)();
+  assert(shipped === WAIT_COPY_REQUIRED,
+    `WAIT_COPY must be VERBATIM the founder's sentence.\n  want: ${JSON.stringify(WAIT_COPY_REQUIRED)}\n  got:  ${JSON.stringify(shipped)}`);
+
+  // 2) The waiting/results state actually RENDERS it — a constant nobody uses
+  //    is not shipped copy. Real progress ("2 replies in") may supersede it.
+  const code = codeNoComments('src/screens/ResultsScreen.jsx');
+  assert(/liveReplied > 0[\s\S]{0,240}?:\s*WAIT_COPY\}/.test(code),
+    'the waiting state (no replies yet) must render WAIT_COPY');
+
+  // 3) The OLD copy is gone from every user-facing surface.
+  const banned = [
+    [/Allow up to 15 minutes/i, 'the old instant-wait line'],
+    [/up to 24 hours to locate and negotiate/i, 'the old scheduled-wait line'],
+  ];
+  const surfaces = walkSync(path.join(REPO_ROOT, 'src')).filter(f => /\.jsx?$/.test(f));
+  for (const f of surfaces) {
+    const rel = path.relative(REPO_ROOT, f);
+    const c = codeNoComments(rel);
+    for (const [re, what] of banned) {
+      assert(!re.test(c), `${rel}: ${what} is retired — the ONE wait sentence is WAIT_COPY (launch-02 / SPEC-78)`);
+    }
+  }
+});
+
+// ─── launch-03: best match = highest rating, then closest ────────────────
+test('spec-launch-03', 'FROZEN: provider ranking in a covered area = rating DESC, then distance ASC', 'launch-03', async () => {
+  const src = readFile('src/lib/api.js');
+  const start = src.indexOf('export function rankProviders');
+  assert(start > 0, 'lib/api.js must export rankProviders — the ONE best-match order (launch-03)');
+  const end = src.indexOf('\n}\n', start);
+  assert(end > start, 'could not delimit rankProviders');
+  const fnSrc = src.slice(start, end + 2).replace('export function', 'function');
+  const rankProviders = new Function(`${fnSrc}\nreturn rankProviders;`)();
+  assert(typeof rankProviders === 'function', 'rankProviders must be a pure, executable function');
+
+  // Deterministic fixture: three providers, known rating + distance.
+  //   c — 5.0★ but 30mi   → best RATING wins the list
+  //   b — 4.9★ and  2mi   → closest of the two 4.9s
+  //   a — 4.9★ and  8mi
+  const input = [
+    { id: 'a', rating_avg: 4.9, rating_count: 40, distance_miles: 8 },
+    { id: 'b', rating_avg: 4.9, rating_count: 12, distance_miles: 2 },
+    { id: 'c', rating_avg: 5.0, rating_count: 3,  distance_miles: 30 },
+  ];
+  const order = rankProviders(input).map(s => s.id);
+  assert(order.join(',') === 'c,b,a',
+    `best match = highest rating, then closest — expected c,b,a; got ${order.join(',')}`);
+
+  // An unrated provider is UNKNOWN, not bad — it must not outrank a rated one
+  // just by being nearby (and a missing distance sorts last, never first).
+  const withUnrated = rankProviders([
+    { id: 'unrated-near', distance_miles: 1 },
+    { id: 'rated-far', rating_avg: 4.2, distance_miles: 20 },
+  ]).map(s => s.id);
+  assert(withUnrated[0] === 'rated-far',
+    'a rated provider must outrank an unrated one (null rating ≠ 0.0 — it is unknown)');
+  const noDist = rankProviders([
+    { id: 'no-dist', rating_avg: 5 },
+    { id: 'has-dist', rating_avg: 5, distance_miles: 9 },
+  ]).map(s => s.id);
+  assert(noDist[0] === 'has-dist', 'a provider with no distance must not beat one with a real distance');
+
+  // Total + stable: same input → same output, input never mutated.
+  const before = input.map(s => s.id).join(',');
+  assert(rankProviders(input).map(s => s.id).join(',') === order.join(','), 'ranking must be deterministic across runs');
+  assert(input.map(s => s.id).join(',') === before, 'rankProviders must be pure — it may not mutate its input');
+
+  // The live search path must USE it: the proximity branch of listServices
+  // ranked by distance ONLY (a 3.1★ next door beat a 5.0★ two miles away).
+  const pStart = src.indexOf('if (lat != null && lng != null)');
+  assert(pStart > 0, 'proximity branch of listServices not found');
+  const branch = src.slice(pStart, pStart + 4000);
+  assert(/rankProviders\(/.test(branch),
+    'the covered-area (proximity) branch must order results with rankProviders');
+  assert(!/\.sort\(\(a, b\) => \(a\.distance_miles \?\? 9e9\) - \(b\.distance_miles \?\? 9e9\)\)/.test(branch),
+    'the distance-ONLY sort is retired — it ignores rating (launch-03)');
+});
+
+// ─── launch-04: the requester's name/avatar opens their profile ──────────
+test('spec-launch-04', 'FROZEN: /inbound/:reqId links the requester to their profile', 'launch-04', async () => {
+  const code = codeNoComments('src/screens/RequestFromConnectorScreen.jsx');
+
+  // The loader must carry the requester's id — you cannot link to a profile
+  // you never resolved.
+  assert(/requesterId:\s*requester\.id/.test(code),
+    'RequestFromConnectorScreen must resolve data.requesterId from the request row');
+
+  // The identity block must render whenever we know WHO asked — it used to
+  // render only for Connectors / IG-havers / bio-havers, so a plain requester
+  // had no identity block and therefore no route to their profile at all.
+  assert(/data\.requesterId \|\| data\.isConnector/.test(code),
+    'the requester identity block must render whenever data.requesterId exists (not only for Connectors)');
+
+  // The avatar AND the name are the affordances a user reaches for. Both must
+  // be clickable and both must go to the app's existing profile route.
+  const LINK = /onClick=\{\(\) => navigate\(`\/u\/\$\{data\.requesterId\}`\)\}/;
+  assert(LINK.test(code), 'the requester must link to /u/:requesterId (the app profile route)');
+  assert(new RegExp(LINK.source + '[\\s\\S]{0,320}?<Avatar', 'm').test(code),
+    "the requester's AVATAR must open their profile (it was dead text)");
+  assert(new RegExp(LINK.source + '[\\s\\S]{0,400}?\\{data\\.requesterName\\}', 'm').test(code),
+    "the requester's NAME must open their profile (it was dead text)");
+
+  // …and that route must exist, or the link is a 404.
+  assert(/path="\/u\/:profileId"/.test(readFile('src/App.jsx')),
+    'App.jsx must route /u/:profileId to the public profile — the link target');
+});
+
+// ─── launch-05: a user is NEVER notified about their own request ─────────
+test('spec-launch-05', 'FROZEN: the requester is never in the notify/dispatch set', 'launch-05', async () => {
+  // ── (a) SERVER-SIDE, the last gate before an email/SMS leaves the building.
+  const fn = readFile('supabase/functions/notify-request/index.ts');
+  assert(/id, requester_id, service_type/.test(fn),
+    'notify-request must select requests.requester_id — the authoritative identity of the requester');
+  const m = fn.match(/const providerIds = requested\.filter\(([\s\S]*?)\);/);
+  assert(m, 'notify-request/handleCreated must derive providerIds by FILTERING the caller-supplied list');
+
+  // EXECUTE the shipped filter (TS annotation stripped) against a recipient
+  // list that contains the requester — the exact live failure.
+  const expr = m[1].replace(/:\s*string/g, '');
+  const filterRecipients = new Function('requested', 'requesterId',
+    `return requested.filter(${expr});`);
+  const REQUESTER = 'req-uuid-1111';
+  const out = filterRecipients(['prov-a', REQUESTER, 'prov-b', null, REQUESTER], REQUESTER);
+  assert(!out.includes(REQUESTER),
+    'THE BUG: the requester was in the dispatch set — a user must never be notified as a provider for their own request');
+  assert(out.join(',') === 'prov-a,prov-b',
+    `every OTHER provider must still be notified (self-notify guard must not nuke the fan-out) — got ${JSON.stringify(out)}`);
+
+  // The send loop must iterate the FILTERED list, not the raw payload.
+  assert(/for \(const pid of providerIds\)/.test(fn) && !/for \(const pid of requested\)/.test(fn),
+    'the send loop must iterate the filtered providerIds — filtering into a variable nobody sends to is not a fix');
+
+  // ── (b) CLIENT-SIDE: every path that writes a kind='new_request' row must
+  //        exclude the requester too (the in-app bell is a notification too).
+  const api = readFile('src/lib/api.js');
+  const slice = (name) => {
+    const s = api.indexOf(`export async function ${name}(`);
+    assert(s > 0, `lib/api.js must export ${name}`);
+    const e = api.indexOf('\n}\n', s);
+    return api.slice(s, e);
+  };
+  const fanout = slice('createRequestAndFanOut');
+  assert(/\.filter\(id => id !== uid\)/.test(fanout),
+    'createRequestAndFanOut must exclude the requester (uid) from the notified owner ids');
+  const cross = slice('crossPostRequest');
+  assert(/\.filter\(id => id !== uid\)/.test(cross),
+    'crossPostRequest must exclude the requester (uid) — it only excluded the originally-targeted provider, so the requester leaked back in');
+  const toProv = slice('createRequestToProvider');
+  const guard = toProv.indexOf('if (toProviderOwnerId === uid)');
+  assert(guard > 0,
+    'createRequestToProvider must suppress the notification when the requester IS the provider (own listing)');
+  assert(guard < toProv.indexOf("from('notifications')"),
+    'the self-notify guard must run BEFORE the notifications insert, not after');
+});
+
+// ─── launch-06: a saved location survives the night ──────────────────────
+test('spec-launch-06', 'FROZEN: a saved address is persisted durably and reloaded, never clobbered', 'launch-06', async () => {
+  const api = readFile('src/lib/api.js');
+
+  // ── SAVE: user_metadata is the durable store (it needs no migration and
+  //    survives a localStorage eviction). saveAddress must TRACK whether that
+  //    write landed and must never report success when nothing persisted —
+  //    that silent lie is how an address "saved last night" was gone by morning.
+  const sStart = api.indexOf('export async function saveAddress(');
+  assert(sStart > 0, 'lib/api.js must export saveAddress');
+  const save = api.slice(sStart, api.indexOf('\n}\n', sStart));
+  assert(/supabase\.auth\.updateUser\(\{\s*\n?\s*data: \{ default_address:/.test(save),
+    'saveAddress must write the default address to user_metadata (the durable, migration-free store)');
+  assert(/let metaOk = false;/.test(save) && /metaOk = true;/.test(save),
+    'saveAddress must track whether the durable write actually landed (metaOk)');
+  assert(!/return \{ data: null, error: null \};/.test(save),
+    'THE BUG: saveAddress returned success with NOTHING persisted (missing-table branch swallowed a failed metadata write)');
+  assert(/if \(metaOk\) return \{ data: metaRow, error: null, persisted: 'metadata' \};/.test(save),
+    'a durable metadata write must be reported as saved even when the user_addresses table errors (it must not be masked as a failure)');
+  assert(/persisted: 'none'/.test(save),
+    'when nothing persisted, saveAddress must say so — the caller may not paint "Saved ✓" over a lost address');
+
+  // ── LOAD: the canonical read prefers user_metadata over the (optional) table
+  //    and must not fall back to a default that overwrites it.
+  const gStart = api.indexOf('export async function getDefaultAddress(');
+  assert(gStart > 0, 'lib/api.js must export getDefaultAddress');
+  const load = api.slice(gStart, api.indexOf('\n}\n', gStart));
+  assert(load.indexOf('user_metadata?.default_address') > 0,
+    'getDefaultAddress must read the durable user_metadata copy');
+  assert(load.indexOf('user_metadata?.default_address') < load.indexOf("from('user_addresses')"),
+    'the durable metadata copy must be read FIRST — the table is the optional mirror');
+
+  // ── The screen: an address the geocoder cannot verify is STILL the user's
+  //    address. It used to `return` before saveAddress, so it lived in
+  //    localStorage alone and died with the next storage eviction.
+  const home = codeNoComments('src/screens/HomeScreen.jsx');
+  assert(!/if \(!v\.ok\) return;/.test(home),
+    'THE BUG: an unverified address was never persisted server-side (early return before saveAddress)');
+  assert(/formattedAddress: v\.ok \? v\.address : where/.test(home),
+    'HomeScreen must persist the typed address even when verification fails (coords stay null; the address is remembered)');
+  // …and the load path re-hydrates it on session start without clobbering it.
+  assert(/getDefaultAddress\(\)\.then\(async \(\{ data \}\) => \{[\s\S]{0,200}?setLocationText\(data\.formatted_address\)/.test(home),
+    'HomeScreen must load the saved default address on session start');
+  const promote = home.indexOf('Server has no default');
+  assert(home.includes('await saveAddress({'),
+    'HomeScreen must promote a local-only address to the server when the server has none (never the reverse)');
+  assert(promote === -1 || promote < home.indexOf('await saveAddress({'),
+    'the promotion must only happen when the server has NO default — a server address may never be overwritten by a local default');
 });
 
 main().catch(e => {

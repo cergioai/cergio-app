@@ -97,12 +97,22 @@ serve(async (req: Request) => {
       .limit(perRun);
     if (jobsErr) throw jobsErr;
 
-    // Google Places jobs need the key; YP jobs don't. Only hard-fail if we have
-    // Places jobs and no key.
-    const havePlacesJobs = (jobs ?? []).some((j) => (j.source ?? 'google_places') !== 'yellowpages');
-    if (havePlacesJobs && !placesKey) {
-      return json({ error: 'GOOGLE_PLACES_API_KEY not set (needed for google_places jobs; yellowpages jobs are unaffected)' }, 500);
-    }
+    // ── RECOVERY (2026-07-14 FORENSIC) ────────────────────────────────────────
+    // Un-burn jobs that a previous run stamped 'failed' purely because the Google
+    // account was denied (billing). Those jobs were never bad — they were victims
+    // of an account state. Put them back in the queue; they now drain via OSM.
+    await db.from('crawl_requests')
+      .update({ status: 'new', updated_at: new Date().toISOString() })
+      .eq('status', 'failed')
+      .or('notes.ilike.%REQUEST_DENIED%,notes.ilike.%places-infra%,notes.ilike.%enable Billing%');
+
+    // 2026-07-14 (FORENSIC): a missing/denied Places key is NO LONGER fatal. The
+    // crawl falls back to OpenStreetMap Overpass — keyless, free, no billing
+    // account — so the services engine can never be taken offline by a Google
+    // billing/quota state. placesDown latches for the rest of the run once Google
+    // returns an infrastructure status (REQUEST_DENIED / OVER_QUERY_LIMIT).
+    let placesDown = !placesKey;
+    let placesDownReason = placesKey ? '' : 'GOOGLE_PLACES_API_KEY not set';
 
     const out: Array<Record<string, unknown>> = [];
     for (const job of jobs ?? []) {
@@ -139,6 +149,19 @@ serve(async (req: Request) => {
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (placesDown) {
+          // ── FREE fallback: OpenStreetMap Overpass (keyless, no billing) ─────
+          // Reached when Google Places is denied/over-quota/unkeyed. OSM carries
+          // the crawl at zero cost and zero credentials (constitution: free-first).
+          const r = await fulfillOverpass(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: saved === 0
+              ? `no OpenStreetMap results for this city/type (places down: ${placesDownReason})`
+              : `osm-fallback (places down: ${placesDownReason})`,
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else {
           // ── Google Places path (unchanged legacy behaviour) ─────────────────
           const want = Math.min(Math.max(job.target_count || 10, 1), 20);
@@ -149,7 +172,18 @@ serve(async (req: Request) => {
           const tsRes = await fetch(tsUrl);
           const ts = await tsRes.json();
           if (ts.status && ts.status !== 'OK' && ts.status !== 'ZERO_RESULTS') {
-            throw new Error(`Places: ${ts.status}${ts.error_message ? ' — ' + ts.error_message : ''}`);
+            const st  = String(ts.status);
+            const em  = String(ts.error_message || '');
+            // INFRASTRUCTURE status (billing disabled, key denied, quota) — this is
+            // an ACCOUNT state, not a bad job. Latch placesDown so every remaining
+            // job this run goes to the free OSM path, and throw a typed error so the
+            // catch below RE-QUEUES this job instead of burning it to 'failed'.
+            if (/REQUEST_DENIED|OVER_QUERY_LIMIT|BILLING_NOT_ENABLED/i.test(st) || /billing/i.test(em)) {
+              placesDown = true;
+              placesDownReason = `${st}${em ? ' — ' + em : ''}`.slice(0, 200);
+              throw new PlacesInfraError(placesDownReason);
+            }
+            throw new Error(`Places: ${st}${em ? ' — ' + em : ''}`);
           }
           const results = (ts.results || []).slice(0, want);
           found = results.length;
@@ -205,6 +239,22 @@ serve(async (req: Request) => {
         out.push({ id: job.id, source, query, found, saved });
       } catch (e) {
         const msg = serr(e);
+        // ── INFRASTRUCTURE failure ≠ job failure ──────────────────────────────
+        // 2026-07-14 (FORENSIC): Google Places started returning REQUEST_DENIED
+        // (billing disabled). The old code stamped every such job 'failed', which
+        // at the */2 cron × 40 jobs BURNED ~1,200 queued jobs/hour permanently —
+        // silently destroying the crawl queue while the dashboard showed 'error'.
+        // An account-state error must put the job BACK to 'new' so it is retried
+        // (the next job in this run already falls through to the free OSM source).
+        if (e instanceof PlacesInfraError) {
+          await db.from('crawl_requests').update({
+            status: 'new',
+            notes: `places-infra (re-queued, not burned): ${msg}`.slice(0, 500),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
+          out.push({ id: job.id, error: msg, infra: true });
+          continue;
+        }
         const blocked = e instanceof YpBlockedError || /^yp-blocked/i.test(msg);
         // A block page is stamped 'failed' with a distinct 'yp-blocked' note — NOT
         // 'delivered' — so the queue is not silently drained to delivered-0 and the
@@ -467,6 +517,182 @@ function ypLooksBlocked(status: number, html: string): boolean {
   const hasListingStructure = /application\/ld\+json|business-name/i.test(body);
   if (!hasListingStructure && YP_BLOCK_MARKERS.test(body.slice(0, 20000))) return true;
   return false;
+}
+
+// ── Google Places ACCOUNT-STATE error (billing off / key denied / over quota) ──
+// Typed so the job loop can tell "Google's account is down" (re-queue the job,
+// switch the whole run to the free OSM source) apart from "this job is bad"
+// (stamp it failed). Conflating the two burned the queue at 1,200 jobs/hr.
+class PlacesInfraError extends Error {
+  constructor(msg: string) { super(msg); this.name = 'PlacesInfraError'; }
+}
+
+// ── FREE, KEYLESS SERVICES SOURCE: OpenStreetMap via Overpass ─────────────────
+// Constitution law: free-first. Google Places needs a billing account; Overpass
+// needs nothing — no key, no card, no quota approval. Coverage is thinner than
+// Google for mobile providers, but it is NON-ZERO and it cannot be switched off
+// by an account state, so the crawl always has a floor. Rows land in the same
+// leads_services bucket with data_source='osm' (so their origin is auditable)
+// and, unlike some Places rows, they ALWAYS carry lat/lon → they are immediately
+// visible to services_near (historic failure #9: NULL lat/lng = invisible).
+const OSM_ENDPOINT = 'https://overpass-api.de/api/interpreter';
+
+// service_type → OSM tag selectors. Keys mirror crawl-seed-google-places'
+// SERVICE_TYPES. Unmapped types fall back to a name-substring search so a new
+// service type never silently yields zero.
+const OSM_TAGS: Record<string, string[]> = {
+  'plumber':            ['"craft"="plumber"', '"shop"="plumber"'],
+  'electrician':        ['"craft"="electrician"'],
+  'hvac':               ['"craft"="hvac"', '"craft"="heating_engineer"'],
+  'handyman':           ['"craft"="handyman"'],
+  'house cleaning':     ['"shop"="cleaning"', '"office"="cleaning"', '"craft"="cleaning"'],
+  'maid service':       ['"shop"="cleaning"', '"office"="cleaning"'],
+  'landscaping':        ['"craft"="gardener"', '"shop"="garden_centre"', '"landuse"="landscaping"'],
+  'lawn care':          ['"craft"="gardener"'],
+  'tree service':       ['"craft"="tree_service"', '"craft"="gardener"'],
+  'pest control':       ['"craft"="pest_control"', '"shop"="pest_control"'],
+  'mover':              ['"shop"="moving_company"', '"office"="moving_company"'],
+  'junk removal':       ['"amenity"="waste_transfer_station"', '"shop"="scrap_yard"'],
+  'painter':            ['"craft"="painter"'],
+  'roofing':            ['"craft"="roofer"'],
+  'flooring':           ['"craft"="floorer"', '"shop"="flooring"'],
+  'window cleaning':    ['"craft"="window_construction"', '"shop"="cleaning"'],
+  'pressure washing':   ['"shop"="cleaning"'],
+  'gutter cleaning':    ['"craft"="roofer"'],
+  'pool cleaning':      ['"craft"="pool_maintenance"', '"shop"="swimming_pool"'],
+  'appliance repair':   ['"shop"="appliance"', '"craft"="electronics_repair"'],
+  'locksmith':          ['"craft"="locksmith"', '"shop"="locksmith"'],
+  'garage door repair': ['"craft"="door_construction"'],
+  'fencing':            ['"craft"="fence_maker"'],
+  'drywall':            ['"craft"="plasterer"'],
+  'carpet cleaning':    ['"shop"="cleaning"'],
+  'photographer':       ['"craft"="photographer"', '"shop"="photo"', '"shop"="photo_studio"'],
+  'videographer':       ['"craft"="photographer"', '"shop"="video"'],
+  'personal trainer':   ['"leisure"="fitness_centre"', '"sport"="fitness"'],
+  'yoga instructor':    ['"sport"="yoga"'],
+  'pilates instructor': ['"sport"="pilates"'],
+  'nutrition coach':    ['"healthcare"="nutrition_counselling"', '"shop"="nutrition_supplements"'],
+  'hair stylist':       ['"shop"="hairdresser"'],
+  'barber':             ['"shop"="hairdresser"'],
+  'nail technician':    ['"shop"="nails"', '"beauty"="nails"'],
+  'lash technician':    ['"shop"="beauty"'],
+  'dog walker':         ['"shop"="pet_grooming"', '"amenity"="animal_boarding"'],
+  'dog grooming':       ['"shop"="pet_grooming"'],
+  'pet sitting':        ['"amenity"="animal_boarding"'],
+  'mobile mechanic':    ['"shop"="car_repair"'],
+  'auto detailing':     ['"amenity"="car_wash"'],
+  'car wash':           ['"amenity"="car_wash"'],
+  'tutor':              ['"amenity"="prep_school"', '"office"="educational_institution"'],
+  'music teacher':      ['"amenity"="music_school"'],
+  'bookkeeping':        ['"office"="accountant"', '"shop"="accountant"'],
+  'tax preparation':    ['"office"="tax_advisor"', '"office"="accountant"'],
+  'computer repair':    ['"shop"="computer"', '"craft"="electronics_repair"'],
+  'tech support':       ['"shop"="computer"', '"office"="it"'],
+  'interior designer':  ['"shop"="interior_decoration"', '"office"="interior_design"'],
+  'home staging':       ['"shop"="interior_decoration"'],
+  'solar installer':    ['"craft"="solar"', '"shop"="solar"'],
+  'window tinting':     ['"shop"="car_repair"'],
+  'wedding planner':    ['"shop"="wedding"', '"office"="event_management"'],
+  'event planner':      ['"office"="event_management"', '"shop"="party"'],
+};
+
+// USPS code → full state name. REQUIRED: a bare area["name"="Miami"] in Overpass
+// also matches Miami, QUEENSLAND, AUSTRALIA — verified live 2026-07-14 (returned
+// +61 phone numbers at lat −28). Every city area must be nested inside its US
+// state area, and every row re-checked against the continental-US bbox below.
+const US_STATES: Record<string, string> = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',
+  DE:'Delaware',DC:'District of Columbia',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',
+  IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',
+  MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',
+  NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',
+  NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',
+  RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',
+  VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+};
+// Continental US + AK/HI bbox — a belt-and-braces guard so a geo-ambiguous OSM
+// area can never land a foreign business in leads_services.
+function inUS(lat: number, lon: number): boolean {
+  return lat >= 18 && lat <= 72 && lon >= -180 && lon <= -66;
+}
+
+async function fulfillOverpass(db: any, job: any): Promise<{ saved: number; found: number; query: string }> {
+  const type  = (job.service_type || '').toLowerCase().trim();
+  const city  = (job.city || '').trim();
+  const state = (job.state || 'FL').trim();
+  const want  = Math.min(Math.max(job.target_count || 10, 1), 25);
+  const query = `${type || 'local service'} in ${[city, state].filter(Boolean).join(', ')} [osm]`;
+  if (!city) return { saved: 0, found: 0, query };
+
+  const selectors = OSM_TAGS[type] ?? [`"name"~"${type.replace(/[^a-z ]/gi, '')}",i`];
+  const stateName = US_STATES[state.toUpperCase()];
+  if (!stateName) return { saved: 0, found: 0, query }; // unknown state → refuse to guess
+
+  // The city area is scoped to the US state area (admin_level 4) as a first pass.
+  // VERIFIED LIVE 2026-07-14: this scoping is BEST-EFFORT — Overpass still let
+  // Miami, QUEENSLAND through (19 of 59 rows came back at lat −28 with +61 phone
+  // numbers). The hard guarantee is therefore NOT this query, it is the inUS()
+  // bbox check on every row below. Do not remove that check.
+  const body = `[out:json][timeout:60];
+area["name"="${stateName}"]["admin_level"="4"]->.s;
+area(area.s)["name"="${city.replace(/"/g, '')}"]["boundary"="administrative"]->.a;
+(${selectors.map((s) => `  nwr(area.a)[${s}];`).join('\n')}
+);
+out center ${want * 2};`;
+
+  const res = await fetch(OSM_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'CergioServicesCrawl/1.0 (+https://cergio.ai)' },
+    body: `data=${encodeURIComponent(body)}`,
+  });
+  if (!res.ok) throw new Error(`Overpass ${res.status}`);
+  const j = await res.json().catch(() => ({ elements: [] }));
+  const els: any[] = (j.elements || []).filter((e: any) => e?.tags?.name);
+
+  let saved = 0;
+  const seen = new Set<string>();
+  for (const el of els.slice(0, want)) {
+    const t = el.tags || {};
+    const name = cleanText(t.name);
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+
+    const phone   = normPhone(t.phone || t['contact:phone'] || '');
+    const website = pickWebsite(t.website || t['contact:website'] || null);
+    const ig      = t['contact:instagram'] || null;
+    const lat     = el.lat ?? el.center?.lat ?? null;
+    const lon     = el.lon ?? el.center?.lon ?? null;
+    // A row with no lat/lon is invisible to services_near — don't write it
+    // (historic failure #9). And a row outside the US is a geo-ambiguity bug, not
+    // a lead — drop it rather than poison the sendable pool.
+    if (lat == null || lon == null || !inUS(Number(lat), Number(lon))) continue;
+
+    const email = website ? await scrapeEmail(website) : null;
+    const addr  = [t['addr:housenumber'], t['addr:street'], t['addr:city'] || city, t['addr:state'] || state]
+      .filter(Boolean).join(' ').trim() || null;
+
+    const row = {
+      id: `osm:${el.type}/${el.id}`,
+      name,
+      service_type: job.service_type || null,
+      phone, phone_origin: phone ? 'osm' : null,
+      website_url: website,
+      owner_email: email,
+      instagram: ig,
+      has_instagram: !!ig,
+      address: addr,
+      city: t['addr:city'] || city || null,
+      state,
+      lat, lon,
+      data_source: 'osm',
+      fetched_at: new Date().toISOString(),
+      outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'
+      outreach_notes: `auto-sourced via OpenStreetMap (${city}) ${new Date().toISOString().slice(0, 10)}`,
+    };
+    const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    if (!upErr) saved++;
+  }
+  return { saved, found: els.length, query };
 }
 
 class YpBlockedError extends Error {

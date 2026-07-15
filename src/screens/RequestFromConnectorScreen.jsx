@@ -400,16 +400,47 @@ export function RequestFromConnectorScreen() {
       </div>
 
       {/* requester block — identity (avatar · bio · services) ABOVE the IG box;
-          mutual friends BELOW the IG box (Tarik 2026-06-14). */}
-      {(data.isConnector || data.igHandle || data.bio) && (
+          mutual friends BELOW the IG box (Tarik 2026-06-14).
+          CERGIO-GUARD (2026-07-14, launch-04): this block used to render only
+          when the requester was a Connector OR had an IG handle OR a bio — so a
+          plain requester had NO identity block at all, and with it went the only
+          route to their profile. SPEC-48 says the requester block shows ALWAYS.
+          It now renders whenever we know who the requester is. */}
+      {(data.requesterId || data.isConnector || data.igHandle || data.bio) && (
         <div className="px-5 pb-3">
           <div className="bg-white border border-line rounded-[16px] p-5">
-            {/* identity: avatar + name + Connector badge + IG counts + bio */}
+            {/* identity: avatar + name + Connector badge + IG counts + bio.
+                CERGIO-GUARD (2026-07-14, launch-04): the avatar + name are the
+                affordance every user reaches for to open a profile — they were
+                dead text. They are now a single link to /u/:requesterId (the
+                "See full profile" link below stays as the explicit CTA). */}
             <div className="flex items-start gap-3">
-              <Avatar name={data.requesterName} size={48} />
+              {data.requesterId ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/u/${data.requesterId}`)}
+                  aria-label={`Open ${data.requesterName}'s profile`}
+                  className="shrink-0 rounded-full active:scale-[.97] transition-transform"
+                >
+                  <Avatar name={data.requesterName} size={48} />
+                </button>
+              ) : (
+                <Avatar name={data.requesterName} size={48} />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-heading-2 font-extrabold text-black truncate">{data.requesterName}</p>
+                  {data.requesterId ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/u/${data.requesterId}`)}
+                      aria-label={`Open ${data.requesterName}'s profile`}
+                      className="text-heading-2 font-extrabold text-black truncate text-left hover:underline underline-offset-2"
+                    >
+                      {data.requesterName}
+                    </button>
+                  ) : (
+                    <p className="text-heading-2 font-extrabold text-black truncate">{data.requesterName}</p>
+                  )}
                   {data.isConnector && <ConnectorChip />}
                 </div>
                 {/* Headline — below the Connector badge, above the IG count. */}

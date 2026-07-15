@@ -26,19 +26,64 @@ jobs:
       - name: Flow QA (qa.mjs — the spec journey checks)
         run: node scripts/qa.mjs
 
-  # NEXT LAYER — E2E (Playwright) real-browser journeys against spec.
-  # Requires a one-time `npm install -D @playwright/test` on the Mac (updates the
-  # lockfile), then e2e/*.spec.ts per spec journey (search→request address holds,
-  # instant/scheduled messaging, no false paid banner, no dead-ends). Once the
-  # dep + specs are in, uncomment the job below and it gates every deploy.
+  # BEHAVIOURAL LAYER — E2E (Playwright) real-browser journeys against spec.
   #
-  # e2e:
-  #   runs-on: ubuntu-latest
-  #   needs: build-and-qa
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with: { node-version: '20', cache: 'npm' }
-  #     - run: npm ci
-  #     - run: npx playwright install --with-deps chromium
-  #     - run: npx playwright test
+  # build-and-qa is a CODE-INVARIANT gate: it greps the source for the shape of a
+  # fix. A well-shaped STUB passes a grep. This job closes that hole — it boots the
+  # real built app in headless chromium, drives the real journeys (search → results
+  # with the address held and no false paid banner; instant vs scheduled copy;
+  # request → provider accept → confirmed booking) and asserts on what the USER
+  # SEES and what the app actually WROTE.
+  #
+  # Hermetic: Supabase is served from the seeded world at the network boundary
+  # (e2e/support/), so this needs NO secrets, runs on any PR including forks, and
+  # can never touch production data. A red journey fails the PR.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build-and-qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Install headless chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E journeys (fails the PR on a broken journey)
+        run: npx playwright test
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-trace
+          path: |
+            playwright-report/
+            test-results/
+            e2e-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # LEDGER — a red journey is a FINDING, not just a red check. Mirrors how
+  # qa-live.mjs / the qa-suite edge fn wire their failures into qa_findings, so the
+  # watchdog can escalate a stale broken journey exactly like any other defect.
+  # Runs only on main (the ledger records what is true of SHIPPED code) and only
+  # when the secrets exist — a fork PR must never be able to write findings.
+  e2e-ledger:
+    runs-on: ubuntu-latest
+    needs: e2e
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Record the E2E outcome in qa_findings
+        env:
+          # Same secret names the other workflows already use.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+        run: node scripts/e2e-ledger.mjs

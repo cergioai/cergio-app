@@ -9,6 +9,178 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target
 const MODEL = 'claude-opus-4-8'; // highest-intelligence model for COO judgment (upgraded from haiku)
 const j = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
 
+// ─── LEAD-TABLE SCHEMA CONTRACT — DO NOT FORK ────────────────────────────────
+// 12 autonomous actions died with Postgres 42703 — `column "handle" does not
+// exist (hint: perhaps you meant to reference the column
+// "leads_influencers.ig_handle")` and `column "website" does not exist` — because
+// the model authored SQL against a HALLUCINATED schema and NOTHING between the
+// model and Postgres ever checked the column names. The old allowlist only asked
+// "is this a single reversible UPDATE of a lead table with a WHERE?" — a doomed
+// statement passes that test perfectly. Shape was checked; meaning was not.
+//
+// So the column list is now DATA, carried byte-identically by coo-brain (which
+// injects it into the model prompt AND re-checks the payload it gets back) and
+// coo-execute (which re-checks again immediately before running anything). A
+// payload naming a column that does not exist is REFUSED and routed to the
+// founder — it is never shipped to the database to fail.
+//
+// The fallback list is the DDL truth (leads_services / leads_influencers as
+// created by the services-crawl handoff `01_leads_tables.sql`, plus the two
+// additive ALTERs: leads_services.has_instagram and
+// leads_influencers.enrich_attempted_at). At RUN TIME we prefer the LIVE column
+// list read from PostgREST's OpenAPI spec, so an ALTER that has not actually been
+// applied yet can never produce a payload referencing a column the database does
+// not really have.
+//
+// qa.mjs #76 asserts the two copies never drift, and unit-tests this validator
+// against the exact two payloads that failed live.
+type LeadColumns = { leads_services: string[]; leads_influencers: string[] };
+
+const LEAD_COLUMNS_FALLBACK: LeadColumns = {
+  leads_services: [
+    'id', 'name', 'service_type', 'phone', 'phone_origin', 'website_url', 'address',
+    'city', 'state', 'zip', 'lat', 'lon', 'osm_id', 'yelp_url', 'cl_post_url',
+    'instagram', 'facebook', 'owner_email', 'data_source', 'fetched_at', 'has_instagram',
+    'outreach_status', 'outreach_last_at', 'outreach_notes', 'invited_at',
+    'signed_up_profile_id', 'signed_up_at', 'created_at', 'updated_at',
+  ],
+  leads_influencers: [
+    'id', 'ig_handle', 'display_name', 'category', 'tier', 'followers', 'email',
+    'phone', 'phone_verified_level', 'email_verified', 'city', 'state', 'bio',
+    'external_url', 'is_business', 'osm_id', 'discovered_via', 'enrich_attempted_at',
+    'outreach_status', 'outreach_last_at', 'outreach_notes', 'invited_at',
+    'signed_up_profile_id', 'signed_up_at', 'created_at', 'updated_at',
+  ],
+};
+
+// Tokens that may legally appear in an UPDATE payload WITHOUT being a column
+// name (keywords, operators-as-words, type names, literal prefixes). Anything
+// left over after these — and after comments, string literals, casts, schema
+// qualifiers, the table name, its alias and function names are stripped — MUST be
+// a real column of the target table.
+const SQL_NON_COLUMN_WORDS = new Set([
+  'update', 'set', 'where', 'from', 'and', 'or', 'not', 'in', 'is', 'null', 'true', 'false',
+  'unknown', 'like', 'ilike', 'similar', 'to', 'between', 'symmetric', 'exists', 'any', 'all',
+  'some', 'case', 'when', 'then', 'else', 'end', 'as', 'asc', 'desc', 'nulls', 'first', 'last',
+  'distinct', 'on', 'using', 'only', 'returning', 'default', 'collate', 'escape', 'interval',
+  'array', 'row', 'values', 'select', 'limit', 'offset', 'order', 'by', 'group', 'having',
+  'with', 'without', 'at', 'time', 'zone', 'current_date', 'current_time', 'current_timestamp',
+  'localtime', 'localtimestamp', 'cast', 'both', 'leading', 'trailing', 'text', 'varchar',
+  'char', 'character', 'int', 'integer', 'int2', 'int4', 'int8', 'bigint', 'smallint', 'numeric',
+  'decimal', 'real', 'double', 'precision', 'boolean', 'bool', 'uuid', 'json', 'jsonb', 'date',
+  'timestamp', 'timestamptz', 'timetz', 'bytea', 'e', 'u', 'n', 'b', 'x',
+]);
+
+// The NAME check above stops 42703. It does NOT stop 42804 — which is what killed
+// action #97 on 2026-07-14: `... IS NOT TRUE` applied to a column that is an
+// INTEGER, not a boolean ("argument of IS TRUE must be type boolean, not type
+// integer"). Same disease as the hallucinated column: the model assumed a type
+// nobody ever told it. So the contract also carries the ONLY boolean columns on
+// each lead table, and `IS [NOT] TRUE/FALSE` is refused on anything else.
+const LEAD_BOOLEAN_COLUMNS: Record<string, string[]> = {
+  leads_services: ['has_instagram'],
+  leads_influencers: ['is_business', 'email_verified'],
+};
+
+function typesOk(stmt: string, table: string): { ok: boolean; why?: string } {
+  const bools = new Set((LEAD_BOOLEAN_COLUMNS[table] || []).map((c) => c.toLowerCase()));
+  const re = /\b([a-z_][a-z0-9_$]*)\s+is\s+(?:not\s+)?(?:true|false)\b/gi;
+  const bad: string[] = [];
+  let m = re.exec(stmt);
+  while (m !== null) {
+    const col = m[1].toLowerCase();
+    if (!bools.has(col) && bad.indexOf(col) === -1) bad.push(col);
+    m = re.exec(stmt);
+  }
+  if (bad.length === 0) return { ok: true };
+  return {
+    ok: false,
+    why: `SCHEMA: \`IS [NOT] TRUE/FALSE\` used on non-boolean column(s) on public.${table}: ${bad.join(', ')} — Postgres 42804 (this is what killed action #97). Boolean columns here: ${[...bools].join(', ') || '(none)'}. Compare with = / <> / IS NULL instead.`,
+  };
+}
+
+// PRE-FLIGHT SCHEMA VALIDATION. Every bare identifier the statement references on
+// the target table must exist, AND every IS TRUE/FALSE must target a boolean.
+// Fails CLOSED: an identifier we cannot account for is reported as unknown (→ the
+// action is gated to the founder), never assumed fine. That is the correct
+// direction — a false gate costs one approval click; a false pass costs another
+// dead autonomous action and another day of blind loop.
+function sqlColumnsOk(raw: string, cols: LeadColumns): { ok: boolean; why?: string } {
+  const stmt = String(raw || '').trim().replace(/;+\s*$/, '');
+  const head = stmt.match(
+    /^\s*update\s+(?:only\s+)?(?:public\s*\.\s*)?(leads_services|leads_influencers)\b\s*(?:as\s+)?([a-z_][a-z0-9_$]*)?/i,
+  );
+  if (!head) return { ok: false, why: 'target table not allowlisted (only leads_services / leads_influencers)' };
+  const table = head[1].toLowerCase();
+  const aliasRaw = String(head[2] || '').toLowerCase();
+  const alias = (aliasRaw && aliasRaw !== 'set') ? aliasRaw : '';
+  const known = table === 'leads_services' ? cols.leads_services : cols.leads_influencers;
+  if (!known || known.length === 0) return { ok: false, why: `no known column list for ${table} — refusing to guess` };
+  const knownSet = new Set(known.map((c) => String(c).toLowerCase()));
+
+  // Strip everything that is NOT a bare column reference, in this order.
+  let s = ' ' + stmt + ' ';
+  s = s.replace(/--[^\n]*/g, ' ');                              // line comments
+  s = s.replace(/\/\*[\s\S]*?\*\//g, ' ');                      // block comments
+  s = s.replace(/\$[a-z0-9_]*\$[\s\S]*?\$[a-z0-9_]*\$/gi, ' '); // dollar-quoted bodies
+  s = s.replace(/'(?:''|[^'])*'/g, ' ');                        // string literals ('a''b' safe)
+  s = s.replace(/"([a-z_][a-z0-9_$]*)"/gi, ' $1 ');             // quoted identifiers -> bare
+  s = s.replace(/::\s*[a-z_][a-z0-9_]*(\s*\[\s*\])?/gi, ' ');   // ::casts
+  s = s.replace(/\bpublic\s*\.\s*/gi, ' ');                     // schema qualifier
+  if (alias) s = s.replace(new RegExp('\\b' + alias + '\\s*\\.\\s*', 'gi'), ' ');
+  s = s.replace(/\b(leads_services|leads_influencers)\s*\.\s*/gi, ' ');
+  s = s.replace(/\b(leads_services|leads_influencers)\b/gi, ' ');
+  if (alias) s = s.replace(new RegExp('\\b' + alias + '\\b', 'gi'), ' ');
+
+  const unknown: string[] = [];
+  const re = /[a-z_][a-z0-9_$]*/gi;
+  let m = re.exec(s);
+  while (m !== null) {
+    const word = m[0];
+    const lower = word.toLowerCase();
+    const isCall = /^\s*\(/.test(s.slice(m.index + word.length)); // lower(...) / coalesce(...) etc.
+    if (!isCall && !SQL_NON_COLUMN_WORDS.has(lower) && !knownSet.has(lower) && unknown.indexOf(lower) === -1) {
+      unknown.push(lower);
+    }
+    m = re.exec(s);
+  }
+  if (unknown.length === 0) return typesOk(stmt, table);
+
+  // Name the real column when we can — this is the hint Postgres gave us AFTER
+  // the action had already failed; give it to the author BEFORE it runs.
+  const hints = unknown.map((u) => {
+    const near = known.find((k) => k.toLowerCase().includes(u) || u.includes(k.toLowerCase()));
+    return near ? `${u} (did you mean ${near}?)` : u;
+  });
+  return {
+    ok: false,
+    why: `SCHEMA: unknown column(s) on public.${table}: ${hints.join(', ')} — this payload would raise Postgres 42703 and fail, exactly like the 12 dead actions. Refusing to ship it.`,
+  };
+}
+
+// LIVE column list, straight from PostgREST's OpenAPI spec (no migration, no RPC
+// needed). Falls back to the DDL list on ANY doubt — a partial or unreadable spec
+// must never silently shrink the known-column set and start rejecting good SQL.
+async function liveLeadColumns(url: string, key: string): Promise<LeadColumns> {
+  try {
+    const r = await fetch(String(url).replace(/\/+$/, '') + '/rest/v1/', {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/openapi+json' },
+    });
+    if (!r.ok) return LEAD_COLUMNS_FALLBACK;
+    const spec = await r.json();
+    const defs = (spec && (spec.definitions || (spec.components && spec.components.schemas))) || {};
+    const svc = defs['leads_services'] && defs['leads_services'].properties
+      ? Object.keys(defs['leads_services'].properties) : [];
+    const inf = defs['leads_influencers'] && defs['leads_influencers'].properties
+      ? Object.keys(defs['leads_influencers'].properties) : [];
+    if (svc.length < 5 || inf.length < 5) return LEAD_COLUMNS_FALLBACK;
+    return { leads_services: svc, leads_influencers: inf };
+  } catch (_e) {
+    return LEAD_COLUMNS_FALLBACK;
+  }
+}
+// ─── END LEAD-TABLE SCHEMA CONTRACT ──────────────────────────────────────────
+
 // ── Payload safety pre-check (mirror of coo-execute's hard allowlist) ─────────
 // coo-brain does NOT trust the model's requires_approval flag blindly; it re-runs
 // the SAME allowlist the executor enforces. This lets an on-spec proposal AUTO-RUN
@@ -53,13 +225,57 @@ function edgePayloadSafe(name: string): boolean {
   return EDGE_ALLOW.has(n);
 }
 
-// Return the safe auto-run verdict for a (kind, payload) pair. This ONLY ever
-// grants auto-run when the payload passes the executor allowlist; anything else
-// is downgraded. It can never upgrade a prohibited action.
-function payloadPassesAllowlist(kind: string, payload: string): boolean {
-  if (kind === 'sql') return sqlPayloadSafe(payload);
-  if (kind === 'edge_call') return edgePayloadSafe(payload);
-  return false;
+// Return the safe auto-run verdict for a (kind, payload) pair, WITH the reason it
+// failed. This ONLY ever grants auto-run when the payload passes the executor
+// allowlist AND every column it names actually exists; anything else is
+// downgraded. It can never upgrade a prohibited action.
+function payloadVerdict(kind: string, payload: string, cols: LeadColumns): { ok: boolean; why?: string } {
+  if (kind === 'sql') {
+    if (!sqlPayloadSafe(payload)) return { ok: false, why: 'payload does not pass the executor SQL allowlist (single reversible UPDATE of a lead table, with a WHERE, no prohibited verb/target)' };
+    // The gate that was missing: does every column it names EXIST?
+    return sqlColumnsOk(payload, cols);
+  }
+  if (kind === 'edge_call') {
+    return edgePayloadSafe(payload)
+      ? { ok: true }
+      : { ok: false, why: `edge fn '${payload}' is not in the idempotent-worker allowlist` };
+  }
+  return { ok: false, why: 'no concrete action' };
+}
+
+// The REAL schema, rendered into the prompt. This is the anti-hallucination fix:
+// the model is no longer left to invent column names ("handle", "website") — it is
+// handed the live list and told, in the same breath, which two guesses already
+// cost us 12 dead actions.
+function schemaContract(cols: LeadColumns): string {
+  return [
+    '    ┌─ SCHEMA CONTRACT — THESE ARE THE ONLY COLUMNS THAT EXIST ─────────────────┐',
+    '    │ Read LIVE from the database on every run. Referencing any column not      │',
+    '    │ listed below raises Postgres 42703 and the action FAILS. Do NOT guess.    │',
+    '    └───────────────────────────────────────────────────────────────────────────┘',
+    `    public.leads_services:    ${cols.leads_services.join(', ')}`,
+    `    public.leads_influencers: ${cols.leads_influencers.join(', ')}`,
+    '',
+    `    THE ONLY BOOLEAN COLUMNS: leads_services → ${(LEAD_BOOLEAN_COLUMNS.leads_services || []).join(', ')}; `
+      + `leads_influencers → ${(LEAD_BOOLEAN_COLUMNS.leads_influencers || []).join(', ')}.`,
+    '    Every other column is text / integer / timestamp. `IS TRUE` / `IS NOT TRUE` on a',
+    '    NON-boolean column raises Postgres 42804 ("argument of IS TRUE must be type boolean,',
+    '    not type integer") — that is exactly how action #97 died. Use = / <> / IS NULL instead.',
+    '',
+    '    THE THREE HALLUCINATIONS THAT HAVE ALREADY FAILED IN PRODUCTION — never repeat them:',
+    '      · There is NO "handle" column. The creator IG handle is leads_influencers.ig_handle.',
+    '      · There is NO "website" column on either table. The services site URL is',
+    '        leads_services.website_url; the creator link-in-bio is leads_influencers.external_url.',
+    '      · leads_services has NO "category" column — the service category lives in service_type.',
+    '        (leads_influencers DOES have category.)',
+    '      · The services IG handle is leads_services.instagram; has_instagram is the derived boolean.',
+    '',
+    '    Before you emit an sql payload, check EVERY column you name against the two lists',
+    '    above. If the column you want is not there, the fix is a CODE CHANGE',
+    '    (action_kind="none", requires_approval=true) — NOT a guessed name. A payload that',
+    '    names a column that does not exist is rejected before it runs and handed to the',
+    '    founder as a defect, so guessing buys you nothing.',
+  ].join('\n');
 }
 
 // Stale proposals whose fix is already shipped: coo-brain closes these at the
@@ -75,7 +291,10 @@ const SUPERSEDED_MATCHERS: { label: string; tokens: string[] }[] = [
   { label: 'creator-harvest seed rotation (live)', tokens: ['harvest', 'seed'] },
 ];
 
-const SYSTEM = `You are the COO of Cergio, a services marketplace (friends recommend independent/mobile providers; creators drive bookings; everyone earns referral fees). Mission: help hundreds of millions earn from their skills — shared prosperity.
+// The system prompt is now a FUNCTION of the live schema — the column list is
+// injected, never hard-coded, so the model always writes SQL against the columns
+// the database actually has today.
+const buildSystem = (cols: LeadColumns) => `You are the COO of Cergio, a services marketplace (friends recommend independent/mobile providers; creators drive bookings; everyone earns referral fees). Mission: help hundreds of millions earn from their skills — shared prosperity.
 
 NON-NEGOTIABLE CONSTITUTION (these OVERRIDE any optimization; never violate, never hedge around):
 1. EXECUTE the founder's FROZEN vision. Never propose anything that contradicts it.
@@ -98,30 +317,7 @@ For EACH proposal you MUST also emit an executable classification so an untruste
       · Set an intrinsic flag such as has_instagram, or clear/set another reversible boolean/text flag: UPDATE ... SET has_instagram=true WHERE ... .
       · Re-queue a city / re-seed a lead status: UPDATE ... SET outreach_status='queued'/'new' WHERE ... .
 
-    ┌─ SCHEMA CONTRACT — THESE ARE THE ONLY COLUMNS THAT EXIST ─────────────────┐
-    │ Referencing any column not listed here raises 42703 and the action FAILS. │
-    │ Do NOT guess or invent column names. There is no "website", no "handle".  │
-    │                                                                            │
-    │ public.leads_services:                                                     │
-    │   id, name, service_type, phone, phone_origin, website_url, address,       │
-    │   city, state, zip, lat, lon, osm_id, yelp_url, cl_post_url, instagram,    │
-    │   facebook, owner_email, data_source, fetched_at, has_instagram,           │
-    │   outreach_status, outreach_last_at, outreach_notes                        │
-    │   → the site URL is website_url (NOT "website")                            │
-    │   → there is NO "category" column; the category lives in service_type      │
-    │   → the IG handle is instagram; has_instagram is the derived boolean flag  │
-    │                                                                            │
-    │ public.leads_influencers:                                                  │
-    │   id, ig_handle, display_name, bio, category, city, state, followers,      │
-    │   tier, email, email_verified, phone, phone_verified_level, external_url,  │
-    │   is_business, osm_id, discovered_via, outreach_status                     │
-    │   → the IG handle is ig_handle (NOT "handle")                              │
-    │   → the link-in-bio / site URL is external_url (NOT "website")             │
-    └────────────────────────────────────────────────────────────────────────────┘
-
-    Before you emit an sql payload, check EVERY column you named against the
-    contract above. If the column you want does not exist, the fix is a code
-    change (action_kind="none", requires_approval=true) — NOT a guessed name.
+${schemaContract(cols)}
 
     The snapshot includes "execution_failures". If a proposal you are about to
     make already appears there, DO NOT re-emit the same payload: it has already
@@ -171,6 +367,11 @@ serve(async (req: Request) => {
     const { data: snap, error: sErr } = await db.rpc('cergio_ops_snapshot');
     if (sErr) throw sErr;
 
+    // The REAL columns of the two lead tables, read live. They go INTO the prompt
+    // (so the model stops inventing "handle" / "website") and are used again below
+    // to re-check whatever SQL the model hands back.
+    const leadCols = await liveLeadColumns(supabaseUrl, serviceKey);
+
     // ── Supersede stale proposals whose fix is ALREADY shipped ──────────────
     // Reversible (status='dismissed', never deleted). We only close a stale
     // proposal when the delivering system is actually live: (1) delivery-
@@ -214,7 +415,7 @@ serve(async (req: Request) => {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: MODEL, max_tokens: 2000, system: SYSTEM, // raised: per-proposal classification adds JSON
+        model: MODEL, max_tokens: 2000, system: buildSystem(leadCols), // raised: per-proposal classification adds JSON
         messages: [{ role: 'user', content: 'Live metrics snapshot:\n' + JSON.stringify(snap) + '\n\nGive the ranked proposals JSON now.' }],
       }),
     });
@@ -238,27 +439,42 @@ serve(async (req: Request) => {
         // requires_approval=true (when the payload is missing or fails the safety
         // pre-check). It NEVER upgrades a prohibited/off-spec action to auto-run.
         const kindRaw = String(p.action_kind ?? 'none').toLowerCase();
-        const action_kind = (kindRaw === 'sql' || kindRaw === 'edge_call') ? kindRaw : 'none';
-        const action_payload = action_kind === 'none' ? '' : String(p.action_payload ?? '').slice(0, 2000);
+        let action_kind = (kindRaw === 'sql' || kindRaw === 'edge_call') ? kindRaw : 'none';
+        let action_payload = action_kind === 'none' ? '' : String(p.action_payload ?? '').slice(0, 2000);
         const on_spec = p.on_spec === true;
 
-        // Safety pre-check: does the concrete payload PASS the executor allowlist?
+        // Safety pre-check: does the concrete payload PASS the executor allowlist
         // (single reversible UPDATE of a lead table w/ WHERE, or an allowlisted
-        // idempotent worker). Only a payload that passes may be auto-run.
-        const payloadSafe = action_kind !== 'none' && action_payload.length > 0
-          && payloadPassesAllowlist(action_kind, action_payload);
+        // idempotent worker) AND — the check that did not exist while 12 actions
+        // died — does every column it names actually EXIST on the target table?
+        const verdict = (action_kind !== 'none' && action_payload.length > 0)
+          ? payloadVerdict(action_kind, action_payload, leadCols)
+          : { ok: false, why: 'no concrete action_payload' };
+        const payloadSafe = verdict.ok;
+
+        // A payload that names a column the table does not have is NOT a proposal
+        // the founder can approve into existence — approving it would just ship the
+        // same 42703. So we strip the doomed SQL (action_kind='none'), keep the
+        // statement + reason in `detail` where an engineer can see it, and gate it.
+        const schemaBad = action_kind === 'sql' && !verdict.ok && /^SCHEMA:/.test(String(verdict.why || ''));
+        const gateNote = schemaBad
+          ? `\n\n[GATED — ${verdict.why} The proposal is sound but the SQL is not runnable; this needs a code/schema fix, not an approval. Rejected payload: ${action_payload}]`
+          : '';
+        if (schemaBad) { action_kind = 'none'; action_payload = ''; }
 
         // AUTO-RUN (requires_approval=false) only when the proposal is on_spec,
         // the model asked for auto-run, AND the payload passes the safety gate.
         // Anything else — off-spec, model wanted approval, missing/unsafe payload
         // (a send/money/legal/delete/metrics-endpoint payload can never pass the
-        // allowlist) — is DOWNGRADED to requires_approval=true.
+        // allowlist), or a payload naming a non-existent column — is DOWNGRADED to
+        // requires_approval=true.
         const requires_approval = !(
           p.requires_approval === false && on_spec && payloadSafe
         );
         return {
           rank: p.rank ?? i + 1, division: String(p.division ?? 'General').slice(0, 40),
-          title: String(p.title ?? '').slice(0, 200), detail: String(p.detail ?? '').slice(0, 1000),
+          title: String(p.title ?? '').slice(0, 200),
+          detail: (String(p.detail ?? '') + gateNote).slice(0, 1000),
           expected_lift: String(p.lift ?? '').slice(0, 120), effort: String(p.effort ?? '').slice(0, 60),
           status: 'pending', on_spec, action_kind, action_payload, requires_approval,
         };

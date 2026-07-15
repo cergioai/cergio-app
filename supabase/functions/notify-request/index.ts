@@ -65,19 +65,36 @@ serve(async (req: Request) => {
 // ── event: created — consumer request fan-out → providers ──────────────────
 async function handleCreated(supaAdmin: any, body: any, appBase: string) {
   const requestId   = body?.requestId;
-  const providerIds = Array.isArray(body?.providerIds) ? body.providerIds.slice(0, MAX_FANOUT) : [];
+  const requested   = Array.isArray(body?.providerIds) ? body.providerIds.slice(0, MAX_FANOUT) : [];
   if (!requestId) return json({ error: 'requestId required' }, 400);
-  if (providerIds.length === 0) return json({ sent: 0, note: 'no providerIds' });
+  if (requested.length === 0) return json({ sent: 0, note: 'no providerIds' });
 
   const { data: request, error: rErr } = await supaAdmin
     .from('requests')
     .select(`
-      id, service_type, description, location_text, created_at,
+      id, requester_id, service_type, description, location_text, created_at,
       requester:profiles!requests_requester_id_fkey ( id, display_name )
     `)
     .eq('id', requestId)
     .single();
   if (rErr || !request) return json({ error: 'request not found', detail: rErr?.message }, 404);
+
+  // ── SELF-NOTIFY GUARD (SPEC-78, launch-05) ────────────────────────────────
+  // 2026-07-14: the founder received a "new request near you" notification for a
+  // request HE created. A user is NEVER a provider for their own request. The
+  // client callers (createRequestAndFanOut / crossPostRequest) each filter the
+  // requester out, but a client filter is not a guarantee: this function is the
+  // LAST gate before an email/SMS actually leaves the building, and it takes the
+  // recipient list from its caller. So the exclusion is enforced HERE, server-
+  // side, against the request's OWN requester_id — the authoritative source.
+  // Any caller (present, future, retried, or buggy) is now incapable of making
+  // Cergio notify a requester about their own request.
+  const requesterId = request.requester_id || request.requester?.id || null;
+  const providerIds = requested.filter((pid: string) => pid && pid !== requesterId);
+  const selfNotifyBlocked = requested.length - providerIds.length;
+  if (providerIds.length === 0) {
+    return json({ sent: 0, note: 'no recipients after self-notify guard', selfNotifyBlocked });
+  }
 
   const requesterName = request.requester?.display_name || 'A Cergio user';
   const serviceType   = request.service_type || 'service';
@@ -105,7 +122,12 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
     });
     results.push({ pid, ...r });
   }
-  return json({ event: 'created', sent: results.filter(r => r.email === 'sent').length, results });
+  return json({
+    event: 'created',
+    sent: results.filter(r => r.email === 'sent').length,
+    selfNotifyBlocked, // > 0 means a caller tried to notify the requester — SPEC-78
+    results,
+  });
 }
 
 // ── event: response — provider responded → requester ───────────────────────

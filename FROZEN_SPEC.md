@@ -672,6 +672,17 @@ qa.mjs #47j enforces this (and `qa-suite` + `qa-live.mjs` share the assertion).
 
 ---
 
+### SPEC-78 · Launch blockers from the founder's own walk (2026-07-14, FROZEN)
+**Status:** FROZEN — 2026-07-14 (Tarik, walking the live product at `/inbound/…`). Five defects he hit himself. Each is locked by a `spec-launch-0X` regression test in `scripts/qa.mjs`; the ledger rows are seeded by `supabase/migrations/20260714000000_req_launch_blockers.sql`.
+
+1. **launch-05 · SELF-NOTIFY IS IMPOSSIBLE.** A user is **never** notified as a provider for a request **they** created. Enforced **server-side** in `notify-request/handleCreated` against the request's own `requester_id` (the last gate before an email/SMS leaves the building — so no caller, present or future, can dispatch to the requester), **and** on every client path that writes a `kind='new_request'` row: `createRequestAndFanOut`, `crossPostRequest`, `createRequestToProvider` (own listing → suppressed). The request row still stands; only the self-notification is dropped.
+2. **launch-04 · The requester is a person you can look up.** On `/inbound/:reqId` the requester's **avatar and name** are clickable and open their profile (`/u/:requesterId`). The identity block renders whenever the requester is known — not only when they are a Connector / have an IG handle / have a bio.
+3. **launch-06 · A saved location survives the night.** `saveAddress` persists to the durable `user_metadata` store (needs no migration), **never** reports success when nothing persisted, and is **not** masked as a failure when the optional `user_addresses` table errors. An address the geocoder cannot verify is still the user's address: it is saved **as typed** with null coords (a later verification upgrades it in place), never left in `localStorage` alone. `getDefaultAddress` reads the durable copy **first**, and session-start load re-hydrates it without clobbering it with a default.
+4. **launch-02 · One wait sentence.** While no offer has landed, the requester reads exactly: *"This may take 15 minutes to a few hours to locate and get you a solid offer. We'll notify you the moment we have a match."* — exported as `WAIT_COPY` (one source of truth). The old instant/scheduled fork ("Allow up to 15 minutes…" / "…up to 24 hours to locate and negotiate…") is retired. Real progress ("2 replies in — 8 notified.") may supersede it, because that is a fact, not a promise.
+5. **launch-03 · Best match = highest rating, then closest.** In a covered area, provider selection orders by `rating_avg` **DESC**, then `distance_miles` **ASC** (then `rating_count`, then `id` — so the order is total and stable). An **unrated** provider is *unknown*, not 0.0, and sorts below any rated one; a missing distance sorts last. `listServices`' proximity branch orders through the pure exported `rankProviders()`; the distance-only sort is retired.
+
+---
+
 ### YellowPages: RETIRED (2026-07-13)
 YP answers datacenter IPs with **HTTP 403**, permanently. `fulfill-crawl` no longer fetches `source='yellowpages'` jobs; leftovers are quarantined once as `yp-blocked-permanent` and never retried; the seeder cron is unscheduled and the agent disabled. **Google Places is the live services path.** The parser stays dormant behind `YP_ENABLED` (default false) — reversible in one env var. Requirement `p10-crawl-yp-drain` is retired. qa.mjs `p10-crawl-yp-retired` enforces this.
 

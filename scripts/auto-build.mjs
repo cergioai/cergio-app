@@ -114,6 +114,7 @@ const FORCE_REQ = (argv.find(a => a.startsWith('--req=')) || '').slice(6) || nul
 const MAX_BUILD_FILES = Number(env.MAX_BUILD_FILES || 5);
 const MAX_BUILD_LINES = Number(env.MAX_BUILD_LINES || 300);
 const MIN_SPEC_ASSERTS = Number(env.MIN_SPEC_ASSERTS || 3);
+const MIN_E2E_EXPECTS = Number(env.MIN_E2E_EXPECTS || 2);
 
 const RED='\x1b[31m',GRN='\x1b[32m',YEL='\x1b[33m',GRY='\x1b[90m',RST='\x1b[0m';
 const log = (...a) => console.error(...a); // human log → stderr; machine plan → stdout
@@ -127,6 +128,7 @@ const log = (...a) => console.error(...a); // human log → stderr; machine plan
 // a builder that can edit its own exam, its own CI, or its own spec has no gate at all.
 const PATH_DISCARD = [
   /^scripts\/qa\.mjs$/, /^scripts\/qa-live\.mjs$/,      // the grader
+  /^e2e\//, /^playwright\.config\./,                     // the BEHAVIOURAL grader
   /^scripts\/auto-(build|fix)\.mjs$/,                    // itself
   /^scripts\/expand-coverage\.mjs$/,
   /(^|\/)\.github\//,                                    // the CI gate
@@ -238,6 +240,105 @@ function rankRequirements(reqs, qaSrc) {
 const specTestId = reqId => `spec-${reqId}`;
 function hasSpecTest(qaSrc, reqId) {
   return String(qaSrc || '').includes(`test('${specTestId(reqId)}'`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BEHAVIOURAL ACCEPTANCE — the mitigation for the shape-satisfying-stub risk.
+//
+// A qa.mjs spec-test is a CODE-INVARIANT test: it greps for the shape of the fix.
+// That is a real gate, but it has an honest hole — a well-shaped STUB passes it.
+// `isScheduledWhen(when)` can be imported, referenced, and still render the wrong
+// sentence; the paid-fallback banner can exist in the source and still show while
+// a free option sits right there on screen.
+//
+// So when a requirement is USER-JOURNEY-SHAPED ("the user sees…", "clicking X
+// confirms…", "the banner must not show when…"), the builder now ALSO authors a
+// Playwright spec that drives the real app in a real browser and asserts on what
+// is RENDERED and what the app actually WROTE. The grep proves the code has the
+// right shape; the journey proves it has the right behaviour. Both ship, both are
+// regression guards, and — critically — the implementer may never edit either
+// (e2e/ is in PATH_DISCARD alongside scripts/qa.mjs).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Requirement text that describes something a USER does or SEES. These are the
+// requirements a grep cannot honestly close.
+const REQ_JOURNEY = [
+  /\buser\b|\bconsumer\b|\bprovider\b|\bconnector\b|\bfounder\b/i,
+  /\bsees?\b|\bshown?\b|\bdisplays?\b|\brenders?\b|\bvisible\b|\bcopy\b|\bmessage\b|\bbanner\b|\bpill\b|\btoast\b/i,
+  /\bclicks?\b|\btaps?\b|\bsubmits?\b|\baccepts?\b|\bconfirms?\b|\bbooks?\b|\bsearch(es)?\b|\bnavigates?\b|\bredirects?\b/i,
+  /\bscreen\b|\bpage\b|\bflow\b|\bjourney\b|\bresults\b|\bcheckout\b|\binbox\b|\bdead[- ]end\b/i,
+];
+/** Journey-shaped = it talks about a user AND about something seen or done. */
+function isJourneyShaped(req) {
+  const text = `${req?.instruction || ''} ${req?.spec_ref || ''} ${req?.suite || ''}`;
+  const hits = REQ_JOURNEY.filter(re => re.test(text)).length;
+  return hits >= 2;
+}
+
+const e2eSpecPath = reqId => `e2e/spec-${String(reqId).replace(/[^a-z0-9_-]/gi, '-')}.spec.js`;
+
+// Rails on the AUTHORED E2E SPEC. A behavioural test that never looks at the page
+// is just a slower grep — and one that reaches the real network is a liability.
+const E2E_CONTENT_FORBIDDEN = [
+  /process\.env/, /SERVICE_ROLE/i, /ANTHROPIC/i, /child_process/, /\bfs\./,
+  /supabase\.co\b/i,                                  // never the real project
+  /page\.route\s*\(\s*['"`]\*\*\/\*/,                 // must not fight the harness router
+];
+function evaluateE2ESpec(cand, req) {
+  const reasons = [];
+  const code = String(cand?.code || '');
+  if (!code.trim()) return { ok: false, reasons: ['empty e2e spec'] };
+  if (!/from\s+['"]\.\/support\/harness\.js['"]/.test(code)) {
+    reasons.push('must drive the seeded world via ./support/harness.js (installWorld) — a spec that invents its own backend proves nothing');
+  }
+  if (!/installWorld\s*\(/.test(code)) reasons.push('must call installWorld(page, …) — otherwise it has no world to act on');
+  if (!/\btest\s*\(/.test(code)) reasons.push('must register at least one test(…)');
+  const expects = (code.match(/\bexpect\s*\(/g) || []).length;
+  if (expects < MIN_E2E_EXPECTS) reasons.push(`only ${expects} expect() call(s) (min ${MIN_E2E_EXPECTS}) — too weak to be evidence`);
+  // The whole point: it must assert on the RENDERED page or on a REAL write.
+  if (!/(getByText|getByRole|getByLabel|getByTestId|locator\s*\(|toBeVisible|toHaveCount|net\.writes)/.test(code)) {
+    reasons.push('asserts nothing about what the user SEES or what the app WROTE — this is the code-shape gap it exists to close');
+  }
+  if (/\|\|\s*true\b/.test(code)) reasons.push('vacuous escape hatch: `|| true`');
+  for (const re of E2E_CONTENT_FORBIDDEN) {
+    if (re.test(code)) reasons.push(`e2e spec must stay hermetic (no secrets/env/fs/real project): matched ${re}`);
+  }
+  void req;
+  return { ok: reasons.length === 0, reasons };
+}
+
+/** Is Playwright actually installed here? We never PRETEND to have run a browser. */
+function playwrightAvailable() {
+  const r = spawnSync('npx', ['--no-install', 'playwright', '--version'], {
+    cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000,
+  });
+  return r.status === 0;
+}
+
+/** Run ONE e2e spec. Returns {ran, pass}. `ran:false` = no browser here — and we
+ *  then make NO claim about it (SPEC-72: never claim verified without evidence). */
+function runE2E(specRelPath) {
+  if (!playwrightAvailable()) return { ran: false, pass: null };
+  const r = spawnSync('npx', ['--no-install', 'playwright', 'test', specRelPath, '--reporter=list'], {
+    cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 10 * 60_000,
+  });
+  return { ran: true, pass: r.status === 0, out: String(r.stdout || r.stderr || '').slice(-2000) };
+}
+
+/**
+ * The RED gate for the behavioural spec — same anti-vacuity law as qa.mjs:
+ * a journey test that PASSES before the feature exists proves nothing.
+ * When no browser is present we do not fail the build (the qa.mjs RED gate still
+ * governs) — but we do not claim the journey was proven either.
+ */
+function decideE2ERed(result) {
+  if (!result.ran) {
+    return { proceed: true, proven: false, note: 'Playwright not installed in this runner — the e2e spec ships as a regression guard and CI (ci.yml → e2e) is its first real execution. It was NOT proven RED here.' };
+  }
+  if (result.pass) {
+    return { proceed: false, proven: true, abort: 'e2e journey PASSED on current code — it is vacuous, or the requirement is already met. Never build on a test that cannot fail.' };
+  }
+  return { proceed: true, proven: true, note: 'e2e journey RED on current code, as it must be.' };
 }
 
 /**
@@ -489,6 +590,38 @@ async function anthropic({ system, user, maxTokens }) {
 
 async function authorSpecTest({ req, spec, tree }) {
   const id = specTestId(req.id);
+  const journey = isJourneyShaped(req);
+
+  // For a user-journey requirement, a grep is NOT enough evidence: a stub with the
+  // right shape passes it. Ask for a BEHAVIOURAL spec as well — one that drives the
+  // real app in a real browser and asserts on what is rendered / what was written.
+  const e2eBrief = journey ? [
+    '',
+    '── SECOND ARTIFACT: A BEHAVIOURAL E2E SPEC (required — this requirement is user-journey-shaped) ──',
+    'A code-invariant grep can be satisfied by a STUB that has the right shape and the wrong behaviour.',
+    'So you must ALSO author a Playwright spec that drives the REAL app and asserts on what the USER SEES.',
+    '',
+    'HARNESS (e2e/support/harness.js — a hermetic seeded world; no secrets, no network):',
+    "  import { test, expect } from '@playwright/test';",
+    "  import { installWorld, assertNoEscapedRequests, searchFromHome } from './support/harness.js';",
+    "  import { FREE_WORLD, PAID_WORLD, EMPTY_WORLD, PENDING_BOOKING, CONSUMER, PROVIDER, SEARCH_ADDRESS, parseResultFor } from './support/world.js';",
+    '  const net = await installWorld(page, { world: FREE_WORLD, parse: parseResultFor({ what, when, where, budget }), user, booking });',
+    '     · net.writes   — every mutation the app actually SENT (e.g. { kind: "booking.update", patch })',
+    '     · net.booking() — the booking as the fake DB now holds it',
+    '  await searchFromHome(page, "<the query a user types>");   // Home → /results',
+    '  await page.goto("/request/" + PENDING_BOOKING.id);        // a provider opening a request',
+    '  assertNoEscapedRequests(net);                             // nothing may reach a real host',
+    '',
+    'E2E RULES:',
+    '1. Assert on the RENDERED page (getByText / getByRole / toBeVisible / toHaveCount) and, when the',
+    '   journey WRITES something, on net.writes — a screen that only repaints its own state must FAIL.',
+    `2. At least ${MIN_E2E_EXPECTS} expect() calls, each on a concrete, spec-mandated, user-visible fact.`,
+    '3. Hermetic: never process.env, never fs, never a real supabase.co host, never `|| true`.',
+    '4. Where the spec defines a NEGATIVE ("must not show X when Y"), also assert the POSITIVE CONTROL',
+    '   ("shows X when not-Y") — otherwise a screen that never renders X would pass vacuously.',
+    '5. It must FAIL on code that lacks the feature, exactly like the qa.mjs test.',
+  ].join('\n') : '';
+
   const system = [
     'You author ONE acceptance test for Cergio, from the SPEC ONLY.',
     'You have NOT been shown the implementation and you must NOT guess at it: your job is to encode',
@@ -516,12 +649,19 @@ async function authorSpecTest({ req, spec, tree }) {
     '   state → src/hooks/*.js, UI → src/screens/*.jsx, server → supabase/functions/<name>/index.ts).',
     '5. Assert only what the SPEC / requirement text DEFINES. If the spec is silent or ambiguous, do NOT',
     '   invent behavior — return {"onSpec": false, "note": "<what is undefined>"} and author nothing.',
+    e2eBrief,
+    '',
     '6. Return ONLY JSON:',
     `   {"onSpec":true,"test_id":"${id}","target_paths":["src/lib/..."],`,
     '    "expected_red_reason":"<why this MUST fail on code that lacks the feature>",',
-    '    "code":"test(\'' + id + '\', \'<name>\', \'REQ:' + req.id + '\', async () => { ... });"}',
+    '    "code":"test(\'' + id + '\', \'<name>\', \'REQ:' + req.id + '\', async () => { ... });"'
+      + (journey
+        ? ',\n    "e2e":{"code":"<a COMPLETE standalone Playwright spec file, imports included>",'
+          + '"expected_red_reason":"<why the JOURNEY fails on today\'s code>"}}'
+        : '}'),
     '   "code" must be valid JS that can be pasted into scripts/qa.mjs at top level.',
-  ].join('\n');
+    journey ? `   "e2e".code must be a complete spec file — it is written verbatim to ${e2eSpecPath(req.id)}.` : '',
+  ].filter(Boolean).join('\n');
 
   const user = [
     `REQUIREMENT id: ${req.id}`,
@@ -655,6 +795,64 @@ function runSelfCheck() {
     classifyRequirement({ id: 'x', status: 'captured', instruction: 'Off-spec: new admin dashboard (needs approval)' }).selectable === false);
   const bigBuild = evaluateBuild({ files: [{ path: 'src/lib/comms.js', before: '', after: Array.from({ length: 400 }, (_, i) => `const l${i} = ${i};`).join('\n') }] }, { onSpec: true, sensitiveReq: false });
   ok('(c) oversized build → review PR + decompose', bigBuild.mode === 'review' && bigBuild.reasons.some(r => /decompose/.test(r)));
+
+  // ── (c2) BEHAVIOURAL ACCEPTANCE — the shape-satisfying-stub mitigation ──────
+  // A grep proves the code has the right SHAPE. For a user journey that is not
+  // enough. These rails prove the builder now ALSO demands a behavioural test —
+  // and that the behavioural test is itself real (looks at the page, stays
+  // hermetic, and can never be edited by the thing it is grading).
+  const journeyReq = {
+    id: 'p2-paid-banner',
+    status: 'captured',
+    instruction: 'On /results the user must not see the "no free plumbers nearby — showing paid options" banner when a free option IS available nearby.',
+    spec_ref: 'SPEC-44',
+  };
+  ok('(c2) a user-journey requirement is recognised as journey-shaped',
+    isJourneyShaped(journeyReq) === true);
+  ok('(c2) a pure data/worker requirement is NOT journey-shaped (no browser tax on a cron fix)',
+    isJourneyShaped({ id: 'p10-crawl', instruction: 'fulfill-crawl must drain queued YellowPages jobs into leads_services rows.' }) === false);
+
+  const goodE2E = {
+    code: [
+      "import { test, expect } from '@playwright/test';",
+      "import { installWorld, assertNoEscapedRequests, searchFromHome } from './support/harness.js';",
+      "import { FREE_WORLD, SEARCH_ADDRESS, parseResultFor } from './support/world.js';",
+      "test('free option → no paid banner', async ({ page }) => {",
+      '  const net = await installWorld(page, { world: FREE_WORLD, parse: parseResultFor({ when: "tomorrow" }) });',
+      '  await searchFromHome(page, `plumber tomorrow at ${SEARCH_ADDRESS}`);',
+      '  await expect(page.getByText(/Marisol/).first()).toBeVisible();',
+      '  await expect(page.getByText(/showing paid options/i)).toHaveCount(0);',
+      '  assertNoEscapedRequests(net);',
+      '});',
+    ].join('\n'),
+    expected_red_reason: 'the banner renders even when a free option exists',
+  };
+  ok('(c2) a page-asserting, hermetic e2e spec is accepted',
+    evaluateE2ESpec(goodE2E, journeyReq).ok === true);
+  ok('(c2) an e2e spec that never looks at the page is rejected (that is just a slower grep)',
+    evaluateE2ESpec({ code: "import { test } from '@playwright/test';\nimport { installWorld } from './support/harness.js';\ntest('x', async ({ page }) => { const net = await installWorld(page, {}); expect(net).toBeTruthy(); expect(1).toBe(1); });" }, journeyReq).ok === false);
+  ok('(c2) an e2e spec that invents its own backend (no harness) is rejected',
+    evaluateE2ESpec({ code: "import { test, expect } from '@playwright/test';\ntest('x', async ({ page }) => { await page.goto('/'); await expect(page.getByText('a')).toBeVisible(); await expect(page.getByText('b')).toBeVisible(); });" }, journeyReq).ok === false);
+  ok('(c2) an e2e spec reaching the REAL supabase project is rejected',
+    evaluateE2ESpec({ code: goodE2E.code.replace('./support/world.js', './support/world.js') + "\n// https://abc.supabase.co\n" }, journeyReq).ok === false);
+  ok('(c2) a vacuous `|| true` e2e spec is rejected',
+    evaluateE2ESpec({ code: goodE2E.code + '\n// x || true\n' }, journeyReq).ok === false);
+
+  // The builder may NEVER edit the exam — neither the grep suite nor the journeys.
+  const e2eEdit = evaluateBuild({ files: [{ path: 'e2e/search-results.spec.js', before: 'a\n', after: 'b\n' }] }, { onSpec: true, sensitiveReq: false });
+  ok('(c2) an implementation patch that edits an e2e journey is DISCARDED (it cannot grade itself)',
+    e2eEdit.mode === 'discard');
+  const pwEdit = evaluateBuild({ files: [{ path: 'playwright.config.js', before: 'a\n', after: 'b\n' }] }, { onSpec: true, sensitiveReq: false });
+  ok('(c2) an implementation patch that edits the e2e runner config is DISCARDED', pwEdit.mode === 'discard');
+
+  // Honesty rail: with no browser present we make NO claim that the journey was proven.
+  const noBrowser = decideE2ERed({ ran: false, pass: null });
+  ok('(c2) no browser in the runner → proceed, but the journey is NOT claimed proven (SPEC-72)',
+    noBrowser.proceed === true && noBrowser.proven === false && /NOT proven RED/i.test(noBrowser.note));
+  ok('(c2) e2e journey GREEN on current code → ABORT (anti-vacuous, same law as qa.mjs)',
+    decideE2ERed({ ran: true, pass: true }).proceed === false);
+  ok('(c2) e2e journey RED on current code → proceed, and it IS proven',
+    decideE2ERed({ ran: true, pass: false }).proceed === true && decideE2ERed({ ran: true, pass: false }).proven === true);
 
   // ── (d) REGRESSION → discard ────────────────────────────────────────────────
   const base2 = [{ id: 'auth', pass: true }, { id: 'address', pass: true }, { id: 'spec-p1-x', pass: false }];
@@ -839,6 +1037,67 @@ async function main() {
 
   const red = decideRed(baseline, afterInject, testId);
   plan.spec_test = { id: testId, expected_red_reason: cand.expected_red_reason, red: red.proceed, target_paths: cand.target_paths || [] };
+
+  // ── BEHAVIOURAL ACCEPTANCE (journey-shaped requirements only) ──────────────
+  // The grep above proves the code has the right SHAPE. For a user journey that is
+  // not enough — a stub with the right shape passes it. So we also ship a spec that
+  // drives the real app and asserts on what the user SEES. It lives in e2e/, which
+  // the implementer may never touch (PATH_DISCARD), and CI runs it on the PR.
+  plan.e2e = null;
+  if (isJourneyShaped(req)) {
+    if (!cand.e2e || !cand.e2e.code) {
+      // Not fatal — the qa.mjs RED gate still governs — but it MUST be visible that
+      // the behavioural half is missing, or we quietly slide back to greps-only.
+      plan.reasons.push('journey-shaped requirement but the author returned no e2e spec — behaviour is NOT covered, only code shape');
+      log(`${YEL}journey-shaped requirement with no e2e spec — code shape only${RST}`);
+    } else {
+      const e2eVerdict = evaluateE2ESpec(cand.e2e, req);
+      if (!e2eVerdict.ok) {
+        restoreAll();
+        plan.abort = `authored e2e spec failed the behavioural rails: ${e2eVerdict.reasons.join('; ')}`;
+        await openApproval(D, { req, title: `Weak behavioural test: ${req.id}`, detail: plan.abort });
+        log(`${RED}${plan.abort}${RST}`); console.log(JSON.stringify(plan)); return;
+      }
+      const e2ePath = e2eSpecPath(req.id);
+      remember(e2ePath);
+      fs.mkdirSync(path.dirname(path.join(REPO_ROOT, e2ePath)), { recursive: true });
+      fs.writeFileSync(path.join(REPO_ROOT, e2ePath), String(cand.e2e.code).trim() + '\n');
+
+      const e2eSyntax = spawnSync('node', ['--input-type=module', '--check'], {
+        input: readSafe(e2ePath), encoding: 'utf8',
+      });
+      if (e2eSyntax.status !== 0) {
+        restoreAll();
+        plan.abort = 'authored e2e spec does not parse: ' + String(e2eSyntax.stderr || '').slice(0, 200);
+        await openApproval(D, { req, title: `Weak behavioural test: ${req.id}`, detail: plan.abort });
+        log(`${RED}${plan.abort}${RST}`); console.log(JSON.stringify(plan)); return;
+      }
+
+      // Same anti-vacuity law as qa.mjs: a journey that is GREEN before the feature
+      // exists proves nothing. If there is no browser in this runner we say so
+      // plainly (proven:false) rather than pretending the journey was checked.
+      const e2eRun = runE2E(e2ePath);
+      const e2eRed = decideE2ERed(e2eRun);
+      plan.e2e = {
+        path: e2ePath,
+        expected_red_reason: cand.e2e.expected_red_reason || null,
+        red_proven: e2eRed.proven === true && e2eRed.proceed === true,
+        note: e2eRed.note || e2eRed.abort || null,
+      };
+      if (!e2eRed.proceed) {
+        restoreAll();
+        plan.abort = `E2E RED gate: ${e2eRed.abort}`;
+        await openApproval(D, {
+          req,
+          title: `Behavioural test did not go RED: ${req.id}`,
+          detail: `${e2eRed.abort} Nothing was written.`,
+        });
+        log(`${RED}${plan.abort}${RST}`); console.log(JSON.stringify(plan)); return;
+      }
+      log(`${GRY}e2e: ${plan.e2e.note}${RST}`);
+    }
+  }
+
   if (!red.proceed) {
     // ANTI-CIRCULARITY ABORT. A test that is green before the feature exists proves
     // nothing, and we will not build (or verify) on it. Revert, report, tell the founder.
