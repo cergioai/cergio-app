@@ -4268,6 +4268,28 @@ test('spec-offmac-doc', 'SPEC-81: off-Mac-by-default contract stays documented �
     '.gitignore must exclude .env.local — the GITHUB_PAT must never be committable');
 });
 
+test('ux-invite-copy', 'The invite share message is ONE canonical AI-touch line (buildInviteMessage in lib/referral.js), used by the invite popup — no scattered per-screen copy', '#82', async () => {
+  const ref = readFile('src/lib/referral.js');
+  // Single source of truth: exported from referral.js.
+  const fnStart = ref.indexOf('export function buildInviteMessage(');
+  assert(fnStart > -1, 'lib/referral.js must export buildInviteMessage(url) — the one invite line');
+  const body = ref.slice(fnStart, ref.indexOf('\n}', fnStart) + 2).replace(/^export\s+/, '');
+  const buildInviteMessage = new Function(`${body}\nreturn buildInviteMessage;`)();
+  const out = buildInviteMessage('https://cergio.ai/i/abc');
+  // The AI touch + trust hook Tarik asked for, and the link is embedded (never bare).
+  assert(/powered by AI/i.test(out), 'invite copy must carry the AI touch ("powered by AI")');
+  assert(/friend recommendations/i.test(out) && /actually trust/i.test(out),
+    'invite copy must lead with the friend-recommendation + trust hook');
+  assert(out.includes('https://cergio.ai/i/abc'),
+    'invite copy must embed the attributable link (never share a bare URL)');
+  // The popup uses the centralized one — the old local duplicate is gone.
+  const popup = readFile('src/screens/InviteFriendPopupScreen.jsx');
+  assert(/import\s*\{[^}]*buildInviteMessage[^}]*\}\s*from\s*'\.\.\/lib\/referral'/.test(popup),
+    'InviteFriendPopupScreen must import buildInviteMessage from lib/referral (single source)');
+  assert(!/function buildInviteMessage\(/.test(popup),
+    'InviteFriendPopupScreen must NOT redefine buildInviteMessage locally (that scatters the copy)');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

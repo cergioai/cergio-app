@@ -10,14 +10,11 @@
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
 import { REWARDS } from '../lib/rewards';
-import { buildInviteUrl } from '../lib/referral';
+import { buildInviteUrl, buildInviteMessage } from '../lib/referral';
 
-// CERGIO-GUARD (2026-06-12): per Tarik the credit goes to the INVITING
-// party only — copy must never promise the invitee a credit ("each"/
-// "both" was wrong).
-function buildInviteMessage(amount, url) {
-  return `Hey — I'm using Cergio for booking trusted services through people you actually know. Join me: ${url}`;
-}
+// Invite copy is centralized in lib/referral.js (buildInviteMessage) so every
+// entry point shares the one captivating, AI-touch line. Credit goes to the
+// INVITING party only — the copy never promises the invitee a credit.
 
 export function InviteFriendPopupScreen() {
   const navigate = useNavigate();
@@ -32,7 +29,7 @@ export function InviteFriendPopupScreen() {
   const copyLink = async () => {
     try {
       // Copy the captivating message + link, never a bare URL (Tarik 2026-06-26).
-      await navigator.clipboard.writeText(buildInviteMessage(REWARDS.perFriendUser, inviteUrl));
+      await navigator.clipboard.writeText(buildInviteMessage(inviteUrl));
       showToast(auth?.isSignedIn
         ? 'Invite copied ✓'
         : 'Copied — sign in to earn from invites.');
@@ -42,7 +39,7 @@ export function InviteFriendPopupScreen() {
   };
 
   const shareNative = async () => {
-    const msg = buildInviteMessage(REWARDS.perFriendUser, inviteUrl);
+    const msg = buildInviteMessage(inviteUrl);
     try {
       if (navigator.share) {
         await navigator.share({ text: msg, title: 'Join me on Cergio', url: inviteUrl });
