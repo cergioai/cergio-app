@@ -49,6 +49,15 @@ export function buildConnectorInviteUrl(inviterId) {
   return `${base}${base.includes('?') ? '&' : '?'}c=1`;
 }
 
+/** The ONE canonical invite message (Tarik 2026-07-16 — "make it captivating,
+ *  add the AI touch"). Every Share/Copy invite entry point MUST use this so the
+ *  copy stays consistent everywhere. Leads with the AI recommendation hook, ends
+ *  with the attributable link (never a bare URL). Credit goes to the INVITER
+ *  only — the copy never promises the invitee a credit. */
+export function buildInviteMessage(url) {
+  return `Hey — I found Cergio.Ai: friend recommendations, powered by AI, for booking services you actually trust. Join me 👇 ${url}`;
+}
+
 /** Persist a known inviter UUID directly (used by the /i/:code short-link
  *  landing after the RPC expands the code). Same storage + TTL contract
  *  as captureRefFromUrl. */
