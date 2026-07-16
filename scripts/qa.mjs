@@ -3617,39 +3617,34 @@ function codeNoComments(rel) {
     .replace(/^\s*\/\/.*$/gm, '');               // line comments
 }
 
-// ─── launch-02: THE waiting copy, verbatim ──────────────────────────────
-// Tarik dictated one sentence for the post-request wait. The screen used to
-// fork between "Allow up to 15 minutes…" (instant) and "…up to 24 hours…"
-// (scheduled); neither is what he asked for.
-const WAIT_COPY_REQUIRED =
-  "This may take 15 minutes to a few hours to locate and get you a solid offer. We'll notify you the moment we have a match.";
-
-test('spec-launch-02', 'FROZEN: post-request wait copy is Tarik\'s exact sentence', 'launch-02', async () => {
+// ─── launch-02: retired wait-copy variants are GONE ──────────────────────
+// launch-02 v1 dictated ONE sentence ("This may take 15 minutes to a few
+// hours…"); launch-15 (2026-07-16) SUPERSEDES it with a heading+body pair.
+// This test is now the RETIREMENT guard: neither the original instant/
+// scheduled fork NOR the launch-02-v1 sentence may survive on any surface.
+// The POSITIVE assertion of the new copy lives in spec-launch-15.
+const RETIRED_WAIT_LINES = [
+  [/Allow up to 15 minutes/i, 'the old instant-wait line'],
+  [/up to 24 hours to locate and negotiate/i, 'the old scheduled-wait line'],
+  [/This may take 15 minutes to a few hours to locate/i, 'the retired launch-02-v1 sentence (superseded by launch-15)'],
+];
+test('spec-launch-02', 'FROZEN: every retired post-request wait line is gone', 'launch-02', async () => {
   const src = readFile('src/screens/ResultsScreen.jsx');
-  // 1) The copy is a single exported constant, so screen + test read ONE string.
+  // WAIT_COPY must still be a single exported constant (one source of truth)…
   const m = src.match(/export const WAIT_COPY\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*;/);
-  assert(m, 'ResultsScreen must export a WAIT_COPY string constant (one source of truth for the wait sentence)');
+  assert(m, 'ResultsScreen must export a WAIT_COPY string constant (one source of truth for the wait body)');
   const shipped = new Function(`return ${m[1]};`)();
-  assert(shipped === WAIT_COPY_REQUIRED,
-    `WAIT_COPY must be VERBATIM the founder's sentence.\n  want: ${JSON.stringify(WAIT_COPY_REQUIRED)}\n  got:  ${JSON.stringify(shipped)}`);
-
-  // 2) The waiting/results state actually RENDERS it — a constant nobody uses
-  //    is not shipped copy. Real progress ("2 replies in") may supersede it.
-  const code = codeNoComments('src/screens/ResultsScreen.jsx');
-  assert(/liveReplied > 0[\s\S]{0,240}?:\s*WAIT_COPY\}/.test(code),
-    'the waiting state (no replies yet) must render WAIT_COPY');
-
-  // 3) The OLD copy is gone from every user-facing surface.
-  const banned = [
-    [/Allow up to 15 minutes/i, 'the old instant-wait line'],
-    [/up to 24 hours to locate and negotiate/i, 'the old scheduled-wait line'],
-  ];
+  // …and it must NOT be any retired sentence.
+  for (const [re, what] of RETIRED_WAIT_LINES) {
+    assert(!re.test(shipped), `WAIT_COPY is still ${what} — it must be the launch-15 body`);
+  }
+  // The retired copy is gone from every user-facing surface.
   const surfaces = walkSync(path.join(REPO_ROOT, 'src')).filter(f => /\.jsx?$/.test(f));
   for (const f of surfaces) {
     const rel = path.relative(REPO_ROOT, f);
     const c = codeNoComments(rel);
-    for (const [re, what] of banned) {
-      assert(!re.test(c), `${rel}: ${what} is retired — the ONE wait sentence is WAIT_COPY (launch-02 / SPEC-78)`);
+    for (const [re, what] of RETIRED_WAIT_LINES) {
+      assert(!re.test(c), `${rel}: ${what} is retired — the wait copy is WAIT_HEADING + WAIT_COPY (launch-15 / SPEC-78)`);
     }
   }
 });
@@ -3938,6 +3933,162 @@ test('spec-crack-help-haiku', 'FROZEN: in-app Help → Haiku→Opus→human tria
     'lib/api.js must expose the founder inbox (listSupportTickets) + reply (postFounderReply)');
   assert(/from\('support_messages'\)[\s\S]*?sender: 'founder'/.test(api),
     'postFounderReply must post a founder message to the thread');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LAUNCH BLOCKERS round 2 — founder-reported on the live URL, 2026-07-16.
+// launch-12..15. Each `spec-<id>` test flips its ledger row open→verified once
+// green on main (auto-build.mjs). Rows seeded by
+// supabase/migrations/20260716000000_req_launch_blockers_2.sql.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── launch-12: a saved address is isolated PER USER (no cross-account bleed) ─
+test('spec-launch-12-address-isolation', 'FROZEN: the address cache is namespaced per user — no cross-account bleed', 'launch-12-address-isolation', async () => {
+  const home = readFile('src/screens/HomeScreen.jsx');
+
+  // The cache key MUST be a function of the signed-in user id. A single shared
+  // key surfaced one account's saved address to the NEXT account on the same
+  // browser (info@ saw t@'s "134 Henry Street").
+  const km = home.match(/function addrCacheKey\(uid\)\s*\{[\s\S]*?\n\}/);
+  assert(km, 'HomeScreen must define addrCacheKey(uid) — the per-user cache key');
+  const addrCacheKey = new Function('GUEST_ADDR_KEY', `${km[0]}\nreturn addrCacheKey;`)('cergio.guestAddress');
+  assert(addrCacheKey('user-A') !== addrCacheKey('user-B'),
+    'THE BUG: two different users must get DIFFERENT cache keys — a shared key leaks one account\'s address to the next');
+  assert(String(addrCacheKey('user-A')).includes('user-A'),
+    'a signed-in user\'s cache key must be namespaced by their auth id');
+  assert(addrCacheKey(null) === 'cergio.guestAddress',
+    'a guest (no uid) still uses the guest key');
+
+  // The component resolves ADDR_KEY from the AUTHED user and routes every
+  // cache read/write through it — never a bare shared key.
+  assert(/const addrUid\s*=\s*auth\?\.user\?\.id/.test(home),
+    'HomeScreen must derive addrUid from the signed-in user');
+  assert(/const ADDR_KEY = addrCacheKey\(addrUid\)/.test(home),
+    'HomeScreen must compute ADDR_KEY = addrCacheKey(addrUid)');
+  const comp = home.slice(home.indexOf('export function HomeScreen'));
+  assert(!/localStorage\.getItem\(GUEST_ADDR_KEY\)/.test(comp) && !/localStorage\.setItem\(GUEST_ADDR_KEY\)/.test(comp),
+    'THE BUG: the component read/wrote a SHARED key — every cache access must go through the uid-scoped ADDR_KEY');
+  const editor = home.slice(home.indexOf('function InlineLocationEditor'), home.indexOf('export function HomeScreen'));
+  assert(/storageKey/.test(editor) && !/localStorage\.(get|set)Item\(GUEST_ADDR_KEY\)/.test(editor),
+    'InlineLocationEditor must persist through the passed storageKey, not the shared guest key');
+  assert(/<InlineLocationEditor[\s\S]{0,400}?storageKey=\{ADDR_KEY\}/.test(home),
+    'the editor must be rendered with the uid-scoped storageKey');
+
+  // The DURABLE truth is per-user by construction: saveAddress writes the
+  // signed-in user's user_metadata; getDefaultAddress reads that same user's
+  // metadata — neither can read another account's address.
+  const api = readFile('src/lib/api.js');
+  const save = api.slice(api.indexOf('export async function saveAddress('), api.indexOf('\n}\n', api.indexOf('export async function saveAddress(')));
+  assert(/supabase\.auth\.updateUser\(\{\s*\n?\s*data: \{ default_address:/.test(save),
+    'saveAddress must persist per-user via user_metadata (the durable, isolated store)');
+  const load = api.slice(api.indexOf('export async function getDefaultAddress('), api.indexOf('\n}\n', api.indexOf('export async function getDefaultAddress(')));
+  assert(/user_metadata\?\.default_address/.test(load),
+    'getDefaultAddress must read the AUTHED user\'s own user_metadata (per-user, never a cross-account read)');
+});
+
+// ─── launch-13: a matching listing IS notified (dead core loop) ──────────────
+test('spec-launch-13-match-notify', 'FROZEN: a distinct provider with a matching listing is notified + visible', 'launch-13-match-notify', async () => {
+  // (a) TAXONOMY SYMMETRY. The request side resolves "french tutor" → "Tutor"
+  //     deterministically. The LISTING side must use the SAME resolver so a
+  //     free-text type never saves NULL (invisible to fan-out). Execute the
+  //     shared resolver to prove the request-side ground truth.
+  const taxonomyPath = path.join(REPO_ROOT, 'src/lib/serviceTaxonomy.js');
+  const { execFileSync } = await import('node:child_process');
+  const probe = `
+    import { resolveProviderTypeLocal } from ${JSON.stringify(taxonomyPath)};
+    const cases = ${JSON.stringify([['french tutor','Tutor'],['math tutor','Tutor'],['tutor for my kid','Tutor']])};
+    process.stdout.write(JSON.stringify(cases.map(([q,want]) => ({ q, want, got: resolveProviderTypeLocal(q) }))));
+  `;
+  let out;
+  try {
+    out = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8', stdio: ['ignore','pipe','pipe'] }));
+  } catch (e) { throw new Error('probe failed: ' + (e.stderr || e.message)); }
+  const bad = out.filter(r => r.got !== r.want);
+  assert(bad.length === 0, `"french tutor" must resolve to Tutor on the request side: ${JSON.stringify(bad)}`);
+
+  const about = readFile('src/screens/ServiceListAboutScreen.jsx');
+  assert(/import \{ resolveProviderTypeLocal \} from '\.\.\/lib\/serviceTaxonomy'/.test(about),
+    'the listing flow must import the SAME local resolver the request side uses (taxonomy symmetry)');
+  assert(/const localPT = resolveProviderTypeLocal\(typedTrim\)/.test(about),
+    'the listing must resolve the typed type through resolveProviderTypeLocal');
+  assert(/const resolvedProviderType = parserPT \|\| canonicalMatch \|\| localPT;/.test(about),
+    'THE BUG: a free-text type fell through to NULL — it must fall back to the deterministic local taxonomy so the listing is never invisible to fan-out');
+
+  // (b) FAN-OUT SELECTS the matching listing. Execute the SHIPPED provider
+  //     filter: a distinct owner\'s "Tutor" listing IS included; a non-match
+  //     and a NULL-taxonomy listing are excluded.
+  const api = readFile('src/lib/api.js');
+  const fm = api.match(/const filtered = \(full \|\| \[\]\)\.filter\(s =>\s*([\s\S]*?)\s*\);/);
+  assert(fm, 'getProvidersForNotify must filter services on type OR category');
+  const pred = new Function('s', 'allowLC', 'norm', `return ( ${fm[1]} );`);
+  const norm = (v) => String(v || '').trim().toLowerCase();
+  const allowLC = new Set(['tutor']);
+  assert(pred({ owner_id: 'info', taxonomy_provider_type: 'Tutor' }, allowLC, norm),
+    'a distinct provider (info@) with a matching Tutor listing MUST be in the notified set');
+  assert(pred({ taxonomy_provider_type: 'tutor' }, allowLC, norm), 'the match is case-insensitive');
+  assert(pred({ category: 'Tutor' }, allowLC, norm), 'the match also considers category');
+  assert(!pred({ taxonomy_provider_type: 'Plumber' }, allowLC, norm), 'a non-matching type must be excluded');
+  assert(!pred({ taxonomy_provider_type: null, category: null }, allowLC, norm),
+    'a NULL-taxonomy listing cannot match — which is exactly why the listing-side local resolver (a) is required');
+
+  // (c) The self-notify guard excludes ONLY the requester — never a different
+  //     matching provider. Model the shipped ownerIds line.
+  const fanout = api.slice(api.indexOf('export async function createRequestAndFanOut('));
+  assert(/\.filter\(id => id !== uid\)/.test(fanout),
+    'createRequestAndFanOut must exclude ONLY the requester (uid) from ownerIds');
+  const provs = [{ owner_id: 'info' }, { owner_id: 't-requester' }];
+  const uid = 't-requester';
+  const ownerIds = Array.from(new Set(provs.map(s => s.owner_id).filter(Boolean))).filter(id => id !== uid);
+  assert(ownerIds.includes('info') && !ownerIds.includes('t-requester'),
+    'the fan-out keeps the DISTINCT matching provider (info@) and drops ONLY the requester (t@) — the self-notify guard must not nuke info@');
+
+  // (d) …and the request has a screen to land on for that provider.
+  const app = readFile('src/App.jsx');
+  assert(/path="\/inbound\/:reqId"/.test(app),
+    'the notified provider must be able to open the request on /inbound/:reqId');
+});
+
+// ─── launch-14: "List another/your service" opens the list flow ─────────────
+test('spec-launch-14-list-route', 'FROZEN: list-a-service CTAs open /list-service, not the manage screen', 'launch-14-list-route', async () => {
+  const claim = readFile('src/screens/ClaimProfileScreen.jsx');
+  assert(/onClick=\{\(\) => navigate\('\/list-service'\)\}[\s\S]{0,240}?List your service/.test(claim),
+    'THE BUG: ClaimProfileScreen "List your service" must open the list-a-service flow (/list-service), not /services/manage');
+  assert(!/navigate\('\/services\/manage'\)[\s\S]{0,140}?List your service/.test(claim),
+    'the "List your service" CTA must not route to the MANAGE screen');
+
+  const manage = readFile('src/screens/ManageServicesScreen.jsx');
+  assert(/navigate\('\/list-service'\)/.test(manage),
+    '"List another service" must open /list-service');
+
+  const app = readFile('src/App.jsx');
+  assert(/path="\/list-service"[\s\S]{0,80}?ServiceListWelcomeScreen/.test(app),
+    '/list-service must route to the list-a-service welcome flow');
+  assert(/path="\/services\/manage"[\s\S]{0,80}?ManageServicesScreen/.test(app),
+    '/services/manage is the distinct MANAGE screen — the two must not be conflated');
+});
+
+// ─── launch-15: the new post-request waiting copy (heading + body + action) ──
+test('spec-launch-15-wait-copy-v2', 'FROZEN: post-request wait copy = the founder\'s heading + body, animation kept', 'launch-15-wait-copy-v2', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  const readConst = (name) => {
+    const m = src.match(new RegExp(`export const ${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')\\s*;`));
+    assert(m, `ResultsScreen must export ${name} (one source of truth)`);
+    return new Function(`return ${m[1]};`)();
+  };
+  const HEADING = "We'll notify you when Connectors accept";
+  const BODY = "Your request is out to matching Connectors. Once one accepts, they show up here — free swaps first. Counter-offers land in Spotlight requests › Sent for you to accept or counter back.";
+  assert(readConst('WAIT_HEADING') === HEADING,
+    `WAIT_HEADING must be VERBATIM the founder's heading.\n  want: ${JSON.stringify(HEADING)}`);
+  assert(readConst('WAIT_COPY') === BODY,
+    `WAIT_COPY must be VERBATIM the founder's body.\n  want: ${JSON.stringify(BODY)}`);
+
+  const code = codeNoComments('src/screens/ResultsScreen.jsx');
+  assert(/\{WAIT_HEADING\}/.test(code) && /\{WAIT_COPY\}/.test(code),
+    'the waiting state must render BOTH the heading and the body');
+  assert(/<LeafLogo working=\{true\}/.test(code),
+    'the pulsing live/working LeafLogo animation must be retained');
+  assert(/Cancel request/.test(src),
+    'the waiting-state action must be "Cancel request"');
 });
 
 main().catch(e => {
