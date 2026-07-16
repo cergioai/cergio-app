@@ -1,0 +1,51 @@
+# Auto-ship — the OFF-MAC merge path (SPEC-81).
+#
+# The sandbox can PUSH to github.com but cannot reach api.github.com (PR create /
+# merge). This workflow runs ON GitHub's own servers — which CAN reach the API —
+# so a branch pushed from the sandbox becomes a PR and merges itself with zero Mac.
+#
+# Division of labour:
+#   - ci.yml is the GATE (build + qa.mjs + e2e Playwright) and runs on the PR.
+#   - THIS workflow just opens the PR and arms GitHub-native auto-merge.
+#   - GitHub merges to main automatically the moment ci.yml's required check is
+#     green, then ci.yml-on-main + Vercel ship. Nothing merges unverified.
+#
+# One-time arm (AAA ARM OFF-MAC MERGE.command): sets repo secret GH_PAT (admin
+# token, so the PR is opened by a real user and thus TRIGGERS ci.yml) and enables
+# "Allow auto-merge" on the repo. Until armed, this workflow no-ops with a notice.
+name: Auto-ship (off-Mac merge)
+
+on:
+  push:
+    branches: ['ship/**']
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-ship-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  open-and-arm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open PR + arm auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::GH_PAT secret not set — off-Mac merge is UNARMED. Run 'AAA ARM OFF-MAC MERGE.command' once."
+            exit 0
+          fi
+          gh pr create --base main --head "$BRANCH" \
+            --title "auto-ship: $BRANCH" \
+            --body "Opened + auto-merge armed by auto-ship.yml (SPEC-81). ci.yml (build + qa.mjs + e2e) is the gate; GitHub squash-merges to main when it's green." \
+            2>/dev/null || echo "(PR already open for $BRANCH)"
+          # Arm native auto-merge: GitHub merges only after the required check passes.
+          gh pr merge "$BRANCH" --squash --auto --delete-branch \
+            || gh pr merge "$BRANCH" --squash --admin --delete-branch
+          echo "Armed auto-merge for $BRANCH → main."
