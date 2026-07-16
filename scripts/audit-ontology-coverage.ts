@@ -10,6 +10,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { resolveQuery } from '../supabase/functions/chat-parse/resolver.ts';
+// SPEC-80: the ontology bridge defines the sibling/parent classes that were
+// already counted (by hand) as "intended parent bridges". Made programmatic
+// here: a resolution into the SAME family as the expected type is CORRECT, not
+// confident-wrong (e.g. "balayage"→Hair Stylist for a Hair Colourist offering).
+import { canonicalType, sameFamily } from '../src/lib/ontologyBridge.js';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const tax = JSON.parse(readFileSync(join(__dir, '../supabase/functions/chat-parse/data/taxonomy.json'), 'utf8'));
@@ -59,6 +64,9 @@ for (const off of Object.values(om) as any[]) {
     const gotN = norm(got);
     // Right type (notify_as or category).
     if (gotN === norm(exp) || gotN === norm(off.category || '')) { correct++; continue; }
+    // SPEC-80 ONTOLOGY BRIDGE: same-family or shared-parent resolutions are
+    // INTENDED (a search for any class member must reach any sibling listing).
+    if (sameFamily(got, exp) || norm(canonicalType(got)) === norm(canonicalType(exp))) { correct++; continue; }
     // Cross-listed/ambiguous: the term legitimately belongs to several types and
     // the resolver picked one of them — defensible, not a confident-wrong.
     if ((termTypes[norm(term)]?.size || 0) > 1 && termTypes[norm(term)]?.has(gotN)) { ambiguousOk++; continue; }
@@ -87,7 +95,8 @@ if (wrong > 0) {
 // bridges (e.g. "EV charger"->Electrician, "balayage"->Hair Stylist) — the
 // resolver notifies the broader, populated provider type rather than a niche
 // child, which is the desired behavior. The budget catches NEW harmful matches
-// (a regression) without failing on the known-good set. Audited 2026-06-26: 53.
+// (a regression) without failing on the known-good set. Audited 2026-06-26: 53;
+// 2026-07-16 the SPEC-80 bridge made same-family resolutions count correct → 51.
 const BUDGET = 60;
 if (wrong > BUDGET) {
   console.log(`\n  ❌ TRUE confident-wrong ${wrong} exceeds budget ${BUDGET} — a regression slipped in. Investigate the new entries above.`);

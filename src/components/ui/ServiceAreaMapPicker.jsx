@@ -1,74 +1,54 @@
-// CERGIO-GUARD (2026-05-30): Zillow-style freehand polygon picker.
-// Used by HomeScreen spotlight mode (and eventually the provider
-// listing flow) to let a service provider/Connector mark exactly
-// which area they serve, replacing the coarse 5/10/25mi pills.
+// CERGIO-GUARD (2026-05-30 · rewritten 2026-07-16, SPEC-72 free-first):
+// Zillow-style freehand polygon picker. Used by HomeScreen spotlight mode
+// and the provider listing flow (ServiceListAboutScreen) to let a service
+// provider/Connector mark exactly which area they serve, replacing the
+// coarse 5/10/25mi pills.
 //
-// Why custom freehand and not google.maps.drawing?
-//   • The DrawingManager only ships click-to-vertex polygons (boring).
-//   • Zillow draws as you drag — that's the experience Tarik asked for.
-//   • Implemented via mousedown/move/up + touchstart/move/end. While
-//     drawing, we disable map drag + zoom so the gesture is the draw.
+// WHY LEAFLET + OpenStreetMap (was Google Maps JS API):
+//   • The old surface loaded https://maps.googleapis.com/maps/api/js and
+//     required VITE_GOOGLE_MAPS_API_KEY — with billing enabled — or it
+//     rendered "Google Maps API key missing". That is a PAID dependency,
+//     and in production the key path was surfacing that error to founders.
+//   • Leaflet + the free OpenStreetMap raster tiles need NO API key and
+//     NO billing ($0). Constitution: free-first (SPEC-72).
+//   • The interaction + the SAVED value are UNCHANGED: the founder still
+//     drags to freehand-draw their area, and we still persist the exact
+//     same GeoJSON Polygon shape — so no backend/schema change is needed.
+//
+// Why custom freehand and not leaflet-draw?
+//   • leaflet-draw only ships click-to-vertex polygons (a UX change).
+//   • Zillow draws as you drag — that's the experience Tarik asked for and
+//     the experience the old Google surface delivered. Implemented via
+//     mousedown/move/up + touchstart/move/end. While drawing, we disable
+//     map drag + zoom so the gesture IS the draw. Zero extra deps.
+//
+// OSM tile usage policy: ONE interactive map per listing (no bulk tile
+// scraping), and the required attribution is displayed via Leaflet's
+// attribution control (© OpenStreetMap contributors).
 //
 // API:
 //   <ServiceAreaMapPicker
 //      center={{ lat, lng }}        // anchor point (user's address)
-//      apiKey={string}              // Google Maps JS API key
 //      value={geojson polygon|null} // controlled value (optional)
 //      onChange={(geojson|null)}    // fires on save / clear
 //      onClose={() => void}         // bottom-sheet close
 //   />
+//   (An `apiKey` prop is still accepted but IGNORED — kept only so older
+//    callers don't break. No Google key is ever read or required.)
 //
-// Output GeoJSON shape:
+// Output GeoJSON shape (UNCHANGED — same as the Google version):
 //   { type: 'Polygon', coordinates: [[[lng,lat], [lng,lat], ...]] }
 // First & last coordinate are equal (closed ring) per GeoJSON spec.
 import { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-// CERGIO-GUARD (2026-05-30): plain <script> tag loader for Google Maps
-// JS API. We previously used @googlemaps/js-api-loader but Vite's
-// import-analysis kept crashing the whole app when the package wasn't
-// installed (the /* @vite-ignore */ pragma is honored in production
-// builds but not in dev's import-analysis pass). The script-tag
-// approach has zero npm dependencies — Google's loader resolves +
-// caches itself, and Vite has nothing to analyze.
-let _loaderPromise = null;
-function ensureGoogleMaps(apiKey) {
-  if (_loaderPromise) return _loaderPromise;
-  _loaderPromise = new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') {
-      reject(new Error('Google Maps requires a browser environment.'));
-      return;
-    }
-    if (window.google?.maps?.Map) {
-      resolve(window.google);
-      return;
-    }
-    const callbackName = `__cergioGoogleMapsReady_${Math.random().toString(36).slice(2)}`;
-    window[callbackName] = () => {
-      delete window[callbackName];
-      if (window.google?.maps?.Map) resolve(window.google);
-      else reject(new Error('Google Maps loaded but window.google.maps.Map is missing.'));
-    };
-    const script = document.createElement('script');
-    const params = new URLSearchParams({
-      key:       apiKey,
-      libraries: 'geometry',
-      callback:  callbackName,
-      loading:   'async',
-      v:         'weekly',
-    });
-    script.src   = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => {
-      delete window[callbackName];
-      reject(new Error('Failed to load Google Maps. Check the API key, referrer restrictions, and that Maps JavaScript API is enabled.'));
-    };
-    document.head.appendChild(script);
-  });
-  return _loaderPromise;
-}
+// Cergio green (design-spec token `g` = #3FA821). Same colors the old
+// Google polygon used, so the drawn area looks identical.
+const G = '#3FA821';
 
 // Convert a flat array of {lat,lng} points to a GeoJSON Polygon.
+// (Unchanged from the Google version — the persisted shape is frozen.)
 function pointsToGeoJson(points) {
   if (!points || points.length < 3) return null;
   const ring = points.map(p => [p.lng, p.lat]);
@@ -88,134 +68,125 @@ function geoJsonToPoints(geo) {
   return open.map(([lng, lat]) => ({ lat, lng }));
 }
 
-// Convert pointer event (mouse OR touch) into a LatLng on the map.
-// Uses Google's pixel→latLng projection on the overlay.
-function eventToLatLng(map, projection, evt) {
-  const rect = map.getDiv().getBoundingClientRect();
+// Convert a pointer event (mouse OR touch) into a Leaflet LatLng on the
+// map, using the container-pixel → latLng projection. Mirrors the old
+// Google eventToLatLng but through Leaflet's projection (no API key).
+function eventToLatLng(map, evt) {
+  const container = map.getContainer();
+  const rect = container.getBoundingClientRect();
   const x = (evt.touches?.[0]?.clientX ?? evt.clientX) - rect.left;
   const y = (evt.touches?.[0]?.clientY ?? evt.clientY) - rect.top;
-  const topRight = projection.fromLatLngToContainerPixel(map.getBounds().getNorthEast());
-  const bottomLeft = projection.fromLatLngToContainerPixel(map.getBounds().getSouthWest());
-  // We use the projection through the OverlayView attached below.
-  const point = projection.fromContainerPixelToLatLng(new window.google.maps.Point(x, y));
-  return { lat: point.lat(), lng: point.lng() };
+  return map.containerPointToLatLng([x, y]);
 }
 
 export function ServiceAreaMapPicker({
   center,
-  apiKey,
   value,
   onChange,
   onClose,
+  // apiKey is accepted but intentionally UNUSED — no Google key is read.
+  apiKey, // eslint-disable-line no-unused-vars
 }) {
   const mapRef       = useRef(null);
   const mapInstance  = useRef(null);
-  const overlayRef   = useRef(null);     // OverlayView for projection
-  const polygonRef   = useRef(null);     // committed polygon
-  const livePolyRef  = useRef(null);     // mid-draw polyline
+  const polygonRef   = useRef(null);     // committed polygon layer
+  const livePolyRef  = useRef(null);     // mid-draw polyline layer
   const isDrawingRef = useRef(false);
   const pointsRef    = useRef([]);
   const [loaded, setLoaded]     = useState(false);
   const [hasShape, setHasShape] = useState(!!value);
   const [error, setError]       = useState(null);
 
-  // 1) Load Google Maps script + create the map instance once.
+  // 1) Create the Leaflet map + OSM tile layer once. No API key, no
+  //    billing — free OpenStreetMap raster tiles with attribution.
   useEffect(() => {
-    if (!apiKey) {
-      setError('Google Maps API key missing — add VITE_GOOGLE_MAPS_API_KEY.');
-      return;
-    }
+    if (!mapRef.current) return;
     let cancelled = false;
-    ensureGoogleMaps(apiKey).then((google) => {
-      if (cancelled || !mapRef.current) return;
-      const map = new google.maps.Map(mapRef.current, {
-        center:           center || { lat: 40.7580, lng: -73.9855 }, // Times Sq fallback
-        zoom:             13,
-        disableDefaultUI: true,
-        zoomControl:      true,
-        gestureHandling:  'greedy',
-        styles: [
-          { featureType: 'poi',         elementType: 'labels', stylers: [{ visibility: 'off' }] },
-          { featureType: 'transit',     elementType: 'labels', stylers: [{ visibility: 'off' }] },
-          { featureType: 'road',        elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-        ],
+    let map;
+    try {
+      map = L.map(mapRef.current, {
+        center:            center ? [center.lat, center.lng] : [40.7580, -73.9855], // Times Sq fallback
+        zoom:              13,
+        zoomControl:       true,
+        attributionControl: true, // required OSM attribution
+        // Freehand ownership: we toggle these during a draw gesture.
+        doubleClickZoom:   true,
+        scrollWheelZoom:   true,
       });
       mapInstance.current = map;
 
-      // OverlayView gives us a projection for pixel↔latLng conversion
-      // (required for freehand drag-to-draw).
-      const overlay = new google.maps.OverlayView();
-      overlay.onAdd    = () => {};
-      overlay.draw     = () => {};
-      overlay.onRemove = () => {};
-      overlay.setMap(map);
-      overlayRef.current = overlay;
+      // FREE OpenStreetMap raster tiles — no key. The attribution string
+      // is required by the OSM tile usage policy and renders bottom-right.
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
 
-      // Hydrate with existing value if any.
+      // The map lives in a bottom-sheet that animates open, so its
+      // container has no size at construction — recompute once painted.
+      setTimeout(() => { if (!cancelled) map.invalidateSize(); }, 60);
+      setTimeout(() => { if (!cancelled) map.invalidateSize(); }, 300);
+
+      // Hydrate with the existing value if any.
       if (value) {
         const pts = geoJsonToPoints(value);
         if (pts.length >= 3) {
-          polygonRef.current = new google.maps.Polygon({
-            paths:         pts,
-            strokeColor:   '#3FA821',
-            strokeOpacity: 0.95,
-            strokeWeight:  3,
-            fillColor:     '#3FA821',
-            fillOpacity:   0.18,
-            clickable:     false,
-            editable:      false,
-            map,
-          });
-          // Zoom to fit the existing polygon.
-          const bounds = new google.maps.LatLngBounds();
-          pts.forEach(p => bounds.extend(p));
-          map.fitBounds(bounds, 40);
+          polygonRef.current = L.polygon(pts, {
+            color:       G,
+            weight:      3,
+            opacity:     0.95,
+            fillColor:   G,
+            fillOpacity: 0.18,
+            interactive: false,
+          }).addTo(map);
+          map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
         }
-      } else {
-        // Drop a faint anchor marker at the user's address.
-        if (center) {
-          new google.maps.Marker({
-            position: center,
-            map,
-            icon: {
-              path:           google.maps.SymbolPath.CIRCLE,
-              scale:          7,
-              fillColor:      '#3FA821',
-              fillOpacity:    1,
-              strokeColor:    '#FFFFFF',
-              strokeWeight:   2,
-            },
-          });
-        }
+      } else if (center) {
+        // Faint anchor marker at the user's address (SVG circle — no
+        // external marker-image asset, so no bundler icon config needed).
+        L.circleMarker([center.lat, center.lng], {
+          radius:      7,
+          color:       '#FFFFFF',
+          weight:      2,
+          fillColor:   G,
+          fillOpacity: 1,
+        }).addTo(map);
       }
-      setLoaded(true);
-    }).catch((e) => {
-      console.error('[ServiceAreaMapPicker] load failed', e);
-      setError('Map failed to load. Check your Google Maps API key.');
-    });
-    return () => { cancelled = true; };
-  }, [apiKey]); // eslint-disable-line react-hooks/exhaustive-deps
+      if (!cancelled) setLoaded(true);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[ServiceAreaMapPicker] Leaflet init failed', e);
+      if (!cancelled) setError('Map failed to load. Please try again.');
+    }
 
-  // 2) Attach freehand draw handlers. Listens at the mapRef container
-  //    level so pointer events fire even though the map div is on top.
+    return () => {
+      cancelled = true;
+      if (mapInstance.current) {
+        mapInstance.current.remove();
+        mapInstance.current = null;
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 2) Freehand draw handlers on the map container. Drag = draw; while a
+  //    gesture is active the map's own pan/zoom are frozen so the drag is
+  //    the outline, not a pan (Zillow-style — identical to the old UX).
   useEffect(() => {
-    if (!loaded || !mapRef.current) return;
+    if (!loaded || !mapRef.current || !mapInstance.current) return;
     const map = mapInstance.current;
-    const google = window.google;
     const container = mapRef.current;
 
     const clearLive = () => {
       if (livePolyRef.current) {
-        livePolyRef.current.setMap(null);
+        map.removeLayer(livePolyRef.current);
         livePolyRef.current = null;
       }
     };
 
     const start = (evt) => {
-      if (!overlayRef.current?.getProjection()) return;
-      // Wipe any previous shape — Zillow restarts the polygon on new drag.
+      // Wipe any previous shape — Zillow restarts the polygon on a new drag.
       if (polygonRef.current) {
-        polygonRef.current.setMap(null);
+        map.removeLayer(polygonRef.current);
         polygonRef.current = null;
         setHasShape(false);
         onChange?.(null);
@@ -223,56 +194,50 @@ export function ServiceAreaMapPicker({
       clearLive();
       isDrawingRef.current = true;
       pointsRef.current = [];
-      // Freeze map so the drag IS the draw, not a pan.
-      map.setOptions({ draggable: false, scrollwheel: false, disableDoubleClickZoom: true });
-      // Push initial point.
-      const proj = overlayRef.current.getProjection();
-      const pt = eventToLatLng(map, proj, evt);
+      // Freeze the map so the drag IS the draw, not a pan.
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      const pt = eventToLatLng(map, evt);
       pointsRef.current.push(pt);
-      livePolyRef.current = new google.maps.Polyline({
-        path:          [pt],
-        strokeColor:   '#3FA821',
-        strokeOpacity: 0.95,
-        strokeWeight:  3,
-        map,
-      });
+      livePolyRef.current = L.polyline([pt], {
+        color:   G,
+        weight:  3,
+        opacity: 0.95,
+      }).addTo(map);
       evt.preventDefault?.();
     };
 
     const move = (evt) => {
-      if (!isDrawingRef.current || !overlayRef.current?.getProjection()) return;
-      const proj = overlayRef.current.getProjection();
-      const pt = eventToLatLng(map, proj, evt);
+      if (!isDrawingRef.current) return;
+      const pt = eventToLatLng(map, evt);
       const last = pointsRef.current[pointsRef.current.length - 1];
       // Throttle — drop near-duplicate points so we don't drown the polygon.
       if (last && Math.hypot(pt.lat - last.lat, pt.lng - last.lng) < 0.0002) return;
       pointsRef.current.push(pt);
-      livePolyRef.current?.getPath().push(new google.maps.LatLng(pt.lat, pt.lng));
+      livePolyRef.current?.addLatLng(pt);
       evt.preventDefault?.();
     };
 
     const end = () => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
-      map.setOptions({ draggable: true, scrollwheel: true, disableDoubleClickZoom: false });
+      // Thaw the map.
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
       clearLive();
       const pts = pointsRef.current;
       pointsRef.current = [];
-      if (pts.length < 3) {
-        return; // not enough to form a shape — bail silently
-      }
-      const polygon = new google.maps.Polygon({
-        paths:         pts,
-        strokeColor:   '#3FA821',
-        strokeOpacity: 0.95,
-        strokeWeight:  3,
-        fillColor:     '#3FA821',
-        fillOpacity:   0.18,
-        clickable:     false,
-        editable:      false,
-        map,
-      });
-      polygonRef.current = polygon;
+      if (pts.length < 3) return; // not enough to form a shape — bail silently
+      polygonRef.current = L.polygon(pts, {
+        color:       G,
+        weight:      3,
+        opacity:     0.95,
+        fillColor:   G,
+        fillOpacity: 0.18,
+        interactive: false,
+      }).addTo(map);
       setHasShape(true);
       onChange?.(pointsToGeoJson(pts));
     };
@@ -296,8 +261,8 @@ export function ServiceAreaMapPicker({
   }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearShape = () => {
-    if (polygonRef.current) {
-      polygonRef.current.setMap(null);
+    if (polygonRef.current && mapInstance.current) {
+      mapInstance.current.removeLayer(polygonRef.current);
       polygonRef.current = null;
     }
     setHasShape(false);
@@ -331,12 +296,12 @@ export function ServiceAreaMapPicker({
         {/* Map */}
         <div className="flex-1 relative" style={{ touchAction: 'none' }}>
           {!loaded && !error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-bg5">
+            <div className="absolute inset-0 flex items-center justify-center bg-bg5 z-[500] pointer-events-none">
               <p className="text-body-sm text-b3 font-medium">Loading map…</p>
             </div>
           )}
           {error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-bg5 p-5 text-center">
+            <div className="absolute inset-0 flex items-center justify-center bg-bg5 p-5 text-center z-[500]">
               <p className="text-body-sm text-warnText font-medium">{error}</p>
             </div>
           )}
@@ -344,7 +309,7 @@ export function ServiceAreaMapPicker({
           {loaded && !hasShape && (
             <div className="absolute top-3 left-3 right-3 bg-white/95 backdrop-blur-sm
                             rounded-pill px-4 py-2 text-meta text-b2 font-medium text-center
-                            shadow-sm pointer-events-none">
+                            shadow-sm pointer-events-none z-[600]">
               ✏️ Hold and drag to draw your area
             </div>
           )}

@@ -18,6 +18,7 @@ import {
   listRecosOnMyServices,
 } from '../lib/api';
 import { stampInboxSeen } from '../hooks/useInboxUnread';
+import { isBlockedFeedCategory } from '../data/providerTypes';
 import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
 import { getMyOpenDisputes } from '../lib/api';
 import { MarkBookingPostedModal } from '../components/ui/MarkBookingPostedModal';
@@ -713,13 +714,18 @@ export function JobsInboxScreen() {
 
           // 5. Provider: new inbound requests — accept fast (bid-decay). Lead
           //    with the service; free-barter framing handled on the detail.
-          (inbound || []).forEach(r => items.push({
+          (inbound || []).forEach(r => {
+            // CERGIO-GUARD (2026-07-16): FROZEN_SPEC L617 blocked
+            // categories must never surface on a real screen (Inbox).
+            if (isBlockedFeedCategory(r.service_type, r.category, r.service?.title)) return;
+            items.push({
             key: 'req-' + r.id, tone: 'plain', money: false,
             headline: `New request · ${r.service_type || r.category || 'service'}`,
             sub: `${first(r.requester)}${r.location_text ? ` · ${r.location_text}` : ''}`,
             actionLabel: 'View', onAction: () => navigate(`/inbound/${r.id}`),
             ts: r.created_at,
-          }));
+          });
+          });
 
           // 6. Consumer: a provider accepted your request — book a time (lead $ when offered).
           myAnswered.forEach(r => (r.responses || []).forEach(resp => items.push({
@@ -735,7 +741,11 @@ export function JobsInboxScreen() {
 
           // 6b. Recommendations RECEIVED on my services — give the reco dot a
           //     landing spot so it isn't a dead end (SPEC-67b, Tarik 2026-06-24).
-          (recosReceived || []).forEach(rec => items.push({
+          (recosReceived || []).forEach(rec => {
+            // CERGIO-GUARD (2026-07-16): FROZEN_SPEC L617 blocked
+            // categories must never surface on the reco (Inbox) surface.
+            if (isBlockedFeedCategory(rec.service_title, rec.service_type, rec.category)) return;
+            items.push({
             key: 'reco-' + rec.id, tone: 'green', money: false,
             headline: `${first({ display_name: rec.recommender_name })} recommended you`,
             sub: rec.message
@@ -744,7 +754,8 @@ export function JobsInboxScreen() {
             actionLabel: 'View', onAction: () => navigate(rec.recommender_id ? `/u/${rec.recommender_id}` : '/inbox'),
             onView: viewSvc(rec.service_id),
             ts: rec.sent_at,
-          }));
+          });
+          });
 
           // 7. Recently confirmed (last 48h) — surfaces a "just accepted/booked"
           //    job in the action feed so it isn't only buried in Upcoming
