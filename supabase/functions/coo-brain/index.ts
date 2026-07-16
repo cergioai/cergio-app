@@ -214,7 +214,7 @@ function sqlPayloadSafe(raw: string): boolean {
 
 // Idempotent workers the executor will re-run (identical to coo-execute EDGE_ALLOW).
 const EDGE_ALLOW = new Set([
-  'fulfill-crawl', 'enrich-influencers', 'crawl-health-check', 'creator-harvest', 'crawl-seed-yellowpages',
+  'fulfill-crawl', 'enrich-influencers', 'crawl-health-check', 'creator-harvest', 'crawl-seed-osm',
 ]);
 const EDGE_DENY = [/^outreach-/i, /^notify/i, /^stripe-/i, /release-funds/i, /^outbound/i];
 
@@ -329,7 +329,7 @@ ${schemaContract(cols)}
       (c) it MUST have a WHERE clause (never rewrite a whole table);
       (d) it must contain NONE of: DELETE, DROP, TRUNCATE, GRANT, REVOKE, ALTER, CREATE, INSERT, COPY, CALL, DO $$, auth./storage./vault., or any outreach_/outbound/notification/message/payout/payment/transfer/charge table.
     NEVER emit DELETE, DROP, TRUNCATE, GRANT, ALTER, INSERT into any send/outbound table, or any write to auth.* . Those are not reversible/allowed here.
-  - "edge_call": re-run an idempotent, read/enrich/harvest worker by NAME (put the bare function name in action_payload). ONLY these are allowed: "fulfill-crawl", "enrich-influencers", "crawl-health-check", "creator-harvest", "crawl-seed-yellowpages". NEVER "outreach-send", "notify-*", "stripe-*", "release-funds" or anything that messages a human or moves money.
+  - "edge_call": re-run an idempotent, read/enrich/harvest worker by NAME (put the bare function name in action_payload). ONLY these are allowed: "fulfill-crawl", "enrich-influencers", "crawl-health-check", "creator-harvest", "crawl-seed-osm". NEVER "outreach-send", "notify-*", "stripe-*", "release-funds", "crawl-seed-google-places" (paid) or anything that messages a human or moves money.
   - "none": no safe automatic action exists (pure human decision, copy change, code change/deploy, strategy, or a change to the live metrics endpoint / cergio_ops_snapshot). action_payload = "".
 
 • "action_payload" (string): the EXACT single SQL statement (for sql) or the bare edge fn name (for edge_call), else "". When action_kind is "sql" or "edge_call" you MUST fill this with a concrete, ready-to-run value — an empty payload makes the proposal un-runnable and it will be gated to the founder.

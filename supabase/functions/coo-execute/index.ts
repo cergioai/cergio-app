@@ -231,6 +231,10 @@ const EDGE_ALLOW = new Set([
   'enrich-influencers',
   'crawl-health-check',
   'creator-harvest',
+  // FREE OpenStreetMap/Overpass matrix seeder (SPEC-72 free-first). Enqueue-only,
+  // idempotent, no send / no money — safe for the executor to re-run. Replaces the
+  // paid 'crawl-seed-google-places' (never in the allowlist) as the primary source.
+  'crawl-seed-osm',
 ]);
 // Explicit deny-list of families that message humans or move money (belt & braces).
 const EDGE_DENY = [/^outreach-/i, /^notify/i, /^stripe-/i, /release-funds/i, /^outbound/i];
