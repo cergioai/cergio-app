@@ -23,6 +23,7 @@ import { SetupCheckBanner } from './components/ui/SetupCheckBanner';
 import { PaymentSheet } from './components/ui/PaymentSheet';
 import { ScheduleSheet } from './components/ui/ScheduleSheet';
 import { BuildVersionPill } from './components/ui/BuildVersionPill';
+import { HelpWidget } from './components/ui/HelpWidget';
 
 import { SplashScreen }     from './screens/SplashScreen';
 import { OnboardScreen }    from './screens/OnboardScreen';
@@ -97,6 +98,7 @@ import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
 import { AdminCrawlScreen }                 from './screens/AdminCrawlScreen';
 import { OpsConsoleScreen }                 from './screens/OpsConsoleScreen';
+import { SupportInboxScreen }               from './screens/SupportInboxScreen';
 import { PublicProfileServicesScreen }      from './screens/PublicProfileServicesScreen';
 import { InviteLandingScreen }              from './screens/InviteLandingScreen';
 import { ClaimProfileScreen }               from './screens/ClaimProfileScreen';
@@ -117,6 +119,7 @@ const HIDE_NAV_PATHS_EXTRA = [
   '/earnings/breakdown', '/earnings/network', '/earnings/transactions',
   '/earnings/how', '/earnings/track',
   '/ops',                             // founder console — renders its own full shell
+  '/support-inbox',                   // founder support inbox — own full shell
 ];
 
 // Re-exported so screens can grab shared state with one named import.
@@ -432,6 +435,12 @@ function Layout() {
             No block if the provider hasn't marked complete. */}
         <BarterPostGate isSignedIn={auth.isSignedIn} userId={auth?.user?.id || null} />
 
+        {/* CERGIO-GUARD (2026-07-15, crack-help-haiku): app-wide Help entry —
+            mounted in the shared Layout, not per-screen. Hidden on the focused
+            linear flows (same rule as the BottomNav) so it never covers a
+            fixed-bottom action bar. Opens a ticket → AI triage ladder. */}
+        <HelpWidget visible={showNav} userEmail={auth?.user?.email || ''} />
+
         {paymentSheet && (
           <PaymentSheet
             clientSecret={paymentSheet.clientSecret}
@@ -584,6 +593,9 @@ export default function App() {
               composer). Auth is gated inside the screen via isAdminEmail,
               matching AdminCrawlScreen. */}
           <Route path="/ops"                   element={<OpsConsoleScreen />} />
+          {/* crack-help-haiku — founder support inbox (admin-gated inside the
+              screen, RLS-gated in the DB). Reads all tickets, reply closes. */}
+          <Route path="/support-inbox"         element={<SupportInboxScreen />} />
 
           {/* CERGIO-GUARD (2026-06-12): short invite links — /i/<code>
               expands to the inviter's profile + stores the referral.
