@@ -2473,6 +2473,147 @@ test('crawl-throughput', 'REQ-crawl-throughput: fulfill-crawl produces NEW servi
     'a normal YP page must parse to >=1 real listing (rows_written > 0 on a normal response) — REQ-crawl-throughput');
 });
 
+// ─── REGRESSION LOCK: crawl-osm-free ─────────────────────────────────────────
+// 2026-07-15 (SPEC-72, free-first). Google Places is a PAID API and is now billing-
+// blocked; YellowPages is 403-blocked from edge. The primary + default services
+// source is OpenStreetMap via the keyless Overpass API, for BOTH bulk (crawl-seed-
+// osm → source=osm) AND on-demand (enqueueCityCrawl source=osm). This test locks:
+//   (A) Google Places is dormant (GOOGLE_PLACES_ENABLED default false) + osm default
+//   (B) a REAL service_type→OSM-tag map (cross-checked vs the OSM wiki) + graceful
+//       fallback for unmapped types + provider_type→seeder-key normalization
+//   (C) blocked categories never surface (executes osmIsBlocked)
+//   (D) a block/empty/rate-limited Overpass response is SURFACED as error (job re-
+//       queued, agent_runs.meta.osm_blocked) and NEVER masked as delivered-0
+//       (executes the shipped osmLooksBlocked)
+//   (E) on-demand + the bulk seeder both enqueue source='osm' (not google_places)
+// Wired to REQ crawl-osm-free (ledger row seeded by 20260715000000).
+test('crawl-osm-free', 'REQ-crawl-osm-free: services crawl sources from FREE OpenStreetMap/Overpass for bulk + on-demand (Google Places dormant); real type→tag map; blocked categories never surface; a block/empty Overpass response is error (re-queued) not delivered-0 (SPEC-72)', '#64', async () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+
+  // ── (A) Google Places DORMANT + OSM is the DEFAULT source ───────────────────
+  assert(/GOOGLE_PLACES_ENABLED\s*=\s*\(Deno\.env\.get\('GOOGLE_PLACES_ENABLED'\)\s*\|\|\s*'false'\)/.test(fc),
+    'Google Places must sit behind GOOGLE_PLACES_ENABLED defaulting to false (never billed by default) — crawl-osm-free');
+  assert(/const source = \(job\.source \?\? 'osm'\)/.test(fc),
+    "the DEFAULT crawl source must be 'osm' (free-first) — crawl-osm-free");
+  assert(/source === 'osm' \|\| placesDown/.test(fc),
+    'the OSM branch must run for source=osm and whenever Places is disabled/down (primary path) — crawl-osm-free');
+  // Reversible: the paid Places branch stays in the tree, just dormant.
+  assert(/maps\.googleapis\.com\/maps\/api\/place\/textsearch/.test(fc),
+    'the Google Places branch must remain (dormant, reversible last resort) — crawl-osm-free');
+
+  // ── (B) REAL service_type → OSM tag map (cross-checked vs the OSM wiki) ──────
+  assert(/const OSM_TAGS: Record<string, string\[\]> = \{/.test(fc), 'fulfill-crawl must define OSM_TAGS — crawl-osm-free');
+  const tagChecks = [
+    ['plumber',          'craft"="plumber'],
+    ['electrician',      'craft"="electrician'],
+    ['hvac',             'craft"="hvac'],
+    ['hair stylist',     'shop"="hairdresser'],
+    ['barber',           'shop"="hairdresser'],
+    ['photographer',     'craft"="photographer'],
+    ['mobile mechanic',  'shop"="car_repair'],
+    ['painter',          'craft"="painter'],
+    ['roofing',          'craft"="roofer'],
+    ['locksmith',        'craft"="locksmith'],
+    ['car wash',         'amenity"="car_wash'],
+    ['pest control',     'craft"="pest_control'],
+  ];
+  for (const [type, tag] of tagChecks) {
+    const re = new RegExp(`'${type}':\\s*\\[[^\\]]*${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+    assert(re.test(fc), `OSM_TAGS['${type}'] must map to ${tag}" (OSM wiki) — crawl-osm-free`);
+  }
+  // Unmapped types must fall back to a name search (never silently zero), and an
+  // on-demand provider_type must normalize to the seeder key.
+  assert(/OSM_TAGS\[type\]\s*\?\?\s*\[`"name"~/.test(fc),
+    'unmapped service types must fall back to a name search (never silently zero) — crawl-osm-free');
+  assert(/OSM_TYPE_ALIAS\[rawType\]\s*\?\?\s*rawType/.test(fc),
+    'on-demand provider_type must normalize to the seeder key via OSM_TYPE_ALIAS — crawl-osm-free');
+  // Write-contract: OSM rows carry osm_id + data_source='osm' + lat/lon.
+  assert(/osm_id: osmId/.test(fc) && /data_source: 'osm'/.test(fc),
+    "OSM rows must write osm_id + data_source='osm' (auditable provenance) — crawl-osm-free");
+
+  // ── Overpass etiquette: mirror fallback, descriptive UA, cap, timeout ───────
+  assert(/OSM_ENDPOINTS\s*=\s*\[[\s\S]*?overpass-api\.de[\s\S]*?kumi\.systems/.test(fc),
+    'Overpass must have a primary endpoint + a mirror fallback — crawl-osm-free');
+  assert(/CergioServicesCrawl/.test(fc) && /'User-Agent':\s*OSM_UA/.test(fc),
+    'Overpass calls must send a descriptive User-Agent (etiquette) — crawl-osm-free');
+  assert(/const OSM_MAX_RESULTS = 50/.test(fc),
+    'OSM results must be capped ~50/job (etiquette + write budget) — crawl-osm-free');
+  assert(/AbortController[\s\S]{0,240}OSM_HTTP_TIMEOUT_MS/.test(fc),
+    'the Overpass fetch must have a bounded timeout — crawl-osm-free');
+
+  // ── (C) BEHAVIOURAL: blocked categories NEVER surface ───────────────────────
+  const osmBlockedConst = (fc.match(/const OSM_BLOCKED = new RegExp\([\s\S]*?\);/) || [''])[0];
+  const osmIsBlockedFn  = (fc.match(/function osmIsBlocked[\s\S]*?\}/) || [''])[0]
+    .replace('(s: string): boolean', '(s)');
+  assert(osmBlockedConst && osmIsBlockedFn, 'must define OSM_BLOCKED + osmIsBlocked — crawl-osm-free');
+  // eslint-disable-next-line no-new-func
+  const { osmIsBlocked } = new Function(`${osmBlockedConst}\n${osmIsBlockedFn}\nreturn { osmIsBlocked };`)();
+  for (const bad of ['massage', 'tattoo parlor', 'makeup artist', 'personal chef', 'DJ services', 'smoke shop', 'gun range', 'strip club']) {
+    assert(osmIsBlocked(bad) === true, `blocked category must never surface: "${bad}" — crawl-osm-free`);
+  }
+  for (const ok of ['plumber', 'house cleaning', 'photographer', 'electrician']) {
+    assert(osmIsBlocked(ok) === false, `allowed service type must pass: "${ok}" — crawl-osm-free`);
+  }
+  // And the OSM path must apply the filter: refuse a blocked TYPE up-front (no
+  // Overpass call) and drop a blocked-category ROW during parse.
+  assert(/if \(osmIsBlocked\(type\) \|\| osmIsBlocked\(rawType\)\) return \{ saved: 0/.test(fc),
+    'a blocked type must be refused at parse time (no Overpass call) — crawl-osm-free');
+  assert(/if \(osmIsBlocked\(`\$\{name\} \$\{tagText\}`\)\) continue/.test(fc),
+    'a blocked-category row must be dropped during parse — crawl-osm-free');
+
+  // ── (D) BEHAVIOURAL: a block/empty Overpass response is error, NOT delivered-0
+  const detFn = (fc.match(/function osmLooksBlocked\([\s\S]*?\n\}/) || [''])[0]
+    .replace('(status: number, body: string): boolean', '(status, body)');
+  assert(detFn, 'must define osmLooksBlocked — crawl-osm-free');
+  // eslint-disable-next-line no-new-func
+  const { osmLooksBlocked } = new Function(`${detFn}\nreturn { osmLooksBlocked };`)();
+  assert(osmLooksBlocked(429, 'Too Many Requests') === true, 'a 429 must be detected as blocked (not 0-results) — crawl-osm-free');
+  assert(osmLooksBlocked(504, '') === true, 'a 504 gateway timeout must be blocked — crawl-osm-free');
+  assert(osmLooksBlocked(200, '') === true, 'an empty 200 body must be blocked/empty — crawl-osm-free');
+  assert(osmLooksBlocked(200, 'runtime error: please try again later') === true, 'a rate-limit/runtime-error page must be blocked — crawl-osm-free');
+  assert(osmLooksBlocked(200, JSON.stringify({ elements: [{ type: 'node', id: 1, tags: { name: 'Acme Plumbing' } }] })) === false,
+    'a VALID Overpass element set must NOT be flagged blocked (real rows can be written) — crawl-osm-free');
+
+  // The block must THROW, be RE-QUEUED (transient, not burned/masked), and the
+  // count must be surfaced in agent_runs.meta — never a silent delivered-0 (SPEC-72).
+  assert(/class OverpassBlockedError/.test(fc) && /throw new OverpassBlockedError\(/.test(fc),
+    'a blocked Overpass response must THROW OverpassBlockedError (surfaced) — crawl-osm-free');
+  assert(/e instanceof OverpassBlockedError[\s\S]{0,260}?status: 'new'/.test(fc),
+    'a blocked OSM job must be RE-QUEUED to new (transient) — never delivered-0, never burned — crawl-osm-free');
+  assert(/osm-blocked \(re-queued/.test(fc),
+    'the re-queue note must carry the osm-blocked reason (surfaced) — crawl-osm-free');
+  assert(/osm_blocked:\s*osmBlocked\.length/.test(fc),
+    'agent_runs.meta must carry osm_blocked so a block flood cannot hide behind delivered-0 (SPEC-72) — crawl-osm-free');
+
+  // ── (E) BULK + ON-DEMAND both flow through OSM (not google_places) ──────────
+  const api = readFile('src/lib/api.js');
+  assert(/kind === 'services' \? 'osm'/.test(api),
+    "on-demand SERVICES crawls (enqueueCityCrawl) must default source='osm' (not google_places) — crawl-osm-free");
+  assert(/source: src/.test(api),
+    'enqueueCityCrawl must insert the source column so the on-demand path is osm-routed — crawl-osm-free');
+
+  const seed = readFile('supabase/functions/crawl-seed-osm/index.ts');
+  assert(/source:\s*'osm'/.test(seed),
+    "crawl-seed-osm must enqueue source='osm' (the free drain path) — crawl-osm-free");
+  assert(/kind:\s*'services'/.test(seed) && /status:\s*'new'/.test(seed),
+    'the seeder must enqueue kind=services/status=new so fulfill-crawl drains them — crawl-osm-free');
+  assert(/const BLOCKED = new RegExp/.test(seed) && /isBlocked/.test(seed),
+    'the seeder must exclude blocked categories from the matrix — crawl-osm-free');
+  // The 11 DMA cities are seeded.
+  for (const city of ['Miami', 'New York', 'Los Angeles', 'Chicago', 'Dallas', 'Philadelphia', 'Houston', 'Atlanta', 'Washington', 'Boston', 'San Francisco']) {
+    assert(new RegExp(`'${city}'`).test(seed), `crawl-seed-osm must seed the DMA city ${city} — crawl-osm-free`);
+  }
+
+  // ── Migration: register the seeder, unschedule the paid cron, open the ledger row
+  const mig = readFile('supabase/migrations/20260715000000_osm_primary_source.sql');
+  assert(/crawl-seed-osm/.test(mig) && /agent_registry/.test(mig),
+    'the migration must register crawl-seed-osm in agent_registry — crawl-osm-free');
+  assert(/cron\.unschedule/.test(mig) && /crawl-seed-google-places/.test(mig),
+    'the migration must unschedule any google-places seed cron (stop refilling a paid path) — crawl-osm-free');
+  assert(/cergio_open_requirement\(\s*\n?\s*'crawl-osm-free'/.test(mig),
+    'the migration must open the crawl-osm-free requirement in the ledger — crawl-osm-free');
+});
+
 test('spec-63-crawl-monitoring', 'FROZEN: crawl pipeline self-monitors — health-check emails STALLED/FAILED/EMPTY diagnosis; admin-crawl-status + /admin/crawls live dashboard (SPEC-63)', '#63', async () => {
   const hc = path.join(REPO_ROOT, 'supabase/functions/crawl-health-check/index.ts');
   const ad = path.join(REPO_ROOT, 'supabase/functions/admin-crawl-status/index.ts');

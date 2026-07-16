@@ -45,6 +45,13 @@ serve(async (req: Request) => {
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const placesKey   = Deno.env.get('GOOGLE_PLACES_API_KEY')
       || Deno.env.get('GOOGLE_MAPS_KEY') || '';
+    // 2026-07-15 (SPEC-72, free-first): OpenStreetMap/Overpass is the PRIMARY and
+    // DEFAULT services source — keyless, no billing account, and it cannot be shut
+    // off by a Google account state. Google Places is now DORMANT: its branch stays
+    // in the tree (reversible) but is only ever reached when GOOGLE_PLACES_ENABLED=
+    // true (default false), so the paid/billing-blocked API is never called unless a
+    // human explicitly, reversibly flips one env var.
+    const GOOGLE_PLACES_ENABLED = (Deno.env.get('GOOGLE_PLACES_ENABLED') || 'false').toLowerCase() === 'true';
     const auth = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!auth || auth !== serviceKey) return json({ error: 'Unauthorized' }, 401);
     // NOTE: Places key is validated conditionally below (only google_places jobs
@@ -84,11 +91,13 @@ serve(async (req: Request) => {
     }
 
     // Pick up unworked service crawls. `source` (nullable) routes fulfillment:
-    // NULL/'google_places' → Places API. 'yellowpages' rows are EXCLUDED here (see
-    // above) so a dead queue can never be fetched or re-errored.
+    // NULL/'osm' → OpenStreetMap/Overpass (the free DEFAULT, keyless). 'google_places'
+    // → Places API but ONLY when GOOGLE_PLACES_ENABLED=true (dormant by default).
+    // 'yellowpages' rows are EXCLUDED here (see above) so a dead queue can never be
+    // fetched or re-errored.
     let jobQ = db
       .from('crawl_requests')
-      .select('id, kind, city, state, service_type, target_count, requested_by, status, source, notes')
+      .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
       .eq('kind', 'services')
       .eq('status', 'new');
     if (!YP_ENABLED) jobQ = jobQ.or('source.is.null,source.neq.yellowpages');
@@ -106,13 +115,16 @@ serve(async (req: Request) => {
       .eq('status', 'failed')
       .or('notes.ilike.%REQUEST_DENIED%,notes.ilike.%places-infra%,notes.ilike.%enable Billing%');
 
-    // 2026-07-14 (FORENSIC): a missing/denied Places key is NO LONGER fatal. The
-    // crawl falls back to OpenStreetMap Overpass — keyless, free, no billing
-    // account — so the services engine can never be taken offline by a Google
-    // billing/quota state. placesDown latches for the rest of the run once Google
+    // 2026-07-15 (SPEC-72): OpenStreetMap/Overpass is the free primary source, so a
+    // missing/denied/disabled Places account is NEVER fatal. placesDown latches the
+    // whole run onto Overpass; it starts TRUE whenever Google is disabled (the
+    // default) or unkeyed, so every job flows to the free path unless Google Places
+    // is explicitly re-enabled. It also latches mid-run if an enabled Google account
     // returns an infrastructure status (REQUEST_DENIED / OVER_QUERY_LIMIT).
-    let placesDown = !placesKey;
-    let placesDownReason = placesKey ? '' : 'GOOGLE_PLACES_API_KEY not set';
+    let placesDown = !GOOGLE_PLACES_ENABLED || !placesKey;
+    let placesDownReason = !GOOGLE_PLACES_ENABLED
+      ? 'GOOGLE_PLACES_ENABLED=false (OpenStreetMap is the free primary source)'
+      : (placesKey ? '' : 'GOOGLE_PLACES_API_KEY not set');
 
     const out: Array<Record<string, unknown>> = [];
     for (const job of jobs ?? []) {
@@ -120,7 +132,10 @@ serve(async (req: Request) => {
       await db.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
 
       try {
-        const source = (job.source ?? 'google_places') as string;
+        // DEFAULT source is now 'osm' (free-first). Legacy rows were backfilled to
+        // 'google_places' by migration 20260707000000; new app + seeder rows set
+        // 'osm' explicitly. A null source therefore means a brand-new osm job.
+        const source = (job.source ?? 'osm') as string;
         let saved = 0;
         let found = 0;
         let query = '';
@@ -149,21 +164,28 @@ serve(async (req: Request) => {
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
-        } else if (placesDown) {
-          // ── FREE fallback: OpenStreetMap Overpass (keyless, no billing) ─────
-          // Reached when Google Places is denied/over-quota/unkeyed. OSM carries
-          // the crawl at zero cost and zero credentials (constitution: free-first).
+        } else if (source === 'osm' || placesDown) {
+          // ── PRIMARY services source: OpenStreetMap via Overpass (keyless, free)
+          // This is the DEFAULT path for every services crawl (bulk + on-demand).
+          // Constitution: free-first. It runs for source='osm', for null-source
+          // jobs (default), and whenever Google Places is disabled/denied/unkeyed.
+          // A blocked/rate-limited/timed-out Overpass response throws
+          // OverpassBlockedError (caught below → job re-queued, run surfaced as
+          // 'error' with the reason in agent_runs.meta) and is NEVER masked as a
+          // delivered-0 (SPEC-72).
           const r = await fulfillOverpass(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: saved === 0
-              ? `no OpenStreetMap results for this city/type (places down: ${placesDownReason})`
-              : `osm-fallback (places down: ${placesDownReason})`,
+              ? `no OpenStreetMap results for ${job.service_type || 'this type'} in ${job.city || 'this city'}`
+              : `osm (${r.endpoint || 'overpass'})`,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else {
-          // ── Google Places path (unchanged legacy behaviour) ─────────────────
+          // ── Google Places path — DORMANT (only reached when GOOGLE_PLACES_ENABLED
+          //    =true AND a valid key exists AND source='google_places'). Left intact
+          //    and reversible as a last-resort; never called by default. ──────────
           const want = Math.min(Math.max(job.target_count || 10, 1), 20);
           const where = [job.city, job.state].filter(Boolean).join(', ');
           query = `${job.service_type || 'local service'} in ${where || 'United States'}`;
@@ -255,6 +277,22 @@ serve(async (req: Request) => {
           out.push({ id: job.id, error: msg, infra: true });
           continue;
         }
+        // ── Overpass rate-limit / block / timeout is TRANSIENT, not a bad job ────
+        // SPEC-72: the block is SURFACED (this pushes an error → the run logs
+        // 'error' and agent_runs.meta.osm_blocked carries the count + reason, so a
+        // block flood can never hide behind a silent delivered-0). But the JOB is
+        // RE-QUEUED to 'new' (not burned to 'failed'): Overpass has 2 slots + short
+        // cooldowns, so a 429/504 clears on the next run. yp-blocked note appears in
+        // the generic branch below (status: 'failed') for the dormant YP path.
+        if (e instanceof OverpassBlockedError || /^osm-blocked/i.test(msg)) {
+          await db.from('crawl_requests').update({
+            status: 'new',
+            notes: `osm-blocked (re-queued, transient): ${msg}`.slice(0, 500),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
+          out.push({ id: job.id, error: msg, blocked: true, osm: true });
+          continue;
+        }
         const blocked = e instanceof YpBlockedError || /^yp-blocked/i.test(msg);
         // A block page is stamped 'failed' with a distinct 'yp-blocked' note — NOT
         // 'delivered' — so the queue is not silently drained to delivered-0 and the
@@ -277,6 +315,8 @@ serve(async (req: Request) => {
     const totSaved = out.reduce((a, r: any) => a + (Number(r.saved) || 0), 0);
     const anyErr   = out.some((r: any) => r.error);
     const blockedCount = out.filter((r: any) => r.blocked).length;
+    const osmBlocked   = out.filter((r: any) => r.osm && r.error);
+    const osmBlockReasons = Array.from(new Set(osmBlocked.map((r: any) => String(r.error)))).slice(0, 5);
     // SURFACE the block: if every processed job was a source block (e.g. YP anti-bot
     // on datacenter IPs) with zero rows written, this run is NOT 'ok' — it's 'error'
     // so the watchdog/health-check flags it instead of the block hiding behind a
@@ -291,6 +331,8 @@ serve(async (req: Request) => {
              : (ypSweepError ? `yp-quarantine sweep failed: ${ypSweepError}` : null),
       meta: {
         processed: out.length, blocked: blockedCount,
+        osm_blocked: osmBlocked.length, osm_block_reasons: osmBlockReasons,
+        source_default: 'osm', google_places_enabled: GOOGLE_PLACES_ENABLED,
         yp_enabled: YP_ENABLED, yp_quarantined: ypQuarantined, yp_sweep_error: ypSweepError,
       },
     });
@@ -535,11 +577,127 @@ class PlacesInfraError extends Error {
 // leads_services bucket with data_source='osm' (so their origin is auditable)
 // and, unlike some Places rows, they ALWAYS carry lat/lon → they are immediately
 // visible to services_near (historic failure #9: NULL lat/lng = invisible).
-const OSM_ENDPOINT = 'https://overpass-api.de/api/interpreter';
+// Public Overpass endpoints, tried in order with a mirror fallback. Both are free
+// and keyless. overpass-api.de is the reference instance; kumi.systems is a fast
+// community mirror. If the first rate-limits/times out we back off and try the
+// next (Overpass etiquette: ≤2 concurrent slots, short cooldowns on 429/504).
+const OSM_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+// A descriptive User-Agent is REQUIRED etiquette on the public Overpass API (an
+// anonymous UA gets throttled/blocked first). Identifies the app + a contact.
+const OSM_UA = 'CergioServicesCrawl/1.0 (+https://cergio.ai; contact: t@cergio.ai)';
+const OSM_MAX_RESULTS = 50;        // hard cap per job (Overpass etiquette + write budget)
+const OSM_HTTP_TIMEOUT_MS = 90_000; // Overpass can be slow under load; generous but bounded
+const OSM_POLITE_DELAY_MS = 1_000;  // small pause before each query so we never hammer a slot
 
-// service_type → OSM tag selectors. Keys mirror crawl-seed-google-places'
-// SERVICE_TYPES. Unmapped types fall back to a name-substring search so a new
-// service type never silently yields zero.
+// ── Overpass BLOCK / rate-limit / timeout — TRANSIENT, must be SURFACED ────────
+// Typed so the job loop can tell "Overpass is momentarily unavailable" (re-queue
+// the job, log the run 'error' with the reason in agent_runs.meta) apart from a
+// genuine "no such providers here" (valid JSON, 0 elements → honest delivered-0).
+// SPEC-72: a block/empty/error response is NEVER masked as delivered-0.
+class OverpassBlockedError extends Error {
+  constructor(public reason: string) { super(`osm-blocked: ${reason}`); this.name = 'OverpassBlockedError'; }
+}
+
+// Detect a blocked / rate-limited / timed-out / empty Overpass response. Mirrors
+// ypLooksBlocked's contract: HTTP status first, then body shape. A valid Overpass
+// answer is JSON that contains an "elements" array — anything else (a runtime-
+// error page, a rate-limit notice, an empty body) is treated as blocked.
+function osmLooksBlocked(status: number, body: string): boolean {
+  if (status === 429 || status === 504 || status === 503 || status === 502 || status === 403) return true;
+  const b = (body || '').trim();
+  if (b.length === 0) return true; // empty body = gateway/slot drop
+  if (/"elements"/.test(b)) return false; // a real result set — not blocked
+  // Overpass emits a plain-text/HTML error (not JSON) on rate-limit / timeout.
+  if (/rate_limited|too many requests|rate limit|runtime error|dispatch|please try again|gateway timeout|load too high/i.test(b)) return true;
+  return false;
+}
+
+function hostOf(u: string): string { try { return new URL(u).host; } catch { return u; } }
+
+// Fetch an Overpass query with retry + mirror fallback + polite backoff. Returns
+// the parsed JSON and the endpoint that answered. Throws OverpassBlockedError only
+// after BOTH endpoints (×2 attempts each) have failed — so a single slow slot does
+// not fail a job, but a real outage is surfaced (not silently swallowed).
+async function overpassFetch(body: string): Promise<{ json: any; endpoint: string }> {
+  let lastReason = 'unknown';
+  for (const endpoint of OSM_ENDPOINTS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await sleep(OSM_POLITE_DELAY_MS + Math.floor(Math.random() * 500));
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), OSM_HTTP_TIMEOUT_MS);
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': OSM_UA,
+            'Accept': 'application/json',
+          },
+          body: `data=${encodeURIComponent(body)}`,
+          signal: ctrl.signal,
+        });
+        clearTimeout(t);
+        const text = await res.text();
+        if (osmLooksBlocked(res.status, text)) {
+          lastReason = `http=${res.status} bytes=${text.length} @${hostOf(endpoint)}`;
+          await sleep(1500 + attempt * 2500 + Math.floor(Math.random() * 800)); // backoff on 429/504
+          continue;
+        }
+        let json: any;
+        try { json = JSON.parse(text); }
+        catch { lastReason = `non-json response @${hostOf(endpoint)}`; await sleep(1200); continue; }
+        return { json, endpoint };
+      } catch (e) {
+        // Network error / abort (timeout). serr() (never String(e)) keeps the loop
+        // from going blind (SPEC-73). Back off, then try the next attempt/mirror.
+        lastReason = `fetch-error: ${serr(e)} @${hostOf(endpoint)}`;
+        await sleep(1200 + attempt * 1500);
+      }
+    }
+  }
+  throw new OverpassBlockedError(lastReason);
+}
+
+// On-demand requests carry the taxonomy provider_type (e.g. "Plumber", "House
+// Cleaner", "Hairstylist"); the bulk seeder + OSM_TAGS use the lowercase service_
+// type keys ("plumber", "house cleaning", "hair stylist"). Normalize the former to
+// the latter so an on-demand crawl resolves the SAME OSM tags as the bulk matrix.
+const OSM_TYPE_ALIAS: Record<string, string> = {
+  'house cleaner':    'house cleaning',
+  'housekeeper':      'house cleaning',
+  'hairstylist':      'hair stylist',
+  'hvac technician':  'hvac',
+  'nail tech':        'nail technician',
+  'pet groomer':      'dog grooming',
+  'pet sitter':       'pet sitting',
+  'gardener':         'landscaping',
+  'landscaper':       'landscaping',
+  'pool cleaner':     'pool cleaning',
+  'music teacher':    'music teacher',
+};
+
+// BLOCKED categories — SECOND safety net at OSM parse time (the seeder never
+// enqueues these, but an on-demand request or an ambiguous OSM tag could surface
+// one). Word-bounded where a bare token would false-match. Mirrors YP_BLOCKED.
+const OSM_BLOCKED = new RegExp(
+  '(massage|tattoo|makeup|\\bpersonal chef\\b|private chef' +
+  '|plastic surgery|cosmetic surgery|\\bsurgeon\\b' +
+  '|\\bdrug\\b|pharmac|cannabis|dispensary|marijuana' +
+  '|liquor|\\bwine\\b|brewery|winery|distillery|\\bwine bar\\b|cocktail bar' +
+  '|tobacco|smoke shop|\\bvape\\b|\\bcigar\\b' +
+  '|casino|gambling|\\bbetting\\b|firearm|\\bgun\\b|\\bammo\\b' +
+  '|\\bescort\\b|strip club|nightclub|night club|disc jockey|\\bdj\\b)',
+  'i',
+);
+function osmIsBlocked(s: string): boolean { return OSM_BLOCKED.test(s || ''); }
+
+// service_type → OSM tag selectors. Keys mirror crawl-seed-osm's SERVICE_TYPES.
+// Cross-checked against the OSM wiki (Key:craft, Key:shop, Key:office, Key:amenity).
+// Unmapped types fall back to a name-substring search so a new service type never
+// silently yields zero.
 const OSM_TAGS: Record<string, string[]> = {
   'plumber':            ['"craft"="plumber"', '"shop"="plumber"'],
   'electrician':        ['"craft"="electrician"'],
@@ -549,14 +707,14 @@ const OSM_TAGS: Record<string, string[]> = {
   'maid service':       ['"shop"="cleaning"', '"office"="cleaning"'],
   'landscaping':        ['"craft"="gardener"', '"shop"="garden_centre"', '"landuse"="landscaping"'],
   'lawn care':          ['"craft"="gardener"'],
-  'tree service':       ['"craft"="tree_service"', '"craft"="gardener"'],
+  'tree service':       ['"craft"="gardener"'], // no dedicated OSM tag; arborists map as gardener
   'pest control':       ['"craft"="pest_control"', '"shop"="pest_control"'],
   'mover':              ['"shop"="moving_company"', '"office"="moving_company"'],
   'junk removal':       ['"amenity"="waste_transfer_station"', '"shop"="scrap_yard"'],
   'painter':            ['"craft"="painter"'],
   'roofing':            ['"craft"="roofer"'],
   'flooring':           ['"craft"="floorer"', '"shop"="flooring"'],
-  'window cleaning':    ['"craft"="window_construction"', '"shop"="cleaning"'],
+  'window cleaning':    ['"shop"="cleaning"'], // window_construction = maker, not cleaner
   'pressure washing':   ['"shop"="cleaning"'],
   'gutter cleaning':    ['"craft"="roofer"'],
   'pool cleaning':      ['"craft"="pool_maintenance"', '"shop"="swimming_pool"'],
@@ -616,50 +774,74 @@ function inUS(lat: number, lon: number): boolean {
   return lat >= 18 && lat <= 72 && lon >= -180 && lon <= -66;
 }
 
-async function fulfillOverpass(db: any, job: any): Promise<{ saved: number; found: number; query: string }> {
-  const type  = (job.service_type || '').toLowerCase().trim();
-  const city  = (job.city || '').trim();
-  const state = (job.state || 'FL').trim();
-  const want  = Math.min(Math.max(job.target_count || 10, 1), 25);
-  const query = `${type || 'local service'} in ${[city, state].filter(Boolean).join(', ')} [osm]`;
-  if (!city) return { saved: 0, found: 0, query };
+async function fulfillOverpass(db: any, job: any): Promise<{ saved: number; found: number; query: string; endpoint?: string }> {
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const type    = OSM_TYPE_ALIAS[rawType] ?? rawType; // provider_type → seeder key
+  const city    = (job.city || '').trim();
+  const state   = (job.state || '').trim();
+  const jlat    = job.lat != null ? Number(job.lat) : null;
+  const jlon    = job.lng != null ? Number(job.lng) : null; // crawl_requests uses `lng`
+  const want    = Math.min(Math.max(job.target_count || 10, 1), OSM_MAX_RESULTS);
+  const query   = `${type || 'local service'} in ${[city, state].filter(Boolean).join(', ')} [osm]`;
+  if (!city && !(jlat != null && jlon != null)) return { saved: 0, found: 0, query };
+
+  // BLOCKED category never crawled: if the requested type is off-limits (massage/
+  // tattoo/makeup/personal chef + SHAFT), refuse the whole job at parse time — no
+  // Overpass call, no rows. (First net is the seeder; this is defense in depth.)
+  if (osmIsBlocked(type) || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
 
   const selectors = OSM_TAGS[type] ?? [`"name"~"${type.replace(/[^a-z ]/gi, '')}",i`];
-  const stateName = US_STATES[state.toUpperCase()];
-  if (!stateName) return { saved: 0, found: 0, query }; // unknown state → refuse to guess
 
-  // The city area is scoped to the US state area (admin_level 4) as a first pass.
-  // VERIFIED LIVE 2026-07-14: this scoping is BEST-EFFORT — Overpass still let
-  // Miami, QUEENSLAND through (19 of 59 rows came back at lat −28 with +61 phone
-  // numbers). The hard guarantee is therefore NOT this query, it is the inUS()
-  // bbox check on every row below. Do not remove that check.
-  const body = `[out:json][timeout:60];
-area["name"="${stateName}"]["admin_level"="4"]->.s;
-area(area.s)["name"="${city.replace(/"/g, '')}"]["boundary"="administrative"]->.a;
-(${selectors.map((s) => `  nwr(area.a)[${s}];`).join('\n')}
-);
-out center ${want * 2};`;
+  // Two scoping strategies. On-demand requests carry lat/lng → a BBOX around the
+  // point (robust anywhere, no area-name ambiguity). Bulk city jobs have no point
+  // → the city area nested inside its US state area (admin_level 4). EITHER way the
+  // hard geo guarantee is the inUS() bbox re-check on every row below (Overpass has
+  // let "Miami, QUEENSLAND" through — verified live 2026-07-14). Do not remove it.
+  let body: string;
+  if (jlat != null && jlon != null && inUS(jlat, jlon)) {
+    // ~25mi box: ~0.36° lat; lon scaled by cos(lat) so the box isn't skewed.
+    const dLat = 0.36;
+    const dLon = 0.36 / Math.max(0.2, Math.cos((jlat * Math.PI) / 180));
+    const s = (jlat - dLat).toFixed(4), n = (jlat + dLat).toFixed(4);
+    const w = (jlon - dLon).toFixed(4), e = (jlon + dLon).toFixed(4);
+    body = `[out:json][timeout:60];\n(${selectors.map((sel) => `  nwr(${s},${w},${n},${e})[${sel}];`).join('\n')}\n);\nout center ${OSM_MAX_RESULTS};`;
+  } else {
+    const stateName = US_STATES[state.toUpperCase()];
+    if (!stateName) return { saved: 0, found: 0, query }; // unknown state, no point → refuse to guess
+    body = `[out:json][timeout:60];\narea["name"="${stateName}"]["admin_level"="4"]->.s;\narea(area.s)["name"="${city.replace(/"/g, '')}"]["boundary"="administrative"]->.a;\n(${selectors.map((sel) => `  nwr(area.a)[${sel}];`).join('\n')}\n);\nout center ${OSM_MAX_RESULTS};`;
+  }
 
-  const res = await fetch(OSM_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'CergioServicesCrawl/1.0 (+https://cergio.ai)' },
-    body: `data=${encodeURIComponent(body)}`,
-  });
-  if (!res.ok) throw new Error(`Overpass ${res.status}`);
-  const j = await res.json().catch(() => ({ elements: [] }));
-  const els: any[] = (j.elements || []).filter((e: any) => e?.tags?.name);
+  // overpassFetch retries + falls back to the mirror + backs off on 429/504, and
+  // THROWS OverpassBlockedError if every endpoint fails. That error is caught by
+  // the job loop → the job is re-queued (transient) and the run is logged 'error'
+  // with the reason in agent_runs.meta.osm_blocked — NEVER a masked delivered-0.
+  const { json: j, endpoint } = await overpassFetch(body);
+  const els: any[] = (j.elements || []).filter((el: any) => el?.tags?.name);
 
   let saved = 0;
-  const seen = new Set<string>();
-  for (const el of els.slice(0, want)) {
+  const seen = new Set<string>();      // in-job dedupe: osm_id AND normalized name+city
+  for (const el of els) {
+    if (saved >= want) break;
     const t = el.tags || {};
     const name = cleanText(t.name);
-    if (!name || seen.has(name.toLowerCase())) continue;
-    seen.add(name.toLowerCase());
+    if (!name) continue;
+
+    // BLOCKED category never surfaces: drop a row whose name or OSM tag lands in a
+    // blocked vertical (e.g. an ad/adjacent "massage"/"tattoo" node).
+    const tagText = `${t.shop || ''} ${t.craft || ''} ${t.office || ''} ${t.amenity || ''} ${t.leisure || ''}`;
+    if (osmIsBlocked(`${name} ${tagText}`)) continue;
+    // name↔service_type plausibility: reject an off-topic node (reuses the shared
+    // keyword profiles; types with no profile can't be disproved → accepted).
+    if (!ypPlausible(rawType, name, tagText)) continue;
+
+    const osmId = `${el.type}/${el.id}`;
+    const nameKey = `${name.toLowerCase()}|${(t['addr:city'] || city).toLowerCase()}`;
+    if (seen.has(osmId) || seen.has(nameKey)) continue;
+    seen.add(osmId); seen.add(nameKey);
 
     const phone   = normPhone(t.phone || t['contact:phone'] || '');
     const website = pickWebsite(t.website || t['contact:website'] || null);
-    const ig      = t['contact:instagram'] || null;
+    const ig      = t['contact:instagram'] || t['instagram'] || null;
     const lat     = el.lat ?? el.center?.lat ?? null;
     const lon     = el.lon ?? el.center?.lon ?? null;
     // A row with no lat/lon is invisible to services_near — don't write it
@@ -672,7 +854,8 @@ out center ${want * 2};`;
       .filter(Boolean).join(' ').trim() || null;
 
     const row = {
-      id: `osm:${el.type}/${el.id}`,
+      id: `osm:${osmId}`,        // primary key / dedupe (upsert onConflict id)
+      osm_id: osmId,             // write-contract column (auditable OSM provenance)
       name,
       service_type: job.service_type || null,
       phone, phone_origin: phone ? 'osm' : null,
@@ -682,17 +865,17 @@ out center ${want * 2};`;
       has_instagram: !!ig,
       address: addr,
       city: t['addr:city'] || city || null,
-      state,
+      state: state || (t['addr:state'] || null),
       lat, lon,
       data_source: 'osm',
       fetched_at: new Date().toISOString(),
       outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'
-      outreach_notes: `auto-sourced via OpenStreetMap (${city}) ${new Date().toISOString().slice(0, 10)}`,
+      outreach_notes: `auto-sourced via OpenStreetMap (${city || 'geo'}) ${new Date().toISOString().slice(0, 10)}`,
     };
     const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
     if (!upErr) saved++;
   }
-  return { saved, found: els.length, query };
+  return { saved, found: els.length, query, endpoint: hostOf(endpoint) };
 }
 
 class YpBlockedError extends Error {

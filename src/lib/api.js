@@ -3183,6 +3183,7 @@ export async function notifyUser({ event, recipient, data = {} } = {}) {
 export async function enqueueCityCrawl({
   kind, city = null, state = null, lat = null, lng = null,
   serviceType = null, targetCount = null, triggerRequestId = null,
+  source = null,
 } = {}) {
   if (!supabaseReady) return { data: null, error: null };
   if (kind !== 'services' && kind !== 'influencers') {
@@ -3191,6 +3192,12 @@ export async function enqueueCityCrawl({
   const { data: userRes } = await supabase.auth.getUser();
   const uid = userRes?.user?.id || null;
   if (!uid) return { data: null, error: null }; // RLS requires requested_by = self
+  // CERGIO-GUARD (2026-07-15, SPEC-72 free-first): on-demand SERVICES crawls now
+  // source from OpenStreetMap/Overpass (keyless, free) — NOT the paid, billing-
+  // blocked Google Places API. fulfill-crawl drains source='osm' via Overpass and
+  // returns ~20 matches fast. Influencer crawls keep their own pipeline (source
+  // stays null; fulfill-crawl only handles kind='services').
+  const src = source || (kind === 'services' ? 'osm' : null);
   const res = await supabase
     .from('crawl_requests')
     .insert({
@@ -3201,6 +3208,7 @@ export async function enqueueCityCrawl({
       trigger_request_id: triggerRequestId,
       requested_by: uid,
       status: 'new',
+      source: src,
     })
     .select('id')
     .maybeSingle();
