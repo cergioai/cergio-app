@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { listConsumerBookings, listMyOutboundSpotlightRequests, listMyOpenSearchRequests, listSocialFeed, getMyFollowedIds, getMyInviteCounts, getMyInvitesDetailed, followProfile, unfollowProfile } from '../lib/api';
 import { stampActivitySeen } from '../hooks/useActivityUnread';
+import { isBlockedFeedCategory } from '../data/providerTypes';
 import { IgPostTile } from '../components/ui/IgPostTile';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { REWARDS } from '../lib/rewards';
@@ -768,9 +769,21 @@ export function ActivityScreen() {
         // existing "your friend / your Connector" logic reads true
         // for followed actors. Mutating the row in-place is safe here
         // because we re-build visibleFeed every render.
+        // CERGIO-GUARD (2026-07-16): blocked-category render guard.
+        // FROZEN_SPEC line 617 / SPEC-71 item 5 — blocked categories
+        // (massage, tattoo, makeup, personal chef + SHAFT) must NEVER
+        // surface on a real screen. Any event whose service type/
+        // category/title names a blocked category is dropped here,
+        // regardless of follow graph or seed data. Defense-in-depth
+        // against the QA-red where a followed Connector spotlighted a
+        // Personal Chef / Massage Therapist onto the live feed.
+        const svcBlocked = (svc) => !!svc && isBlockedFeedCategory(
+          svc.taxonomy_provider_type, svc.category, svc.title,
+        );
         const visibleFeed = (feed || []).filter(ev => {
           if (ev.kind === 'reco') {
             if (!isFollowed(ev.recommender?.id)) return false;
+            if (svcBlocked(ev.service)) return false;
             ev.recommender.is_friend = true;
             return true;
           }
@@ -778,12 +791,14 @@ export function ActivityScreen() {
             const cFollowed = isFollowed(ev.connector?.id);
             const rFollowed = isFollowed(ev.requester?.id);
             if (!cFollowed && !rFollowed) return false;
+            if (svcBlocked(ev.service)) return false;
             if (cFollowed && ev.connector) ev.connector.is_friend = true;
             if (rFollowed && ev.requester) ev.requester.is_friend = true;
             return true;
           }
           if (ev.kind === 'listing') {
             if (!isFollowed(ev.owner?.id)) return false;
+            if (svcBlocked(ev.service)) return false;
             if (ev.owner) ev.owner.is_friend = true;
             return true;
           }
@@ -797,12 +812,30 @@ export function ActivityScreen() {
           // barter row the viewer can read is THEIR OWN exchange —
           // always show it (plus followed actors when RLS widens).
           if (ev.kind === 'barter') {
+            if (svcBlocked(ev.service)) return false;
             if (isFollowed(ev.connector?.id) && ev.connector) ev.connector.is_friend = true;
             if (isFollowed(ev.provider?.id)  && ev.provider)  ev.provider.is_friend = true;
             return true;
           }
           return false;
-        });
+        })
+        // CERGIO-GUARD (2026-07-16): provider-dedup. Seed data produced
+        // the SAME (actor, provider) spotlight ~2-3× on the feed. Keep
+        // the first (most-recent, feed is date-desc) occurrence of each
+        // kind+actor+provider tuple so a provider never stacks.
+        .filter((() => {
+          const seen = new Set();
+          return (ev) => {
+            const providerId = ev.service?.owner_id || ev.owner?.id
+              || ev.provider?.id || ev.requester?.id || null;
+            const actorId = ev.recommender?.id || ev.connector?.id
+              || ev.owner?.id || ev.profile?.id || null;
+            const key = `${ev.kind}:${actorId || '?'}:${providerId || ev.id}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          };
+        })());
         // CERGIO-GUARD (2026-06-04 v8): when the viewer follows
         // nobody yet, the feed silently disappeared — empty state
         // felt broken. Replace with a single Follow-Connectors CTA
