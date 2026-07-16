@@ -4252,6 +4252,22 @@ test('draw-map-leaflet', 'FROZEN (SPEC-72 free-first): the Draw-your-service-are
   assert(pkg.dependencies?.leaflet, 'package.json must declare the leaflet dependency — draw-map-leaflet');
 });
 
+test('spec-offmac-doc', 'SPEC-81: off-Mac-by-default contract stays documented — sandbox pushes git directly via a PAT held ONLY in gitignored .env.local; merge + DB writes remain the sole Mac/CI-gated steps', '#81', async () => {
+  const spec = readFile('FROZEN_SPEC.md');
+  assert(/SPEC-81/.test(spec) && /OFF-MAC BY DEFAULT/i.test(spec),
+    'FROZEN_SPEC.md must carry SPEC-81 · OFF-MAC BY DEFAULT');
+  assert(/GITHUB_PAT/.test(spec) && /\.env\.local/.test(spec),
+    'SPEC-81 must pin the credential contract: GITHUB_PAT lives in .env.local');
+  assert(/api\.github\.com/.test(spec) && /BLOCKED/.test(spec),
+    'SPEC-81 must record that api.github.com (PR/merge) is blocked from the sandbox — merge stays Mac/CI-gated');
+
+  // The PAT must be UNCOMMITTABLE: .gitignore has to exclude .env.local so the
+  // token can never be pushed by the very off-Mac flow it enables.
+  const gi = readFile('.gitignore');
+  assert(/(^|\n)\s*\.env\.local\s*(\n|$)/.test(gi) || /(^|\n)\s*\.env\.?\*/.test(gi) || /(^|\n)\s*\*\.local\s*(\n|$)/.test(gi),
+    '.gitignore must exclude .env.local — the GITHUB_PAT must never be committable');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

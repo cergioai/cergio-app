@@ -713,4 +713,21 @@ YP answers datacenter IPs with **HTTP 403**, permanently. `fulfill-crawl` no lon
 
 ---
 
-*Last updated: 2026-07-13 by Claude (Cowork session) — SPEC-73/74/75 + SPEC-47j: the autonomous loop must never run blind (canonical serr, no silent success, staleness escalation) + YellowPages retired*
+### SPEC-81 · OFF-MAC BY DEFAULT (2026-07-16, FROZEN)
+**Status:** FROZEN — 2026-07-16. Tarik's standing rule: "do all instructions off my mac so I can work — only block or use the mac when it's impossible to execute."
+**Why:** Driving `.command` launchers through Finder (computer-use type-ahead + Cmd+O) is slow, brittle (Mac locks / sleeps / focus loss), and blocks Tarik's own use of the machine. The Mac was being used as a *network relay* when in fact the sandbox can reach the git server directly.
+**Proven reachability (2026-07-16, from the sandbox):**
+- `github.com` (git protocol) = **REACHABLE**; `git ls-remote` and `git push` **WORK** with a fine-grained PAT.
+- `api.github.com` (REST: PR create/merge, `gh`) = **BLOCKED (000)**.
+- `api.supabase.com` (Management API) and `*.supabase.co/rest` (DB REST) = **BLOCKED (000)**.
+**Rule:**
+- **Credential:** a fine-grained GitHub PAT (repo `cergioai/cergio-app`, Contents + Pull-requests read/write) lives ONLY in the gitignored `cergio-app/.env.local` as `GITHUB_PAT=…`. Never commit it, never print it (always `sed 's/$PAT/***/'` in any logged git command). The push URL form that works for a fine-grained PAT is `https://<PAT>@github.com/cergioai/cergio-app.git` (token as user, no `x-access-token` prefix).
+- **DEFAULT PATH — do it off-Mac:** git commits and **branch pushes** run directly from the sandbox. The gate (build + qa.mjs + e2e Playwright) runs on GitHub Actions on the pushed branch/PR, so quality is machine-enforced without the Mac.
+- **MERGE + DB WRITES — the only remaining Mac/CI-gated steps:** because `api.github.com` and the Supabase Management/REST APIs are blocked from the sandbox, (a) PR **merge** to protected `main` and (b) **DB migrations / edge-function deploys** are done EITHER by a GitHub Actions workflow triggered by the branch push (preferred, still off-Mac) OR, only if that is impossible, by a Mac `.command` launcher.
+- **Mac is the exception, not the tool of first resort.** Touch the Mac only for: entering a password/2FA, a payment, a phone action, account-state changes, or a genuinely API-blocked write with no CI path. Everything else ships off-Mac.
+
+qa.mjs `spec-offmac-doc` enforces that this rule stays documented (the PAT-in-`.env.local` + off-Mac-push contract is not silently dropped).
+
+---
+
+*Last updated: 2026-07-16 by Claude (Cowork session) — SPEC-81: off-Mac by default (sandbox pushes git directly via PAT; only merge + DB writes remain Mac/CI-gated). Prior: SPEC-80 ontology bridge; SPEC-73/74/75 + SPEC-47j autonomous-loop honesty; YellowPages retired.*
