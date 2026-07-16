@@ -3835,6 +3835,111 @@ test('spec-launch-06', 'FROZEN: a saved address is persisted durably and reloade
     'the promotion must only happen when the server has NO default — a server address may never be overwritten by a local default');
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// crack-help-haiku — the in-app Help/support module.
+//
+// Regression guard for the support increment. Named `spec-crack-help-haiku`
+// so auto-build.mjs flips the ledger row (cergio_verify_requirement) from
+// open → verified once green on main. Asserts: (1) the Help entry exists in
+// the SHARED layout (not per-screen); (2) support-triage has the
+// Haiku→Opus→human ladder; (3) the AI is REPLY-ONLY — a hard safety guard
+// forces account/money/data/bug asks to a human; (4) the schema + RLS + founder
+// surface are wired.
+// ═══════════════════════════════════════════════════════════════════════════
+test('spec-crack-help-haiku', 'FROZEN: in-app Help → Haiku→Opus→human triage ladder, AI is reply-only', 'crack-help-haiku', async () => {
+  // ── (1) The Help button lives in the SHARED layout, not a single screen ──
+  const app = codeNoComments('src/App.jsx');
+  assert(/import \{ HelpWidget \} from '\.\/components\/ui\/HelpWidget'/.test(app),
+    'App.jsx must import the shared HelpWidget');
+  assert(/<HelpWidget\b/.test(app),
+    'App.jsx Layout must mount <HelpWidget/> (a floating Help entry available across the app)');
+  const widget = codeNoComments('src/components/ui/HelpWidget.jsx');
+  assert(/createSupportTicket/.test(widget),
+    'HelpWidget must open a ticket via createSupportTicket on submit');
+  assert(/type="file"/.test(widget) && /accept="image\/\*"/.test(widget),
+    'HelpWidget must offer an optional screenshot upload');
+
+  // ── (2) The client opens a ticket AND fires the triage function ──
+  const api = readFile('src/lib/api.js');
+  const cst = api.slice(api.indexOf('export async function createSupportTicket('),
+                        api.indexOf('export async function getMySupportTickets('));
+  assert(cst.length > 0, 'lib/api.js must export createSupportTicket');
+  assert(/from\('support_tickets'\)[\s\S]*?\.insert\(/.test(cst),
+    'createSupportTicket must INSERT a support_tickets row (status new)');
+  assert(/functions\.invoke\('support-triage'/.test(cst),
+    'createSupportTicket must fire the support-triage function after inserting the ticket');
+
+  // ── (3) THE LADDER: Haiku → Opus → human, in that order ──
+  const fn = readFile('supabase/functions/support-triage/index.ts');
+  assert(/claude-haiku-4-5-20251001/.test(fn), 'support-triage must call Haiku (claude-haiku-4-5-20251001) for triage');
+  assert(/claude-opus-4-8/.test(fn),           'support-triage must escalate to Opus (claude-opus-4-8)');
+  const iHaiku = fn.indexOf("const haiku = await askClaude(HAIKU");
+  const iOpus  = fn.indexOf("const opus = await askClaude(OPUS");
+  const iHuman = fn.indexOf('routeToHuman(db, ticket');
+  assert(iHaiku > 0 && iOpus > iHaiku,
+    'the ladder must call Haiku BEFORE Opus (triage first, escalate second)');
+  assert(iHuman > 0,
+    'the ladder must fall through to a human (routeToHuman) when neither AI tier resolves');
+  // Haiku resolving short-circuits before Opus; Opus resolving short-circuits before human.
+  assert(/if \(haiku && haiku\.can_resolve && !humanReason1\)/.test(fn),
+    'Haiku must be able to resolve (and only when the safety guard permits)');
+  assert(/if \(opus && opus\.can_resolve && !humanReason2\)/.test(fn),
+    'Opus must be able to resolve (and only when the safety guard permits)');
+  // Human handoff notifies the founder (Resend) + the reason is recorded.
+  assert(/function notifyFounder\(/.test(fn) && /api\.resend\.com\/emails/.test(fn),
+    'the human handoff must email the founder via Resend');
+  assert(/status: 'human'[\s\S]*?ai_reason: reason/.test(fn) || /ai_reason: reason,[\s\S]*?status: 'human'/.test(fn) ||
+         /status: 'human', ai_stage: 'human', ai_reason: reason/.test(fn),
+    "a human-routed ticket must set status='human' with the ai_reason");
+
+  // ── (4) THE REPLY-ONLY SAFETY GUARD — the AI can NEVER take a non-reply action ──
+  assert(/const AI_REPLY_ONLY = true/.test(fn),
+    'support-triage must declare AI_REPLY_ONLY');
+  assert(/function mustEscalateToHuman\(/.test(fn),
+    'support-triage must have the mustEscalateToHuman guard (structural reply-only enforcement)');
+  assert(/HUMAN_ONLY_PATTERNS/.test(fn),
+    'the guard must consult HUMAN_ONLY_PATTERNS (account/money/data/bug asks that a human must handle)');
+  // The guard runs on BOTH tiers before a resolve is accepted.
+  assert(/const humanReason1 = mustEscalateToHuman\(ticket, haiku\)/.test(fn) &&
+         /const humanReason2 = mustEscalateToHuman\(ticket, opus\)/.test(fn),
+    'the reply-only guard must gate BOTH the Haiku and the Opus resolve paths');
+  // The function must never invoke another edge fn / take an action; its only
+  // writes are to its own two tables. Prove it names no forbidden side-effects.
+  const forbidden = [/functions\.invoke\(/, /release-funds/, /stripe-/, /auth\.admin\.(?!getUserById)/,
+                     /from\('bookings'\)/, /from\('payments'\)/, /from\('profiles'\)\s*\.\s*(update|delete)/];
+  for (const re of forbidden) {
+    assert(!re.test(fn), `support-triage must take NO account/money/data action — found a forbidden op matching ${re}`);
+  }
+  // Its DB writes touch ONLY support_tickets / support_messages.
+  const tableWrites = [...fn.matchAll(/from\('([a-z_]+)'\)\s*\.\s*(insert|update|delete|upsert)/g)].map(m => m[1]);
+  for (const tbl of tableWrites) {
+    assert(tbl === 'support_tickets' || tbl === 'support_messages',
+      `support-triage may only write support_tickets / support_messages — it wrote ${tbl}`);
+  }
+
+  // ── (5) SCHEMA + RLS + founder surface ──
+  const mig = readFile('supabase/migrations/20260715000000_support_tickets.sql');
+  assert(/create table if not exists public\.support_tickets/.test(mig), 'migration must create support_tickets');
+  assert(/create table if not exists public\.support_messages/.test(mig), 'migration must create support_messages');
+  assert(/enable row level security/.test(mig), 'support tables must enable RLS');
+  assert(/auth\.uid\(\) = user_id or public\.cergio_is_admin\(\)/.test(mig),
+    'RLS: a user sees only their own tickets; an admin sees all');
+  assert(/cergio_open_requirement\(\s*\n?\s*'crack-help-haiku'/.test(mig),
+    'migration must register the crack-help-haiku requirement ledger row');
+  assert(/create or replace function public\.cergio_support_summary\(\)/.test(mig),
+    'migration must create the cergio_support_summary founder-inbox read fn');
+
+  // ── (6) The founder inbox is surfaced on the dashboard via ops-metrics ──
+  const ops = readFile('supabase/functions/ops-metrics/index.ts');
+  assert(/cergio_support_summary/.test(ops),
+    'ops-metrics must merge the support block (counts + human queue) into the dashboard snapshot');
+  // …and a founder can read + reply to a ticket.
+  assert(/export async function listSupportTickets\(/.test(api) && /export async function postFounderReply\(/.test(api),
+    'lib/api.js must expose the founder inbox (listSupportTickets) + reply (postFounderReply)');
+  assert(/from\('support_messages'\)[\s\S]*?sender: 'founder'/.test(api),
+    'postFounderReply must post a founder message to the thread');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

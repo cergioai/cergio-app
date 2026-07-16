@@ -4823,3 +4823,120 @@ function uniqSorted(arr) {
   }
   return out.sort((a, b) => a.localeCompare(b));
 }
+
+// ─── HELP / SUPPORT (crack-help-haiku) ────────────────────────────────────────
+// The in-app Help widget writes here. A ticket is inserted (RLS lets a user see
+// only their own; the founder/admin sees all), then support-triage runs the
+// Haiku→Opus→human ladder server-side. The AI is REPLY-ONLY — see
+// supabase/functions/support-triage/index.ts.
+
+/**
+ * Open a support ticket + fire the AI triage ladder.
+ *   const { data, error } = await createSupportTicket({ subject, body, email, screenshotUrl })
+ * Works logged-out (user_id stays null; email is how we reach them). Returns
+ * { data: { ticket, triage }, error } — triage carries the AI reply/stage when
+ * the edge function answered inline, or null if triage couldn't be reached (the
+ * ticket is still saved and will be handled).
+ */
+export async function createSupportTicket({ subject = '', body = '', email = '', screenshotUrl = null } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  if (!String(body).trim() && !String(subject).trim()) {
+    return { data: null, error: { message: 'Please add a subject or a message.' } };
+  }
+  const { data: userRes } = await supabase.auth.getUser();
+  const user  = userRes?.user || null;
+  const uid   = user?.id || null;
+  const email2 = String(email || user?.email || '').trim() || null;
+
+  // Generate the id client-side so we don't need to read the row back — a
+  // logged-out (anon) INSERT can't SELECT its own row under RLS (user_id is
+  // null), so a `.select().single()` would falsely report failure. The opening
+  // user message is written authoritatively by the service-role triage fn so
+  // the thread is always complete regardless of auth.
+  const id = (globalThis.crypto?.randomUUID?.()) || undefined;
+  const row = {
+    user_id:        uid,
+    email:          email2,
+    subject:        String(subject || '').slice(0, 200),
+    body:           String(body || '').slice(0, 8000),
+    screenshot_url: screenshotUrl || null,
+    status:         'new',
+  };
+  if (id) row.id = id;
+
+  const { error } = await supabase.from('support_tickets').insert(row);
+  if (error) return { data: null, error };
+  const ticket = { ...row, id: id || null };
+
+  // Fire the AI ladder. It re-reads the ticket with the service role and returns
+  // the reply inline when it resolved (so even logged-out users see the answer).
+  let triage = null;
+  if (ticket.id) {
+    try {
+      const app_url = typeof window !== 'undefined' ? window.location.origin : undefined;
+      const { data: tri } = await supabase.functions.invoke('support-triage', {
+        body: { ticketId: ticket.id, app_url },
+      });
+      triage = tri || null;
+    } catch { triage = null; }
+  }
+
+  return { data: { ticket, triage }, error: null };
+}
+
+/** My tickets (RLS scopes to the caller). Newest first. */
+export async function getMySupportTickets({ limit = 50 } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data, error } = await supabase
+    .from('support_tickets')
+    .select('id, subject, body, status, ai_stage, ai_reply, ai_reason, created_at, resolved_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return { data: data || [], error };
+}
+
+/** One ticket + its full message thread. RLS enforces owner-or-admin access. */
+export async function getSupportThread(ticketId) {
+  if (!supabaseReady) return NOT_WIRED;
+  const { data: ticket, error: tErr } = await supabase
+    .from('support_tickets').select('*').eq('id', ticketId).single();
+  if (tErr) return { data: null, error: tErr };
+  const { data: messages, error: mErr } = await supabase
+    .from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
+  return { data: { ticket, messages: messages || [] }, error: mErr || null };
+}
+
+/** Founder inbox: ALL tickets (RLS lets an admin read them; a non-admin gets
+ *  only their own, which is a safe no-op for this admin-gated screen). */
+export async function listSupportTickets({ status = null, limit = 100 } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  let q = supabase
+    .from('support_tickets')
+    .select('id, subject, body, email, status, ai_stage, ai_reply, ai_reason, handled_by, created_at, resolved_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  return { data: data || [], error };
+}
+
+/** Founder reply → posts a founder message and closes the ticket. RLS admin-
+ *  update policy gates this; a non-admin's update is rejected server-side. */
+export async function postFounderReply(ticketId, bodyText, { close = true } = {}) {
+  if (!supabaseReady) return NOT_WIRED;
+  const text = String(bodyText || '').trim();
+  if (!text) return { data: null, error: { message: 'Reply cannot be empty.' } };
+  const { data: userRes } = await supabase.auth.getUser();
+  const adminEmail = userRes?.user?.email || null;
+
+  const { error: mErr } = await supabase
+    .from('support_messages')
+    .insert({ ticket_id: ticketId, sender: 'founder', body: text.slice(0, 8000) });
+  if (mErr) return { data: null, error: mErr };
+
+  const patch = { handled_by: adminEmail, updated_at: new Date().toISOString() };
+  if (close) { patch.status = 'closed'; patch.resolved_at = new Date().toISOString(); }
+  const { data, error } = await supabase
+    .from('support_tickets').update(patch).eq('id', ticketId).select().single();
+  return { data, error };
+}

@@ -126,6 +126,45 @@ export async function uploadServiceCover(file, serviceId) {
   return { url, error: null };
 }
 
+/**
+ * Upload an optional support screenshot to the `support-screenshots` bucket.
+ * Used by the Help widget. Best-effort: if the bucket isn't provisioned yet (or
+ * anything fails), we return { url: null, error } and the caller submits the
+ * ticket WITHOUT a screenshot (marked as a follow-up) — the text ticket must
+ * never be blocked by an image upload.
+ *
+ *   const { url, error } = await uploadSupportScreenshot(file)
+ */
+export async function uploadSupportScreenshot(file) {
+  if (!supabaseReady) return { url: null, error: { message: 'Supabase not configured' } };
+  if (!file)         return { url: null, error: { message: 'No file selected' } };
+  if (!file.type?.startsWith('image/')) {
+    return { url: null, error: { message: 'That file isn\'t an image.' } };
+  }
+
+  // Best-effort resize (same canvas trick as covers); fall back to the original.
+  let bodyBlob;
+  try {
+    const img = await fileToImage(file);
+    bodyBlob = img ? (await resizeToBlob(img, MAX_DIM_PX, JPEG_QUALITY)) || file : file;
+  } catch { bodyBlob = file; }
+
+  // Namespace by user when signed in, else an anon folder. A timestamp keeps
+  // multiple screenshots from colliding.
+  const { data: userRes } = await supabase.auth.getUser();
+  const uid  = userRes?.user?.id || 'anon';
+  const path = `${uid}/${Date.now()}.jpg`;
+
+  const { error: upErr } = await supabase.storage
+    .from('support-screenshots')
+    .upload(path, bodyBlob, { cacheControl: '3600', contentType: 'image/jpeg', upsert: true });
+  if (upErr) return { url: null, error: upErr };
+
+  const { data: pub } = supabase.storage.from('support-screenshots').getPublicUrl(path);
+  if (!pub?.publicUrl) return { url: null, error: { message: 'Uploaded but no public URL.' } };
+  return { url: pub.publicUrl, error: null };
+}
+
 /** Convenience: upload + immediately write the URL to services.cover_url.
  *  Returns { url, error } from the storage upload AND the DB update
  *  combined — if the upload succeeded but the DB write failed, you'll

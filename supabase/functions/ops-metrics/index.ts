@@ -64,6 +64,15 @@ serve(async (req: Request) => {
       if (qa && typeof qa === 'object') snap.qa = qa;
     } catch (_e) { /* additive; never break the snapshot on this */ }
 
+    // ── SUPPORT (crack-help-haiku): counts by status + the human queue ────────
+    // Merged in at read time (same additive pattern as org_health / qa) so the
+    // dashboard shows the support backlog + the tickets a human must action.
+    // Best-effort: if the fn isn't deployed yet, the snapshot still serves.
+    try {
+      const { data: sup } = await db.rpc('cergio_support_summary');
+      if (sup && typeof sup === 'object') snap.support = sup;
+    } catch (_e) { /* additive; never break the snapshot on this */ }
+
     // ── Autonomous-execution split ────────────────────────────────────────────
     // Founder should SEE progress (things the COO already did) separately from a
     // to-do list. So we split proposals into:
