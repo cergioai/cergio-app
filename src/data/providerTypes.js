@@ -42,6 +42,39 @@ export function isOutOfScopeProviderType(value) {
   return false;
 }
 
+// CERGIO-GUARD (2026-07-16): FROZEN_SPEC line 617 / SPEC-71 item 5
+// (authoritative, supersedes memory) blocked categories: massage,
+// tattoo, makeup, personal chef, PLUS SHAFT — plastic surgery, drugs,
+// alcohol, tobacco, gambling, firearms, adult, nightclub/DJ. "Tests
+// assert none ever surface." OUT_OF_SCOPE_PROVIDER_TYPES above is the
+// taxonomy-resolver denylist (food/DJ/massage/dance only) and is
+// INTENTIONALLY not widened here to avoid side-effects on routing.
+// This is a SEPARATE, render-layer guard so no real screen (Activity
+// feed, Inbox recos) can ever surface a blocked provider —
+// defense-in-depth for the "no blocked categories on a real screen"
+// invariant.
+const BLOCKED_FEED_PATTERNS = [
+  /\bmassage\b/, /\btattoo\b/, /\bmake[ -]?up\b/, /\bpersonal chef\b/,
+  /\bplastic surg/, /\bdrugs?\b/, /\balcohol\b/, /\btobacco\b/,
+  /\bgambl/, /\bfirearm/, /\badult\b/, /\bnight ?club\b/, /\bdj\b/,
+];
+
+/**
+ * True if ANY of the passed strings (provider type, category, title…)
+ * names a FROZEN_SPEC-blocked category. Case-insensitive, word-boundary
+ * matched so "DJ" is caught but "adjuster" is not.
+ */
+export function isBlockedFeedCategory(...texts) {
+  for (const t of texts) {
+    if (!t) continue;
+    const s = String(t).toLowerCase();
+    for (const re of BLOCKED_FEED_PATTERNS) {
+      if (re.test(s)) return true;
+    }
+  }
+  return false;
+}
+
 export const PROVIDER_TYPES = [
   '360 Photo Booth Operator',
   'ADHD Coach',

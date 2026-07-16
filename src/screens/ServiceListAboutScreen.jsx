@@ -541,7 +541,6 @@ export function ServiceListAboutScreen() {
       {areaPickerOpen && (
         <ServiceAreaMapPicker
           center={coords || null}
-          apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
           value={serviceAreaGeoJson}
           onChange={setServiceAreaGeoJson}
           onClose={() => setAreaPickerOpen(false)}

@@ -21,6 +21,38 @@
 // (Miami launch context), and plurals. Combined with the fuzzy fallback
 // in resolveProviderTypeLocal, every realistic typo of these keys also
 // routes correctly. qa.mjs #29 locks 50+ test phrases.
+
+// CERGIO-GUARD (2026-07-16, SPEC-80 ontology bridge): canonicalType collapses
+// any resolved provider type to its family PARENT so a phrase resolves to ONE
+// stable canonical string. Idempotent on the parents this map already emits
+// (Tutor / Music Teacher / Nail Tech / House Cleaner / Hairstylist / Driver),
+// so no existing #29 phrase changes; it future-proofs against child-emitting keys.
+import { canonicalType } from './ontologyBridge.js';
+
+// ── AUGMENT (SPEC-80): "<language> tutor / lessons / teacher / class" → Tutor ──
+// "french tutor" was the live near-miss (typed "Language Immersion" on the
+// listing, "Tutor" on the search). Canonicalizing every language-tutor phrase
+// to the "Tutor" parent — which the bridge widens to Language Immersion /
+// Language Tutor / Math Tutor siblings at match time — permanently unifies them.
+// Multi-word keys ONLY (never a bare language word) so we never false-match
+// "french bulldog grooming". Generated so the popular-language list stays in sync.
+const _TUTOR_LANGUAGES = [
+  'french', 'spanish', 'arabic', 'mandarin', 'chinese', 'italian', 'portuguese',
+  'german', 'hebrew', 'japanese', 'korean', 'hindi', 'russian', 'english', 'esl',
+];
+const _TUTOR_PHRASINGS = [
+  'tutor', 'tutoring', 'teacher', 'lessons', 'lesson', 'classes', 'class',
+];
+const LANGUAGE_TUTOR_ENTRIES = [];
+for (const lang of _TUTOR_LANGUAGES)
+  for (const p of _TUTOR_PHRASINGS)
+    LANGUAGE_TUTOR_ENTRIES.push([`${lang} ${p}`, 'Tutor']);
+// Unambiguous generics.
+for (const g of [
+  'language tutor', 'language lessons', 'language teacher', 'language immersion',
+  'foreign language tutor', 'english as a second language',
+]) LANGUAGE_TUTOR_ENTRIES.push([g, 'Tutor']);
+
 export const PROVIDER_TYPE_MAP = [
   // ── home cleaning ────────────────────────────────────────────────────
   ['deep cleaning',        'House Cleaner'],
@@ -226,6 +258,9 @@ export const PROVIDER_TYPE_MAP = [
   ['guitar teacher',       'Music Teacher'],
   ['music teacher',        'Music Teacher'],
   ['music lesson',         'Music Teacher'],
+
+  // ── language tutoring (AUGMENT, SPEC-80) — generated, appended below ──
+  ...LANGUAGE_TUTOR_ENTRIES,
 ];
 
 // Longest matching key wins so "deep cleaning" beats "cleaning" and
@@ -265,7 +300,9 @@ export function resolveProviderTypeLocal(text) {
       bestKey = [k, v];
     }
   }
-  if (bestKey) return bestKey[1];
+  // SPEC-80: collapse to the family parent so a phrase resolves to ONE canonical
+  // type that the bridge widens to all siblings at match time.
+  if (bestKey) return canonicalType(bestKey[1]);
 
   // Pass 2: fuzzy fallback. Tokenize the user's text + each taxonomy
   // key, then a key matches if ALL its meaningful tokens (≥4 chars)
@@ -294,7 +331,7 @@ export function resolveProviderTypeLocal(text) {
       bestFuzzy = [k, v];
     }
   }
-  return bestFuzzy ? bestFuzzy[1] : null;
+  return bestFuzzy ? canonicalType(bestFuzzy[1]) : null;
 }
 
 // Levenshtein distance — small enough that a full DP table is fine.

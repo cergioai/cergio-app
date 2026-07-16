@@ -228,6 +228,20 @@ const SUPPLEMENT: Record<string, string> = {
   'interior detail':'Auto Detailer','ceramic coating':'Auto Detailer','car detailing':'Auto Detailer',
   // Tutors / coaches / misc gaps
   'math tutoring':'Math Tutor','math tutor':'Math Tutor','life coach':'Life Coach','accountability coach':'Life Coach',
+  // ── Language tutoring (AUGMENT 2026-07-16, SPEC-80 ontology bridge) ────────
+  // "<language> tutor/lessons" → 'Language Tutor' (a REAL type: PERS-TUT-004).
+  // The frontend bridge collapses Language Tutor → the "Tutor" parent, so all
+  // of these + Math Tutor + Language Immersion match each other at search time.
+  // This rescues arabic/mandarin/hindi/korean from resolving to the broad,
+  // non-bridgeable "Cultural Services" category, and types every new language-
+  // tutor LISTING inside the one Tutor family. EN keeps it high-confidence exact.
+  'french tutor':'Language Tutor','spanish tutor':'Language Tutor','arabic tutor':'Language Tutor',
+  'mandarin tutor':'Language Tutor','chinese tutor':'Language Tutor','italian tutor':'Language Tutor',
+  'portuguese tutor':'Language Tutor','german tutor':'Language Tutor','hebrew tutor':'Language Tutor',
+  'japanese tutor':'Language Tutor','korean tutor':'Language Tutor','hindi tutor':'Language Tutor',
+  'russian tutor':'Language Tutor','english tutor':'Language Tutor','esl tutor':'Language Tutor',
+  'french lessons':'Language Tutor','spanish lessons':'Language Tutor','italian lessons':'Language Tutor',
+  'language lessons':'Language Tutor','language tutor':'Language Tutor','esl classes':'Language Tutor',
   'face painting':'Face Painter','meal prep':'Personal Chef','personal chef':'Personal Chef',
   'chef':'Personal Chef','need a chef':'Personal Chef','hire a chef':'Personal Chef','book a chef':'Personal Chef',
   'private chef':'Personal Chef','in home chef':'Personal Chef','dinner party chef':'Personal Chef','cocinero':'Personal Chef',

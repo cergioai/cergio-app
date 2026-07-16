@@ -3,6 +3,12 @@
 // callers can branch on either.
 import { supabase, supabaseReady } from './supabase';
 import { pointInPolygon } from './geo';
+// SPEC-80 ontology bridge — expand a searched provider type into its whole
+// family so a search matches sibling/variant listing types ("Tutor" ⇄
+// "Language Immersion"/"Math Tutor"/"Language Tutor", "Nail Tech" ⇄ "Nail
+// Technician", etc.). The bridge only WIDENS the allow-set; an un-familied
+// type still bridges to itself, so a strict match is never lost.
+import { expandAllowlist, bridgeAllowSetLC } from './ontologyBridge';
 
 const NOT_WIRED = { data: null, error: { message: 'Supabase not configured' } };
 
@@ -260,10 +266,13 @@ export async function getProvidersForNotify({
     };
   }
 
-  // Build the allowlist — exact match by default; opt-in for related
-  // canonical types via providerTypeAllowlist (no fuzzy / no stem).
-  const allow = [verifiedProviderType, ...(providerTypeAllowlist || [])]
-    .map(s => String(s).trim()).filter(Boolean);
+  // Allowlist = the type + caller allowlist, each widened through the SPEC-80
+  // ontology bridge (Tutor → Language Immersion / Math Tutor / Language Tutor …).
+  // Un-familied types bridge to themselves, so a strict match is never lost.
+  const allow = expandAllowlist(
+    [verifiedProviderType, ...(providerTypeAllowlist || [])]
+      .map(s => String(s).trim()).filter(Boolean)
+  );
 
   // Proximity via services_near, then post-filter on exact provider_type.
   const { data, error } = await supabase.rpc('services_near', {
@@ -574,9 +583,17 @@ export async function listServices({
     // empty state UI tells the user we couldn't understand, with a
     // suggestion to use simpler/more canonical terms.
     if (provider_type) {
-      const want = String(provider_type).toLowerCase();
+      // SPEC-80: match the searched type OR any sibling/child in its ontology
+      // family (bridgeAllowSetLC). A "Tutor" search now surfaces a listing
+      // typed "Language Immersion" / "Math Tutor" / "Language Tutor"; category
+      // is also checked (category-derived types like "Language Immersion" live
+      // in taxonomy_provider_type on the listing, but this keeps parity with
+      // getProvidersForNotify's type-OR-category rule). An un-familied type
+      // yields a one-element set, preserving the strict single-type match.
+      const wantSet = bridgeAllowSetLC(provider_type);
       filtered = filtered.filter(s =>
-        String(s.taxonomy_provider_type || '').toLowerCase() === want
+        wantSet.has(String(s.taxonomy_provider_type || '').trim().toLowerCase()) ||
+        wantSet.has(String(s.category || '').trim().toLowerCase())
       );
     } else if (offering_id) {
       filtered = filtered.filter(s =>

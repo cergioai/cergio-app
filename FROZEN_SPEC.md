@@ -693,6 +693,21 @@ qa.mjs #47j enforces this (and `qa-suite` + `qa-live.mjs` share the assertion).
 
 ---
 
+### SPEC-80 · Ontology bridge — the search↔listing near-miss CLASS fix (2026-07-16, FROZEN)
+**Status:** FROZEN — 2026-07-16. Generalizes launch-13 (SPEC-79.2) from "french tutor" to the whole class.
+**Why:** A "french tutor" LISTING was typed `Language Immersion` (the cloud parser's granular node) while a "french tutor"/"tutor" SEARCH resolved to `Tutor`. Both are correct labels for the SAME service, but the matcher compared them for equality on `taxonomy_provider_type`/`category` — so they never matched and the request never reached the listed provider. Same near-miss exists for Nail Tech⇄Nail Technician, Hairstylist⇄Hair Stylist, House Cleaner⇄Housekeeper, Driver⇄Personal Driver, Music Teacher⇄Piano/Guitar Teacher.
+**Rule:**
+- **`src/lib/ontologyBridge.js`** defines curated, TIGHT `FAMILIES` (parent + interchangeable members). Two ops: `canonicalType(t)` collapses a member to its parent; `bridgeAllowSet(t)` / `bridgeAllowSetLC(t)` / `expandAllowlist(types)` widen a searched type into its whole family. An **un-familied type bridges only to itself** — matching is only ever WIDENED within a class, never loosened.
+- **Applied in BOTH resolve + match layers:** `resolveProviderTypeLocal` wraps its returns in `canonicalType` (a phrase resolves to ONE stable parent); `getProvidersForNotify` builds its allow-set via `expandAllowlist`; `listServices`' proximity filter uses `bridgeAllowSetLC` (type OR category). The launch-13 predicate itself is unchanged — the family is baked into the allow-set BEFORE the filter.
+- **AUGMENT:** any `<language> tutor/lessons/teacher/class` → canonical `Tutor` in `serviceTaxonomy` (local) and → `Language Tutor` (a real, bridgeable type) in the backend `resolver.ts` SUPPLEMENT, so french/spanish/arabic/mandarin/… tutors all live in the one Tutor family instead of fragmenting across Language Immersion / Math Tutor / Language Tutor / Cultural Services.
+- **BLOCKED never bridges:** no blocked category (DJ/nightclub + SHAFT + massage/tattoo/makeup/personal chef, SPEC-71.5) may sit in any family; a blocked term never resolves to a bookable type.
+- **AUDIT:** `scripts/audit-ontology-coverage.ts` is now bridge-aware (same-family/shared-parent resolutions count as correct, not confident-wrong — 51/60, was 53). `scripts/audit-ontology-bridge.ts` classifies every catalogue term into exactly one bucket — **BLOCKED** (never map) / **CORRECT-BUT-MISSING** (add a mapping) / **INVALID** (junk, reject) — and gates that added language-tutor terms bridge to Tutor, blocked terms never map, and junk never resolves.
+- **Offline note (SPEC-72 honesty):** this is **WRITTEN + committed-ready, NOT deployed.** The `serviceTaxonomy`/`ontologyBridge`/`api.js` changes ship in the next Vercel frontend build; the `resolver.ts` SUPPLEMENT change ships when the `chat-parse` edge function is redeployed. The bridge fixes matching for BOTH already-listed (`Language Immersion`) and future (`Language Tutor`) listings, so no data backfill is required.
+
+qa.mjs `ontology-bridge-a/b/c/d` enforce this: (a) french/spanish tutor + language immersion → Tutor; (b) a Tutor allow-set includes Language Immersion/Math Tutor/Language Tutor and the shipped matchers apply it (un-familied types stay strict); (c) blocked DJ/massage never resolve + never in a family; (d) car/james/gibberish resolve to nothing.
+
+---
+
 ### YellowPages: RETIRED (2026-07-13)
 YP answers datacenter IPs with **HTTP 403**, permanently. `fulfill-crawl` no longer fetches `source='yellowpages'` jobs; leftovers are quarantined once as `yp-blocked-permanent` and never retried; the seeder cron is unscheduled and the agent disabled. **Google Places is the live services path.** The parser stays dormant behind `YP_ENABLED` (default false) — reversible in one env var. Requirement `p10-crawl-yp-drain` is retired. qa.mjs `p10-crawl-yp-retired` enforces this.
 

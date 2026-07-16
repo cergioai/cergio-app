@@ -4091,6 +4091,167 @@ test('spec-launch-15-wait-copy-v2', 'FROZEN: post-request wait copy = the founde
     'the waiting-state action must be "Cancel request"');
 });
 
+// ─── SPEC-80 · ONTOLOGY BRIDGE — search↔listing near-miss class fix ──────────
+// (a) a parent/language phrase resolves DETERMINISTICALLY to the canonical Tutor.
+test('spec-80-bridge-a-canonical', 'FROZEN (SPEC-80): "french tutor"/"spanish tutor"/"language immersion" resolve to the canonical Tutor parent', 'ontology-bridge-a', async () => {
+  const mod = await import('../src/lib/serviceTaxonomy.js');
+  const resolve = mod.resolveProviderTypeLocal;
+  for (const q of ['french tutor', 'spanish tutor', 'arabic tutor', 'french lessons', 'language immersion', 'esl classes', 'math tutor', 'tutor']) {
+    assert(resolve(q) === 'Tutor', `"${q}" must resolve to the canonical "Tutor" parent, got ${JSON.stringify(resolve(q))}`);
+  }
+});
+
+// (b) a Tutor search's ALLOW-SET includes its family siblings, AND the shipped
+//     matchers (getProvidersForNotify + listServices) actually apply the bridge.
+test('spec-80-bridge-b-allowset', 'FROZEN (SPEC-80): a Tutor search allow-set bridges to Language Immersion / Math Tutor / Language Tutor, and the matchers apply it', 'ontology-bridge-b', async () => {
+  const b = await import('../src/lib/ontologyBridge.js');
+  const setLC = b.bridgeAllowSetLC('Tutor');
+  for (const sib of ['language immersion', 'math tutor', 'language tutor', 'reading tutor', 'test prep tutor']) {
+    assert(setLC.has(sib), `a "Tutor" search allow-set must include the sibling "${sib}"`);
+  }
+  // Symmetric: a child search reaches the whole class (kills the near-miss).
+  assert(b.bridgeAllowSetLC('Language Immersion').has('tutor'), 'a "Language Immersion" search must bridge back to Tutor');
+  // An un-familied type bridges only to itself — never a loosened match.
+  const plumber = b.bridgeAllowSet('Plumber');
+  assert(plumber.length === 1 && plumber[0] === 'Plumber', 'an un-familied type must bridge only to itself (strict match preserved)');
+  // Tight-family guard: Barber is NOT in the Hairstylist family (distinct service).
+  assert(!b.sameFamily('Hairstylist', 'Barber'), 'families must stay tight — Barber is not a Hairstylist');
+
+  // The SHIPPED matchers apply the bridge (not just the helper existing).
+  const api = readFile('src/lib/api.js');
+  assert(/const allow = expandAllowlist\(/.test(api),
+    'getProvidersForNotify must expand its allow-set through the ontology bridge (expandAllowlist)');
+  assert(/const wantSet = bridgeAllowSetLC\(provider_type\)/.test(api),
+    'listServices must filter provider_type through the ontology bridge (bridgeAllowSetLC)');
+  assert(/import \{ expandAllowlist, bridgeAllowSetLC \} from '\.\/ontologyBridge'/.test(api),
+    'api.js must import the ontology bridge');
+});
+
+// (c) a BLOCKED term (DJ + SHAFT + massage/tattoo/makeup/personal chef) never
+//     resolves to a bookable provider type.
+test('spec-80-bridge-c-blocked', 'FROZEN (SPEC-80): a blocked term (DJ, massage, tattoo) never resolves to a bookable type and is never in a bridge family', 'ontology-bridge-c', async () => {
+  const mod = await import('../src/lib/serviceTaxonomy.js');
+  const b = await import('../src/lib/ontologyBridge.js');
+  for (const q of ['dj', 'dj for my party', 'need a dj tonight', 'massage', 'nightclub']) {
+    assert(mod.resolveProviderTypeLocal(q) === null, `blocked term "${q}" must resolve to nothing (got ${JSON.stringify(mod.resolveProviderTypeLocal(q))})`);
+  }
+  // No blocked type may sit inside a bridge family (the bridge only widens
+  // among in-scope, bookable types).
+  for (const fam of b.FAMILIES) {
+    for (const m of fam.members) {
+      assert(!/(massage|tattoo|makeup|personal chef|\bchef\b|\bdj\b|nightclub|escort|firearm|\bgun\b|cannabis)/i.test(m),
+        `a blocked category leaked into bridge family "${fam.parent}": ${m}`);
+    }
+  }
+});
+
+// (d) an INVALID term (car / james / gibberish) resolves to nothing.
+test('spec-80-bridge-d-invalid', 'FROZEN (SPEC-80): junk terms (car, james, gibberish) resolve to nothing — never a fabricated match', 'ontology-bridge-d', async () => {
+  const mod = await import('../src/lib/serviceTaxonomy.js');
+  for (const q of ['car', 'james', 'john smith', 'asdfghjkl', 'qwerty']) {
+    assert(mod.resolveProviderTypeLocal(q) === null, `junk term "${q}" must resolve to nothing (got ${JSON.stringify(mod.resolveProviderTypeLocal(q))})`);
+  }
+});
+
+// #A1j-v2 — FROZEN_SPEC L617 / SPEC-71 item 5: blocked categories
+// (massage, tattoo, makeup, personal chef + SHAFT) must NEVER surface
+// on a real screen. This asserts BOTH the helper is correct AND that
+// the two shipping render surfaces (Activity feed + Inbox recos)
+// actually apply it — not just that the helper exists. Regression for
+// the QA-red where a followed Connector spotlighted a Personal Chef /
+// Massage Therapist onto the live feed (prod v112b4e2).
+test('A1j-v2-blocked-render-guard', 'FROZEN (SPEC-71.5 / L617): blocked categories never render on the Activity feed OR the Inbox reco surface — helper correct AND both surfaces wire it', 'A1j-v2', async () => {
+  const pt = await import('../src/data/providerTypes.js');
+  assert(typeof pt.isBlockedFeedCategory === 'function', 'providerTypes must export isBlockedFeedCategory');
+  for (const blocked of ['Personal Chef', 'Massage Therapist', 'Makeup Artist', 'DJ', 'Tattoo Artist', 'Personal Chef in Miami, FL, USA']) {
+    assert(pt.isBlockedFeedCategory(blocked) === true, `isBlockedFeedCategory must block "${blocked}"`);
+  }
+  for (const ok of ['Plumber', 'House Cleaner', 'Moving Truck Driver', 'French Tutor', 'Adjuster', 'Photographer']) {
+    assert(pt.isBlockedFeedCategory(ok) === false, `isBlockedFeedCategory must NOT block "${ok}" (false positive)`);
+  }
+  // Activity feed SHIPS the guard (imports it + applies svcBlocked in the filter).
+  const act = readFile('src/screens/ActivityScreen.jsx');
+  assert(/import \{ isBlockedFeedCategory \} from '\.\.\/data\/providerTypes'/.test(act),
+    'ActivityScreen must import isBlockedFeedCategory');
+  assert(/const svcBlocked = \(svc\) => .*isBlockedFeedCategory/s.test(act),
+    'ActivityScreen must define svcBlocked via isBlockedFeedCategory');
+  assert((act.match(/if \(svcBlocked\(ev\.service\)\) return false;/g) || []).length >= 4,
+    'ActivityScreen must drop blocked events in every feed branch (reco/spotlight/listing/barter)');
+  // Inbox reco surface SHIPS the guard.
+  const inbox = readFile('src/screens/JobsInboxScreen.jsx');
+  assert(/import \{ isBlockedFeedCategory \} from '\.\.\/data\/providerTypes'/.test(inbox),
+    'JobsInboxScreen must import isBlockedFeedCategory');
+  assert((inbox.match(/if \(isBlockedFeedCategory\(/g) || []).length >= 2,
+    'JobsInboxScreen must guard both the inbound-request and reco-received surfaces');
+});
+
+// ─── draw-map-leaflet · the "Draw on Map" surface is FREE (Leaflet + OSM) ─────
+// The provider service-area draw surface (ServiceAreaMapPicker) used to load the
+// Google Maps JS API and required VITE_GOOGLE_MAPS_API_KEY *with billing* — in
+// prod it surfaced "Google Maps API key missing" and cost money. SPEC-72 is
+// free-first: it now uses Leaflet + the keyless OpenStreetMap raster tiles ($0,
+// no key, no billing). This locks: (A) Leaflet + OSM tiles + attribution are the
+// surface; (B) the Google Maps JS API / key path is GONE from this component and
+// its two callers; (C) the SAVED value shape is UNCHANGED — a closed-ring GeoJSON
+// Polygon of [lng,lat] pairs (the exact `services.service_area_geojson` contract),
+// so no backend change is needed.
+test('draw-map-leaflet', 'FROZEN (SPEC-72 free-first): the Draw-your-service-area map uses Leaflet + keyless OpenStreetMap tiles (no Google Maps JS API, no API key, no billing); the saved GeoJSON Polygon shape is unchanged', '#free-map', async () => {
+  const rel  = 'src/components/ui/ServiceAreaMapPicker.jsx';
+  const code = codeNoComments(rel); // scan CODE, not the explanatory comments
+
+  // ── (A) FREE surface: Leaflet + OSM raster tiles + the required attribution ──
+  assert(/import L from 'leaflet'/.test(code),
+    'ServiceAreaMapPicker must import Leaflet — draw-map-leaflet');
+  assert(/import 'leaflet\/dist\/leaflet\.css'/.test(code),
+    "ServiceAreaMapPicker must import Leaflet's CSS so the map renders — draw-map-leaflet");
+  assert(/L\.tileLayer\(\s*'https:\/\/\{s\}\.tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png'/.test(code),
+    'the map must draw the keyless OpenStreetMap raster tiles (no API key) — draw-map-leaflet');
+  assert(/attribution:\s*'[^']*OpenStreetMap/.test(code),
+    'OSM tile usage policy requires the "© OpenStreetMap contributors" attribution to be displayed — draw-map-leaflet');
+  assert(/attributionControl:\s*true/.test(code),
+    'the Leaflet attribution control must be enabled (attribution must be visible) — draw-map-leaflet');
+
+  // ── (B) the Google Maps JS API / API-key path is GONE (no paid dependency) ──
+  assert(!/maps\.googleapis\.com/.test(code),
+    'REGRESSION: the Google Maps JS API script must NOT be loaded by the draw surface (it needs a paid, billed key) — draw-map-leaflet');
+  assert(!/window\.google/.test(code) && !/new google\.maps\./.test(code),
+    'REGRESSION: no google.maps usage may remain in the draw surface — draw-map-leaflet');
+  assert(!/VITE_GOOGLE_MAPS/.test(code),
+    'the draw surface must not read any VITE_GOOGLE_MAPS key — draw-map-leaflet');
+  assert(!/API key missing/i.test(code),
+    'the "Google Maps API key missing" error path must be gone (it was shown to founders in prod) — draw-map-leaflet');
+  // The two callers must stop passing a Google key into the picker.
+  for (const caller of ['src/screens/ServiceListAboutScreen.jsx', 'src/screens/HomeScreen.jsx']) {
+    const c = codeNoComments(caller);
+    const m = c.match(/<ServiceAreaMapPicker[\s\S]*?\/>/);
+    assert(m, `${caller} must still render <ServiceAreaMapPicker/> — draw-map-leaflet`);
+    assert(!/apiKey=/.test(m[0]) && !/VITE_GOOGLE_MAPS/.test(m[0]),
+      `${caller} must not pass a Google Maps API key to the picker — draw-map-leaflet`);
+  }
+
+  // ── (C) the SAVED shape is UNCHANGED: a closed-ring GeoJSON Polygon of
+  //        [lng,lat] pairs — the exact services.service_area_geojson contract.
+  const fnStart = code.indexOf('function pointsToGeoJson(points) {');
+  assert(fnStart > -1, 'ServiceAreaMapPicker must keep pointsToGeoJson (the persisted-shape builder) — draw-map-leaflet');
+  const body = code.slice(fnStart, code.indexOf('\n}', fnStart) + 2);
+  const pointsToGeoJson = new Function(`${body}\nreturn pointsToGeoJson;`)();
+  const geo = pointsToGeoJson([{ lat: 1, lng: 2 }, { lat: 3, lng: 4 }, { lat: 5, lng: 6 }]);
+  assert(geo && geo.type === 'Polygon' && Array.isArray(geo.coordinates?.[0]),
+    'pointsToGeoJson must still emit a GeoJSON Polygon (the frozen save shape) — draw-map-leaflet');
+  const ring = geo.coordinates[0];
+  assert(ring[0][0] === 2 && ring[0][1] === 1,
+    'the ring must be [lng,lat] ordered (GeoJSON), unchanged from the Google version — draw-map-leaflet');
+  assert(ring.length === 4 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1],
+    'the ring must be CLOSED (first vertex repeated last) per the GeoJSON spec — draw-map-leaflet');
+  assert(pointsToGeoJson([{ lat: 1, lng: 2 }]) === null,
+    'fewer than 3 points is not a polygon (null) — draw-map-leaflet');
+
+  // The dependency is declared (the lockfile is regenerated by npm ci on
+  // CI / the Mac launcher — leaflet is dependency-free + pure JS).
+  const pkg = JSON.parse(readFile('package.json'));
+  assert(pkg.dependencies?.leaflet, 'package.json must declare the leaflet dependency — draw-map-leaflet');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
