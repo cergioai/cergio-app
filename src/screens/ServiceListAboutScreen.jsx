@@ -18,6 +18,17 @@ import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 // CERGIO-GUARD: provider_type-level only, never offering names.
 // See CHECKLIST §2.
 import { PROVIDER_TYPES } from '../data/providerTypes';
+// CERGIO-GUARD (launch-13-match-notify): the LISTING side must resolve a
+// free-text service type through the SAME deterministic local taxonomy the
+// REQUEST side uses (resolveProviderTypeLocal). Without it, a phrase like
+// "french tutor" matched no exact catalog entry (canonicalMatch=null) and,
+// whenever the cloud resolver stalled/low-confidenced (parserPT=null), the
+// listing saved taxonomy_provider_type=NULL → invisible to getProvidersForNotify
+// AND listServices. Meanwhile a "french tutor" SEARCH resolves locally to
+// "Tutor", so the request never reached the listed provider. The local map
+// returns the EXACT string providers register under, so it closes that
+// request↔listing asymmetry (the dead-core-loop the founder hit).
+import { resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
 
 // Case-insensitive substring filter. When the field is empty, show the
 // most-commonly-used handful as starter suggestions; otherwise filter
@@ -462,7 +473,15 @@ export function ServiceListAboutScreen() {
             const parserPT = (useTaxo && !isGeneric(taxo.provider_type))
               ? taxo.provider_type
               : null;
-            const resolvedProviderType = parserPT || canonicalMatch;
+            // CERGIO-GUARD (launch-13-match-notify): deterministic local
+            // taxonomy is the LAST-RESORT lock so a free-text type never
+            // saves NULL. It only fires when the cloud parser (parserPT) AND
+            // the exact catalog match (canonicalMatch) both came up empty —
+            // exactly the "french tutor + cloud stalled" case that was saving
+            // NULL and making the listing invisible to the request fan-out.
+            // Same resolver, same EXACT strings, as the request write path.
+            const localPT = resolveProviderTypeLocal(typedTrim);
+            const resolvedProviderType = parserPT || canonicalMatch || localPT;
 
             // CERGIO-GUARD (2026-06-02): novel-type telemetry. Per
             // Tarik: "augment the taxonomy gradually (and add related

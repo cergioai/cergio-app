@@ -121,9 +121,22 @@ function SendArrowIcon() {
 // LeafLogo moved to ../components/ui/LeafLogo so other screens
 // (ResultsScreen header + status, etc.) share the same brand mark.
 
-// localStorage key for signed-out users' "guest" address. Replaced by the
+// localStorage key for signed-out (guest) users' address. Replaced by the
 // server-side default once they sign in (auth flip reloads from Supabase).
 const GUEST_ADDR_KEY = 'cergio.guestAddress';
+
+// CERGIO-GUARD (launch-12-address-isolation): the address localStorage cache
+// MUST be namespaced per signed-in user. A SINGLE shared key leaked one
+// account's saved address to the NEXT account that logged in on the same
+// browser — the founder, signed in as info@, saw t@'s "134 Henry Street"
+// (a DIFFERENT account's home address) because the shared key still held it
+// and was read on first paint. A signed-in user reads/writes ONLY their own
+// uid-scoped key; guests use the guest key. Two accounts can never share a
+// cache entry, so one account can never surface another's address. The
+// durable per-user truth is user_metadata (see api.js saveAddress/getDefaultAddress).
+function addrCacheKey(uid) {
+  return uid ? `cergio.addr.${uid}` : GUEST_ADDR_KEY;
+}
 
 // ─── Inline location editor ─────────────────────────────────────────────────
 // Compact in-place editor for the address chip at the top of Home. Replaces
@@ -131,7 +144,7 @@ const GUEST_ADDR_KEY = 'cergio.guestAddress';
 // to the chip — no page-jump, no overlay. Same two-tier verification
 // (Google → Nominatim fallback) and persistent inline status as the
 // modal version, just sized for inline use.
-function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, onSaved, onCancel }) {
+function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, storageKey = GUEST_ADDR_KEY, onSaved, onCancel }) {
   const [text, setText] = useState(initialAddress || '');
   const [coords, setCoords] = useState(initialCoords || null);
   const [placeId, setPlaceId] = useState(null);
@@ -152,9 +165,10 @@ function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, onSav
     setBusy(true);
     setStatus({ kind: 'info', text: 'Saving…' });
 
-    // Always persist locally first — the user is never stuck.
+    // Always persist locally first — the user is never stuck. The key is
+    // uid-scoped (launch-12) so this never touches another account's cache.
     try {
-      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+      localStorage.setItem(storageKey, JSON.stringify({
         address: typed,
         lat:     coords?.lat ?? null,
         lng:     coords?.lng ?? null,
@@ -168,7 +182,7 @@ function InlineLocationEditor({ initialAddress, initialCoords, isSignedIn, onSav
     if (v.ok) {
       final = { address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId };
       try {
-        localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+        localStorage.setItem(storageKey, JSON.stringify({
           address: final.address, lat: final.lat, lng: final.lng, placeId: final.placeId,
         }));
       } catch { /* ignore */ }
@@ -252,6 +266,13 @@ export function HomeScreen() {
     auth,
     chat,            // useChat hook — gives us the ask-for-missing-fields flow inline
   } = useOutletContext();
+  // CERGIO-GUARD (launch-12-address-isolation): the address cache key is
+  // scoped to the signed-in user's auth id. Every localStorage read/write
+  // below goes through ADDR_KEY, so a signed-in user only ever sees their
+  // OWN cached address — never the previous account's (the cross-account
+  // "134 Henry Street" bleed). Guests fall back to the guest key.
+  const addrUid  = auth?.user?.id || null;
+  const ADDR_KEY = addrCacheKey(addrUid);
   const [query, setQuery] = useState('');
   const [images, setImages] = useState([]);
   const [modeOpen, setModeOpen] = useState(false);
@@ -348,7 +369,7 @@ export function HomeScreen() {
   // initializer runs once per mount.
   const [locationText, setLocationText] = useState(() => {
     try {
-      const raw = localStorage.getItem(GUEST_ADDR_KEY);
+      const raw = localStorage.getItem(ADDR_KEY);
       if (!raw) return '';
       const g = JSON.parse(raw);
       return g?.address || '';
@@ -356,7 +377,7 @@ export function HomeScreen() {
   });
   const [locationCoords, setLocationCoords] = useState(() => {
     try {
-      const raw = localStorage.getItem(GUEST_ADDR_KEY);
+      const raw = localStorage.getItem(ADDR_KEY);
       if (!raw) return null;
       const g = JSON.parse(raw);
       if (g?.lat != null && g?.lng != null) return { lat: g.lat, lng: g.lng };
@@ -402,8 +423,8 @@ export function HomeScreen() {
     setLocationText(where);
     // Mirror to localStorage as-is for immediate fallback.
     try {
-      const existing = JSON.parse(localStorage.getItem(GUEST_ADDR_KEY) || '{}');
-      localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({ ...existing, address: where }));
+      const existing = JSON.parse(localStorage.getItem(ADDR_KEY) || '{}');
+      localStorage.setItem(ADDR_KEY, JSON.stringify({ ...existing, address: where }));
     } catch { /* ignore */ }
     // Verify then persist.
     (async () => {
@@ -430,7 +451,7 @@ export function HomeScreen() {
         setLocationText(v.address);
         setLocationCoords({ lat: v.lat, lng: v.lng });
         try {
-          localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+          localStorage.setItem(ADDR_KEY, JSON.stringify({
             address: v.address, lat: v.lat, lng: v.lng, placeId: v.placeId,
           }));
         } catch { /* ignore */ }
@@ -457,7 +478,7 @@ export function HomeScreen() {
   useEffect(() => {
     if (!locationText) return;
     try {
-      const existing = JSON.parse(localStorage.getItem(GUEST_ADDR_KEY) || '{}');
+      const existing = JSON.parse(localStorage.getItem(ADDR_KEY) || '{}');
       const next = {
         ...existing,
         address: locationText,
@@ -469,7 +490,7 @@ export function HomeScreen() {
       if (existing.address !== next.address
           || existing.lat !== next.lat
           || existing.lng !== next.lng) {
-        localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify(next));
+        localStorage.setItem(ADDR_KEY, JSON.stringify(next));
       }
     } catch { /* ignore */ }
   }, [locationText, locationCoords]);
@@ -494,7 +515,7 @@ export function HomeScreen() {
           setLocationCoords({ lat: data.lat, lng: data.lng });
         }
         try {
-          localStorage.setItem(GUEST_ADDR_KEY, JSON.stringify({
+          localStorage.setItem(ADDR_KEY, JSON.stringify({
             address: data.formatted_address,
             lat:     data.lat ?? null,
             lng:     data.lng ?? null,
@@ -505,7 +526,7 @@ export function HomeScreen() {
       }
       // Server has no default — try to promote whatever localStorage holds.
       try {
-        const raw = localStorage.getItem(GUEST_ADDR_KEY);
+        const raw = localStorage.getItem(ADDR_KEY);
         if (!raw) return;
         const g = JSON.parse(raw);
         if (!g?.address) return;
@@ -1328,6 +1349,7 @@ export function HomeScreen() {
                     initialAddress={locationText}
                     initialCoords={locationCoords}
                     isSignedIn={!!auth?.isSignedIn}
+                    storageKey={ADDR_KEY}
                     onCancel={() => setLocEditing(false)}
                     onSaved={(saved) => {
                       if (saved?.address) setLocationText(saved.address);

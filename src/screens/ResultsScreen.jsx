@@ -128,8 +128,15 @@ const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
 // Exported so the screen and the tests read the SAME string — copy asserted by
 // grep against a literal can drift; asserted against the export it cannot.
 // Do not reword without an explicit instruction from Tarik.
+// CERGIO-GUARD (launch-15-wait-copy-v2, Tarik 2026-07-16): the post-request
+// waiting state now leads with a bold heading + this body (the pulsing
+// "live/working" LeafLogo stays; only the words change). WAIT_HEADING +
+// WAIT_COPY are the ONE source of truth the screen and tests both read.
+// The old launch-02 single-sentence ("This may take 15 minutes to a few
+// hours…") is retired — do not reintroduce it.
+export const WAIT_HEADING = "We'll notify you when Connectors accept";
 export const WAIT_COPY =
-  "This may take 15 minutes to a few hours to locate and get you a solid offer. We'll notify you the moment we have a match.";
+  "Your request is out to matching Connectors. Once one accepts, they show up here — free swaps first. Counter-offers land in Spotlight requests › Sent for you to accept or counter back.";
 
 // CERGIO-GUARD (2026-06-03): three calmly cycling dots beside the
 // roaming headline per Tarik — never reads as "stuck." Pure CSS via
@@ -1068,16 +1075,21 @@ export function ResultsScreen() {
           <div className="flex items-center gap-3">
             <LeafLogo working={true} size={48} intensity={liveStatus.intensity} />
             <div className="flex-1 min-w-0">
-              {/* CERGIO-GUARD (2026-07-14, launch-02 / SPEC-78): while nothing has
-                  landed, the user reads exactly ONE promise — WAIT_COPY. Real
-                  progress ("2 replies in — 8 notified.") still supersedes it,
-                  because that is a fact, not a promise. The old instant/scheduled
-                  copy fork is retired; do not reintroduce it. */}
-              <p className="text-meta-sm text-b3 font-normal leading-snug">
-                {liveReplied > 0
-                  ? `${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`
-                  : WAIT_COPY}
-              </p>
+              {/* CERGIO-GUARD (2026-07-16, launch-15-wait-copy-v2): while nothing
+                  has landed, the user reads the WAIT_HEADING + WAIT_COPY the
+                  founder dictated. Real progress ("2 replies in — 8 notified.")
+                  still supersedes it, because that is a fact, not a promise. The
+                  old launch-02 single sentence is retired; do not reintroduce it. */}
+              {liveReplied > 0 ? (
+                <p className="text-meta-sm text-b3 font-normal leading-snug">
+                  {`${liveReplied} ${liveReplied === 1 ? 'reply' : 'replies'} in — ${liveNotified} notified.`}
+                </p>
+              ) : (
+                <>
+                  <p className="text-body-sm text-black font-extrabold leading-snug">{WAIT_HEADING}</p>
+                  <p className="text-meta-sm text-b3 font-normal leading-snug mt-0.5">{WAIT_COPY}</p>
+                </>
+              )}
               {requestId && (
                 <CancelRequestLink
                   requestId={requestId}

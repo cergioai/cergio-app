@@ -115,7 +115,7 @@ export function ClaimProfileScreen() {
               Go to my profile →
             </button>
             <button
-              onClick={() => navigate('/services/manage')}
+              onClick={() => navigate('/list-service')}
               className="w-full bg-white border border-bdr text-black rounded-[24px] py-3.5 text-body font-extrabold mt-3
                          hover:bg-bg5/30 active:scale-[.99] transition-all"
             >
