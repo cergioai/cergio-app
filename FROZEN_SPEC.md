@@ -730,4 +730,17 @@ qa.mjs `spec-offmac-doc` enforces that this rule stays documented (the PAT-in-`.
 
 ---
 
+### SPEC-83 · SMS is OPT-IN ONLY — explicit consent before any text (2026-07-16, FROZEN)
+**Status:** FROZEN — 2026-07-16. Tarik's decision after Twilio A2P rejected the cold campaign.
+**Why:** Twilio vetting FAILED the Low-Volume campaign (`QE2c6890…`) with 30886 (invalid use-case description) + **30896 (opt-in information rejected)**. Carriers/TCPA require DOCUMENTED consent captured BEFORE the first text. The old "tapping the link we cold-sent = consent" model (outreach-optin) does NOT satisfy this and is retired for SMS. Cold-texting crawled/published numbers is prohibited.
+**Rule:**
+- SMS may only go to numbers that gave **explicit, checkbox-driven consent** captured before any message. Signup (`AuthScreen`) shows an unchecked, optional SMS-consent checkbox with full disclosure: "Text me booking & invite alerts from Cergio. Msg & data rates may apply, message frequency varies. Reply STOP to opt out, HELP for help. See Terms & Privacy." Unchecked = no SMS; signup still works.
+- `useSession.signUp(…, smsConsent)` records `sms_consent` + `sms_consent_at` + `sms_consent_source` into `user_metadata` (default false — never implied). This is the documented consent.
+- The send path MUST gate on recorded consent before texting (increment 2 — outreach-send/notify check `sms_consent`); cold acquisition stays on email / WhatsApp tap / manual, which need no A2P campaign.
+- The A2P campaign, when re-registered, must describe THIS real in-app opt-in truthfully (checkbox + disclosure at cergio.ai signup) — never misrepresent the flow (would fail vetting again and violate the no-misrepresentation rule).
+
+qa.mjs `sms-consent-optin` enforces the explicit checkbox + STOP/HELP/rates disclosure + consent flowing into signUp + the implied "never marketing" line being retired.
+
+---
+
 *Last updated: 2026-07-16 by Claude (Cowork session) — SPEC-81: off-Mac by default (sandbox pushes git directly via PAT; only merge + DB writes remain Mac/CI-gated). Prior: SPEC-80 ontology bridge; SPEC-73/74/75 + SPEC-47j autonomous-loop honesty; YellowPages retired.*

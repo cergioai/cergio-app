@@ -4290,6 +4290,31 @@ test('ux-invite-copy', 'The invite share message is ONE canonical AI-touch line 
     'InviteFriendPopupScreen must NOT redefine buildInviteMessage locally (that scatters the copy)');
 });
 
+
+test('sms-consent-optin', 'SPEC-83: SMS is opt-in only — signup captures EXPLICIT checkbox consent with STOP/HELP + rates disclosure BEFORE any text, and stores it; no implied "we only text X" consent', '#83', async () => {
+  const auth = readFile('src/screens/AuthScreen.jsx');
+  // Explicit checkbox bound to a consent state (not a pre-checked / implied thing).
+  assert(/type="checkbox"[\s\S]{0,200}checked=\{smsConsent\}/.test(auth) || /checked=\{smsConsent\}/.test(auth),
+    'AuthScreen must have an SMS-consent checkbox bound to smsConsent state');
+  // A2P/TCPA disclosure language must be present next to it.
+  assert(/Reply STOP to opt out/i.test(auth), 'consent copy must include "Reply STOP to opt out"');
+  assert(/HELP for help/i.test(auth), 'consent copy must include "HELP for help"');
+  assert(/rates may apply/i.test(auth) && /frequency varies/i.test(auth),
+    'consent copy must disclose msg&data rates + message frequency');
+  // Consent must actually flow into signUp.
+  assert(/auth\.signUp\([^;]*smsConsent\s*\)/.test(auth),
+    'AuthScreen must pass smsConsent into auth.signUp');
+  // The old IMPLIED-consent line is retired (that shape is exactly what A2P rejects).
+  assert(!/never marketing/.test(auth),
+    'the implied "we text only … never marketing" line must be gone — consent is now explicit');
+  // And signUp records the consent (before-first-text documentation).
+  const sess = readFile('src/hooks/useSession.js');
+  assert(/sms_consent\b/.test(sess) && /sms_consent_at/.test(sess),
+    'useSession.signUp must record sms_consent + sms_consent_at into user_metadata');
+  assert(/smsConsent\s*=\s*false/.test(sess) || /signUp\s*=\s*useCallback\(async\s*\([^)]*smsConsent/.test(sess),
+    'signUp must accept an explicit smsConsent argument (default false — never implied)');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

@@ -47,19 +47,30 @@ export function useSession() {
     return res;
   }, []);
 
-  const signUp = useCallback(async (email, password, displayName, phone) => {
+  const signUp = useCallback(async (email, password, displayName, phone, smsConsent = false) => {
     if (!supabaseReady) return { error: { message: 'Supabase not configured' } };
     // Phone normalized to E.164-ish (just digits + leading +). Saved into
     // both Supabase auth.users.phone AND user_metadata so we have one
     // canonical copy whichever side reads it. profile_private gets a copy
     // when the profile row is first synced.
     const cleanPhone = (phone || '').replace(/[^\d+]/g, '').trim();
+    // SMS opt-in (SPEC-83, 2026-07-16): A2P requires DOCUMENTED consent captured
+    // BEFORE the first text. We record an explicit, checkbox-driven consent (never
+    // implied) into user_metadata so the send path can gate on it. Twilio rejected
+    // the prior campaign (30896) for lacking this; cold "tap = consent" is retired.
+    const consented = !!smsConsent && !!cleanPhone;
     const result = await supabase.auth.signUp({
       email,
       password,
       phone: cleanPhone || undefined,
       options: {
-        data: { display_name: displayName, phone: cleanPhone || null },
+        data: {
+          display_name: displayName,
+          phone: cleanPhone || null,
+          sms_consent: consented,
+          sms_consent_at: consented ? new Date().toISOString() : null,
+          sms_consent_source: consented ? 'signup_checkbox_v1' : null,
+        },
       },
     });
     if (result.error) return result;
