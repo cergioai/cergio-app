@@ -56,6 +56,45 @@ export function outreachTemplateFor(audience) {
   return audience === 'services' ? SERVICE_TEMPLATE : CREATOR_TEMPLATE;
 }
 
+// ── P2P SMS (tap-to-send) ────────────────────────────────────────────────────
+// SPEC-84: these are the SHORT texts the FOUNDER sends one at a time from their
+// OWN phone via an sms: deep link — genuine person-to-person, so NO A2P/10DLC and
+// NO prior opt-in required (it's you texting, like texting a friend). Each is
+// individualized to a number the business PUBLISHED to be contacted for hire, and
+// ends with a one-word opt-in nudge that grows the consented A2P pool + STOP.
+// Truthful TODAY (founding invite — no live-job claim; honor the no-fake-data rule).
+export const SMS_TEMPLATE = {
+  services:
+    'Hi {name} — Tarik, founder of Cergio. Vetted local creators will spotlight your {service_type} in {city} to their followers, free — new clients, no ad spend. Picking 25 founding providers. Want a spot? Reply YES for details (or STOP to opt out).',
+  creators:
+    'Hi @{ig_handle} — Tarik, founder of Cergio. Your followers book trusted local pros through you and you earn on every booking. Hand-picking 5 founding creators in {city}: free services + founding status. Want in? Reply YES (or STOP to opt out).',
+};
+
+// PERSONAL (cold, hand-picked) — the warm 1:1 note the FOUNDER taps to a specific
+// service/creator they chose. Genuine person-to-person from Tarik's own phone.
+export const PERSONAL_SMS_TEMPLATE = {
+  services:
+    "Hi {name} — Tarik here, founder of Cergio. Came across your {service_type} in {city} and I'd love to send you local customers looking to book. Mind if I share a couple details? — Tarik, Cergio",
+  creators:
+    "Hi @{ig_handle} — Tarik, founder of Cergio. Love what you're doing in {city}. I'm hand-picking a few founding creators and think you'd be perfect. Can I share how it works? — Tarik, Cergio",
+};
+
+// mode: 'personal' (cold hand-picked 1:1) | 'optin' (invite w/ opt-in nudge + STOP)
+export function smsTemplateFor(audience, mode = 'personal') {
+  const t = mode === 'optin' ? SMS_TEMPLATE : PERSONAL_SMS_TEMPLATE;
+  return audience === 'services' ? t.services : t.creators;
+}
+
+/** Build an `sms:` deep link that opens the sender's own Messages app pre-filled
+ *  with the recipient + body. Cross-platform: iOS wants `&body=`, Android `?body=`;
+ *  the `?body=` form is widely honored, so we normalize to it. P2P — the human taps
+ *  send. Never used to auto-send. */
+export function buildSmsLink(phone, body) {
+  const digits = String(phone || '').replace(/[^\d+]/g, '');
+  const b = encodeURIComponent(String(body || ''));
+  return digits ? `sms:${digits}?body=${b}` : `sms:?body=${b}`;
+}
+
 /** Resolve {merge} fields against a sampled recipient. Unfilled fields fall back
  *  to a readable placeholder so the preview never renders a raw "{token}". */
 export function renderMergeFields(text, recipient = {}) {

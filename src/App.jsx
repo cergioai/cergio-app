@@ -98,6 +98,7 @@ import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
 import { AdminCrawlScreen }                 from './screens/AdminCrawlScreen';
 import { OpsConsoleScreen }                 from './screens/OpsConsoleScreen';
+import { P2pSmsQueueScreen }               from './screens/P2pSmsQueueScreen';
 import { SupportInboxScreen }               from './screens/SupportInboxScreen';
 import { PublicProfileServicesScreen }      from './screens/PublicProfileServicesScreen';
 import { InviteLandingScreen }              from './screens/InviteLandingScreen';
@@ -119,6 +120,7 @@ const HIDE_NAV_PATHS_EXTRA = [
   '/earnings/breakdown', '/earnings/network', '/earnings/transactions',
   '/earnings/how', '/earnings/track',
   '/ops',                             // founder console — renders its own full shell
+  '/ops/sms',                         // P2P tap-to-send queue — own full shell
   '/support-inbox',                   // founder support inbox — own full shell
 ];
 
@@ -593,6 +595,7 @@ export default function App() {
               composer). Auth is gated inside the screen via isAdminEmail,
               matching AdminCrawlScreen. */}
           <Route path="/ops"                   element={<OpsConsoleScreen />} />
+          <Route path="/ops/sms"               element={<P2pSmsQueueScreen />} />
           {/* crack-help-haiku — founder support inbox (admin-gated inside the
               screen, RLS-gated in the DB). Reads all tickets, reply closes. */}
           <Route path="/support-inbox"         element={<SupportInboxScreen />} />

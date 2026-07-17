@@ -4796,6 +4796,43 @@ export async function sampleOutreachRecipient(audience, filters = {}) {
 /** Real, distinct filter OPTIONS (cities + niches/service types) for the audience
  *  builder dropdowns — derived from a capped scan of queued rows so the founder
  *  filters against values that actually exist. No hardcoded lists. */
+/** List real recipients (WITH a phone) for the P2P SMS tap-to-send queue (SPEC-84).
+ *  Unlike the server-side A2P sender, this returns the list to the founder's own
+ *  device so THEY send each text one at a time from their phone (genuine P2P — no
+ *  10DLC, no A2P). Only phone-bearing rows; capped. Founder/admin only (leads_*
+ *  are admin-scoped by RLS). Returns [{ name, phone, city, service_type, ig_handle }]. */
+export async function listOutreachRecipients(audience, filters = {}, limit = 50) {
+  if (!supabaseReady) return { data: [], error: NOT_WIRED.error };
+  const cap = Math.min(Math.max(1, limit | 0), 200);
+  try {
+    if (audience === 'services') {
+      const { data, error } = await serviceQuery(SERVICE_COLS, filters)
+        .not('phone', 'is', null).limit(cap);
+      if (error) return { data: [], error };
+      return {
+        data: (data || []).filter(r => r.phone).map(r => ({
+          name: r.name || '', phone: String(r.phone), city: r.city || '',
+          service_type: r.service_type || '', ig_handle: '',
+        })),
+        error: null,
+      };
+    }
+    const { data, error } = await creatorQuery(CREATOR_COLS, filters)
+      .not('phone', 'is', null)
+      .order('followers', { ascending: false, nullsFirst: false }).limit(cap);
+    if (error) return { data: [], error };
+    return {
+      data: (data || []).filter(r => r.phone).map(r => ({
+        name: r.display_name || r.ig_handle || '', phone: String(r.phone), city: r.city || '',
+        service_type: r.category || '', ig_handle: r.ig_handle || '',
+      })),
+      error: null,
+    };
+  } catch (e) {
+    return { data: [], error: { message: e?.message || 'list failed' } };
+  }
+}
+
 export async function getOutreachFilterOptions(audience) {
   if (!supabaseReady) return { data: { cities: [], niches: [] }, error: NOT_WIRED.error };
   try {
