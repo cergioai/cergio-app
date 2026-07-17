@@ -809,11 +809,22 @@ export function ResultsScreen() {
   const notBlockedSvc = (s) => !isBlockedFeedCategory(
     s?.taxonomy_provider_type, s?.category, s?.title,
   );
+  // CERGIO-GUARD (2026-07-17, no-fake-data rule): internal seed/test fixtures
+  // carry a literal "[SEED]" marker in their title/name and must NEVER render
+  // on a real user-facing Results surface (the "no mock data on real screens"
+  // FROZEN rule). Observed live (run 35, prod c8d4b15): a NYC "house cleaning"
+  // search surfaced "[SEED] Paulo Plumber — 24/7 Miami" + "[SEED] Cara Cleaner
+  // — Austin deep clean" via the free/browse path. Guard BOTH the request-scoped
+  // and legacy browse paths, mirroring notBlockedSvc.
+  const notSeedFixture = (s) =>
+    !/\[\s*seed\s*\]/i.test(String(s?.title || '')) &&
+    !/\[\s*seed\s*\]/i.test(String(s?.name || ''));
+  const showableSvc = (s) => notBlockedSvc(s) && notSeedFixture(s);
   const servicesFiltered = (() => {
     if (!services || services.length === 0) return services;
-    if (!requestId) return services.filter(notBlockedSvc);
+    if (!requestId) return services.filter(showableSvc);
     if (confirmedServiceIds === null) return null; // still loading the response set
-    return services.filter(s => confirmedServiceIds.has(s.id) && notBlockedSvc(s));
+    return services.filter(s => confirmedServiceIds.has(s.id) && showableSvc(s));
   })();
   const providersRaw = (servicesFiltered && servicesFiltered.length > 0)
     ? servicesFiltered.map((s, i) => {

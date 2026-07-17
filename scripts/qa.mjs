@@ -4306,9 +4306,11 @@ test('results-blocked-guard', 'ResultsScreen never surfaces a blocked category �
   const m = src.match(/const servicesFiltered = \(\(\) => \{[\s\S]*?\}\)\(\);/);
   assert(m, 'servicesFiltered IIFE not found');
   const blk = m[0];
-  assert(/if \(!requestId\) return services\.filter\(notBlockedSvc\);/.test(blk),
+  // Guard may be applied directly (notBlockedSvc) or via the composed
+  // showableSvc = notBlockedSvc && notSeedFixture (seed-fixture guard, #84b).
+  assert(/if \(!requestId\) return services\.filter\((?:notBlockedSvc|showableSvc)\);/.test(blk),
     'legacy browse path (no requestId) must filter blocked categories');
-  assert(/confirmedServiceIds\.has\(s\.id\)\s*&&\s*notBlockedSvc\(s\)/.test(blk),
+  assert(/confirmedServiceIds\.has\(s\.id\)\s*&&\s*(?:notBlockedSvc|showableSvc)\(s\)/.test(blk),
     'request-scoped path must AND the blocked-category guard onto the confirmed-set filter');
 });
 
@@ -4427,6 +4429,21 @@ test('p2p-compose-copy', 'SPEC-84c: CSV-driven personalization — "Hi {first}, 
   const rows = parseContactsCsv('First Name,Phone,Service Name,City\nTom,+13055551212,Plumber,Miami\n');
   assert(rows[0] && rows[0].first_name === 'Tom' && rows[0].service === 'Plumber' && rows[0].city === 'Miami' && rows[0].phone === '+13055551212',
     'parseContactsCsv must read First Name / Service Name / City columns');
+});
+
+test('results-seed-guard', 'FROZEN (no-fake-data): ResultsScreen never surfaces a [SEED]-labeled internal test fixture on a real user Results surface — guard composed into BOTH the request-scoped and legacy browse filter paths', '#84b', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  assert(/const notSeedFixture = \(s\) =>/.test(src),
+    'ResultsScreen must define notSeedFixture(s) — the [SEED] marker guard');
+  assert(/\\\[\\s\*seed\\s\*\\\]/i.test(src) || /\[\\s\*seed/i.test(src),
+    'notSeedFixture must test the literal [SEED] marker (case/space-insensitive)');
+  assert(/const showableSvc = \(s\) => notBlockedSvc\(s\) && notSeedFixture\(s\)/.test(src),
+    'showableSvc must compose notBlockedSvc AND notSeedFixture');
+  // Both filter paths must use showableSvc, not the bare notBlockedSvc.
+  assert(/services\.filter\(showableSvc\)/.test(src),
+    'legacy browse path must filter on showableSvc');
+  assert(/confirmedServiceIds\.has\(s\.id\) && showableSvc\(s\)/.test(src),
+    'request-scoped path must filter on showableSvc');
 });
 
 main().catch(e => {
