@@ -8,7 +8,7 @@
 //
 // 2026-06-10: Added Instagram data §6, TikTok data §7, data processors §9,
 //             public-authority policies, Yogotoo Inc as controller.
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export function PrivacyPolicyScreen() {
   const navigate = useNavigate();
@@ -195,7 +195,29 @@ export function PrivacyPolicyScreen() {
           app or by email.
         </Section>
 
-        <Section title="13. Contact">
+        <Section title="13. SMS / text messaging">
+          <p>
+            You opt in to receive SMS text messages from{' '}
+            <span className="font-semibold">Cergio</span> directly on our website
+            or app (for example, by checking an SMS-consent box at signup). We use
+            your mobile number only to send messages you consented to — such as
+            local client requests, onboarding, and account notifications.
+          </p>
+          <p className="mt-2 font-semibold">
+            Mobile information and text-messaging opt-in / consent are not shared
+            with any third parties or affiliates for marketing or promotional
+            purposes. We do not sell your mobile number or messaging opt-in data.
+          </p>
+          <p className="mt-2">
+            Message frequency varies. Message and data rates may apply. Reply{' '}
+            <span className="font-extrabold">STOP</span> to opt out at any time,
+            or <span className="font-extrabold">HELP</span> for help. See our{' '}
+            <Link to="/terms" className="text-gd font-extrabold underline">Terms</Link>{' '}
+            for the full messaging program terms.
+          </p>
+        </Section>
+
+        <Section title="14. Contact">
           Questions about this policy:{' '}
           <strong className="text-black">privacy@cergio.ai</strong>
         </Section>

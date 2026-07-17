@@ -4470,6 +4470,17 @@ test('ops-batch-consented', 'SPEC-84d: one-click batch send (ops-batch-send) is 
   assert(/opted-in/i.test(scr) && /Confirm send/.test(scr), 'screen sends to opted-in pool behind a confirm gate');
 });
 
+
+test('privacy-sms-clause', 'A2P: the privacy policy carries the carrier-required statement that mobile/SMS opt-in consent is NOT shared with third parties/affiliates for marketing (fixes rejection 30908)', '#89', async () => {
+  const pv = readFile('src/screens/PrivacyPolicyScreen.jsx');
+  assert(/text messaging|SMS/i.test(pv), 'privacy policy must have an SMS/messaging section');
+  assert(/not\s+shared[\s\S]{0,80}third parties/i.test(pv) && /affiliates/i.test(pv),
+    'must state opt-in/consent is NOT shared with third parties or affiliates');
+  assert(/marketing/i.test(pv) && /(do not sell|not sold)/i.test(pv),
+    'must state we do not sell the number / opt-in data for marketing');
+  assert(/STOP/.test(pv) && /HELP/.test(pv) && /opt out/i.test(pv), 'must carry STOP + HELP + opt out');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
