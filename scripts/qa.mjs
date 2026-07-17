@@ -4315,6 +4315,40 @@ test('sms-consent-optin', 'SPEC-83: SMS is opt-in only — signup captures EXPLI
     'signUp must accept an explicit smsConsent argument (default false — never implied)');
 });
 
+
+test('p2p-sms-queue', 'SPEC-84: P2P SMS tap-to-send queue — human sends each text from their own phone via an sms: link (never auto-sent); personal cold + opt-in modes; only phone-bearing recipients', '#84', async () => {
+  const copy = readFile('src/lib/outreachCopy.js');
+  assert(/export const SMS_TEMPLATE/.test(copy) && /export const PERSONAL_SMS_TEMPLATE/.test(copy),
+    'outreachCopy must export SMS_TEMPLATE (opt-in) + PERSONAL_SMS_TEMPLATE (cold)');
+  assert(/export function smsTemplateFor\(audience, mode/.test(copy),
+    'smsTemplateFor must be mode-aware (personal|optin)');
+  // buildSmsLink builds a real sms: deep link (the P2P mechanism).
+  const fnStart = copy.indexOf('export function buildSmsLink(');
+  assert(fnStart > -1, 'outreachCopy must export buildSmsLink');
+  const body = copy.slice(fnStart, copy.indexOf('\n}', fnStart) + 2).replace(/^export\s+/, '');
+  const buildSmsLink = new Function(body + '\nreturn buildSmsLink;')();
+  const link = buildSmsLink('+1 (555) 222-3333', 'hi there');
+  assert(link.startsWith('sms:+15552223333?body=') && /hi%20there/.test(link),
+    'buildSmsLink must produce sms:<digits>?body=<encoded>');
+  // Opt-in copy carries STOP; personal is a warm 1:1 from Tarik.
+  assert(/STOP/.test(copy), 'opt-in SMS copy must include STOP');
+  // The data path returns only phone-bearing recipients.
+  const api = readFile('src/lib/api.js');
+  assert(/export async function listOutreachRecipients/.test(api), 'api must export listOutreachRecipients');
+  assert(/\.not\(\s*['"]phone['"]\s*,\s*['"]is['"]\s*,\s*null\s*\)/.test(api),
+    'listOutreachRecipients must exclude rows without a phone');
+  // The screen sends via an sms: anchor and NEVER programmatically auto-sends.
+  const scr = readFile('src/screens/P2pSmsQueueScreen.jsx');
+  assert(/buildSmsLink/.test(scr) && /href=\{smsHref\}/.test(scr),
+    'the queue must send through an sms: <a href> (human taps) — no auto-send');
+  assert(!/window\.open\(|\.click\(\)|location\.href\s*=/.test(scr),
+    'the queue must NOT auto-trigger sending (that would be A2P)');
+  // Routed.
+  const app = readFile('src/App.jsx');
+  assert(/path="\/ops\/sms"/.test(app) && /P2pSmsQueueScreen/.test(app),
+    'App must route /ops/sms to P2pSmsQueueScreen');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
