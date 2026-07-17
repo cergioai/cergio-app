@@ -3021,6 +3021,10 @@ test('a1-open-requests-surface', "FROZEN: a submitted search request surfaces in
   assert(/\.from\('requests'\)/.test(body), 'listMyOpenSearchRequests must read the requests table (A1e)');
   assert(/requester_id/.test(body), 'it must scope to the signed-in requester (A1e)');
   assert(/'status',\s*'pending'/.test(body), 'only PENDING requests are "open" (A1e)');
+  // A1 honest schedule (2026-07-17 forensic ship): the select must carry when_text
+  // so the row can show the schedule the user typed, not a fabricated ASAP.
+  assert(/when_text/.test(body),
+    'listMyOpenSearchRequests must select when_text — the row shows the typed schedule, never a fabricated "As soon as possible" (SPEC-12/A1)');
 
   const act = readFile('src/screens/ActivityScreen.jsx');
   assert(/listMyOpenSearchRequests/.test(act),
@@ -3036,6 +3040,8 @@ test('a1-open-requests-surface', "FROZEN: a submitted search request surfaces in
   const rowBody = row.slice(0, row.indexOf('\n}') + 2);
   assert(/We'll let you know when offers land/.test(rowBody),
     'the row must use the canonical waiting copy (SPEC-42) — never a fabricated status (A1e)');
+  assert(/req\.when_text/.test(rowBody),
+    'when scheduled_at is null the row must fall back to req.when_text (the typed schedule) before "As soon as possible" — no invented ETA (SPEC-12/A1)');
 });
 
 // ─── INVARIANT #A1f: a RESCUED geocode failure is never shown to the user ─────

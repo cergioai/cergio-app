@@ -108,7 +108,13 @@ function BookingRow({ booking, onClick }) {
 // no fake providers, no fabricated ETA).
 function SearchRequestRow({ req }) {
   const what = req.service_type || 'Service request';
-  const when = req.scheduled_at ? fmtDate(req.scheduled_at) : 'As soon as possible';
+  // SPEC-12 (no invented ETA): if the request wasn't persisted with a parsed
+  // scheduled_at, show the schedule the user actually typed (when_text, e.g.
+  // "tomorrow afternoon") rather than a fabricated "As soon as possible".
+  // Only truly time-less requests (no when_text) read as ASAP.
+  const when = req.scheduled_at
+    ? fmtDate(req.scheduled_at)
+    : (req.when_text || 'As soon as possible');
   return (
     <div className="w-full bg-white border border-bdr rounded-[14px] p-3.5 flex items-center gap-3 text-left">
       <div className="w-9 h-9 rounded-full bg-gl flex items-center justify-center flex-shrink-0">
