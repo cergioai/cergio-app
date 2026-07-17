@@ -3922,7 +3922,15 @@ export async function listMyOpenSearchRequests({ limit = 20 } = {}) {
   // `location_text` is the real column — there is no `city`.
   return await supabase
     .from('requests')
-    .select('id, created_at, status, service_type, description, scheduled_at, location_text, lat, lng')
+    // CERGIO-GUARD (2026-07-17, forensic ship — A1 honest schedule): `when_text`
+    // is named here so the row can show the schedule the user actually typed
+    // ("tomorrow afternoon") instead of a fabricated "As soon as possible" when
+    // `scheduled_at` is null (SPEC-12: no invented ETA). SAFE: `when_text` is
+    // written by the request INSERT (createSearchRequest, api.js ~L3300) and that
+    // insert succeeds in prod (requests persist across Inbox/Activity), so the
+    // column is PROVEN to exist — unlike `city`, which only lived in a SELECT and
+    // 42703'd. Display-only, no new schema dependency.
+    .select('id, created_at, status, service_type, description, scheduled_at, when_text, location_text, lat, lng')
     .eq('requester_id', userRes.user.id)
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
