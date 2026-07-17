@@ -79,6 +79,26 @@ export const PERSONAL_SMS_TEMPLATE = {
     "Hi @{ig_handle} — Tarik, founder of Cergio. Love what you're doing in {city}. I'm hand-picking a few founding creators and think you'd be perfect. Can I share how it works? — Tarik, Cergio",
 };
 
+/** Compose a grammatical P2P message from per-recipient fields, reading well WHETHER
+ *  OR NOT the service/category is present (Tarik: "copy should read well if the
+ *  category is omitted"). Services use the service name ("add you as a plumber");
+ *  creators use the category ("love your pets content"). first_name falls back to
+ *  "there". This is preferred over a static {token} template for the tap-queue. */
+export function composeP2pMessage(row = {}, audience = 'services', mode = 'personal') {
+  const first = (row.first_name || String(row.name || '').trim().split(/\s+/)[0] || 'there');
+  const topic = String(
+    audience === 'services' ? (row.service_type || row.service || '')
+                            : (row.category || row.service_type || '')
+  ).trim();
+  const tail = mode === 'optin' ? ' Reply YES for details, or STOP to opt out.' : '';
+  if (audience === 'services') {
+    const as = topic ? ` as a ${topic}` : '';
+    return `Hi ${first}, Tarik here from Cergio — I'd love to add you${as} on Cergio so local customers can find & book you. Mind if I share how it works?${tail}`;
+  }
+  const cat = topic ? ` ${topic}` : '';
+  return `Hi ${first}, Tarik from Cergio — love your${cat} content. I'm hand-picking a few founding creators and think you'd be perfect. Can I share how it works?${tail}`;
+}
+
 // mode: 'personal' (cold hand-picked 1:1) | 'optin' (invite w/ opt-in nudge + STOP)
 export function smsTemplateFor(audience, mode = 'personal') {
   const t = mode === 'optin' ? SMS_TEMPLATE : PERSONAL_SMS_TEMPLATE;

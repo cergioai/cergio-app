@@ -33,13 +33,29 @@ export function parseContactsCsv(text) {
   if (rows.length < 2) return [];
   const header = rows[0].map(h => h.toLowerCase());
   const col = (re) => header.findIndex(h => re.test(h));
-  const iName = col(/^name$|display name|^first name$|full name/);
-  const iLast = col(/^last name$/);
+  const iFirst = col(/^first name$|^first$|given name/);
+  const iName = col(/^name$|display name|full name/);
+  const iLast = col(/^last name$|surname|family name/);
   const iPhone = col(/phone.*(1 - value|number)?|^mobile|^tel/);
+  const iService = col(/service name|service type|^service$|^type$|profession|trade/);
+  const iCategory = col(/category|niche/);
+  const iCity = col(/^city$|town|location|area/);
+  const val = (idx) => (idx >= 0 ? String(r_[idx] || '').trim() : '');
+  let r_;
   return rows.slice(1).map(r => {
-    const first = iName >= 0 ? r[iName] || '' : '';
-    const last = iLast >= 0 ? r[iLast] || '' : '';
-    return { name: `${first} ${last}`.trim(), phone: normalizePhone(iPhone >= 0 ? (r[iPhone] || '').split(':').pop() : '') };
+    r_ = r;
+    const first = val(iFirst);
+    const nameCell = val(iName);
+    const last = val(iLast);
+    const full = (nameCell || `${first} ${last}`).trim();
+    return {
+      name: full,
+      first_name: first || full.split(/\s+/)[0] || '',
+      phone: normalizePhone(iPhone >= 0 ? (r[iPhone] || '').split(':').pop() : ''),
+      service: val(iService),
+      category: val(iCategory),
+      city: val(iCity),
+    };
   });
 }
 
@@ -72,6 +88,15 @@ export function parseContactFile(filename, text) {
 /** Shape any imported list into tap-queue rows (phone required). */
 export function toQueueRows(list) {
   return (list || [])
-    .map(c => ({ name: c.name || '', phone: normalizePhone(c.phone), city: c.city || '', service_type: c.service_type || '', ig_handle: c.ig_handle || '' }))
+    .map(c => ({
+      name: c.name || '',
+      first_name: c.first_name || '',
+      phone: normalizePhone(c.phone),
+      city: c.city || '',
+      service: c.service || '',
+      category: c.category || '',
+      service_type: c.service_type || c.service || '',
+      ig_handle: c.ig_handle || '',
+    }))
     .filter(c => c.phone);
 }
