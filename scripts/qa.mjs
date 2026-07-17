@@ -4291,6 +4291,21 @@ test('ux-invite-copy', 'The invite share message is ONE canonical AI-touch line 
 });
 
 
+test('results-blocked-guard', 'ResultsScreen never surfaces a blocked category — guard applied on BOTH the request-scoped and legacy browse paths (SPEC-71.5)', '#83', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  assert(/import\s*\{[^}]*isBlockedFeedCategory[^}]*\}\s*from\s*'\.\.\/data\/providerTypes'/.test(src),
+    'ResultsScreen must import isBlockedFeedCategory from data/providerTypes');
+  assert(/const\s+notBlockedSvc\s*=\s*\(s\)\s*=>\s*!isBlockedFeedCategory\(/.test(src),
+    'ResultsScreen must define notBlockedSvc via isBlockedFeedCategory');
+  const m = src.match(/const servicesFiltered = \(\(\) => \{[\s\S]*?\}\)\(\);/);
+  assert(m, 'servicesFiltered IIFE not found');
+  const blk = m[0];
+  assert(/if \(!requestId\) return services\.filter\(notBlockedSvc\);/.test(blk),
+    'legacy browse path (no requestId) must filter blocked categories');
+  assert(/confirmedServiceIds\.has\(s\.id\)\s*&&\s*notBlockedSvc\(s\)/.test(blk),
+    'request-scoped path must AND the blocked-category guard onto the confirmed-set filter');
+});
+
 test('sms-consent-optin', 'SPEC-83: SMS is opt-in only — signup captures EXPLICIT checkbox consent with STOP/HELP + rates disclosure BEFORE any text, and stores it; no implied "we only text X" consent', '#83', async () => {
   const auth = readFile('src/screens/AuthScreen.jsx');
   // Explicit checkbox bound to a consent state (not a pre-checked / implied thing).

@@ -31,6 +31,7 @@ import { verifyAddress } from '../lib/google';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { buildInviteUrl } from '../lib/referral';
 import { pluralProviderTypeLocal, resolveProviderTypeLocal } from '../lib/serviceTaxonomy';
+import { isBlockedFeedCategory } from '../data/providerTypes';
 import { REWARDS } from '../lib/rewards';
 import { useRequestActivity, activityToStatus } from '../hooks/useRequestActivity';
 import { rankResults, applyPickFlag } from '../lib/rankResults';
@@ -801,11 +802,18 @@ export function ResultsScreen() {
   // services that have a confirmed (offered / countered / accepted)
   // response row. No requestId → legacy / pre-broadcast browse path,
   // show all matches. Spec § 3.2.
+  // CERGIO-GUARD (2026-07-16, SPEC-71.5): defense-in-depth — never surface a
+  // blocked category (Personal Chef / Massage / plastic surgery / etc.) on the
+  // Results surface, on EITHER the request-scoped path or the legacy browse
+  // path. Mirrors the guard already on ActivityScreen + JobsInboxScreen.
+  const notBlockedSvc = (s) => !isBlockedFeedCategory(
+    s?.taxonomy_provider_type, s?.category, s?.title,
+  );
   const servicesFiltered = (() => {
     if (!services || services.length === 0) return services;
-    if (!requestId) return services;
+    if (!requestId) return services.filter(notBlockedSvc);
     if (confirmedServiceIds === null) return null; // still loading the response set
-    return services.filter(s => confirmedServiceIds.has(s.id));
+    return services.filter(s => confirmedServiceIds.has(s.id) && notBlockedSvc(s));
   })();
   const providersRaw = (servicesFiltered && servicesFiltered.length > 0)
     ? servicesFiltered.map((s, i) => {
