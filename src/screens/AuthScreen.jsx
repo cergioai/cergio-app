@@ -73,6 +73,7 @@ export function AuthScreen() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail]       = useState('');
   const [phone, setPhone]       = useState('');
+  const [smsConsent, setSmsConsent] = useState(false);
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd]   = useState(false);
   const [busy, setBusy]         = useState(false);
@@ -139,7 +140,7 @@ export function AuthScreen() {
     setBusy(true);
     try {
       if (isSignup) {
-        const res = await auth.signUp(email.trim(), password, displayName.trim(), phone.trim());
+        const res = await auth.signUp(email.trim(), password, displayName.trim(), phone.trim(), smsConsent);
         if (res?.error) {
           const msg = res.error.message || '';
           if (/rate limit|too many|too frequent/i.test(msg)) {
@@ -422,13 +423,26 @@ export function AuthScreen() {
                               placeholder-b3 outline-none focus:ring-2 focus:ring-g/30
                               ${phone && !phoneValid(phone) ? 'ring-2 ring-danger/40' : ''}`}
                 />
-                {phone && !phoneValid(phone) ? (
+                {phone && !phoneValid(phone) && (
                   <p className="text-meta-sm text-danger mt-1.5">Enter 7–15 digits (include country code).</p>
-                ) : (
-                  <p className="text-meta-sm text-b3 mt-1.5 leading-snug">
-                    We text only booking + invite alerts — never marketing.
-                  </p>
                 )}
+                {/* SMS opt-in (SPEC-83) — EXPLICIT, checkbox-driven consent captured
+                    before any text, as A2P/TCPA require. Optional: unchecked = no SMS,
+                    signup still works. This is the ONLY way a number becomes textable. */}
+                <label className="flex items-start gap-2.5 mt-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={smsConsent}
+                    onChange={e => setSmsConsent(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-g"
+                  />
+                  <span className="text-meta-sm text-b3 leading-snug">
+                    Text me booking &amp; invite alerts from Cergio. Msg &amp; data rates may apply,
+                    message frequency varies. Reply STOP to opt out, HELP for help. See our{' '}
+                    <a href="/terms" className="underline">Terms</a> &amp;{' '}
+                    <a href="/privacy" className="underline">Privacy</a>. (Optional.)
+                  </span>
+                </label>
               </div>
             )}
 
