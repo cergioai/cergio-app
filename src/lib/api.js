@@ -4841,6 +4841,20 @@ export async function listOutreachRecipients(audience, filters = {}, limit = 50)
   }
 }
 
+/** One-click A2P SMS batch to the OPTED-IN pool (SPEC-84d) via the admin-gated
+ *  ops-batch-send edge fn. dry-run counts the consented pool; send fires up to
+ *  `limit` (SMS-only, consented-only). Uses the caller's JWT (admin-checked server-side). */
+export async function opsBatchDryRun() {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+  const { data, error } = await supabase.functions.invoke('ops-batch-send', { body: { dry: true } });
+  return { data, error };
+}
+export async function opsBatchSend(limit = 50) {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+  const { data, error } = await supabase.functions.invoke('ops-batch-send', { body: { send: true, limit } });
+  return { data, error };
+}
+
 export async function getOutreachFilterOptions(audience) {
   if (!supabaseReady) return { data: { cities: [], niches: [] }, error: NOT_WIRED.error };
   try {

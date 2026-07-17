@@ -4429,6 +4429,47 @@ test('p2p-compose-copy', 'SPEC-84c: CSV-driven personalization — "Hi {first}, 
     'parseContactsCsv must read First Name / Service Name / City columns');
 });
 
+
+test('sms-send-consented-only', 'SPEC-84d: automated A2P SMS in outreach-send selects ONLY opted-in rows (outreach_status=opted_in) — NEVER queued/cold. The consent gate that keeps a switch-flip from cold-blasting.', '#87', async () => {
+  const src = readFile('supabase/functions/outreach-send/index.ts');
+  // Isolate the SMS channel block.
+  const smsStart = src.indexOf('SMS channel');
+  assert(smsStart > -1, 'outreach-send must have an SMS channel block');
+  const smsBlock = src.slice(smsStart, smsStart + 4500);
+  // It must pull leads_services + leads_influencers with outreach_status opted_in.
+  assert(/\.from\('leads_services'\)[\s\S]{0,220}outreach_status'\s*,\s*'opted_in'/.test(smsBlock),
+    'services SMS must select outreach_status=opted_in (consented)');
+  assert(/\.from\('leads_influencers'\)[\s\S]{0,220}outreach_status'\s*,\s*'opted_in'/.test(smsBlock),
+    'influencer SMS must select outreach_status=opted_in (consented)');
+  // And must NOT send to queued (cold) rows in the SMS path.
+  assert(!/outreach_status'\s*,\s*'queued'/.test(smsBlock),
+    'the SMS path must NEVER select outreach_status=queued (that is cold-blast)');
+  // Still gated by the flag + carries STOP.
+  assert(/OUTREACH_SMS_ENABLED/.test(src) && /Reply STOP to opt out/.test(src),
+    'SMS stays flag-gated + every text carries Reply STOP');
+});
+
+
+test('ops-batch-consented', 'SPEC-84d: one-click batch send (ops-batch-send) is admin-gated, SMS-only, OPTED-IN-only, and reports PENDING (sends nothing) until OUTREACH_SMS_ENABLED is on — never cold-blasts', '#88', async () => {
+  const fn = readFile('supabase/functions/ops-batch-send/index.ts');
+  assert(/auth\.getUser\(\)/.test(fn) && /Forbidden/.test(fn) && /admins\.includes\(email\)/.test(fn),
+    'ops-batch-send must be admin-JWT gated');
+  assert(/outreach_status'\s*,\s*'opted_in'/.test(fn) && !/outreach_status'\s*,\s*'queued'/.test(fn),
+    'batch send must target opted_in only — never queued (cold)');
+  assert(/OUTREACH_SMS_ENABLED/.test(fn) && /pending/i.test(fn),
+    'must gate on OUTREACH_SMS_ENABLED and report pending (no fake sent) when off');
+  assert(/MessagingServiceSid/.test(fn) && /Reply STOP to opt out/.test(fn),
+    'sends via the Messaging Service + every text carries Reply STOP');
+  const api = readFile('src/lib/api.js');
+  assert(/export async function opsBatchDryRun/.test(api) && /export async function opsBatchSend/.test(api),
+    'api must expose opsBatchDryRun + opsBatchSend');
+  assert(/functions\.invoke\('ops-batch-send'/.test(api), 'callers invoke ops-batch-send with the user JWT');
+  const app = readFile('src/App.jsx');
+  assert(/path="\/ops\/batch"/.test(app) && /BatchSendScreen/.test(app), 'App routes /ops/batch');
+  const scr = readFile('src/screens/BatchSendScreen.jsx');
+  assert(/opted-in/i.test(scr) && /Confirm send/.test(scr), 'screen sends to opted-in pool behind a confirm gate');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

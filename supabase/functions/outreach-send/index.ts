@@ -217,11 +217,14 @@ serve(async (req: Request) => {
     const twAuthPass = Deno.env.get('TWILIO_API_KEY_SECRET') || twTok;
     const twFrom = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || Deno.env.get('TWILIO_FROM_NUMBER');
     if (smsEnabled && twSid && twAuthUser && twAuthPass && twFrom) {
+      // CERGIO-GUARD (SPEC-84d): automated A2P SMS goes ONLY to CONSENTED rows
+      // (outreach_status='opted_in') — NEVER 'queued' (cold crawled leads). Cold
+      // bulk SMS is illegal + carrier-blocked; the tap-queue (/ops/sms) is the only
+      // cold path. This filter is the consent gate; qa `sms-send-consented-only` locks it.
       const { data: smsLeads } = await db
         .from('leads_services')
         .select('id, name, service_type, city, phone')
-        .eq('outreach_status', 'queued')
-        .is('owner_email', null)
+        .eq('outreach_status', 'opted_in')
         .not('phone', 'is', null)
         .limit(BATCH);
       for (const lead of smsLeads ?? []) {
@@ -232,7 +235,7 @@ serve(async (req: Request) => {
         if (supp) { await db.from('leads_services').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id); continue; }
         const smsTok = await hmac(e164, optoutSecret);
         const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(e164)}&k=${smsTok}`;
-        const body = `Hi${lead.name ? ' ' + lead.name : ''} — Tarik, founder of Cergio. 25 founding spots: free IG spotlights from local Creators for 1 free ${lead.service_type || 'service'}, + $250 per client you invite + priority. Want a spot? ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const body = `Hi${lead.name ? ' ' + lead.name : ''} — Tarik, founder of Cergio. 25 founding spots: free IG spotlights from local Creators for 1 free ${lead.service_type || 'service'}, + $250 per client you invite + priority. Want a spot? ${optinUrl} Reply STOP to opt out. (Cergio)`;
         const form = new URLSearchParams();
         form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
         form.set('To', e164); form.set('Body', body);
@@ -253,7 +256,7 @@ serve(async (req: Request) => {
       const { data: smsInf } = await db
         .from('leads_influencers')
         .select('ig_handle, city, phone')
-        .eq('outreach_status', 'queued').is('email', null).not('phone', 'is', null).limit(BATCH);
+        .eq('outreach_status', 'opted_in').not('phone', 'is', null).limit(BATCH); // consented-only (SPEC-84d)
       for (const inf of smsInf ?? []) {
         const e164 = toE164(inf.phone);
         if (!e164) continue;
@@ -261,7 +264,7 @@ serve(async (req: Request) => {
         if (supp) { await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue; }
         const smsTok = await hmac(e164, optoutSecret);
         const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=inf&a=${encodeURIComponent(e164)}&k=${smsTok}`;
-        const body = `Hi @${inf.ig_handle} — Tarik, founder of Cergio. Hand-picking 5 founding Creators, would love you to be one. To start: 1 free service for 1 spotlight. Beyond that, let's refine how your network earns for you. Want in? ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const body = `Hi @${inf.ig_handle} — Tarik, founder of Cergio. Hand-picking 5 founding Creators, would love you to be one. To start: 1 free service for 1 spotlight. Beyond that, let's refine how your network earns for you. Want in? ${optinUrl} Reply STOP to opt out. (Cergio)`;
         const form = new URLSearchParams();
         form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
         form.set('To', e164); form.set('Body', body);
