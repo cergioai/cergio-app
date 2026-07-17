@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { listOutreachRecipients, getOutreachFilterOptions } from '../lib/api';
-import { smsTemplateFor, renderMergeFields, buildSmsLink } from '../lib/outreachCopy';
+import { composeP2pMessage, buildSmsLink } from '../lib/outreachCopy';
 import { parseContactFile, parsePasted, toQueueRows } from '../lib/contactImport';
 
 const AUDIENCES = [{ id: 'services', label: 'Services' }, { id: 'creators', label: 'Creators' }];
@@ -95,7 +95,7 @@ export function P2pSmsQueueScreen() {
   const current = rows[i] || null;
   useEffect(() => {
     if (!current) { setEditBody(''); return; }
-    setEditBody(renderMergeFields(smsTemplateFor(audience, mode), current));
+    setEditBody(composeP2pMessage(current, audience, mode));
   }, [current, audience, mode]);
 
   const advance = () => setI(n => Math.min(n + 1, rows.length));

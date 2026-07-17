@@ -4395,6 +4395,40 @@ test('p2p-contact-import', 'SPEC-84b: tap-queue can seed from the founder\'s own
   assert(/href=\{smsHref\}/.test(scr), 'still sends via sms: href — human taps');
 });
 
+
+test('p2p-compose-copy', 'SPEC-84c: CSV-driven personalization — "Hi {first}, add you as a {service}" (services) / "love your {category} content" (creators), and reads well when service/category is OMITTED', '#86', async () => {
+  const copy = readFile('src/lib/outreachCopy.js');
+  const start = copy.indexOf('export function composeP2pMessage(');
+  assert(start > -1, 'outreachCopy must export composeP2pMessage');
+  const body = copy.slice(start, copy.indexOf('\n}', start) + 2).replace(/^export\s+/, '');
+  const composeP2pMessage = new Function(body + '\nreturn composeP2pMessage;')();
+
+  // Services WITH service name.
+  const a = composeP2pMessage({ first_name: 'Tom', service_type: 'plumber' }, 'services', 'personal');
+  assert(/^Hi Tom,/.test(a) && /as a plumber/.test(a), 'services: greets first name + "as a {service}"');
+  // Services WITHOUT service name — must read clean (no "as a  on", no stray token).
+  const b = composeP2pMessage({ name: 'Jane Doe' }, 'services', 'personal');
+  assert(/^Hi Jane,/.test(b) && !/as a\s{2,}/.test(b) && !/\{.*\}/.test(b) && /add you on Cergio/.test(b),
+    'services w/o service must omit "as a" cleanly and greet the first name');
+  // Creators WITH + WITHOUT category.
+  const c = composeP2pMessage({ first_name: 'Ana', category: 'pets' }, 'creators', 'personal');
+  assert(/love your pets content/.test(c), 'creators: "love your {category} content"');
+  const d = composeP2pMessage({ first_name: 'Ana' }, 'creators', 'personal');
+  assert(/love your content/.test(d) && !/your\s{2,}content/.test(d), 'creators w/o category reads clean');
+  // Opt-in mode adds the nudge + STOP.
+  const e = composeP2pMessage({ first_name: 'Tom', service_type: 'plumber' }, 'services', 'optin');
+  assert(/Reply YES/.test(e) && /STOP/.test(e), 'optin mode appends reply-YES + STOP');
+  // No unresolved fallback token leaks anywhere.
+  assert(![a,b,c,d,e].some(x => /\{|there,/.test(x) && /\{/.test(x)), 'no raw {tokens} in output');
+
+  // CSV parser captures the new columns.
+  const ci = readFile('src/lib/contactImport.js').replace(/^export\s+/gm, '');
+  const parseContactsCsv = new Function(ci + '\nreturn parseContactsCsv;')();
+  const rows = parseContactsCsv('First Name,Phone,Service Name,City\nTom,+13055551212,Plumber,Miami\n');
+  assert(rows[0] && rows[0].first_name === 'Tom' && rows[0].service === 'Plumber' && rows[0].city === 'Miami' && rows[0].phone === '+13055551212',
+    'parseContactsCsv must read First Name / Service Name / City columns');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
