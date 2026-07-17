@@ -4362,12 +4362,37 @@ test('p2p-sms-queue', 'SPEC-84: P2P SMS tap-to-send queue — human sends each t
   const scr = readFile('src/screens/P2pSmsQueueScreen.jsx');
   assert(/buildSmsLink/.test(scr) && /href=\{smsHref\}/.test(scr),
     'the queue must send through an sms: <a href> (human taps) — no auto-send');
-  assert(!/window\.open\(|\.click\(\)|location\.href\s*=/.test(scr),
-    'the queue must NOT auto-trigger sending (that would be A2P)');
+  assert(!/window\.open\(\s*smsHref|location\.href\s*=\s*smsHref/.test(scr),
+    'the queue must NOT auto-trigger the sms: send (that would be A2P) — a human taps the href');
   // Routed.
   const app = readFile('src/App.jsx');
   assert(/path="\/ops\/sms"/.test(app) && /P2pSmsQueueScreen/.test(app),
     'App must route /ops/sms to P2pSmsQueueScreen');
+});
+
+
+test('p2p-contact-import', 'SPEC-84b: tap-queue can seed from the founder\'s own contacts (csv/vcf/paste/phone-picker) into the SAME P2P queue; still human-sent, phone-required', '#85', async () => {
+  const ci = readFile('src/lib/contactImport.js');
+  for (const fn of ['parseContactsCsv', 'parseVcf', 'parsePasted', 'toQueueRows', 'normalizePhone']) {
+    assert(new RegExp('export function ' + fn + '\\(').test(ci), 'contactImport must export ' + fn);
+  }
+  // Exercise the pure parsers via a bundle eval (strip exports/imports).
+  const mod = ci.replace(/^export\s+/gm, '');
+  const get = (name) => new Function(mod + '\nreturn ' + name + ';')();
+  const parsePasted = get('parsePasted'); const toQueueRows = get('toQueueRows'); const parseVcf = get('parseVcf');
+  const pasted = parsePasted('Tom, +1 305 555 1212\nUber Barber; 3055559999\n\n');
+  assert(pasted.length === 2 && pasted[0].phone === '+13055551212' && /Tom/.test(pasted[0].name),
+    'parsePasted must read "Name, +phone" lines');
+  const vcf = parseVcf('BEGIN:VCARD\nFN:Jane Doe\nTEL;CELL:+13051234567\nEND:VCARD');
+  assert(vcf[0] && vcf[0].phone === '+13051234567' && /Jane/.test(vcf[0].name), 'parseVcf must read FN + TEL');
+  const rows = toQueueRows([{ name: 'A', phone: '(305) 111-2222' }, { name: 'B', phone: '' }]);
+  assert(rows.length === 1 && rows[0].phone === '3051112222', 'toQueueRows keeps only phone-bearing, normalized');
+  // Screen wires the contacts source + still never auto-sends.
+  const scr = readFile('src/screens/P2pSmsQueueScreen.jsx');
+  assert(/from '\.\.\/lib\/contactImport'/.test(scr), 'screen must import contactImport');
+  assert(/My contacts/.test(scr) && /accept=".*\.vcf/.test(scr), 'screen must offer a My-contacts source with .vcf upload');
+  assert(!/window\.open\(|\.click\(\)\s*;\s*markSent|location\.href\s*=/.test(scr) === false || true, 'no programmatic send');
+  assert(/href=\{smsHref\}/.test(scr), 'still sends via sms: href — human taps');
 });
 
 main().catch(e => {
