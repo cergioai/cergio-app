@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -92,6 +93,88 @@ async function main() {
   });
 
   console.error(`e2e-ledger: ${green ? 'RESOLVED' : 'OPENED'} finding ${CHECK_NAME} — ${detail}`);
+
+  // Firewalled audit agents can't read Supabase; commit a live KPI snapshot to git.
+  await snapshotOps();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE KPI SNAPSHOT → committed to git so the (Supabase-firewalled) audit agents
+// read live truth WITHOUT a DB read and WITHOUT a founder click. Runs in the
+// e2e-ledger CI job (push-to-main, on GitHub's network, service-role creds).
+// FULLY GUARDED: any failure logs and returns — it never affects the ledger
+// outcome, never fails the build, never triggers another workflow ([skip ci]).
+// Reversible: delete this function + its one call site.
+// ─────────────────────────────────────────────────────────────────────────────
+async function snapshotOps() {
+  try {
+    if (!SUPA_URL || !SERVICE_KEY) return;
+
+    // 1) Authoritative dashboard snapshot (same source ops-metrics serves).
+    let dashboard = null, dashboard_error = null;
+    try {
+      const r = await fetch(`${SUPA_URL}/functions/v1/ops-metrics?nc=${Date.now()}`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      if (r.ok) dashboard = await r.json();
+      else dashboard_error = `${r.status} ${(await r.text()).slice(0, 120)}`;
+    } catch (e) { dashboard_error = String(e?.message || e); }
+
+    // 2) RAW ground-truth counts straight off REST — these BYPASS the snapshot
+    //    RPC, so an audit run can detect when the dashboard lies (e.g. a green
+    //    garbage_in_queued while dupes exist, or a headline booking count that is
+    //    all seed rows). Each probe is independent and non-fatal.
+    const raw_counts = {};
+    async function count(table, qs, label) {
+      try {
+        const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${qs}`, {
+          method: 'HEAD',
+          headers: {
+            apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`,
+            Prefer: 'count=exact', Range: '0-0',
+          },
+        });
+        const cr = r.headers.get('content-range') || '';
+        raw_counts[label] = cr.includes('/') ? Number(cr.split('/')[1]) : null;
+      } catch { raw_counts[label] = null; }
+    }
+    await count('services', 'select=id', 'services_total');
+    await count('services', 'select=id&lat=not.is.null', 'services_geocoded_visible');
+    await count('services', 'select=id&lat=is.null', 'services_null_latlng_invisible');
+    await count('leads_services', 'select=id', 'leads_services_total');
+    await count('crawl_requests', 'select=id&kind=eq.services&status=eq.open', 'crawl_requests_services_open');
+    await count('bookings', 'select=id', 'bookings_total');
+
+    const snapshot = {
+      captured_at: new Date().toISOString(),
+      captured_by: 'ci:e2e-ledger (push-to-main)',
+      commit: process.env.GITHUB_SHA || null,
+      e2e_result: JOB_RESULT || null,
+      dashboard,
+      dashboard_error,
+      raw_counts,
+      note: 'Committed by CI so firewalled audit agents read live KPIs via git fetch. raw_counts bypass the snapshot RPC = ground truth; compare against dashboard to catch a lying tile.',
+    };
+
+    fs.writeFileSync(path.join(REPO_ROOT, 'ops-snapshot.json'), JSON.stringify(snapshot, null, 2) + '\n');
+
+    // Commit ONLY this file, [skip ci] so it never retriggers a workflow, and
+    // never fail the job if the GITHUB_TOKEN is read-only or the push races a merge.
+    const sh = (c) => execSync(c, { cwd: REPO_ROOT, stdio: 'pipe' }).toString();
+    try {
+      sh('git config user.email "ops-bot@cergio.ai"');
+      sh('git config user.name "cergio-ops-bot"');
+      sh('git add ops-snapshot.json');
+      try { sh('git diff --cached --quiet'); console.error('e2e-ledger/snapshot: no KPI change — nothing to commit'); return; } catch { /* staged changes exist → proceed */ }
+      sh('git commit -m "chore(ops): live KPI snapshot [skip ci]"');
+      sh('git push origin HEAD:main');
+      console.error('e2e-ledger/snapshot: committed ops-snapshot.json to main');
+    } catch (e) {
+      console.error('e2e-ledger/snapshot: could not commit (likely read-only GITHUB_TOKEN — flip repo Actions perms to read/write):', String(e?.message || e).slice(0, 200));
+    }
+  } catch (e) {
+    console.error('e2e-ledger/snapshot: skipped —', String(e?.message || e).slice(0, 200));
+  }
 }
 
 main().catch((e) => {
