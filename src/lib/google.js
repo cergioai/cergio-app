@@ -226,33 +226,56 @@ export async function verifyAddress(text) {
   // Tier 2: Nominatim fallback. Only kicks in when Google didn't return
   // a real result — auth-rejected, key missing, REQUEST_DENIED, or
   // ZERO_RESULTS. Lets users keep working even with a broken GCP setup.
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(trimmed)}`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (res.ok) {
-      const rows = await res.json();
-      const r = Array.isArray(rows) ? rows[0] : null;
-      if (r && r.lat && r.lon) {
-        // CERGIO-GUARD: Nominatim rescued the request — clear any Google
-        // geocode error so SetupCheckBanner doesn't show a false alarm.
-        // The address resolved successfully; GCP config issues are a
-        // developer concern, not a user-facing problem. Auth errors
-        // (kind='auth') stay visible — those affect more than geocoding.
-        if (status.lastError?.kind === 'geocode') {
-          status.lastError = null;
-          emit();
+  //
+  // CERGIO-GUARD (QA 2026-07-17): prod's Google key has the Geocoding API
+  // disabled, so EVERY search records a Google geocode error and depends
+  // entirely on this OSM tier rescuing it inside the SetupCheckBanner
+  // grace window. A verbose OSM display_name (e.g. "134, Henry Street,
+  // Two Bridges, Manhattan Community Board 3, Manhattan, New York County,
+  // New York, 10002, United States") can miss an exact Nominatim match —
+  // when it did, the rescue failed, the raw "Google geocoder error /
+  // Setup needed" banner surfaced on /results, and the search lost its
+  // lat/lng. So we try the full string first, then a simplified variant
+  // (house number + street + city/region + country) before giving up.
+  const queryVariants = [trimmed];
+  const parts = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length > 3) {
+    // Keep the head (number/street) + tail (region/postcode/country),
+    // dropping the noisy administrative middle that Nominatim's exact
+    // match can choke on.
+    const simplified = [parts[0], parts[1], parts[parts.length - 2], parts[parts.length - 1]]
+      .filter(Boolean).join(', ');
+    if (simplified && simplified !== trimmed) queryVariants.push(simplified);
+  }
+  for (const q of queryVariants) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (res.ok) {
+        const rows = await res.json();
+        const r = Array.isArray(rows) ? rows[0] : null;
+        if (r && r.lat && r.lon) {
+          // CERGIO-GUARD: Nominatim rescued the request — clear any Google
+          // geocode error so SetupCheckBanner doesn't show a false alarm.
+          // The address resolved successfully; GCP config issues are a
+          // developer concern, not a user-facing problem. Auth errors
+          // (kind='auth') stay visible — those affect more than geocoding.
+          if (status.lastError?.kind === 'geocode') {
+            status.lastError = null;
+            emit();
+          }
+          return {
+            ok:       true,
+            address:  r.display_name || trimmed,
+            lat:      parseFloat(r.lat),
+            lng:      parseFloat(r.lon),
+            placeId:  `osm:${r.osm_type || ''}:${r.osm_id || ''}`,
+            verified: 'osm',
+          };
         }
-        return {
-          ok:       true,
-          address:  r.display_name || trimmed,
-          lat:      parseFloat(r.lat),
-          lng:      parseFloat(r.lon),
-          placeId:  `osm:${r.osm_type || ''}:${r.osm_id || ''}`,
-          verified: 'osm',
-        };
       }
-    }
-  } catch (_e) { /* network blip — fall through to error reason below */ }
+    } catch (_e) { /* network blip — try the next variant / fall through */ }
+  }
 
   // Both tiers failed. Be specific about why so the toast can be useful.
   if (!getGoogleMapsKey())                                                 return { ok: false, reason: 'no-key' };
