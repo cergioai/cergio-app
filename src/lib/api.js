@@ -4841,6 +4841,22 @@ export async function listOutreachRecipients(audience, filters = {}, limit = 50)
   }
 }
 
+export async function exportLeads(audience, filters = {}, limit = 100000) {
+  if (!supabaseReady) return { data: [], error: NOT_WIRED.error };
+  const cap = Math.min(Math.max(1, limit | 0), 100000);
+  try {
+    if (audience === 'services') {
+      const { data, error } = await serviceQuery('*', filters).limit(cap);
+      return { data: data || [], error: error || null };
+    }
+    const { data, error } = await creatorQuery('*', filters)
+      .order('followers', { ascending: false, nullsFirst: false }).limit(cap);
+    return { data: data || [], error: error || null };
+  } catch (e) {
+    return { data: [], error: { message: e?.message || 'export failed' } };
+  }
+}
+
 export async function getOutreachFilterOptions(audience) {
   if (!supabaseReady) return { data: { cities: [], niches: [] }, error: NOT_WIRED.error };
   try {

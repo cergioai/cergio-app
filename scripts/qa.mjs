@@ -4446,6 +4446,21 @@ test('results-seed-guard', 'ResultsScreen never surfaces a [SEED]-labeled test f
 });
 
 
+
+test('ops-data-export', 'SPEC-85: /ops/data dashboard downloads crawled leads city-by-city, split Services vs Creators, as CSV (all columns, admin-only, client-side Blob)', '#90', async () => {
+  const api = readFile('src/lib/api.js');
+  assert(/export async function exportLeads\(audience/.test(api), 'api must export exportLeads(audience, filters)');
+  assert(/serviceQuery\('\*'/.test(api) && /creatorQuery\('\*'/.test(api),
+    'exportLeads must select all columns for both audiences');
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  assert(/function toCsv\(/.test(scr) && /new Blob\(/.test(scr) && /\.download\s*=/.test(scr),
+    'screen must build CSV + trigger a Blob download');
+  assert(/Services/.test(scr) && /Creators/.test(scr) && /list="cg-export-cities"/.test(scr),
+    'screen must offer Services/Creators + a city filter');
+  const app = readFile('src/App.jsx');
+  assert(/path="\/ops\/data"/.test(app) && /DataExportScreen/.test(app), 'App routes /ops/data');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
