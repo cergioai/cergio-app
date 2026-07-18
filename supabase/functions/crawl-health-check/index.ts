@@ -117,7 +117,45 @@ serve(async (req: Request) => {
       }
     }
 
-    return json({ ...report, emailed });
+    // ── SPEC-72.1 · SELF-HEAL: keep the FREE OSM seeder alive without a cron ─────
+    // ROOT CAUSE (forensic runs 30/35/36): the crawl-seed-osm seeder was REGISTERED
+    // (migration 20260715 osm_primary_source) but the cron.schedule migration that
+    // was supposed to actually INVOKE it (20260717120000_schedule_crawl_seed_osm)
+    // merged to main WITHOUT ever being applied to the live DB — deploy-functions.yml
+    // deploys FUNCTIONS only and deliberately never runs `db push`; the manual apply
+    // launcher (run30) was never clicked; the _autorun drop is dead. Net effect: the
+    // seeder never fires → zero OSM crawl_requests are enqueued → fulfill-crawl (15m)
+    // drains nothing → services intake has been flat (~32,531) for days.
+    //
+    // THIS worker already runs on an APPLIED every-2h cron (cergio_crawl_health,
+    // FROZEN SPEC-63/-52), so we piggy-back the single wire the un-applied migration
+    // was meant to add: when the open services queue has run dry, kick the keyless
+    // Overpass seeder to refill it. Intake now self-heals with no migration apply and
+    // no founder click.
+    //
+    // SAFE · free-first · reversible · additive:
+    //   * ENQUEUE-ONLY and dedup-guarded inside crawl-seed-osm (it pre-filters OPEN
+    //     rows) → repeated kicks never duplicate work / can't worsen the de-dup pile.
+    //   * ZERO paid calls — Overpass is keyless; Google Places stays dormant.
+    //   * Detection/email path above is UNCHANGED (SPEC-63 behavior is untouched).
+    //   * One env flag OSM_SELFHEAL_ENABLED (default on) fully reverses it;
+    //     OSM_SELFHEAL_REFILL_BELOW tunes the dry-queue threshold.
+    let osm_selfheal: Record<string, unknown> = { enabled: false, kicked: false };
+    try {
+      const selfhealOn = (Deno.env.get('OSM_SELFHEAL_ENABLED') || 'true').toLowerCase() !== 'false';
+      const refillBelow = Number(Deno.env.get('OSM_SELFHEAL_REFILL_BELOW') || '50');
+      const openServices = (byStatus['services/new'] ?? 0) + (byStatus['services/crawling'] ?? 0);
+      osm_selfheal = { enabled: selfhealOn, open_services: openServices, refill_below: refillBelow, kicked: false };
+      if (selfhealOn && openServices < refillBelow) {
+        const { error: kickErr } = await db.rpc('cergio_call_edge', { fn: 'crawl-seed-osm' });
+        osm_selfheal.kicked = !kickErr;
+        if (kickErr) osm_selfheal.error = String(kickErr.message || kickErr).slice(0, 200);
+      }
+    } catch (e) {
+      osm_selfheal = { ...osm_selfheal, error: e instanceof Error ? e.message : String(e) };
+    }
+
+    return json({ ...report, emailed, osm_selfheal });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
