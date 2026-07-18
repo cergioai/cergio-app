@@ -4306,10 +4306,14 @@ test('results-blocked-guard', 'ResultsScreen never surfaces a blocked category �
   const m = src.match(/const servicesFiltered = \(\(\) => \{[\s\S]*?\}\)\(\);/);
   assert(m, 'servicesFiltered IIFE not found');
   const blk = m[0];
-  assert(/if \(!requestId\) return services\.filter\(notBlockedSvc\);/.test(blk),
-    'legacy browse path (no requestId) must filter blocked categories');
-  assert(/confirmedServiceIds\.has\(s\.id\)\s*&&\s*notBlockedSvc\(s\)/.test(blk),
-    'request-scoped path must AND the blocked-category guard onto the confirmed-set filter');
+  // The blocked-category guard is now composed with the seed guard into
+  // showableSvc (see results-seed-guard); both paths must apply it.
+  assert(/if \(!requestId\) return services\.filter\(showableSvc\);/.test(blk),
+    'legacy browse path (no requestId) must filter via showableSvc (blocked + seed)');
+  assert(/confirmedServiceIds\.has\(s\.id\)\s*&&\s*showableSvc\(s\)/.test(blk),
+    'request-scoped path must AND showableSvc (blocked + seed guard) onto the confirmed-set filter');
+  assert(/const\s+showableSvc\s*=\s*\(s\)\s*=>\s*notBlockedSvc\(s\)\s*&&\s*notSeedFixture\(s\)/.test(src),
+    'showableSvc must compose notBlockedSvc AND notSeedFixture');
 });
 
 test('sms-consent-optin', 'SPEC-83: SMS is opt-in only — signup captures EXPLICIT checkbox consent with STOP/HELP + rates disclosure BEFORE any text, and stores it; no implied "we only text X" consent', '#83', async () => {
@@ -4428,6 +4432,19 @@ test('p2p-compose-copy', 'SPEC-84c: CSV-driven personalization — "Hi {first}, 
   assert(rows[0] && rows[0].first_name === 'Tom' && rows[0].service === 'Plumber' && rows[0].city === 'Miami' && rows[0].phone === '+13055551212',
     'parseContactsCsv must read First Name / Service Name / City columns');
 });
+
+test('results-seed-guard', 'ResultsScreen never surfaces a [SEED]-labeled test fixture on a real user Results surface (no-fake-data rule)', '#84', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  const nsf = src.match(/const\s+notSeedFixture\s*=\s*\(s\)\s*=>[\s\S]*?;/);
+  assert(nsf, 'ResultsScreen must define notSeedFixture');
+  assert(/seed/i.test(nsf[0]) && /s\?\.title/.test(nsf[0]),
+    'notSeedFixture must reject a [SEED] marker based on the service title (case-insensitive)');
+  const m = src.match(/const servicesFiltered = \(\(\) => \{[\s\S]*?\}\)\(\);/);
+  assert(m, 'servicesFiltered IIFE not found');
+  assert(/services\.filter\(showableSvc\)/.test(m[0]),
+    'the seed guard must be applied via showableSvc on the render path');
+});
+
 
 main().catch(e => {
   console.error(e);
