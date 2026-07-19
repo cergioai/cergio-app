@@ -89,6 +89,31 @@ const MAX_QUERIES   = 48;   // high-volume discovery — target 1000+ new/day ac
 const MAX_SITEFETCH = 60;   // bounded external fetches for email mining
 const DEADLINE_MS   = 125000;
 
+// ── QUALITY GATE HELPERS (SPEC-86, 2026-07-18) — enforce the frozen creator bar:
+//    verified geo only, individual (not business), NO fabricated fields. ──
+const CITY_STATE: Record<string, string> = {
+  'New York': 'NY', 'Brooklyn': 'NY', 'Manhattan': 'NY', 'Queens': 'NY', 'Bronx': 'NY',
+  'Miami': 'FL', 'Fort Lauderdale': 'FL', 'Los Angeles': 'CA', 'Chicago': 'IL',
+  'Atlanta': 'GA', 'Washington': 'DC', 'San Francisco': 'CA', 'Boston': 'MA',
+  'Philadelphia': 'PA', 'Dallas': 'TX', 'Houston': 'TX',
+};
+const CITY_ALIASES: Record<string, string[]> = {
+  'New York': ['new york', 'nyc', 'brooklyn', 'manhattan', 'queens', 'bronx', 'new york city'],
+  'Miami': ['miami', 'brickell', 'wynwood', 'coral gables', 'south beach', 'miami beach', 'doral'],
+};
+/** Geo is set ONLY when the creator's own text names the target city/area — kills
+ *  the Utah-labeled-Miami class. If unverifiable, the row is dropped (never guessed). */
+function cityVerified(city: string, text: string): boolean {
+  const t = (text || '').toLowerCase();
+  const al = CITY_ALIASES[city] || [city.toLowerCase()];
+  return al.some((a) => t.includes(a));
+}
+/** Drop obvious business/brand accounts — kills the business-as-creator class. */
+function isBusinessLike(handle: string, title: string): boolean {
+  const s = `${handle} ${title}`.toLowerCase();
+  return /(studio|salon|\bspa\b|clinic|official|boutique|\bco\b|\binc\b|\bllc\b|academy|\bagency\b|\bshop\b|\bstore\b|\bteam\b|\bhq\b|\bgroup\b|\bcompany\b|\bbrand\b)/.test(s);
+}
+
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
@@ -140,7 +165,7 @@ serve(async (req: Request) => {
     const rows: Array<Record<string, unknown>> = [];
     let siteFetches = 0;
     // Skip-reason tally so the watchdog can see WHY a run found nothing new.
-    const skips = { known_handle: 0, no_handle: 0, no_contact_no_link: 0, blocked: 0, suppressed: 0, non_creator: 0 };
+    const skips = { known_handle: 0, no_handle: 0, no_contact_no_link: 0, blocked: 0, suppressed: 0, non_creator: 0, geo_unverified: 0, business: 0 };
 
     for (const item of queries) {
       if (Date.now() - started > DEADLINE_MS) break;
@@ -171,13 +196,14 @@ serve(async (req: Request) => {
         let phone = firstPhone(r.snippet + ' ' + r.title);
 
         // Mine the NON-Meta page when we still need a contact OR a real IG handle.
+        let pageText = '';
         if ((!handle || (!email && !phone)) && !isIG && siteFetches < MAX_SITEFETCH) {
           siteFetches++;
-          const page = await fetchText(r.url);
-          if (page) {
-            if (!email) email = firstEmail(page);
-            if (!phone) phone = firstPhone(page);
-            if (!handle) handle = igHandle(page);   // creator's IG link on their linktree/site
+          pageText = (await fetchText(r.url)) || '';
+          if (pageText) {
+            if (!email) email = firstEmail(pageText);
+            if (!phone) phone = firstPhone(pageText);
+            if (!handle) handle = igHandle(pageText);   // creator's IG link on their linktree/site
           }
         }
         // VOLUME MODE: keep the creator if we have a contact OR a mineable link
@@ -208,11 +234,22 @@ serve(async (req: Request) => {
         // Those are NOT individual creators and were polluting the sendable
         // pool ~20-25%. enrich/gate can't fix identity, so drop at the source.
         if (isBadHandle(handle)) { skips.non_creator++; continue; }
+        // ── QUALITY GATE at the SOURCE (SPEC-86): no fabrication, verified geo,
+        //    individual-only, and NEVER sendable until vetted/promoted. ──
+        const geoText = `${r.snippet} ${r.title} ${pageText}`;
+        if (!cityVerified(city, geoText)) { skips.geo_unverified++; continue; }   // kills wrong-geo (Utah-for-Miami)
+        if (isBusinessLike(handle, r.title)) { skips.business++; continue; }        // kills business-as-creator
         const id = `harv:${handle.replace(/[^a-z0-9]+/gi, '').slice(0, 60).toLowerCase()}`;
         rows.push({
           id, ig_handle: handle, display_name: cleanTitle(r.title),
-          category: niche.category, email, phone, external_url: ext, city, state: 'FL',
-          is_business: false, discovered_via: tag, outreach_status: 'new',
+          category: niche.category,
+          email,                                   // only a real, un-suppressed email or null
+          phone: null,                             // creators are reached by IG/email — NEVER a scraped phone (no fabrication)
+          external_url: ext,
+          city, state: CITY_STATE[city] ?? null,   // mapped, NEVER hardcoded 'FL'
+          is_business: false,
+          discovered_via: tag,
+          outreach_status: 'pending_review',       // NON-sendable until it passes the gate + (initial batches) human vet
           created_at: new Date().toISOString(),
         });
       }

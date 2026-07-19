@@ -4472,6 +4472,20 @@ test('crawl-force-osm', 'SPEC-72.2: fulfill-crawl FORCES OpenStreetMap for every
   assert(/fulfillOverpass\(db, job\)/.test(fc), 'must call fulfillOverpass (OSM) for service jobs');
 });
 
+
+test('creator-quality-gate', 'SPEC-86: creator-harvest never fabricates — verified geo only (no hardcoded FL), individual-only (drop business), phone=null, and pending_review (non-sendable) until vetted', '#92', async () => {
+  const h = readFile('supabase/functions/creator-harvest/index.ts');
+  assert(!/state:\s*'FL'/.test(h), 'must NOT hardcode state: FL (geo was fabricated) — use CITY_STATE map');
+  assert(/state:\s*CITY_STATE\[city\]/.test(h), 'state must come from the CITY_STATE map (verified geo)');
+  assert(/function cityVerified\(/.test(h) && /skips\.geo_unverified\+\+/.test(h),
+    'harvest must verify the target city in the creator text + drop unverified geo (kills Utah-for-Miami)');
+  assert(/function isBusinessLike\(/.test(h) && /skips\.business\+\+/.test(h),
+    'harvest must drop business-like accounts (kills business-as-creator)');
+  assert(/phone:\s*null,/.test(h), 'harvested creators must have phone=null (no scraped-phone fabrication)');
+  assert(/outreach_status:\s*'pending_review'/.test(h),
+    'harvested creators must be pending_review — NON-sendable until gated + vetted');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
