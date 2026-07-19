@@ -743,4 +743,16 @@ qa.mjs `sms-consent-optin` enforces the explicit checkbox + STOP/HELP/rates disc
 
 ---
 
+### SPEC-86 · CREATOR DATA QUALITY GATE — no fabrication, verified only (2026-07-18, FROZEN)
+**Status:** FROZEN — 2026-07-18. After a data-quality collapse (fake phones, fake IG, wrong-geo Utah-for-Miami, businesses-as-creators, all shipped as sendable) that Tarik called existential.
+**The bar (his lock):** a creator is acceptable ONLY if — individual (not a business); niche in the target list; **followers 5k–500k**; **engagement ≥2% or unknown-OK**; **location = the target city, VERIFIED** (in the creator's own text, never assumed from the search); a **real IG handle**; and **NO fabricated fields** — any value not verified-real is `null`, never invented.
+**Enforcement (crawl-based, no paid data):**
+- `creator-harvest` gates at the SOURCE: `cityVerified()` requires the target city/alias to appear in the creator's text (kills wrong-geo); `isBusinessLike()` drops brand/business accounts (kills business-as-creator); `state` is mapped via `CITY_STATE`, **never hardcoded 'FL'**; `phone` is **always null** for harvested creators (reached by IG/email — kills scraped-phone fabrication); every harvested row is `outreach_status='pending_review'` — **NON-sendable** until it passes the gate + (for the initial batches) Tarik's human vet, then is promoted. Followers 5k–500k are enforced at promote-time (after enrich supplies the count).
+- Process: Tarik vets the **initial batches**; once the seed + gate prove out, expansion runs autonomously (NYC around the vetted seeds + recrawl Miami). Existing off-spec data is QUARANTINED (`do_not_contact`), kept for audit, and the pool is rebuilt through the gate.
+- Seeds: his Modash-vetted handles load as the clean starting pool (real, on-target).
+
+qa.mjs `creator-quality-gate` locks the source invariants (no hardcoded FL, phone null, pending_review, cityVerified + isBusinessLike present).
+
+---
+
 *Last updated: 2026-07-16 by Claude (Cowork session) — SPEC-81: off-Mac by default (sandbox pushes git directly via PAT; only merge + DB writes remain Mac/CI-gated). Prior: SPEC-80 ontology bridge; SPEC-73/74/75 + SPEC-47j autonomous-loop honesty; YellowPages retired.*

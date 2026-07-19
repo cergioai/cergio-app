@@ -121,10 +121,16 @@ serve(async (req: Request) => {
     // default) or unkeyed, so every job flows to the free path unless Google Places
     // is explicitly re-enabled. It also latches mid-run if an enabled Google account
     // returns an infrastructure status (REQUEST_DENIED / OVER_QUERY_LIMIT).
-    let placesDown = !GOOGLE_PLACES_ENABLED || !placesKey;
-    let placesDownReason = !GOOGLE_PLACES_ENABLED
-      ? 'GOOGLE_PLACES_ENABLED=false (OpenStreetMap is the free primary source)'
-      : (placesKey ? '' : 'GOOGLE_PLACES_API_KEY not set');
+    // FORCE OSM (2026-07-18, SPEC-72.2): billing on the Google project is disabled,
+    // so ANY Google Places call returns REQUEST_DENIED (280/283 recent crawls failed
+    // this way — while OSM delivered fine, incl. NYC). Pin placesDown=true so every
+    // service job flows to the free OpenStreetMap/Overpass path regardless of the
+    // GOOGLE_PLACES_ENABLED env (which is stale-true in prod). Google Places code is
+    // left intact but unreachable — reversible by reverting this one line + fixing billing.
+    let placesDown = true;
+    let placesDownReason = GOOGLE_PLACES_ENABLED
+      ? 'FORCED OSM: Google billing disabled → Places REQUEST_DENIED; OpenStreetMap is the free source'
+      : 'GOOGLE_PLACES_ENABLED=false (OpenStreetMap is the free primary source)';
 
     const out: Array<Record<string, unknown>> = [];
     for (const job of jobs ?? []) {
