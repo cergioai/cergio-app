@@ -64,13 +64,18 @@ const NICHES: Array<{ q: string; category: string }> = [
   { q: 'pet photographer',      category: 'pets' },
   { q: 'mom blogger',           category: 'mom family' },
 ];
-// NYC-focused geo set (SPEC-86 refocus): scale New York first around the vetted
-// Modash seeds, then recrawl other metros. cityVerified() gates every hit to the
-// creator's own text, so an off-target handle (Bay Area, CT, Utah) is dropped.
-const CITIES = ['New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx',
-  'New York City', 'Williamsburg', 'Bushwick', 'Harlem', 'Astoria',
-  'Long Island City', 'Park Slope', 'Lower East Side', 'Upper East Side',
-  'SoHo', 'Chelsea NYC', 'Greenpoint', 'Flushing', 'Jackson Heights', 'Staten Island'];
+// NYC + Miami dual-metro geo set (SPEC-86 expansion): accumulate BOTH cities
+// toward ~200 each. cityVerified() gates every hit to the creator's own text, so
+// a Miami query that surfaces an LA/Utah handle is dropped — geo stays honest.
+const CITIES = [
+  // New York
+  'New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'New York City',
+  'Williamsburg', 'Bushwick', 'Harlem', 'Astoria', 'Long Island City',
+  'Park Slope', 'Lower East Side', 'Upper East Side', 'SoHo', 'Greenpoint',
+  // Miami
+  'Miami', 'Miami Beach', 'Brickell', 'Wynwood', 'Coral Gables', 'Doral',
+  'South Beach', 'Coconut Grove', 'Aventura', 'Little Havana', 'Hialeah',
+  'Fort Lauderdale', 'North Miami', 'Kendall', 'Pinecrest'];
 // Query-shape modifiers — each rotates independently so the SAME niche×city can
 // still surface NEW handles run-to-run instead of repeating one rigid phrasing.
 // {c} = city, {n} = niche query.
@@ -96,6 +101,7 @@ const DEADLINE_MS   = 125000;
 const CITY_STATE: Record<string, string> = {
   'New York': 'NY', 'Brooklyn': 'NY', 'Manhattan': 'NY', 'Queens': 'NY', 'Bronx': 'NY',
   'New York City': 'NY', 'Williamsburg': 'NY', 'Bushwick': 'NY', 'Harlem': 'NY', 'Astoria': 'NY', 'Long Island City': 'NY', 'Park Slope': 'NY', 'Lower East Side': 'NY', 'Upper East Side': 'NY', 'SoHo': 'NY', 'Chelsea NYC': 'NY', 'Greenpoint': 'NY', 'Flushing': 'NY', 'Jackson Heights': 'NY', 'Staten Island': 'NY',
+  'Miami Beach': 'FL', 'Brickell': 'FL', 'Wynwood': 'FL', 'Coral Gables': 'FL', 'Doral': 'FL', 'South Beach': 'FL', 'Coconut Grove': 'FL', 'Aventura': 'FL', 'Little Havana': 'FL', 'Hialeah': 'FL', 'North Miami': 'FL', 'Kendall': 'FL', 'Pinecrest': 'FL',
   'Miami': 'FL', 'Fort Lauderdale': 'FL', 'Los Angeles': 'CA', 'Chicago': 'IL',
   'Atlanta': 'GA', 'Washington': 'DC', 'San Francisco': 'CA', 'Boston': 'MA',
   'Philadelphia': 'PA', 'Dallas': 'TX', 'Houston': 'TX',
@@ -118,6 +124,20 @@ const CITY_ALIASES: Record<string, string[]> = {
   'Jackson Heights': ['new york', 'nyc', 'jackson heights'],
   'Staten Island': ['new york', 'nyc', 'staten island'],
   'Miami': ['miami', 'brickell', 'wynwood', 'coral gables', 'south beach', 'miami beach', 'doral'],
+  'Miami Beach': ['miami', 'miami beach', 'south florida', 'miami beach'],
+  'Brickell': ['miami', 'miami beach', 'south florida', 'brickell'],
+  'Wynwood': ['miami', 'miami beach', 'south florida', 'wynwood'],
+  'Coral Gables': ['miami', 'miami beach', 'south florida', 'coral gables'],
+  'Doral': ['miami', 'miami beach', 'south florida', 'doral'],
+  'South Beach': ['miami', 'miami beach', 'south florida', 'south beach'],
+  'Coconut Grove': ['miami', 'miami beach', 'south florida', 'coconut grove'],
+  'Aventura': ['miami', 'miami beach', 'south florida', 'aventura'],
+  'Little Havana': ['miami', 'miami beach', 'south florida', 'little havana'],
+  'Hialeah': ['miami', 'miami beach', 'south florida', 'hialeah'],
+  'Fort Lauderdale': ['miami', 'miami beach', 'south florida', 'fort lauderdale'],
+  'North Miami': ['miami', 'miami beach', 'south florida', 'north miami'],
+  'Kendall': ['miami', 'miami beach', 'south florida', 'kendall'],
+  'Pinecrest': ['miami', 'miami beach', 'south florida', 'pinecrest'],
 };
 /** Geo is set ONLY when the creator's own text names the target city/area — kills
  *  the Utah-labeled-Miami class. If unverifiable, the row is dropped (never guessed). */
