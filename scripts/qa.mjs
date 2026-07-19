@@ -4461,6 +4461,31 @@ test('ops-data-export', 'SPEC-85: /ops/data dashboard downloads crawled leads ci
   assert(/path="\/ops\/data"/.test(app) && /DataExportScreen/.test(app), 'App routes /ops/data');
 });
 
+
+test('crawl-force-osm', 'SPEC-72.2: fulfill-crawl FORCES OpenStreetMap for every service job (Google billing is disabled → 280/283 crawls were REQUEST_DENIED); failed-on-Places jobs are recovered back to the queue', '#91', async () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/let placesDown = true;/.test(fc), 'placesDown must be pinned true (force OSM, ignore GOOGLE_PLACES_ENABLED)');
+  // Recovery: previously failed-on-billing jobs are put back to new so they re-run via OSM.
+  assert(/status:\s*'new'[\s\S]{0,220}enable Billing|REQUEST_DENIED[\s\S]{0,220}status:\s*'new'|\.eq\('status',\s*'failed'\)[\s\S]{0,260}REQUEST_DENIED/.test(fc),
+    'fulfill-crawl must re-queue failed-on-Places jobs (reset failed→new)');
+  // OSM path is the one used; Google textsearch stays gated (not the default).
+  assert(/fulfillOverpass\(db, job\)/.test(fc), 'must call fulfillOverpass (OSM) for service jobs');
+});
+
+
+test('creator-quality-gate', 'SPEC-86: creator-harvest never fabricates — verified geo only (no hardcoded FL), individual-only (drop business), phone=null, and pending_review (non-sendable) until vetted', '#92', async () => {
+  const h = readFile('supabase/functions/creator-harvest/index.ts');
+  assert(!/state:\s*'FL'/.test(h), 'must NOT hardcode state: FL (geo was fabricated) — use CITY_STATE map');
+  assert(/state:\s*CITY_STATE\[city\]/.test(h), 'state must come from the CITY_STATE map (verified geo)');
+  assert(/function cityVerified\(/.test(h) && /skips\.geo_unverified\+\+/.test(h),
+    'harvest must verify the target city in the creator text + drop unverified geo (kills Utah-for-Miami)');
+  assert(/function isBusinessLike\(/.test(h) && /skips\.business\+\+/.test(h),
+    'harvest must drop business-like accounts (kills business-as-creator)');
+  assert(/phone:\s*null,/.test(h), 'harvested creators must have phone=null (no scraped-phone fabrication)');
+  assert(/outreach_status:\s*'pending_review'/.test(h),
+    'harvested creators must be pending_review — NON-sendable until gated + vetted');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
