@@ -4461,6 +4461,17 @@ test('ops-data-export', 'SPEC-85: /ops/data dashboard downloads crawled leads ci
   assert(/path="\/ops\/data"/.test(app) && /DataExportScreen/.test(app), 'App routes /ops/data');
 });
 
+
+test('crawl-force-osm', 'SPEC-72.2: fulfill-crawl FORCES OpenStreetMap for every service job (Google billing is disabled → 280/283 crawls were REQUEST_DENIED); failed-on-Places jobs are recovered back to the queue', '#91', async () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/let placesDown = true;/.test(fc), 'placesDown must be pinned true (force OSM, ignore GOOGLE_PLACES_ENABLED)');
+  // Recovery: previously failed-on-billing jobs are put back to new so they re-run via OSM.
+  assert(/status:\s*'new'[\s\S]{0,220}enable Billing|REQUEST_DENIED[\s\S]{0,220}status:\s*'new'|\.eq\('status',\s*'failed'\)[\s\S]{0,260}REQUEST_DENIED/.test(fc),
+    'fulfill-crawl must re-queue failed-on-Places jobs (reset failed→new)');
+  // OSM path is the one used; Google textsearch stays gated (not the default).
+  assert(/fulfillOverpass\(db, job\)/.test(fc), 'must call fulfillOverpass (OSM) for service jobs');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
