@@ -170,6 +170,19 @@ serve(async (req: Request) => {
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (source === 'yelp') {
+          // ── Yelp Fusion API (official, keyed, free trial) ─────────────────
+          // Structured provider data: name, phone, address, categories, url.
+          // No email/website from the search endpoint (enriched later via a
+          // provider actor). NO-OP without YELP_API_KEY. Geo-verified + entity-
+          // classified (company vs individual) + provenance data_source='yelp'.
+          const r = await fulfillYelp(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: r.note || (saved === 0 ? 'no Yelp results for this city/type' : 'yelp'),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else if (source === 'osm' || placesDown) {
           // ── PRIMARY services source: OpenStreetMap via Overpass (keyless, free)
           // This is the DEFAULT path for every services crawl (bulk + on-demand).
@@ -1124,6 +1137,92 @@ function slug(s: string): string {
   return s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9|]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 200);
 }
 function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
+
+// ── ENTITY CLASSIFIER (SPEC-88b): company vs individual, so we target each
+// differently. Individual = the core mobile-provider target; company = Phase-2.
+// Heuristic on the name — conservative, never fabricates, defaults to 'company'
+// only on clear company signals; otherwise 'individual'.
+function classifyEntity(name: string): 'company' | 'individual' {
+  const n = (name || '').toLowerCase().trim();
+  if (!n) return 'company';
+  const companyRe = /\b(llc|l\.l\.c|inc|corp|co\b|company|group|solutions?|services?|systems?|associates|partners|enterprises?|contractors?|construction|plumbing|electric(al)?|hvac|roofing|landscaping|cleaners?|cleaning|movers?|moving|salon|studio|spa|clinic|academy|agency|pros?|experts?|masters?|brothers|bros|sons|&)\b/i;
+  if (companyRe.test(n)) return 'company';
+  if (/[0-9]/.test(n)) return 'company';           // "5 Star ..." etc.
+  const words = n.split(/\s+/).filter(Boolean);
+  if (words.length <= 3 && words.every((w) => /^[a-z'.-]+$/i.test(w))) return 'individual';
+  return 'company';
+}
+
+// ── Yelp Fusion search → leads_services. Reuses inUS/normPhone/cleanText.
+async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+  const KEY = Deno.env.get('YELP_API_KEY');
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const city = (job.city || '').trim();
+  const state = (job.state || '').trim();
+  const query = `${rawType || 'service'} in ${[city, state].filter(Boolean).join(', ')} [yelp]`;
+  if (!KEY) return { saved: 0, found: 0, query, note: 'pending YELP_API_KEY' };
+  if (!city) return { saved: 0, found: 0, query };
+  if (osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
+
+  const want = Math.min(Math.max(job.target_count || 20, 1), 100); // trial-rate-friendly
+  const loc = [city, state].filter(Boolean).join(', ');
+  let saved = 0, found = 0;
+  const seen = new Set<string>();
+  for (let offset = 0; offset < want && offset < 200; offset += 50) {
+    const url = `https://api.yelp.com/v3/businesses/search?location=${encodeURIComponent(loc)}`
+      + `&term=${encodeURIComponent(rawType)}&limit=50&offset=${offset}&sort_by=best_match`;
+    let j: any;
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${KEY}` } });
+      if (!res.ok) return { saved, found, query, note: `yelp http ${res.status}` };
+      j = await res.json();
+    } catch (e) { return { saved, found, query, note: `yelp fetch ${String(e).slice(0,60)}` }; }
+    const list: any[] = j?.businesses || [];
+    found += list.length;
+    if (!list.length) break;
+    for (const b of list) {
+      if (saved >= want) break;
+      if (b?.is_closed) continue;
+      const name = cleanText(b?.name);
+      if (!name) continue;
+      const cats = (b?.categories || []).map((c: any) => c?.title).filter(Boolean).join(', ');
+      if (osmIsBlocked(`${name} ${cats}`)) continue;
+      const lat = b?.coordinates?.latitude ?? null;
+      const lon = b?.coordinates?.longitude ?? null;
+      if (lat == null || lon == null || !inUS(Number(lat), Number(lon))) continue; // geo guard
+      const yid = String(b?.id || '');
+      const nameKey = `${name.toLowerCase()}|${(b?.location?.city || city).toLowerCase()}`;
+      if (!yid || seen.has(yid) || seen.has(nameKey)) continue;
+      seen.add(yid); seen.add(nameKey);
+      const phone = normPhone(b?.phone || b?.display_phone || '');
+      const addr = (b?.location?.display_address || []).join(', ') || null;
+      const entity = classifyEntity(name);
+      const row = {
+        id: `yelp:${yid}`,
+        name,
+        service_type: job.service_type || null,
+        phone, phone_origin: phone ? 'yelp' : null,
+        website_url: null,           // not in search endpoint; enrich later
+        owner_email: null,           // Yelp API exposes no email — never fabricate
+        yelp_url: b?.url || null,
+        instagram: null, has_instagram: false,
+        address: addr,
+        city: b?.location?.city || city || null,
+        state: b?.location?.state || state || null,
+        zip: b?.location?.zip_code || null,
+        lat, lon,
+        data_source: 'yelp',
+        fetched_at: new Date().toISOString(),
+        outreach_status: 'new',
+        outreach_notes: `yelp | ${entity} | ${cats}`.slice(0, 240),
+      };
+      const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+      if (!upErr) saved++;
+    }
+    if (list.length < 50) break;
+  }
+  return { saved, found, query };
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
