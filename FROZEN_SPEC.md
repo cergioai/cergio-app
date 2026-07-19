@@ -759,3 +759,13 @@ qa.mjs `creator-quality-gate` locks the source invariants (no hardcoded FL, phon
 
 ## SPEC-87 — Instagram Creator Marketplace enrichment (2026-07-19)
 FREE first-party Meta creator data (Modash-equivalent). `creator-marketplace-enrich` edge fn calls the official IG Creator Marketplace Discovery + Insights APIs (`creator_marketplace_creators`) to discover creators per category x city and fill REAL followers/email/engagement onto leads_influencers. First-party API, NOT scraping. Fill-only (never overwrites), geo set only when verified in bio, lands `pending_review`, `discovered_via=ig-creator-marketplace`, NO fabrication. NO-OPS with status `pending_access` until `IG_USER_ID`+`IG_MARKETPLACE_TOKEN` secrets are set (needs `instagram_creator_marketplace_discovery` advanced-access app review + Marketplace ToS acceptance + Page token). qa `ig-marketplace-enrich`.
+
+## SPEC-88 — DATA INTEGRITY PROTOCOL (frozen; services + creators)
+The rule that stops bad data from EVER recurring. Every crawled/ingested row must obey ALL of:
+1. SOURCE-OF-TRUTH ONLY. Every field traces to a real fetched source. Unknown = NULL. Never hardcode geo, never scrape a phone off an unrelated page, never guess an IG handle, never invent a follower count.
+2. PROVENANCE STAMP. Every row carries its origin (osm_id/data_source/fetched_at for services; discovered_via for creators) so any field is auditable back to where it came from. If we cannot cite the source, we do not write the field.
+3. GEO VERIFIED PER ROW. Location is re-checked against the target area on every row (US bbox + city admin scope for OSM). Off-target rows are DROPPED, not kept.
+4. TYPE/PLAUSIBILITY GATE. Name must plausibly match the requested service_type/category; blocked verticals refused at parse time. No noise rows.
+5. NON-SENDABLE UNTIL REVIEWED. Cold sends require opted_in — raw crawled rows are never auto-contacted. First 200 of any new source are human-reviewed before scaling.
+6. HONEST REPORTING. Counts report what is REAL (with-phone/with-email/with-IG/geo-verified), never a padded total. A green gate is NOT proof — verify against the live rows (a green qa suite once hid a dead prod flow). Targets (e.g. "50k") are aims; the deliverable is every REAL verified row, however many that is — we never fabricate to hit a number.
+7. SPOT-CHECKABLE. Exports carry the source columns so Tarik can trace any row to its origin.
