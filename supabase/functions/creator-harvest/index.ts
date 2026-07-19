@@ -18,51 +18,37 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target
 // massage, tattoo, makeup, personal chef, plus SHAFT (sex/hate/alcohol/firearms/
 // tobacco/gambling/adult/DJ-nightlife/plastic surgery/drugs). Do NOT re-add them.
 const NICHES: Array<{ q: string; category: string }> = [
-  { q: 'personal trainer',      category: 'fitness' },
-  { q: 'fitness coach',         category: 'fitness' },
-  { q: 'bootcamp trainer',      category: 'fitness' },
-  { q: 'run coach',             category: 'fitness' },
-  { q: 'hair stylist',          category: 'hair beauty' },
-  { q: 'hair colorist',         category: 'hair beauty' },
-  { q: 'braider',               category: 'hair beauty' },
-  { q: 'lash artist',           category: 'beauty lash' },
-  { q: 'lash tech',             category: 'beauty lash' },
-  { q: 'nail artist',           category: 'beauty nail' },
-  { q: 'nail tech',             category: 'beauty nail' },
-  { q: 'esthetician skincare',  category: 'beauty skincare' },
-  { q: 'skincare specialist',   category: 'beauty skincare' },
-  { q: 'brow artist',           category: 'beauty brow' },
-  { q: 'photographer',          category: 'photographer' },
-  { q: 'portrait photographer', category: 'photographer' },
-  { q: 'brand photographer',    category: 'photographer' },
-  { q: 'videographer',          category: 'photographer' },
-  { q: 'content photographer',  category: 'photographer' },
-  { q: 'yoga instructor',       category: 'yoga wellness' },
-  { q: 'yoga teacher',          category: 'yoga wellness' },
-  { q: 'pilates instructor',    category: 'pilates wellness' },
-  { q: 'pilates teacher',       category: 'pilates wellness' },
-  { q: 'wellness coach',        category: 'wellness' },
-  { q: 'nutrition coach',       category: 'nutrition wellness' },
-  { q: 'holistic health coach', category: 'wellness' },
-  { q: 'meditation teacher',    category: 'wellness' },
-  { q: 'event wedding planner', category: 'event wedding planner' },
-  { q: 'event planner',         category: 'event wedding planner' },
-  { q: 'wedding photographer',  category: 'event wedding planner' },
-  { q: 'party stylist',         category: 'event wedding planner' },
-  { q: 'baker',                 category: 'baker food' },
-  { q: 'cake artist',           category: 'baker food' },
-  { q: 'pastry chef',           category: 'baker food' },
-  { q: 'food blogger',          category: 'food creator' },
-  { q: 'barber',                category: 'beauty barber' },
-  { q: 'content creator',       category: 'creator lifestyle' },
-  { q: 'lifestyle blogger',     category: 'creator lifestyle' },
-  { q: 'fashion blogger',       category: 'fashion creator' },
-  { q: 'fashion stylist',       category: 'fashion creator' },
-  { q: 'personal stylist',      category: 'fashion creator' },
-  { q: 'pet groomer',           category: 'pets' },
-  { q: 'dog trainer',           category: 'pets' },
-  { q: 'pet photographer',      category: 'pets' },
-  { q: 'mom blogger',           category: 'mom family' },
+  // Tarik's 14 target categories — INFLUENCERS / content creators (people with an
+  // audience who publish a partner/collab email), NOT bookable service providers.
+  { q: 'parenting influencer',        category: 'parenting' },
+  { q: 'mom influencer',              category: 'parenting' },
+  { q: 'family content creator',      category: 'parenting' },
+  { q: 'fitness influencer',          category: 'fitness' },
+  { q: 'fitness content creator',     category: 'fitness' },
+  { q: 'health influencer',           category: 'health' },
+  { q: 'healthy living creator',      category: 'health' },
+  { q: 'pet influencer',              category: 'pets' },
+  { q: 'dog influencer',              category: 'pets' },
+  { q: 'nutrition influencer',        category: 'nutrition' },
+  { q: 'dietitian content creator',   category: 'nutrition' },
+  { q: 'wedding influencer',          category: 'weddings' },
+  { q: 'bride content creator',       category: 'weddings' },
+  { q: 'home decor influencer',       category: 'home' },
+  { q: 'interior design creator',     category: 'home' },
+  { q: 'real estate influencer',      category: 'real estate' },
+  { q: 'realtor content creator',     category: 'real estate' },
+  { q: 'fashion influencer',          category: 'fashion' },
+  { q: 'style content creator',       category: 'fashion' },
+  { q: 'lifestyle influencer',        category: 'lifestyle' },
+  { q: 'lifestyle blogger',           category: 'lifestyle' },
+  { q: 'beauty influencer',           category: 'beauty' },
+  { q: 'skincare influencer',         category: 'beauty' },
+  { q: 'shopping influencer',         category: 'shopping' },
+  { q: 'fashion haul creator',        category: 'shopping' },
+  { q: 'car influencer',              category: 'auto' },
+  { q: 'auto content creator',        category: 'auto' },
+  { q: 'wellness influencer',         category: 'wellness' },
+  { q: 'self care creator',           category: 'wellness' },
 ];
 // NYC + Miami dual-metro geo set (SPEC-86 expansion): accumulate BOTH cities
 // toward ~200 each. cityVerified() gates every hit to the creator's own text, so
@@ -81,16 +67,16 @@ const CITIES = [
 // {c} = city, {n} = niche query.
 const MODIFIERS = [
   '{c} {n} instagram',
-  '{c} {n} instagram contact email',
-  '{c} {n} book on instagram',
-  '{c} {n} creator instagram',
-  '{c} {n} linktr.ee',
-  '{c} {n} beacons.ai',
+  'top {c} {n} instagram',
+  'top 25 {c} {n} to follow',
+  'best {c} {n} instagram to follow',
+  '{c} {n} instagram collab email',
+  '{c} {n} instagram partnerships email',
+  '{c} micro influencer {n} instagram',
+  '{c} {n} linktr.ee email',
   '{c} {n} instagram gmail.com',
   '{c} based {n} instagram',
-  'best {c} {n} instagram',
-  '{c} {n} instagram dm to book',
-];
+]
 
 const MAX_QUERIES   = 48;   // high-volume discovery — target 1000+ new/day across continuous runs
 const MAX_SITEFETCH = 60;   // bounded external fetches for email mining
@@ -164,6 +150,25 @@ serve(async (req: Request) => {
     const auth = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!auth || auth !== serviceKey) return json({ error: 'Unauthorized' }, 401);
     const db = createClient(supabaseUrl, serviceKey);
+
+    // ── ONE-TIME SELF-HEALING CLEANUP (SPEC-86b): the earlier harvest pulled
+    // bookable SERVICE providers (photographers, lash techs, event planners), not
+    // influencers. Quarantine every pending_review row whose category is NOT one of
+    // the 14 target influencer categories — EXCEPT the Modash-vetted seeds, which
+    // are protected by discovered_via and kept no matter their legacy category tag.
+    // Runs server-side on the cron tick (no Mac); harmless once the pool is clean.
+    const TARGET_CATEGORIES = ['parenting','fitness','health','pets','nutrition',
+      'weddings','home','real estate','fashion','lifestyle','beauty','shopping','auto','wellness'];
+    try {
+      const inList = '(' + TARGET_CATEGORIES.map((c) => '"' + c + '"').join(',') + ')';
+      const { data: q } = await db.from('leads_influencers')
+        .update({ outreach_status: 'do_not_contact' })
+        .eq('outreach_status', 'pending_review')
+        .neq('discovered_via', 'modash-vetted-seed')
+        .not('category', 'in', inList)
+        .select('id');
+      if (q && q.length) console.log(`cleanup: quarantined ${q.length} off-target service-type rows`);
+    } catch (_e) { /* cleanup is best-effort; never blocks a harvest run */ }
     dbRef = db;
 
     const tag = `se:web-harvest-${new Date().toISOString().slice(0, 10)}`;
