@@ -29,6 +29,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target
 const CITIES: Array<[string, string]> = [
   ['Miami', 'FL'],            // home market
   ['New York', 'NY'],         // DMA 1
+  ['Manhattan', 'NY'],        // NYC borough — real OSM admin boundary
+  ['Brooklyn', 'NY'],         // NYC borough
+  ['Queens', 'NY'],           // NYC borough
+  ['Bronx', 'NY'],            // NYC borough
+  ['Staten Island', 'NY'],    // NYC borough
   ['Los Angeles', 'CA'],      // DMA 2
   ['Chicago', 'IL'],          // DMA 3
   ['Dallas', 'TX'],           // DMA 4 (Dallas–Fort Worth)
