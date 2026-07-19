@@ -756,3 +756,6 @@ qa.mjs `creator-quality-gate` locks the source invariants (no hardcoded FL, phon
 ---
 
 *Last updated: 2026-07-16 by Claude (Cowork session) — SPEC-81: off-Mac by default (sandbox pushes git directly via PAT; only merge + DB writes remain Mac/CI-gated). Prior: SPEC-80 ontology bridge; SPEC-73/74/75 + SPEC-47j autonomous-loop honesty; YellowPages retired.*
+
+## SPEC-87 — Instagram Creator Marketplace enrichment (2026-07-19)
+FREE first-party Meta creator data (Modash-equivalent). `creator-marketplace-enrich` edge fn calls the official IG Creator Marketplace Discovery + Insights APIs (`creator_marketplace_creators`) to discover creators per category x city and fill REAL followers/email/engagement onto leads_influencers. First-party API, NOT scraping. Fill-only (never overwrites), geo set only when verified in bio, lands `pending_review`, `discovered_via=ig-creator-marketplace`, NO fabrication. NO-OPS with status `pending_access` until `IG_USER_ID`+`IG_MARKETPLACE_TOKEN` secrets are set (needs `instagram_creator_marketplace_discovery` advanced-access app review + Marketplace ToS acceptance + Page token). qa `ig-marketplace-enrich`.

@@ -4486,6 +4486,18 @@ test('creator-quality-gate', 'SPEC-86: creator-harvest never fabricates — veri
     'harvested creators must be pending_review — NON-sendable until gated + vetted');
 });
 
+test('ig-marketplace-enrich', 'SPEC-87: IG Creator Marketplace enrichment uses first-party API (not scraping), fills fill-only + no fabrication, no-ops gracefully without access, lands pending_review', '#93', async () => {
+  const h = readFile('supabase/functions/creator-marketplace-enrich/index.ts');
+  assert(/creator_marketplace_creators/.test(h), 'must call the official Creator Marketplace endpoint (first-party API, not scraping)');
+  assert(/status:\s*'pending_access'/.test(h) && /IG_MARKETPLACE_TOKEN/.test(h),
+    'must NO-OP gracefully (pending_access) when the token/permission is not yet set — never crash');
+  assert(/discovered_via:\s*'ig-creator-marketplace'/.test(h), 'rows must be tagged discovered_via=ig-creator-marketplace');
+  assert(/outreach_status:\s*'pending_review'/.test(h), 'discovered creators must land pending_review (non-sendable)');
+  assert(/only claim city if verified in bio/.test(h) || /geoOk \? city : null/.test(h),
+    'city must be set only when verified in the creator text (no geo fabrication)');
+  assert(/followersFrom\(c\?\.insights\)/.test(h), 'followers must come from real API insights or be null — never faked');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
