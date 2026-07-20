@@ -138,6 +138,20 @@ function isBusinessLike(handle: string, title: string): boolean {
   return /(studio|salon|\bspa\b|clinic|official|boutique|\bco\b|\binc\b|\bllc\b|academy|\bagency\b|\bshop\b|\bstore\b|\bteam\b|\bhq\b|\bgroup\b|\bcompany\b|\bbrand\b)/.test(s);
 }
 
+// BLOCKED CONTENT guard (SPEC-86c, Forensic 2026-07-20): medical-aesthetic /
+// medspa / injectable / laser / clinic accounts were slipping into the sendable
+// pool tagged category 'beauty' (is_business=false), because isBusinessLike only
+// scans handle+title and lacks medical terms. These are off-spec blocked
+// categories (mobile_first_positioning: plastic surgery / med-spa). This scans
+// handle+title+url+snippet for medical-aesthetic + SHAFT signals and is applied
+// BOTH at the source (skip on harvest) and in the server-side self-heal cleanup
+// (quarantine existing pending_review rows every cron tick — no Mac needed).
+const BLOCKED_CONTENT_RE =
+  /(med[\s.-]?spa|medi[\s.-]?spa|med[\s.-]?aesthetic|medical aesthetic|\baesthetics\b|\blaser\b|botox|filler|injectable|microneedl|dermatolog|plastic surg|liposuction|\bbbl\b|rejuven|iv[\s.-]?therapy|hormone|wellness ?center|health ?center|tattoo|\bvape\b|hookah|nightclub|casino|firearm)/i;
+function isBlockedContent(...parts: Array<string | null | undefined>): boolean {
+  return BLOCKED_CONTENT_RE.test(parts.filter(Boolean).join(' ').toLowerCase());
+}
+
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
@@ -169,6 +183,28 @@ serve(async (req: Request) => {
         .select('id');
       if (q && q.length) console.log(`cleanup: quarantined ${q.length} off-target service-type rows`);
     } catch (_e) { /* cleanup is best-effort; never blocks a harvest run */ }
+
+    // SELF-HEAL (SPEC-86c): quarantine any pending_review row that is a blocked
+    // medical-aesthetic / med-spa / SHAFT account (matched on url/handle/name/bio).
+    // Server-side, runs on the cron tick — closes the leak with zero Mac clicks.
+    // Modash-vetted seeds are protected.
+    try {
+      const orExpr = [
+        'external_url.ilike.%medspa%','external_url.ilike.%med-spa%','external_url.ilike.%aesthetic%',
+        'external_url.ilike.%laser%','external_url.ilike.%botox%','external_url.ilike.%injectable%',
+        'ig_handle.ilike.%medspa%','ig_handle.ilike.%aesthetic%','ig_handle.ilike.%laser%',
+        'ig_handle.ilike.%medaesthetic%','display_name.ilike.%med spa%','display_name.ilike.%aesthetics%',
+        'bio.ilike.%medspa%','bio.ilike.%med spa%','bio.ilike.%injectable%','bio.ilike.%botox%',
+        'bio.ilike.%dermatolog%','bio.ilike.%plastic surg%',
+      ].join(',');
+      const { data: mq } = await db.from('leads_influencers')
+        .update({ outreach_status: 'do_not_contact' })
+        .eq('outreach_status', 'pending_review')
+        .neq('discovered_via', 'modash-vetted-seed')
+        .or(orExpr)
+        .select('id');
+      if (mq && mq.length) console.log(`cleanup: quarantined ${mq.length} blocked med-aesthetic rows`);
+    } catch (_e) { /* best-effort */ }
     dbRef = db;
 
     const tag = `se:web-harvest-${new Date().toISOString().slice(0, 10)}`;
@@ -282,6 +318,7 @@ serve(async (req: Request) => {
         const geoText = `${r.snippet} ${r.title} ${pageText}`;
         if (!cityVerified(city, geoText)) { skips.geo_unverified++; continue; }   // kills wrong-geo (Utah-for-Miami)
         if (isBusinessLike(handle, r.title)) { skips.business++; continue; }        // kills business-as-creator
+        if (isBlockedContent(handle, r.title, ext, r.snippet)) { skips.blocked++; continue; } // kills med-spa/aesthetic/SHAFT leak at source
         const id = `harv:${handle.replace(/[^a-z0-9]+/gi, '').slice(0, 60).toLowerCase()}`;
         rows.push({
           id, ig_handle: handle, display_name: cleanTitle(r.title),
