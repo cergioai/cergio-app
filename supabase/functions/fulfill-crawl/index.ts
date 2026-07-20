@@ -115,6 +115,22 @@ serve(async (req: Request) => {
       .eq('status', 'failed')
       .or('notes.ilike.%REQUEST_DENIED%,notes.ilike.%places-infra%,notes.ilike.%enable Billing%');
 
+    // ── ORPHAN RECLAIM (2026-07-20 FORENSIC) ─────────────────────────────────
+    // A job is stamped 'crawling' at the top of the loop (below) so concurrent
+    // runs don't double-process it. If that run then TIMES OUT or crashes before
+    // it reaches the 'delivered'/'failed'/'new' stamp, the job is orphaned in
+    // 'crawling' forever — the un-burn block above only reclaims 'failed' rows,
+    // never a stuck 'crawling'. Forensic export 2026-07-19 found 18 jobs pinned
+    // in 'crawling' with delivered_count=0, the oldest stale ~9h. Reset any job
+    // left in 'crawling' whose updated_at is older than a generous 15-minute
+    // watchdog window back to 'new' so the next tick retries it. A legitimately
+    // in-flight job updates well inside 15 min, so this never touches live work.
+    await db.from('crawl_requests')
+      .update({ status: 'new', notes: 'orphan-reclaim: reset from stuck crawling (run timeout/crash)', updated_at: new Date().toISOString() })
+      .eq('kind', 'services')
+      .eq('status', 'crawling')
+      .lt('updated_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
+
     // 2026-07-15 (SPEC-72): OpenStreetMap/Overpass is the free primary source, so a
     // missing/denied/disabled Places account is NEVER fatal. placesDown latches the
     // whole run onto Overpass; it starts TRUE whenever Google is disabled (the
