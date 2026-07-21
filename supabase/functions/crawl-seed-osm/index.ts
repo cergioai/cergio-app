@@ -96,6 +96,24 @@ serve(async (req: Request) => {
     const types = SERVICE_TYPES.filter((t) => !isBlocked(t));
     const rows: Array<Record<string, unknown>> = [];
     const nowIso = new Date().toISOString();
+
+    // ── ONE-TIME google_lsa seed (SPEC-88d): enqueue Google Local Services Ads
+    // jobs for the 23 individual service types x NYC+Miami EXACTLY ONCE (guarded on
+    // count=0) so the fulfill cron drains them server-side — no Mac, and no
+    // re-burning the SerpAPI free quota on every tick. Reversible; safe.
+    try {
+      const { count: lsaCount } = await db.from('crawl_requests')
+        .select('id', { count: 'exact', head: true }).eq('source', 'google_lsa');
+      if ((lsaCount ?? 0) === 0) {
+        const LSA_TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','weight loss specialist','mover'];
+        const LSA_CITIES: Array<[string, string]> = [['New York', 'NY'], ['Miami', 'FL']];
+        const lsaRows: Array<Record<string, unknown>> = [];
+        for (const [c, st] of LSA_CITIES) for (const t of LSA_TYPES)
+          lsaRows.push({ kind: 'services', city: c, state: st, service_type: t, target_count: 20, status: 'new', source: 'google_lsa', created_at: nowIso, updated_at: nowIso });
+        await db.from('crawl_requests').insert(lsaRows);
+        console.log(`seeded ${lsaRows.length} one-time google_lsa jobs`);
+      }
+    } catch (_e) { /* best-effort; never blocks the osm seed */ }
     for (const [city, state] of CITIES) {
       for (const type of types) {
         if (isBlocked(`${type} ${city}`)) continue;
