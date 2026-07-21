@@ -247,10 +247,23 @@ serve(async (req: Request) => {
         .filter('category', 'in', catList)
         .select('id');
       promoted += pa?.length ?? 0;
-      // (b) explicit founder allowlist (hand-picked, so no category gate needed)
+      // (b) explicit founder allowlist (hand-picked, so no category gate needed).
+      // Forensic Auditor 2026-07-21 (SPEC-88c): the 10 Miami founding-cohort handles
+      // had been swept to 'do_not_contact' by the June se:web-2026-06-29 CATEGORY
+      // purge — NOT by any opt-out/bounce (verified from the ALL-Creators export:
+      // notes are biolink provenance only, every handle has an email, none is a
+      // blocked category). The old pending_review-only filter therefore made this
+      // branch a SILENT NO-OP and the constitutional Miami-first founding cohort
+      // produced 0 queued creators, while only the 36 NYC modash seeds moved.
+      // Promote the EXPLICIT allowlist from BOTH pending_review AND do_not_contact —
+      // the hardcoded list is itself the founder's informed override. This only
+      // STAGES ('queued'); the actual send is a manual founder click and
+      // outreach-send re-checks outreach_suppressions by email at send time (it
+      // skips + re-suppresses any genuine opt-out), so a future opt-out on an
+      // allowlisted handle is still honored. Send stays frozen NOT-scheduled.
       const { data: pb } = await db.from('leads_influencers')
         .update({ outreach_status: 'queued' })
-        .eq('outreach_status', 'pending_review')
+        .filter('outreach_status', 'in', '("pending_review","do_not_contact")')
         .filter('ig_handle', 'in', allow)
         .select('id');
       promoted += pb?.length ?? 0;
