@@ -186,6 +186,16 @@ serve(async (req: Request) => {
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (source === 'craigslist') {
+          // ── Craigslist via Apify actor (memo23/craigslist-scraper). Capped
+          //    maxItems (cost), deduped by phone/email/name, first-name parsed.
+          const r = await fulfillCraigslist(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: r.note || (saved === 0 ? 'no Craigslist results' : 'craigslist'),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else if (source === 'google_lsa') {
           // ── Google LOCAL SERVICES ADS via SerpAPI (the "Sponsored" service pros
           //    with a published phone + Google Guaranteed badge). data_source=google_lsa.
@@ -1424,6 +1434,76 @@ async function fulfillGoogleLSA(db: any, job: any): Promise<{ saved: number; fou
       data_source: 'google_lsa', fetched_at: new Date().toISOString(),
       outreach_status: 'new',
       outreach_notes: `google_lsa | ${classifyEntity(name)} | ${a?.badge||''} | ${rev} ${yrs} | ${a?.type||''}`.slice(0,240),
+    };
+    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    if (!error) saved++;
+  }
+  return { saved, found, query };
+}
+
+// Craigslist city -> subdomain
+const CL_SUBDOMAIN: Record<string, string> = { 'new york': 'newyork', 'miami': 'miami' };
+// Pull a likely first name from a Craigslist title/body ("Handyman - Jose", "Jessica\'s cleaning").
+function parseFirstName(text: string): string | null {
+  const t = (text || '').replace(/\s+/g, ' ').trim();
+  let m = t.match(/(?:^|[-–,:|]|\bby\b|\bwith\b|\bcall\b|\bask for\b)\s*([A-Z][a-z]{2,15})(?:\b)/);
+  if (m && !/^(New|The|Best|Call|Text|Free|Now|Nyc|Miami|Cheap|Fast|Pro|Licensed|Insured)$/i.test(m[1])) return m[1];
+  m = t.match(/\b([A-Z][a-z]{2,15})['\u2019]s\b/); // "Jessica\'s"
+  if (m) return m[1];
+  return null;
+}
+// Apify actor run (sync) with a hard maxItems cap so cost is bounded.
+async function apifyRun(actor: string, input: unknown, maxItems: number): Promise<any[]> {
+  const TOKEN = Deno.env.get('APIFY_TOKEN');
+  if (!TOKEN) return [];
+  const url = `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${TOKEN}&maxItems=${maxItems}`;
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 110000);
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: ctrl.signal });
+    if (!res.ok) return [];
+    const j = await res.json();
+    return Array.isArray(j) ? j : [];
+  } catch (_e) { return []; } finally { clearTimeout(to); }
+}
+async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+  if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'craigslist', note: 'pending APIFY_TOKEN' };
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const city = (job.city || '').trim();
+  const state = (job.state || '').trim();
+  const sub = CL_SUBDOMAIN[city.toLowerCase()];
+  const query = `${rawType} [craigslist ${city}]`;
+  if (!sub || osmIsBlocked(rawType)) return { saved: 0, found: 0, query, note: sub ? 'blocked' : 'no craigslist subdomain' };
+  const clUrl = `https://${sub}.craigslist.org/search/bbb?query=${encodeURIComponent(rawType)}`;
+  const MAXITEMS = 40; // hard cost cap per (city,type): ~$0.06 at $1.5/1k
+  const items = await apifyRun('memo23~craigslist-scraper', { startUrls: [{ url: clUrl }], includeEmails: true }, MAXITEMS);
+  let found = items.length, saved = 0;
+  const seen = new Set<string>();
+  for (const it of items) {
+    const name = cleanText(it?.title || it?.name);
+    if (!name) continue;
+    if (osmIsBlocked(name)) continue;
+    const phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || '')) || '');
+    const email = ((Array.isArray(it?.emails) ? it.emails[0] : (it?.email || '')) || '').toLowerCase() || null;
+    // DEDUP: phone > email > name+city. A repost with the same phone collapses to 1.
+    const dkey = phone ? `p:${phone}` : (email ? `e:${email}` : `n:${name.toLowerCase()}|${city.toLowerCase()}`);
+    if (seen.has(dkey)) continue; seen.add(dkey);
+    if (!phone && !email) continue; // uncontactable → skip (don't pay to store noise)
+    const lat = it?.mapCoordinates?.latitude ?? it?.latitude ?? it?.lat ?? null;
+    const lon = it?.mapCoordinates?.longitude ?? it?.longitude ?? it?.lon ?? null;
+    if (lat != null && lon != null && !inUS(Number(lat), Number(lon))) continue;
+    const first = parseFirstName(`${name} ${it?.description || ''}`);
+    const idbase = phone ? phone.replace(/\D/g, '') : (email || name.toLowerCase().replace(/[^a-z0-9]+/g, '-')).slice(0, 50);
+    const row = {
+      id: `cl:${idbase}:${city.toLowerCase().replace(/[^a-z]/g, '')}`,
+      name, service_type: job.service_type || null,
+      phone, phone_origin: phone ? 'craigslist' : null,
+      website_url: it?.url || null, owner_email: email,
+      instagram: null, has_instagram: false,
+      address: it?.location || null, city, state: state || null, zip: null,
+      lat, lon, data_source: 'craigslist', fetched_at: new Date().toISOString(),
+      outreach_status: 'new',
+      outreach_notes: `craigslist | ${classifyEntity(name)} | ${first ? 'name:' + first + ' | ' : ''}${(it?.description || '').slice(0, 80)}`.slice(0, 240),
     };
     const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
     if (!error) saved++;
