@@ -4498,6 +4498,16 @@ test('ig-marketplace-enrich', 'SPEC-87: IG Creator Marketplace enrichment uses f
   assert(/followersFrom\(c\?\.insights\)/.test(h), 'followers must come from real API insights or be null — never faked');
 });
 
+test('creator-selfheal-parity', 'SPEC-86d: creator-harvest self-heal .or() list stays in PARITY with BLOCKED_CONTENT_RE — an existing pending_review med-spa row whose bio says "filler"/"microneedling"/"liposuction" (no botox) must still be quarantined, not just new harvests', '#94', async () => {
+  const h = readFile('supabase/functions/creator-harvest/index.ts');
+  const or = (h.match(/const orExpr = \[([\s\S]*?)\]\.join/) || [,''])[1];
+  assert(or.length > 0, 'self-heal orExpr array must exist');
+  for (const kw of ['filler','microneedl','liposuction','botox','injectable','medspa']) {
+    assert(new RegExp('bio\\.ilike\\.%'+kw).test(or) || new RegExp(kw).test(or),
+      'self-heal orExpr must cover blocked med-aesthetic keyword: '+kw+' (parity with BLOCKED_CONTENT_RE)');
+  }
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

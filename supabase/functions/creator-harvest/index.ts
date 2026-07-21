@@ -189,13 +189,28 @@ serve(async (req: Request) => {
     // Server-side, runs on the cron tick — closes the leak with zero Mac clicks.
     // Modash-vetted seeds are protected.
     try {
+      // KEEP IN SYNC WITH BLOCKED_CONTENT_RE (above). Forensic Auditor 2026-07-21
+      // (SPEC-86d): the source-side regex blocks filler/microneedling/liposuction/
+      // rejuven at HARVEST, but this existing-row self-heal .or() list had drifted
+      // NARROWER — a med-spa row whose bio says "lip filler" (no botox/injectable)
+      // survived in pending_review (ISSUE3, deferred 07-21). Bringing the two into
+      // parity across bio/handle/name/url. Additive + demote-only: this can only
+      // flip a blocked med-aesthetic row to do_not_contact, never promote — so it
+      // cannot affect the founding-cohort send. Modash-vetted seeds stay protected.
       const orExpr = [
         'external_url.ilike.%medspa%','external_url.ilike.%med-spa%','external_url.ilike.%aesthetic%',
         'external_url.ilike.%laser%','external_url.ilike.%botox%','external_url.ilike.%injectable%',
+        'external_url.ilike.%filler%','external_url.ilike.%microneedl%','external_url.ilike.%dermatolog%',
         'ig_handle.ilike.%medspa%','ig_handle.ilike.%aesthetic%','ig_handle.ilike.%laser%',
-        'ig_handle.ilike.%medaesthetic%','display_name.ilike.%med spa%','display_name.ilike.%aesthetics%',
+        'ig_handle.ilike.%medaesthetic%','ig_handle.ilike.%botox%','ig_handle.ilike.%injectable%',
+        'ig_handle.ilike.%filler%',
+        'display_name.ilike.%med spa%','display_name.ilike.%medspa%','display_name.ilike.%aesthetics%',
+        'display_name.ilike.%laser%','display_name.ilike.%botox%','display_name.ilike.%injectable%',
+        'display_name.ilike.%filler%',
         'bio.ilike.%medspa%','bio.ilike.%med spa%','bio.ilike.%injectable%','bio.ilike.%botox%',
-        'bio.ilike.%dermatolog%','bio.ilike.%plastic surg%',
+        'bio.ilike.%dermatolog%','bio.ilike.%plastic surg%','bio.ilike.%filler%',
+        'bio.ilike.%microneedl%','bio.ilike.%liposuction%','bio.ilike.%rejuven%',
+        'bio.ilike.%med aesthetic%','bio.ilike.%medaesthetic%','bio.ilike.%aesthetics%',
       ].join(',');
       const { data: mq } = await db.from('leads_influencers')
         .update({ outreach_status: 'do_not_contact' })
