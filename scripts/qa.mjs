@@ -4447,16 +4447,20 @@ test('results-seed-guard', 'ResultsScreen never surfaces a [SEED]-labeled test f
 
 
 
-test('ops-data-export', 'SPEC-85: /ops/data dashboard downloads crawled leads city-by-city, split Services vs Creators, as CSV (all columns, admin-only, client-side Blob)', '#90', async () => {
+test('ops-data-export', 'SPEC-90: /ops/data live dashboard reads past RLS via admin-gated leads-dashboard edge fn (fixes No-rows) — counts by source/city/status + filter + CSV download', '#90', async () => {
   const api = readFile('src/lib/api.js');
-  assert(/export async function exportLeads\(audience/.test(api), 'api must export exportLeads(audience, filters)');
-  assert(/serviceQuery\('\*'/.test(api) && /creatorQuery\('\*'/.test(api),
-    'exportLeads must select all columns for both audiences');
+  assert(/export async function leadsDashboard\(/.test(api) && /invoke\('leads-dashboard'/.test(api),
+    'api must call the leads-dashboard edge function (server-side read past RLS)');
+  const fn = readFile('supabase/functions/leads-dashboard/index.ts');
+  assert(/admins\.includes\(email\)/.test(fn) && /SERVICE_ROLE_KEY/.test(fn),
+    'leads-dashboard must be admin-gated AND read via the service role (past RLS)');
+  assert(/bySource/.test(fn) && /byCity/.test(fn) && /byStatus/.test(fn) && /growth/.test(fn),
+    'dashboard must return counts by source, city, status + growth');
   const scr = readFile('src/screens/DataExportScreen.jsx');
   assert(/function toCsv\(/.test(scr) && /new Blob\(/.test(scr) && /\.download\s*=/.test(scr),
     'screen must build CSV + trigger a Blob download');
-  assert(/Services/.test(scr) && /Creators/.test(scr) && /list="cg-export-cities"/.test(scr),
-    'screen must offer Services/Creators + a city filter');
+  assert(/Services/.test(scr) && /Creators/.test(scr) && /leadsDashboard\(/.test(scr) && /All sources/.test(scr),
+    'screen must offer Services/Creators + a source filter, fed by leadsDashboard');
   const app = readFile('src/App.jsx');
   assert(/path="\/ops\/data"/.test(app) && /DataExportScreen/.test(app), 'App routes /ops/data');
 });
