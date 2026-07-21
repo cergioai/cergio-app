@@ -63,6 +63,7 @@ const SERVICE_TYPES: string[] = [
 const BLOCKED = new RegExp(
   '(massage|tattoo|makeup|\\bpersonal chef\\b|private chef|\\bchef\\b' +
   '|plastic surgery|cosmetic surgery|\\bsurgeon\\b' +
+  '|weight ?loss|\\bpeptide|bariatric|semaglutide|ozempic|wegovy|tirzepatide|med.?spa|medi.?spa|med.?aesthetic|medical aesthetic|botox|\\bfiller|injectable|dermatolog|liposuction|\\bbbl\\b|iv drip|iv therapy|hormone (replacement|therapy)|\\bhrt\\b' +
   '|drug|pharmac|cannabis|dispensary|marijuana' +
   '|alcohol|liquor|\\bwine\\b|brewery|winery|distillery|\\bbar\\b|cocktail|\\bpub\\b' +
   '|tobacco|smoke shop|\\bvape\\b|\\bcigar\\b' +
