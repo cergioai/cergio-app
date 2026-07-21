@@ -543,6 +543,7 @@ const YP_MAX_PAGE_BYTES = 4_000_000;
 const YP_BLOCKED = new RegExp(
   '(massage|tattoo|makeup|\\bpersonal chef\\b|private chef' +
   '|plastic surgery|cosmetic surgery|\\bsurgeon\\b' +
+  '|weight ?loss|\\bpeptide|bariatric|semaglutide|ozempic|wegovy|tirzepatide|med.?spa|medi.?spa|med.?aesthetic|medical aesthetic|botox|\\bfiller|injectable|dermatolog|liposuction|\\bbbl\\b|iv drip|iv therapy|hormone (replacement|therapy)|\\bhrt\\b' +
   '|\\bdrug\\b|pharmac|cannabis|dispensary|marijuana' +
   '|liquor|\\bwine\\b|brewery|winery|distillery|\\bwine bar\\b|cocktail bar' +
   '|tobacco|smoke shop|\\bvape\\b|\\bcigar\\b' +

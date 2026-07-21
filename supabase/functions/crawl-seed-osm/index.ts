@@ -67,6 +67,7 @@ const SERVICE_TYPES: string[] = [
 const BLOCKED = new RegExp(
   '(massage|tattoo|makeup|\\bpersonal chef\\b|private chef|\\bchef\\b' +
   '|plastic surgery|cosmetic surgery|\\bsurgeon\\b' +
+  '|weight ?loss|\\bpeptide|bariatric|semaglutide|ozempic|wegovy|tirzepatide|med.?spa|medi.?spa|med.?aesthetic|medical aesthetic|botox|\\bfiller|injectable|dermatolog|liposuction|\\bbbl\\b|iv drip|iv therapy|hormone (replacement|therapy)|\\bhrt\\b' +
   '|drug|pharmac|cannabis|dispensary|marijuana' +
   '|alcohol|liquor|\\bwine\\b|brewery|winery|distillery|\\bbar\\b|cocktail|\\bpub\\b' +
   '|tobacco|smoke shop|\\bvape\\b|\\bcigar\\b' +
@@ -105,7 +106,7 @@ serve(async (req: Request) => {
       const { count: lsaCount } = await db.from('crawl_requests')
         .select('id', { count: 'exact', head: true }).eq('source', 'google_lsa');
       if ((lsaCount ?? 0) === 0) {
-        const LSA_TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','weight loss specialist','mover'];
+        const LSA_TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','mover'].filter((t) => !isBlocked(t));
         const LSA_CITIES: Array<[string, string]> = [['New York', 'NY'], ['Miami', 'FL']];
         const lsaRows: Array<Record<string, unknown>> = [];
         for (const [c, st] of LSA_CITIES) for (const t of LSA_TYPES)
