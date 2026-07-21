@@ -186,6 +186,19 @@ serve(async (req: Request) => {
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (source === 'google_sponsored') {
+          // ── Google Sponsored + local pack via SerpAPI (free tier, official) ──
+          // Advertisers who publish a contact # = high-intent providers. NO-OP
+          // without SERPAPI_KEY. Ads tagged data_source='google_sponsored', map
+          // pack 'google_local'. Phone from the local pack directly + the ad's OWN
+          // landing page. Geo-verified where coords exist; entity-classified.
+          const r = await fulfillGoogleSponsored(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: r.note || (saved === 0 ? 'no Google sponsored/local results' : 'google_sponsored'),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else if (source === 'yelp') {
           // ── Yelp Fusion API (official, keyed, free trial) ─────────────────
           // Structured provider data: name, phone, address, categories, url.
@@ -482,6 +495,22 @@ async function scrapeEmail(website: string): Promise<string | null> {
       return e;
     }
     return null;
+  } catch { return null; }
+}
+
+// Mirror of scrapeEmail: pull the first plausible US phone from a page (the
+// advertiser's OWN landing page — compliant, same clean-room rule). Never guesses.
+async function scrapePhone(website: string): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(website, { signal: ctrl.signal, headers: { 'User-Agent': 'CergioBot/1.0 (+https://cergio.ai)' } });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    const html = (await res.text()).slice(0, 200000);
+    const tel = html.match(/tel:\+?1?[\s-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/i);
+    const cand = tel ? tel[0].replace(/^tel:/i, '') : (html.match(/\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/) || [])[0];
+    return cand ? normPhone(cand) : null;
   } catch { return null; }
 }
 
@@ -1236,6 +1265,91 @@ async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: n
       if (!upErr) saved++;
     }
     if (list.length < 50) break;
+  }
+  return { saved, found, query };
+}
+
+// ── Google Sponsored + local pack via SerpAPI. Reuses inUS/normPhone/cleanText/
+// classifyEntity/scrapeEmail/scrapePhone. Free-tier friendly: ONE search per job.
+async function fulfillGoogleSponsored(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+  const KEY = Deno.env.get('SERPAPI_KEY');
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const city = (job.city || '').trim();
+  const state = (job.state || '').trim();
+  const query = `${rawType || 'service'} in ${[city, state].filter(Boolean).join(', ')} [google_sponsored]`;
+  if (!KEY) return { saved: 0, found: 0, query, note: 'pending SERPAPI_KEY' };
+  if (!city) return { saved: 0, found: 0, query };
+  if (osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
+
+  const stateName = US_STATES[state.toUpperCase()] || state;
+  const location = [city, stateName, 'United States'].filter(Boolean).join(', ');
+  const url = `https://serpapi.com/search.json?engine=google`
+    + `&q=${encodeURIComponent(rawType + ' ' + city)}`
+    + `&location=${encodeURIComponent(location)}&google_domain=google.com&gl=us&hl=en&num=20`
+    + `&api_key=${KEY}`;
+  let j: any;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return { saved: 0, found: 0, query, note: `serpapi http ${res.status}` };
+    j = await res.json();
+  } catch (e) { return { saved: 0, found: 0, query, note: `serpapi fetch ${String(e).slice(0,60)}` }; }
+  if (j?.error) return { saved: 0, found: 0, query, note: `serpapi ${String(j.error).slice(0,80)}` };
+
+  let saved = 0, found = 0, fetches = 0;
+  const seen = new Set<string>();
+  const persist = async (row: Record<string, unknown>) => {
+    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    if (!error) saved++;
+  };
+
+  // A) Sponsored ADS — advertisers. Phone from the ad's OWN landing page (bounded).
+  for (const ad of (j.ads || [])) {
+    found++;
+    const name = cleanText(ad?.title);
+    if (!name) continue;
+    if (osmIsBlocked(name)) continue;
+    const site = ad?.link || ad?.displayed_link || null;
+    const key = `${name.toLowerCase()}|${city.toLowerCase()}`;
+    if (seen.has(key)) continue; seen.add(key);
+    let phone = null, email = null;
+    if (site && fetches < 12) { fetches++; phone = await scrapePhone(site); email = await scrapeEmail(site); }
+    await persist({
+      id: `gsp:${city}:${(name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,60)}`,
+      name, service_type: job.service_type || null,
+      phone, phone_origin: phone ? 'google_sponsored_site' : null,
+      website_url: site, owner_email: email,
+      instagram: null, has_instagram: false,
+      address: null, city, state: state || null, zip: null,
+      lat: null, lon: null,                       // ads carry no coords — outreach lead, not a map pin
+      data_source: 'google_sponsored', fetched_at: new Date().toISOString(),
+      outreach_status: 'new',
+      outreach_notes: `google_sponsored | ${classifyEntity(name)} | ${(ad?.displayed_link||'')}`.slice(0,240),
+    });
+  }
+
+  // B) LOCAL PACK — map results with a real phone + coords. Tagged google_local.
+  const places = j?.local_results?.places || j?.local_results || [];
+  for (const pl of (Array.isArray(places) ? places : [])) {
+    found++;
+    const name = cleanText(pl?.title);
+    if (!name) continue;
+    if (osmIsBlocked(`${name} ${pl?.type||''}`)) continue;
+    const lat = pl?.gps_coordinates?.latitude ?? null;
+    const lon = pl?.gps_coordinates?.longitude ?? null;
+    if (lat != null && lon != null && !inUS(Number(lat), Number(lon))) continue; // geo guard when coords exist
+    const key = `${name.toLowerCase()}|${city.toLowerCase()}`;
+    if (seen.has(key)) continue; seen.add(key);
+    await persist({
+      id: `glo:${pl?.place_id || (name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,60)}`,
+      name, service_type: job.service_type || null,
+      phone: normPhone(pl?.phone || ''), phone_origin: pl?.phone ? 'google_local' : null,
+      website_url: pl?.links?.website || null, owner_email: null,
+      instagram: null, has_instagram: false,
+      address: pl?.address || null, city, state: state || null, zip: null,
+      lat, lon, data_source: 'google_local', fetched_at: new Date().toISOString(),
+      outreach_status: 'new',
+      outreach_notes: `google_local | ${classifyEntity(name)} | ${(pl?.type||'')}`.slice(0,240),
+    });
   }
   return { saved, found, query };
 }
