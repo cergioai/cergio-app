@@ -186,6 +186,16 @@ serve(async (req: Request) => {
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (source === 'google_lsa') {
+          // ── Google LOCAL SERVICES ADS via SerpAPI (the "Sponsored" service pros
+          //    with a published phone + Google Guaranteed badge). data_source=google_lsa.
+          const r = await fulfillGoogleLSA(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: r.note || (saved === 0 ? 'no Google local-services ads' : 'google_lsa'),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else if (source === 'google_sponsored') {
           // ── Google Sponsored + local pack via SerpAPI (free tier, official) ──
           // Advertisers who publish a contact # = high-intent providers. NO-OP
@@ -1350,6 +1360,72 @@ async function fulfillGoogleSponsored(db: any, job: any): Promise<{ saved: numbe
       outreach_status: 'new',
       outreach_notes: `google_local | ${classifyEntity(name)} | ${(pl?.type||'')}`.slice(0,240),
     });
+  }
+  return { saved, found, query };
+}
+
+// City -> Google CID (data_cid) for the Local Services engine. NYC from SerpAPI
+// docs; others resolved at runtime via google_maps and cached in-process.
+const CITY_CID: Record<string, string> = { 'new york': '14414772292044717666' };
+async function resolveCid(KEY: string, city: string, state: string): Promise<string | null> {
+  const k = city.toLowerCase();
+  if (CITY_CID[k]) return CITY_CID[k];
+  try {
+    const u = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(city + ' ' + state)}&type=search&api_key=${KEY}`;
+    const res = await fetch(u); const j = await res.json();
+    const cid = (j?.local_results || []).map((r: any) => r?.data_cid).find((x: any) => x);
+    if (cid) { CITY_CID[k] = String(cid); return String(cid); }
+  } catch (_e) { /* ignore */ }
+  return null;
+}
+// Google Local Services Ads — the sponsored service pros (phone + badge).
+async function fulfillGoogleLSA(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+  const KEY = Deno.env.get('SERPAPI_KEY');
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const city = (job.city || '').trim();
+  const state = (job.state || '').trim();
+  const query = `${rawType} [google_lsa ${city}]`;
+  if (!KEY) return { saved: 0, found: 0, query, note: 'pending SERPAPI_KEY' };
+  if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
+  const data_cid = await resolveCid(KEY, city, state);
+  if (!data_cid) return { saved: 0, found: 0, query, note: 'no data_cid for city' };
+
+  const url = `https://serpapi.com/search.json?engine=google_local_services`
+    + `&q=${encodeURIComponent(rawType)}&data_cid=${data_cid}&hl=en&api_key=${KEY}`;
+  let j: any;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return { saved: 0, found: 0, query, note: `serpapi http ${res.status}` };
+    j = await res.json();
+  } catch (e) { return { saved: 0, found: 0, query, note: `serpapi fetch ${String(e).slice(0,60)}` }; }
+  if (j?.error) return { saved: 0, found: 0, query, note: `serpapi ${String(j.error).slice(0,80)}` };
+
+  const ads = j?.local_ads || [];
+  let saved = 0, found = ads.length;
+  const seen = new Set<string>();
+  for (const a of ads) {
+    const name = cleanText(a?.title);
+    if (!name) continue;
+    if (osmIsBlocked(`${name} ${a?.type||''}`)) continue;
+    const key = `${name.toLowerCase()}|${city.toLowerCase()}`;
+    if (seen.has(key)) continue; seen.add(key);
+    const phone = normPhone(a?.phone || '');
+    const rev = a?.reviews != null ? `${a.rating||''}(${a.reviews}rev)` : '';
+    const yrs = a?.years_in_business != null ? `${a.years_in_business}yr` : '';
+    const row = {
+      id: `glsa:${a?.cid || (name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,60)}:${city.toLowerCase().replace(/[^a-z]/g,'')}`,
+      name, service_type: job.service_type || null,
+      phone, phone_origin: phone ? 'google_lsa' : null,
+      website_url: a?.link || null, owner_email: null,
+      instagram: null, has_instagram: false,
+      address: a?.service_area || null, city, state: state || null, zip: null,
+      lat: null, lon: null,
+      data_source: 'google_lsa', fetched_at: new Date().toISOString(),
+      outreach_status: 'new',
+      outreach_notes: `google_lsa | ${classifyEntity(name)} | ${a?.badge||''} | ${rev} ${yrs} | ${a?.type||''}`.slice(0,240),
+    };
+    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    if (!error) saved++;
   }
   return { saved, found, query };
 }
