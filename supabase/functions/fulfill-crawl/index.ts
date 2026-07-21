@@ -186,6 +186,15 @@ serve(async (req: Request) => {
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (source === 'yellowpages_apify') {
+          // ── YellowPages via Apify (trudax) — structured business listings ──
+          const r = await fulfillYellowPagesApify(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: r.note || (saved === 0 ? 'no YellowPages results' : 'yellowpages'),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else if (source === 'craigslist') {
           // ── Craigslist via Apify actor (memo23/craigslist-scraper). Capped
           //    maxItems (cost), deduped by phone/email/name, first-name parsed.
@@ -1474,26 +1483,48 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
   const sub = CL_SUBDOMAIN[city.toLowerCase()];
   const query = `${rawType} [craigslist ${city}]`;
   if (!sub || osmIsBlocked(rawType)) return { saved: 0, found: 0, query, note: sub ? 'blocked' : 'no craigslist subdomain' };
-  const clUrl = `https://${sub}.craigslist.org/search/bbb?query=${encodeURIComponent(rawType)}`;
-  const MAXITEMS = 40; // hard cost cap per (city,type): ~$0.06 at $1.5/1k
+  // Map the service to the RIGHT Craigslist services subcategory (bbb was a
+  // for-sale/spam-polluted catch-all). sss=for-sale is NEVER used.
+  const CL_SUBCAT: Record<string, string> = {
+    'handyman':'sks','plumber':'sks','electrician':'sks','contractor':'sks','hvac':'sks','painter':'sks','roofing':'sks',
+    'house cleaning':'hss','housekeeper':'hss','home organizer':'hss','home decorator':'hss',
+    'dog walker':'pas','pet sitter':'pas','cat sitter':'pas','dog trainer':'pas','pet sitting':'pas',
+    'tutor':'lss','gmat tutor':'lss','personal trainer':'lss','nutritionist':'lss','life coach':'lss',
+    'babysitter':'cps','barber':'bts','personal shopper':'bts','photographer':'crs','mover':'lbs',
+    'driver':'lbs','personal assistant':'lbs',
+  };
+  const subcat = CL_SUBCAT[rawType] || 'bbb';
+  const clUrl = `https://${sub}.craigslist.org/search/${subcat}?query=${encodeURIComponent(rawType)}`;
+  const MAXITEMS = 40;
   const items = await apifyRun('memo23~craigslist-scraper', { startUrls: [{ url: clUrl }], includeEmails: true }, MAXITEMS);
   let found = items.length, saved = 0;
   const seen = new Set<string>();
+  // Reject FOR-SALE items (cars/products) + spammy ALL-CAPS/price posts.
+  const FORSALE = /(19|20)\d{2}\b|\b(mercedes|toyota|honda|ford|nissan|bmw|chevy|chevrolet|jeep|hyundai|kia|audi|lexus|acura|dodge|ram\b|gmc|subaru|volkswagen|\bvw\b|cadillac|tesla|mazda|infiniti|for sale|miles\b|mileage|sedan|\bsuv\b|coupe|pickup|\bvin\b|obo\b)/i;
+  const kw = rawType.split(' ')[0]; // core service keyword must appear
   for (const it of items) {
     const name = cleanText(it?.title || it?.name);
     if (!name) continue;
-    if (osmIsBlocked(name)) continue;
-    const phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || '')) || '');
+    const desc = (it?.description || it?.body || '').toString();
+    const hay = `${name} ${desc}`;
+    if (osmIsBlocked(hay)) continue;
+    if (FORSALE.test(name)) continue;                                   // drop cars/products
+    if (name.startsWith('$') || /\$\d+[^a-z]{0,3}(visit|off|special|install|repair|drain)/i.test(name)) continue; // price-spam
+    const letters = name.replace(/[^A-Za-z]/g,''); const caps = name.replace(/[^A-Z]/g,'');
+    if (letters.length > 8 && caps.length / letters.length > 0.7) continue; // ALL-CAPS spam
+    if (kw && !new RegExp(kw.replace(/[^a-z]/gi,''),'i').test(hay)) continue; // must be on-topic
+    // robust phone: explicit fields first, then a phone in the body.
+    let phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || it?.contactPhone || '')) || '');
+    if (!phone) { const m = desc.match(/\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/); if (m) phone = normPhone(m[0]); }
     const email = ((Array.isArray(it?.emails) ? it.emails[0] : (it?.email || '')) || '').toLowerCase() || null;
-    // DEDUP: phone > email > name+city. A repost with the same phone collapses to 1.
-    const dkey = phone ? `p:${phone}` : (email ? `e:${email}` : `n:${name.toLowerCase()}|${city.toLowerCase()}`);
-    if (seen.has(dkey)) continue; seen.add(dkey);
-    if (!phone && !email) continue; // uncontactable → skip (don't pay to store noise)
+    if (!phone && !email) continue;                                     // uncontactable
+    const dkey = phone ? `p:${phone}` : `e:${email}`;
+    if (seen.has(dkey)) continue; seen.add(dkey);                        // dedup reposts within run
     const lat = it?.mapCoordinates?.latitude ?? it?.latitude ?? it?.lat ?? null;
     const lon = it?.mapCoordinates?.longitude ?? it?.longitude ?? it?.lon ?? null;
     if (lat != null && lon != null && !inUS(Number(lat), Number(lon))) continue;
-    const first = parseFirstName(`${name} ${it?.description || ''}`);
-    const idbase = phone ? phone.replace(/\D/g, '') : (email || name.toLowerCase().replace(/[^a-z0-9]+/g, '-')).slice(0, 50);
+    const first = parseFirstName(`${name} ${desc}`);
+    const idbase = phone ? phone.replace(/\D/g, '') : (email || '').slice(0, 50);
     const row = {
       id: `cl:${idbase}:${city.toLowerCase().replace(/[^a-z]/g, '')}`,
       name, service_type: job.service_type || null,
@@ -1503,7 +1534,49 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
       address: it?.location || null, city, state: state || null, zip: null,
       lat, lon, data_source: 'craigslist', fetched_at: new Date().toISOString(),
       outreach_status: 'new',
-      outreach_notes: `craigslist | ${classifyEntity(name)} | ${first ? 'name:' + first + ' | ' : ''}${(it?.description || '').slice(0, 80)}`.slice(0, 240),
+      outreach_notes: `craigslist | ${classifyEntity(name)} | ${first ? 'name:' + first + ' | ' : ''}${desc.slice(0, 70)}`.slice(0, 240),
+    };
+    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    if (!error) saved++;
+  }
+  return { saved, found, query };
+}
+
+async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+  if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'yellowpages', note: 'pending APIFY_TOKEN' };
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const city = (job.city || '').trim();
+  const state = (job.state || '').trim();
+  const query = `${rawType} [yellowpages ${city}]`;
+  if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
+  const items = await apifyRun('trudax~yellow-pages-us-scraper',
+    { search: rawType, location: `${city}, ${state}`, maxItems: 40 }, 40);
+  let found = items.length, saved = 0;
+  const seen = new Set<string>();
+  for (const it of items) {
+    const name = cleanText(it?.name || it?.title || it?.businessName);
+    if (!name) continue;
+    if (osmIsBlocked(`${name} ${(it?.categories||it?.category||'')}`)) continue;
+    const phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || '')) || '');
+    const email = ((it?.email || (Array.isArray(it?.emails) ? it.emails[0] : '')) || '').toLowerCase() || null;
+    if (!phone && !email) continue;
+    const dkey = phone ? `p:${phone}` : `e:${email}`;
+    if (seen.has(dkey)) continue; seen.add(dkey);
+    const addr = it?.address || [it?.street, it?.city, it?.state, it?.zip].filter(Boolean).join(', ') || null;
+    const cats = Array.isArray(it?.categories) ? it.categories.join(', ') : (it?.categories || it?.category || '');
+    const first = parseFirstName(name);
+    const idbase = phone ? phone.replace(/\D/g, '') : (email || name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,50);
+    const row = {
+      id: `yp:${idbase}:${city.toLowerCase().replace(/[^a-z]/g, '')}`,
+      name, service_type: job.service_type || null,
+      phone, phone_origin: phone ? 'yellowpages' : null,
+      website_url: it?.website || it?.url || null, owner_email: email,
+      instagram: null, has_instagram: false,
+      address: addr, city, state: state || null, zip: it?.zip || null,
+      lat: it?.latitude ?? null, lon: it?.longitude ?? null,
+      data_source: 'yellowpages', fetched_at: new Date().toISOString(),
+      outreach_status: 'new',
+      outreach_notes: `yellowpages | ${classifyEntity(name)} | ${first ? 'name:' + first + ' | ' : ''}${String(cats).slice(0, 70)}`.slice(0, 240),
     };
     const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
     if (!error) saved++;
