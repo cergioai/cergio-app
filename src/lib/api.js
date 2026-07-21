@@ -4841,6 +4841,14 @@ export async function listOutreachRecipients(audience, filters = {}, limit = 50)
   }
 }
 
+export async function leadsDashboard(audience = 'services', { city = null, source = null } = {}) {
+  const { data, error } = await supabase.functions.invoke('leads-dashboard', {
+    body: { audience, city, source },
+  });
+  if (error) return { data: null, error };
+  return { data, error: null };
+}
+
 export async function exportLeads(audience, filters = {}, limit = 100000) {
   if (!supabaseReady) return { data: [], error: NOT_WIRED.error };
   const cap = Math.min(Math.max(1, limit | 0), 100000);
