@@ -205,6 +205,58 @@ serve(async (req: Request) => {
         .select('id');
       if (mq && mq.length) console.log(`cleanup: quarantined ${mq.length} blocked med-aesthetic rows`);
     } catch (_e) { /* best-effort */ }
+
+    // ── PROMOTE HALF of the creator gate (SPEC-88, Forensic Auditor 2026-07-20) ──
+    // ROOT CAUSE of "204 sendable, 0 EVER contacted": creator-harvest only ever
+    // DEMOTED rows (the two quarantine blocks above). The PROMOTE half the
+    // services gate has (leads_services new->'queued') was never built for
+    // creators, so they sat forever at 'pending_review'. outreach-send's
+    // influencer loop (WHERE outreach_status='queued') therefore found 0 rows and
+    // the founder's MANUAL "Send Outreach" launcher emailed nobody.
+    //
+    // SAFETY — this does NOT auto-send. outreach-send is NOT on cron
+    // (20260622180000_periodic_workers_cron.sql: "NOT scheduled: outreach-send.
+    // Cold email/SMS stays MANUAL (the launcher)"). 'queued' is only the
+    // sendable-but-not-yet-sent staging state; the founder still deliberately
+    // fires the send launcher. Promoting to 'queued' therefore respects the
+    // frozen never-auto-sent invariant (qa#84) — nothing leaves until a human
+    // clicks. Reversible (a status flip).
+    //
+    // SCOPE — honors the spec's "passes the gate + human vet" rule: promote ONLY
+    // the human-vetted set, never the raw se:web-harvest pool:
+    //   (a) discovered_via='modash-vetted-seed' inside the category gate, OR
+    //   (b) FOUNDER_VETTED_ALLOWLIST — the exact handles the founder hand-marked
+    //       in "FOUNDING COHORT - creators (READY TO SEND).csv".
+    // Both sets are hand-vetted (not med-spa), and the two quarantine blocks above
+    // already ran this tick, so a blocked row cannot be sitting at pending_review
+    // to be promoted.
+    const FOUNDER_VETTED_ALLOWLIST = [
+      'remixthedog','mallowfrenchie','bullyfambam','brookelilybrazelton',
+      'byvictoriabarrientos','highonlifestylee','maryandpalettes','rachelove',
+      'fromappletoorange','lopezjennylopez',
+    ];
+    try {
+      const catList = '(' + TARGET_CATEGORIES.map((c) => '"' + c + '"').join(',') + ')';
+      const allow   = '(' + FOUNDER_VETTED_ALLOWLIST.map((h) => '"' + h + '"').join(',') + ')';
+      let promoted = 0;
+      // (a) vetted seeds inside the category gate
+      const { data: pa } = await db.from('leads_influencers')
+        .update({ outreach_status: 'queued' })
+        .eq('outreach_status', 'pending_review')
+        .eq('discovered_via', 'modash-vetted-seed')
+        .filter('category', 'in', catList)
+        .select('id');
+      promoted += pa?.length ?? 0;
+      // (b) explicit founder allowlist (hand-picked, so no category gate needed)
+      const { data: pb } = await db.from('leads_influencers')
+        .update({ outreach_status: 'queued' })
+        .eq('outreach_status', 'pending_review')
+        .filter('ig_handle', 'in', allow)
+        .select('id');
+      promoted += pb?.length ?? 0;
+      if (promoted) console.log(`promote: ${promoted} vetted creators pending_review -> queued (staged, NOT sent)`);
+    } catch (_e) { /* best-effort; never blocks a harvest run */ }
+
     dbRef = db;
 
     const tag = `se:web-harvest-${new Date().toISOString().slice(0, 10)}`;
