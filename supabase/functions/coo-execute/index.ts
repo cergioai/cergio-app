@@ -329,6 +329,11 @@ serve(async (req: Request) => {
       } catch (e) {
         status = 'failed';
         result = serr(e);
+        // BLAST-RADIUS CAP (SPEC-89): cergio_coo_exec_sql rolled the over-broad
+        // UPDATE back to a no-op and raised. Route it to the founder's approval
+        // queue (gated path below) instead of leaving it to be re-proposed and
+        // re-refused every tick. No rows changed; the founder decides.
+        if (/blast radius/i.test(result)) gated = true;
       }
 
       // SCHEMA-GATED: hand it back to the founder instead of shipping a doomed

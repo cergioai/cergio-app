@@ -4508,6 +4508,26 @@ test('creator-selfheal-parity', 'SPEC-86d: creator-harvest self-heal .or() list 
   }
 });
 
+test('coo-exec-blast-radius-cap', 'SPEC-89: the autonomous COO SQL executor (cergio_coo_exec_sql) CAPS a single auto-run UPDATE\'s blast radius and rolls an over-broad statement back to a no-op (prevents the ~33k-row do_not_contact dump recurring); coo-execute routes a capped statement to the founder approval queue', '#95', async () => {
+  const files = fs.readdirSync('supabase/migrations').filter(f => /coo_exec_blast_radius_cap|coo_autonomous_execution/.test(f)).sort();
+  assert(files.length > 0, 'coo exec sql migration must exist');
+  // Grade the LAST create-or-replace of the function across migrations (the live definition).
+  let body = '';
+  for (const f of files) {
+    const t = readFile('supabase/migrations/' + f);
+    if (/function\s+public\.cergio_coo_exec_sql/.test(t)) body = t;
+  }
+  assert(body, 'a migration must (re)define cergio_coo_exec_sql');
+  assert(/\bcap\b/.test(body) && /row_count/.test(body), 'exec fn must capture row_count and compare to a cap');
+  assert(/blast radius/i.test(body), 'exec fn must raise a blast-radius refusal message');
+  assert(/get diagnostics[\s\S]{0,200}exception[\s\S]{0,200}raise/i.test(body),
+    'the cap must live in a subtransaction (begin..get diagnostics..if>cap raise..exception..raise) so an over-broad UPDATE rolls back to a no-op');
+  // Executor must park a capped statement for human approval rather than loop-failing.
+  const ce = readFile('supabase/functions/coo-execute/index.ts');
+  assert(/blast radius/i.test(ce) && /gated = true/.test(ce),
+    'coo-execute must detect the blast-radius refusal and gate the proposal (requires_approval=true)');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
