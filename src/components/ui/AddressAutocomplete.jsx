@@ -20,7 +20,13 @@ async function nominatimSearch(q) {
   if (!q || q.length < 3) return [];
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    // Time-box the dropdown lookup too (QA nightly 2026-07-22) so a stalled
+    // Nominatim request can never leave the suggestions spinner stuck.
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    let res;
+    try { res = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctrl.signal }); }
+    finally { clearTimeout(t); }
     if (!res.ok) return [];
     const rows = await res.json();
     return rows.map(r => ({
