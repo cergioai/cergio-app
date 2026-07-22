@@ -25,6 +25,32 @@ const BATCH = 40;
 const FUNCTIONS_BASE = 'https://vjmwnbftfquyquwaklue.functions.supabase.co';
 const DEFAULT_ADDRESS = 'Yogotoo / Cergio, 14 West 23rd, 5th Floor, New York, NY 10010';
 
+// ── BLOCKED-category TERMINAL guard (defense-at-the-exit, catalog #72/#73). ───
+// Seeders + fulfill-crawl each filter blocked categories, but that coverage is
+// per-INGEST-PATH: a restored, hand-inserted, ad-source, or legacy row can still
+// reach outreach_status='queued' (e.g. a "Head Spa" with service_type "massage").
+// This is the LAST gate before a message leaves, so it re-checks EVERY recipient
+// regardless of how it was queued, and quarantines the row (-> do_not_contact) so
+// it can never re-surface. Mirrors fulfill-crawl's OSM_BLOCKED net + the #72
+// weight-loss/peptide additions. Matches on name || service_type (either field
+// can carry the category). Constitution brand-safety: free-first, on-brand only.
+const OUTREACH_BLOCKED = new RegExp(
+  '(massage|tattoo|makeup|\\bpersonal chef\\b|private chef' +
+  '|weight ?loss|peptide|bariatric|semaglutide|ozempic|wegovy|tirzepatide' +
+  '|med.?spa|medspa|botox|filler|injectable|liposuction|\\bBBL\\b|dermatolog' +
+  '|hormone|\\bHRT\\b|\\bIV ?drip\\b|\\bIV ?therapy\\b' +
+  '|plastic surgery|cosmetic surgery|\\bsurgeon\\b' +
+  '|\\bdrug\\b|pharmac|cannabis|dispensary|marijuana' +
+  '|liquor|\\bwine\\b|brewery|winery|distillery|\\bwine bar\\b|cocktail bar' +
+  '|tobacco|smoke shop|\\bvape\\b|\\bcigar\\b' +
+  '|casino|gambling|\\bbetting\\b|firearm|\\bgun\\b|\\bammo\\b' +
+  '|\\bescort\\b|strip club|nightclub|night club|disc jockey|\\bdj\\b)',
+  'i',
+);
+function outreachIsBlocked(a?: string | null, b?: string | null): boolean {
+  return OUTREACH_BLOCKED.test(`${a || ''} ${b || ''}`);
+}
+
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   try {
@@ -91,6 +117,7 @@ serve(async (req: Request) => {
         .limit(limit);
       for (const b of bizs ?? []) {
         const e164 = toE164(b.phone); if (!e164) continue;
+        if (outreachIsBlocked(b.name, b.service_type)) continue; // never surface a blocked category in the tap-queue
         const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
         if (supp) continue;
         const tok = await hmac(e164, optoutSecret);
@@ -129,6 +156,12 @@ serve(async (req: Request) => {
     for (const lead of leads ?? []) {
       const email = String(lead.owner_email).trim().toLowerCase();
       if (!email || !email.includes('@')) continue;
+
+      // TERMINAL blocked-category guard - never email a blocked category; quarantine it.
+      if (outreachIsBlocked(lead.name, lead.service_type)) {
+        await db.from('leads_services').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id);
+        suppressed++; continue;
+      }
 
       // Suppression check (never contact opt-outs).
       const { data: supp } = await db
@@ -176,6 +209,10 @@ serve(async (req: Request) => {
       for (const inf of infs ?? []) {
         const email = String(inf.email).trim().toLowerCase();
         if (!email || !email.includes('@')) continue;
+        // TERMINAL blocked-category guard (creator email path) - handle is the only text we have.
+        if (outreachIsBlocked(inf.ig_handle, null)) {
+          await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue;
+        }
         const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'email').ilike('address', email).maybeSingle();
         if (supp) { await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue; }
         const token = await hmac(email, optoutSecret);
@@ -227,6 +264,10 @@ serve(async (req: Request) => {
       for (const lead of smsLeads ?? []) {
         const e164 = toE164(lead.phone);
         if (!e164) continue;
+        // TERMINAL blocked-category guard (SMS path).
+        if (outreachIsBlocked(lead.name, lead.service_type)) {
+          await db.from('leads_services').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id); continue;
+        }
         const { data: supp } = await db
           .from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
         if (supp) { await db.from('leads_services').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id); continue; }
