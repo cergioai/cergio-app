@@ -1550,12 +1550,12 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   const state = (job.state || '').trim();
   const query = `${rawType} [yellowpages ${city}]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
-  const items = await apifyRun('trudax~yellow-pages-us-scraper',
-    { search: rawType, location: `${city}, ${state}`, maxItems: 40 }, 40);
+  const items = await apifyRun('cryptosignals~yellow-pages-us-scraper',
+    { keyword: rawType, location: `${city}, ${state}`, maxItems: 40, maxResults: 40 }, 40);
   let found = items.length, saved = 0;
   const seen = new Set<string>();
   for (const it of items) {
-    const name = cleanText(it?.name || it?.title || it?.businessName);
+    const name = cleanText(it?.businessName || it?.name || it?.title);
     if (!name) continue;
     if (osmIsBlocked(`${name} ${(it?.categories||it?.category||'')}`)) continue;
     const phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || '')) || '');
@@ -1564,7 +1564,7 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
     const dkey = phone ? `p:${phone}` : `e:${email}`;
     if (seen.has(dkey)) continue; seen.add(dkey);
     const addr = it?.address || [it?.street, it?.city, it?.state, it?.zip].filter(Boolean).join(', ') || null;
-    const cats = Array.isArray(it?.categories) ? it.categories.join(', ') : (it?.categories || it?.category || '');
+    const cats = Array.isArray(it?.categories) ? it.categories.join(', ') : (it?.category || it?.categories || '');
     const first = parseFirstName(name);
     const idbase = phone ? phone.replace(/\D/g, '') : (email || name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,50);
     const row = {
