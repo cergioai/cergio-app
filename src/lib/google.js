@@ -200,6 +200,30 @@ export function loadGoogleMaps() {
  * toast). This is the single choke-point that prevents bogus addresses
  * like "1 jane street ny" from being stored as-is.
  */
+// CERGIO-GUARD (QA nightly 2026-07-22): the address Save path
+// (HomeScreen InlineLocationEditor + LocationEditModal) awaits verifyAddress
+// with NO upper bound. Nominatim is a shared free service (1 req/sec); under
+// rate-limit or a stalled TCP connection the fetch never settles and the
+// "Saving…" spinner hangs forever, blocking the launch-critical search flow.
+// Every network hop below is now time-boxed so verifyAddress ALWAYS resolves;
+// on timeout the caller keeps the already-picked OSM coords.
+const VERIFY_STEP_TIMEOUT_MS = 5000;
+function withTimeout(promise, ms, onTimeout) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise(resolve => setTimeout(() => resolve(onTimeout), ms)),
+  ]);
+}
+async function fetchWithTimeout(url, opts = {}, ms = VERIFY_STEP_TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function verifyAddress(text) {
   if (!text || !text.trim()) return { ok: false, reason: 'not-found' };
   const trimmed = text.trim();
@@ -207,7 +231,7 @@ export async function verifyAddress(text) {
   // Tier 1: Google (when configured and not broken).
   if (getGoogleMapsKey()) {
     try {
-      const g = await geocodeAddress(trimmed);
+      const g = await withTimeout(geocodeAddress(trimmed), VERIFY_STEP_TIMEOUT_MS, null);
       if (g?.lat && g?.lng) {
         return {
           ok:       true,
@@ -250,7 +274,7 @@ export async function verifyAddress(text) {
   for (const q of queryVariants) {
     try {
       const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(q)}`;
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const res = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } });
       if (res.ok) {
         const rows = await res.json();
         const r = Array.isArray(rows) ? rows[0] : null;
