@@ -1517,7 +1517,9 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     // robust phone: explicit fields first, then a phone in the body.
     let phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || it?.contactPhone || '')) || '');
     if (!phone) { const m = desc.match(/\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/); if (m) phone = normPhone(m[0]); }
-    const email = ((Array.isArray(it?.emails) ? it.emails[0] : (it?.email || '')) || '').toLowerCase() || null;
+    const emailsArr = Array.isArray(it?.emails) ? it.emails : (it?.email ? [it.email] : []);
+    const email = (emailsArr.map((e: any) => String(e || '').toLowerCase())
+      .find((e: string) => e.includes('@') && !/craigslist\.org|reply\./i.test(e))) || null; // DIRECT email only
     if (!phone && !email) continue;                                     // uncontactable
     const dkey = phone ? `p:${phone}` : `e:${email}`;
     if (seen.has(dkey)) continue; seen.add(dkey);                        // dedup reposts within run
@@ -1552,14 +1554,16 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
   const items = await apifyRun('cryptosignals~yellow-pages-us-scraper',
     { keyword: rawType, location: `${city}, ${state}`, maxItems: 40, maxResults: 40 }, 40);
-  let found = items.length, saved = 0;
+  let found = items.length, saved = 0, ypFetches = 0;
   const seen = new Set<string>();
   for (const it of items) {
     const name = cleanText(it?.businessName || it?.name || it?.title);
     if (!name) continue;
     if (osmIsBlocked(`${name} ${(it?.categories||it?.category||'')}`)) continue;
     const phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || '')) || '');
-    const email = ((it?.email || (Array.isArray(it?.emails) ? it.emails[0] : '')) || '').toLowerCase() || null;
+    let email = ((it?.email || (Array.isArray(it?.emails) ? it.emails[0] : '')) || '').toLowerCase() || null;
+    const site = it?.website || it?.url || null;
+    if (!email && site && ypFetches < 15) { ypFetches++; email = await scrapeEmail(site); } // direct email from the biz's own site
     if (!phone && !email) continue;
     const dkey = phone ? `p:${phone}` : `e:${email}`;
     if (seen.has(dkey)) continue; seen.add(dkey);
