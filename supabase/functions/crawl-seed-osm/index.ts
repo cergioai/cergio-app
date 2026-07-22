@@ -115,6 +115,29 @@ serve(async (req: Request) => {
         console.log(`seeded ${lsaRows.length} one-time google_lsa jobs`);
       }
     } catch (_e) { /* best-effort; never blocks the osm seed */ }
+
+    // ── ONE-TIME scale seed: Craigslist + YellowPages (via Apify) for the 23
+    // individual service types x NYC+Miami. Guarded on the sentinel type 'barber'
+    // (only in the full scale, not the 5-category test) so it seeds ONCE; the
+    // fulfill cron then drains each job via Apify server-side (no Mac). Bounded:
+    // 92 jobs x maxItems=40, ~$4-5 total (CL $1.5/1k + YP $3/1k). NO-OP without APIFY_TOKEN.
+    try {
+      const { count: scaled } = await db.from('crawl_requests')
+        .select('id', { count: 'exact', head: true }).eq('source', 'craigslist').eq('service_type', 'barber');
+      if ((scaled ?? 0) === 0) {
+        const APIFY_TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','weight loss specialist','mover'];
+        const APIFY_CITIES: Array<[string, string]> = [['New York', 'NY'], ['Miami', 'FL']];
+        const rows2: Array<Record<string, unknown>> = [];
+        for (const src of ['craigslist', 'yellowpages_apify'])
+          for (const [c, st] of APIFY_CITIES) for (const t of APIFY_TYPES)
+            rows2.push({ kind: 'services', city: c, state: st, service_type: t, target_count: 40, status: 'new', source: src, created_at: nowIso, updated_at: nowIso });
+        // insert in batches; dedupe index skips any still-OPEN dupes
+        for (let i = 0; i < rows2.length; i += INSERT_BATCH) {
+          try { await db.from('crawl_requests').insert(rows2.slice(i, i + INSERT_BATCH)); } catch (_e) { /* dupes */ }
+        }
+        console.log(`seeded ${rows2.length} one-time craigslist+yellowpages scale jobs`);
+      }
+    } catch (_e) { /* best-effort */ }
     for (const [city, state] of CITIES) {
       for (const type of types) {
         if (isBlocked(`${type} ${city}`)) continue;
