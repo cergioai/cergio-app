@@ -1453,10 +1453,11 @@ async function fulfillGoogleLSA(db: any, job: any): Promise<{ saved: number; fou
 // Craigslist city -> subdomain
 const CL_SUBDOMAIN: Record<string, string> = { 'new york': 'newyork', 'miami': 'miami' };
 // Pull a likely first name from a Craigslist title/body ("Handyman - Jose", "Jessica\'s cleaning").
+const NOT_A_NAME = /^(New|The|Best|Call|Text|Free|Now|Nyc|Miami|Cheap|Fast|Pro|Professional|Licensed|Insured|Affordable|Reliable|Quality|Expert|Experienced|Premium|Local|Certified|Trusted|Available|Special|Standard|Deep|Move|Apartment|Home|House|Housekeeping|Cleaning|Cleaner|Tutor|Tutoring|Math|Maths|Algebra|Geometry|Calculus|Statistics|Stats|Physics|Chemistry|Biology|Science|English|Spanish|French|Reading|Writing|Harvard|Yale|Princeton|Columbia|Ivy|Grad|Undergrad|Mba|Phd|Psat|Sat|Act|Gmat|Gre|Dog|Cat|Pet|Walking|Boarding|Sitting|Plumber|Plumbing|Electrician|Handyman|Barber|Photographer|Mover|Moving|Service|Services|Repair|Install|Emergency|Same|Day|Hour|Year|Years|Nyc|Manhattan|Brooklyn|Queens|Bronx|West|East|North|South|Upper|Lower)$/i;
 function parseFirstName(text: string): string | null {
   const t = (text || '').replace(/\s+/g, ' ').trim();
   let m = t.match(/(?:^|[-–,:|]|\bby\b|\bwith\b|\bcall\b|\bask for\b)\s*([A-Z][a-z]{2,15})(?:\b)/);
-  if (m && !/^(New|The|Best|Call|Text|Free|Now|Nyc|Miami|Cheap|Fast|Pro|Licensed|Insured)$/i.test(m[1])) return m[1];
+  if (m && !NOT_A_NAME.test(m[1])) return m[1];
   m = t.match(/\b([A-Z][a-z]{2,15})['\u2019]s\b/); // "Jessica\'s"
   if (m) return m[1];
   return null;
