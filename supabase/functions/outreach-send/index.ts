@@ -38,6 +38,7 @@ const OUTREACH_BLOCKED = new RegExp(
   '(massage|tattoo|makeup|\\bpersonal chef\\b|private chef' +
   '|weight ?loss|peptide|bariatric|semaglutide|ozempic|wegovy|tirzepatide' +
   '|med.?spa|medspa|botox|filler|injectable|liposuction|\\bBBL\\b|dermatolog' +
+  '|\\blash(es)?\\b|eyelash|lash ?bar|lash ?studio|lash ?extension|permanent make.?up|microblad|micro-?blad|medi.?spa|med.?aesthetic|medical aesthetic|\\baesthetics\\b|\\baesthetician|rejuven|microneedl' +
   '|hormone|\\bHRT\\b|\\bIV ?drip\\b|\\bIV ?therapy\\b' +
   '|plastic surgery|cosmetic surgery|\\bsurgeon\\b' +
   '|\\bdrug\\b|pharmac|cannabis|dispensary|marijuana' +
@@ -202,15 +203,19 @@ serve(async (req: Request) => {
     {
       const { data: infs } = await db
         .from('leads_influencers')
-        .select('ig_handle, followers, email, city')
+        .select('ig_handle, followers, email, city, category, display_name, bio, external_url')
         .eq('outreach_status', 'queued')
         .not('email', 'is', null)
         .limit(BATCH);
       for (const inf of infs ?? []) {
         const email = String(inf.email).trim().toLowerCase();
         if (!email || !email.includes('@')) continue;
-        // TERMINAL blocked-category guard (creator email path) - handle is the only text we have.
-        if (outreachIsBlocked(inf.ig_handle, null)) {
+        // TERMINAL blocked-category guard (creator email path) — check EVERY available text
+        // field, not just the handle. A lash / med-aesthetic studio whose handle carries no
+        // blocked keyword (e.g. beautyartistny, newbeauty, wearebirdeye) is blocked only by
+        // its category/bio; checking the handle alone let those be emailed (brand-safety leak,
+        // Forensic Auditor run 84 — the 17 flagged creators from QA run 82).
+        if (outreachIsBlocked(`${inf.ig_handle || ''} ${inf.category || ''} ${inf.display_name || ''} ${inf.bio || ''} ${inf.external_url || ''}`, null)) {
           await db.from('leads_influencers').update({ outreach_status: 'do_not_contact' }).eq('ig_handle', inf.ig_handle); continue;
         }
         const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'email').ilike('address', email).maybeSingle();
