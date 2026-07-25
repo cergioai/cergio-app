@@ -3339,7 +3339,7 @@ export async function createRequestAndFanOut({
     if (provider_type && lat != null && lng != null) {
       enqueueCityCrawl({
         kind: 'services', city: where_text || null, lat, lng,
-        serviceType: provider_type, targetCount: 10, triggerRequestId: request.id,
+        serviceType: provider_type, targetCount: 25, triggerRequestId: request.id,
       }).catch(() => {});
     }
     return { request, notified: 0, error: null };
