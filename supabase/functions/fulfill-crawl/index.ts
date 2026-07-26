@@ -498,7 +498,7 @@ function toE164svc(raw: string): string | null {
 async function notifyOnDemandProvidersSMS(db: any, job: any) {
   try {
     if (!job.trigger_request_id) return;
-    if ((Deno.env.get('OUTREACH_SMS_ENABLED') || 'false').toLowerCase() !== 'true') return; // hard gate
+    if ((Deno.env.get('ONDEMAND_SMS_ENABLED') || 'false').toLowerCase() !== 'true') return; // DEDICATED gate (separate from the founding-cohort marketing SMS)
     const twSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const twUser = Deno.env.get('TWILIO_API_KEY_SID') || twSid;
     const twPass = Deno.env.get('TWILIO_API_KEY_SECRET') || Deno.env.get('TWILIO_AUTH_TOKEN');
