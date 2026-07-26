@@ -9,6 +9,7 @@ import { pointInPolygon } from './geo';
 // Technician", etc.). The bridge only WIDENS the allow-set; an un-familied
 // type still bridges to itself, so a strict match is never lost.
 import { expandAllowlist, bridgeAllowSetLC } from './ontologyBridge';
+import { isBlockedFeedCategory, isOutOfScopeProviderType } from '../data/providerTypes';
 
 const NOT_WIRED = { data: null, error: { message: 'Supabase not configured' } };
 
@@ -308,6 +309,14 @@ export async function getProvidersForNotify({
   const filtered = (full || []).filter(s =>
     allowLC.has(norm(s.taxonomy_provider_type)) || allowLC.has(norm(s.category))
   );
+  // CERGIO-GUARD (2026-07-26, QA run 87 / F33): defense-at-the-exit — even if the
+  // server chat-parse resolves a FROZEN_SPEC-blocked/out-of-scope term to a
+  // bookable canonical, terminally REFUSE to notify any provider for it. Placed
+  // at the fan-out EXIT (blocked coverage is per-INGEST-PATH, not global) so a
+  // blocked category can never blast a provider inbox, whatever the resolver did.
+  if (isBlockedFeedCategory(verifiedProviderType) || isOutOfScopeProviderType(verifiedProviderType)) {
+    return { data: [], error: null, blocked: 'blocked_category: refusing to fan out a blocked/out-of-scope category.' };
+  }
   return { data: filtered, error: null };
 }
 

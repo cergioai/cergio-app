@@ -149,6 +149,12 @@ test('notify-safe', 'getProvidersForNotify enforces notifySafe + exact provider_
     'getProvidersForNotify must block when notifySafe is false');
   assert(/no_verified_provider_type/.test(src),
     'getProvidersForNotify must block when verifiedProviderType is missing');
+  // F33 (QA run 87): defense-at-the-exit — even a resolved blocked/out-of-scope
+  // canonical must never fan out to a provider inbox.
+  assert(/isBlockedFeedCategory\(verifiedProviderType\)\s*\|\|\s*isOutOfScopeProviderType\(verifiedProviderType\)/.test(src),
+    'getProvidersForNotify must terminally refuse a blocked/out-of-scope provider type (F33 blocked-fanout-guard)');
+  assert(/blocked_category: refusing to fan out/.test(src),
+    'getProvidersForNotify must return the blocked_category sentinel on a blocked fanout');
   // useChat must compute notifySafe.
   const chat = readFile('src/hooks/useChat.js');
   assert(/notifySafe\s*:/.test(chat),
