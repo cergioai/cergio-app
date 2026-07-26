@@ -335,6 +335,7 @@ serve(async (req: Request) => {
 
         // ── Notify the searcher ───────────────────────────────────────────────
         await notifySearcher(db, job, saved);
+        await notifyOnDemandProviders(db, job);
         out.push({ id: job.id, source, query, found, saved });
       } catch (e) {
         const msg = serr(e);
@@ -479,6 +480,49 @@ async function logAgentRun(
       meta: o.meta ?? null,
     });
   } catch (_e) { /* best-effort */ }
+}
+
+// ── ON-DEMAND: email the crawled SERVICES about the real user request (compliant:
+// they published email to get customers; personalized to a genuine lead; blocked-
+// category + suppression guarded; opt-out + SMS opt-in capture). Fires only for
+// on-demand crawls (trigger_request_id). Cold VOICE/SMS stays OFF until they opt in.
+async function notifyOnDemandProviders(db: any, job: any) {
+  try {
+    if (!job.trigger_request_id) return;
+    const resendKey = Deno.env.get('RESEND_API_KEY'); if (!resendKey) return;
+    const { data: reqRow } = await db.from('requests')
+      .select('what, when_text, where_text, service_type, provider_type, city')
+      .eq('id', job.trigger_request_id).maybeSingle();
+    const type = job.service_type || reqRow?.provider_type || reqRow?.service_type || 'local pro';
+    const where = reqRow?.where_text || job.city || 'your area';
+    const what = reqRow?.what ? ` for ${String(reqRow.what).slice(0, 80)}` : '';
+    const when = reqRow?.when_text ? ` (needed ${String(reqRow.when_text).slice(0, 40)})` : '';
+    const link = `https://cergio.ai/inbound/${job.trigger_request_id}`;
+    const { data: provs } = await db.from('leads_services')
+      .select('name, owner_email, service_type')
+      .eq('city', job.city).eq('service_type', job.service_type)
+      .not('owner_email', 'is', null).neq('outreach_status', 'do_not_contact').limit(25);
+    let sent = 0;
+    for (const p of (provs || [])) {
+      const email = String(p.owner_email || '').toLowerCase();
+      if (!email.includes('@')) continue;
+      if (osmIsBlocked(`${p.name || ''} ${p.service_type || ''}`)) continue;
+      const { data: supp } = await db.from('outreach_suppressions')
+        .select('id').eq('channel', 'email').ilike('address', email).maybeSingle();
+      if (supp) continue;
+      const subject = `A customer near ${where} needs a ${type}`;
+      const html = `<p>Hi${p.name ? ' ' + p.name : ''}, a Cergio user near <b>${where}</b> is looking for a <b>${type}</b>${what}${when}.</p>`
+        + `<p>If you can help, respond here: <a href="${link}">${link}</a></p>`
+        + `<p>Want jobs like this the moment they come in? <b>Reply YES</b> and we'll text you (opt-in). Reply STOP to stop these emails.</p>`
+        + `<p style="color:#888;font-size:12px">Cergio · you're receiving this because your business is listed publicly for ${type} services. Reply STOP to opt out.</p>`;
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: FROM_EMAIL, to: email, subject, html, reply_to: 'jobs@cergio.ai' }),
+      });
+      sent++;
+    }
+    if (sent) console.log(`on-demand: notified ${sent} providers for request ${job.trigger_request_id}`);
+  } catch { /* best-effort; never fail the crawl */ }
 }
 
 async function notifySearcher(db: any, job: any, saved: number) {
