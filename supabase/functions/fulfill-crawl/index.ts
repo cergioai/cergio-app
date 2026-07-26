@@ -336,6 +336,7 @@ serve(async (req: Request) => {
         // ── Notify the searcher ───────────────────────────────────────────────
         await notifySearcher(db, job, saved);
         await notifyOnDemandProviders(db, job);
+        await notifyOnDemandProvidersSMS(db, job);
         out.push({ id: job.id, source, query, found, saved });
       } catch (e) {
         const msg = serr(e);
@@ -480,6 +481,65 @@ async function logAgentRun(
       meta: o.meta ?? null,
     });
   } catch (_e) { /* best-effort */ }
+}
+
+// ── ON-DEMAND TRANSACTIONAL SMS to the crawled services (SPEC-92b). A genuine
+// person->service customer inquiry (NOT Cergio marketing) to a business that
+// PUBLISHED its number to receive jobs. Curated list (not autodialer/random per
+// Facebook v. Duguid); STOP honored; suppression-checked; throttled; consent basis
+// logged (published_number). HARD-GATED on OUTREACH_SMS_ENABLED — sends NOTHING
+// until 10DLC is approved + the flag is flipped. Fires only for on-demand crawls.
+function toE164svc(raw: string): string | null {
+  const d = (raw || '').replace(/[^\d]/g, '');
+  if (d.length === 11 && d.startsWith('1')) return '+' + d;
+  if (d.length === 10) return '+1' + d;
+  return null;
+}
+async function notifyOnDemandProvidersSMS(db: any, job: any) {
+  try {
+    if (!job.trigger_request_id) return;
+    if ((Deno.env.get('OUTREACH_SMS_ENABLED') || 'false').toLowerCase() !== 'true') return; // hard gate
+    const twSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const twUser = Deno.env.get('TWILIO_API_KEY_SID') || twSid;
+    const twPass = Deno.env.get('TWILIO_API_KEY_SECRET') || Deno.env.get('TWILIO_AUTH_TOKEN');
+    const twFrom = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || Deno.env.get('TWILIO_FROM_NUMBER');
+    if (!twSid || !twUser || !twPass || !twFrom) return;
+    const { data: reqRow } = await db.from('requests')
+      .select('what, when_text, where_text, provider_type, service_type').eq('id', job.trigger_request_id).maybeSingle();
+    const type = job.service_type || reqRow?.provider_type || reqRow?.service_type || 'local pro';
+    const where = reqRow?.where_text || job.city || 'your area';
+    const when = reqRow?.when_text ? ` (${String(reqRow.when_text).slice(0, 30)})` : '';
+    const link = `https://cergio.ai/inbound/${job.trigger_request_id}`;
+    const { data: provs } = await db.from('leads_services')
+      .select('id, name, service_type, phone, outreach_notes')
+      .eq('city', job.city).eq('service_type', job.service_type)
+      .not('phone', 'is', null).neq('outreach_status', 'do_not_contact').limit(20);
+    let sent = 0;
+    for (const p of (provs || [])) {
+      const e164 = toE164svc(p.phone); if (!e164) continue;
+      if (osmIsBlocked(`${p.name || ''} ${p.service_type || ''}`)) continue;
+      const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
+      if (supp) continue;
+      // TRANSACTIONAL customer-inquiry copy (never "join Cergio"):
+      const body = `A customer near ${where} needs a ${type}${when}. See the job & reply to connect: ${link} — Cergio. Reply STOP to opt out.`;
+      const form = new URLSearchParams();
+      form.set(twFrom.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom);
+      form.set('To', e164); form.set('Body', body);
+      const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twSid}/Messages.json`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Basic ' + btoa(`${twUser}:${twPass}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: form.toString(),
+      });
+      if (r.ok) {
+        sent++;
+        // consent-basis audit trail on the lead
+        const note = `${(p.outreach_notes || '').slice(0, 180)} | sms:ondemand consent:published_number ${new Date().toISOString().slice(0, 10)}`;
+        await db.from('leads_services').update({ outreach_notes: note, outreach_last_at: new Date().toISOString() }).eq('id', p.id);
+      }
+      await new Promise((res) => setTimeout(res, 2500)); // staggered send (spam-safety)
+    }
+    if (sent) console.log(`on-demand SMS: notified ${sent} providers for request ${job.trigger_request_id}`);
+  } catch { /* best-effort; never fail the crawl */ }
 }
 
 // ── ON-DEMAND: email the crawled SERVICES about the real user request (compliant:
