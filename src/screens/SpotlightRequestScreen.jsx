@@ -80,6 +80,12 @@ export function SpotlightRequestScreen() {
   const igFollowers = data.provider?.instagram_followers || 0;
   const ttFollowers = data.provider?.tiktok_followers || 0;
   const providerIsConnector = isConnectorProfile(data.provider || {});
+  // Click-through to verify the creator on their platform (Tarik 2026-07-25 UX fix:
+  // the IG handle was shown but not linked, so a Connector couldn't verify).
+  const _ig = data.provider?.instagram_handle ? String(data.provider.instagram_handle).replace(/^@/, '') : null;
+  const _tt = data.provider?.tiktok_handle ? String(data.provider.tiktok_handle).replace(/^@/, '') : null;
+  const socialUrl = _ig ? `https://instagram.com/${_ig}` : (_tt ? `https://tiktok.com/@${_tt}` : null);
+  const socialLabel = _ig ? `@${_ig}` : (_tt ? `@${_tt}` : null);
   // Counts about the requesting provider (lead with the SERVICE above; these
   // back it up). Tarik 2026-06-14: show network · reco's · reach + Connector status.
   const countLine = [
@@ -166,6 +172,12 @@ export function SpotlightRequestScreen() {
               )}
               {providerBio && <p className="text-meta text-b3 leading-snug mt-1 line-clamp-3">{providerBio}</p>}
               {countLine && <p className="text-meta-sm text-b3 mt-1">{countLine}</p>}
+              {socialUrl && (
+                <a href={socialUrl} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-meta-sm font-extrabold text-gd hover:underline mt-1">
+                  {socialLabel} · Verify on {platformLabel} ↗
+                </a>
+              )}
             </div>
           </div>
 
