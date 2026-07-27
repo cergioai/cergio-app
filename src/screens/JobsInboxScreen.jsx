@@ -823,6 +823,14 @@ export function JobsInboxScreen() {
 
               {filtered.length > 0 ? (
                 filtered.map(it => <ActionRow key={it.key} {...it} />)
+              ) : myJobs === null ? (
+                // CERGIO-GUARD (2026-07-27 QA run): never claim "all caught up"
+                // while jobs are still loading — it contradicts the global
+                // "N upcoming services" banner, which loads faster. Show a calm
+                // loading line until myJobs resolves.
+                <div className="bg-white border border-line rounded-[18px] p-6 text-center">
+                  <p className="text-meta text-b3">Loading your jobs…</p>
+                </div>
               ) : (
                 <div className="bg-white border border-line rounded-[18px] p-6 text-center">
                   <p className="text-body font-extrabold text-black">You're all caught up.</p>
@@ -833,11 +841,11 @@ export function JobsInboxScreen() {
               {/* slim folder shortcuts below the action feed */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button onClick={() => setActiveTab('Upcoming')} className="bg-white border border-line rounded-[16px] p-3.5 text-left">
-                  <p className="text-heading-1 font-extrabold text-black leading-none">{upcomingCount}</p>
+                  <p className="text-heading-1 font-extrabold text-black leading-none">{myJobs === null ? '\u00b7' : upcomingCount}</p>
                   <p className="text-meta text-b3 font-extrabold mt-1">Upcoming</p>
                 </button>
                 <button onClick={() => setActiveTab('Past')} className="bg-white border border-line rounded-[16px] p-3.5 text-left">
-                  <p className="text-heading-1 font-extrabold text-black leading-none">{pastCount}</p>
+                  <p className="text-heading-1 font-extrabold text-black leading-none">{myJobs === null ? '\u00b7' : pastCount}</p>
                   <p className="text-meta text-b3 font-extrabold mt-1">Past</p>
                 </button>
               </div>
