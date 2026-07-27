@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { expect } from '@playwright/test';
 import {
-  MIAMI, SEARCH_ADDRESS, CONSUMER, PROVIDER, PENDING_BOOKING, parseResultFor,
+  MIAMI, SEARCH_ADDRESS, CONSUMER, PROVIDER, PENDING_BOOKING, INBOUND_REQUEST, parseResultFor,
 } from './world.js';
 
 export const SUPA_ORIGIN = 'https://seedworld.supabase.test';
@@ -87,10 +87,11 @@ export async function installWorld(page, {
   parse = parseResultFor({ when: 'tomorrow' }),
   user = CONSUMER,
   booking = PENDING_BOOKING,
+  request = INBOUND_REQUEST,
 } = {}) {
   const escaped = [];               // requests to origins we never mocked
   const writes = [];                // every mutation the app actually sent
-  const state = { booking: { ...booking } };
+  const state = { booking: { ...booking }, request: { ...request }, responses: [] };
 
   // A signed-in session, before any app code runs.
   await page.addInitScript(([key, session]) => {
@@ -162,6 +163,15 @@ export async function installWorld(page, {
         id: s.id, title: s.title, location_text: s.location_text, distance_miles: 1.4,
       })));
     }
+    if (pathname === '/rest/v1/rpc/accept_request_with_time') {
+      // The REAL write the inbound Connector-accept produces: a CONFIRMED
+      // booking via the SECURITY DEFINER RPC. The spec asserts on this — a
+      // screen that only repaints local state cannot fake it. Returns a
+      // scalar booking uuid, exactly as the SQL function does.
+      writes.push({ kind: 'accept.rpc', body: safeBody(req) });
+      state.request = { ...state.request, status: 'accepted' };
+      return json(route, '99999999-9999-4999-8999-999999999999');
+    }
     if (pathname.startsWith('/rest/v1/rpc/')) {
       writes.push({ kind: 'rpc', fn: pathname.split('/').pop(), body: safeBody(req) });
       return json(route, []);
@@ -188,13 +198,42 @@ export async function installWorld(page, {
       }
       return rowsOrOne(route, [state.booking]);
     }
-    if (pathname === '/rest/v1/requests' && method === 'POST') {
-      writes.push({ kind: 'request.insert', body: safeBody(req) });
-      // Deliberately NO id back: ResultsScreen suppresses the paid-fallback
-      // banner whenever a requestId exists, so returning one would make the
-      // banner assertions vacuous. This keeps the banner ELIGIBLE to render —
-      // and the specs then prove when it does and does not.
-      return json(route, []);
+    if (pathname === '/rest/v1/requests') {
+      if (method === 'POST') {
+        writes.push({ kind: 'request.insert', body: safeBody(req) });
+        // Deliberately NO id back: ResultsScreen suppresses the paid-fallback
+        // banner whenever a requestId exists, so returning one would make the
+        // banner assertions vacuous. This keeps the banner ELIGIBLE to render —
+        // and the specs then prove when it does and does not.
+        return json(route, []);
+      }
+      // getInboundRequest() reads the seeded inbound request by id (maybeSingle).
+      // Only serve it when THIS request is the one queried — every other requests
+      // GET (e.g. ResultsScreen's active-request lookup) stays empty, exactly as
+      // before, so the search specs are untouched.
+      if (method === 'GET' && url.search.includes(state.request.id)) {
+        return rowsOrOne(route, [state.request]);
+      }
+      if (method === 'PATCH') {
+        const patch = safeBody(req) || {};
+        writes.push({ kind: 'request.update', patch });
+        state.request = { ...state.request, ...patch };
+        return rowsOrOne(route, [state.request]);
+      }
+      return rowsOrOne(route, method === 'GET' ? [] : []);
+    }
+    if (pathname === '/rest/v1/request_responses') {
+      // The barter/offer write the inbound screen produces on a PAID bid or a
+      // Counter (respondToRequest → upsert). status='offered'|'countered', NOT a
+      // bookings PATCH. Echo the row back with an id so respondToRequest's
+      // maybeSingle() resolves and the requester-notify fires (recorded as edge).
+      if (method === 'GET') return rowsOrOne(route, state.responses);
+      const body = safeBody(req);
+      const rowIn = Array.isArray(body) ? body[0] : body;
+      const row = { id: 'res00001-0000-4000-8000-000000000001', ...(rowIn || {}) };
+      writes.push({ kind: 'response.upsert', body: rowIn });
+      state.responses = [row];
+      return rowsOrOne(route, [row]);
     }
 
     // Every other table read: empty. An empty table is a legitimate world state

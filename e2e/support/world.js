@@ -174,3 +174,94 @@ export function parseResultFor({ what = 'plumber', when, where = SEARCH_ADDRESS,
     quick_replies: [],
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE INBOUND CONNECTOR-REQUEST WORLD (2026-07-27, forensic auditor).
+//
+// The direct-booking loop (/request/:id on `bookings`) already has an e2e
+// (request-accept.spec.js). The ACTUAL Miami founding-cohort loop is the OTHER
+// screen: a Connector sends a free request to a provider, who accepts it at
+// /inbound/:reqId (RequestFromConnectorScreen). That path had NO e2e — a
+// well-shaped stub could pass every qa.mjs grep while the Accept button sent
+// nothing. These fixtures + the handlers in harness.js close that hole.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The requester in the inbound loop — a real Connector (cc_verified_at set, so
+ *  isConnectorProfile() → true → the request is a FREE barter, not a paid bid). */
+export const CONNECTOR = {
+  id: '55555555-5555-4555-8555-555555555555',
+  email: 'seed.connector@cergio.test',
+  display_name: 'Dana the Connector',
+  instagram_handle: 'danaconnects',
+  instagram_followers: 4200,
+  cc_verified_at: '2026-07-01T10:00:00.000Z',
+};
+
+/** A free Connector→provider request WITH a concrete time. The founding-cohort
+ *  loop's terminal step: the provider taps "Accept & confirm" and a CONFIRMED
+ *  booking is created via the accept_request_with_time RPC. Shaped exactly like
+ *  getInboundRequest()'s PostgREST embed (requester nested). */
+export const INBOUND_REQUEST = {
+  id: '66666666-6666-4666-8666-666666666666',
+  requester_id: CONNECTOR.id,
+  service_type: 'Plumber',
+  category: 'Home Services',
+  description: 'Kitchen sink is leaking under the cabinet.',
+  what: 'plumber',
+  query: 'plumber for a kitchen leak',
+  when_text: null,
+  scheduled_at: '2026-08-05T15:00:00.000Z',   // concrete time → "Accept & confirm"
+  location_text: 'Brickell, Miami, FL',
+  lat: MIAMI.lat,
+  lng: MIAMI.lng,
+  is_free_for_rainmaker: true,
+  budget_cents: 0,
+  status: 'pending',
+  created_at: '2026-07-20T10:00:00.000Z',
+  requester: {
+    id: CONNECTOR.id,
+    display_name: CONNECTOR.display_name,
+    headline: 'Miami lifestyle Connector',
+    bio: 'I spotlight great local providers to my followers.',
+    instagram_handle: CONNECTOR.instagram_handle,
+    instagram_followers: CONNECTOR.instagram_followers,
+    tiktok_handle: null,
+    tiktok_followers: null,
+    cc_verified_at: CONNECTOR.cc_verified_at,
+  },
+};
+
+/** A PAID request from an ordinary consumer (NOT a Connector, no
+ *  free-for-rainmaker, a budget set) → isPaid → the provider "Place a bid" path,
+ *  which writes request_responses status='offered'. This is the OTHER distinct
+ *  backend write the inbound screen produces (SPEC-47 barter/offer table, not
+ *  the bookings RPC). Under 300 followers + no cc_verified_at so it is NOT
+ *  mis-classified as a Connector. */
+export const INBOUND_PAID_REQUEST = {
+  ...INBOUND_REQUEST,
+  id: '77777777-7777-4777-8777-777777777777',
+  requester_id: CONSUMER.id,
+  when_text: null,
+  scheduled_at: '2026-08-06T18:00:00.000Z',
+  is_free_for_rainmaker: false,
+  budget_cents: 15000,
+  requester: {
+    id: CONSUMER.id,
+    display_name: CONSUMER.display_name,
+    headline: null,
+    bio: null,
+    instagram_handle: null,
+    instagram_followers: 12,
+    tiktok_handle: null,
+    tiktok_followers: null,
+    cc_verified_at: null,
+  },
+};
+
+/** An already-accepted inbound request — the control that proves Accept is not
+ *  offered on a resolved request (the no-double-accept invariant). */
+export const INBOUND_RESOLVED_REQUEST = {
+  ...INBOUND_REQUEST,
+  id: '88888888-8888-4888-8888-888888888888',
+  status: 'accepted',
+};
