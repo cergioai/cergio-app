@@ -980,6 +980,55 @@ export function ResultsScreen() {
   };
   const pills = [when, shortLocation(where), budget && `Budget ${budget}`].filter(Boolean);
 
+  // CERGIO-GUARD (2026-07-27, QA live walk run 95 - BLOCKED-CATEGORY FAKE WAIT):
+  // createRequestAndFanOut's intake guard correctly REFUSES a blocked category
+  // (massage/tattoo/DJ/plastic surgery/...) â it writes NO requests row and
+  // returns the blocked sentinel, so we land here with requestId=null. Without
+  // this branch the screen renders the "roaming for ... / We'll notify you when
+  // Connectors accept" wait narration off the raw query alone, reproducing the
+  // exact fake wait screen the founder flagged (still live on v78c22d2: the
+  // run-92 guard stopped the DB row + fan-out but NOT this front-end screen).
+  // FROZEN_SPEC: a blocked category never books and never shows a fake wait.
+  // Word-boundary matched via isBlockedFeedCategory + gated on !requestId, so a
+  // real request (row written) can never trip it and no home service matches.
+  if (!requestId && isBlockedFeedCategory(userQuery)) {
+    return (
+      <div className="flex-1 overflow-y-auto pb-20 bg-cr">
+        <div className="flex justify-between items-center px-5 py-3.5">
+          <button
+            onClick={() => navigate('/home')}
+            className="text-heading-2 text-b3 bg-transparent border-none cursor-pointer"
+            aria-label="Back"
+          >
+            ←
+          </button>
+          <div className="flex-1" />
+        </div>
+        <div className="mx-5 mt-4" aria-live="polite">
+          <div className="flex items-center gap-3">
+            <LeafLogo working={false} size={48} intensity={0} />
+            <div className="flex-1 min-w-0">
+              <p className="text-body-sm text-black font-extrabold leading-snug">
+                That’s not something Cergio books
+              </p>
+              <p className="text-meta-sm text-b3 font-normal leading-snug mt-0.5">
+                Cergio connects you with independent, mobile home &amp; lifestyle
+                services — no one was notified for this. Try something like a
+                cleaner, handyman, dog walker, or tutor.
+              </p>
+              <button
+                onClick={() => navigate('/home')}
+                className="mt-0.5 text-meta-sm text-gd font-extrabold underline-offset-2 hover:underline bg-transparent border-none p-0 cursor-pointer"
+              >
+                Start a new search
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-cr">
       {/* header — leaf brand mark + slim wordmark + back arrow.
