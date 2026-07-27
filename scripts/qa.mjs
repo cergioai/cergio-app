@@ -918,9 +918,13 @@ test('intake-refusal', 'createRequestAndFanOut refuses a blocked/out-of-scope ca
   const rest = apiCode.slice(fnStart + 1);
   const fnEndRel = rest.indexOf('\nexport async function');
   const body = fnEndRel === -1 ? rest : rest.slice(0, fnEndRel);
-  const guardIdx = body.search(/isBlockedFeedCategory\(provider_type\)\s*\|\|\s*isOutOfScopeProviderType\(provider_type\)/);
+  // run92: the guard MUST also feed isBlockedFeedCategory the RAW query text, not
+  // just the resolved provider_type — massage/dance/DJ resolve to NULL (out-of-scope
+  // short-circuit) so a provider_type-only check is a no-op for exactly the blocked
+  // terms it must catch. isBlockedFeedCategory is variadic + word-boundary matched.
+  const guardIdx = body.search(/isBlockedFeedCategory\([^)]*provider_type[^)]*\bquery\b[^)]*\)\s*\|\|\s*isOutOfScopeProviderType\(provider_type\)/);
   assert(guardIdx !== -1,
-    'createRequestAndFanOut MUST guard isBlockedFeedCategory(provider_type)||isOutOfScopeProviderType(provider_type) at intake');
+    'createRequestAndFanOut MUST guard isBlockedFeedCategory(provider_type, query, ...)||isOutOfScopeProviderType(provider_type) at intake — the raw query is REQUIRED so a blocked term that resolves to no canonical type (massage/dance/DJ) is still refused');
   const insertIdx = body.search(/from\(['\"]requests['\"]\)\s*\.insert/);
   assert(insertIdx !== -1, 'createRequestAndFanOut MUST insert a requests row');
   assert(guardIdx < insertIdx,
