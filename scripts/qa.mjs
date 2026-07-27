@@ -902,6 +902,33 @@ test('request-fanout', 'Home submit creates a requests row + fans out notificati
     'ResultsScreen MUST read requestId from location.state so useRequestActivity polls notifications for THIS request.');
 });
 
+// ─── INVARIANT #F34: blocked categories refused at INTAKE, not after ───────
+// QA run 91 (2026-07-27): createRequestAndFanOut inserted the `requests` row
+// UNCONDITIONALLY, then relied on getProvidersForNotify to skip the fan-out for a
+// blocked category. The row still existed, so HomeScreen seeded a requestId and
+// the SRP polled a request that can never get a reply — a permanent fake
+// "Reaching nearby …" wait screen for massage/tattoo/etc. Lock the intake guard:
+// the blocked/out-of-scope refusal MUST run BEFORE the requests insert and write
+// no row (request:null).
+test('intake-refusal', 'createRequestAndFanOut refuses a blocked/out-of-scope category BEFORE inserting the request row', '#F34', async () => {
+  const api = readFile('src/lib/api.js');
+  const apiCode = stripComments(api);
+  const fnStart = apiCode.indexOf('export async function createRequestAndFanOut');
+  assert(fnStart !== -1, 'createRequestAndFanOut must exist');
+  const rest = apiCode.slice(fnStart + 1);
+  const fnEndRel = rest.indexOf('\nexport async function');
+  const body = fnEndRel === -1 ? rest : rest.slice(0, fnEndRel);
+  const guardIdx = body.search(/isBlockedFeedCategory\(provider_type\)\s*\|\|\s*isOutOfScopeProviderType\(provider_type\)/);
+  assert(guardIdx !== -1,
+    'createRequestAndFanOut MUST guard isBlockedFeedCategory(provider_type)||isOutOfScopeProviderType(provider_type) at intake');
+  const insertIdx = body.search(/from\(['\"]requests['\"]\)\s*\.insert/);
+  assert(insertIdx !== -1, 'createRequestAndFanOut MUST insert a requests row');
+  assert(guardIdx < insertIdx,
+    'the blocked-category intake guard MUST run BEFORE the requests insert (no orphan row / no fake wait screen)');
+  assert(/blocked_category_intake/.test(api),
+    'createRequestAndFanOut MUST return the blocked_category_intake sentinel so the caller can show the honest not-supported state');
+});
+
 // ─── INVARIANT #29: search must tolerate typos, synonyms, Spanish, slang ─
 // User directive (2026-05-28): "search match notification can't fail on
 // silliness". 50+ realistic variations across categories — typos,
