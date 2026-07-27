@@ -4569,6 +4569,17 @@ test('coo-exec-blast-radius-cap', 'SPEC-89: the autonomous COO SQL executor (cer
     'coo-execute must detect the blast-radius refusal and gate the proposal (requires_approval=true)');
 });
 
+test('blocked-query-refusal-screen', 'SPEC-71.5 / run95: a BLOCKED-category top-level query (massage/tattoo/DJ/...) that the intake guard refused (requestId=null) must render an HONEST refusal on ResultsScreen, NEVER the roaming / We-will-notify-you wait narration (the founder-flagged fake wait screen). Front-end half of the blocked-intake fix — the api.js guard alone stops the DB row + fan-out but not this screen', '#96', async () => {
+  const src = readFile('src/screens/ResultsScreen.jsx');
+  assert(/if \(!requestId && isBlockedFeedCategory\(userQuery\)\)/.test(src),
+    'ResultsScreen must short-circuit to a refusal when the raw query is a blocked category and no request row exists (requestId=null)');
+  assert(/not something Cergio books/i.test(src),
+    'the refusal must show honest copy (never the WAIT_HEADING) for a blocked query');
+  // guard is gated on !requestId so a real request (row written) is never affected
+  assert(/isBlockedFeedCategory\(userQuery\)/.test(src),
+    'refusal must key off the user query via isBlockedFeedCategory (word-boundary matched)');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
