@@ -10,6 +10,7 @@ import { pointInPolygon } from './geo';
 // type still bridges to itself, so a strict match is never lost.
 import { expandAllowlist, bridgeAllowSetLC } from './ontologyBridge';
 import { isBlockedFeedCategory, isOutOfScopeProviderType } from '../data/providerTypes';
+import { isOutOfScopeText } from './serviceTaxonomy';
 
 const NOT_WIRED = { data: null, error: { message: 'Supabase not configured' } };
 
@@ -3273,7 +3274,19 @@ export async function createRequestAndFanOut({
   // Refuse at INTAKE: write NO row and return the blocked sentinel, so the caller
   // routes to /results with requestId=null and ResultsScreen's SPEC-71.5 blocked
   // guard shows the honest empty state instead of a permanent fake wait screen.
-  if (isBlockedFeedCategory(provider_type) || isOutOfScopeProviderType(provider_type)) {
+  // CERGIO-GUARD (2026-07-27, QA nightly run92 — RAW-TEXT INTAKE LEAK): PR #72's
+  // guard only checked the RESOLVED provider_type. But resolveProviderTypeLocal
+  // SHORT-CIRCUITS out-of-scope terms (massage/masseuse/dance/DJ/restaurant…) to
+  // NULL up front (serviceTaxonomy OUT_OF_SCOPE_KEYWORDS), so a "deep tissue
+  // massage therapist" request arrives here with provider_type=null → the guard
+  // was a no-op and the fake "We'll notify you when Connectors accept" wait screen
+  // still showed (reproduced live on 539b57a). isBlockedFeedCategory is a variadic
+  // word-boundary RAW-TEXT matcher (same one the Activity feed + Inbox render
+  // guards use) — feed it the user's raw query/what/category so a blocked term is
+  // refused at intake even when it resolved to no canonical type. Word-boundary
+  // matched, so non-blocked queries (dog walker, house cleaner, electrician) are
+  // untouched.
+  if (isBlockedFeedCategory(provider_type, query, what, category) || isOutOfScopeProviderType(provider_type) || isOutOfScopeText(query) || isOutOfScopeText(what)) {
     return { request: null, notified: 0, error: null, blocked: 'blocked_category_intake: refusing to open a request for a blocked/out-of-scope category.' };
   }
 

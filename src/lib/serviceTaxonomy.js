@@ -274,6 +274,27 @@ export const PROVIDER_TYPE_MAP = [
 // edit distance 2 of a token in any taxonomy key counts as a hit. We
 // pick the longest key whose tokens ALL fuzzy-match at least one
 // user token. Conservative — never overrides an exact-substring hit.
+// CERGIO-GUARD (2026-07-27, QA run92): the out-of-scope keyword list is now
+// EXPORTED so the request-intake guard (createRequestAndFanOut) can refuse an
+// out-of-scope term (massage/dance/DJ/food-venue) at intake. Previously the list
+// lived only inside resolveProviderTypeLocal, which short-circuits these to null —
+// and a null provider_type slipped past the intake guard, so an out-of-scope
+// request still opened a permanent fake "We'll notify you…" wait screen.
+export const OUT_OF_SCOPE_KEYWORDS = [
+  'massage', 'masseuse', 'dance', 'ballet', 'ballroom',
+  'dj ', ' dj', 'restaurant', 'cafe', 'coffee shop',
+  'brewery', 'winery', 'wine bar', 'cocktail bar',
+  'sports bar', 'food truck', 'food cart', 'distillery', 'pub',
+];
+
+/** True if raw user text names an out-of-scope category (returns null from the
+ *  resolver). Case-insensitive substring match, mirroring the resolver's own
+ *  short-circuit so intake refusal and resolution stay in lockstep. */
+export function isOutOfScopeText(text) {
+  const l = String(text || '').toLowerCase();
+  return OUT_OF_SCOPE_KEYWORDS.some(kw => l.includes(kw));
+}
+
 export function resolveProviderTypeLocal(text) {
   const l = String(text || '').toLowerCase();
 
@@ -283,15 +304,7 @@ export function resolveProviderTypeLocal(text) {
   // requests through the marketplace.
   // eslint-disable-next-line global-require
   // Local import to avoid a circular dep cycle.
-  const OUT_OF_SCOPE_KEYWORDS = [
-    'massage', 'masseuse', 'dance', 'ballet', 'ballroom',
-    'dj ', ' dj', 'restaurant', 'cafe', 'coffee shop',
-    'brewery', 'winery', 'wine bar', 'cocktail bar',
-    'sports bar', 'food truck', 'food cart', 'distillery', 'pub',
-  ];
-  for (const kw of OUT_OF_SCOPE_KEYWORDS) {
-    if (l.includes(kw)) return null;
-  }
+  if (isOutOfScopeText(l)) return null;
 
   // Pass 1: exact-substring match (canonical, fast path).
   let bestKey = null;
