@@ -3264,6 +3264,19 @@ export async function createRequestAndFanOut({
   }
   const uid = userRes.user.id;
 
+  // CERGIO-GUARD (2026-07-27, forensic run91 — INTAKE REFUSAL; fixes the
+  // blocked-category fake-wait-screen residual): getProvidersForNotify already
+  // refuses a FROZEN_SPEC-blocked / out-of-scope canonical at the fan-out EXIT
+  // (qa #F33) — but by then a `requests` row was ALREADY inserted, so HomeScreen
+  // seeded a requestId and the SRP showed a "Reaching nearby …" ticker that can
+  // NEVER resolve (no provider is or will ever be notified for a blocked category).
+  // Refuse at INTAKE: write NO row and return the blocked sentinel, so the caller
+  // routes to /results with requestId=null and ResultsScreen's SPEC-71.5 blocked
+  // guard shows the honest empty state instead of a permanent fake wait screen.
+  if (isBlockedFeedCategory(provider_type) || isOutOfScopeProviderType(provider_type)) {
+    return { request: null, notified: 0, error: null, blocked: 'blocked_category_intake: refusing to open a request for a blocked/out-of-scope category.' };
+  }
+
   // CERGIO-GUARD (2026-07-14, QA live walk — DUPLICATE REQUESTS): one submit
   // wrote TWO identical `requests` rows 753ms apart (verified live: two
   // "Electrician …" rows at 16:08:04.127 and 16:08:04.880). Same class as the
