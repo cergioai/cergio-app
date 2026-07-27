@@ -487,8 +487,9 @@ async function logAgentRun(
 // person->service customer inquiry (NOT Cergio marketing) to a business that
 // PUBLISHED its number to receive jobs. Curated list (not autodialer/random per
 // Facebook v. Duguid); STOP honored; suppression-checked; throttled; consent basis
-// logged (published_number). HARD-GATED on OUTREACH_SMS_ENABLED — sends NOTHING
-// until 10DLC is approved + the flag is flipped. Fires only for on-demand crawls.
+// logged (published_number). HARD-GATED on ONDEMAND_SMS_ENABLED — its own
+// dedicated flag (separate from the marketing OUTREACH_SMS_ENABLED); sends NOTHING
+// until 10DLC is approved + that flag is flipped. Fires only for on-demand crawls.
 function toE164svc(raw: string): string | null {
   const d = (raw || '').replace(/[^\d]/g, '');
   if (d.length === 11 && d.startsWith('1')) return '+' + d;
