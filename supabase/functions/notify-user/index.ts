@@ -179,7 +179,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
     const friendName = data.friend_name || 'Your friend';
     const link       = `${appBase}/earnings`;
     return {
-      subject: `${friendName} just joined Cergio — you earned $25 🎉`,
+      subject: `${friendName} just joined Cergio — $250 is yours when they book 🎉`,
       body_html: `
         <p style="font-size:15px;color:#3A3A3A;margin:0 0 12px;">
           <strong>${escapeHtml(friendName)}</strong> just signed up using your invite. $25 in Cergio credit is in your wallet.
@@ -187,7 +187,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Invite 10 friends + get one to book → you unlock <strong>Connector</strong> status.</p>`,
       cta_label: 'See earnings →',
       cta_link:  link,
-      sms: `🎉 ${friendName} joined Cergio. +$25 credit yours. See balance: ${link}`,
+      sms: `🎉 ${friendName} joined Cergio. $250 is yours when they book. See balance: ${link}`,
       text: `${friendName} joined Cergio.`,
     };
   },
