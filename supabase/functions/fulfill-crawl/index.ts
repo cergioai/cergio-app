@@ -522,7 +522,7 @@ async function notifyOnDemandProvidersSMS(db: any, job: any) {
       const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
       if (supp) continue;
       // TRANSACTIONAL customer-inquiry copy (never "join Cergio"):
-      const body = `A customer near ${where} needs a ${type}${when}. See the job & reply to connect: ${link} — Cergio. Reply STOP to opt out.`;
+      const body = `A customer near ${where} needs a ${type}${when}. See the job and reply with your price: ${link} — Cergio. Reply STOP to opt out.`;
       const form = new URLSearchParams();
       form.set(twFrom.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom);
       form.set('To', e164); form.set('Body', body);
@@ -573,7 +573,7 @@ async function notifyOnDemandProviders(db: any, job: any) {
       if (supp) continue;
       const subject = `A customer near ${where} needs a ${type}`;
       const html = `<p>Hi${p.name ? ' ' + p.name : ''}, a Cergio user near <b>${where}</b> is looking for a <b>${type}</b>${what}${when}.</p>`
-        + `<p>If you can help, respond here: <a href="${link}">${link}</a></p>`
+        + `<p>If you can help, <b>reply here with your price</b>: <a href="${link}">${link}</a></p>`
         + `<p>Want jobs like this the moment they come in? <b>Reply YES</b> and we'll text you (opt-in). Reply STOP to stop these emails.</p>`
         + `<p style="color:#888;font-size:12px">Cergio · you're receiving this because your business is listed publicly for ${type} services. Reply STOP to opt out.</p>`;
       await fetch('https://api.resend.com/emails', {
@@ -600,7 +600,7 @@ async function notifySearcher(db: any, job: any, saved: number) {
       ? `We're adding ${type} in ${place} to Cergio`
       : `We're working on ${type} in ${place}`;
     const body = saved > 0
-      ? `Good news — we found ${saved} ${type} in ${place} and we're working to bring them onto Cergio. We'll notify you as they become available so you can book through your network.`
+      ? `Good news — we found ${saved} ${type} in ${place} and we're bringing them onto Cergio. We'll notify you as they come online so you can book them directly or through your network.`
       : `Thanks for searching ${type} in ${place}. We don't have them yet, but your request told us to source that area — we'll notify you as soon as pros are available.`;
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
