@@ -4876,6 +4876,12 @@ export async function listOutreachRecipients(audience, filters = {}, limit = 50)
   }
 }
 
+export async function opsConsole() {
+  const { data, error } = await supabase.functions.invoke('ops-console', { body: {} });
+  if (error) return { data: null, error };
+  return { data, error: null };
+}
+
 export async function leadsDashboard(audience = 'services', { city = null, source = null } = {}) {
   const { data, error } = await supabase.functions.invoke('leads-dashboard', {
     body: { audience, city, source },
