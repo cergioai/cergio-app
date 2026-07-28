@@ -98,6 +98,7 @@ import { MessagesScreen }                   from './screens/MessagesScreen';
 import { PublicProfileScreen }              from './screens/PublicProfileScreen';
 import { AdminCrawlScreen }                 from './screens/AdminCrawlScreen';
 import { OpsConsoleScreen }                 from './screens/OpsConsoleScreen';
+import { OpsStatusScreen }                  from './screens/OpsStatusScreen';
 import { P2pSmsQueueScreen }               from './screens/P2pSmsQueueScreen';
 import { DataExportScreen }                from './screens/DataExportScreen';
 import { SupportInboxScreen }               from './screens/SupportInboxScreen';
@@ -597,6 +598,7 @@ export default function App() {
               composer). Auth is gated inside the screen via isAdminEmail,
               matching AdminCrawlScreen. */}
           <Route path="/ops"                   element={<OpsConsoleScreen />} />
+          <Route path="/ops/status"            element={<OpsStatusScreen />} />
           <Route path="/ops/sms"               element={<P2pSmsQueueScreen />} />
           <Route path="/ops/data"              element={<DataExportScreen />} />
           {/* crack-help-haiku — founder support inbox (admin-gated inside the
