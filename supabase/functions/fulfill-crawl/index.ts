@@ -1106,7 +1106,7 @@ async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; f
   const type = String(job.service_type || 'local service');
   const city = String(job.city || '');
   const state = String(job.state || '');
-  const want = Math.min(Math.max(job.target_count || 30, 1), 60);
+  const want = Math.min(Math.max(job.target_count || 200, 1), 200);  // VOLUME
   const query = `${type} in ${[city, state].filter(Boolean).join(', ') || 'United States'} (YellowPages)`;
 
   const pages = Math.max(1, Math.ceil(want / YP_RESULTS_PER_PAGE));
@@ -1365,11 +1365,11 @@ async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: n
   if (!city) return { saved: 0, found: 0, query };
   if (osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
 
-  const want = Math.min(Math.max(job.target_count || 20, 1), 100); // trial-rate-friendly
+  const want = Math.min(Math.max(job.target_count || 240, 1), 240); // VOLUME: yelp is the top-yield source (154 rows/job)
   const loc = [city, state].filter(Boolean).join(', ');
   let saved = 0, found = 0;
   const seen = new Set<string>();
-  for (let offset = 0; offset < want && offset < 200; offset += 50) {
+  for (let offset = 0; offset < want && offset < 240; offset += 50) {   // yelp API caps offset at 240
     const url = `https://api.yelp.com/v3/businesses/search?location=${encodeURIComponent(loc)}`
       + `&term=${encodeURIComponent(rawType)}&limit=50&offset=${offset}&sort_by=best_match`;
     let j: any;
@@ -1622,8 +1622,13 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
   };
   const subcat = CL_SUBCAT[rawType] || 'bbb';
   const clUrl = `https://${sub}.craigslist.org/search/${subcat}?query=${encodeURIComponent(rawType)}`;
-  const MAXITEMS = 40;
-  const items = await apifyRun('memo23~craigslist-scraper', { startUrls: [{ url: clUrl }], includeEmails: true }, MAXITEMS);
+  // VOLUME (SPEC-101): 40 -> 250 per job, and sweep EVERY relevant services
+  // subcategory in one run instead of a single URL. Craigslist has ~8 service
+  // subcats; one URL was leaving ~90% of the inventory on the table.
+  const MAXITEMS = Number(Deno.env.get('CL_MAX_ITEMS') || '250');
+  const SUBCATS = Array.from(new Set([subcat, 'sks', 'hss', 'lbs', 'crs', 'lss', 'pas', 'cps']));
+  const startUrls = SUBCATS.map((sc) => ({ url: `https://${sub}.craigslist.org/search/${sc}?query=${encodeURIComponent(rawType)}` }));
+  const items = await apifyRun('memo23~craigslist-scraper', { startUrls, includeEmails: true }, MAXITEMS);
   let found = items.length, saved = 0;
   const seen = new Set<string>();
   // Reject FOR-SALE items (cars/products) + spammy ALL-CAPS/price posts.
@@ -1679,7 +1684,7 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   const query = `${rawType} [yellowpages ${city}]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
   const items = await apifyRun('cryptosignals~yellow-pages-us-scraper',
-    { keyword: rawType, location: `${city}, ${state}`, maxItems: 40, maxResults: 40 }, 40);
+    { keyword: rawType, location: `${city}, ${state}`, maxItems: 250, maxResults: 250 }, 250);  // VOLUME: 40 -> 250
   let found = items.length, saved = 0, ypFetches = 0;
   const seen = new Set<string>();
   for (const it of items) {

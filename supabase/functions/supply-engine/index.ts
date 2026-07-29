@@ -24,7 +24,7 @@ const P1_CITIES: Array<[string, string]> = [
 // sources ranked by MEASURED yield — the engine re-ranks itself from data each run
 const SOURCES = ['yelp', 'craigslist', 'google_lsa', 'osm', 'yellowpages_apify', 'google_local'];
 const TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','mover','house cleaning','landscaping','mover','locksmith','appliance repair','auto detailing','hair stylist','nail technician','dog walker','pool cleaning','pressure washing','window cleaning','junk removal','painter'];
-const QUEUE_FLOOR = Number(Deno.env.get('QUEUE_FLOOR') || '600');   // keep this many phase-1 jobs open
+const QUEUE_FLOOR = Number(Deno.env.get('QUEUE_FLOOR') || '2000');  // VOLUME   // keep this many phase-1 jobs open
 const DEAD_AFTER  = 30;                                             // jobs with 0 rows => dead
 
 serve(async (req: Request) => {
@@ -71,14 +71,36 @@ serve(async (req: Request) => {
     if (req?.length) fixes.push(`requeued ${req.length} recoverable failed phase-1 jobs`);
   } catch (_e) {}
 
+  // ── R6 (SPEC-101): PURGE dead-source jobs clogging the queue. `yellowpages` (the
+  // dormant page-scrape path, YP_ENABLED=false) had ~97,700 jobs that can never run.
+  try {
+    const { data: purged } = await db.from('crawl_requests')
+      .update({ status: 'failed', notes: 'purged: dead source path (never fetched)' })
+      .eq('kind', 'services').in('status', ['new', 'crawling']).eq('source', 'yellowpages')
+      .select('id').limit(5000);
+    if (purged?.length) { fixes.push(`purged ${purged.length} dead yellowpages jobs from the queue`); await note('supply-dead-queue-purged', false, 'high', `${purged.length} un-runnable jobs removed`); }
+  } catch (_e) {}
+
+  // ── R7: YIELD-WEIGHTED seeding. Flat seeding wasted 97% of jobs on osm (3 rows/job)
+  // while yelp returns ~154 rows/job. Seed proportional to measured yield.
+  const ranked = Object.entries(yields).filter(([s]) => !DISABLED.includes(s))
+    .sort((a, b) => b[1].ratio - a[1].ratio).map(([s]) => s);
+
   // ── R2: keep the phase-1 queue SATURATED (turbo). Re-seed across live sources.
   const open = await cnt('crawl_requests', (b) => b.eq('kind', 'services').in('status', ['new', 'crawling']).in('city', P1_CITIES.map(([c]) => c)));
   let seeded = 0;
   if (open < QUEUE_FLOOR) {
     const nowIso = new Date().toISOString();
     const batch: Array<Record<string, unknown>> = [];
-    for (const src of LIVE_SOURCES) for (const [city, state] of P1_CITIES) for (const t of TYPES) {
-      batch.push({ kind: 'services', city, state, service_type: t, target_count: 50, status: 'new', source: src, created_at: nowIso, updated_at: nowIso });
+    // top-yield source gets the deepest target_count; low-yield gets a token share
+    const order = ranked.length ? ranked : LIVE_SOURCES;
+    for (let i = 0; i < order.length; i++) {
+      const src = order[i];
+      const depth = i === 0 ? 240 : i === 1 ? 250 : i === 2 ? 200 : 100;   // rows requested per job
+      const repeats = i === 0 ? 2 : 1;                                     // duplicate the best source
+      for (let r = 0; r < repeats; r++) for (const [city, state] of P1_CITIES) for (const t of TYPES) {
+        batch.push({ kind: 'services', city, state, service_type: t, target_count: depth, status: 'new', source: src, created_at: nowIso, updated_at: nowIso });
+      }
     }
     for (let i = 0; i < batch.length; i += 250) {
       try { const { data } = await db.from('crawl_requests').insert(batch.slice(i, i + 250)).select('id'); seeded += data?.length ?? 0; } catch (_e) {}
@@ -96,7 +118,7 @@ serve(async (req: Request) => {
   // FIRE-AND-FORGET (fix 2026-07-29): awaiting N worker kicks blew the edge-function
   // time limit and the engine returned no JSON at all. Kicks are dispatched WITHOUT
   // await so the engine always returns its counter fast; the worker drains in parallel.
-  const kicks = Number(Deno.env.get('TURBO_KICKS') || '4');
+  const kicks = Number(Deno.env.get('TURBO_KICKS') || '10');  // VOLUME: 10 parallel drains
   let kicked = 0;
   for (let i = 0; i < kicks; i++) {
     try {
