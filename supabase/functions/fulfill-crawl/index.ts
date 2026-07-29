@@ -33,7 +33,7 @@ const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 //   drain the ~5k-job YP matrix faster, tighten that schedule to '*/2 * * * *'
 //   (every 2 min) or '* * * * *' (every minute). At limit=40 jobs/run × 30/min
 //   that is ~1,200 jobs/min-cron-hour → the whole matrix in a few hours.
-const MAX_REQUESTS_PER_RUN = 40;
+const MAX_REQUESTS_PER_RUN = 200;
 const YP_FETCH_JITTER_MS = 1200; // polite pacing between YP page fetches (+ random)
 
 serve(async (req: Request) => {
@@ -63,7 +63,7 @@ serve(async (req: Request) => {
     // Per-run batch size: default high, overridable via ?limit=N (clamped).
     const url = new URL(req.url);
     const limitParam = parseInt(url.searchParams.get('limit') || '', 10);
-    const perRun = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : MAX_REQUESTS_PER_RUN, 1), 200);
+    const perRun = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : MAX_REQUESTS_PER_RUN, 1), 500);
 
     // ── YELLOWPAGES IS DEAD FROM EDGE — QUARANTINE, DON'T RETRY ───────────────
     // YP answers every request from a datacenter IP with HTTP 403 (verified: every
@@ -808,7 +808,7 @@ const OSM_ENDPOINTS = [
 // A descriptive User-Agent is REQUIRED etiquette on the public Overpass API (an
 // anonymous UA gets throttled/blocked first). Identifies the app + a contact.
 const OSM_UA = 'CergioServicesCrawl/1.0 (+https://cergio.ai; contact: t@cergio.ai)';
-const OSM_MAX_RESULTS = 50;        // hard cap per job (Overpass etiquette + write budget)
+const OSM_MAX_RESULTS = 100;   // TURBO (SPEC-99): 50 -> 100 (still Overpass-polite)        // hard cap per job (Overpass etiquette + write budget)
 const OSM_HTTP_TIMEOUT_MS = 90_000; // Overpass can be slow under load; generous but bounded
 const OSM_POLITE_DELAY_MS = 1_000;  // small pause before each query so we never hammer a slot
 

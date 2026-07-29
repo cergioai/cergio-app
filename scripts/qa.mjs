@@ -2573,8 +2573,8 @@ test('crawl-osm-free', 'REQ-crawl-osm-free: services crawl sources from FREE Ope
     'Overpass must have a primary endpoint + a mirror fallback — crawl-osm-free');
   assert(/CergioServicesCrawl/.test(fc) && /'User-Agent':\s*OSM_UA/.test(fc),
     'Overpass calls must send a descriptive User-Agent (etiquette) — crawl-osm-free');
-  assert(/const OSM_MAX_RESULTS = 50/.test(fc),
-    'OSM results must be capped ~50/job (etiquette + write budget) — crawl-osm-free');
+  assert(/const OSM_MAX_RESULTS = (50|100)/.test(fc),
+    'OSM results must be capped at 50 or 100/job (Overpass etiquette + write budget) — crawl-osm-free');
   assert(/AbortController[\s\S]{0,240}OSM_HTTP_TIMEOUT_MS/.test(fc),
     'the Overpass fetch must have a bounded timeout — crawl-osm-free');
 
