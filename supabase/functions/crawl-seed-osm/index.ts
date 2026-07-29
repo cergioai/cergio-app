@@ -99,7 +99,9 @@ serve(async (req: Request) => {
     // seeded at once, so effort scattered (and a test launcher even injected
     // off-spec cities via a test launcher). This makes the priority
     // structural, not a promise.
-    const PHASE1_TARGET = Number(Deno.env.get('PHASE1_TARGET') || '20000'); // per metro
+    // FOUNDER SPEC (2026-07-29): NYC 50,000 services + ~10% creators; Miami 20,000.
+    const NYC_TARGET   = Number(Deno.env.get('NYC_TARGET')   || '50000');
+    const MIAMI_TARGET = Number(Deno.env.get('MIAMI_TARGET') || '20000');
     const metroCount = async (states: string[]) => {
       const { count } = await db.from('leads_services')
         .select('id', { count: 'exact', head: true }).in('state', states);
@@ -107,9 +109,9 @@ serve(async (req: Request) => {
     };
     const miamiN = await metroCount(['FL']);
     const nycN   = await metroCount(['NY']);
-    const phase1Done = miamiN >= PHASE1_TARGET && nycN >= PHASE1_TARGET;
+    const phase1Done = miamiN >= MIAMI_TARGET && nycN >= NYC_TARGET;
     const PHASE1_CITIES = new Set(['Miami', 'New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island']);
-    console.log(`phase-gate: Miami=${miamiN} NYC=${nycN} target=${PHASE1_TARGET} phase1Done=${phase1Done}`);
+    console.log(`phase-gate: Miami=${miamiN}/${MIAMI_TARGET} NYC=${nycN}/${NYC_TARGET} phase1Done=${phase1Done}`);
 
     const types = SERVICE_TYPES.filter((t) => !isBlocked(t));
     const rows: Array<Record<string, unknown>> = [];
@@ -120,8 +122,12 @@ serve(async (req: Request) => {
     // count=0) so the fulfill cron drains them server-side — no Mac, and no
     // re-burning the SerpAPI free quota on every tick. Reversible; safe.
     try {
+      // FIX (2026-07-29): the old guard was `total lsa jobs == 0`, so after one failed
+      // attempt it never re-seeded — the founder's approved LSA source (Local Services
+      // Ads WITH phone numbers) sat at 0 rows forever. Now: re-seed whenever there is
+      // no OPEN LSA work, so the source keeps producing.
       const { count: lsaCount } = await db.from('crawl_requests')
-        .select('id', { count: 'exact', head: true }).eq('source', 'google_lsa');
+        .select('id', { count: 'exact', head: true }).eq('source', 'google_lsa').in('status', ['new', 'crawling']);
       if ((lsaCount ?? 0) === 0) {
         const LSA_TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','mover'].filter((t) => !isBlocked(t));
         const LSA_CITIES: Array<[string, string]> = [['New York', 'NY'], ['Miami', 'FL']];
