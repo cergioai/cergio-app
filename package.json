@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "qa": "node scripts/qa.mjs",
     "e2e": "playwright test",
-    "e2e:headed": "playwright test --headed"
+    "e2e:headed": "playwright test --headed",
+    "e2e:live": "playwright test --config=playwright.live.config.js"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^2.8.1",

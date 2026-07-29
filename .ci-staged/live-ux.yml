@@ -1,0 +1,23 @@
+# SPEC-96 — LIVE UX SELF-TEST. Runs against the deployed site every 3h and on
+# every push. No Mac, no founder. This is the layer that catches rendered-UI bugs
+# (cut-off sheets, unlinked handles, dead routes) that a static suite cannot see.
+name: live-ux
+on:
+  schedule: [{ cron: '13 */3 * * *' }]
+  push: { branches: [main] }
+  workflow_dispatch:
+jobs:
+  live-ux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: live UX suite (real site, mobile viewport)
+        env: { LIVE_BASE: 'https://cergio.ai' }
+        run: npm run e2e:live
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: live-ux-results, path: 'live-ux-results.json' }
