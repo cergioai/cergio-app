@@ -4,11 +4,29 @@ import { useEffect, useState, useCallback } from 'react';
 import { opsConsole } from '../lib/api';
 
 const TABS = [
+  { id: 'live', label: 'LIVE counts' },
+  { id: 'creators', label: 'Creator sources' },
   { id: 'qa', label: 'QA & Bugs' },
   { id: 'agents', label: 'Agents' },
   { id: 'crawls', label: 'Crawls' },
   { id: 'product', label: 'Product data' },
 ];
+function csvOf(rows) {
+  if (!rows || !rows.length) return '';
+  const keys = Object.keys(rows[0]);
+  const esc = v => (v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  return keys.join(',') + '\n' + rows.map(r => keys.map(k => esc(r[k])).join(',')).join('\n');
+}
+function dl(name, rows) {
+  const blob = new Blob([csvOf(rows)], { type: 'text/csv;charset=utf-8;' });
+  const u = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = u; a.download = `${name}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 1000);
+}
+function Bar({ n, target }) {
+  const pct = Math.min(100, Math.round((100 * (n || 0)) / (target || 1)));
+  return (<div className="mt-1 h-2 rounded-full bg-bg5 overflow-hidden"><div className="h-full bg-g" style={{ width: `${pct}%` }} /></div>);
+}
 function Stat({ label, value, bad }) {
   return (<div className="rounded-xl bg-bg5 px-3 py-2">
     <div className="text-[11px] text-b3 font-bold uppercase tracking-wide">{label}</div>
@@ -16,7 +34,7 @@ function Stat({ label, value, bad }) {
   </div>);
 }
 export function OpsStatusScreen() {
-  const [tab, setTab] = useState('qa');
+  const [tab, setTab] = useState('live');
   const [d, setD] = useState(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
@@ -42,6 +60,66 @@ export function OpsStatusScreen() {
       </div>
       {busy && <div className="mt-4 text-b3">Loading…</div>}
       {err && <div className="mt-4 text-red-600 text-meta-sm">{err}</div>}
+
+      {d && tab === 'live' && (<>
+        <div className="mt-4 grid sm:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-bg5 p-3">
+            <div className="text-meta-sm font-bold text-black">NYC services</div>
+            <div className="text-2xl font-extrabold text-black">{(d.counter?.nyc_services ?? 0).toLocaleString()} <span className="text-meta-sm text-b3">/ {(d.counter?.nyc_target ?? 0).toLocaleString()}</span></div>
+            <Bar n={d.counter?.nyc_services} target={d.counter?.nyc_target} />
+            <div className="text-meta-sm text-b3 mt-1">creators {(d.counter?.nyc_creators ?? 0).toLocaleString()}</div>
+          </div>
+          <div className="rounded-xl border border-bg5 p-3">
+            <div className="text-meta-sm font-bold text-black">Miami services</div>
+            <div className="text-2xl font-extrabold text-black">{(d.counter?.miami_services ?? 0).toLocaleString()} <span className="text-meta-sm text-b3">/ {(d.counter?.miami_target ?? 0).toLocaleString()}</span></div>
+            <Bar n={d.counter?.miami_services} target={d.counter?.miami_target} />
+            <div className="text-meta-sm text-b3 mt-1">creators {(d.counter?.miami_creators ?? 0).toLocaleString()}</div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <Stat label="New 24h" value={(d.counter?.services_new_24h ?? 0).toLocaleString()} />
+          <Stat label="Open bugs" value={d.qa?.open_bugs} bad={(d.qa?.open_bugs ?? 0) > 0} />
+          <Stat label="Services total" value={(d.crawls?.services_total ?? 0).toLocaleString()} />
+        </div>
+        {d.engine?.meta && (
+          <div className="mt-4 rounded-xl border border-bg5 p-3">
+            <div className="text-meta-sm font-bold text-black mb-1">Supply engine — last run {(d.engine.started_at || '').slice(0, 16)}</div>
+            <div className="text-meta-sm text-b3">live sources: {(d.engine.meta.live_sources || []).join(', ')}</div>
+            {(d.engine.meta.disabled_sources || []).length > 0 && <div className="text-meta-sm text-red-600 font-bold">auto-disabled: {(d.engine.meta.disabled_sources || []).join(', ')}</div>}
+            <div className="mt-2 text-meta-sm"><b>bugs found:</b> {(d.engine.meta.bugs_found || ['none']).join(' · ')}</div>
+            <div className="text-meta-sm text-gd"><b>fixes applied:</b> {(d.engine.meta.fixes_applied || ['none']).join(' · ')}</div>
+            <div className="mt-2 text-[12px]">
+              {Object.entries(d.engine.meta.yields || {}).sort((a, b) => b[1].ratio - a[1].ratio).map(([s2, y]) => (
+                <div key={s2} className="flex justify-between"><span className="text-b3">{s2}</span><span className="font-bold text-black">{y.rows} rows / {y.jobs} jobs · {Number(y.ratio).toFixed(2)}/job</span></div>
+              ))}
+            </div>
+          </div>)}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {Object.keys(d.download || {}).map(k => (
+            <button key={k} onClick={() => dl(k, d.download[k])} className="rounded-xl bg-bg5 px-3 py-2 text-[12px] font-bold text-b3">
+              ⬇ {k} ({(d.download[k] || []).length})
+            </button>))}
+        </div>
+      </>)}
+
+      {d && tab === 'creators' && (
+        <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
+          <div className="px-3 py-2 text-meta-sm font-bold text-black">Creator sources — every algorithm, with counts</div>
+          <table className="w-full text-[12px]"><thead className="bg-bg5 text-b3"><tr>
+            {['source (algorithm)', 'total', 'NYC', 'Miami', 'with email', 'with followers', ''].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
+          </tr></thead><tbody>
+            {Object.entries(d.creatorsBySource || {}).sort((a, b) => b[1].total - a[1].total).map(([cs, v]) => (
+              <tr key={cs} className="border-t border-bg5">
+                <td className="px-2 py-1 font-bold text-black">{cs}</td>
+                <td className={`px-2 py-1 font-extrabold ${v.total === 0 ? 'text-red-600' : 'text-black'}`}>{v.total}</td>
+                <td className="px-2 py-1">{v.nyc}</td><td className="px-2 py-1">{v.miami}</td>
+                <td className="px-2 py-1">{v.withEmail}</td><td className="px-2 py-1">{v.withFollowers}</td>
+                <td className="px-2 py-1">{(d.download?.[`creators_${cs}`] || []).length > 0 && (
+                  <button onClick={() => dl(`creators_${cs}`, d.download[`creators_${cs}`])} className="text-gd font-bold">⬇ csv</button>)}</td>
+              </tr>))}
+          </tbody></table>
+          <div className="px-3 py-2 text-[11px] text-b3">A source at 0 is a FAILURE, not a blank — red means it produced nothing.</div>
+        </div>)}
 
       {d && tab === 'qa' && (<>
         <div className="mt-4 grid grid-cols-3 gap-2">

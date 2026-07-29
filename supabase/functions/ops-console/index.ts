@@ -9,7 +9,16 @@ function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { st
 
 // every agent/cron we claim runs — so "is it on?" is answered by DATA, not belief
 const AGENTS = ['fulfill-crawl','creator-harvest','enrich-influencers','creator-enrich','qa-suite','qa-live-verify','crawl-health-check','coo-execute','cergio-watchdog','cergio-orchestrator','ops-metrics'];
-const SOURCES = ['yelp','google_local','google_lsa','google_sponsored','craigslist','yellowpages','osm','google_places'];
+const SOURCES = ['yelp','google_local','google_lsa','google_sponsored','craigslist','yellowpages','osm','google_places','openstreetmap'];
+// CREATOR sources — the algorithm decided these (each with its own discovery method):
+const CREATOR_SOURCES = [
+  'modash-vetted-seed',        // founder-vetted Modash handles (seed pool)
+  'se:web-harvest',            // SerpAPI/DDG "top <cat> influencers <city>" -> handles
+  'ig-creator-marketplace',    // Meta Graph creator_marketplace_creators (first-party)
+  'homegrown-feedspot',        // curated city lists (Feedspot etc)
+  'ig-scraper-user-search',    // apify~instagram-scraper searchType=user
+  'provider-with-following',   // service providers who have an IG audience (dual)
+];
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -48,6 +57,42 @@ serve(async (req: Request) => {
     const { count: svcNew24 } = await db.from('leads_services').select('id', { count: 'exact', head: true }).gte('fetched_at', since(24));
 
     // ── 4. USERS / social graph density (for UX realism checks)
+    // CREATORS per source (discovered_via) + contactability
+    const creatorsBySource: Record<string, { total: number; withEmail: number; withFollowers: number; nyc: number; miami: number }> = {};
+    for (const cs of CREATOR_SOURCES) {
+      const q = (f: (b: any) => any) => f(db.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('discovered_via', cs));
+      const { count: total } = await q((b: any) => b);
+      const { count: withEmail } = await q((b: any) => b.not('email', 'is', null));
+      const { count: withFollowers } = await q((b: any) => b.not('followers', 'is', null));
+      const { count: nyc } = await q((b: any) => b.eq('state', 'NY'));
+      const { count: miami } = await q((b: any) => b.eq('state', 'FL'));
+      creatorsBySource[cs] = { total: total ?? 0, withEmail: withEmail ?? 0, withFollowers: withFollowers ?? 0, nyc: nyc ?? 0, miami: miami ?? 0 };
+    }
+    // LIVE COUNTER (targets per founder spec)
+    const { count: nycSvc } = await db.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'NY');
+    const { count: miaSvc } = await db.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'FL');
+    const { count: nycCre } = await db.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'NY');
+    const { count: miaCre } = await db.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'FL');
+    const counter = { nyc_services: nycSvc ?? 0, nyc_target: 50000, miami_services: miaSvc ?? 0, miami_target: 20000,
+                      nyc_creators: nycCre ?? 0, miami_creators: miaCre ?? 0, services_new_24h: svcNew24 ?? 0 };
+    // latest supply-engine run (bugs found + auto-fixes)
+    let engine: unknown = null;
+    try { const { data } = await db.from('agent_runs').select('meta, started_at, status').eq('agent','supply-engine').order('started_at',{ascending:false}).limit(1); engine = data?.[0] ?? null; } catch (_e) {}
+    // DOWNLOAD payloads: rows per source, capped
+    const download: Record<string, unknown[]> = {};
+    for (const s2 of SOURCES) {
+      const { data } = await db.from('leads_services')
+        .select('name, service_type, phone, owner_email, instagram, city, state, data_source, outreach_status')
+        .eq('data_source', s2).limit(2000);
+      if (data?.length) download[`services_${s2}`] = data;
+    }
+    for (const cs of CREATOR_SOURCES) {
+      const { data } = await db.from('leads_influencers')
+        .select('ig_handle, display_name, category, followers, email, phone, city, state, discovered_via, outreach_status')
+        .eq('discovered_via', cs).limit(2000);
+      if (data?.length) download[`creators_${cs}`] = data;
+    }
+
     const { count: profiles } = await db.from('profiles').select('id', { count: 'exact', head: true });
     let withAvatar = 0, connections = 0, services = 0, requests = 0, bookings = 0;
     try { const { count } = await db.from('profiles').select('id', { count: 'exact', head: true }).not('avatar_url','is',null); withAvatar = count ?? 0; } catch (_e) {}
@@ -62,6 +107,7 @@ serve(async (req: Request) => {
       agents,
       crawls: { by_source: bySource, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
       product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings },
+      counter, creatorsBySource, engine, download,
     });
   } catch (e) { return json({ error: String(e).slice(0, 300) }, 500); }
 });
