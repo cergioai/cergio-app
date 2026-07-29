@@ -138,7 +138,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
     return {
       subject: `Welcome to Cergio, ${first} 🌿`,
       body_html: `
-        <p style="font-size:15px;color:#3A3A3A;margin:0 0 12px;">Hi ${escapeHtml(first)} — glad you're here. Cergio matches you with services your friends actually trust. Three things you can do right now:</p>
+        <p style="font-size:15px;color:#3A3A3A;margin:0 0 12px;">Hi ${escapeHtml(first)} — glad you're here. Cergio matches you with services your friends and locals actually trust. Three things you can do right now:</p>
         <ul style="font-size:14px;color:#3A3A3A;line-height:1.7;padding-left:18px;margin:0 0 16px;">
           <li><strong>Find a service</strong> — describe what you need in one line and we route you to the right Provider.</li>
           <li><strong>List your service</strong> — turn what you already do into income.</li>
@@ -170,7 +170,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
         <p style="font-size:14px;color:#3A3A3A;margin:0 0 16px;">Sign up and book your first service — ${escapeHtml(inviterName)} earns $250 in credits when you do.</p>`,
       cta_label: 'Sign up free →',
       cta_link:  link,
-      sms: `${inviterName} invited you to Cergio — services your friends actually trust. Join: ${link}`,
+      sms: `${inviterName} invited you to Cergio — services your friends and locals actually trust. Join: ${link}`,
       text: `${inviterName} invited you to Cergio.${note ? `\n\n"${note}"` : ''}\n\nJoin: ${link}`,
     };
   },
@@ -238,7 +238,7 @@ const TEMPLATES: Record<string, (ctx: Ctx) => Rendered> = {
       cta_label: 'Claim your profile →',
       cta_link:  link,
       // SMS — short + captivating per Tarik. Single line, under 160 chars.
-      sms: `${firstName} — ${recommender} reco’d you on Cergio as a great ${serviceTitle.toLowerCase()}. Claim your profile + earn from your network: ${link}`,
+      sms: `${firstName} — ${recommender} reco’d you on Cergio as a great ${serviceTitle.toLowerCase()}. Claim your profile, get an IG spotlight from a local creator for one free service, and earn $250 per referral: ${link}`,
       text: `${recommender} reco’d you on Cergio as a great ${serviceTitle.toLowerCase()}.`,
     };
   },

@@ -506,7 +506,7 @@ async function notifyOnDemandProvidersSMS(db: any, job: any) {
     const twFrom = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID') || Deno.env.get('TWILIO_FROM_NUMBER');
     if (!twSid || !twUser || !twPass || !twFrom) return;
     const { data: reqRow } = await db.from('requests')
-      .select('what, when_text, where_text, provider_type, service_type').eq('id', job.trigger_request_id).maybeSingle();
+      .select('what, when_text, where_text, provider_type, service_type, requester_id').eq('id', job.trigger_request_id).maybeSingle();
     const type = job.service_type || reqRow?.provider_type || reqRow?.service_type || 'local pro';
     const where = reqRow?.where_text || job.city || 'your area';
     const when = reqRow?.when_text ? ` (${String(reqRow.when_text).slice(0, 30)})` : '';
@@ -522,7 +522,12 @@ async function notifyOnDemandProvidersSMS(db: any, job: any) {
       const { data: supp } = await db.from('outreach_suppressions').select('id').eq('channel', 'sms').ilike('address', e164).maybeSingle();
       if (supp) continue;
       // TRANSACTIONAL customer-inquiry copy (never "join Cergio"):
-      const body = `A customer near ${where} needs a ${type}${when}. See the job and reply with your price: ${link} — Cergio. Reply STOP to opt out.`;
+      let who2 = 'A customer';
+      if (reqRow?.requester_id) {
+        const { data: rp2 } = await db.from('profiles').select('display_name').eq('id', reqRow.requester_id).maybeSingle();
+        if (rp2?.display_name) who2 = String(rp2.display_name).split(' ')[0];
+      }
+      const body = `${who2} near ${where} needs a ${type}${when}. See the job and reply with your price: ${link} — Cergio. Reply STOP to opt out.`;
       const form = new URLSearchParams();
       form.set(twFrom.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom);
       form.set('To', e164); form.set('Body', body);
@@ -552,7 +557,7 @@ async function notifyOnDemandProviders(db: any, job: any) {
     if (!job.trigger_request_id) return;
     const resendKey = Deno.env.get('RESEND_API_KEY'); if (!resendKey) return;
     const { data: reqRow } = await db.from('requests')
-      .select('what, when_text, where_text, service_type, provider_type, city')
+      .select('what, when_text, where_text, service_type, provider_type, city, requester_id')
       .eq('id', job.trigger_request_id).maybeSingle();
     const type = job.service_type || reqRow?.provider_type || reqRow?.service_type || 'local pro';
     const where = reqRow?.where_text || job.city || 'your area';
@@ -571,8 +576,13 @@ async function notifyOnDemandProviders(db: any, job: any) {
       const { data: supp } = await db.from('outreach_suppressions')
         .select('id').eq('channel', 'email').ilike('address', email).maybeSingle();
       if (supp) continue;
-      const subject = `A customer near ${where} needs a ${type}`;
-      const html = `<p>Hi${p.name ? ' ' + p.name : ''}, a Cergio user near <b>${where}</b> is looking for a <b>${type}</b>${what}${when}.</p>`
+      let who = 'A customer';
+      if (reqRow?.requester_id) {
+        const { data: rp } = await db.from('profiles').select('display_name').eq('id', reqRow.requester_id).maybeSingle();
+        if (rp?.display_name) who = String(rp.display_name).split(' ')[0];
+      }
+      const subject = `${who} near ${where} needs a ${type}`;
+      const html = `<p>Hi${p.name ? ' ' + p.name : ''}, <b>${who}</b> near <b>${where}</b> needs a <b>${type}</b>${what}${when}.</p>`
         + `<p>If you can help, <b>reply here with your price</b>: <a href="${link}">${link}</a></p>`
         + `<p>Want jobs like this the moment they come in? <b>Reply YES</b> and we'll text you (opt-in). Reply STOP to stop these emails.</p>`
         + `<p style="color:#888;font-size:12px">Cergio · you're receiving this because your business is listed publicly for ${type} services. Reply STOP to opt out.</p>`;

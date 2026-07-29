@@ -65,7 +65,7 @@ export function outreachTemplateFor(audience) {
 // Truthful TODAY (founding invite — no live-job claim; honor the no-fake-data rule).
 export const SMS_TEMPLATE = {
   services:
-    "Hi {name} — I'm Tarik, founder at Cergio. Simple barter: you give ONE free {service_type} to a local creator, they post an IG spotlight of your work to their followers — new clients, no ad spend. Plus $250 per client you refer. Picking 25 founding providers in {city}. Want a spot? Reply YES (or STOP to opt out).",
+    "Hi {name} — I'm Tarik, founder at Cergio. Simple barter: you give ONE free {service_type} to a local creator, they post an IG spotlight of your work to their followers — new clients, no ad spend. Plus $250 per client you refer. Picking 25 founding local service pros in {city}. Want a spot? Reply YES (or STOP to opt out).",
   creators:
     'Hi @{ig_handle} — Tarik, founder of Cergio. Your followers book trusted local pros through you and you earn on every booking. Hand-picking 5 founding creators in {city}: free services + founding status. Want in? Reply YES (or STOP to opt out).',
 };
