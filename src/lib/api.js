@@ -18,8 +18,19 @@ const NOT_WIRED = { data: null, error: { message: 'Supabase not configured' } };
 
 // Build a default service title from category + location.
 function makeTitle(category, location) {
-  const cat  = (category || 'Service').trim();
-  const loc  = (location  || '').trim();
+  const cat = (category || 'Service').trim();
+  let loc = (location || '').trim();
+  // CERGIO-GUARD (2026-07-29, Tarik): the title was concatenating the RAW address
+  // ("Housekeeper in 5701 Collins") — misleading AND it published the provider's
+  // street address. Strip any leading street number + take the city-ish part only.
+  if (loc) {
+    const parts = loc.split(',').map(x => x.trim()).filter(Boolean);
+    // prefer the city segment (2nd part of "5701 Collins Ave, Miami Beach, FL")
+    let cityish = parts.length > 1 ? parts[1] : parts[0];
+    // if it still starts with a street number, drop the whole thing
+    if (/^\d/.test(cityish)) cityish = parts.length > 2 ? parts[2] : '';
+    loc = /^\d/.test(cityish) ? '' : cityish;
+  }
   return loc ? `${cat} in ${loc}` : cat;
 }
 
@@ -55,13 +66,14 @@ export async function createService(draft) {
   // any listing this owner already has with the SAME title created in the last
   // 2 minutes — idempotent regardless of how the caller fires.
   {
-    const since = new Date(Date.now() - 120000).toISOString();
+    // CERGIO-GUARD (2026-07-29, Tarik hit duplicates again): the 2-minute window
+    // only caught double-taps. A provider re-listing the same thing later still
+    // created a duplicate. Dedupe on ANY existing listing with the same title.
     const { data: dupes } = await supabase
       .from('services')
       .select('*')
       .eq('owner_id', ownerId)
       .eq('title', title)
-      .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(1);
     if (dupes && dupes.length) {
@@ -2985,7 +2997,20 @@ export async function getServiceOfferings(serviceId) {
 export async function createSetupIntent() {
   if (!supabaseReady) return NOT_WIRED;
   const { data, error } = await supabase.functions.invoke('create-setup-intent', { body: {} });
-  if (error) return { data: null, error };
+  if (error) {
+    // CERGIO-GUARD (2026-07-29): supabase-js masks edge-fn failures as the useless
+    // "Edge Function returned a non-2xx status code". The function DOES return
+    // { error: "<real Stripe message>" } — read it off the response so the user
+    // (and we) see the actual cause instead of a dead end.
+    let real = error.message;
+    try {
+      const body = await error.context?.json?.();
+      if (body?.error) real = body.error;
+    } catch (_e) { /* keep the generic message */ }
+    // eslint-disable-next-line no-console
+    console.error('[CERGIO/setup-intent] real error:', real);
+    return { data: null, error: { ...error, message: real } };
+  }
   return { data, error: null };
 }
 
