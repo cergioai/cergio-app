@@ -93,15 +93,18 @@ serve(async (req: Request) => {
   const sinceStall = new Date(Date.now() - 30 * 60000).toISOString();
   const recent = await cnt('agent_runs', (b) => b.eq('agent', 'fulfill-crawl').gte('started_at', sinceStall));
   if (recent === 0) { await note('supply-worker-stalled', false, 'critical', 'no fulfill-crawl run in 30m — kicking'); }
-  const kicks = Number(Deno.env.get('TURBO_KICKS') || '6');
+  // FIRE-AND-FORGET (fix 2026-07-29): awaiting N worker kicks blew the edge-function
+  // time limit and the engine returned no JSON at all. Kicks are dispatched WITHOUT
+  // await so the engine always returns its counter fast; the worker drains in parallel.
+  const kicks = Number(Deno.env.get('TURBO_KICKS') || '4');
   let kicked = 0;
   for (let i = 0; i < kicks; i++) {
     try {
-      const r = await fetch(`${FN_BASE}/fulfill-crawl?limit=200`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } });
-      if (r.ok) kicked++;
+      fetch(`${FN_BASE}/fulfill-crawl?limit=200`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
+      kicked++;
     } catch (_e) {}
   }
-  if (kicked) fixes.push(`turbo: kicked fulfill-crawl ${kicked}x (limit 200/run)`);
+  if (kicked) fixes.push(`turbo: dispatched ${kicked} parallel fulfill-crawl runs (limit 200 each)`);
 
   // ── LIVE COUNTER (published for the dashboard)
   const nyc = await cnt('leads_services', (b) => b.eq('state', 'NY'));
