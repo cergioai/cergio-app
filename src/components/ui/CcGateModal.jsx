@@ -139,8 +139,12 @@ export function CcGateModal({ onClose, onVerified, reason = 'photos' }) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[10003] bg-black/40 flex items-end justify-center" onClick={onClose}>
-      <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6 pb-7" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[10003] bg-black/40 flex items-end justify-center overflow-y-auto" onClick={onClose}>
+      {/* CERGIO-GUARD (2026-07-29, Tarik — mobile): the sheet had no height cap and
+          no scroll, so on short viewports (and with the keyboard up) the TOP of the
+          card — title + "your card won't be charged" — was pushed off screen and
+          unreachable. Cap at 92svh, scroll inside, and keep the safe-area inset. */}
+      <div className="w-full max-w-[390px] bg-white rounded-t-[24px] p-6 pb-[max(1.75rem,env(safe-area-inset-bottom))] max-h-[92svh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 bg-bdr rounded-full mx-auto mb-5" />
         <div className="flex items-center justify-center w-14 h-14 rounded-full bg-gl mx-auto mb-4">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
