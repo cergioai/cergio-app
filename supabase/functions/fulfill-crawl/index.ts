@@ -808,7 +808,7 @@ const OSM_ENDPOINTS = [
 // A descriptive User-Agent is REQUIRED etiquette on the public Overpass API (an
 // anonymous UA gets throttled/blocked first). Identifies the app + a contact.
 const OSM_UA = 'CergioServicesCrawl/1.0 (+https://cergio.ai; contact: t@cergio.ai)';
-const OSM_MAX_RESULTS = 200;   // TURBO (SPEC-99): was 50 — volume ceiling raised        // hard cap per job (Overpass etiquette + write budget)
+const OSM_MAX_RESULTS = 100;   // TURBO (SPEC-99): 50 -> 100 (still Overpass-polite)        // hard cap per job (Overpass etiquette + write budget)
 const OSM_HTTP_TIMEOUT_MS = 90_000; // Overpass can be slow under load; generous but bounded
 const OSM_POLITE_DELAY_MS = 1_000;  // small pause before each query so we never hammer a slot
 
