@@ -278,7 +278,7 @@ serve(async (req: Request) => {
         if (supp) { await db.from('leads_services').update({ outreach_status: 'do_not_contact' }).eq('id', lead.id); continue; }
         const smsTok = await hmac(e164, optoutSecret);
         const optinUrl = `${FUNCTIONS_BASE}/outreach-optin?t=biz&a=${encodeURIComponent(e164)}&k=${smsTok}`;
-        const body = `Hi${lead.name ? ' ' + lead.name : ''} — Tarik, founder of Cergio. 25 founding spots: free IG spotlights from local Creators for 1 free ${lead.service_type || 'service'}, + $250 per client you invite + priority. Want a spot? ${optinUrl} Reply STOP to opt out. (Cergio/Yogotoo)`;
+        const body = `Hi${lead.name ? ' ' + lead.name : ''} — I'm Tarik, founder at Cergio. Simple barter: you give ONE free ${lead.service_type || 'service'} to a local creator, and they post an IG spotlight of your work to their followers — new clients, no ad spend. Plus $250 for every client you refer. 25 founding spots. Want one? ${optinUrl} Reply STOP to opt out.`;
         const form = new URLSearchParams();
         form.set(twFrom!.startsWith('MG') ? 'MessagingServiceSid' : 'From', twFrom!);
         form.set('To', e164); form.set('Body', body);
