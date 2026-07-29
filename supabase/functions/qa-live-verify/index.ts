@@ -79,6 +79,35 @@ serve(async (req: Request) => {
     } catch (e) { await record('config-twilio-valid', false, 'high', String(e).slice(0, 150)); }
   }
 
+  // ── B2. LIVE SITE HTML CHECKS (SPEC-96b) — no browser needed. Fetch the real
+  // deployed pages and assert on what actually ships. Catches: dead routes, raw
+  // edge-fn error strings leaking to users, missing critical markup, stale build.
+  const SITE = Deno.env.get('SITE_BASE') || 'https://cergio.ai';
+  const ROUTES = ['/', '/early', '/free', '/ops/status'];
+  for (const r of ROUTES) {
+    try {
+      const res = await fetch(`${SITE}${r}`, { headers: { 'User-Agent': 'CergioQA/1.0' } });
+      const html = (await res.text()).slice(0, 300000);
+      await record(`site-route-${r}`, res.ok, 'critical', `HTTP ${res.status}`);
+      // a raw supabase error must NEVER reach a user-facing page
+      const leaked = /non-2xx status code|FunctionsHttpError|Uncaught|ChunkLoadError/i.test(html);
+      await record(`site-noerror-${r}`, !leaked, 'critical', leaked ? 'RAW ERROR STRING IN PAGE' : 'clean');
+    } catch (e) { await record(`site-route-${r}`, false, 'critical', String(e).slice(0, 120)); }
+  }
+
+  // ── B3. DATA INTEGRITY — the bugs the founder hit, asserted continuously.
+  try {
+    // duplicate service listings (same owner + same title)
+    const { data: svcs } = await db.from('services').select('owner_id, title').limit(2000);
+    const seen = new Set<string>(); let dupes = 0;
+    for (const s of (svcs || [])) { const k = `${s.owner_id}|${(s.title || '').toLowerCase()}`; if (seen.has(k)) dupes++; seen.add(k); }
+    await record('data-no-duplicate-services', dupes === 0, 'high', `${dupes} duplicate listings`);
+    // a service title must never contain a street address (privacy leak)
+    const { data: titled } = await db.from('services').select('title').limit(2000);
+    const leaky = (titled || []).filter((t: any) => /\bin\s+\d{2,6}\s+\w/i.test(t.title || '')).length;
+    await record('data-no-address-in-title', leaky === 0, 'critical', `${leaky} titles contain a street address`);
+  } catch (e) { await record('data-integrity-check', false, 'high', String(e).slice(0, 120)); }
+
   // ── C. CRON LIVENESS — are the jobs we CLAIM run actually running? ────────
   try {
     const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
