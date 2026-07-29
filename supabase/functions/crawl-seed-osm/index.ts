@@ -94,6 +94,23 @@ serve(async (req: Request) => {
     const db = createClient(supabaseUrl, serviceKey);
     dbRef = db;
 
+    // ── PHASE GATE (SPEC-97, 2026-07-29) — FROZEN PRIORITY. Miami + NYC MUST reach
+    // the Phase-1 target BEFORE any other DMA is seeded. Previously every city was
+    // seeded at once, so effort scattered (and a test launcher even injected
+    // off-spec cities via a test launcher). This makes the priority
+    // structural, not a promise.
+    const PHASE1_TARGET = Number(Deno.env.get('PHASE1_TARGET') || '20000'); // per metro
+    const metroCount = async (states: string[]) => {
+      const { count } = await db.from('leads_services')
+        .select('id', { count: 'exact', head: true }).in('state', states);
+      return count ?? 0;
+    };
+    const miamiN = await metroCount(['FL']);
+    const nycN   = await metroCount(['NY']);
+    const phase1Done = miamiN >= PHASE1_TARGET && nycN >= PHASE1_TARGET;
+    const PHASE1_CITIES = new Set(['Miami', 'New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island']);
+    console.log(`phase-gate: Miami=${miamiN} NYC=${nycN} target=${PHASE1_TARGET} phase1Done=${phase1Done}`);
+
     const types = SERVICE_TYPES.filter((t) => !isBlocked(t));
     const rows: Array<Record<string, unknown>> = [];
     const nowIso = new Date().toISOString();
@@ -139,6 +156,8 @@ serve(async (req: Request) => {
       }
     } catch (_e) { /* best-effort */ }
     for (const [city, state] of CITIES) {
+      // FROZEN: until Miami AND NYC hit the Phase-1 target, seed ONLY those metros.
+      if (!phase1Done && !PHASE1_CITIES.has(city)) continue;
       for (const type of types) {
         if (isBlocked(`${type} ${city}`)) continue;
         rows.push({

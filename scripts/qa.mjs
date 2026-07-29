@@ -4580,6 +4580,15 @@ test('blocked-query-refusal-screen', 'SPEC-71.5 / run95: a BLOCKED-category top-
     'refusal must key off the user query via isBlockedFeedCategory (word-boundary matched)');
 });
 
+test('crawl-phase-gate', 'SPEC-97: crawl seeder is PHASE-GATED — Miami + NYC must hit the Phase-1 target before any other DMA is seeded, and the city list stays the frozen top-10 DMAs', '#95', async () => {
+  const seed = readFile('supabase/functions/crawl-seed-osm/index.ts');
+  assert(/PHASE1_CITIES/.test(seed) && /phase1Done/.test(seed), 'seeder must implement the phase gate');
+  assert(/if \(!phase1Done && !PHASE1_CITIES\.has\(city\)\) continue;/.test(seed), 'non-phase-1 cities must be skipped until the target is hit');
+  assert(!/Nashville|Austin|Denver|Phoenix/.test(seed), 'off-spec cities must never appear in the seeder');
+  const live = readFile('supabase/functions/qa-live-verify/index.ts');
+  assert(/crawl-spec-cities-only/.test(live), 'live QA must flag any off-spec crawl city');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

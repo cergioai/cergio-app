@@ -108,6 +108,19 @@ serve(async (req: Request) => {
     await record('data-no-address-in-title', leaky === 0, 'critical', `${leaky} titles contain a street address`);
   } catch (e) { await record('data-integrity-check', false, 'high', String(e).slice(0, 120)); }
 
+  // ── B4. CRAWL SPEC CONFORMANCE (SPEC-97) — the crawl must ONLY touch the frozen
+  // city list (Miami + top-10 DMAs). A stray city = spec violation, flagged here.
+  try {
+    const SPEC_CITIES = new Set(['Miami','New York','Manhattan','Brooklyn','Queens','Bronx','Staten Island','Los Angeles','Chicago','Dallas','Philadelphia','Houston','Atlanta','Washington','Boston','San Francisco','Miami Beach','Brickell','Wynwood','Coral Gables','Doral','Fort Lauderdale','Hialeah','Kendall','Aventura','Little Havana','North Miami','Pinecrest','Coconut Grove','South Beach']);
+    const { data: jobs } = await db.from('crawl_requests').select('city').eq('kind','services').limit(2000);
+    const off = Array.from(new Set((jobs || []).map((j: any) => j.city).filter((c: string) => c && !SPEC_CITIES.has(c))));
+    await record('crawl-spec-cities-only', off.length === 0, 'critical', off.length ? `OFF-SPEC CITIES: ${off.join(', ').slice(0,200)}` : 'all crawl cities on-spec');
+    // phase-1 progress is reported so priority drift is visible
+    const { count: fl } = await db.from('leads_services').select('id',{count:'exact',head:true}).eq('state','FL');
+    const { count: ny } = await db.from('leads_services').select('id',{count:'exact',head:true}).eq('state','NY');
+    await record('phase1-progress', true, 'high', `Miami(FL)=${fl ?? 0} NYC(NY)=${ny ?? 0} target=20000 each`);
+  } catch (e) { await record('crawl-spec-cities-only', false, 'critical', String(e).slice(0,120)); }
+
   // ── C. CRON LIVENESS — are the jobs we CLAIM run actually running? ────────
   try {
     const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
