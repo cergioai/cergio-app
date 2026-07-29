@@ -101,10 +101,31 @@ serve(async (req: Request) => {
       .eq('kind', 'services')
       .eq('status', 'new');
     if (!YP_ENABLED) jobQ = jobQ.or('source.is.null,source.neq.yellowpages');
-    const { data: jobs, error: jobsErr } = await jobQ
-      .order('created_at', { ascending: true })
-      .limit(perRun);
-    if (jobsErr) throw jobsErr;
+    // ── PRIORITY QUEUE (SPEC-97b, 2026-07-29) — ROOT CAUSE OF THE CITY DRIFT.
+    // This was pure FIFO on created_at, so every city competed equally for worker
+    // capacity: Miami/NYC-first lived only in conversation, never in code. Now
+    // PHASE-1 metros (Miami + NYC/boroughs) drain FIRST, every run, always.
+    const P1 = ['Miami','New York','Manhattan','Brooklyn','Queens','Bronx','Staten Island',
+                'Miami Beach','Brickell','Wynwood','Coral Gables','Doral','South Beach',
+                'Coconut Grove','Aventura','Little Havana','Hialeah','North Miami','Kendall','Pinecrest'];
+    let jobs: any[] = [];
+    {
+      // 1) phase-1 metros first
+      const { data: p1jobs, error: e1 } = await jobQ.in('city', P1)
+        .order('created_at', { ascending: true }).limit(perRun);
+      if (e1) throw e1;
+      jobs = p1jobs || [];
+      // 2) only if phase-1 has no work left, spend the remainder elsewhere
+      if (jobs.length < perRun) {
+        let q2 = db.from('crawl_requests')
+          .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
+          .eq('kind', 'services').eq('status', 'new').not('city', 'in', `(${P1.map(c => `"${c}"`).join(',')})`);
+        if (!YP_ENABLED) q2 = q2.or('source.is.null,source.neq.yellowpages');
+        const { data: rest } = await q2.order('created_at', { ascending: true }).limit(perRun - jobs.length);
+        jobs = jobs.concat(rest || []);
+      }
+      console.log(`priority-queue: ${(jobs || []).filter((j: any) => P1.includes(j.city)).length}/${jobs.length} jobs are phase-1`);
+    }
 
     // ── RECOVERY (2026-07-14 FORENSIC) ────────────────────────────────────────
     // Un-burn jobs that a previous run stamped 'failed' purely because the Google
