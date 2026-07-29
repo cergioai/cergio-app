@@ -4580,6 +4580,21 @@ test('blocked-query-refusal-screen', 'SPEC-71.5 / run95: a BLOCKED-category top-
     'refusal must key off the user query via isBlockedFeedCategory (word-boundary matched)');
 });
 
+test('early-offers-wiring', 'SPEC-95: /early founding offers browse opted-in only, expose NO scraped contact data, and Request routes into the REAL flows via Home prefill (not a dead deep link)', '#94', async () => {
+  const fn = readFile('supabase/functions/early-offers/index.ts');
+  assert(/outreach_status'?,\s*'opted_in'/.test(fn), 'must list ONLY opted_in leads');
+  assert(!/owner_email|\bphone\b/.test(fn.split('select(')[1] || ''), 'must NOT select scraped email/phone into the public payload');
+  const scr = readFile('src/screens/EarlyOffersScreen.jsx');
+  assert(/navigate\('\/home',\s*\{\s*state:\s*\{\s*prefillQuery/.test(scr),
+    'Request buttons must route to /home with prefillQuery (the real request flow), not a dead /request?type= deep link');
+  assert(!/\/spotlight\/request\?/.test(scr) && !/\/request\?type=/.test(scr), 'no dead deep links');
+  const home = readFile('src/screens/HomeScreen.jsx');
+  assert(/location\.state\?\.prefillQuery/.test(home) && /location\.state\?\.prefillIntent/.test(home),
+    'HomeScreen must consume prefillQuery + prefillIntent');
+  const app = readFile('src/App.jsx');
+  assert(/path="\/early"/.test(app), 'App routes /early');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

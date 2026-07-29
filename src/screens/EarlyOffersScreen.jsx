@@ -71,7 +71,7 @@ export function EarlyOffersScreen() {
                     <p className="text-meta-sm text-b3">{[s.city, s.state].filter(Boolean).join(', ')}</p>
                     <span className="inline-block mt-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide">Offering 1 free service</span>
                   </div>
-                  <button onClick={() => navigate(`/request?type=${encodeURIComponent(s.service_type || '')}&to=${encodeURIComponent(s.name || '')}`)}
+                  <button onClick={() => navigate('/home', { state: { prefillQuery: `I need a ${s.service_type || 'service'}${s.city ? ` in ${s.city}` : ''}`, prefillIntent: 'find' } })}
                     className="rounded-xl bg-g px-3 py-2 text-meta-sm font-bold text-white shrink-0">Request</button>
                 </div>))}
             </div>
@@ -95,7 +95,7 @@ export function EarlyOffersScreen() {
                     </p>
                     <span className="inline-block mt-1 bg-gl text-gd rounded-pill px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide">Offering a free IG spotlight</span>
                   </div>
-                  <button onClick={() => navigate(`/spotlight/request?creator=${encodeURIComponent(c.handle || '')}`)}
+                  <button onClick={() => navigate('/home', { state: { prefillQuery: `I'd like an IG spotlight from @${String(c.handle || '').replace(/^@/, '')}`, prefillIntent: 'spotlight' } })}
                     className="rounded-xl bg-g px-3 py-2 text-meta-sm font-bold text-white shrink-0">Request</button>
                 </div>))}
             </div>

@@ -273,7 +273,9 @@ export function HomeScreen() {
   // "134 Henry Street" bleed). Guests fall back to the guest key.
   const addrUid  = auth?.user?.id || null;
   const ADDR_KEY = addrCacheKey(addrUid);
-  const [query, setQuery] = useState('');
+  // PREFILL (SPEC-95): /early "Request" sends { prefillQuery, prefillIntent } so a
+  // visitor who browsed a founding offer lands on Home with the ask already typed.
+  const [query, setQuery] = useState(location.state?.prefillQuery || '');
   const [images, setImages] = useState([]);
   const [modeOpen, setModeOpen] = useState(false);
   // CERGIO-GUARD (2026-05-30 v2): budget no longer a Home pill — it's
@@ -282,7 +284,7 @@ export function HomeScreen() {
   // existing question flow.
   const [showCcGate, setShowCcGate] = useState(false);
   const [ccVerified, setCcVerified] = useState(false);
-  const [intent, setIntent] = useState('find');
+  const [intent, setIntent] = useState(location.state?.prefillIntent || 'find');
   const [hasService, setHasService] = useState(null);
   const [reply, setReply] = useState('');   // inline mini-chat reply input
   const [exampleIdx, setExampleIdx] = useState(0); // rotating example overlay
