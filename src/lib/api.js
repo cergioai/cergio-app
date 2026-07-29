@@ -4876,6 +4876,12 @@ export async function listOutreachRecipients(audience, filters = {}, limit = 50)
   }
 }
 
+export async function earlyOffers({ city = null, limit = 60 } = {}) {
+  const { data, error } = await supabase.functions.invoke('early-offers', { body: { city, limit } });
+  if (error) return { data: null, error };
+  return { data, error: null };
+}
+
 export async function opsConsole() {
   const { data, error } = await supabase.functions.invoke('ops-console', { body: {} });
   if (error) return { data: null, error };
