@@ -99,6 +99,7 @@ import { PublicProfileScreen }              from './screens/PublicProfileScreen'
 import { AdminCrawlScreen }                 from './screens/AdminCrawlScreen';
 import { OpsConsoleScreen }                 from './screens/OpsConsoleScreen';
 import { OpsStatusScreen }                  from './screens/OpsStatusScreen';
+import { EarlyOffersScreen }                from './screens/EarlyOffersScreen';
 import { P2pSmsQueueScreen }               from './screens/P2pSmsQueueScreen';
 import { DataExportScreen }                from './screens/DataExportScreen';
 import { SupportInboxScreen }               from './screens/SupportInboxScreen';
@@ -495,6 +496,7 @@ export default function App() {
               rate card. Phase 2 will add request + counter-offer flow. */}
           <Route path="/connectors/browse" element={<BrowseConnectorsScreen />} />
           <Route path="/free" element={<FreeBarterLandingScreen />} />
+          <Route path="/early" element={<EarlyOffersScreen />} />
           {/* Two-tab inbox for spotlight requests — inbound for Connectors,
               outbound for providers. Counter-offer modal lives inside. */}
           <Route path="/connectors/requests" element={<ConnectorRequestsScreen />} />
