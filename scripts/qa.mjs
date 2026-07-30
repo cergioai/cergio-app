@@ -4661,7 +4661,10 @@ test('ops-city-filter-and-creator-provenance', 'SPEC-104b: the ops console must 
     'the screen must own a city filter and pass it to the endpoint');
   assert(/opsConsole\(city \? \{ download: key, city \} : \{ download: key \}\)/.test(ui),
     'a CSV downloaded from a filtered view must contain the filtered rows');
-  assert(/what it does/.test(ui) && /where it looks/.test(ui), 'creator table must render the what/where columns');
+  assert(/<b>what:<\/b>/.test(ui) && /<b>where:<\/b>/.test(ui), 'each creator source must render what it does + where it looks');
+  assert(/max-w-full/.test(ui) && /overflow-x-hidden/.test(ui),
+    'the ops screen renders inside a ~408px mobile shell — a max-w-5xl container overflowed it and the shell CLIPPED every count column off-screen. Width must be shell-bound, with scrolling confined to each table wrapper');
+  assert(!/max-w-5xl/.test(ui), 'no fixed desktop max-width on a screen that renders in the mobile shell');
   assert(/STALE PAYLOAD/.test(ui), 'an incomplete payload must warn loudly, not display zeros');
   assert(/d\.counter \? d\.counter\.nyc_services\.toLocaleString\(\) : '—'/.test(ui),
     "a missing counter must render '—' — showing 0 next to a Crawls tab reading 4,721 is a misreporting bug");
