@@ -4719,6 +4719,24 @@ test('supply-seeding-cannot-fail-silently', 'SPEC-107: the supply engine must (a
     'a run that seeds nothing must be reported as a BUG, never as a healthy queue');
 });
 
+test('every-agent-writes-agent-runs', 'SPEC-108: /ops/status decides ON/OFF purely from agent_runs rows, so ANY agent that does not write one is guaranteed to display OFF forever no matter how well it runs. ops-metrics mentioned agent_runs only in a COMMENT and crawl-health-check not at all — both were reported dead while their crons were fine. An unfalsifiable health signal is worse than none', '#108', async () => {
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  const agents = (shared.match(/export const AGENTS = \[([^\]]+)\]/) || [, ''])[1]
+    .split(',').map(x => x.trim().replace(/^'|'$/g, '')).filter(Boolean);
+  assert(agents.length > 0, 'AGENTS list must be parseable');
+  const missing = [];
+  for (const a of agents) {
+    const f = `supabase/functions/${a}/index.ts`;
+    if (!fs.existsSync(f)) { missing.push(`${a} (no function dir)`); continue; }
+    // must WRITE, not merely mention — strip // comments before checking
+    const code = readFile(f).split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    const writes = /from\('agent_runs'\)\s*\n?\s*\.insert|logAgentRun\(/.test(code);
+    if (!writes) missing.push(a);
+  }
+  assert(missing.length === 0,
+    `agent(s) reported ON/OFF by the ops console never write an agent_runs row, so they can only ever display OFF: ${missing.join(', ')}`);
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

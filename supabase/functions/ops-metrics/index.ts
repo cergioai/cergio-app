@@ -29,6 +29,7 @@ const NO_CACHE = {
 const JSON_HEADERS = { ...CORS, ...NO_CACHE, 'Content-Type': 'application/json' };
 
 serve(async (req: Request) => {
+  const omStarted = Date.now();
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
     const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -124,6 +125,16 @@ serve(async (req: Request) => {
       awaiting_approval: (needRows ?? []).length,
     };
 
+    // BACKBONE (fix 2026-07-29): ops-metrics' only mention of agent_runs was a
+    // COMMENT — it never wrote a row, so /ops/status showed it OFF permanently
+    // whether or not it ran. The dashboard's ON/OFF is measured from agent_runs,
+    // so an uninstrumented agent is guaranteed to look dead.
+    try {
+      await db.from('agent_runs').insert({
+        agent: 'ops-metrics', started_at: new Date(omStarted).toISOString(),
+        finished_at: new Date().toISOString(), status: 'ok',
+      });
+    } catch (_e) { /* best-effort */ }
     return new Response(JSON.stringify(snap), { headers: JSON_HEADERS });
   } catch (e) {
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
