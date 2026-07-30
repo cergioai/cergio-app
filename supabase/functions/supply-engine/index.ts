@@ -22,7 +22,8 @@ const P1_CITIES: Array<[string, string]> = [
   ['Miami', 'FL'], ['Miami Beach', 'FL'], ['Brickell', 'FL'], ['Wynwood', 'FL'], ['Coral Gables', 'FL'], ['Doral', 'FL'],
 ];
 // sources ranked by MEASURED yield — the engine re-ranks itself from data each run
-const SOURCES = ['yelp', 'craigslist', 'google_lsa', 'osm', 'yellowpages_apify', 'google_local', 'ig_services'];
+// APIFY-FIRST (founder spec 2026-07-29): uncapped pay-per-result actors lead.
+const SOURCES = ['gmaps_apify', 'craigslist', 'yellowpages_apify', 'ig_services', 'yelp', 'google_lsa', 'osm', 'google_local'];
 const TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','mover','house cleaning','landscaping','mover','locksmith','appliance repair','auto detailing','hair stylist','nail technician','dog walker','pool cleaning','pressure washing','window cleaning','junk removal','painter'];
 const QUEUE_FLOOR = Number(Deno.env.get('QUEUE_FLOOR') || '20000');  // MAX: keep the queue deep   // keep this many phase-1 jobs open
 const DEAD_AFTER  = 30;                                             // jobs with 0 rows => dead
