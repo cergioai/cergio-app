@@ -258,7 +258,7 @@ serve(async (req: Request) => {
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no Google Maps results' : 'gmaps_apify'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || 'no Google Maps results') : 'gmaps_apify'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'ig_services') {
@@ -1659,18 +1659,39 @@ function parseFirstName(text: string): string | null {
   return null;
 }
 // Apify actor run (sync) with a hard maxItems cap so cost is bounded.
+// SPEC-117. This used to return [] on EVERY failure — `if (!res.ok) return []`
+// and `catch { return [] }` — so gmaps_apify burned 420 jobs producing 0 rows with
+// no recorded reason and was auto-disabled as a "dead source". It was never dead:
+// run-sync on compass~crawler-google-places takes minutes, and the abort timer
+// below was 110s, so it was aborted every single time. Craigslist survives only
+// because it is fast. Failures are now REPORTED, and the timeout is honest.
+let _lastApifyError: string | null = null;
 async function apifyRun(actor: string, input: unknown, maxItems: number): Promise<any[]> {
+  _lastApifyError = null;
   const TOKEN = Deno.env.get('APIFY_TOKEN');
-  if (!TOKEN) return [];
+  if (!TOKEN) { _lastApifyError = 'pending APIFY_TOKEN'; return []; }
   const url = `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${TOKEN}&maxItems=${maxItems}`;
   const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 110000);
+  // Edge functions cap around 150s wall clock; give the actor as much of it as we
+  // safely can instead of the arbitrary 110s that guaranteed failure for slow actors.
+  const to = setTimeout(() => ctrl.abort(), 140000);
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: ctrl.signal });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      _lastApifyError = `apify ${actor} HTTP ${res.status}: ${body.slice(0, 160)}`;
+      return [];
+    }
     const j = await res.json();
-    return Array.isArray(j) ? j : [];
-  } catch (_e) { return []; } finally { clearTimeout(to); }
+    const items = Array.isArray(j) ? j : [];
+    if (items.length === 0) _lastApifyError = `apify ${actor} returned 0 items (check actor input)`;
+    return items;
+  } catch (e) {
+    _lastApifyError = (e as Error)?.name === 'AbortError'
+      ? `apify ${actor} TIMED OUT after 140s (actor too slow for run-sync at maxItems=${maxItems} — lower the per-run target)`
+      : `apify ${actor} threw: ${String(e).slice(0, 160)}`;
+    return [];
+  } finally { clearTimeout(to); }
 }
 async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
   if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'craigslist', note: 'pending APIFY_TOKEN' };
@@ -1870,7 +1891,7 @@ async function fulfillGmapsApify(db: any, job: any): Promise<{ saved: number; fo
   const items = await apifyRun('compass~crawler-google-places', {
     searchStringsArray: [`${rawType} ${city}`],
     locationQuery: `${city}, ${state}, United States`,
-    maxCrawledPlacesPerSearch: want,
+    maxCrawledPlacesPerSearch: Math.min(want, 60),   // SPEC-117: must finish inside run-sync
     language: 'en',
     skipClosedPlaces: true,
     scrapeContacts: true,          // emails + socials from the business website
