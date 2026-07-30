@@ -23,6 +23,7 @@ export const CREATOR_SOURCES = [
   'homegrown-feedspot',        // curated city lists (Feedspot etc)
   'ig-scraper-user-search',    // apify~instagram-scraper searchType=user
   'provider-with-following',   // service providers who have an IG audience (dual)
+  'localbiz_bridge',           // local businesses bridged in as creator candidates
 ];
 
 // Admin allowlist — env wins, but the default must contain every address the
@@ -43,7 +44,14 @@ export const CREATOR_SOURCE_META: Record<string, { what: string; where: string }
   'homegrown-feedspot':         { what: 'Curated city "top 20" editorial lists, scored + labelled', where: 'Feedspot & similar city lists' },
   'ig-scraper-user-search':     { what: 'apify~instagram-scraper searchType=user, geo-verified per city', where: 'Instagram user search (via Apify)' },
   'provider-with-following':    { what: 'Our OWN services pool, filtered to providers who have an IG audience (dual service+creator)', where: 'leads_services (internal)' },
+  'localbiz_bridge':            { what: 'Local businesses bridged in as creator candidates', where: 'leads_services (internal)' },
 };
+
+// creator-harvest writes one discovered_via PER RUN DAY (e.g. se:web-harvest-2026-07-28).
+// Counting by equality on the algorithm name matched 0 rows even with thousands
+// present — so every count here is a PREFIX match that folds the daily runs back
+// into their algorithm. Never switch this back to eq().
+export const creatorSourceMatch = (q: any, source: string) => q.like('discovered_via', `${source}%`);
 
 export async function buildOpsPayload(db: SupabaseClient, body: Record<string, unknown> = {}) {
   const since = (h: number) => new Date(Date.now() - h * 3600e3).toISOString();
@@ -80,7 +88,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // ── 4. CREATORS per source (discovered_via) + contactability
   const creatorsBySource: Record<string, { total: number; withEmail: number; withFollowers: number; nyc: number; miami: number; what: string; where: string }> = {};
   for (const cs of CREATOR_SOURCES) {
-    const q = (f: (b: any) => any) => f(creQ().eq('discovered_via', cs));
+    const q = (f: (b: any) => any) => f(creatorSourceMatch(creQ(), cs));
     const { count: total } = await q((b: any) => b);
     const { count: withEmail } = await q((b: any) => b.not('email', 'is', null));
     const { count: withFollowers } = await q((b: any) => b.not('followers', 'is', null));
@@ -99,7 +107,8 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     const { data: dv } = await (city ? db.from('leads_influencers').select('discovered_via').eq('city', city) : db.from('leads_influencers').select('discovered_via')).limit(20000);
     for (const r of (dv || [])) {
       const k = (r as any).discovered_via || 'NULL';
-      if (!CREATOR_SOURCES.includes(k)) creatorsUnattributed[k] = (creatorsUnattributed[k] || 0) + 1;
+      // prefix-aware: a dated run of a KNOWN algorithm is attributed, not orphaned
+      if (!CREATOR_SOURCES.some(cs => k === cs || k.startsWith(cs))) creatorsUnattributed[k] = (creatorsUnattributed[k] || 0) + 1;
     }
   }
 
@@ -140,7 +149,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     } else if (kind === 'creators') {
       let q = db.from('leads_influencers')
         .select('ig_handle, display_name, category, followers, email, phone, city, state, discovered_via, outreach_status')
-        .eq('discovered_via', key);
+        .like('discovered_via', `${key}%`);   // prefix: include every dated run of this algorithm
       if (city) q = q.eq('city', city);
       const { data } = await q.limit(5000);
       download[wantDl] = data || [];
