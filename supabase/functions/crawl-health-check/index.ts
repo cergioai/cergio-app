@@ -21,6 +21,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { isGrowthPaused } from '../_shared/growthPause.ts';
 
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 
@@ -147,7 +148,8 @@ serve(async (req: Request) => {
       const refillBelow = Number(Deno.env.get('OSM_SELFHEAL_REFILL_BELOW') || '50');
       const openServices = (byStatus['services/new'] ?? 0) + (byStatus['services/crawling'] ?? 0);
       osm_selfheal = { enabled: selfhealOn, open_services: openServices, refill_below: refillBelow, kicked: false };
-      if (selfhealOn && openServices < refillBelow) {
+      // SPEC-119: honour the SPEC-118 pause — do not re-kick a paused seeder.
+      if (selfhealOn && openServices < refillBelow && !isGrowthPaused('crawl-seed-osm')) {
         const { error: kickErr } = await db.rpc('cergio_call_edge', { fn: 'crawl-seed-osm' });
         osm_selfheal.kicked = !kickErr;
         if (kickErr) osm_selfheal.error = String(kickErr.message || kickErr).slice(0, 200);
