@@ -4652,6 +4652,9 @@ test('ops-city-filter-and-creator-provenance', 'SPEC-104b: the ops console must 
   assert(/if \(city\) q = q\.eq\('city', city\)/.test(shared), 'CSV downloads must honour the same city filter as the view');
   assert(/CREATOR_SOURCE_META/.test(shared) && /what:/.test(shared) && /where:/.test(shared),
     'every creator algorithm needs a what/where description — a bare source key answers neither question');
+  assert(/export const creatorSourceMatch/.test(shared) && /\.like\('discovered_via', `\$\{source\}%`\)/.test(shared),
+    "creator-harvest stamps discovered_via PER RUN DAY (se:web-harvest-2026-07-28, ...). Counting by eq() on the algorithm name matched 0 rows beside a real total of 4,211 — counts MUST be prefix matches. Never revert to eq().");
+  assert(!/\.eq\('discovered_via'/.test(shared), 'no equality match on discovered_via anywhere — it silently returns 0');
   assert(/creatorsUnattributed/.test(shared),
     'creators under an unlisted discovered_via must be reported, never silently dropped (founder saw 0 per source beside a 4,211 total)');
   assert(/filter: \{ city, cities:/.test(shared), 'payload must return the real city list for the filter control');
