@@ -26,6 +26,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { PAUSED_GROWTH_AGENTS } from '../_shared/growthPause.ts';
 
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
@@ -57,6 +58,11 @@ serve(async (req: Request) => {
       // data/logic issue a re-run won't fix; an 'error' may be transient but we
       // let the next scheduled tick or an escalation handle it, to avoid tight
       // crash loops.) One nudge per heartbeat, idempotent.
+      // SPEC-119: never self-heal a PAUSED growth agent back on. SPEC-118 paused
+      // these after background load took the product down; a paused agent reads as
+      // 'stall' precisely because it was paused, so re-invoking it here would
+      // silently UNDO the emergency pause and re-saturate the DB. The product wins.
+      if (PAUSED_GROWTH_AGENTS.has(a.agent)) continue;
       if (a.health === 'stall' && rerunnable.has(a.agent)) {
         try {
           const { error: cErr } = await db.rpc('cergio_call_edge', { fn: a.agent });
@@ -74,6 +80,7 @@ serve(async (req: Request) => {
     // proposals (idempotent by a stable title per agent+issue so we don't spam).
     const escalations: any[] = [];
     for (const a of agents) {
+      if (PAUSED_GROWTH_AGENTS.has(a.agent)) continue; // SPEC-119: paused on purpose
       const neverRan = a.health === 'stall' && (a.last_run_at == null);
       if (neverRan) {
         const title = `Backbone: agent '${a.agent}' has never run`;

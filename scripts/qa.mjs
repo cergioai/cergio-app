@@ -4822,6 +4822,21 @@ test('apify-failures-are-reported', 'SPEC-117: apifyRun discarded every failure 
   assert(/_lastApifyError \|\| 'no Google Maps results'/.test(fc), 'the real reason must land on the job notes');
 });
 
+test('paused-growth-cannot-be-self-healed-back-on', 'SPEC-119: the self-heal backbone must NEVER re-invoke a PAUSED growth agent. SPEC-118 (#121) paused background growth by UNSCHEDULING its crons after DB saturation took the product down (/rest/v1/services 503). But a paused agent reads as `stall`, and cergio-orchestrator (30m, left running) re-runs any can_rerun+enabled stalled agent via cergio_call_edge, and crawl-health-check (2h) re-kicks crawl-seed-osm — either path would silently UNDO the pause and re-saturate the pool within ~30 min. The product outranks growth unconditionally, so every self-heal path must honour the pause, not just the removed cron', '#119', async () => {
+  const gp = readFile('supabase/functions/_shared/growthPause.ts');
+  assert(/PAUSED_GROWTH_AGENTS/.test(gp), 'a single source of truth for paused growth agents must exist');
+  for (const a of ['supply-engine','fulfill-crawl','crawl-seed-osm','creator-harvest','creator-enrich'])
+    assert(gp.includes(`'${a}'`), `the paused set must include ${a} (the SPEC-118 unscheduled crons)`);
+  const orch = readFile('supabase/functions/cergio-orchestrator/index.ts');
+  assert(/from '\.\.\/_shared\/growthPause\.ts'/.test(orch) && /PAUSED_GROWTH_AGENTS/.test(orch),
+    'the orchestrator must import + honour the paused set — otherwise its 30m self-heal re-invokes paused agents and undoes the emergency pause');
+  assert(/PAUSED_GROWTH_AGENTS\.has\(a\.agent\)\)\s*continue/.test(orch),
+    'the orchestrator heal loop must SKIP (continue) a paused agent before the stall re-run');
+  const ch = readFile('supabase/functions/crawl-health-check/index.ts');
+  assert(/!isGrowthPaused\('crawl-seed-osm'\)/.test(ch),
+    'crawl-health self-heal must not re-kick the paused OSM seeder');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
