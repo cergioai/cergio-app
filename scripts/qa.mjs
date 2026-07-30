@@ -4807,6 +4807,23 @@ test('fanout-survives-missing-geo', 'SPEC-113 PERMANENT FIX: the request fan-out
   assert(/fallbackCity:  request\.city/.test(api), 'callers must pass the request city through');
 });
 
+test('geocode-denied-cannot-kill-the-fanout', 'SPEC-114 ROOT CAUSE: Google geocoding is REQUEST_DENIED on this project (billing disabled), so the REQUESTER lat/lng was null on EVERY request and getProvidersForNotify refused every fan-out via its no_coords guard. Live console proof 2026-07-30: geocode REQUEST_DENIED for "725 Riverside Dr, New York, NY 10031, USA". A dead third-party key must never be able to silently disable the #1 flow', '#114', async () => {
+  const g = readFile('src/lib/google.js');
+  assert(/geocodeViaNominatim/.test(g), 'a free geocoder fallback must exist');
+  assert(/geocodeViaNominatim\(text\)\.then\(resolve\)/.test(g),
+    'a non-OK Google status must fall back to the free geocoder, never resolve null');
+  assert(/if \(!google\) return geocodeViaNominatim\(text\)/.test(g),
+    'a blocked Maps script load must also fall back');
+  const api = readFile('src/lib/api.js');
+  const fn = api.slice(api.indexOf('export async function getProvidersForNotify({'), api.indexOf('export async function', api.indexOf('export async function getProvidersForNotify({') + 10));
+  assert(/\(lat == null \|\| lng == null\) && !fallbackCity && !fallbackState/.test(fn),
+    'missing coords must only refuse when there is ALSO no city — otherwise degrade to city matching');
+  assert(/no_coords_no_city/.test(fn), 'the refusal must name both missing inputs');
+  assert(/const hasGeo = lat != null && lng != null/.test(fn), 'geo must be optional, tracked explicitly');
+  assert(/!hasGeo \? \{ data: \[\], error: null \} : await supabase\.rpc\('services_near'/.test(fn),
+    'services_near must be SKIPPED when there are no coords rather than called with nulls');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

@@ -309,10 +309,27 @@ export async function verifyAddress(text) {
 }
 
 /** Geocode an address string → { lat, lng, formatted } or null. */
+// FREE FALLBACK (SPEC-114). Google geocoding is REQUEST_DENIED on this project
+// (billing disabled). Live proof 2026-07-30: "725 Riverside Dr, New York, NY
+// 10031, USA" -> REQUEST_DENIED, so locationCoords stayed null, so every request
+// hit getProvidersForNotify's no_coords guard and NO provider was ever notified.
+// Nominatim is the same free geocoder fulfill-crawl already uses server-side.
+async function geocodeViaNominatim(text) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(text.trim())}`,
+      { headers: { Accept: 'application/json' } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j?.[0]?.lat || !j?.[0]?.lon) return null;
+    return { lat: Number(j[0].lat), lng: Number(j[0].lon), formatted: j[0].display_name || text.trim() };
+  } catch (_e) { return null; }
+}
+
 export async function geocodeAddress(text) {
   if (!text?.trim()) return null;
   const google = await loadGoogleMaps();
-  if (!google) return null;
+  if (!google) return geocodeViaNominatim(text);
 
   return new Promise(resolve => {
     let geocoder;
@@ -335,7 +352,9 @@ export async function geocodeAddress(text) {
         } else {
           recordError('geocode', gStatus, `geocoder returned ${gStatus} for "${text}"`);
         }
-        resolve(null);
+        // Never resolve null on a CONFIG failure — fall back to the free
+        // geocoder so a disabled Google key cannot silently kill the fan-out.
+        geocodeViaNominatim(text).then(resolve);
         return;
       }
       if (!results?.[0]) { resolve(null); return; }
