@@ -54,7 +54,7 @@ export function OpsStatusScreen() {
   }, [city]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="w-full max-w-full mx-auto px-4 py-6 overflow-x-hidden">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-extrabold text-black">Ops console</h1>
         <button onClick={load} className="shrink-0 rounded-xl bg-bg5 px-3 py-2 text-meta-sm font-bold text-b3">↻ Refresh</button>
@@ -140,38 +140,41 @@ export function OpsStatusScreen() {
       </>)}
 
       {d && tab === 'creators' && (
-        <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
-          <div className="px-3 py-2 text-meta-sm font-bold text-black">Creator sources — every algorithm, with counts</div>
-          <table className="w-full min-w-[880px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
-            {['source (algorithm)', 'what it does', 'where it looks', 'total', 'NYC', 'Miami', 'with email', 'with followers', ''].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
-          </tr></thead><tbody>
-            {Object.entries(d.creatorsBySource || {}).sort((a, b) => b[1].total - a[1].total).map(([cs, v]) => (
-              <tr key={cs} className="border-t border-bg5">
-                <td className="px-2 py-1 font-bold text-black">{cs}</td>
-                <td className="px-2 py-1 text-b3 max-w-[220px]">{v.what || '—'}</td>
-                <td className="px-2 py-1 text-b3">{v.where || '—'}</td>
-                <td className={`px-2 py-1 font-extrabold ${v.total === 0 ? 'text-red-600' : 'text-black'}`}>{v.total}</td>
-                <td className="px-2 py-1">{v.nyc}</td><td className="px-2 py-1">{v.miami}</td>
-                <td className="px-2 py-1">{v.withEmail}</td><td className="px-2 py-1">{v.withFollowers}</td>
-                <td className="px-2 py-1">{v.total > 0 && (
-                  <button onClick={() => fetchDl(`creators:${cs}`)} className="text-gd font-bold">⬇ csv</button>)}</td>
-              </tr>))}
-          </tbody></table>
+        <div className="mt-4">
+          <div className="text-meta-sm font-bold text-black">Creator sources — every algorithm, with counts</div>
+          <p className="text-[11px] text-b3 mt-1">A source at 0 is a FAILURE, not a blank. Cards, not a wide table, so no column is hidden off-screen.</p>
           {Object.keys(d.creatorsBySource || {}).length === 0 && (
-            <div className="px-3 py-3 text-[12px] text-red-700 bg-red-50">
+            <div className="mt-3 rounded-xl bg-red-50 p-3 text-[12px] text-red-700">
               <b>No creator-source rows returned at all.</b> The endpoint that answered
-              (<code>{d.served_by || 'unknown'}</code>) did not include <code>creatorsBySource</code> —
-              this is a stale-deploy symptom, not "zero creators". Creators total reads{' '}
+              (<code>{d.served_by || 'unknown'}</code>) omitted <code>creatorsBySource</code> —
+              a stale-deploy symptom, NOT "zero creators". Creators total reads{' '}
               <b>{(d.creators_total ?? d.crawls?.creators_total ?? 0).toLocaleString()}</b>.
             </div>)}
+          <div className="mt-3 space-y-2">
+            {Object.entries(d.creatorsBySource || {}).sort((a, b) => b[1].total - a[1].total).map(([cs, v]) => (
+              <div key={cs} className={`rounded-xl border p-3 ${v.total === 0 ? 'border-red-200 bg-red-50' : 'border-bg5'}`}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-meta-sm font-extrabold text-black break-all">{cs}</span>
+                  <span className={`text-lg font-extrabold ${v.total === 0 ? 'text-red-600' : 'text-black'}`}>{v.total.toLocaleString()}</span>
+                </div>
+                <div className="mt-1 text-[11px] text-b3"><b>what:</b> {v.what || '—'}</div>
+                <div className="text-[11px] text-b3"><b>where:</b> {v.where || '—'}</div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-b3">
+                  <span>NYC <b className="text-black">{v.nyc.toLocaleString()}</b></span>
+                  <span>Miami <b className="text-black">{v.miami.toLocaleString()}</b></span>
+                  <span>email <b className="text-black">{v.withEmail.toLocaleString()}</b></span>
+                  <span>followers <b className="text-black">{v.withFollowers.toLocaleString()}</b></span>
+                  {v.total > 0 && <button onClick={() => fetchDl(`creators:${cs}`)} className="font-bold text-gd">⬇ csv</button>}
+                </div>
+              </div>))}
+          </div>
           {d.creatorsUnattributed && Object.keys(d.creatorsUnattributed).length > 0 && (
-            <div className="px-3 py-3 text-[12px] text-amber-800 bg-amber-50 border-t border-bg5">
-              <b>{Object.values(d.creatorsUnattributed).reduce((a, b) => a + b, 0).toLocaleString()} creators sit under
-              discovered_via values not in the listed algorithms</b> — they were NOT counted above:
+            <div className="mt-3 rounded-xl bg-amber-50 p-3 text-[12px] text-amber-800">
+              <b>{Object.values(d.creatorsUnattributed).reduce((a, b) => a + b, 0).toLocaleString()} creators sit under a
+              discovered_via outside the listed algorithms</b> — NOT counted in the cards above:
               <div className="mt-1">{Object.entries(d.creatorsUnattributed).sort((a, b) => b[1] - a[1]).map(([k, n]) => (
-                <span key={k} className="inline-block mr-3"><code>{k}</code> {n.toLocaleString()}</span>))}</div>
+                <span key={k} className="mr-3 inline-block"><code>{k}</code> {n.toLocaleString()}</span>))}</div>
             </div>)}
-          <div className="px-3 py-2 text-[11px] text-b3">A source at 0 is a FAILURE, not a blank — red means it produced nothing.</div>
         </div>)}
 
       {d && tab === 'qa' && (<>
@@ -182,7 +185,7 @@ export function OpsStatusScreen() {
         </div>
         <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Findings (bugs found → fixes confirmed)</div>
-          <table className="w-full min-w-[560px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
+          <table className="w-full min-w-[480px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
             {['check','area','severity','status','detail','updated'].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
           </tr></thead><tbody>
             {d.qa.findings.map((f, i) => (
@@ -197,7 +200,7 @@ export function OpsStatusScreen() {
         </div>
         <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Recent QA runs</div>
-          <table className="w-full min-w-[560px] text-[12px]"><tbody>
+          <table className="w-full min-w-[480px] text-[12px]"><tbody>
             {d.qa.recent_runs.map((r, i) => (
               <tr key={i} className="border-t border-bg5">
                 <td className="px-2 py-1 font-bold">{r.agent}</td>
@@ -212,7 +215,7 @@ export function OpsStatusScreen() {
       {d && tab === 'agents' && (
         <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Every agent — ON is proven by runs in the last 24h</div>
-          <table className="w-full min-w-[560px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
+          <table className="w-full min-w-[480px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
             {['agent','state','runs 24h','last run','last status'].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
           </tr></thead><tbody>
             {d.agents.map((a, i) => (
@@ -246,7 +249,7 @@ export function OpsStatusScreen() {
         </div>
         <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Recent crawl jobs</div>
-          <table className="w-full min-w-[560px] text-[12px]"><tbody>
+          <table className="w-full min-w-[480px] text-[12px]"><tbody>
             {d.crawls.recent_jobs.map((j, i) => (
               <tr key={i} className="border-t border-bg5">
                 <td className="px-2 py-1 font-bold">{j.source || 'osm'}</td><td className="px-2 py-1">{j.city}</td>
