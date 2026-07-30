@@ -216,6 +216,17 @@ serve(async (req: Request) => {
             notes: r.note || (saved === 0 ? 'no YellowPages results' : 'yellowpages'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (source === 'gmaps_apify') {
+          // ── GOOGLE MAPS via APIFY (SPEC-103) — APIFY-FIRST backbone. Replaces the
+          //    dead Google Places API path (billing disabled -> 101 failed jobs) and
+          //    out-scales Yelp: no daily cap, pay-per-result, returns email+phone.
+          const r = await fulfillGmapsApify(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: r.note || (saved === 0 ? 'no Google Maps results' : 'gmaps_apify'),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else if (source === 'ig_services') {
           // ── IG-FOR-SERVICES (SPEC-102): direct Instagram user search per service x
           //    city. Proven in eval (12 real Miami trainers in seconds). Yields the
@@ -1796,6 +1807,62 @@ function cityVerifiedSvc(city: string, text: string): boolean {
   if (NY.includes(c) || ['manhattan','brooklyn','queens','bronx','staten island'].includes(c)) return NY.some((a) => t.includes(a));
   if (MIA.includes(c) || ['miami beach','brickell','wynwood','coral gables','doral'].includes(c)) return MIA.some((a) => t.includes(a));
   return t.includes(c);
+}
+
+// ── GOOGLE MAPS via Apify `compass/crawler-google-places` (SPEC-103).
+// The APIFY-FIRST backbone: no quota cap, pay-per-result, includes email+phone.
+async function fulfillGmapsApify(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+  if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'gmaps_apify', note: 'pending APIFY_TOKEN' };
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const city = (job.city || '').trim();
+  const state = (job.state || '').trim();
+  const query = `${rawType} in ${city}, ${state} [gmaps_apify]`;
+  if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
+  const want = Number(Deno.env.get('GMAPS_MAX') || '1000');   // MAX: no provider ceiling
+  const items = await apifyRun('compass~crawler-google-places', {
+    searchStringsArray: [`${rawType} ${city}`],
+    locationQuery: `${city}, ${state}, United States`,
+    maxCrawledPlacesPerSearch: want,
+    language: 'en',
+    skipClosedPlaces: true,
+    scrapeContacts: true,          // emails + socials from the business website
+  }, want);
+  let found = items.length, saved = 0;
+  const seen = new Set<string>();
+  for (const it of items) {
+    const name = cleanText(it?.title || it?.name);
+    if (!name) continue;
+    const cat = String(it?.categoryName || it?.category || '');
+    if (osmIsBlocked(`${name} ${cat}`)) continue;
+    if (!ypPlausible(rawType, name, cat)) continue;
+    const lat = it?.location?.lat ?? it?.latitude ?? null;
+    const lon = it?.location?.lng ?? it?.longitude ?? null;
+    if (lat != null && lon != null && !inUS(Number(lat), Number(lon))) continue;
+    const phone = normPhone(it?.phone || it?.phoneUnformatted || '');
+    const emails = Array.isArray(it?.emails) ? it.emails : (it?.email ? [it.email] : []);
+    const email = (emails.map((e: any) => String(e || '').toLowerCase()).find((e: string) => e.includes('@'))) || null;
+    const igs = Array.isArray(it?.instagrams) ? it.instagrams : [];
+    const igHandle = igs.length ? String(igs[0]).replace(/^.*instagram\.com\//, '').replace(/\/$/, '') : null;
+    const pid = String(it?.placeId || it?.place_id || '');
+    const key = pid || `${name.toLowerCase()}|${city.toLowerCase()}`;
+    if (seen.has(key)) continue; seen.add(key);
+    if (!phone && !email) continue;   // uncontactable -> don't pay to store
+    const row = {
+      id: `gmap:${pid || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}`,
+      name, service_type: job.service_type || null,
+      phone, phone_origin: phone ? 'gmaps_apify' : null,
+      website_url: it?.website || null, owner_email: email,
+      instagram: igHandle, has_instagram: !!igHandle,
+      address: it?.address || null,
+      city: it?.city || city, state: it?.state || state || null, zip: it?.postalCode || null,
+      lat, lon, data_source: 'gmaps_apify', fetched_at: new Date().toISOString(),
+      outreach_status: 'new',
+      outreach_notes: `gmaps_apify | ${classifyEntity(name)} | ${cat}`.slice(0, 240),
+    };
+    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    if (!error) saved++;
+  }
+  return { saved, found, query };
 }
 
 function json(body: unknown, status = 200) {
