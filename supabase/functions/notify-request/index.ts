@@ -79,6 +79,24 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
     .single();
   if (rErr || !request) return json({ error: 'request not found', detail: rErr?.message }, 404);
 
+  // ── SPEC-112: DIAGNOSTIC PING ────────────────────────────────────────────
+  // The fan-out has silent CLIENT-side exits BEFORE this function is ever
+  // called: getProvidersForNotify refuses on notify_safe_false /
+  // no_verified_provider_type / no_coords / blocked_category, and the caller can
+  // also match zero owners in radius. Those returned quietly, so a request that
+  // notified nobody left NO trace anywhere — the founder retested twice and the
+  // dashboard stayed clean. The client now pings this endpoint with the reason
+  // and it lands in the QA ledger like any other bug.
+  if (typeof body.diagnose === 'string' && body.diagnose) {
+    try {
+      await db.rpc('cergio_qa_check', {
+        p_area: 'live', p_check: 'request-notified-nobody', p_sev: 'critical', p_count: 1,
+        p_detail: `request ${requestId} (${request.service_type || 'unknown type'}, ${request.city || 'no city'}) notified 0 providers. REASON: ${String(body.diagnose).slice(0, 200)}`,
+      });
+    } catch (_e) { /* best-effort */ }
+    return json({ sent: 0, diagnosed: String(body.diagnose).slice(0, 200) });
+  }
+
   // ── SELF-NOTIFY GUARD (SPEC-78, launch-05) ────────────────────────────────
   // 2026-07-14: the founder received a "new request near you" notification for a
   // request HE created. A user is NEVER a provider for their own request. The

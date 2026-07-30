@@ -4768,6 +4768,12 @@ test('bookings-headline-counts-only-real-completed', 'SPEC-107: the headline `bo
 
 test('zero-fanout-is-a-finding', 'SPEC-110: a request that notifies ZERO providers must raise a critical qa_finding with its diagnosis. The founder requested a housekeeper while a housekeeper was listed and nobody was notified — and NOTHING recorded it, so the #1 flow failed invisibly. Also: a service row with NULL lat/lng can never be returned by services_near, so it is unreachable by every request', '#110', async () => {
   const nr = readFile('supabase/functions/notify-request/index.ts');
+  assert(/body\.diagnose/.test(nr),
+    'SPEC-112: notify-request must accept a diagnostic ping — the fan-out has CLIENT-side exits (notify_safe_false / no_verified_provider_type / no_coords / blocked_category / no_owner_in_radius) that never reach this function, so without it a request that notified nobody leaves no trace at all');
+  const apiSrc = readFile('src/lib/api.js');
+  assert(/function reportZeroFanout/.test(apiSrc), 'the client must report a zero fan-out');
+  assert(/reportZeroFanout\(request\.id, blocked\)/.test(apiSrc), 'every blocked fan-out must be reported');
+  assert(/no_owner_in_radius/.test(apiSrc), 'matching zero owners in radius must be reported too');
   assert(/p_check: 'request-notified-nobody'/.test(nr),
     'a zero-recipient fan-out must write a qa_finding, not return silently');
   assert(/p_sev: 'critical'/.test(nr), 'the #1 flow reaching nobody is critical severity');
