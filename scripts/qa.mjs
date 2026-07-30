@@ -4776,6 +4776,18 @@ test('standing-findings-self-repair', 'SPEC-111: the standing findings must be F
   assert(/repaired: \{ geo: geoFixed, titles: titleFixed, parked \}/.test(hc), 'repairs must be counted into agent_runs so the work is provable');
 });
 
+test('background-load-cannot-take-the-product-down', 'SPEC-115: background data acquisition must never be able to degrade the live product. Measured 2026-07-30: Supabase REST returned 503 on /rest/v1/services while /auth/v1/user stayed 200 — the founder could not list a service or stay signed in, because supply-engine dispatched 60 parallel fulfill-crawl runs at limit=500 and exhausted the shared connection pool', '#115', async () => {
+  const se = readFile('supabase/functions/supply-engine/index.ts');
+  assert(/Math\.min\(Number\(Deno\.env\.get\('TURBO_KICKS'\) \|\| '6'\), 10\)/.test(se),
+    'turbo kicks must have a HARD ceiling in code — env may lower it, never raise it');
+  assert(!/fulfill-crawl\?limit=500/.test(se), 'per-run limit must be reduced from the 500 that saturated the DB');
+  assert(/restOk/.test(se) && /probe\.status < 500/.test(se),
+    'the engine must probe live REST health BEFORE adding load');
+  assert(/for \(let i = 0; restOk && i < kicks; i\+\+\)/.test(se),
+    'turbo must be SKIPPED entirely while the product is degraded');
+  assert(/rest-degraded/.test(se), 'standing down must be reported as a bug, not silently');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

@@ -146,11 +146,31 @@ serve(async (req: Request) => {
   // FIRE-AND-FORGET (fix 2026-07-29): awaiting N worker kicks blew the edge-function
   // time limit and the engine returned no JSON at all. Kicks are dispatched WITHOUT
   // await so the engine always returns its counter fast; the worker drains in parallel.
-  const kicks = Number(Deno.env.get('TURBO_KICKS') || '60');  // MAX: env-driven, no hardcoded ceiling
+  // SPEC-115 — PRODUCTION SAFETY CAP. Measured 2026-07-30: Supabase REST returned
+  // HTTP 503 on /rest/v1/services and /rest/v1/user_addresses while /auth/v1/user
+  // stayed 200 — the DB layer was saturated, not auth. The founder could not list a
+  // service or stay signed in. Cause: this line dispatched 60 PARALLEL
+  // fulfill-crawl runs at limit=500 each, exhausting the connection pool that the
+  // live app shares. Background data acquisition must NEVER be able to take the
+  // product down. Hard ceiling of 6, env may lower it but never raise it past 10.
+  // Before adding ANY load, check the product is healthy. If a plain REST read is
+  // failing, the app is already degraded and crawling must stand down.
+  let restOk = true;
+  try {
+    const probe = await fetch(`${url}/rest/v1/services?select=id&limit=1`,
+      { method: 'HEAD', headers: { apikey: svc, Authorization: `Bearer ${svc}` } });
+    restOk = probe.status < 500;
+    if (!restOk) {
+      bugs.push(`rest-degraded: /rest/v1/services returned ${probe.status} — turbo SKIPPED to let the product recover`);
+      await note('supply-rest-degraded', false, 'critical', `REST ${probe.status}; background crawling stood down`);
+    }
+  } catch (_e) { restOk = false; }
+
+  const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '6'), 10);
   let kicked = 0;
   for (let i = 0; i < kicks; i++) {
     try {
-      fetch(`${FN_BASE}/fulfill-crawl?limit=500`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
+      fetch(`${FN_BASE}/fulfill-crawl?limit=150`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
       kicked++;
     } catch (_e) {}
   }
