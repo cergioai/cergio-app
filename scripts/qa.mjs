@@ -4668,6 +4668,39 @@ test('google-sponsored-uses-the-proven-lsa-engine', 'SPEC-105: the google_sponso
   assert(/data_source: provenance/.test(fc), 'rows must carry the requesting provenance, not a hardcoded one');
 });
 
+test('every-claimed-agent-has-a-cron', 'SPEC-106: every agent the ops console reports ON/OFF must actually have a pg_cron schedule defined in a migration. creator-enrich and ops-metrics read OFF/0-runs for weeks not because a deploy failed but because NO migration ever scheduled them — an agent listed in the dashboard with no cron is a permanently dead agent that LOOKS monitored', '#106', async () => {
+  const migDir = 'supabase/migrations';
+  const sql = fs.readdirSync(migDir).filter(f => f.endsWith('.sql'))
+    .map(f => readFile(`${migDir}/${f}`)).join('\n');
+  const scheduled = new Set([...sql.matchAll(/cron\.schedule\(\s*'([^']+)'/g)].map(m => m[1]));
+  // dashboard agent name -> the cron jobname that must schedule it
+  const REQUIRED = {
+    'fulfill-crawl': 'cergio_fulfill_crawl',
+    'enrich-influencers': 'cergio_enrich_influencers',
+    'creator-enrich': 'cergio_creator_enrich',
+    'crawl-health-check': 'cergio_crawl_health',
+    'qa-suite': 'cergio_qa_suite',
+    'qa-live-verify': 'cergio_qa_live_verify',
+    'coo-execute': 'cergio_coo_execute',
+    'cergio-watchdog': 'cergio_watchdog',
+    'cergio-orchestrator': 'cergio_orchestrator',
+    'ops-metrics': 'cergio_ops_metrics',
+    'supply-engine': 'cergio_supply_engine',
+    // was COO-discretionary only (no cron of its own) until SPEC-106
+    'creator-harvest': 'cergio_creator_harvest',
+  };
+  const missing = Object.entries(REQUIRED).filter(([, job]) => !scheduled.has(job));
+  assert(missing.length === 0,
+    `agent(s) reported by the ops console have NO cron.schedule in any migration -> they can never run: ${missing.map(([a, j]) => `${a} (${j})`).join(', ')}`);
+  // the shared AGENTS list must not claim an agent we do not schedule
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  const listed = (shared.match(/export const AGENTS = \[([^\]]+)\]/) || [, ''])[1]
+    .split(',').map(s => s.trim().replace(/^'|'$/g, '')).filter(Boolean);
+  const unschedulable = listed.filter(a => REQUIRED[a] === undefined);
+  assert(unschedulable.length === 0,
+    `the ops console lists agent(s) with no declared cron mapping, so ON/OFF is unverifiable: ${unschedulable.join(', ')}`);
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
