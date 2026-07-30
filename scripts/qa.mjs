@@ -4811,6 +4811,17 @@ test('growth-writes-are-batched', 'SPEC-116: growth must not share the product\'
     'the handler must flush before writing agent_runs so no row is stranded');
 });
 
+test('apify-failures-are-reported', 'SPEC-117: apifyRun discarded every failure — `if (!res.ok) return []` and `catch { return [] }`. gmaps_apify therefore burned 420 jobs producing 0 rows with NO recorded reason and was auto-disabled as a dead source. It was never dead: run-sync on compass~crawler-google-places takes minutes and the abort timer was 110s, so it aborted every time. A source cannot be judged dead on evidence the code refused to collect', '#117', async () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/_lastApifyError/.test(fc), 'apify failures must be captured, not discarded');
+  assert(/HTTP \$\{res\.status\}/.test(fc), 'a non-OK apify response must record its status');
+  assert(/TIMED OUT after 140s/.test(fc), 'an abort must be reported as a timeout with the cause, not as "no results"');
+  assert(/returned 0 items \(check actor input\)/.test(fc), 'an empty-but-successful run must be distinguished from a failure');
+  assert(!/setTimeout\(\(\) => ctrl\.abort\(\), 110000\)/.test(fc), 'the 110s timer that guaranteed failure for slow actors must be gone');
+  assert(/Math\.min\(want, 60\)/.test(fc), 'the Google Places per-run target must fit inside the run-sync window');
+  assert(/_lastApifyError \|\| 'no Google Maps results'/.test(fc), 'the real reason must land on the job notes');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
