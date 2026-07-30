@@ -4772,6 +4772,14 @@ test('zero-fanout-is-a-finding', 'SPEC-110: a request that notifies ZERO provide
     'SPEC-112: notify-request must accept a diagnostic ping — the fan-out has CLIENT-side exits (notify_safe_false / no_verified_provider_type / no_coords / blocked_category / no_owner_in_radius) that never reach this function, so without it a request that notified nobody leaves no trace at all');
   const apiSrc = readFile('src/lib/api.js');
   assert(/function reportZeroFanout/.test(apiSrc), 'the client must report a zero fan-out');
+  // REGRESSION GUARD 2026-07-30: reporting must never touch an authed endpoint.
+  // Invoking notify-request from the client returned 401 and supabase-js tore the
+  // session down — the founder was signed out on every submit. A diagnostic must
+  // never be able to break the flow it observes.
+  const rzf = apiSrc.slice(apiSrc.indexOf('function reportZeroFanout'), apiSrc.indexOf('export async function getProvidersForNotify'))
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');   // code only — a comment explaining the bug must not trip the gate
+  assert(!/functions\.invoke/.test(rzf) && !/supabase\./.test(rzf),
+    'reportZeroFanout must NOT call supabase or any authed endpoint — a 401 there signs the user out');
   assert(/reportZeroFanout\(request\.id, blocked\)/.test(apiSrc), 'every blocked fan-out must be reported');
   assert(/no_owner_in_radius/.test(apiSrc), 'matching zero owners in radius must be reported too');
   assert(/p_check: 'request-notified-nobody'/.test(nr),

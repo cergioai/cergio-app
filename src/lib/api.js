@@ -243,35 +243,20 @@ export async function listMyServices() {
 // client-side and used to return silently, so the QA ledger stayed clean while
 // the #1 flow failed. Fire-and-forget — diagnosis must never block the user.
 function reportZeroFanout(requestId, reason) {
-  try {
-    supabase.functions.invoke('notify-request', { body: { requestId, diagnose: reason } })
-      .catch(() => {});
-  } catch (_e) { /* never throw from a diagnostic */ }
+  // SPEC-112 DISABLED 2026-07-30 — REGRESSION, reverted on live evidence.
+  // This fired supabase.functions.invoke('notify-request') from the CLIENT on
+  // every blocked fan-out. notify-request is an authed endpoint; a 401 from it
+  // makes supabase-js tear down the session, which signed the founder out on
+  // every query submit ("it forces me to resign in each time"). A DIAGNOSTIC
+  // MUST NEVER BE ABLE TO BREAK THE THING IT OBSERVES. The zero-fanout finding
+  // still gets written server-side inside notify-request when that function is
+  // actually reached; the client no longer touches auth to report anything.
+  if (typeof console !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.warn('[CERGIO/request] zero fan-out', { requestId, reason });
+  }
 }
 
-// CERGIO-GUARD (2026-06-18): services_near returns ONLY proximity columns
-// (id / title / location / distance) — NOT taxonomy_provider_type. Filtering the
-// RAW rpc rows on `s.taxonomy_provider_type` matched NOTHING (always undefined →
-// allow.includes('') → false), so NO provider was EVER fanned out a new_request —
-// confirmed by zero new_request rows in the notifications table. Re-hydrate full
-// rows by id (the SAME fix searchServices applies) BEFORE the provider-type
-// filter so matching actually works.
-//
-// SPEC-113/114 — WHY THIS FUNCTION HAS A NON-GEO PATH.
-// Matching used to run ONLY through services_near (a geo query) and to refuse
-// outright when the requester had no coordinates. Both failed in production:
-//   • a listing whose lat/lng is NULL (geocode failed on save) is absent from
-//     services_near, so that provider is unreachable by EVERY request;
-//   • Google geocoding is REQUEST_DENIED on this project (billing disabled), so
-//     the REQUESTER's coords were null on every request and the no_coords guard
-//     refused every fan-out. Live proof 2026-07-30: "725 Riverside Dr, New York,
-//     NY 10031, USA" -> REQUEST_DENIED. That is why a listed housekeeper was
-//     never notified about a housekeeper request.
-// Geo is now an OPTIMISATION for proximity ranking, not a precondition for being
-// reachable. When coords are missing or proximity returns nothing, matching
-// degrades to city/state. The provider-type allowlist, ontology bridge and
-// blocked-category filters run over those rows UNCHANGED — reach widens, safety
-// does not. We refuse only when there is neither geo nor a city.
 export async function getProvidersForNotify({
   verifiedProviderType,
   notifySafe,
