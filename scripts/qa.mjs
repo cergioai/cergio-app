@@ -4701,6 +4701,24 @@ test('every-claimed-agent-has-a-cron', 'SPEC-106: every agent the ops console re
     `the ops console lists agent(s) with no declared cron mapping, so ON/OFF is unverifiable: ${unschedulable.join(', ')}`);
 });
 
+test('supply-seeding-cannot-fail-silently', 'SPEC-107: the supply engine must (a) seed COLD sources (0 jobs ever) FIRST — pure yield-ranking buried them forever because no jobs means no ratio, which is why gmaps_apify and ig_services produced zero rows for weeks — and (b) never swallow a failed insert. A bulk insert loses the ENTIRE batch if any row collides, so a silent catch made `seeded` 0 on every run while the engine reported success', '#107', async () => {
+  const se = readFile('supabase/functions/supply-engine/index.ts');
+  assert(/const cold = notDisabled\.filter\(\(\[, y\]\) => y\.jobs === 0\)/.test(se),
+    'cold sources (0 jobs) must be identified explicitly');
+  assert(/const ranked = \[\.\.\.cold, \.\.\.warm\]/.test(se),
+    'cold sources must be seeded BEFORE yield-ranked warm sources — an untried source is unmeasurable until it gets a job');
+  // no silent swallow anywhere in the seeding path
+  // strip comments first — a comment DESCRIBING the old bug must not trip the gate
+  const seedBlock = se.slice(se.indexOf('if (open < QUEUE_FLOOR)'), se.indexOf('} else {', se.indexOf('if (open < QUEUE_FLOOR)')))
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  assert(!/catch \(_e\) \{\}/.test(seedBlock),
+    'the seeding path must not contain an empty catch — that is how 0-seeded runs reported success for weeks');
+  assert(/for \(const row of chunk\)/.test(seedBlock),
+    'a failed bulk insert must fall back to per-row inserts so one duplicate costs one row, not the whole batch');
+  assert(/bugs\.push\(`seeding produced 0 jobs/.test(se),
+    'a run that seeds nothing must be reported as a BUG, never as a healthy queue');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
