@@ -4624,8 +4624,13 @@ test('ci-deploy-gap-guarded', 'SPEC-104: EVERY edge function under supabase/func
   assert(/export async function buildOpsPayload/.test(shared) && /export function isAdminEmail/.test(shared),
     'the ops payload + admin allowlist must live in _shared so both endpoints cannot drift');
   const api = readFile('src/lib/api.js');
-  assert(/invoke\('admin-crawl-status', \{ body: \{ \.\.\.opts, view: 'ops' \} \}\)/.test(api),
-    'opsConsole must fall back to the CI-deployed endpoint on ANY primary failure');
+  // LIVE-EVIDENCE-DRIVEN (2026-07-29): the stale ops-console returned 200, so an
+  // error-only fallback never fired. The CI-deployed endpoint must be PRIMARY.
+  const opsFn = api.slice(api.indexOf('export async function opsConsole'), api.indexOf('export async function leadsDashboard'));
+  const iCi = opsFn.indexOf("invoke('admin-crawl-status'");
+  const iOc = opsFn.indexOf("invoke('ops-console'");
+  assert(iCi > -1 && iOc > -1, 'opsConsole must call both endpoints');
+  assert(iCi < iOc, 'the CI-DEPLOYED endpoint (admin-crawl-status {view:"ops"}) must be called FIRST — a function outside the CI deploy array can serve a stale 200 forever, which no error-path fallback can detect');
 });
 
 test('ops-admin-allowlist-covers-founder', 'SPEC-104: the ops admin allowlist default must contain every address the founder signs in with, and a rejection must name the rejected email. A narrow default returned a bare "Forbidden" on /ops/status and cost a debugging round-trip', '#104', async () => {
@@ -4638,6 +4643,42 @@ test('ops-admin-allowlist-covers-founder', 'SPEC-104: the ops admin allowlist de
     const src = readFile(`supabase/functions/${f}/index.ts`);
     assert(/signed_in_as: email/.test(src), `${f} must report signed_in_as on a 403 so the rejected identity is visible`);
   }
+});
+
+test('ops-city-filter-and-creator-provenance', 'SPEC-104b: the ops console must (a) filter EVERY count and CSV by city, (b) say WHAT each creator algorithm does and WHERE it looks, (c) never render a missing payload block as 0, and (d) surface creators whose discovered_via is outside the listed algorithms instead of showing an empty table next to a non-zero total', '#104', async () => {
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  assert(/body\.city/.test(shared) && /const svcQ = \(\)/.test(shared) && /const creQ = \(\)/.test(shared),
+    'payload must accept body.city and route service+creator counts through filtered query builders');
+  assert(/if \(city\) q = q\.eq\('city', city\)/.test(shared), 'CSV downloads must honour the same city filter as the view');
+  assert(/CREATOR_SOURCE_META/.test(shared) && /what:/.test(shared) && /where:/.test(shared),
+    'every creator algorithm needs a what/where description — a bare source key answers neither question');
+  assert(/creatorsUnattributed/.test(shared),
+    'creators under an unlisted discovered_via must be reported, never silently dropped (founder saw 0 per source beside a 4,211 total)');
+  assert(/filter: \{ city, cities:/.test(shared), 'payload must return the real city list for the filter control');
+
+  const ui = readFile('src/screens/OpsStatusScreen.jsx');
+  assert(/const \[city, setCity\] = useState\(''\)/.test(ui) && /opsConsole\(city \? \{ city \} : \{\}\)/.test(ui),
+    'the screen must own a city filter and pass it to the endpoint');
+  assert(/opsConsole\(city \? \{ download: key, city \} : \{ download: key \}\)/.test(ui),
+    'a CSV downloaded from a filtered view must contain the filtered rows');
+  assert(/what it does/.test(ui) && /where it looks/.test(ui), 'creator table must render the what/where columns');
+  assert(/STALE PAYLOAD/.test(ui), 'an incomplete payload must warn loudly, not display zeros');
+  assert(/d\.counter \? d\.counter\.nyc_services\.toLocaleString\(\) : '—'/.test(ui),
+    "a missing counter must render '—' — showing 0 next to a Crawls tab reading 4,721 is a misreporting bug");
+  assert(/creatorsUnattributed/.test(ui), 'the screen must reveal unattributed creators');
+  assert(/served by/.test(ui), 'the console must name the endpoint that answered so freshness is visible');
+});
+
+test('google-sponsored-uses-the-proven-lsa-engine', 'SPEC-105: the google_sponsored source must run the Local Services Ads engine (what the founder actually pasted: "Sponsored <service> | <city>" WITH phone numbers), not only the generic engine=google ads[] array which measured 0 rows on every job. Provenance stays google_sponsored so the dashboard row the founder watches is the one that fills', '#105', async () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/async function fulfillGoogleLSA\(db: any, job: any, provenance = 'google_lsa'\)/.test(fc),
+    'the LSA fetcher must be provenance-parameterised so google_sponsored can reuse it');
+  const branch = fc.slice(fc.indexOf("source === 'google_sponsored'"), fc.indexOf("source === 'yelp'"));
+  assert(/fulfillGoogleLSA\(db, job, 'google_sponsored'\)/.test(branch),
+    'google_sponsored must call the LSA engine FIRST (measured: 88 rows / 100% phone vs 0 rows for ads[])');
+  assert(/fulfillGoogleSponsored\(db, job\)/.test(branch),
+    'the generic ads[] scrape must remain as a supplement, not the primary');
+  assert(/data_source: provenance/.test(fc), 'rows must carry the requesting provenance, not a hardcoded one');
 });
 
 main().catch(e => {

@@ -259,16 +259,26 @@ serve(async (req: Request) => {
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'google_sponsored') {
-          // ── Google Sponsored + local pack via SerpAPI (free tier, official) ──
-          // Advertisers who publish a contact # = high-intent providers. NO-OP
-          // without SERPAPI_KEY. Ads tagged data_source='google_sponsored', map
-          // pack 'google_local'. Phone from the local pack directly + the ad's OWN
-          // landing page. Geo-verified where coords exist; entity-classified.
-          const r = await fulfillGoogleSponsored(db, job);
+          // ── Google Sponsored (SPEC-105, corrected on evidence 2026-07-29) ────
+          // The founder's spec for this source was a pasted block of "Sponsored
+          // <service> | <city>" listings WITH phone numbers. Those are Google
+          // LOCAL SERVICES ADS (engine=google_local_services), NOT the generic
+          // engine=google `ads[]` array. Measured: LSA = 88 rows, 100% with a
+          // phone; the generic ads[] path = 0 rows across every job it ever ran.
+          // So run the PROVEN LSA fetcher first and keep the ads[] scrape only as
+          // a supplement. Provenance stays 'google_sponsored' so the founder's
+          // dashboard row is the one that fills.
+          const lsa = await fulfillGoogleLSA(db, job, 'google_sponsored');
+          let r = lsa;
+          if (lsa.saved === 0) {
+            const alt = await fulfillGoogleSponsored(db, job);
+            if (alt.saved > 0) r = alt;
+            else r = { ...lsa, note: `no LSA + no ads[] (${lsa.note || 'lsa empty'})` };
+          }
           saved = r.saved; found = r.found; query = r.query;
           await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no Google sponsored/local results' : 'google_sponsored'),
+            notes: r.note || (saved === 0 ? 'no Google sponsored/LSA results' : 'google_sponsored via LSA'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'yelp') {
@@ -1547,12 +1557,15 @@ async function resolveCid(KEY: string, city: string, state: string): Promise<str
   return null;
 }
 // Google Local Services Ads — the sponsored service pros (phone + badge).
-async function fulfillGoogleLSA(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+// `provenance` lets the google_sponsored source reuse this PROVEN fetcher while
+// keeping its own data_source tag (SPEC-105) — the founder's "Sponsored" spec IS
+// Local Services Ads. Defaults to 'google_lsa' so existing callers are unchanged.
+async function fulfillGoogleLSA(db: any, job: any, provenance = 'google_lsa'): Promise<{ saved: number; found: number; query: string; note?: string }> {
   const KEY = Deno.env.get('SERPAPI_KEY');
   const rawType = (job.service_type || '').toLowerCase().trim();
   const city = (job.city || '').trim();
   const state = (job.state || '').trim();
-  const query = `${rawType} [google_lsa ${city}]`;
+  const query = `${rawType} [${provenance} ${city}]`;
   if (!KEY) return { saved: 0, found: 0, query, note: 'pending SERPAPI_KEY' };
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
   const data_cid = await resolveCid(KEY, city, state);
@@ -1583,14 +1596,14 @@ async function fulfillGoogleLSA(db: any, job: any): Promise<{ saved: number; fou
     const row = {
       id: `glsa:${a?.cid || (name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,60)}:${city.toLowerCase().replace(/[^a-z]/g,'')}`,
       name, service_type: job.service_type || null,
-      phone, phone_origin: phone ? 'google_lsa' : null,
+      phone, phone_origin: phone ? provenance : null,
       website_url: a?.link || null, owner_email: null,
       instagram: null, has_instagram: false,
       address: a?.service_area || null, city, state: state || null, zip: null,
       lat: null, lon: null,
-      data_source: 'google_lsa', fetched_at: new Date().toISOString(),
+      data_source: provenance, fetched_at: new Date().toISOString(),
       outreach_status: 'new',
-      outreach_notes: `google_lsa | ${classifyEntity(name)} | ${a?.badge||''} | ${rev} ${yrs} | ${a?.type||''}`.slice(0,240),
+      outreach_notes: `${provenance} | ${classifyEntity(name)} | ${a?.badge||''} | ${rev} ${yrs} | ${a?.type||''}`.slice(0,240),
     };
     const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
     if (!error) saved++;

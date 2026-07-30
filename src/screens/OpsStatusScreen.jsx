@@ -35,27 +35,29 @@ function Stat({ label, value, bad }) {
 }
 export function OpsStatusScreen() {
   const [tab, setTab] = useState('live');
+  const [city, setCity] = useState('');   // '' = all cities (founder request: filter by city)
   const [d, setD] = useState(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
-    const { data, error } = await opsConsole(); setBusy(false);
+    const { data, error } = await opsConsole(city ? { city } : {}); setBusy(false);
     if (error || data?.error) { setErr(error?.message || data?.error); return; }
     setD(data);
-  }, []);
+  }, [city]);
   useEffect(() => { load(); }, [load]);
 
-  // download ONE source on click (the console used to preload every source -> timeout)
+  // download ONE source on click (the console used to preload every source -> timeout).
+  // The CSV is scoped to the SAME city filter as the view it was clicked from.
   const fetchDl = useCallback(async (key) => {
-    const { data, error } = await opsConsole({ download: key });
-    if (error || !data?.download?.[key]?.length) { setErr(error?.message || `no rows for ${key}`); return; }
-    dl(key.replace(':', '_'), data.download[key]);
-  }, []);
+    const { data, error } = await opsConsole(city ? { download: key, city } : { download: key });
+    if (error || !data?.download?.[key]?.length) { setErr(error?.message || `no rows for ${key}${city ? ` in ${city}` : ''}`); return; }
+    dl([key.replace(':', '_'), city || 'all'].join('_'), data.download[key]);
+  }, [city]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-extrabold text-black">Ops console</h1>
-        <button onClick={load} className="rounded-xl bg-bg5 px-3 py-2 text-meta-sm font-bold text-b3">↻ Refresh</button>
+        <button onClick={load} className="shrink-0 rounded-xl bg-bg5 px-3 py-2 text-meta-sm font-bold text-b3">↻ Refresh</button>
       </div>
       <p className="text-meta-sm text-b3 mt-1">Live proof: what's running, what's broken, what's been crawled.</p>
 
@@ -65,26 +67,47 @@ export function OpsStatusScreen() {
             className={`rounded-xl px-4 py-2 text-meta-sm font-bold ${tab === t.id ? 'bg-g text-white' : 'bg-bg5 text-b3'}`}>{t.label}</button>
         ))}
       </div>
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <label className="text-[11px] font-bold uppercase tracking-wide text-b3">City</label>
+        <select value={city} onChange={e => setCity(e.target.value)}
+          className="rounded-xl border border-bg5 bg-white px-3 py-2 text-meta-sm font-bold text-black">
+          <option value="">All cities</option>
+          {Object.entries(d?.filter?.cities || {}).map(([c, n]) => (
+            <option key={c} value={c}>{c} ({n.toLocaleString()})</option>
+          ))}
+        </select>
+        {city && <button onClick={() => setCity('')} className="text-[12px] font-bold text-gd">clear</button>}
+        <span className="text-[11px] text-b3">every count + CSV below is scoped to this city</span>
+      </div>
       {busy && <div className="mt-4 text-b3">Loading…</div>}
+      {d && (!d.counter || !d.creatorsBySource) && (
+        <div className="mt-4 rounded-xl border border-red-300 bg-red-50 p-3 text-[12px] text-red-700">
+          <b>STALE PAYLOAD — numbers below are incomplete, do not quote them.</b><br />
+          Served by <code>{d.served_by || 'unknown'}</code>, which is missing{' '}
+          {[!d.counter && 'counter', !d.creatorsBySource && 'creatorsBySource'].filter(Boolean).join(' + ')}.
+          The endpoint in production is behind main (it is outside the CI deploy array).
+          Missing values show as — , never as 0.
+        </div>
+      )}
       {err && <div className="mt-4 text-red-600 text-meta-sm">{err}</div>}
 
       {d && tab === 'live' && (<>
         <div className="mt-4 grid sm:grid-cols-2 gap-3">
           <div className="rounded-xl border border-bg5 p-3">
             <div className="text-meta-sm font-bold text-black">NYC services</div>
-            <div className="text-2xl font-extrabold text-black">{(d.counter?.nyc_services ?? 0).toLocaleString()} <span className="text-meta-sm text-b3">/ {(d.counter?.nyc_target ?? 0).toLocaleString()}</span></div>
+            <div className="text-2xl font-extrabold text-black">{d.counter ? d.counter.nyc_services.toLocaleString() : '—'} <span className="text-meta-sm text-b3">/ {d.counter ? d.counter.nyc_target.toLocaleString() : '—'}</span></div>
             <Bar n={d.counter?.nyc_services} target={d.counter?.nyc_target} />
-            <div className="text-meta-sm text-b3 mt-1">creators {(d.counter?.nyc_creators ?? 0).toLocaleString()}</div>
+            <div className="text-meta-sm text-b3 mt-1">creators {d.counter ? d.counter.nyc_creators.toLocaleString() : '—'}</div>
           </div>
           <div className="rounded-xl border border-bg5 p-3">
             <div className="text-meta-sm font-bold text-black">Miami services</div>
-            <div className="text-2xl font-extrabold text-black">{(d.counter?.miami_services ?? 0).toLocaleString()} <span className="text-meta-sm text-b3">/ {(d.counter?.miami_target ?? 0).toLocaleString()}</span></div>
+            <div className="text-2xl font-extrabold text-black">{d.counter ? d.counter.miami_services.toLocaleString() : '—'} <span className="text-meta-sm text-b3">/ {d.counter ? d.counter.miami_target.toLocaleString() : '—'}</span></div>
             <Bar n={d.counter?.miami_services} target={d.counter?.miami_target} />
-            <div className="text-meta-sm text-b3 mt-1">creators {(d.counter?.miami_creators ?? 0).toLocaleString()}</div>
+            <div className="text-meta-sm text-b3 mt-1">creators {d.counter ? d.counter.miami_creators.toLocaleString() : '—'}</div>
           </div>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <Stat label="New 24h" value={(d.counter?.services_new_24h ?? 0).toLocaleString()} />
+          <Stat label="New 24h" value={d.counter ? d.counter.services_new_24h.toLocaleString() : (d.crawls?.services_new_24h ?? 0).toLocaleString()} />
           <Stat label="Open bugs" value={d.qa?.open_bugs} bad={(d.qa?.open_bugs ?? 0) > 0} />
           <Stat label="Services total" value={(d.crawls?.services_total ?? 0).toLocaleString()} />
         </div>
@@ -117,14 +140,16 @@ export function OpsStatusScreen() {
       </>)}
 
       {d && tab === 'creators' && (
-        <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
+        <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Creator sources — every algorithm, with counts</div>
-          <table className="w-full text-[12px]"><thead className="bg-bg5 text-b3"><tr>
-            {['source (algorithm)', 'total', 'NYC', 'Miami', 'with email', 'with followers', ''].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
+          <table className="w-full min-w-[880px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
+            {['source (algorithm)', 'what it does', 'where it looks', 'total', 'NYC', 'Miami', 'with email', 'with followers', ''].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
           </tr></thead><tbody>
             {Object.entries(d.creatorsBySource || {}).sort((a, b) => b[1].total - a[1].total).map(([cs, v]) => (
               <tr key={cs} className="border-t border-bg5">
                 <td className="px-2 py-1 font-bold text-black">{cs}</td>
+                <td className="px-2 py-1 text-b3 max-w-[220px]">{v.what || '—'}</td>
+                <td className="px-2 py-1 text-b3">{v.where || '—'}</td>
                 <td className={`px-2 py-1 font-extrabold ${v.total === 0 ? 'text-red-600' : 'text-black'}`}>{v.total}</td>
                 <td className="px-2 py-1">{v.nyc}</td><td className="px-2 py-1">{v.miami}</td>
                 <td className="px-2 py-1">{v.withEmail}</td><td className="px-2 py-1">{v.withFollowers}</td>
@@ -132,6 +157,20 @@ export function OpsStatusScreen() {
                   <button onClick={() => fetchDl(`creators:${cs}`)} className="text-gd font-bold">⬇ csv</button>)}</td>
               </tr>))}
           </tbody></table>
+          {Object.keys(d.creatorsBySource || {}).length === 0 && (
+            <div className="px-3 py-3 text-[12px] text-red-700 bg-red-50">
+              <b>No creator-source rows returned at all.</b> The endpoint that answered
+              (<code>{d.served_by || 'unknown'}</code>) did not include <code>creatorsBySource</code> —
+              this is a stale-deploy symptom, not "zero creators". Creators total reads{' '}
+              <b>{(d.creators_total ?? d.crawls?.creators_total ?? 0).toLocaleString()}</b>.
+            </div>)}
+          {d.creatorsUnattributed && Object.keys(d.creatorsUnattributed).length > 0 && (
+            <div className="px-3 py-3 text-[12px] text-amber-800 bg-amber-50 border-t border-bg5">
+              <b>{Object.values(d.creatorsUnattributed).reduce((a, b) => a + b, 0).toLocaleString()} creators sit under
+              discovered_via values not in the listed algorithms</b> — they were NOT counted above:
+              <div className="mt-1">{Object.entries(d.creatorsUnattributed).sort((a, b) => b[1] - a[1]).map(([k, n]) => (
+                <span key={k} className="inline-block mr-3"><code>{k}</code> {n.toLocaleString()}</span>))}</div>
+            </div>)}
           <div className="px-3 py-2 text-[11px] text-b3">A source at 0 is a FAILURE, not a blank — red means it produced nothing.</div>
         </div>)}
 
@@ -141,9 +180,9 @@ export function OpsStatusScreen() {
           <Stat label="Findings tracked" value={d.qa.findings.length} />
           <Stat label="QA runs logged" value={d.qa.recent_runs.length} />
         </div>
-        <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
+        <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Findings (bugs found → fixes confirmed)</div>
-          <table className="w-full text-[12px]"><thead className="bg-bg5 text-b3"><tr>
+          <table className="w-full min-w-[560px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
             {['check','area','severity','status','detail','updated'].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
           </tr></thead><tbody>
             {d.qa.findings.map((f, i) => (
@@ -156,9 +195,9 @@ export function OpsStatusScreen() {
               </tr>))}
           </tbody></table>
         </div>
-        <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
+        <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Recent QA runs</div>
-          <table className="w-full text-[12px]"><tbody>
+          <table className="w-full min-w-[560px] text-[12px]"><tbody>
             {d.qa.recent_runs.map((r, i) => (
               <tr key={i} className="border-t border-bg5">
                 <td className="px-2 py-1 font-bold">{r.agent}</td>
@@ -171,9 +210,9 @@ export function OpsStatusScreen() {
       </>)}
 
       {d && tab === 'agents' && (
-        <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
+        <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Every agent — ON is proven by runs in the last 24h</div>
-          <table className="w-full text-[12px]"><thead className="bg-bg5 text-b3"><tr>
+          <table className="w-full min-w-[560px] text-[12px]"><thead className="bg-bg5 text-b3"><tr>
             {['agent','state','runs 24h','last run','last status'].map(h => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
           </tr></thead><tbody>
             {d.agents.map((a, i) => (
@@ -205,9 +244,9 @@ export function OpsStatusScreen() {
               <div key={k} className="flex justify-between text-meta-sm py-0.5"><span className="text-b3">{k}</span><span className="font-bold text-black">{n}</span></div>))}
           </div>
         </div>
-        <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
+        <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto">
           <div className="px-3 py-2 text-meta-sm font-bold text-black">Recent crawl jobs</div>
-          <table className="w-full text-[12px]"><tbody>
+          <table className="w-full min-w-[560px] text-[12px]"><tbody>
             {d.crawls.recent_jobs.map((j, i) => (
               <tr key={i} className="border-t border-bg5">
                 <td className="px-2 py-1 font-bold">{j.source || 'osm'}</td><td className="px-2 py-1">{j.city}</td>
@@ -220,6 +259,11 @@ export function OpsStatusScreen() {
         </div>
       </>)}
 
+      {d && (
+        <p className="mt-4 text-[11px] text-b3">
+          served by <code>{d.served_by || 'unknown'}</code> · generated {d.generated_at || '—'}
+        </p>
+      )}
       {d && tab === 'product' && (
         <div className="mt-4 grid grid-cols-3 gap-2">
           <Stat label="Profiles" value={d.product.profiles} />
