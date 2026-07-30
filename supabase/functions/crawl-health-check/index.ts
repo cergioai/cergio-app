@@ -156,6 +156,58 @@ serve(async (req: Request) => {
       osm_selfheal = { ...osm_selfheal, error: e instanceof Error ? e.message : String(e) };
     }
 
+    // ── SELF-REPAIR (SPEC-111) — fix the standing findings instead of reporting
+    // them forever. Runs every 30 min. Small batches, no deletes, all idempotent.
+    let geoFixed = 0, titleFixed = 0, parked = 0;
+
+    // 1. GEO-INVISIBLE LISTINGS. services_near is a geo query, so a NULL lat/lng
+    //    makes a listing unreachable by EVERY request — the founder's housekeeper
+    //    was listed and never notified. Backfill coords from the address.
+    try {
+      const { data: noGeo } = await db.from('services')
+        .select('id, location_text, city, state')
+        .or('lat.is.null,lng.is.null').limit(20);
+      for (const svc of (noGeo || [])) {
+        const addr = [svc.location_text, svc.city, svc.state].filter(Boolean).join(', ');
+        if (!addr) continue;
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(addr)}`,
+            { headers: { 'User-Agent': 'cergio.ai/1.0 (ops@cergio.ai)' } });
+          if (!r.ok) continue;
+          const j = await r.json();
+          if (!j?.[0]?.lat || !j?.[0]?.lon) continue;
+          await db.from('services').update({ lat: Number(j[0].lat), lng: Number(j[0].lon) }).eq('id', svc.id);
+          geoFixed++;
+        } catch (_e) { /* skip this row */ }
+        await new Promise((res) => setTimeout(res, 1100));   // Nominatim etiquette: 1 req/sec
+      }
+    } catch (_e) { /* repair is best-effort */ }
+
+    // 2. STREET ADDRESS LEAKED INTO A TITLE ("Housekeeper in 5701 Collins").
+    try {
+      const { data: bad } = await db.from('services')
+        .select('id, title, category, city').limit(200);
+      for (const svc of (bad || [])) {
+        if (!svc.title || !/\bin\s+\d{2,6}\s+\w/i.test(svc.title)) continue;
+        const clean = svc.city ? `${svc.category || 'Service'} in ${svc.city}` : (svc.category || 'Service');
+        await db.from('services').update({ title: clean }).eq('id', svc.id);
+        titleFixed++;
+      }
+    } catch (_e) { /* best-effort */ }
+
+    // 3. OFF-SPEC CRAWL CITIES — park them; phase 1 is Miami + NYC only.
+    try {
+      const P1 = ['Miami','New York','Manhattan','Brooklyn','Queens','Bronx','Staten Island',
+                  'Miami Beach','Brickell','Wynwood','Coral Gables','Doral','South Beach',
+                  'Coconut Grove','Aventura','Little Havana','Hialeah','North Miami','Kendall','Pinecrest'];
+      const { data: off } = await db.from('crawl_requests')
+        .update({ status: 'parked', updated_at: new Date().toISOString() })
+        .in('status', ['new', 'crawling']).not('city', 'in', `(${P1.map((c) => `"${c}"`).join(',')})`)
+        .select('id');
+      parked = off?.length ?? 0;
+    } catch (_e) { /* best-effort */ }
+
     // BACKBONE (fix 2026-07-29): this worker never wrote an agent_runs row, so
     // /ops/status reported it OFF no matter how often its cron fired — an
     // unfalsifiable health signal. One row per invocation makes ON/OFF real.
@@ -163,7 +215,7 @@ serve(async (req: Request) => {
       await db.from('agent_runs').insert({
         agent: 'crawl-health-check', started_at: new Date(hcStarted).toISOString(),
         finished_at: new Date().toISOString(), rows_written: osm_selfheal ?? 0,
-        status: 'ok', meta: { emailed, osm_selfheal },
+        status: 'ok', meta: { emailed, osm_selfheal, repaired: { geo: geoFixed, titles: titleFixed, parked } },
       });
     } catch (_e) { /* best-effort: logging must never mask the worker outcome */ }
     return json({ ...report, emailed, osm_selfheal });

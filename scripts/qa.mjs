@@ -4777,6 +4777,16 @@ test('zero-fanout-is-a-finding', 'SPEC-110: a request that notifies ZERO provide
   assert(/or\('lat\.is\.null,lng\.is\.null'\)/.test(lv), 'the geo check must catch a NULL in EITHER coordinate');
 });
 
+test('standing-findings-self-repair', 'SPEC-111: the standing findings must be FIXED automatically, not reported forever. crawl-health-check (every 30 min) backfills NULL lat/lng (a geo-invisible listing is unreachable by every request — the housekeeper case), strips street addresses leaked into titles, and parks off-spec crawl cities', '#111', async () => {
+  const hc = readFile('supabase/functions/crawl-health-check/index.ts');
+  assert(/or\('lat\.is\.null,lng\.is\.null'\)/.test(hc), 'must find listings with a NULL in either coordinate');
+  assert(/nominatim\.openstreetmap\.org/.test(hc) && /User-Agent/.test(hc), 'geocode backfill must identify itself');
+  assert(/setTimeout\(res, 1100\)/.test(hc), 'Nominatim etiquette is 1 request/sec — never hammer a free service');
+  assert(/status: 'parked'/.test(hc), 'off-spec crawl cities must be parked, never deleted');
+  assert(!/\.delete\(\)/.test(hc), 'a self-repair loop must never hard-delete');
+  assert(/repaired: \{ geo: geoFixed, titles: titleFixed, parked \}/.test(hc), 'repairs must be counted into agent_runs so the work is provable');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
