@@ -44,6 +44,13 @@ export function OpsStatusScreen() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // download ONE source on click (the console used to preload every source -> timeout)
+  const fetchDl = useCallback(async (key) => {
+    const { data, error } = await opsConsole({ download: key });
+    if (error || !data?.download?.[key]?.length) { setErr(error?.message || `no rows for ${key}`); return; }
+    dl(key.replace(':', '_'), data.download[key]);
+  }, []);
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between">
@@ -94,11 +101,18 @@ export function OpsStatusScreen() {
               ))}
             </div>
           </div>)}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {Object.keys(d.download || {}).map(k => (
-            <button key={k} onClick={() => dl(k, d.download[k])} className="rounded-xl bg-bg5 px-3 py-2 text-[12px] font-bold text-b3">
-              ⬇ {k} ({(d.download[k] || []).length})
-            </button>))}
+        <div className="mt-4">
+          <div className="text-meta-sm font-bold text-black mb-2">Download data (fetched on click)</div>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(d.crawls?.by_source || {}).filter(([, n]) => n > 0).map(([s2, n]) => (
+              <button key={s2} onClick={() => fetchDl(`services:${s2}`)} className="rounded-xl bg-bg5 px-3 py-2 text-[12px] font-bold text-b3">
+                ⬇ {s2} ({n.toLocaleString()})
+              </button>))}
+            {Object.entries(d.creatorsBySource || {}).filter(([, v]) => v.total > 0).map(([cs, v]) => (
+              <button key={cs} onClick={() => fetchDl(`creators:${cs}`)} className="rounded-xl bg-bg5 px-3 py-2 text-[12px] font-bold text-b3">
+                ⬇ {cs} ({v.total.toLocaleString()})
+              </button>))}
+          </div>
         </div>
       </>)}
 
@@ -114,8 +128,8 @@ export function OpsStatusScreen() {
                 <td className={`px-2 py-1 font-extrabold ${v.total === 0 ? 'text-red-600' : 'text-black'}`}>{v.total}</td>
                 <td className="px-2 py-1">{v.nyc}</td><td className="px-2 py-1">{v.miami}</td>
                 <td className="px-2 py-1">{v.withEmail}</td><td className="px-2 py-1">{v.withFollowers}</td>
-                <td className="px-2 py-1">{(d.download?.[`creators_${cs}`] || []).length > 0 && (
-                  <button onClick={() => dl(`creators_${cs}`, d.download[`creators_${cs}`])} className="text-gd font-bold">⬇ csv</button>)}</td>
+                <td className="px-2 py-1">{v.total > 0 && (
+                  <button onClick={() => fetchDl(`creators:${cs}`)} className="text-gd font-bold">⬇ csv</button>)}</td>
               </tr>))}
           </tbody></table>
           <div className="px-3 py-2 text-[11px] text-b3">A source at 0 is a FAILURE, not a blank — red means it produced nothing.</div>

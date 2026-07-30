@@ -78,19 +78,25 @@ serve(async (req: Request) => {
     // latest supply-engine run (bugs found + auto-fixes)
     let engine: unknown = null;
     try { const { data } = await db.from('agent_runs').select('meta, started_at, status').eq('agent','supply-engine').order('started_at',{ascending:false}).limit(1); engine = data?.[0] ?? null; } catch (_e) {}
-    // DOWNLOAD payloads: rows per source, capped
+    // DOWNLOAD is OPT-IN (fix 2026-07-29): loading 15 sources x 2000 rows on every
+    // page load timed out the function -> the console showed "non-2xx status code".
+    // The UI now requests ONE source at a time via { download: "<key>" }.
     const download: Record<string, unknown[]> = {};
-    for (const s2 of SOURCES) {
-      const { data } = await db.from('leads_services')
-        .select('name, service_type, phone, owner_email, instagram, city, state, data_source, outreach_status')
-        .eq('data_source', s2).limit(2000);
-      if (data?.length) download[`services_${s2}`] = data;
-    }
-    for (const cs of CREATOR_SOURCES) {
-      const { data } = await db.from('leads_influencers')
-        .select('ig_handle, display_name, category, followers, email, phone, city, state, discovered_via, outreach_status')
-        .eq('discovered_via', cs).limit(2000);
-      if (data?.length) download[`creators_${cs}`] = data;
+    const wantDl = typeof body.download === 'string' ? body.download : null;
+    if (wantDl) {
+      const [kind, ...rest] = wantDl.split(':');
+      const key = rest.join(':');
+      if (kind === 'services') {
+        const { data } = await db.from('leads_services')
+          .select('name, service_type, phone, owner_email, instagram, city, state, data_source, outreach_status')
+          .eq('data_source', key).limit(5000);
+        download[wantDl] = data || [];
+      } else if (kind === 'creators') {
+        const { data } = await db.from('leads_influencers')
+          .select('ig_handle, display_name, category, followers, email, phone, city, state, discovered_via, outreach_status')
+          .eq('discovered_via', key).limit(5000);
+        download[wantDl] = data || [];
+      }
     }
 
     const { count: profiles } = await db.from('profiles').select('id', { count: 'exact', head: true });
