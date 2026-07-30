@@ -4883,16 +4883,27 @@ export async function earlyOffers({ city = null, limit = 60 } = {}) {
 }
 
 export async function opsConsole(opts = {}) {
-  const { data, error } = await supabase.functions.invoke('ops-console', { body: opts });
-  if (error) {
-    // surface the REAL error instead of "Edge Function returned a non-2xx status code"
-    let real = error.message;
-    try { const b = await error.context?.json?.(); if (b?.error) real = b.error; } catch (_e) { /* keep */ }
-    // eslint-disable-next-line no-console
-    console.error('[CERGIO/ops-console]', real);
-    return { data: null, error: { ...error, message: real } };
-  }
-  return { data, error: null };
+  // SPEC-104: `ops-console` is not in the CI deploy array, so a merged fix to it
+  // may not be live yet. `admin-crawl-status` IS CI-deployed and serves the
+  // identical payload at { view:'ops' }. Try ops-console, fall back on ANY
+  // failure (403 stale allowlist / 404 not deployed / 5xx) so the dashboard
+  // never dies on a deploy gap. Whichever answered is reported in `served_by`.
+  const unwrap = async (error) => {
+    let real = error?.message || 'unknown error';
+    try { const b = await error.context?.json?.(); if (b?.error) real = b.error + (b.signed_in_as ? ` (signed in as ${b.signed_in_as})` : ''); } catch (_e) { /* keep */ }
+    return real;
+  };
+  const primary = await supabase.functions.invoke('ops-console', { body: opts });
+  if (!primary.error) return { data: primary.data, error: null };
+  const primaryMsg = await unwrap(primary.error);
+  // eslint-disable-next-line no-console
+  console.warn('[CERGIO/ops-console] primary failed, trying admin-crawl-status:', primaryMsg);
+  const fb = await supabase.functions.invoke('admin-crawl-status', { body: { ...opts, view: 'ops' } });
+  if (!fb.error) return { data: fb.data, error: null };
+  const fbMsg = await unwrap(fb.error);
+  // eslint-disable-next-line no-console
+  console.error('[CERGIO/ops-console] both endpoints failed:', primaryMsg, '|', fbMsg);
+  return { data: null, error: { ...fb.error, message: `${fbMsg} (ops-console: ${primaryMsg})` } };
 }
 
 export async function leadsDashboard(audience = 'services', { city = null, source = null } = {}) {

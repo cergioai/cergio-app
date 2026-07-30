@@ -4589,6 +4589,57 @@ test('crawl-phase-gate', 'SPEC-97: crawl seeder is PHASE-GATED — Miami + NYC m
   assert(/crawl-spec-cities-only/.test(live), 'live QA must flag any off-spec crawl city');
 });
 
+test('ci-deploy-gap-guarded', 'SPEC-104: EVERY edge function under supabase/functions/ must either be in the CI deploy array (.github/workflows/deploy-functions.yml) or be listed in KNOWN_DEPLOY_GAP below WITH a CI-deployed fallback. A function that is neither is INERT on merge (404 in prod) while the code reads as shipped — the exact class of failure that made a merged ops fix invisible', '#104', async () => {
+  const wf = readFile('.github/workflows/deploy-functions.yml');
+  const m = wf.match(/FUNCS=\(([\s\S]*?)\)/);
+  assert(m, 'deploy-functions.yml must declare a FUNCS list');
+  const ciFuncs = new Set(m[1].split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')));
+  const dirs = fs.readdirSync('supabase/functions', { withFileTypes: true })
+    .filter(d => d.isDirectory() && !d.name.startsWith('_')).map(d => d.name).sort();
+  // Functions knowingly outside CI. Each MUST have a real reach-path in prod.
+  // Shrink this list — do not grow it. The permanent fix is granting the PAT
+  // `workflow` scope so deploy-functions.yml becomes auto-discovering.
+  const KNOWN_DEPLOY_GAP = {
+    'ops-console':              'admin-crawl-status serves the identical payload at { view:"ops" } (CI-deployed); api.js opsConsole falls back',
+    'leads-dashboard':          'manually deployed; admin-only screen',
+    'crawl-seed-osm':           'manually deployed; invoked by pg_cron server-side',
+    'crawl-seed-google-places': 'dormant (Google Places billing disabled)',
+    'creator-enrich':           'manually deployed; invoked by pg_cron',
+    'creator-marketplace-enrich':'manually deployed; no-ops until the IG marketplace token is set',
+    'early-offers':             'manually deployed; verified HTTP 200 live',
+    'qa-live-verify':           'manually deployed; invoked by pg_cron',
+    'qa-suite':                 'manually deployed; invoked by pg_cron',
+    'supply-engine':            'manually deployed; invoked by pg_cron',
+    'support-triage':           'manually deployed; admin-only',
+  };
+  const unaccounted = dirs.filter(d => !ciFuncs.has(d) && !(d in KNOWN_DEPLOY_GAP));
+  assert(unaccounted.length === 0,
+    `NEW function(s) are in neither the CI deploy array nor KNOWN_DEPLOY_GAP -> they will 404 in prod on merge: ${unaccounted.join(', ')}. Add them to FUNCS (preferred) or document the reach-path.`);
+  // the ops fallback specifically must be real, not just documented
+  const acs = readFile('supabase/functions/admin-crawl-status/index.ts');
+  assert(ciFuncs.has('admin-crawl-status'), 'the ops fallback host must itself be CI-deployed');
+  assert(/buildOpsPayload/.test(acs) && /reqBody\.view === 'ops'/.test(acs),
+    'admin-crawl-status must serve the shared ops payload at { view:"ops" }');
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  assert(/export async function buildOpsPayload/.test(shared) && /export function isAdminEmail/.test(shared),
+    'the ops payload + admin allowlist must live in _shared so both endpoints cannot drift');
+  const api = readFile('src/lib/api.js');
+  assert(/invoke\('admin-crawl-status', \{ body: \{ \.\.\.opts, view: 'ops' \} \}\)/.test(api),
+    'opsConsole must fall back to the CI-deployed endpoint on ANY primary failure');
+});
+
+test('ops-admin-allowlist-covers-founder', 'SPEC-104: the ops admin allowlist default must contain every address the founder signs in with, and a rejection must name the rejected email. A narrow default returned a bare "Forbidden" on /ops/status and cost a debugging round-trip', '#104', async () => {
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  for (const e of ['t@cergio.ai', 'info@cergio.ai', 'tarik.sansal2@gmail.com']) {
+    assert(shared.includes(e), `DEFAULT_ADMINS must include ${e}`);
+  }
+  assert(/ADMIN_EMAILS/.test(readFile('supabase/functions/ops-console/index.ts')), 'env ADMIN_EMAILS must still override');
+  for (const f of ['ops-console', 'admin-crawl-status']) {
+    const src = readFile(`supabase/functions/${f}/index.ts`);
+    assert(/signed_in_as: email/.test(src), `${f} must report signed_in_as on a 403 so the rejected identity is visible`);
+  }
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

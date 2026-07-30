@@ -11,6 +11,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { buildOpsPayload, isAdminEmail } from '../_shared/opsPayload.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,7 +19,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const DEFAULT_ADMINS = ['t@cergio.ai', 'info@cergio.ai', 'tarik.sansal2@gmail.com', 'tarik@cergio.ai', 'tariksansal@gmail.com'];  // founder's signed-in emails (Forbidden fix 2026-07-29)
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -33,11 +33,22 @@ serve(async (req: Request) => {
     const supaUser = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: u } = await supaUser.auth.getUser();
     const email = (u?.user?.email || '').toLowerCase();
-    const admins = (Deno.env.get('ADMIN_EMAILS') || DEFAULT_ADMINS.join(','))
-      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    if (!email || !admins.includes(email)) return json({ error: 'Forbidden' }, 403);
+    if (!isAdminEmail(email, Deno.env.get('ADMIN_EMAILS'))) return json({ error: 'Forbidden', signed_in_as: email || null, hint: 'this email is not in the ops allowlist' }, 403);
 
     const db = createClient(supabaseUrl, serviceKey);
+
+    // ── SPEC-104: serve the OPS CONSOLE payload from here too ────────────────
+    // `ops-console` is absent from the CI deploy array and that workflow file
+    // cannot be pushed off-Mac (PAT lacks `workflow` scope), so ops fixes never
+    // reached prod. This function IS CI-deployed, so /ops/status falls back here
+    // and every future ops change ships automatically.
+    let reqBody: Record<string, unknown> = {};
+    try { reqBody = await req.clone().json(); } catch (_e) { reqBody = {}; }
+    if (reqBody.view === 'ops') {
+      const payload = await buildOpsPayload(db, reqBody);
+      return json({ ...payload, served_by: 'admin-crawl-status' });
+    }
+
     const staleHours = Number(Deno.env.get('CRAWL_STALE_HOURS') || '2');
     const sinceIso = new Date(Date.now() - staleHours * 3600 * 1000).toISOString();
 
