@@ -1,0 +1,67 @@
+# SPEC-120 — one-shot setup + health check for the SEPARATE growth project.
+# Manual only. Verifies the GROWTH_* secrets really work, applies the growth
+# schema, and prints proof. Nothing here can touch the product database: the
+# applier refuses to run if GROWTH_SUPABASE_URL points at the product ref.
+name: Growth DB setup
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Verify the GROWTH secrets are present and distinct from the product
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "${GROWTH_SUPABASE_URL:-}" ] || { echo "::error::GROWTH_SUPABASE_URL is empty"; exit 1; }
+          [ -n "${GROWTH_SERVICE_ROLE_KEY:-}" ] || { echo "::error::GROWTH_SERVICE_ROLE_KEY is empty"; exit 1; }
+          case "$GROWTH_SUPABASE_URL" in
+            *vjmwnbftfquyquwaklue*) echo "::error::points at the PRODUCT project — that is the outage"; exit 1;;
+            https://*.supabase.co*) echo "URL shape OK (host masked)";;
+            *) echo "::error::GROWTH_SUPABASE_URL must look like https://<ref>.supabase.co"; exit 1;;
+          esac
+          echo "secret length check: ${#GROWTH_SERVICE_ROLE_KEY} chars"
+
+      - name: Live auth check against the growth project
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "apikey: $GROWTH_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
+            "$GROWTH_SUPABASE_URL/rest/v1/")
+          echo "growth REST responded: HTTP $CODE"
+          case "$CODE" in
+            200|404) echo "credentials accepted";;
+            401|403) echo "::error::growth key rejected (HTTP $CODE) — re-copy the secret key"; exit 1;;
+            *) echo "::error::unexpected HTTP $CODE from the growth project"; exit 1;;
+          esac
+
+      - name: Apply the growth schema
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/apply-growth-schema.mjs
+
+      - name: Prove the tables exist
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+        run: |
+          for t in crawl_requests leads_services leads_influencers agent_runs; do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+              -H "apikey: $GROWTH_SERVICE_ROLE_KEY" -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
+              "$GROWTH_SUPABASE_URL/rest/v1/$t?select=*&limit=1")
+            echo "  $t -> HTTP $CODE"
+          done
