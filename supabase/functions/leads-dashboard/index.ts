@@ -10,7 +10,7 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
-const DEFAULT_ADMINS = ['t@cergio.ai', 'info@cergio.ai'];
+const DEFAULT_ADMINS = ['t@cergio.ai', 'info@cergio.ai', 'tarik.sansal2@gmail.com', 'tarik@cergio.ai', 'tariksansal@gmail.com'];  // founder's signed-in emails (Forbidden fix 2026-07-29)
 const SVC_SOURCES = ['yelp', 'google_local', 'google_lsa', 'google_sponsored', 'craigslist', 'yellowpages', 'osm', 'google_places'];
 const CRE_SOURCES = ['modash-vetted-seed', 'ig-creator-marketplace'];
 function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } }); }
