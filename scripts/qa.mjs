@@ -4589,6 +4589,98 @@ test('crawl-phase-gate', 'SPEC-97: crawl seeder is PHASE-GATED — Miami + NYC m
   assert(/crawl-spec-cities-only/.test(live), 'live QA must flag any off-spec crawl city');
 });
 
+test('ci-deploy-gap-guarded', 'SPEC-104: EVERY edge function under supabase/functions/ must either be in the CI deploy array (.github/workflows/deploy-functions.yml) or be listed in KNOWN_DEPLOY_GAP below WITH a CI-deployed fallback. A function that is neither is INERT on merge (404 in prod) while the code reads as shipped — the exact class of failure that made a merged ops fix invisible', '#104', async () => {
+  const wf = readFile('.github/workflows/deploy-functions.yml');
+  const m = wf.match(/FUNCS=\(([\s\S]*?)\)/);
+  assert(m, 'deploy-functions.yml must declare a FUNCS list');
+  const ciFuncs = new Set(m[1].split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')));
+  const dirs = fs.readdirSync('supabase/functions', { withFileTypes: true })
+    .filter(d => d.isDirectory() && !d.name.startsWith('_')).map(d => d.name).sort();
+  // Functions knowingly outside CI. Each MUST have a real reach-path in prod.
+  // Shrink this list — do not grow it. The permanent fix is granting the PAT
+  // `workflow` scope so deploy-functions.yml becomes auto-discovering.
+  const KNOWN_DEPLOY_GAP = {
+    'ops-console':              'admin-crawl-status serves the identical payload at { view:"ops" } (CI-deployed); api.js opsConsole falls back',
+    'leads-dashboard':          'manually deployed; admin-only screen',
+    'crawl-seed-osm':           'manually deployed; invoked by pg_cron server-side',
+    'crawl-seed-google-places': 'dormant (Google Places billing disabled)',
+    'creator-enrich':           'manually deployed; invoked by pg_cron',
+    'creator-marketplace-enrich':'manually deployed; no-ops until the IG marketplace token is set',
+    'early-offers':             'manually deployed; verified HTTP 200 live',
+    'qa-live-verify':           'manually deployed; invoked by pg_cron',
+    'qa-suite':                 'manually deployed; invoked by pg_cron',
+    'supply-engine':            'manually deployed; invoked by pg_cron',
+    'support-triage':           'manually deployed; admin-only',
+  };
+  const unaccounted = dirs.filter(d => !ciFuncs.has(d) && !(d in KNOWN_DEPLOY_GAP));
+  assert(unaccounted.length === 0,
+    `NEW function(s) are in neither the CI deploy array nor KNOWN_DEPLOY_GAP -> they will 404 in prod on merge: ${unaccounted.join(', ')}. Add them to FUNCS (preferred) or document the reach-path.`);
+  // the ops fallback specifically must be real, not just documented
+  const acs = readFile('supabase/functions/admin-crawl-status/index.ts');
+  assert(ciFuncs.has('admin-crawl-status'), 'the ops fallback host must itself be CI-deployed');
+  assert(/buildOpsPayload/.test(acs) && /reqBody\.view === 'ops'/.test(acs),
+    'admin-crawl-status must serve the shared ops payload at { view:"ops" }');
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  assert(/export async function buildOpsPayload/.test(shared) && /export function isAdminEmail/.test(shared),
+    'the ops payload + admin allowlist must live in _shared so both endpoints cannot drift');
+  const api = readFile('src/lib/api.js');
+  // LIVE-EVIDENCE-DRIVEN (2026-07-29): the stale ops-console returned 200, so an
+  // error-only fallback never fired. The CI-deployed endpoint must be PRIMARY.
+  const opsFn = api.slice(api.indexOf('export async function opsConsole'), api.indexOf('export async function leadsDashboard'));
+  const iCi = opsFn.indexOf("invoke('admin-crawl-status'");
+  const iOc = opsFn.indexOf("invoke('ops-console'");
+  assert(iCi > -1 && iOc > -1, 'opsConsole must call both endpoints');
+  assert(iCi < iOc, 'the CI-DEPLOYED endpoint (admin-crawl-status {view:"ops"}) must be called FIRST — a function outside the CI deploy array can serve a stale 200 forever, which no error-path fallback can detect');
+});
+
+test('ops-admin-allowlist-covers-founder', 'SPEC-104: the ops admin allowlist default must contain every address the founder signs in with, and a rejection must name the rejected email. A narrow default returned a bare "Forbidden" on /ops/status and cost a debugging round-trip', '#104', async () => {
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  for (const e of ['t@cergio.ai', 'info@cergio.ai', 'tarik.sansal2@gmail.com']) {
+    assert(shared.includes(e), `DEFAULT_ADMINS must include ${e}`);
+  }
+  assert(/ADMIN_EMAILS/.test(readFile('supabase/functions/ops-console/index.ts')), 'env ADMIN_EMAILS must still override');
+  for (const f of ['ops-console', 'admin-crawl-status']) {
+    const src = readFile(`supabase/functions/${f}/index.ts`);
+    assert(/signed_in_as: email/.test(src), `${f} must report signed_in_as on a 403 so the rejected identity is visible`);
+  }
+});
+
+test('ops-city-filter-and-creator-provenance', 'SPEC-104b: the ops console must (a) filter EVERY count and CSV by city, (b) say WHAT each creator algorithm does and WHERE it looks, (c) never render a missing payload block as 0, and (d) surface creators whose discovered_via is outside the listed algorithms instead of showing an empty table next to a non-zero total', '#104', async () => {
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  assert(/body\.city/.test(shared) && /const svcQ = \(\)/.test(shared) && /const creQ = \(\)/.test(shared),
+    'payload must accept body.city and route service+creator counts through filtered query builders');
+  assert(/if \(city\) q = q\.eq\('city', city\)/.test(shared), 'CSV downloads must honour the same city filter as the view');
+  assert(/CREATOR_SOURCE_META/.test(shared) && /what:/.test(shared) && /where:/.test(shared),
+    'every creator algorithm needs a what/where description — a bare source key answers neither question');
+  assert(/creatorsUnattributed/.test(shared),
+    'creators under an unlisted discovered_via must be reported, never silently dropped (founder saw 0 per source beside a 4,211 total)');
+  assert(/filter: \{ city, cities:/.test(shared), 'payload must return the real city list for the filter control');
+
+  const ui = readFile('src/screens/OpsStatusScreen.jsx');
+  assert(/const \[city, setCity\] = useState\(''\)/.test(ui) && /opsConsole\(city \? \{ city \} : \{\}\)/.test(ui),
+    'the screen must own a city filter and pass it to the endpoint');
+  assert(/opsConsole\(city \? \{ download: key, city \} : \{ download: key \}\)/.test(ui),
+    'a CSV downloaded from a filtered view must contain the filtered rows');
+  assert(/what it does/.test(ui) && /where it looks/.test(ui), 'creator table must render the what/where columns');
+  assert(/STALE PAYLOAD/.test(ui), 'an incomplete payload must warn loudly, not display zeros');
+  assert(/d\.counter \? d\.counter\.nyc_services\.toLocaleString\(\) : '—'/.test(ui),
+    "a missing counter must render '—' — showing 0 next to a Crawls tab reading 4,721 is a misreporting bug");
+  assert(/creatorsUnattributed/.test(ui), 'the screen must reveal unattributed creators');
+  assert(/served by/.test(ui), 'the console must name the endpoint that answered so freshness is visible');
+});
+
+test('google-sponsored-uses-the-proven-lsa-engine', 'SPEC-105: the google_sponsored source must run the Local Services Ads engine (what the founder actually pasted: "Sponsored <service> | <city>" WITH phone numbers), not only the generic engine=google ads[] array which measured 0 rows on every job. Provenance stays google_sponsored so the dashboard row the founder watches is the one that fills', '#105', async () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/async function fulfillGoogleLSA\(db: any, job: any, provenance = 'google_lsa'\)/.test(fc),
+    'the LSA fetcher must be provenance-parameterised so google_sponsored can reuse it');
+  const branch = fc.slice(fc.indexOf("source === 'google_sponsored'"), fc.indexOf("source === 'yelp'"));
+  assert(/fulfillGoogleLSA\(db, job, 'google_sponsored'\)/.test(branch),
+    'google_sponsored must call the LSA engine FIRST (measured: 88 rows / 100% phone vs 0 rows for ads[])');
+  assert(/fulfillGoogleSponsored\(db, job\)/.test(branch),
+    'the generic ads[] scrape must remain as a supplement, not the primary');
+  assert(/data_source: provenance/.test(fc), 'rows must carry the requesting provenance, not a hardcoded one');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
