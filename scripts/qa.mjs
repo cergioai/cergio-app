@@ -4778,14 +4778,37 @@ test('standing-findings-self-repair', 'SPEC-111: the standing findings must be F
 
 test('background-load-cannot-take-the-product-down', 'SPEC-115: background data acquisition must never be able to degrade the live product. Measured 2026-07-30: Supabase REST returned 503 on /rest/v1/services while /auth/v1/user stayed 200 — the founder could not list a service or stay signed in, because supply-engine dispatched 60 parallel fulfill-crawl runs at limit=500 and exhausted the shared connection pool', '#115', async () => {
   const se = readFile('supabase/functions/supply-engine/index.ts');
-  assert(/Math\.min\(Number\(Deno\.env\.get\('TURBO_KICKS'\) \|\| '6'\), 10\)/.test(se),
-    'turbo kicks must have a HARD ceiling in code — env may lower it, never raise it');
-  assert(!/fulfill-crawl\?limit=500/.test(se), 'per-run limit must be reduced from the 500 that saturated the DB');
+  assert(/Math\.min\(Number\(Deno\.env\.get\('TURBO_KICKS'\) \|\| '40'\), 60\)/.test(se),
+    'turbo must have a HARD ceiling in code — env may tune within it, never exceed it');
+  // Growth runs at full throttle ONLY because writes are batched. If batching is
+  // ever removed, high turbo would starve the pool again — so assert the pairing.
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/async function bufUpsert/.test(fc),
+    'high turbo is only safe while fulfill-crawl batches its writes (SPEC-116) — never raise throughput without it');
   assert(/restOk/.test(se) && /probe\.status < 500/.test(se),
     'the engine must probe live REST health BEFORE adding load');
   assert(/for \(let i = 0; restOk && i < kicks; i\+\+\)/.test(se),
     'turbo must be SKIPPED entirely while the product is degraded');
   assert(/rest-degraded/.test(se), 'standing down must be reported as a bug, not silently');
+});
+
+test('growth-writes-are-batched', 'SPEC-116: growth must not share the product\'s connection budget. Measured 2026-07-30: fulfill-crawl upserted ONE row per HTTP round-trip across 11 call sites; at ~15,572 rows/day that starved the pool and /rest/v1/services returned 503 while the founder tried to list a service. Batching gives the SAME throughput for ~1/500th of the connections, so acquisition runs flat out AND the product is untouched', '#116', async () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/async function bufUpsert/.test(fc) && /async function flushBuf/.test(fc), 'buffered writer must exist');
+  // the ONLY permitted single-row upsert is flushBuf's own retry path
+  const outsideHelper = fc.slice(fc.indexOf('serve(async (req: Request)'));
+  assert(!/await db\.from\('leads_services'\)\.upsert\(row, \{ onConflict: 'id' \}\)/.test(outsideHelper),
+    'no single-row upsert may remain outside flushBuf — that is the pattern that exhausted the pool');
+  assert(/_rowBuf\.length >= 500/.test(fc), 'buffer must flush on size so memory stays bounded');
+  assert(/for \(const row of chunk\)/.test(fc),
+    'a failed chunk must retry row-by-row so one bad row never costs 499 good ones');
+  // correctness: counts and job status must never be written with rows still buffered
+  const updates = (fc.match(/await db\.from\('crawl_requests'\)\.update\(\{/g) || []).length;
+  const flushedUpdates = (fc.match(/await flushBuf\(db\); await db\.from\('crawl_requests'\)\.update\(\{/g) || []).length;
+  assert(updates === flushedUpdates,
+    `every crawl_requests status write must flush first (${flushedUpdates}/${updates}) — otherwise delivered_count lies`);
+  assert(/await flushBuf\(db\);   \/\/ never strand a buffered row/.test(fc),
+    'the handler must flush before writing agent_runs so no row is stranded');
 });
 
 main().catch(e => {
