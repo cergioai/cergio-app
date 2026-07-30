@@ -22,9 +22,9 @@ const P1_CITIES: Array<[string, string]> = [
   ['Miami', 'FL'], ['Miami Beach', 'FL'], ['Brickell', 'FL'], ['Wynwood', 'FL'], ['Coral Gables', 'FL'], ['Doral', 'FL'],
 ];
 // sources ranked by MEASURED yield — the engine re-ranks itself from data each run
-const SOURCES = ['yelp', 'craigslist', 'google_lsa', 'osm', 'yellowpages_apify', 'google_local'];
+const SOURCES = ['yelp', 'craigslist', 'google_lsa', 'osm', 'yellowpages_apify', 'google_local', 'ig_services'];
 const TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','mover','house cleaning','landscaping','mover','locksmith','appliance repair','auto detailing','hair stylist','nail technician','dog walker','pool cleaning','pressure washing','window cleaning','junk removal','painter'];
-const QUEUE_FLOOR = Number(Deno.env.get('QUEUE_FLOOR') || '2000');  // VOLUME   // keep this many phase-1 jobs open
+const QUEUE_FLOOR = Number(Deno.env.get('QUEUE_FLOOR') || '20000');  // MAX: keep the queue deep   // keep this many phase-1 jobs open
 const DEAD_AFTER  = 30;                                             // jobs with 0 rows => dead
 
 serve(async (req: Request) => {
@@ -96,7 +96,7 @@ serve(async (req: Request) => {
     const order = ranked.length ? ranked : LIVE_SOURCES;
     for (let i = 0; i < order.length; i++) {
       const src = order[i];
-      const depth = i === 0 ? 240 : i === 1 ? 250 : i === 2 ? 200 : 100;   // rows requested per job
+      const depth = Number(Deno.env.get('SEED_DEPTH') || '1000');   // MAX rows requested per job (source caps clamp it)
       const repeats = i === 0 ? 2 : 1;                                     // duplicate the best source
       for (let r = 0; r < repeats; r++) for (const [city, state] of P1_CITIES) for (const t of TYPES) {
         batch.push({ kind: 'services', city, state, service_type: t, target_count: depth, status: 'new', source: src, created_at: nowIso, updated_at: nowIso });
@@ -118,11 +118,11 @@ serve(async (req: Request) => {
   // FIRE-AND-FORGET (fix 2026-07-29): awaiting N worker kicks blew the edge-function
   // time limit and the engine returned no JSON at all. Kicks are dispatched WITHOUT
   // await so the engine always returns its counter fast; the worker drains in parallel.
-  const kicks = Number(Deno.env.get('TURBO_KICKS') || '10');  // VOLUME: 10 parallel drains
+  const kicks = Number(Deno.env.get('TURBO_KICKS') || '60');  // MAX: env-driven, no hardcoded ceiling
   let kicked = 0;
   for (let i = 0; i < kicks; i++) {
     try {
-      fetch(`${FN_BASE}/fulfill-crawl?limit=200`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
+      fetch(`${FN_BASE}/fulfill-crawl?limit=500`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
       kicked++;
     } catch (_e) {}
   }
