@@ -130,6 +130,18 @@ serve(async (req: Request) => {
     }
   } catch (e) { await record('cron-alive-check', false, 'high', String(e).slice(0, 150)); }
 
+  // ── GEO-INVISIBLE LISTINGS (SPEC-110) ────────────────────────────────────
+  // services_near is a geo query, so a service row with NULL lat/lng can NEVER
+  // be returned — the provider is listed, looks fine to themselves, and is
+  // simply unreachable by every request. This silently broke the #1 flow.
+  try {
+    const { count: total } = await db.from('services').select('id', { count: 'exact', head: true });
+    const { count: noGeo } = await db.from('services').select('id', { count: 'exact', head: true })
+      .or('lat.is.null,lng.is.null');
+    await record('data-services-geo-invisible', (noGeo ?? 0) === 0, 'critical',
+      `${noGeo ?? 0} of ${total ?? 0} live services have NULL lat/lng — invisible to services_near, so they can never be notified about a matching request`);
+  } catch (e) { await record('data-services-geo-invisible', false, 'critical', String(e).slice(0, 150)); }
+
   const failed = results.filter((r) => !r.ok);
   const out = { status: failed.length ? 'FAIL' : 'PASS', checks: results.length, failed: failed.length, failures: failed, ms: Date.now() - started };
   try {

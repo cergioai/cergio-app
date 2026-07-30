@@ -93,6 +93,21 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
   const providerIds = requested.filter((pid: string) => pid && pid !== requesterId);
   const selfNotifyBlocked = requested.length - providerIds.length;
   if (providerIds.length === 0) {
+    // SPEC-110 (2026-07-29): a request that reaches ZERO providers used to return
+    // this JSON and vanish — no row, no finding, no alert. The founder requested a
+    // housekeeper, a housekeeper was listed, nobody was notified, and NOTHING
+    // recorded it. A silent zero-fanout is the #1 flow failing invisibly, so it is
+    // now a first-class QA finding with the diagnosis attached.
+    try {
+      await db.rpc('cergio_qa_check', {
+        p_area: 'live', p_check: 'request-notified-nobody', p_sev: 'critical', p_count: 1,
+        p_detail: `request ${requestId} (${request.service_type || 'unknown type'}, ${request.city || 'no city'}) notified 0 providers. ` +
+                  `caller passed ${requested.length} candidate(s); ${selfNotifyBlocked} removed by the self-notify guard. ` +
+                  (requested.length === 0
+                    ? 'CAUSE: the caller matched no providers at all — check services.lat/lng (a NULL geo makes a listing invisible to services_near), provider_type bridging, and notify_safe.'
+                    : 'CAUSE: every candidate was the requester themselves.'),
+      });
+    } catch (_e) { /* the finding is best-effort; never block the response */ }
     return json({ sent: 0, note: 'no recipients after self-notify guard', selfNotifyBlocked });
   }
 
