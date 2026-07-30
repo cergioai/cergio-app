@@ -256,6 +256,8 @@ export async function getProvidersForNotify({
   lng,
   radiusMiles = 25,
   providerTypeAllowlist = null,
+  fallbackCity = null,
+  fallbackState = null,
 } = {}) {
   if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
 
@@ -303,13 +305,31 @@ export async function getProvidersForNotify({
   // table. Re-hydrate full rows by id (the SAME fix searchServices already
   // applies) BEFORE the strict provider-type filter so matching actually works.
   const ids = (data || []).map(s => s.id).filter(Boolean);
-  if (ids.length === 0) return { data: [], error: null };
-  const { data: full, error: fullErr } = await supabase
+  const { data: near, error: fullErr } = !ids.length ? { data: [], error: null } : await supabase
     .from('services')
     .select('id, owner_id, taxonomy_provider_type, category, status')
     .in('id', ids)
     .eq('status', 'listed');
   if (fullErr) return { data: null, error: fullErr };
+
+  // ── GEO-INDEPENDENT FALLBACK (SPEC-113) ────────────────────────────────
+  // services_near is a GEO query, so a listing with NULL lat/lng (geocode failed
+  // on save) is invisible to it and unreachable by EVERY request — that is how a
+  // listed housekeeper was never notified. Geo is an optimisation, not a
+  // requirement. The type + blocked-category filters below run over these rows
+  // unchanged, so this widens reach, never safety.
+  let full = near || [];
+  let usedFallback = false;
+  if (full.length === 0 && (fallbackCity || fallbackState)) {
+    let fb = supabase.from('services')
+      .select('id, owner_id, taxonomy_provider_type, category, status')
+      .eq('status', 'listed').limit(200);
+    fb = fallbackCity ? fb.ilike('city', fallbackCity) : fb.eq('state', fallbackState);
+    const { data: byCity } = await fb;
+    full = byCity || [];
+    usedFallback = full.length > 0;
+  }
+  if (full.length === 0) return { data: [], error: null, usedFallback };
 
   // CERGIO-GUARD (2026-06-25): match CASE-INSENSITIVELY on taxonomy_provider_type
   // OR category. The old exact, case-sensitive match on taxonomy_provider_type
@@ -3365,6 +3385,8 @@ export async function createRequestAndFanOut({
     notifySafe:           !!notifySafe,
     lat, lng,
     radiusMiles,
+    fallbackCity:  request.city  || null,   // SPEC-113
+    fallbackState: request.state || null,
   });
   if (provErr) return { request, notified: 0, error: provErr };
   if (blocked) { reportZeroFanout(request.id, blocked); return { request, notified: 0, error: null, blocked }; }
@@ -3537,6 +3559,8 @@ export async function crossPostRequest({
     notifySafe:           !!notifySafe,
     lat, lng,
     radiusMiles,
+    fallbackCity:  request.city  || null,   // SPEC-113
+    fallbackState: request.state || null,
   });
   if (provErr) return { notified: 0, error: provErr };
   if (blocked) return { notified: 0, error: null, blocked };
