@@ -4793,6 +4793,20 @@ test('standing-findings-self-repair', 'SPEC-111: the standing findings must be F
   assert(/repaired: \{ geo: geoFixed, titles: titleFixed, parked \}/.test(hc), 'repairs must be counted into agent_runs so the work is provable');
 });
 
+test('fanout-survives-missing-geo', 'SPEC-113 PERMANENT FIX: the request fan-out must NOT depend on geo alone. services_near is a geo query, so a listing with NULL lat/lng (geocode failed on save) is invisible to it — the provider sees a normal listing and is unreachable by EVERY request. That is how a listed housekeeper was never notified. Geo is an optimisation, not a requirement: when proximity returns nothing, match on city/state instead. Provider-type and blocked-category filtering still apply', '#113', async () => {
+  const api = readFile('src/lib/api.js');
+  const fn = api.slice(api.indexOf('export async function getProvidersForNotify'), api.indexOf('export async function', api.indexOf('export async function getProvidersForNotify') + 10));
+  assert(/fallbackCity/.test(fn) && /fallbackState/.test(fn), 'the matcher must accept a geo-independent fallback');
+  assert(/full\.length === 0 && \(fallbackCity \|\| fallbackState\)/.test(fn),
+    'the fallback must trigger EXACTLY when proximity yielded no LISTED rows — never instead of proximity');
+  assert(/const \{ data: near, error: fullErr \}/.test(fn),
+    'proximity must still run first and be re-hydrated (SPEC-55) before any fallback');
+  assert(/\.eq\('status', 'listed'\)/.test(fn), 'the fallback must still only consider listed services');
+  // the fallback must NOT bypass the safety filters
+  assert(fn.indexOf('fallbackCity') < fn.indexOf('allowLC'), 'provider-type filtering must still run after the fallback');
+  assert(/fallbackCity:  request\.city/.test(api), 'callers must pass the request city through');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
