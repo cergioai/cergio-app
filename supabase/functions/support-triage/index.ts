@@ -46,7 +46,7 @@ const corsHeaders = {
 
 const FROM_EMAIL       = 'Cergio Support <notify@cergio.ai>'; // verified domain
 const APP_URL_FALLBACK = 'https://cergio-app-cergio-s-projects.vercel.app';
-const DEFAULT_ADMINS   = ['t@cergio.ai', 'info@cergio.ai'];
+const DEFAULT_ADMINS = ['t@cergio.ai', 'info@cergio.ai', 'tarik.sansal2@gmail.com', 'tarik@cergio.ai', 'tariksansal@gmail.com'];  // founder's signed-in emails (Forbidden fix 2026-07-29)
 
 // ── REPLY_ONLY allowlist — the ONLY things this function is permitted to do. ──
 // Kept as data so the intent is auditable (and greppable by qa.mjs). If a future
