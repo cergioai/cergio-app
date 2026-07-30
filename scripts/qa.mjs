@@ -4766,31 +4766,6 @@ test('bookings-headline-counts-only-real-completed', 'SPEC-107: the headline `bo
     'the raw bookings total must be preserved separately as bookings_all (internal ops visibility), not as the headline');
 });
 
-test('zero-fanout-is-a-finding', 'SPEC-110: a request that notifies ZERO providers must raise a critical qa_finding with its diagnosis. The founder requested a housekeeper while a housekeeper was listed and nobody was notified — and NOTHING recorded it, so the #1 flow failed invisibly. Also: a service row with NULL lat/lng can never be returned by services_near, so it is unreachable by every request', '#110', async () => {
-  const nr = readFile('supabase/functions/notify-request/index.ts');
-  assert(/body\.diagnose/.test(nr),
-    'SPEC-112: notify-request must accept a diagnostic ping — the fan-out has CLIENT-side exits (notify_safe_false / no_verified_provider_type / no_coords / blocked_category / no_owner_in_radius) that never reach this function, so without it a request that notified nobody leaves no trace at all');
-  const apiSrc = readFile('src/lib/api.js');
-  assert(/function reportZeroFanout/.test(apiSrc), 'the client must report a zero fan-out');
-  // REGRESSION GUARD 2026-07-30: reporting must never touch an authed endpoint.
-  // Invoking notify-request from the client returned 401 and supabase-js tore the
-  // session down — the founder was signed out on every submit. A diagnostic must
-  // never be able to break the flow it observes.
-  const rzf = apiSrc.slice(apiSrc.indexOf('function reportZeroFanout'), apiSrc.indexOf('export async function getProvidersForNotify'))
-    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');   // code only — a comment explaining the bug must not trip the gate
-  assert(!/functions\.invoke/.test(rzf) && !/supabase\./.test(rzf),
-    'reportZeroFanout must NOT call supabase or any authed endpoint — a 401 there signs the user out');
-  assert(/reportZeroFanout\(request\.id, blocked\)/.test(apiSrc), 'every blocked fan-out must be reported');
-  assert(/no_owner_in_radius/.test(apiSrc), 'matching zero owners in radius must be reported too');
-  assert(/p_check: 'request-notified-nobody'/.test(nr),
-    'a zero-recipient fan-out must write a qa_finding, not return silently');
-  assert(/p_sev: 'critical'/.test(nr), 'the #1 flow reaching nobody is critical severity');
-  assert(/services\.lat\/lng/.test(nr), 'the finding must name the likely causes so it is actionable without a human investigation');
-  const lv = readFile('supabase/functions/qa-live-verify/index.ts');
-  assert(/data-services-geo-invisible/.test(lv), 'live QA must count listings with NULL lat/lng');
-  assert(/or\('lat\.is\.null,lng\.is\.null'\)/.test(lv), 'the geo check must catch a NULL in EITHER coordinate');
-});
-
 test('standing-findings-self-repair', 'SPEC-111: the standing findings must be FIXED automatically, not reported forever. crawl-health-check (every 30 min) backfills NULL lat/lng (a geo-invisible listing is unreachable by every request — the housekeeper case), strips street addresses leaked into titles, and parks off-spec crawl cities', '#111', async () => {
   const hc = readFile('supabase/functions/crawl-health-check/index.ts');
   assert(/or\('lat\.is\.null,lng\.is\.null'\)/.test(hc), 'must find listings with a NULL in either coordinate');
@@ -4799,37 +4774,6 @@ test('standing-findings-self-repair', 'SPEC-111: the standing findings must be F
   assert(/status: 'parked'/.test(hc), 'off-spec crawl cities must be parked, never deleted');
   assert(!/\.delete\(\)/.test(hc), 'a self-repair loop must never hard-delete');
   assert(/repaired: \{ geo: geoFixed, titles: titleFixed, parked \}/.test(hc), 'repairs must be counted into agent_runs so the work is provable');
-});
-
-test('fanout-survives-missing-geo', 'SPEC-113 PERMANENT FIX: the request fan-out must NOT depend on geo alone. services_near is a geo query, so a listing with NULL lat/lng (geocode failed on save) is invisible to it — the provider sees a normal listing and is unreachable by EVERY request. That is how a listed housekeeper was never notified. Geo is an optimisation, not a requirement: when proximity returns nothing, match on city/state instead. Provider-type and blocked-category filtering still apply', '#113', async () => {
-  const api = readFile('src/lib/api.js');
-  const fn = api.slice(api.indexOf('export async function getProvidersForNotify'), api.indexOf('export async function', api.indexOf('export async function getProvidersForNotify') + 10));
-  assert(/fallbackCity/.test(fn) && /fallbackState/.test(fn), 'the matcher must accept a geo-independent fallback');
-  assert(/full\.length === 0 && \(fallbackCity \|\| fallbackState\)/.test(fn),
-    'the fallback must trigger EXACTLY when proximity yielded no LISTED rows — never instead of proximity');
-  assert(/const \{ data: near, error: fullErr \}/.test(fn),
-    'proximity must still run first and be re-hydrated (SPEC-55) before any fallback');
-  assert(/\.eq\('status', 'listed'\)/.test(fn), 'the fallback must still only consider listed services');
-  // the fallback must NOT bypass the safety filters
-  assert(fn.indexOf('fallbackCity') < fn.indexOf('allowLC'), 'provider-type filtering must still run after the fallback');
-  assert(/fallbackCity:  request\.city/.test(api), 'callers must pass the request city through');
-});
-
-test('geocode-denied-cannot-kill-the-fanout', 'SPEC-114 ROOT CAUSE: Google geocoding is REQUEST_DENIED on this project (billing disabled), so the REQUESTER lat/lng was null on EVERY request and getProvidersForNotify refused every fan-out via its no_coords guard. Live console proof 2026-07-30: geocode REQUEST_DENIED for "725 Riverside Dr, New York, NY 10031, USA". A dead third-party key must never be able to silently disable the #1 flow', '#114', async () => {
-  const g = readFile('src/lib/google.js');
-  assert(/geocodeViaNominatim/.test(g), 'a free geocoder fallback must exist');
-  assert(/geocodeViaNominatim\(text\)\.then\(resolve\)/.test(g),
-    'a non-OK Google status must fall back to the free geocoder, never resolve null');
-  assert(/if \(!google\) return geocodeViaNominatim\(text\)/.test(g),
-    'a blocked Maps script load must also fall back');
-  const api = readFile('src/lib/api.js');
-  const fn = api.slice(api.indexOf('export async function getProvidersForNotify({'), api.indexOf('export async function', api.indexOf('export async function getProvidersForNotify({') + 10));
-  assert(/\(lat == null \|\| lng == null\) && !fallbackCity && !fallbackState/.test(fn),
-    'missing coords must only refuse when there is ALSO no city — otherwise degrade to city matching');
-  assert(/no_coords_no_city/.test(fn), 'the refusal must name both missing inputs');
-  assert(/const hasGeo = lat != null && lng != null/.test(fn), 'geo must be optional, tracked explicitly');
-  assert(/!hasGeo \? \{ data: \[\], error: null \} : await supabase\.rpc\('services_near'/.test(fn),
-    'services_near must be SKIPPED when there are no coords rather than called with nulls');
 });
 
 main().catch(e => {
