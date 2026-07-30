@@ -4589,48 +4589,27 @@ test('crawl-phase-gate', 'SPEC-97: crawl seeder is PHASE-GATED — Miami + NYC m
   assert(/crawl-spec-cities-only/.test(live), 'live QA must flag any off-spec crawl city');
 });
 
-test('ci-deploy-gap-guarded', 'SPEC-104: EVERY edge function under supabase/functions/ must either be in the CI deploy array (.github/workflows/deploy-functions.yml) or be listed in KNOWN_DEPLOY_GAP below WITH a CI-deployed fallback. A function that is neither is INERT on merge (404 in prod) while the code reads as shipped — the exact class of failure that made a merged ops fix invisible', '#104', async () => {
+test('ci-deploy-gap-guarded', 'SPEC-104b: deploy-functions.yml must AUTO-DISCOVER every function directory. A hard-coded FUNCS list fell 11 functions behind the repo — new functions 404 in prod while the code reads as shipped, and one that was deployed manually then served a STALE 200 forever (undetectable by any error-path fallback). The workflow-scope grant landed 2026-07-29, so discovery is now enforceable', '#104', async () => {
   const wf = readFile('.github/workflows/deploy-functions.yml');
-  const m = wf.match(/FUNCS=\(([\s\S]*?)\)/);
-  assert(m, 'deploy-functions.yml must declare a FUNCS list');
-  const ciFuncs = new Set(m[1].split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')));
-  const dirs = fs.readdirSync('supabase/functions', { withFileTypes: true })
-    .filter(d => d.isDirectory() && !d.name.startsWith('_')).map(d => d.name).sort();
-  // Functions knowingly outside CI. Each MUST have a real reach-path in prod.
-  // Shrink this list — do not grow it. The permanent fix is granting the PAT
-  // `workflow` scope so deploy-functions.yml becomes auto-discovering.
-  const KNOWN_DEPLOY_GAP = {
-    'ops-console':              'admin-crawl-status serves the identical payload at { view:"ops" } (CI-deployed); api.js opsConsole falls back',
-    'leads-dashboard':          'manually deployed; admin-only screen',
-    'crawl-seed-osm':           'manually deployed; invoked by pg_cron server-side',
-    'crawl-seed-google-places': 'dormant (Google Places billing disabled)',
-    'creator-enrich':           'manually deployed; invoked by pg_cron',
-    'creator-marketplace-enrich':'manually deployed; no-ops until the IG marketplace token is set',
-    'early-offers':             'manually deployed; verified HTTP 200 live',
-    'qa-live-verify':           'manually deployed; invoked by pg_cron',
-    'qa-suite':                 'manually deployed; invoked by pg_cron',
-    'supply-engine':            'manually deployed; invoked by pg_cron',
-    'support-triage':           'manually deployed; admin-only',
-  };
-  const unaccounted = dirs.filter(d => !ciFuncs.has(d) && !(d in KNOWN_DEPLOY_GAP));
-  assert(unaccounted.length === 0,
-    `NEW function(s) are in neither the CI deploy array nor KNOWN_DEPLOY_GAP -> they will 404 in prod on merge: ${unaccounted.join(', ')}. Add them to FUNCS (preferred) or document the reach-path.`);
-  // the ops fallback specifically must be real, not just documented
+  assert(!/FUNCS=\(/.test(wf),
+    'no hard-coded FUNCS array — it silently rots behind the repo. Use discovery.');
+  assert(/mapfile -t FUNCS < <\(find supabase\/functions/.test(wf),
+    'FUNCS must be discovered from supabase/functions at deploy time');
+  assert(/grep -v '\^_'/.test(wf),
+    'discovery must skip _-prefixed dirs (_shared holds modules, not deployable functions)');
+  assert(/echo "discovered \$\{#FUNCS\[@\]\} functions/.test(wf),
+    'the run log must state how many functions were discovered, so a silent zero is visible');
+  // the ops fallback stays in place regardless — belt and braces
   const acs = readFile('supabase/functions/admin-crawl-status/index.ts');
-  assert(ciFuncs.has('admin-crawl-status'), 'the ops fallback host must itself be CI-deployed');
   assert(/buildOpsPayload/.test(acs) && /reqBody\.view === 'ops'/.test(acs),
-    'admin-crawl-status must serve the shared ops payload at { view:"ops" }');
+    'admin-crawl-status must still serve the shared ops payload at { view:"ops" }');
   const shared = readFile('supabase/functions/_shared/opsPayload.ts');
   assert(/export async function buildOpsPayload/.test(shared) && /export function isAdminEmail/.test(shared),
     'the ops payload + admin allowlist must live in _shared so both endpoints cannot drift');
   const api = readFile('src/lib/api.js');
-  // LIVE-EVIDENCE-DRIVEN (2026-07-29): the stale ops-console returned 200, so an
-  // error-only fallback never fired. The CI-deployed endpoint must be PRIMARY.
   const opsFn = api.slice(api.indexOf('export async function opsConsole'), api.indexOf('export async function leadsDashboard'));
-  const iCi = opsFn.indexOf("invoke('admin-crawl-status'");
-  const iOc = opsFn.indexOf("invoke('ops-console'");
-  assert(iCi > -1 && iOc > -1, 'opsConsole must call both endpoints');
-  assert(iCi < iOc, 'the CI-DEPLOYED endpoint (admin-crawl-status {view:"ops"}) must be called FIRST — a function outside the CI deploy array can serve a stale 200 forever, which no error-path fallback can detect');
+  assert(opsFn.indexOf("invoke('admin-crawl-status'") > -1 && opsFn.indexOf("invoke('ops-console'") > -1,
+    'opsConsole must keep both endpoints wired');
 });
 
 test('ops-admin-allowlist-covers-founder', 'SPEC-104: the ops admin allowlist default must contain every address the founder signs in with, and a rejection must name the rejected email. A narrow default returned a bare "Forbidden" on /ops/status and cost a debugging round-trip', '#104', async () => {

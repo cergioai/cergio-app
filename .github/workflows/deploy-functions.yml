@@ -51,39 +51,14 @@ jobs:
           REF="$SUPABASE_PROJECT_REF"
           # Full function set (from supabase/functions/). --no-verify-jwt because
           # these are called by cron/webhooks/service-role, not end-user JWTs.
-          FUNCS=(
-            admin-crawl-status
-            agent-ops
-            cergio-health
-            cergio-orchestrator
-            cergio-watchdog
-            chat-parse
-            coo-brain
-            coo-execute
-            crawl-health-check
-            crawl-seed-yellowpages
-            create-payment-intent
-            create-setup-intent
-            create-spotlight-payment-intent
-            creator-harvest
-            crosspost
-            enrich-influencers
-            fulfill-crawl
-            google-business-oauth
-            instagram-oauth
-            notify-provider
-            notify-request
-            notify-spotlight
-            notify-user
-            ops-metrics
-            outreach-optin
-            outreach-optout
-            outreach-send
-            release-funds
-            stripe-connect-onboard
-            stripe-webhook
-            tiktok-oauth
-          )
+          # AUTO-DISCOVER every function directory (SPEC-104b, 2026-07-29).
+          # The hard-coded list fell 11 functions behind the repo, so new functions
+          # 404'd in prod while the code read as shipped — and one that HAD been
+          # deployed manually then served a STALE 200 forever, which no error-path
+          # fallback can detect. Discovery removes the whole failure class.
+          # Skips _shared/ and other _-prefixed dirs (modules, not functions).
+          mapfile -t FUNCS < <(find supabase/functions -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | grep -v '^_' | sort)
+          echo "discovered ${#FUNCS[@]} functions: ${FUNCS[*]}"
           for fn in "${FUNCS[@]}"; do
             echo "::group::deploy $fn"
             supabase functions deploy "$fn" --project-ref "$REF" --no-verify-jwt
