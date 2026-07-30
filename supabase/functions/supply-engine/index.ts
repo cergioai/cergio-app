@@ -84,8 +84,20 @@ serve(async (req: Request) => {
 
   // ── R7: YIELD-WEIGHTED seeding. Flat seeding wasted 97% of jobs on osm (3 rows/job)
   // while yelp returns ~154 rows/job. Seed proportional to measured yield.
-  const ranked = Object.entries(yields).filter(([s]) => !DISABLED.includes(s))
+  // COLD-START FIRST (fix 2026-07-29): a source with 0 jobs has ratio 0, so pure
+  // yield-ranking buried it at the very back of the seeding order forever. That is
+  // why gmaps_apify (the frozen APIFY-FIRST backbone) and ig_services had produced
+  // ZERO rows ever — never ranked, never seeded, never measurable. An untried
+  // source is the highest-information seed we can spend a job on, so it goes FIRST.
+  const notDisabled = Object.entries(yields).filter(([s]) => !DISABLED.includes(s));
+  const cold = notDisabled.filter(([, y]) => y.jobs === 0).map(([s]) => s);
+  const warm = notDisabled.filter(([, y]) => y.jobs > 0)
     .sort((a, b) => b[1].ratio - a[1].ratio).map(([s]) => s);
+  const ranked = [...cold, ...warm];
+  if (cold.length) {
+    bugs.push(`cold sources never seeded (0 jobs ever): ${cold.join(', ')}`);
+    fixes.push(`cold-start: seeding ${cold.join(', ')} FIRST so they become measurable`);
+  }
 
   // ── R2: keep the phase-1 queue SATURATED (turbo). Re-seed across live sources.
   const open = await cnt('crawl_requests', (b) => b.eq('kind', 'services').in('status', ['new', 'crawling']).in('city', P1_CITIES.map(([c]) => c)));
@@ -103,10 +115,25 @@ serve(async (req: Request) => {
         batch.push({ kind: 'services', city, state, service_type: t, target_count: depth, status: 'new', source: src, created_at: nowIso, updated_at: nowIso });
       }
     }
-    for (let i = 0; i < batch.length; i += 250) {
-      try { const { data } = await db.from('crawl_requests').insert(batch.slice(i, i + 250)).select('id'); seeded += data?.length ?? 0; } catch (_e) {}
+    // A BULK INSERT LOSES THE WHOLE BATCH IF *ANY* ROW DUPLICATES AN EXISTING JOB,
+    // and the previous `catch (_e) {}` swallowed that silently — so `seeded` was 0
+    // on every run while the engine reported success. Smaller batches, and on
+    // failure fall back to per-row inserts so one collision costs one row, not 250.
+    // Errors are now COUNTED and surfaced; a total failure is reported as a bug.
+    let batchFail = 0, rowFail = 0;
+    for (let i = 0; i < batch.length; i += 100) {
+      const chunk = batch.slice(i, i + 100);
+      const { data, error } = await db.from('crawl_requests').insert(chunk).select('id');
+      if (!error) { seeded += data?.length ?? 0; continue; }
+      batchFail++;
+      for (const row of chunk) {
+        const { data: one, error: e1 } = await db.from('crawl_requests').insert(row).select('id');
+        if (!e1) seeded += one?.length ?? 0; else rowFail++;
+      }
     }
-    if (seeded) fixes.push(`re-seeded ${seeded} phase-1 jobs across ${LIVE_SOURCES.length} live sources (queue was ${open} < ${QUEUE_FLOOR})`);
+    if (seeded) fixes.push(`re-seeded ${seeded} phase-1 jobs across ${ranked.length} sources (queue was ${open} < ${QUEUE_FLOOR})`);
+    if (batchFail) fixes.push(`recovered ${batchFail} batch insert(s) row-by-row (duplicate collisions no longer discard 100 jobs at a time)`);
+    if (!seeded) bugs.push(`seeding produced 0 jobs from ${batch.length} candidates (${rowFail} row rejections) — queue cannot grow`);
     await note('supply-queue-saturated', true, 'high', `queue was ${open}, seeded ${seeded}`);
   } else {
     await note('supply-queue-saturated', true, 'high', `queue healthy: ${open} open phase-1 jobs`);
