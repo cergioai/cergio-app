@@ -4778,7 +4778,7 @@ test('standing-findings-self-repair', 'SPEC-111: the standing findings must be F
 
 test('background-load-cannot-take-the-product-down', 'SPEC-115: background data acquisition must never be able to degrade the live product. Measured 2026-07-30: Supabase REST returned 503 on /rest/v1/services while /auth/v1/user stayed 200 — the founder could not list a service or stay signed in, because supply-engine dispatched 60 parallel fulfill-crawl runs at limit=500 and exhausted the shared connection pool', '#115', async () => {
   const se = readFile('supabase/functions/supply-engine/index.ts');
-  assert(/Math\.min\(Number\(Deno\.env\.get\('TURBO_KICKS'\) \|\| '40'\), 60\)/.test(se),
+  assert(/Math\.min\(Number\(Deno\.env\.get\('TURBO_KICKS'\) \|\| '0'\), 4\)/.test(se),
     'turbo must have a HARD ceiling in code — env may tune within it, never exceed it');
   // Growth runs at full throttle ONLY because writes are batched. If batching is
   // ever removed, high turbo would starve the pool again — so assert the pairing.
