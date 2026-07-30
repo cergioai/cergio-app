@@ -238,6 +238,17 @@ export async function listMyServices() {
  *   blocked is set when the call refuses to fan out for a safety reason
  *   so the caller can surface the disambiguation UI.
  */
+
+// SPEC-112: a fan-out that reaches nobody must leave a trace. These exits are
+// client-side and used to return silently, so the QA ledger stayed clean while
+// the #1 flow failed. Fire-and-forget — diagnosis must never block the user.
+function reportZeroFanout(requestId, reason) {
+  try {
+    supabase.functions.invoke('notify-request', { body: { requestId, diagnose: reason } })
+      .catch(() => {});
+  } catch (_e) { /* never throw from a diagnostic */ }
+}
+
 export async function getProvidersForNotify({
   verifiedProviderType,
   notifySafe,
@@ -3356,7 +3367,7 @@ export async function createRequestAndFanOut({
     radiusMiles,
   });
   if (provErr) return { request, notified: 0, error: provErr };
-  if (blocked) return { request, notified: 0, error: null, blocked };
+  if (blocked) { reportZeroFanout(request.id, blocked); return { request, notified: 0, error: null, blocked }; }
 
   // 3) Fan out the notifications. data.deep_link routes the provider
   //    to /results?req=<id> when they tap. data.request_id is what
@@ -3376,6 +3387,9 @@ export async function createRequestAndFanOut({
         kind: 'services', city: where_text || null, lat, lng,
         serviceType: provider_type, targetCount: 25, triggerRequestId: request.id,
       }).catch(() => {});
+    // SPEC-112: report the zero fan-out AFTER the SPEC-58 crawl enqueue, so the
+    // frozen ownerIds->enqueueCityCrawl adjacency that gate asserts stays intact.
+    reportZeroFanout(request.id, `no_owner_in_radius: ${(provs || []).length} listing(s) in ${radiusMiles}mi, 0 owner_id. Check services.lat/lng.`);
     }
     return { request, notified: 0, error: null };
   }
