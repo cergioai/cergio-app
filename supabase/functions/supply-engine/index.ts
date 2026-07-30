@@ -171,11 +171,11 @@ serve(async (req: Request) => {
   // ~1/500th of the pool. Turbo returns to full: 40 workers, env-tunable, with the
   // health probe below as the only brake. Ceiling raised because the load per
   // worker collapsed, NOT because the risk was accepted.
-  const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '40'), 60);
+  const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '0'), 4);
   let kicked = 0;
   for (let i = 0; restOk && i < kicks; i++) {
     try {
-      fetch(`${FN_BASE}/fulfill-crawl?limit=400`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
+      fetch(`${FN_BASE}/fulfill-crawl?limit=100`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
       kicked++;
     } catch (_e) {}
   }
