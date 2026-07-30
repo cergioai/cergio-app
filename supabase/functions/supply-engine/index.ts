@@ -168,7 +168,7 @@ serve(async (req: Request) => {
 
   const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '6'), 10);
   let kicked = 0;
-  for (let i = 0; i < kicks; i++) {
+  for (let i = 0; restOk && i < kicks; i++) {
     try {
       fetch(`${FN_BASE}/fulfill-crawl?limit=150`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
       kicked++;
