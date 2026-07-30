@@ -4662,8 +4662,10 @@ test('ops-city-filter-and-creator-provenance', 'SPEC-104b: the ops console must 
   assert(/opsConsole\(city \? \{ download: key, city \} : \{ download: key \}\)/.test(ui),
     'a CSV downloaded from a filtered view must contain the filtered rows');
   assert(/<b>what:<\/b>/.test(ui) && /<b>where:<\/b>/.test(ui), 'each creator source must render what it does + where it looks');
-  assert(/max-w-full/.test(ui) && /overflow-x-hidden/.test(ui),
+  assert(/max-w-full/.test(ui),
     'the ops screen renders inside a ~408px mobile shell — a max-w-5xl container overflowed it and the shell CLIPPED every count column off-screen. Width must be shell-bound, with scrolling confined to each table wrapper');
+  assert(!/overflow-x-hidden/.test(ui),
+    'never put overflow-x-hidden on the page container: CSS computes the other axis to auto, making it a NESTED SCROLLER that kills vertical page scrolling in the mobile shell (live-verified regression 2026-07-29 — cards below the fold became unreachable)');
   assert(!/max-w-5xl/.test(ui), 'no fixed desktop max-width on a screen that renders in the mobile shell');
   assert(/STALE PAYLOAD/.test(ui), 'an incomplete payload must warn loudly, not display zeros');
   assert(/d\.counter \? d\.counter\.nyc_services\.toLocaleString\(\) : '—'/.test(ui),

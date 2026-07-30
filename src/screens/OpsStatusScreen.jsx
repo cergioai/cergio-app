@@ -54,7 +54,7 @@ export function OpsStatusScreen() {
   }, [city]);
 
   return (
-    <div className="w-full max-w-full mx-auto px-4 py-6 overflow-x-hidden">
+    <div className="w-full max-w-full mx-auto px-4 py-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-extrabold text-black">Ops console</h1>
         <button onClick={load} className="shrink-0 rounded-xl bg-bg5 px-3 py-2 text-meta-sm font-bold text-b3">↻ Refresh</button>
