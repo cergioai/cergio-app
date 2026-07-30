@@ -65,9 +65,17 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Migration reminder
-        if: ${{ contains(github.event.head_commit.message, 'migration') || true }}
+      - name: Apply pending migrations (Management API — no DB password needed)
+        env:
+          SUPABASE_PROJECT_REF: ${{ env.SUPABASE_PROJECT_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          echo "Functions deployed. NOTE: any new files under supabase/migrations/**"
-          echo "are NOT applied by this workflow — apply them separately (Mac .command"
-          echo "or supabase db push with the DB password)."
+          set -euo pipefail
+          # THE LAST MAC DEPENDENCY. This workflow used to deploy functions and then
+          # merely PRINT a reminder that migrations still needed a laptop, so pg_cron
+          # schedules and schema changes rotted for weeks. The Management API takes
+          # SQL with the access token CI already holds, so no DB password is involved.
+          # scripts/apply-migrations.mjs tracks what it has applied, runs each file
+          # once in filename order, stops on the first failure, and refuses any
+          # unscoped destructive statement.
+          node scripts/apply-migrations.mjs

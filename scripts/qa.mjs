@@ -4737,6 +4737,23 @@ test('every-agent-writes-agent-runs', 'SPEC-108: /ops/status decides ON/OFF pure
     `agent(s) reported ON/OFF by the ops console never write an agent_runs row, so they can only ever display OFF: ${missing.join(', ')}`);
 });
 
+test('ci-applies-migrations', 'SPEC-109: CI must APPLY migrations, not print a reminder about them. deploy-functions.yml deployed functions and then echoed "migrations still need a laptop", so pg_cron schedules and schema changes rotted for weeks — four agents sat unscheduled because of it. The Management API accepts SQL with the SUPABASE_ACCESS_TOKEN secret CI already holds, so no DB password is required. This removes the last Mac dependency', '#109', async () => {
+  const wf = readFile('.github/workflows/deploy-functions.yml');
+  assert(/node scripts\/apply-migrations\.mjs/.test(wf), 'the deploy workflow must actually apply migrations');
+  assert(!/Migration reminder/.test(wf), 'the old print-a-reminder step must be gone — a reminder is not an action');
+  assert(/SUPABASE_ACCESS_TOKEN: \$\{\{ secrets\.SUPABASE_ACCESS_TOKEN \}\}/.test(wf),
+    'the applier needs the existing access-token secret (never a DB password)');
+  const js = readFile('scripts/apply-migrations.mjs');
+  assert(/schema_migrations_applied/.test(js), 'applied migrations must be tracked so each file runs exactly once');
+  assert(/DESTRUCTIVE/.test(js) && /REFUSED/.test(js),
+    'an unattended applier must REFUSE unscoped destructive SQL (drop/truncate/WHERE-less delete or update)');
+  assert(/stopping — later migrations are NOT applied/.test(js),
+    'it must stop on first failure — applying later migrations out of order corrupts schema state');
+  assert(/BASELINE/.test(js),
+    'first run against a pre-existing DB must BASELINE rather than replay every historical migration');
+  assert(!/console\.log\(.*TOKEN/.test(js), 'never log the token');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
