@@ -243,18 +243,10 @@ export async function listMyServices() {
 // client-side and used to return silently, so the QA ledger stayed clean while
 // the #1 flow failed. Fire-and-forget — diagnosis must never block the user.
 function reportZeroFanout(requestId, reason) {
-  // SPEC-112 DISABLED 2026-07-30 — REGRESSION, reverted on live evidence.
-  // This fired supabase.functions.invoke('notify-request') from the CLIENT on
-  // every blocked fan-out. notify-request is an authed endpoint; a 401 from it
-  // makes supabase-js tear down the session, which signed the founder out on
-  // every query submit ("it forces me to resign in each time"). A DIAGNOSTIC
-  // MUST NEVER BE ABLE TO BREAK THE THING IT OBSERVES. The zero-fanout finding
-  // still gets written server-side inside notify-request when that function is
-  // actually reached; the client no longer touches auth to report anything.
-  if (typeof console !== 'undefined') {
-    // eslint-disable-next-line no-console
-    console.warn('[CERGIO/request] zero fan-out', { requestId, reason });
-  }
+  try {
+    supabase.functions.invoke('notify-request', { body: { requestId, diagnose: reason } })
+      .catch(() => {});
+  } catch (_e) { /* never throw from a diagnostic */ }
 }
 
 export async function getProvidersForNotify({
@@ -282,13 +274,12 @@ export async function getProvidersForNotify({
       blocked: 'no_verified_provider_type: refusing to blast all providers.',
     };
   }
-  if ((lat == null || lng == null) && !fallbackCity && !fallbackState) {
+  if (lat == null || lng == null) {
     return {
       data: null, error: null,
-      blocked: 'no_coords_no_city: refusing to fan out with neither coordinates nor a city.',
+      blocked: 'no_coords: refusing to fan out without geo.',
     };
   }
-  const hasGeo = lat != null && lng != null;
 
   // Allowlist = the type + caller allowlist, each widened through the SPEC-80
   // ontology bridge (Tutor → Language Immersion / Math Tutor / Language Tutor …).
@@ -299,14 +290,20 @@ export async function getProvidersForNotify({
   );
 
   // Proximity via services_near, then post-filter on exact provider_type.
-  const { data, error } = !hasGeo ? { data: [], error: null } : await supabase.rpc('services_near', {
+  const { data, error } = await supabase.rpc('services_near', {
     near_lat: lat, near_lng: lng,
     radius_miles: radiusMiles,
     category_match: null,
   });
   if (error) return { data: null, error };
 
-  // Re-hydrate by id before filtering — see CERGIO-GUARD 2026-06-18 in the header.
+  // CERGIO-GUARD (2026-06-18): services_near returns ONLY proximity columns
+  // (id / title / location / distance) — NOT taxonomy_provider_type. Filtering
+  // the RAW rpc rows on `s.taxonomy_provider_type` matched NOTHING (it's always
+  // undefined → allow.includes('') → false), so NO provider was EVER fanned out
+  // a new_request — confirmed by zero new_request rows in the notifications
+  // table. Re-hydrate full rows by id (the SAME fix searchServices already
+  // applies) BEFORE the strict provider-type filter so matching actually works.
   const ids = (data || []).map(s => s.id).filter(Boolean);
   const { data: near, error: fullErr } = !ids.length ? { data: [], error: null } : await supabase
     .from('services')
@@ -315,7 +312,12 @@ export async function getProvidersForNotify({
     .eq('status', 'listed');
   if (fullErr) return { data: null, error: fullErr };
 
-  // SPEC-113/114 fallback — see the header note above this function.
+  // ── GEO-INDEPENDENT FALLBACK (SPEC-113) ────────────────────────────────
+  // services_near is a GEO query, so a listing with NULL lat/lng (geocode failed
+  // on save) is invisible to it and unreachable by EVERY request — that is how a
+  // listed housekeeper was never notified. Geo is an optimisation, not a
+  // requirement. The type + blocked-category filters below run over these rows
+  // unchanged, so this widens reach, never safety.
   let full = near || [];
   let usedFallback = false;
   if (full.length === 0 && (fallbackCity || fallbackState)) {
