@@ -4837,6 +4837,17 @@ test('paused-growth-cannot-be-self-healed-back-on', 'SPEC-119: the self-heal bac
     'crawl-health self-heal must not re-kick the paused OSM seeder');
 });
 
+test('growth-is-a-separate-database', 'SPEC-120: crawl traffic must never share the product database. On 2026-07-30 background crawling saturated the pool — /rest/v1/services returned 503 while /auth/v1/user returned 200 and the founder could not sign in. Two projects means two pools, so a bad day for growth can no longer be a down day for the product', '#120', async () => {
+  const g = readFile('supabase/functions/_shared/growthDb.ts');
+  assert(/GROWTH_SUPABASE_URL/.test(g) && /GROWTH_SERVICE_ROLE_KEY/.test(g), 'growth client must use its own credentials');
+  assert(/throw new Error\(/.test(g),
+    'a missing growth env must FAIL LOUD — a silent fallback to the product DB would recreate the outage');
+  assert(/export function productDb/.test(g), 'the product client must stay explicitly separate');
+  const applier = readFile('scripts/apply-growth-schema.mjs');
+  assert(/REFUSING: GROWTH_SUPABASE_URL points at the PRODUCT project/.test(applier),
+    'the schema applier must refuse to run if pointed at the product project');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
