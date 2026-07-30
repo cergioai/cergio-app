@@ -216,6 +216,17 @@ serve(async (req: Request) => {
             notes: r.note || (saved === 0 ? 'no YellowPages results' : 'yellowpages'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
+        } else if (source === 'ig_services') {
+          // ── IG-FOR-SERVICES (SPEC-102): direct Instagram user search per service x
+          //    city. Proven in eval (12 real Miami trainers in seconds). Yields the
+          //    DUAL creator/service class: a local provider WITH an audience.
+          const r = await fulfillIgServices(db, job);
+          saved = r.saved; found = r.found; query = r.query;
+          await db.from('crawl_requests').update({
+            status: 'delivered', delivered_count: saved,
+            notes: r.note || (saved === 0 ? 'no IG accounts for this service/city' : 'ig_services'),
+            updated_at: new Date().toISOString(),
+          }).eq('id', job.id);
         } else if (source === 'craigslist') {
           // ── Craigslist via Apify actor (memo23/craigslist-scraper). Capped
           //    maxItems (cost), deduped by phone/email/name, first-name parsed.
@@ -1001,7 +1012,7 @@ async function fulfillOverpass(db: any, job: any): Promise<{ saved: number; foun
   const state   = (job.state || '').trim();
   const jlat    = job.lat != null ? Number(job.lat) : null;
   const jlon    = job.lng != null ? Number(job.lng) : null; // crawl_requests uses `lng`
-  const want    = Math.min(Math.max(job.target_count || 10, 1), OSM_MAX_RESULTS);
+  const want    = OSM_MAX_RESULTS;   // MAX allowed under Overpass etiquette (guarded at 100)
   const query   = `${type || 'local service'} in ${[city, state].filter(Boolean).join(', ')} [osm]`;
   if (!city && !(jlat != null && jlon != null)) return { saved: 0, found: 0, query };
 
@@ -1106,7 +1117,7 @@ async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; f
   const type = String(job.service_type || 'local service');
   const city = String(job.city || '');
   const state = String(job.state || '');
-  const want = Math.min(Math.max(job.target_count || 200, 1), 200);  // VOLUME
+  const want = Number(Deno.env.get('LSA_MAX') || '1000');   // MAX: take every local_ad SerpAPI returns
   const query = `${type} in ${[city, state].filter(Boolean).join(', ') || 'United States'} (YellowPages)`;
 
   const pages = Math.max(1, Math.ceil(want / YP_RESULTS_PER_PAGE));
@@ -1365,7 +1376,7 @@ async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: n
   if (!city) return { saved: 0, found: 0, query };
   if (osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
 
-  const want = Math.min(Math.max(job.target_count || 240, 1), 240); // VOLUME: yelp is the top-yield source (154 rows/job)
+  const want = 240;   // MAX: Yelp Fusion caps offset at 240 — this IS the API ceiling
   const loc = [city, state].filter(Boolean).join(', ');
   let saved = 0, found = 0;
   const seen = new Set<string>();
@@ -1625,7 +1636,7 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
   // VOLUME (SPEC-101): 40 -> 250 per job, and sweep EVERY relevant services
   // subcategory in one run instead of a single URL. Craigslist has ~8 service
   // subcats; one URL was leaving ~90% of the inventory on the table.
-  const MAXITEMS = Number(Deno.env.get('CL_MAX_ITEMS') || '250');
+  const MAXITEMS = Number(Deno.env.get('CL_MAX_ITEMS') || '1000');   // MAX: Apify sets no per-run ceiling; 1000 = a full CL subcat page-set
   const SUBCATS = Array.from(new Set([subcat, 'sks', 'hss', 'lbs', 'crs', 'lss', 'pas', 'cps']));
   const startUrls = SUBCATS.map((sc) => ({ url: `https://${sub}.craigslist.org/search/${sc}?query=${encodeURIComponent(rawType)}` }));
   const items = await apifyRun('memo23~craigslist-scraper', { startUrls, includeEmails: true }, MAXITEMS);
@@ -1684,7 +1695,7 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   const query = `${rawType} [yellowpages ${city}]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
   const items = await apifyRun('cryptosignals~yellow-pages-us-scraper',
-    { keyword: rawType, location: `${city}, ${state}`, maxItems: 250, maxResults: 250 }, 250);  // VOLUME: 40 -> 250
+    { keyword: rawType, location: `${city}, ${state}`, maxItems: 1000, maxResults: 1000 }, 1000);  // MAX: no provider ceiling
   let found = items.length, saved = 0, ypFetches = 0;
   const seen = new Set<string>();
   for (const it of items) {
@@ -1718,6 +1729,73 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
     if (!error) saved++;
   }
   return { saved, found, query };
+}
+
+// ── IG-FOR-SERVICES: apify~instagram-scraper user search. Writes BOTH a service row
+// (with the IG handle attached) AND a creator row (dual class), never fabricating.
+async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+  if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'ig_services', note: 'pending APIFY_TOKEN' };
+  const rawType = (job.service_type || '').toLowerCase().trim();
+  const city = (job.city || '').trim();
+  const state = (job.state || '').trim();
+  const query = `${rawType} ${city} [ig_services]`;
+  if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
+  const want = Number(Deno.env.get('IG_MAX') || '200');   // MAX: apify instagram-scraper user search
+  const items = await apifyRun('apify~instagram-scraper',
+    { search: `${rawType} ${city}`, searchType: 'user', searchLimit: want, resultsType: 'details', resultsLimit: want }, want);
+  let found = items.length, saved = 0;
+  const seen = new Set<string>();
+  for (const it of items) {
+    const handle = String(it?.username || '').toLowerCase().trim();
+    if (!handle || seen.has(handle)) continue; seen.add(handle);
+    const name = cleanText(it?.fullName || it?.username);
+    if (!name) continue;
+    const bio = String(it?.biography || '');
+    if (osmIsBlocked(`${name} ${bio} ${it?.businessCategoryName || ''}`)) continue;
+    // geo: the city must appear in the creator's own text (no fabrication)
+    if (!cityVerifiedSvc(city, `${bio} ${name} ${handle} ${it?.businessCategoryName || ''}`)) continue;
+    const followers = typeof it?.followersCount === 'number' ? it.followersCount : null;
+    const ext = it?.externalUrl || null;
+    let email: string | null = null;
+    const em = bio.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+    if (em) email = em[0].toLowerCase();
+    // SERVICE row — the provider, with the IG handle attached (dual)
+    const svc = {
+      id: `igs:${handle}:${city.toLowerCase().replace(/[^a-z]/g, '')}`,
+      name, service_type: job.service_type || null,
+      phone: null, phone_origin: null,
+      website_url: ext, owner_email: email,
+      instagram: handle, has_instagram: true,
+      address: null, city, state: state || null, zip: null,
+      lat: null, lon: null,
+      data_source: 'ig_services', fetched_at: new Date().toISOString(),
+      outreach_status: 'new',
+      outreach_notes: `ig_services | ${classifyEntity(name)} | @${handle}${followers != null ? ` | ${followers} followers` : ''} | ${(it?.businessCategoryName || '')}`.slice(0, 240),
+    };
+    const { error: e1 } = await db.from('leads_services').upsert(svc, { onConflict: 'id' });
+    if (!e1) saved++;
+    // CREATOR row — same person as a creator (dual class), fill-only
+    try {
+      await db.from('leads_influencers').upsert({
+        id: `igs:${handle}`, ig_handle: handle, display_name: name,
+        category: job.service_type || null, followers, email,
+        city, state: state || null, is_business: !!it?.isBusinessAccount,
+        external_url: ext, discovered_via: 'ig-scraper-user-search',
+        outreach_status: 'pending_review',
+      }, { onConflict: 'id' });
+    } catch (_e) { /* creator half is best-effort */ }
+  }
+  return { saved, found, query };
+}
+// city must appear in the account's own text — reuses the CITY alias idea locally
+function cityVerifiedSvc(city: string, text: string): boolean {
+  const t = (text || '').toLowerCase();
+  const c = city.toLowerCase();
+  const NY = ['new york', 'nyc', 'brooklyn', 'manhattan', 'queens', 'bronx'];
+  const MIA = ['miami', 'miami beach', 'brickell', 'wynwood', 'south florida', '305'];
+  if (NY.includes(c) || ['manhattan','brooklyn','queens','bronx','staten island'].includes(c)) return NY.some((a) => t.includes(a));
+  if (MIA.includes(c) || ['miami beach','brickell','wynwood','coral gables','doral'].includes(c)) return MIA.some((a) => t.includes(a));
+  return t.includes(c);
 }
 
 function json(body: unknown, status = 200) {
