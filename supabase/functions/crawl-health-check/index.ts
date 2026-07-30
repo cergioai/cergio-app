@@ -25,6 +25,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 
 serve(async (req: Request) => {
+  const hcStarted = Date.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -155,6 +156,16 @@ serve(async (req: Request) => {
       osm_selfheal = { ...osm_selfheal, error: e instanceof Error ? e.message : String(e) };
     }
 
+    // BACKBONE (fix 2026-07-29): this worker never wrote an agent_runs row, so
+    // /ops/status reported it OFF no matter how often its cron fired — an
+    // unfalsifiable health signal. One row per invocation makes ON/OFF real.
+    try {
+      await db.from('agent_runs').insert({
+        agent: 'crawl-health-check', started_at: new Date(hcStarted).toISOString(),
+        finished_at: new Date().toISOString(), rows_written: osm_selfheal ?? 0,
+        status: 'ok', meta: { emailed, osm_selfheal },
+      });
+    } catch (_e) { /* best-effort: logging must never mask the worker outcome */ }
     return json({ ...report, emailed, osm_selfheal });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
