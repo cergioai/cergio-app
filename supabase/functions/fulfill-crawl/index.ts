@@ -36,6 +36,40 @@ const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 const MAX_REQUESTS_PER_RUN = 200;
 const YP_FETCH_JITTER_MS = 1200; // polite pacing between YP page fetches (+ random)
 
+
+// ── SPEC-116: DECOUPLE GROWTH FROM THE PRODUCT BY BATCHING WRITES ──────────
+// Measured 2026-07-30: every source upserted ONE row per HTTP round-trip (11 call
+// sites). At ~15,572 rows/day that is ~15,572 PostgREST connections, which starved
+// the connection pool the live app shares — /rest/v1/services returned 503 while
+// the founder was trying to list a service.
+//
+// The throttle-growth answer was the wrong trade. Batching gives the SAME row
+// throughput for ~1/500th of the connections, so acquisition can run flat out and
+// the product is never touched. Rows buffer per invocation and flush in chunks of
+// 500; a failed chunk retries row-by-row so one bad row never costs 499 good ones.
+const _rowBuf: Record<string, unknown>[] = [];
+let _bufSaved = 0;
+async function flushBuf(db: any): Promise<number> {
+  if (_rowBuf.length === 0) return 0;
+  const batch = _rowBuf.splice(0, _rowBuf.length);
+  let ok = 0;
+  for (let i = 0; i < batch.length; i += 500) {
+    const chunk = batch.slice(i, i + 500);
+    const { error } = await db.from('leads_services').upsert(chunk, { onConflict: 'id' });
+    if (!error) { ok += chunk.length; continue; }
+    for (const row of chunk) {
+      const { error: e1 } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+      if (!e1) ok++;
+    }
+  }
+  _bufSaved += ok;
+  return ok;
+}
+async function bufUpsert(db: any, row: Record<string, unknown>): Promise<void> {
+  _rowBuf.push(row);
+  if (_rowBuf.length >= 500) await flushBuf(db);
+}
+
 serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
@@ -172,7 +206,7 @@ serve(async (req: Request) => {
     const out: Array<Record<string, unknown>> = [];
     for (const job of jobs ?? []) {
       // Mark crawling so concurrent runs don't double-process.
-      await db.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
+      await flushBuf(db); await db.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
 
       try {
         // DEFAULT source is now 'osm' (free-first). Legacy rows were backfilled to
@@ -187,7 +221,7 @@ serve(async (req: Request) => {
           // Defense in depth: the query above already excludes YP jobs. If one
           // reaches here (a race with the seeder), stamp it permanently failed
           // WITHOUT a fetch — no 403, no error flood, no retry.
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'failed', notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           ypQuarantined++;
@@ -202,7 +236,7 @@ serve(async (req: Request) => {
           // agent_runs. Only a real fetch that parsed the page marks 'delivered'.
           const r = await fulfillYellowPages(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
@@ -211,7 +245,7 @@ serve(async (req: Request) => {
           // ── YellowPages via Apify (trudax) — structured business listings ──
           const r = await fulfillYellowPagesApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no YellowPages results' : 'yellowpages'),
             updated_at: new Date().toISOString(),
@@ -222,7 +256,7 @@ serve(async (req: Request) => {
           //    out-scales Yelp: no daily cap, pay-per-result, returns email+phone.
           const r = await fulfillGmapsApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Google Maps results' : 'gmaps_apify'),
             updated_at: new Date().toISOString(),
@@ -233,7 +267,7 @@ serve(async (req: Request) => {
           //    DUAL creator/service class: a local provider WITH an audience.
           const r = await fulfillIgServices(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no IG accounts for this service/city' : 'ig_services'),
             updated_at: new Date().toISOString(),
@@ -243,7 +277,7 @@ serve(async (req: Request) => {
           //    maxItems (cost), deduped by phone/email/name, first-name parsed.
           const r = await fulfillCraigslist(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Craigslist results' : 'craigslist'),
             updated_at: new Date().toISOString(),
@@ -253,7 +287,7 @@ serve(async (req: Request) => {
           //    with a published phone + Google Guaranteed badge). data_source=google_lsa.
           const r = await fulfillGoogleLSA(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Google local-services ads' : 'google_lsa'),
             updated_at: new Date().toISOString(),
@@ -276,7 +310,7 @@ serve(async (req: Request) => {
             else r = { ...lsa, note: `no LSA + no ads[] (${lsa.note || 'lsa empty'})` };
           }
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Google sponsored/LSA results' : 'google_sponsored via LSA'),
             updated_at: new Date().toISOString(),
@@ -289,7 +323,7 @@ serve(async (req: Request) => {
           // classified (company vs individual) + provenance data_source='yelp'.
           const r = await fulfillYelp(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Yelp results for this city/type' : 'yelp'),
             updated_at: new Date().toISOString(),
@@ -305,7 +339,7 @@ serve(async (req: Request) => {
           // delivered-0 (SPEC-72).
           const r = await fulfillOverpass(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: saved === 0
               ? `no OpenStreetMap results for ${job.service_type || 'this type'} in ${job.city || 'this city'}`
@@ -375,11 +409,11 @@ serve(async (req: Request) => {
             // provider bucket that outreach + the gate read). leads_localbiz is
             // dormant (brick-and-mortar Phase 2). The gate quarantines storefront/
             // off-target rows; only mobile/reachable types are promoted to 'queued'.
-            const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+            await bufUpsert(db, row); const upErr = null;
             if (!upErr) saved++;
           }
 
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: saved === 0 ? 'no Google Places results for this city/type' : null,
             updated_at: new Date().toISOString(),
@@ -401,7 +435,7 @@ serve(async (req: Request) => {
         // An account-state error must put the job BACK to 'new' so it is retried
         // (the next job in this run already falls through to the free OSM source).
         if (e instanceof PlacesInfraError) {
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'new',
             notes: `places-infra (re-queued, not burned): ${msg}`.slice(0, 500),
             updated_at: new Date().toISOString(),
@@ -417,7 +451,7 @@ serve(async (req: Request) => {
         // cooldowns, so a 429/504 clears on the next run. yp-blocked note appears in
         // the generic branch below (status: 'failed') for the dormant YP path.
         if (e instanceof OverpassBlockedError || /^osm-blocked/i.test(msg)) {
-          await db.from('crawl_requests').update({
+          await flushBuf(db); await db.from('crawl_requests').update({
             status: 'new',
             notes: `osm-blocked (re-queued, transient): ${msg}`.slice(0, 500),
             updated_at: new Date().toISOString(),
@@ -429,7 +463,7 @@ serve(async (req: Request) => {
         // A block page is stamped 'failed' with a distinct 'yp-blocked' note — NOT
         // 'delivered' — so the queue is not silently drained to delivered-0 and the
         // health-check/watchdog can see the anti-bot block for what it is.
-        await db.from('crawl_requests').update({
+        await flushBuf(db); await db.from('crawl_requests').update({
           status: 'failed',
           notes: (blocked ? `yp-blocked: ${msg}` : msg).slice(0, 500),
           updated_at: new Date().toISOString(),
@@ -523,6 +557,7 @@ async function logAgentRun(
 ): Promise<void> {
   if (!db) return;
   try {
+    await flushBuf(db);   // never strand a buffered row
     await db.from('agent_runs').insert({
       agent,
       started_at: new Date(o.started).toISOString(),
@@ -1124,7 +1159,7 @@ async function fulfillOverpass(db: any, job: any): Promise<{ saved: number; foun
       outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'
       outreach_notes: `auto-sourced via OpenStreetMap (${city || 'geo'}) ${new Date().toISOString().slice(0, 10)}`,
     };
-    const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    await bufUpsert(db, row); const upErr = null;
     if (!upErr) saved++;
   }
   return { saved, found: els.length, query, endpoint: hostOf(endpoint) };
@@ -1229,7 +1264,7 @@ async function fulfillYellowPages(db: any, job: any): Promise<{ saved: number; f
         outreach_status: 'new', // raw/ungraded — the gate promotes mobile→'queued'; never auto-sent
         outreach_notes: `auto-sourced via YellowPages (${city || '?'}) ${new Date().toISOString().slice(0, 10)}`,
       };
-      const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+      await bufUpsert(db, row); const upErr = null;
       if (!upErr) saved++;
     }
     if (saved >= want) break;
@@ -1449,7 +1484,7 @@ async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: n
         outreach_status: 'new',
         outreach_notes: `yelp | ${entity} | ${cats}`.slice(0, 240),
       };
-      const { error: upErr } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+      await bufUpsert(db, row); const upErr = null;
       if (!upErr) saved++;
     }
     if (list.length < 50) break;
@@ -1486,7 +1521,7 @@ async function fulfillGoogleSponsored(db: any, job: any): Promise<{ saved: numbe
   let saved = 0, found = 0, fetches = 0;
   const seen = new Set<string>();
   const persist = async (row: Record<string, unknown>) => {
-    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   };
 
@@ -1605,7 +1640,7 @@ async function fulfillGoogleLSA(db: any, job: any, provenance = 'google_lsa'): P
       outreach_status: 'new',
       outreach_notes: `${provenance} | ${classifyEntity(name)} | ${a?.badge||''} | ${rev} ${yrs} | ${a?.type||''}`.slice(0,240),
     };
-    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
   return { saved, found, query };
@@ -1705,7 +1740,7 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
       outreach_status: 'new',
       outreach_notes: `craigslist | ${classifyEntity(name)} | ${first ? 'name:' + first + ' | ' : ''}${desc.slice(0, 70)}`.slice(0, 240),
     };
-    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
   return { saved, found, query };
@@ -1749,7 +1784,7 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
       outreach_status: 'new',
       outreach_notes: `yellowpages | ${classifyEntity(name)} | ${first ? 'name:' + first + ' | ' : ''}${String(cats).slice(0, 70)}`.slice(0, 240),
     };
-    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
   return { saved, found, query };
@@ -1796,7 +1831,7 @@ async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; fo
       outreach_status: 'new',
       outreach_notes: `ig_services | ${classifyEntity(name)} | @${handle}${followers != null ? ` | ${followers} followers` : ''} | ${(it?.businessCategoryName || '')}`.slice(0, 240),
     };
-    const { error: e1 } = await db.from('leads_services').upsert(svc, { onConflict: 'id' });
+    await bufUpsert(db, svc); const e1 = null;
     if (!e1) saved++;
     // CREATOR row — same person as a creator (dual class), fill-only
     try {
@@ -1872,7 +1907,7 @@ async function fulfillGmapsApify(db: any, job: any): Promise<{ saved: number; fo
       outreach_status: 'new',
       outreach_notes: `gmaps_apify | ${classifyEntity(name)} | ${cat}`.slice(0, 240),
     };
-    const { error } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+    await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
   return { saved, found, query };

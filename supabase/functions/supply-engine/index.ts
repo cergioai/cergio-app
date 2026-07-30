@@ -166,11 +166,16 @@ serve(async (req: Request) => {
     }
   } catch (_e) { restOk = false; }
 
-  const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '6'), 10);
+  // SPEC-116: growth is now DECOUPLED from the product — fulfill-crawl batches its
+  // writes (500 rows per connection instead of one), so the same throughput costs
+  // ~1/500th of the pool. Turbo returns to full: 40 workers, env-tunable, with the
+  // health probe below as the only brake. Ceiling raised because the load per
+  // worker collapsed, NOT because the risk was accepted.
+  const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '40'), 60);
   let kicked = 0;
   for (let i = 0; restOk && i < kicks; i++) {
     try {
-      fetch(`${FN_BASE}/fulfill-crawl?limit=150`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
+      fetch(`${FN_BASE}/fulfill-crawl?limit=400`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
       kicked++;
     } catch (_e) {}
   }
