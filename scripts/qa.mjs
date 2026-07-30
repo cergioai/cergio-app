@@ -4754,6 +4754,18 @@ test('ci-applies-migrations', 'SPEC-109: CI must APPLY migrations, not print a r
   assert(!/console\.log\(.*TOKEN/.test(js), 'never log the token');
 });
 
+test('bookings-headline-counts-only-real-completed', 'SPEC-107: the headline `bookings` KPI in opsPayload must count ONLY non-seed, completed bookings — never the raw bookings table, which mixes QA seed rows + pending/confirmed placeholders and inflated an INVESTOR-FACING number to 53 headline vs 1 real completed (audit check bookings_kpi_includes_test_rows). The raw total may live alongside as bookings_all but must NEVER be surfaced as the headline.', '#107', async () => {
+  const shared = readFile('supabase/functions/_shared/opsPayload.ts');
+  const bookingsQuery = (shared.match(/from\('bookings'\)[^;]*;\s*bookings\s*=\s*count/g) || []).join('\n');
+  assert(bookingsQuery.length > 0, 'could not find the headline `bookings` assignment in opsPayload.ts');
+  assert(/\.not\('seed','is',true\)/.test(bookingsQuery),
+    'headline bookings query must exclude seed rows via .not(\'seed\',\'is\',true) — else the KPI recounts QA test rows');
+  assert(/\.eq\('status','completed'\)/.test(bookingsQuery),
+    'headline bookings query must count only completed via .eq(\'status\',\'completed\') — pending/confirmed placeholders must not inflate the headline');
+  assert(/bookings_all\s*=\s*count/.test(shared),
+    'the raw bookings total must be preserved separately as bookings_all (internal ops visibility), not as the headline');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

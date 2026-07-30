@@ -157,12 +157,19 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   }
 
   const { count: profiles } = await db.from('profiles').select('id', { count: 'exact', head: true });
-  let withAvatar = 0, connections = 0, services = 0, requests = 0, bookings = 0;
+  let withAvatar = 0, connections = 0, services = 0, requests = 0, bookings = 0, bookings_all = 0;
   try { const { count } = await db.from('profiles').select('id', { count: 'exact', head: true }).not('avatar_url','is',null); withAvatar = count ?? 0; } catch (_e) {}
   try { const { count } = await db.from('connections').select('id', { count: 'exact', head: true }); connections = count ?? 0; } catch (_e) {}
   try { const { count } = await db.from('services').select('id', { count: 'exact', head: true }); services = count ?? 0; } catch (_e) {}
   try { const { count } = await db.from('requests').select('id', { count: 'exact', head: true }); requests = count ?? 0; } catch (_e) {}
-  try { const { count } = await db.from('bookings').select('id', { count: 'exact', head: true }); bookings = count ?? 0; } catch (_e) {}
+  // Headline `bookings` KPI = REAL bookings only: non-seed AND status='completed'.
+  // WHY (SPEC-107 — audit check `bookings_kpi_includes_test_rows`, critical): the raw
+  // table count counts QA seed rows plus pending/confirmed placeholders, inflating
+  // an INVESTOR-FACING number (was 53 headline vs 1 real completed). The headline
+  // must only ever count completed, non-seed bookings. Raw total kept as
+  // `bookings_all` for internal ops visibility (never surfaced as the headline).
+  try { const { count } = await db.from('bookings').select('id', { count: 'exact', head: true }); bookings_all = count ?? 0; } catch (_e) {}
+  try { const { count } = await db.from('bookings').select('id', { count: 'exact', head: true }).not('seed','is',true).eq('status','completed'); bookings = count ?? 0; } catch (_e) {}
 
   return {
     generated_at: new Date().toISOString(),
@@ -170,7 +177,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     qa: { open_bugs: openBugs.length, findings: findings || [], recent_runs: qaRuns || [] },
     agents,
     crawls: { by_source: bySource, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
-    product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings },
+    product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings, bookings_all },
     counter, creatorsBySource, creatorsUnattributed, engine, download,
     filter: { city, cities: Object.fromEntries(Object.entries(cities).sort((a, b) => b[1] - a[1]).slice(0, 60)) },
     creators_listed_total: listedCreators, creators_total: creTotal ?? 0,
