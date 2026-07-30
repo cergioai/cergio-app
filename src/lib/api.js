@@ -4882,9 +4882,16 @@ export async function earlyOffers({ city = null, limit = 60 } = {}) {
   return { data, error: null };
 }
 
-export async function opsConsole() {
-  const { data, error } = await supabase.functions.invoke('ops-console', { body: {} });
-  if (error) return { data: null, error };
+export async function opsConsole(opts = {}) {
+  const { data, error } = await supabase.functions.invoke('ops-console', { body: opts });
+  if (error) {
+    // surface the REAL error instead of "Edge Function returned a non-2xx status code"
+    let real = error.message;
+    try { const b = await error.context?.json?.(); if (b?.error) real = b.error; } catch (_e) { /* keep */ }
+    // eslint-disable-next-line no-console
+    console.error('[CERGIO/ops-console]', real);
+    return { data: null, error: { ...error, message: real } };
+  }
   return { data, error: null };
 }
 
