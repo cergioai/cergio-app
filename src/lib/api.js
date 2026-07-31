@@ -2448,9 +2448,22 @@ export async function listInboundRequests({ limit = 20 } = {}) {
   if (!mySvcs || mySvcs.length === 0) return { data: [], error: null };
 
   // Build lookup: exact taxonomy match first; fall back to category/title.
-  const myTypes = [...new Set(mySvcs.map(s => s.taxonomy_provider_type).filter(Boolean))];
-  // Also collect categories for the fallback query.
-  const myCategories = [...new Set(mySvcs.map(s => s.category).filter(Boolean))];
+  // SPEC-127 — MEASURED 2026-07-31. This matched the provider's OWN types
+  // EXACTLY, with no ontology bridge. The provider lists "Housekeeper"; the
+  // request is written as "House Cleaner" (the family PARENT the resolver
+  // canonicalises to). 'House Cleaner' !== 'Housekeeper' and !== category
+  // 'Cleaner', so the request never appeared in the inbox even though the
+  // fan-out matched, the notification row was written and the email was sent.
+  // The fan-out already widens through expandAllowlist — the inbox must use the
+  // SAME bridge or the two disagree about what a match is.
+  const myTypes = expandAllowlist(
+    [...new Set(mySvcs.map(s => s.taxonomy_provider_type).filter(Boolean))],
+  );
+  // Categories are bridged too — a listing categorised "Cleaner" must see a
+  // "House Cleaner" request.
+  const myCategories = expandAllowlist(
+    [...new Set(mySvcs.map(s => s.category).filter(Boolean))],
+  );
 
   // Map service_type/category string → service id for the card's CTA.
   const typeToSvc = {};
