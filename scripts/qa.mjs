@@ -5004,6 +5004,13 @@ test('growth-tables-only-on-the-growth-db', 'SPEC-132: every crawl worker must r
   assert(bad.length === 0, `these still hit growth tables on the PRODUCT database: ${bad.join(', ')}`);
   const shared = readFile('supabase/functions/_shared/growthDb.ts');
   assert(/throw new Error\(/.test(shared), 'a missing growth env must FAIL LOUD, never silently fall back to the product DB');
+  // SPEC-148: the same secret that carried a /rest/v1 path in CI is pasted into
+  // the edge secrets, so the worker client must normalise it too — otherwise every
+  // worker builds broken URLs and writes nothing, silently.
+  assert(/new URL\(v\)\.origin/.test(shared),
+    'growthDb must reduce the URL to scheme://host — a pasted /rest/v1 path breaks every call');
+  assert(/GROWTH_SERVICE_ROLE_KEY'\) \|\| ''\)\.trim\(\)/.test(shared),
+    'the growth key must be trimmed — a pasted newline breaks auth');
   const ops = readFile('supabase/functions/_shared/opsPayload.ts');
   assert(/growthEnvPresent\(\) \? growthDb\(\) : db/.test(ops), 'the ops console must read growth tables from the growth DB');
 });

@@ -1,2 +1,2 @@
-run: 2026-07-31T22:29:34Z
-reason: SPEC-148 origin-only URL normalisation — accepts any pasted form.
+run: 2026-07-31T22:36:06Z
+reason: SPEC-148b growthDb normalisation — workers should now drain the 51,467 queued jobs.
