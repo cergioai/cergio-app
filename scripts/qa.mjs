@@ -5061,6 +5061,14 @@ test('targeted-quote-and-invite-more-bids', 'SPEC-136/137 (founder 2026-07-31): 
   assert(/state === 'sending'/.test(results), 'the invite must disable itself while sending so it cannot double-send');
 });
 
+test('guest-inbox-no-infinite-spinner', 'QA-nightly 2026-07-31 (live-found in browser walk): a signed-OUT guest who taps the Inbox tab lands on /inbox, whose myJobs eager effect early-returned WITHOUT resolving state, so the render sat on "Loading your jobs\u2026" forever (myJobs stayed null). Every other guest guard in JobsInboxScreen resolves to []; this one was missed. The guard must resolve myJobs to an empty shape so the screen settles to the calm empty state, never a perpetual spinner.', '#154', async () => {
+  const inbox = readFile('src/screens/JobsInboxScreen.jsx');
+  assert(!/if \(!auth\?\.isSignedIn\) return;/.test(inbox),
+    'no auth guard in JobsInboxScreen may bare-return \u2014 it must resolve its state so the screen never hangs on "Loading your jobs\u2026"');
+  assert(/if \(!auth\?\.isSignedIn\) \{ setMyJobs\(\{ asConsumer: \[\], asProvider: \[\] \}\); return; \}/.test(inbox),
+    'the myJobs effect must resolve myJobs to an empty shape when signed out so /inbox never hangs for a guest');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
