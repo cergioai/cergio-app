@@ -15,6 +15,8 @@ name: ops-health (CI live prod probe)
 on:
   schedule:
     - cron: '5 * * * *'      # hourly at :05 — cheap, isolated data branch
+  push:
+    branches: [main]   # deterministic snapshot on every ship (no wait on cron activation)
   workflow_dispatch: {}
 
 permissions:
