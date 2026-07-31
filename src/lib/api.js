@@ -2762,7 +2762,12 @@ export async function listMySentOffers({ limit = 30 } = {}) {
     .from('request_responses')
     .select('id, request_id, status, offered_price_cents, responded_at')
     .eq('responder_id', uid)
-    .in('status', ['offered', 'countered'])
+    // SPEC-134 (founder 2026-07-31): "once service sends offer, it should show
+    // under Sent so service can track offers sent". This filtered to
+    // offered/countered ONLY, so the moment a consumer accepted or declined the
+    // offer VANISHED from the provider's Sent tab — the provider lost all record
+    // of what they had quoted. Keep every outcome and surface the status instead.
+    .in('status', ['offered', 'countered', 'accepted', 'declined', 'expired'])
     .order('responded_at', { ascending: false })
     .limit(limit);
   if (error || !resp?.length) return { data: [], error };
