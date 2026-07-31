@@ -4848,6 +4848,16 @@ test('growth-is-a-separate-database', 'SPEC-120: crawl traffic must never share 
     'the schema applier must refuse to run if pointed at the product project');
 });
 
+test('fanout-fallback-uses-real-columns', 'SPEC-124: MEASURED against the live database 2026-07-31 — the `services` table has NO city or state column (id, owner_id, title, category, description, location_text, status, lat, lng, taxonomy_provider_type, ...). The SPEC-113 fallback filtered .ilike("city", ...) which errors 42703 and returns zero rows. Combined with the requester lat/lng being null (Google geocode REQUEST_DENIED) that meant NO provider was ever matched and the notifications table stayed EMPTY', '#124', async () => {
+  const api = readFile('src/lib/api.js');
+  const start = api.indexOf('export async function getProvidersForNotify({');
+  const fn = api.slice(start, api.indexOf('export async function', start + 10))
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');   // code only
+  assert(/ilike\('location_text'/.test(fn), 'the fallback must match on location_text, the column that exists');
+  assert(!/\.ilike\('city'/.test(fn) && !/\.eq\('state'/.test(fn),
+    'services has no city/state column — filtering on them errors 42703 and silently returns nothing');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

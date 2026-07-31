@@ -342,10 +342,19 @@ export async function getProvidersForNotify({
   let full = near || [];
   let usedFallback = false;
   if (full.length === 0 && (fallbackCity || fallbackState)) {
+    // MEASURED 2026-07-31 against live: `services` has NO city/state columns.
+    // Its columns are id, owner_id, title, category, description, location_text,
+    // status, lat, lng, taxonomy_provider_type, ... — so the previous
+    // .ilike('city', ...) ERRORED (42703) and returned zero rows, silently
+    // killing the fallback. With the requester's coords null (Google geocode
+    // REQUEST_DENIED) that meant NO provider was ever matched and the
+    // notifications table stayed empty. Match on location_text, which holds
+    // e.g. "New York, United States".
+    const needle = (fallbackCity || fallbackState || '').trim();
     let fb = supabase.from('services')
       .select('id, owner_id, taxonomy_provider_type, category, status')
       .eq('status', 'listed').limit(200);
-    fb = fallbackCity ? fb.ilike('city', fallbackCity) : fb.eq('state', fallbackState);
+    fb = fb.ilike('location_text', `%${needle}%`);
     const { data: byCity } = await fb;
     full = byCity || [];
     usedFallback = full.length > 0;
