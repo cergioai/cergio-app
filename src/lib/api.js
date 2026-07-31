@@ -242,11 +242,32 @@ export async function listMyServices() {
 // SPEC-112: a fan-out that reaches nobody must leave a trace. These exits are
 // client-side and used to return silently, so the QA ledger stayed clean while
 // the #1 flow failed. Fire-and-forget — diagnosis must never block the user.
-function reportZeroFanout(requestId, reason) {
+
+// SPEC-123 — the fan-out reports its own outcome, server-side, on EVERY exit.
+// supabase.rpc is PostgREST: unlike functions.invoke, a failure here cannot tear
+// down the session. Fire-and-forget; telemetry never blocks the user.
+function logFanout(requestId, outcome, detail) {
   try {
-    supabase.functions.invoke('notify-request', { body: { requestId, diagnose: reason } })
-      .catch(() => {});
-  } catch (_e) { /* never throw from a diagnostic */ }
+    if (!requestId) return;
+    supabase.rpc('cergio_log_fanout', {
+      p_request_id: requestId,
+      p_outcome: String(outcome).slice(0, 40),
+      p_detail: detail ? String(detail).slice(0, 300) : null,
+    }).then(() => {}, () => {});
+  } catch (_e) { /* never throw from telemetry */ }
+}
+
+function reportZeroFanout(requestId, reason) {
+  // SPEC-123: console only. This previously called
+  // supabase.functions.invoke('notify-request') from the client; that endpoint is
+  // authed, and its 401 made supabase-js tear down the session — the founder was
+  // signed out on every submit. Server-side telemetry is logFanout() (a PostgREST
+  // RPC, which cannot destroy a session). A diagnostic must never be able to break
+  // the thing it observes.
+  if (typeof console !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.warn('[CERGIO/request] zero fan-out', { requestId, reason });
+  }
 }
 
 export async function getProvidersForNotify({
@@ -3407,8 +3428,9 @@ export async function createRequestAndFanOut({
     fallbackCity:  request.city  || null,   // SPEC-113
     fallbackState: request.state || null,
   });
-  if (provErr) return { request, notified: 0, error: provErr };
-  if (blocked) { reportZeroFanout(request.id, blocked); return { request, notified: 0, error: null, blocked }; }
+  if (provErr) { logFanout(request.id, 'match_error', provErr.message); return { request, notified: 0, error: provErr }; }
+  if (blocked) { logFanout(request.id, 'blocked', blocked); reportZeroFanout(request.id, blocked); return { request, notified: 0, error: null, blocked }; }
+  logFanout(request.id, 'matched', `services_near+fallback returned ${(provs || []).length} listing(s)`);
 
   // 3) Fan out the notifications. data.deep_link routes the provider
   //    to /results?req=<id> when they tap. data.request_id is what
@@ -3419,6 +3441,7 @@ export async function createRequestAndFanOut({
   // not be fanned out their own request (CERGIO-GUARD 2026-06-18).
   const ownerIds = Array.from(new Set((provs || []).map(s => s.owner_id).filter(Boolean)))
     .filter(id => id !== uid);
+  logFanout(request.id, 'owners', `${ownerIds.length} owner(s) after excluding the requester`);
   if (ownerIds.length === 0) {
     // CERGIO-GUARD (2026-06-18): no provider matched in radius → a city we don't
     // cover yet. Enqueue an on-demand services crawl (10 best nearest) so the
