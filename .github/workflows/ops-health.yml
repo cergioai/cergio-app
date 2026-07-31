@@ -23,8 +23,14 @@ permissions:
   contents: write
 
 concurrency:
+  # PREEMPT, don't queue (run121 finding): with cancel-in-progress:false a single
+  # stuck/hung run in this group froze the verification snapshot — the data branch
+  # went 3h+ stale on the hourly schedule AND a fresh push-to-main probe never
+  # landed, silently reopening the "prod unproven-live" trap this workflow closed.
+  # Preempting lets every push + hourly tick self-heal the channel; the commit step
+  # is a near-atomic git push, so a cancelled probe just yields to the next one.
   group: ops-health
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   probe:
