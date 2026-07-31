@@ -44,6 +44,31 @@ serve(async (req: Request) => {
     if (error) throw error;
     const snap: any = (data && typeof data === 'object') ? data : {};
 
+    // ── HONEST HEADLINE bookings KPI (SPEC-107 / audit `bookings_kpi_includes_test_rows`) ──
+    // cergio_ops_snapshot() is an UNVERSIONED DB fn (lives only in a launcher, so it
+    // cannot be fixed off-Mac) and it returns snap.bookings as the RAW bookings-table
+    // count, which mixes QA seed rows + pending/confirmed placeholders. That inflated
+    // an INVESTOR-FACING number to 58 headline vs ~1 real completed. We recompute the
+    // headline HERE — versioned, off-Mac-shippable, same additive read-time pattern as
+    // org_health/qa/support above — to count ONLY non-seed, completed bookings. This is
+    // the EXACT definition already enforced for the ops-console path in _shared/opsPayload.ts
+    // (guarded by qa test `bookings-headline-counts-only-real-completed`). The raw value is
+    // preserved as bookings_all + bookings_headline_raw for internal visibility, never as the
+    // headline. Best-effort: on any error the snapshot still serves the fn's value unchanged.
+    try {
+      const rawHeadline = typeof snap.bookings === 'number' ? snap.bookings : null;
+      const { count: completedNonSeed } = await db
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .not('seed', 'is', true)
+        .eq('status', 'completed');
+      if (typeof completedNonSeed === 'number') {
+        snap.bookings_all = rawHeadline;          // raw table count (internal ops visibility)
+        snap.bookings_headline_raw = rawHeadline; // explicit alias so audits can see the old value
+        snap.bookings = completedNonSeed;         // HONEST headline: non-seed completed only
+      }
+    } catch (_e) { /* additive; never break the snapshot on this */ }
+
     // ── BACKBONE: single top-line ORG HEALTH + per-agent health ─────────────────
     // Merged in at read time (rather than baking it into the large snapshot fn,
     // which lives in a launcher) so the dashboard always shows one clear status —
