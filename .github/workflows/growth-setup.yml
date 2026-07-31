@@ -4,6 +4,9 @@
 # applier refuses to run if GROWTH_SUPABASE_URL points at the product ref.
 name: Growth DB setup
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch: {}
   # PUSH TRIGGER (SPEC-139). api.github.com is firewalled from the sandbox
@@ -89,7 +92,7 @@ jobs:
           echo "workers dispatched — waiting 25s for rows to land"
           sleep 25
 
-      - name: GROWTH STATUS — row counts, job queue, agent liveness
+      - name: GROWTH STATUS — write the report INTO the repo
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
@@ -97,32 +100,54 @@ jobs:
           set -uo pipefail
           H_K="apikey: $GROWTH_SERVICE_ROLE_KEY"
           H_A="Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY"
-          cnt () {  # $1=table  $2=extra query
+          cnt () {
             curl -s -I -H "$H_K" -H "$H_A" -H 'Prefer: count=exact' \
               "$GROWTH_SUPABASE_URL/rest/v1/$1?select=id&limit=1${2:-}" \
               | tr -d '\r' | sed -n 's/.*content-range: .*\///p'
           }
-          echo "=============================================="
-          echo " GROWTH DATABASE STATUS"
-          echo "=============================================="
-          echo "leads_services      : $(cnt leads_services)"
-          echo "leads_influencers   : $(cnt leads_influencers)"
-          echo "crawl_requests      : $(cnt crawl_requests)"
-          echo "  new               : $(cnt crawl_requests '&status=eq.new')"
-          echo "  crawling          : $(cnt crawl_requests '&status=eq.crawling')"
-          echo "  delivered         : $(cnt crawl_requests '&status=eq.delivered')"
-          echo "agent_runs          : $(cnt agent_runs)"
-          echo ""
-          echo "--- rows by source ---"
-          for s in gmaps_apify craigslist yellowpages_apify yelp google_lsa google_sponsored osm ig_services; do
-            printf '  %-20s %s\n' "$s" "$(cnt leads_services "&data_source=eq.$s")"
-          done
-          echo ""
-          echo "--- agent runs in the growth DB (last 10) ---"
-          curl -s -H "$H_K" -H "$H_A" \
-            "$GROWTH_SUPABASE_URL/rest/v1/agent_runs?select=agent,status,started_at,rows_written&order=started_at.desc&limit=10" \
-            | head -c 1500
-          echo ""
-          echo "=============================================="
-          echo "A ZERO crawl_requests count means the seeders have not run against"
-          echo "the growth DB yet — the queue must be seeded before anything crawls."
+          # SPEC-140: the report is COMMITTED to the repo, not just printed. The
+          # sandbox cannot reach api.github.com and the Chrome extension detaches,
+          # so Actions logs are frequently unreadable off-Mac. git always works.
+          OUT=GROWTH-STATUS.md
+          {
+            echo "# Growth status"
+            echo
+            echo "generated: $(date -u +%FT%TZ)"
+            echo
+            echo '| table | rows |'
+            echo '|---|---|'
+            echo "| leads_services | $(cnt leads_services) |"
+            echo "| leads_influencers | $(cnt leads_influencers) |"
+            echo "| crawl_requests | $(cnt crawl_requests) |"
+            echo "| &nbsp;&nbsp;new | $(cnt crawl_requests '&status=eq.new') |"
+            echo "| &nbsp;&nbsp;crawling | $(cnt crawl_requests '&status=eq.crawling') |"
+            echo "| &nbsp;&nbsp;delivered | $(cnt crawl_requests '&status=eq.delivered') |"
+            echo "| agent_runs | $(cnt agent_runs) |"
+            echo
+            echo '## rows by source'
+            echo
+            echo '| source | rows |'
+            echo '|---|---|'
+            for s in gmaps_apify craigslist yellowpages_apify yelp google_lsa google_sponsored osm ig_services; do
+              echo "| $s | $(cnt leads_services "&data_source=eq.$s") |"
+            done
+            echo
+            echo '## last 10 agent runs (growth DB)'
+            echo
+            echo '```json'
+            curl -s -H "$H_K" -H "$H_A" \
+              "$GROWTH_SUPABASE_URL/rest/v1/agent_runs?select=agent,status,started_at,rows_written&order=started_at.desc&limit=10"
+            echo
+            echo '```'
+          } > "$OUT"
+          cat "$OUT"
+
+      - name: Commit the report
+        run: |
+          set -uo pipefail
+          git config user.name  "cergio-growth[bot]"
+          git config user.email "growth@cergio.ai"
+          git add GROWTH-STATUS.md
+          git diff --cached --quiet && { echo "no change"; exit 0; }
+          git commit -m "chore(growth): status report $(date -u +%FT%TZ) [skip ci]"
+          git push origin HEAD:main || echo "push failed (non-fatal)"
