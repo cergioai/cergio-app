@@ -24,7 +24,11 @@ export function ManageServicesScreen() {
         ? 'Payouts pending Stripe verification — listing will still publish.'
         : 'Heads up: set up payouts in Profile → Service view to receive payments.');
     }
-    navigate('/list-service');
+    // SPEC-130 (founder): from Manage Services, "List another service" must go
+    // straight into the listing FORM, not back to the welcome/intro screen the
+    // first-time flow starts at. A provider who already has listings has already
+    // seen that intro.
+    navigate('/list-service/about');
   };
 
   useEffect(() => {
