@@ -1,6 +1,12 @@
 // Apply the growth schema to the SEPARATE growth project. Run from CI.
 // Uses GROWTH_SUPABASE_URL + GROWTH_SERVICE_ROLE_KEY. Never touches the product DB.
-const GROWTH_URL = (process.env.GROWTH_SUPABASE_URL || '').trim().replace(/\/+$/, '');   // NOT `URL` — that shadows the global URL constructor
+// SPEC-148: accept ANY form of the project URL. Measured: the secret was
+// 'https://<ref>.supabase.co/rest/v1' (48 chars), so calls became
+// '…/rest/v1/rest/v1/' -> 404. Reduce to scheme://host and discard the rest.
+const GROWTH_URL = (() => {
+  const raw = (process.env.GROWTH_SUPABASE_URL || '').trim();
+  try { return new URL(raw).origin; } catch { return raw.replace(/\/+$/, ''); }
+})();   // NOT `URL` — that shadows the global URL constructor
 const KEY = process.env.GROWTH_SERVICE_ROLE_KEY;
 if (!GROWTH_URL || !KEY) { console.error('GROWTH_SUPABASE_URL / GROWTH_SERVICE_ROLE_KEY not set'); process.exit(1); }
 if (/vjmwnbftfquyquwaklue/.test(GROWTH_URL)) {

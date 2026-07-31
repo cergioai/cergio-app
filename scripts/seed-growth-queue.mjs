@@ -13,7 +13,13 @@
 // secret carries a TRAILING SLASH, so every call built "…//rest/v1/…" and the
 // seed failed while the auth check (which accepted 404 as success) passed green.
 // Normalise once, here, so no caller can hit it again.
-const URL_G = (process.env.GROWTH_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+// SPEC-148: accept ANY form of the project URL. Measured: the secret was
+// 'https://<ref>.supabase.co/rest/v1' (48 chars), so calls became
+// '…/rest/v1/rest/v1/' -> 404. Reduce to scheme://host and discard the rest.
+const URL_G = (() => {
+  const raw = (process.env.GROWTH_SUPABASE_URL || '').trim();
+  try { return new URL(raw).origin; } catch { return raw.replace(/\/+$/, ''); }
+})();
 const KEY = process.env.GROWTH_SERVICE_ROLE_KEY;
 if (!URL_G || !KEY) { console.error('GROWTH_SUPABASE_URL / GROWTH_SERVICE_ROLE_KEY not set'); process.exit(1); }
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };

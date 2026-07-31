@@ -51,8 +51,10 @@ jobs:
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
+          # SPEC-148: reduce to scheme://host — the secret carried a /rest/v1 path,
+          # so every call became '…/rest/v1/rest/v1/' and returned 404.
           GROWTH_SUPABASE_URL="$(printf '%s' "$GROWTH_SUPABASE_URL" | tr -d '[:space:]')"
-          GROWTH_SUPABASE_URL="${GROWTH_SUPABASE_URL%/}"
+          GROWTH_SUPABASE_URL="$(printf '%s' "$GROWTH_SUPABASE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')"
           # SHAPE report — no secret revealed, but a malformed value is obvious.
           echo "url length: ${#GROWTH_SUPABASE_URL}"
           echo "url host  : $(printf '%s' "$GROWTH_SUPABASE_URL" | sed -E 's#^(https?://)([^.]{0,4})[^.]*#\1\2***#')"
@@ -120,8 +122,10 @@ jobs:
           set -uo pipefail
           # SPEC-145: trim whitespace/newlines AND trailing slashes. A pasted
           # secret often carries a newline, which %/ does not remove.
+          # SPEC-148: reduce to scheme://host — the secret carried a /rest/v1 path,
+          # so every call became '…/rest/v1/rest/v1/' and returned 404.
           GROWTH_SUPABASE_URL="$(printf '%s' "$GROWTH_SUPABASE_URL" | tr -d '[:space:]')"
-          GROWTH_SUPABASE_URL="${GROWTH_SUPABASE_URL%/}"
+          GROWTH_SUPABASE_URL="$(printf '%s' "$GROWTH_SUPABASE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')"
           H_K="apikey: $GROWTH_SERVICE_ROLE_KEY"
           H_A="Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY"
           cnt () {
