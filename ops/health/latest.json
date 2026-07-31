@@ -1,0 +1,2465 @@
+{
+  "probed_at": "2026-07-31T04:10:43Z",
+  "http": {
+    "app": 200,
+    "ops_metrics": 200
+  },
+  "healthy": true,
+  "metrics": {
+    "plan": [
+      {
+        "label": "QA green across all modules",
+        "owner": "QA agent",
+        "status": "pending",
+        "target": "qa.mjs green"
+      },
+      {
+        "label": "Inspector honesty PASS",
+        "owner": "Inspector",
+        "status": "pending",
+        "target": "PASS"
+      },
+      {
+        "label": "Hand-pick cohort (5 creators + 25 IG services)",
+        "owner": "Claude",
+        "status": "pending",
+        "target": "shortlist → your yes"
+      },
+      {
+        "label": "Creators sendable 70+",
+        "owner": "Harvester (free)",
+        "status": "in_progress",
+        "target": "1000/day discovery + 70+ sendable"
+      },
+      {
+        "label": "First founding outreach send",
+        "owner": "You (go)",
+        "status": "pending",
+        "target": "30 contacted"
+      },
+      {
+        "label": "Creators onboarded",
+        "owner": "Outreach",
+        "status": "pending",
+        "target": "2-3"
+      },
+      {
+        "label": "Providers onboarded",
+        "owner": "Outreach",
+        "status": "pending",
+        "target": "8-10"
+      },
+      {
+        "label": "First spotlights posted",
+        "owner": "Cohort",
+        "status": "pending",
+        "target": "2+"
+      },
+      {
+        "label": "First real booking (THE proof)",
+        "owner": "Full loop",
+        "status": "pending",
+        "target": ">=1"
+      },
+      {
+        "label": "City-in-a-Box reproducible",
+        "owner": "Engineering",
+        "status": "pending",
+        "target": "1 parametrized run"
+      }
+    ],
+    "crons": [
+      {
+        "job": "cergio_coo_brain",
+        "active": true,
+        "schedule": "0 8,13 * * *",
+        "last_time": "2026-07-30T13:00:00.375858+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_coo_execute",
+        "active": true,
+        "schedule": "5-59/10 * * * *",
+        "last_time": "2026-07-31T04:05:00.421117+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_crawl_health",
+        "active": true,
+        "schedule": "*/30 * * * *",
+        "last_time": "2026-07-31T04:00:00.512366+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_enrich_influencers",
+        "active": true,
+        "schedule": "*/15 * * * *",
+        "last_time": "2026-07-31T04:00:00.507232+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_ops_metrics",
+        "active": true,
+        "schedule": "*/15 * * * *",
+        "last_time": "2026-07-31T04:00:00.514009+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_orchestrator",
+        "active": true,
+        "schedule": "7-59/30 * * * *",
+        "last_time": "2026-07-31T04:07:00.361357+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_qa_live_verify",
+        "active": true,
+        "schedule": "7 */3 * * *",
+        "last_time": "2026-07-31T03:07:00.396062+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_qa_suite",
+        "active": true,
+        "schedule": "13 * * * *",
+        "last_time": "2026-07-31T03:13:00.369144+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_release_funds",
+        "active": true,
+        "schedule": "*/15 * * * *",
+        "last_time": "2026-07-31T04:00:00.504128+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_watchdog",
+        "active": true,
+        "schedule": "*/15 * * * *",
+        "last_time": "2026-07-31T04:00:00.50915+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio-block-categories",
+        "active": true,
+        "schedule": "43 * * * *",
+        "last_time": "2026-07-31T03:43:00.534295+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio-clean-services",
+        "active": true,
+        "schedule": "23 * * * *",
+        "last_time": "2026-07-31T03:23:00.450424+00:00",
+        "last_status": "failed"
+      },
+      {
+        "job": "cergio-creators-gate",
+        "active": true,
+        "schedule": "37 * * * *",
+        "last_time": "2026-07-31T03:37:00.392454+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio-daily-impact",
+        "active": true,
+        "schedule": "55 6 * * *",
+        "last_time": "2026-07-30T06:55:00.391922+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio-ops-audit",
+        "active": true,
+        "schedule": "0 7 * * *",
+        "last_time": "2026-07-30T07:00:00.723747+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio-services-gate",
+        "active": true,
+        "schedule": "17 * * * *",
+        "last_time": "2026-07-31T03:17:00.524934+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "expire_unpaid_spotlights",
+        "active": true,
+        "schedule": "0 * * * *",
+        "last_time": "2026-07-31T04:00:00.505615+00:00",
+        "last_status": "succeeded"
+      }
+    ],
+    "impact": [
+      {
+        "day": "2026-07-31",
+        "cities_covered": 750,
+        "harvested_today": 0,
+        "services_queued": 10210,
+        "creators_sendable": 107
+      },
+      {
+        "day": "2026-07-30",
+        "cities_covered": 750,
+        "harvested_today": 0,
+        "services_queued": 10210,
+        "creators_sendable": 107
+      },
+      {
+        "day": "2026-07-29",
+        "cities_covered": 230,
+        "harvested_today": 0,
+        "services_queued": 2183,
+        "creators_sendable": 107
+      },
+      {
+        "day": "2026-07-28",
+        "cities_covered": 195,
+        "harvested_today": 292,
+        "services_queued": 1582,
+        "creators_sendable": 107
+      },
+      {
+        "day": "2026-07-27",
+        "cities_covered": 194,
+        "harvested_today": 308,
+        "services_queued": 1573,
+        "creators_sendable": 112
+      },
+      {
+        "day": "2026-07-26",
+        "cities_covered": 193,
+        "harvested_today": 332,
+        "services_queued": 1576,
+        "creators_sendable": 114
+      },
+      {
+        "day": "2026-07-25",
+        "cities_covered": 194,
+        "harvested_today": 311,
+        "services_queued": 1573,
+        "creators_sendable": 118
+      }
+    ],
+    "bookings": 58,
+    "creators": {
+      "new": 0,
+      "sendable": 107,
+      "reachable": 774,
+      "harvested_all": 3552,
+      "harvested_today": 0
+    },
+    "services": {
+      "dnc": 33102,
+      "new": 6594,
+      "queued": 10210,
+      "with_ig": 90,
+      "queued_miami": 2409
+    },
+    "proposals": [
+      {
+        "lift": "Restores honest proof metric so the team optimizes the real loop, not test noise",
+        "rank": 5,
+        "title": "Fix headline bookings KPI to count only distinct-party paid/completed non-seed (GATE)",
+        "detail": "Headline bookings=56 but machine truth is 1 completed between distinct parties, 0 paid — the KPI includes test/seed rows and inflates the proof metric on the ops snapshot. This is a change to the snapshot/metrics fn, so it must be gated as a code change to the founder.",
+        "effort": "med",
+        "division": "Data"
+      },
+      {
+        "lift": null,
+        "rank": null,
+        "title": "Backbone: agent 'crawl-seed-osm' has never run",
+        "detail": "crawl-seed-osm appears deployed-but-never-invoked (never ran). A re-run cannot fix a missing deploy / unwired cron / wiped vault secret. Verify: (1) the fn is deployed, (2) its cron job exists in cron.job, (3) edge_fn_bearer is set in Vault. Run the Post-Deploy Health Check.",
+        "effort": null,
+        "division": "ops"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: data-no-duplicate-services — open > 12h with no fix",
+        "detail": "data-no-duplicate-services (area 'live', severity 'high') has been OPEN for 12h (since 2026-07-29T20:22) and is still failing.\nFINDING: 1 duplicate listings\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: data-no-address-in-title — open > 12h with no fix",
+        "detail": "data-no-address-in-title (area 'live', severity 'critical') has been OPEN for 12h (since 2026-07-29T20:22) and is still failing.\nFINDING: 2 titles contain a street address\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: crawl-spec-cities-only — open > 12h with no fix",
+        "detail": "crawl-spec-cities-only (area 'live', severity 'critical') has been OPEN for 12h (since 2026-07-29T20:22) and is still failing.\nFINDING: OFF-SPEC CITIES: Austin, Seattle, Pittsburgh, El Paso, Fresno, Oakland, Lexington, Minneapolis, Milwaukee, Bakersfield, Albuquerque, Anaheim, Sacramento, Orlando, Toledo, Chesapeake, Jacksonville, Denver, Mesa, 725 Ri\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: supply-worker-stalled — open > 12h with no fix",
+        "detail": "supply-worker-stalled (area 'supply', severity 'critical') has been OPEN for 12h (since 2026-07-29T22:56) and is still failing.\nFINDING: no fulfill-crawl run in 30m — kicking\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: supply-dead-source-gmaps_apify — open > 12h with no fix",
+        "detail": "supply-dead-source-gmaps_apify (area 'supply', severity 'critical') has been OPEN for 12h (since 2026-07-30T02:41) and is still failing.\nFINDING: 420 jobs produced 0 rows — source disabled automatically\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: supply-dead-source-ig_services — open > 12h with no fix",
+        "detail": "supply-dead-source-ig_services (area 'supply', severity 'critical') has been OPEN for 12h (since 2026-07-30T02:41) and is still failing.\nFINDING: 420 jobs produced 0 rows — source disabled automatically\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: supply-wasteful-source-ig_services — open > 12h with no fix",
+        "detail": "supply-wasteful-source-ig_services (area 'supply', severity 'high') has been OPEN for 12h (since 2026-07-30T05:50) and is still failing.\nFINDING: 523 jobs -> 5 rows (ratio 0.0096) — throttled automatically\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: watchdog:stall:fulfill-crawl — open > 12h with no fix",
+        "detail": "watchdog:stall:fulfill-crawl (area 'watchdog', severity 'high') has been OPEN for 12h (since 2026-07-30T06:15) and is still failing.\nFINDING: fulfill-crawl: no run in 45m (last 2026-07-30T05:23:45.614+00:00) — worker stalled / cron not firing / vault secret wiped\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: cron-alive-fulfill-crawl — open > 12h with no fix",
+        "detail": "cron-alive-fulfill-crawl (area 'live', severity 'high') has been OPEN for 12h (since 2026-07-30T12:07) and is still failing.\nFINDING: 0 runs in last 6h\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      },
+      {
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "rank": null,
+        "title": "STALE DEFECT: watchdog:silent:crawl-seed-osm — open > 12h with no fix",
+        "detail": "watchdog:silent:crawl-seed-osm (area 'watchdog', severity 'high') has been OPEN for 12h (since 2026-07-30T12:45) and is still failing.\nFINDING: crawl-seed-osm: SILENT COLLISION — found 123 but wrote 0 rows (upsert/insert masking a no-op as success)\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "effort": "engineering",
+        "division": "qa"
+      }
+    ],
+    "audit_flags": "CREATORS_NOT_GROWING(daily seed not ingesting); ",
+    "initiatives": [
+      {
+        "area": "Data",
+        "name": "Services crawl (Google Places)",
+        "note": "fulfill-crawl every 15m, server-side",
+        "status": "live"
+      },
+      {
+        "area": "Data",
+        "name": "Multi-city services expansion",
+        "note": "crawl wave queued; non-Miami providers present",
+        "status": "in_progress"
+      },
+      {
+        "area": "Data",
+        "name": "Creator harvest (free, VOLUME)",
+        "note": "every 20m, target 1000/day discovery",
+        "status": "live"
+      },
+      {
+        "area": "Data",
+        "name": "Contact enrichment",
+        "note": "enrich-influencers every 30m fills emails/phones",
+        "status": "live"
+      },
+      {
+        "area": "Data",
+        "name": "Grading gates (services+creators)",
+        "note": "hourly, quarantines off-values",
+        "status": "live"
+      },
+      {
+        "area": "Data",
+        "name": "Data-quality / junk quarantine",
+        "note": "CL-noise filter added",
+        "status": "in_progress"
+      },
+      {
+        "area": "Growth",
+        "name": "Founding cohort — 5 creators",
+        "note": "ambassadors picked; send gated on your go",
+        "status": "in_progress"
+      },
+      {
+        "area": "Growth",
+        "name": "Outreach (email opt-in)",
+        "note": "copy done, compliant, gated",
+        "status": "ready"
+      },
+      {
+        "area": "Growth",
+        "name": "SMS outreach",
+        "note": "Twilio A2P pending vetting",
+        "status": "blocked"
+      },
+      {
+        "area": "Growth",
+        "name": "IG-priority for services",
+        "note": "has_instagram flag + enrich (#1,#5)",
+        "status": "in_progress"
+      },
+      {
+        "area": "Product",
+        "name": "Core loop (recommend->book->earn->refer)",
+        "note": "app on cergio.ai",
+        "status": "live"
+      },
+      {
+        "area": "Product",
+        "name": "/free landing simplify",
+        "note": "proposal #2, this week",
+        "status": "queued"
+      },
+      {
+        "area": "Product",
+        "name": "Spotlight/barter loop",
+        "note": "free-swap + paid",
+        "status": "live"
+      },
+      {
+        "area": "Ops",
+        "name": "Live Ops Terminal",
+        "note": "this dashboard",
+        "status": "live"
+      },
+      {
+        "area": "Ops",
+        "name": "AI COO (Opus)",
+        "note": "proposals 2x/day, constitution-bound",
+        "status": "live"
+      },
+      {
+        "area": "Ops",
+        "name": "Inspector (honesty + plan audit)",
+        "note": "every 6h, flags drift/regression",
+        "status": "live"
+      },
+      {
+        "area": "Ops",
+        "name": "QA/UX agent",
+        "note": "nightly, auto-fix + escalate",
+        "status": "live"
+      },
+      {
+        "area": "Compliance",
+        "name": "TikTok review",
+        "note": "Login Kit",
+        "status": "submitted"
+      },
+      {
+        "area": "Compliance",
+        "name": "Meta business verification",
+        "note": "gates IG follower/cross-post",
+        "status": "in_review"
+      },
+      {
+        "area": "Payments",
+        "name": "Stripe live",
+        "note": "payments + payouts",
+        "status": "live"
+      },
+      {
+        "area": "Scale",
+        "name": "City-in-a-Box",
+        "note": "after Miami booking proof",
+        "status": "queued"
+      }
+    ],
+    "qa_findings": [
+      {
+        "area": "live",
+        "count": 1,
+        "detail": "request 3168a45f-5357-4fd5-a178-281c51c6128d -> matched | services_near+fallback returned 1 listing(s)",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-31T04:10:42.332145+00:00",
+        "check_name": "fanout-outcome"
+      },
+      {
+        "area": "watchdog",
+        "count": 1,
+        "detail": "fulfill-crawl: no run in 45m (last 2026-07-30T05:23:45.614+00:00) — worker stalled / cron not firing / vault secret wiped",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T06:15:49.643604+00:00",
+        "check_name": "watchdog:stall:fulfill-crawl"
+      },
+      {
+        "area": "watchdog",
+        "count": 1,
+        "detail": "creator-harvest: no run in 180m (last 2026-07-30T17:36:45.408+00:00) — worker stalled / cron not firing / vault secret wiped",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T20:45:13.919494+00:00",
+        "check_name": "watchdog:stall:creator-harvest"
+      },
+      {
+        "area": "watchdog",
+        "count": 1,
+        "detail": "crawl-seed-osm: SILENT COLLISION — found 123 but wrote 0 rows (upsert/insert masking a no-op as success)",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T12:45:39.574963+00:00",
+        "check_name": "watchdog:silent:crawl-seed-osm"
+      },
+      {
+        "area": "live",
+        "count": 1,
+        "detail": "0 runs in last 6h",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-31T00:07:11.52729+00:00",
+        "check_name": "cron-alive-creator-harvest"
+      },
+      {
+        "area": "live",
+        "count": 1,
+        "detail": "0 runs in last 6h",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T12:07:24.396068+00:00",
+        "check_name": "cron-alive-fulfill-crawl"
+      },
+      {
+        "area": "live",
+        "count": 1,
+        "detail": "OFF-SPEC CITIES: Austin, Seattle, Pittsburgh, El Paso, Fresno, Oakland, Lexington, Minneapolis, Milwaukee, Bakersfield, Albuquerque, Anaheim, Sacramento, Orlando, Toledo, Chesapeake, Jacksonville, Denver, Mesa, 725 Ri",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-29T20:22:04.037918+00:00",
+        "check_name": "crawl-spec-cities-only"
+      },
+      {
+        "area": "live",
+        "count": 1,
+        "detail": "1 titles contain a street address",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-29T20:22:03.946852+00:00",
+        "check_name": "data-no-address-in-title"
+      },
+      {
+        "area": "live",
+        "count": 1,
+        "detail": "1 duplicate listings",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-29T20:22:03.876317+00:00",
+        "check_name": "data-no-duplicate-services"
+      },
+      {
+        "area": "supply",
+        "count": 1,
+        "detail": "523 jobs -> 5 rows (ratio 0.0096) — throttled automatically",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T05:50:12.737972+00:00",
+        "check_name": "supply-wasteful-source-ig_services"
+      },
+      {
+        "area": "supply",
+        "count": 1,
+        "detail": "420 jobs produced 0 rows — source disabled automatically",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T02:41:23.37185+00:00",
+        "check_name": "supply-dead-source-gmaps_apify"
+      },
+      {
+        "area": "supply",
+        "count": 1,
+        "detail": "no fulfill-crawl run in 30m — kicking",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-29T22:56:25.784817+00:00",
+        "check_name": "supply-worker-stalled"
+      },
+      {
+        "area": "supply",
+        "count": 1,
+        "detail": "420 jobs produced 0 rows — source disabled automatically",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T02:41:23.469139+00:00",
+        "check_name": "supply-dead-source-ig_services"
+      },
+      {
+        "area": "audit",
+        "count": 53,
+        "detail": "Headline bookings=53 (29 pending,19 confirmed,5 completed). Machine truth: 1 completed between distinct parties, 0 paid (no money moved). Headline should count only distinct-account paid/completed non-seed bookings. Snapshot-fn change escalated as Audit proposal.",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-07T04:14:02.766658+00:00",
+        "check_name": "bookings_kpi_includes_test_rows"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "enrich-influencers: SILENT COLLISION — found 1 but wrote 0 rows (upsert/insert masking a no-op as success)",
+        "status": "fixed",
+        "fixed_at": "2026-07-31T03:45:10.404079+00:00",
+        "found_at": "2026-07-31T03:30:16.282884+00:00",
+        "check_name": "watchdog:silent:enrich-influencers"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "crawl-seed-osm: has NEVER run — deploy or cron not wired",
+        "status": "fixed",
+        "fixed_at": "2026-07-29T17:47:19.993565+00:00",
+        "found_at": "2026-07-16T02:15:04.810508+00:00",
+        "check_name": "watchdog:stall:crawl-seed-osm"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "fulfill-crawl: last run errored — osm-blocked: http=504 bytes=695 @overpass.kumi.systems | at overpassFetch (file:///var/tmp/sb-compile-edge-runtime/fulfill-crawl/index.ts:913:9) <- at eventLoopTick (ext:core/01_core.js:214:9)",
+        "status": "fixed",
+        "fixed_at": "2026-07-28T00:00:04.478798+00:00",
+        "found_at": "2026-07-27T23:46:09.574271+00:00",
+        "check_name": "watchdog:error:fulfill-crawl"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "creator-harvest: SILENT COLLISION — found 50 but wrote 0 rows (upsert/insert masking a no-op as success)",
+        "status": "fixed",
+        "fixed_at": "2026-07-19T03:15:03.368643+00:00",
+        "found_at": "2026-07-19T02:45:04.766835+00:00",
+        "check_name": "watchdog:silent:creator-harvest"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "coo-execute: last run errored — 1 action(s) failed",
+        "status": "fixed",
+        "fixed_at": "2026-07-14T13:30:02.223496+00:00",
+        "found_at": "2026-07-14T13:15:02.335274+00:00",
+        "check_name": "watchdog:error:coo-execute"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "qa-suite: last run errored — 1 QA assertion(s) failing",
+        "status": "fixed",
+        "fixed_at": "2026-07-13T03:00:02.667966+00:00",
+        "found_at": "2026-07-11T15:15:03.020886+00:00",
+        "check_name": "watchdog:error:qa-suite"
+      },
+      {
+        "area": "qa",
+        "count": 0,
+        "detail": "[responses] Scheduled bookings honor a future time (scheduled_at > now + 12h), not an instant placeholder. (spec SPEC-47)",
+        "status": "fixed",
+        "fixed_at": "2026-07-13T02:45:27.282953+00:00",
+        "found_at": "2026-07-11T15:13:04.177553+00:00",
+        "check_name": "qa_resp_scheduled_branch"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "crawl-seed-yellowpages: has NEVER run — deploy or cron not wired",
+        "status": "fixed",
+        "fixed_at": "2026-07-09T18:15:02.313402+00:00",
+        "found_at": "2026-07-08T04:00:02.096306+00:00",
+        "check_name": "watchdog:stall:crawl-seed-yellowpages"
+      },
+      {
+        "area": "qa",
+        "count": 0,
+        "detail": "[search] Blocked categories (massage/tattoo/makeup/chef + SHAFT) never resolve to a provider_type nor sit sendable in leads_services. (spec blocked-cats)",
+        "status": "fixed",
+        "fixed_at": "2026-07-09T03:07:03.315285+00:00",
+        "found_at": "2026-07-09T03:06:06.13568+00:00",
+        "check_name": "qa_search_blocked_never_surface"
+      },
+      {
+        "area": "audit",
+        "count": 0,
+        "detail": "fulfill-crawl, enrich-influencers and creator-harvest all invoke public.cergio_call_edge (pg_net async POST). Cron status succeeded means the HTTP request was enqueued, NOT that the edge function delivered. all-crons-green is structurally incapable of detecting ingest failure. This is the root of the recurring green-but-false class. Fix = verify rows-written, not request-enqueued. [RECONCILED 2026-07-09 00:28Z — VERIFIED LIVE: the delivery-verification backbone (agent_runs + cergio-watchdog every 15m) is deployed; success is now measured as rows-written, not request-enqueued. Closed by cergio_reconcile_findings().]",
+        "status": "fixed",
+        "fixed_at": "2026-07-09T00:28:32.776847+00:00",
+        "found_at": "2026-07-07T04:13:07.119895+00:00",
+        "check_name": "ingest_cron_status_is_false_signal"
+      },
+      {
+        "area": "audit",
+        "count": 0,
+        "detail": "PARTIAL 2026-07-08. Auth fixed (creator-harvest now 200, 68 candidates). But upserted:0 persists: root cause is NOT id-collision — it is a NOT NULL violation on leads_influencers.ig_handle from handle-less rows (email/linktree-only), which failed the whole 25-row upsert chunk AND admitted non-creator emails (billing@wordfence.com, business front desks). CODE FIX applied to creator-harvest/index.ts (skip handle-less rows + row-by-row upsert retry); DEPLOY staged ('zzz RUN ME - DEPLOY creator-harvest'). Creators grow once deployed. [RECONCILED 2026-07-09 00:28Z — VERIFIED LIVE: creator-harvest agent_runs shows rows_written>0 in the last 6h; write path is unblocked and creators_sendable is growing. Closed by cergio_reconcile_findings().]",
+        "status": "fixed",
+        "fixed_at": "2026-07-09T00:28:32.776847+00:00",
+        "found_at": "2026-07-07T04:13:06.899115+00:00",
+        "check_name": "creator_harvest_write_path_frozen"
+      }
+    ],
+    "generated_at": "2026-07-31T04:10:45.453385+00:00",
+    "last_harvest": {
+      "at": "2026-07-31T04:05:12.697052+00:00",
+      "upserted": null,
+      "raw_results": null
+    },
+    "creator_reach": [
+      {
+        "how": "Follow + engage; pitch Cergio as a creator earning tool",
+        "url": "https://instagram.com/creators",
+        "name": "@creators",
+        "type": "IG account (official)"
+      },
+      {
+        "how": "Follow + engage; DM partnership",
+        "url": "https://instagram.com/creatoreconomy",
+        "name": "@creatoreconomy",
+        "type": "IG account"
+      },
+      {
+        "how": "Get Cergio's free-spotlight offer into their creator digest",
+        "url": "https://thesocialcat.com",
+        "name": "Social Cat",
+        "type": "Platform · daily creator digest"
+      },
+      {
+        "how": "Partner / feature Cergio as a creator opportunity",
+        "url": "https://collabstr.com",
+        "name": "Collabstr",
+        "type": "Marketplace · 170k+ creators"
+      },
+      {
+        "how": "Post Cergio as a gig / partner",
+        "url": "https://joinbrands.com",
+        "name": "JoinBrands",
+        "type": "UGC marketplace"
+      },
+      {
+        "how": "Partner / list Cergio",
+        "url": "https://influee.co",
+        "name": "Influee",
+        "type": "UGC platform"
+      },
+      {
+        "how": "Partner",
+        "url": "https://billo.app",
+        "name": "Billo",
+        "type": "UGC marketplace"
+      },
+      {
+        "how": "Partner",
+        "url": "https://findcollab.com",
+        "name": "Findcollab",
+        "type": "Influencer collab platform"
+      },
+      {
+        "how": "Host/partner a Cergio creator community",
+        "url": "https://whop.com",
+        "name": "Whop",
+        "type": "Creator communities marketplace"
+      },
+      {
+        "how": "Get Cergio featured as a campaign to their creator list",
+        "url": "",
+        "name": "Brands Meet Creators",
+        "type": "Free curated-campaigns newsletter"
+      },
+      {
+        "how": "List Cergio in the UGC jobs directory",
+        "url": "",
+        "name": "The UGC Club",
+        "type": "Community + jobs directory"
+      },
+      {
+        "how": "Partner",
+        "url": "",
+        "name": "InSense",
+        "type": "UGC / micro-influencer platform"
+      }
+    ],
+    "creators_list": [
+      {
+        "name": "Jon Marianek",
+        "handle": "jonmarianek",
+        "category": "fitness",
+        "followers": 364000,
+        "reachable": false
+      },
+      {
+        "name": "Maple the Belgian",
+        "handle": "maplethebelgian1",
+        "category": "pets",
+        "followers": 329200,
+        "reachable": false
+      },
+      {
+        "name": "Goose",
+        "handle": "iamgooseontheloose",
+        "category": "pets",
+        "followers": 262100,
+        "reachable": false
+      },
+      {
+        "name": "Cocoa Puff the Giant Rabbit",
+        "handle": "big_cocoa_puff",
+        "category": "pets",
+        "followers": 255300,
+        "reachable": false
+      },
+      {
+        "name": "Phillip The Cat",
+        "handle": "philliptheorangecat",
+        "category": "pets",
+        "followers": 255200,
+        "reachable": false
+      },
+      {
+        "name": "Alex Karpovek",
+        "handle": "alexkwillslay",
+        "category": "lifestyle",
+        "followers": 216700,
+        "reachable": false
+      },
+      {
+        "name": "Lennon",
+        "handle": "lennonthebunny",
+        "category": "pets",
+        "followers": 172300,
+        "reachable": false
+      },
+      {
+        "name": "Jesica Rodriguez",
+        "handle": "rodrigez_jesica",
+        "category": "fitness",
+        "followers": 160800,
+        "reachable": false
+      },
+      {
+        "name": "Kristin Sitova",
+        "handle": "kristinsitova",
+        "category": "pets",
+        "followers": 145800,
+        "reachable": false
+      },
+      {
+        "name": "Patty Cantu",
+        "handle": "pattycantu",
+        "category": "lifestyle",
+        "followers": 129700,
+        "reachable": false
+      },
+      {
+        "name": "Sean Miree",
+        "handle": "seanstetic",
+        "category": "fitness",
+        "followers": 124400,
+        "reachable": false
+      },
+      {
+        "name": "Remix the Dog",
+        "handle": "remixthedog",
+        "category": "pets",
+        "followers": 123000,
+        "reachable": true
+      },
+      {
+        "name": "Connor",
+        "handle": "jacoby.ftness",
+        "category": "fitness",
+        "followers": 67500,
+        "reachable": false
+      },
+      {
+        "name": "Matilda and the boys",
+        "handle": "matilda.and.the.boys",
+        "category": "pets",
+        "followers": 63000,
+        "reachable": false
+      },
+      {
+        "name": "Mallow the Frenchie",
+        "handle": "mallowfrenchie",
+        "category": "pets",
+        "followers": 50000,
+        "reachable": true
+      },
+      {
+        "name": "Ayesha",
+        "handle": "thereal_eesh",
+        "category": "parenting",
+        "followers": 44400,
+        "reachable": false
+      },
+      {
+        "name": "Kierra Miller",
+        "handle": "therealkierralinn_",
+        "category": "lifestyle",
+        "followers": 40400,
+        "reachable": false
+      },
+      {
+        "name": "Baxter Hosley",
+        "handle": "baxter_hosley",
+        "category": "fitness",
+        "followers": 37200,
+        "reachable": false
+      },
+      {
+        "name": "Sophia Renard",
+        "handle": "nardofittt",
+        "category": "fitness",
+        "followers": 33100,
+        "reachable": false
+      },
+      {
+        "name": "Luise Borner",
+        "handle": "luise.lifts",
+        "category": "fitness",
+        "followers": 30900,
+        "reachable": false
+      },
+      {
+        "name": "Julie",
+        "handle": "thejuliebarry",
+        "category": "parenting",
+        "followers": 30700,
+        "reachable": false
+      },
+      {
+        "name": "Bullyfambam",
+        "handle": "bullyfambam",
+        "category": "pets",
+        "followers": 30000,
+        "reachable": true
+      },
+      {
+        "name": "Lorenzo",
+        "handle": "abfixin",
+        "category": "fitness",
+        "followers": 29400,
+        "reachable": false
+      },
+      {
+        "name": "Herr Triplets | Vanna Lee",
+        "handle": "herr.triplets_vanna.lee",
+        "category": "parenting",
+        "followers": 27400,
+        "reachable": false
+      },
+      {
+        "name": "Nataly Henderson",
+        "handle": "natalyhendersonn",
+        "category": "parenting",
+        "followers": 25200,
+        "reachable": false
+      },
+      {
+        "name": "Sharaya Maples",
+        "handle": "sharayamaples",
+        "category": "parenting",
+        "followers": 24300,
+        "reachable": false
+      },
+      {
+        "name": "Carla Bautista",
+        "handle": "lovecartista",
+        "category": "lifestyle",
+        "followers": 21600,
+        "reachable": false
+      },
+      {
+        "name": "Erin",
+        "handle": "geriatric_millennial_mom",
+        "category": "parenting",
+        "followers": 20500,
+        "reachable": false
+      },
+      {
+        "name": "Matthew Cook",
+        "handle": "mattcook_badassmuscle",
+        "category": "fitness",
+        "followers": 18700,
+        "reachable": false
+      },
+      {
+        "name": "Ben Roxey",
+        "handle": "benroxey",
+        "category": "fitness",
+        "followers": 15600,
+        "reachable": false
+      },
+      {
+        "name": "Megan's Guinea Pigs",
+        "handle": "pumpkinandpoppi",
+        "category": "pets",
+        "followers": 14200,
+        "reachable": false
+      },
+      {
+        "name": "About Chris Kendall, Raw Food Coach and Registered Holistic ...",
+        "handle": "therawadvantage",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Lindsay Collins",
+        "handle": "lindsaycollinshc",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Miami Advance Holistic Center",
+        "handle": "advancedholisticcenter",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Live Well With Michelle- Health Coach and Natural Practitioner based in ...",
+        "handle": "livewellmichelleny",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Meet Dianne Wenz - Dianne's Vegan Kitchen",
+        "handle": "diannewenz",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "NIKA Scalp & Skin Ritual",
+        "handle": "nika.ritual",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "LOWER EAST SIDE APARTMENT - De La Espada USA",
+        "handle": "delaespada",
+        "category": "home",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Personal Trainer in Queens NY",
+        "handle": "nelfit4life",
+        "category": "fitness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Coopfit Fitness",
+        "handle": "coopfit_fitness",
+        "category": "fitness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Maik Wiedenbach - Best Personal Trainer in NYC, Fitness Instructor New ...",
+        "handle": "maikwiedenbach",
+        "category": "fitness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "BlackSnapperDesign",
+        "handle": "blacksnapperdesign",
+        "category": "home",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Harlem Crafted",
+        "handle": "harlemcrafted",
+        "category": "home",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "La Sprezzatura",
+        "handle": "la_sprezz",
+        "category": "home",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Coral Gables Counseling Center",
+        "handle": "coralgablescounselingcenter",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "A&C Supply Bushwick",
+        "handle": "artistcraftsman_bsh",
+        "category": "auto",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Spirit Medium Kendall Fisher",
+        "handle": "spiritmediumkendall",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Pet Photography in Miami",
+        "handle": "victoria_machin_photography",
+        "category": "pets",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Pet Portrait Artists in Coral Gables, FL - petworks.com",
+        "handle": "petworks_com",
+        "category": "pets",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "DOG Hotels Wynwood",
+        "handle": "dogwynwood",
+        "category": "pets",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "D.O.G. Hotels Coral Gables",
+        "handle": "dogcoralgables",
+        "category": "pets",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Kadampa Meditation Center Miami - Classes in Meditation & Modern Buddhism",
+        "handle": "kmc_miami",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Meditators' Experience",
+        "handle": "onlinemeditationevents",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Manhattan Meditation Center - Brahma Kumaris",
+        "handle": "brahmakumarismanhattan",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Kendall Rei Healing",
+        "handle": "kendallreihealing",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Book an Intro old",
+        "handle": "bklynmeditation",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Body & Brain Yoga & Tai Chi Pinecrest",
+        "handle": "bodynbrain.us",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "Brooklyn: Meditation - KMC BK: Kadampa Meditation Center Brooklyn ...",
+        "handle": "kmcbrooklyn",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "ISHTA Yoga",
+        "handle": "ishtayoga",
+        "category": "wellness",
+        "followers": null,
+        "reachable": true
+      },
+      {
+        "name": "The rise and fall of the Bushwick Community Darkroom leaves ...",
+        "handle": "amnewyork",
+        "category": "home",
+        "followers": null,
+        "reachable": true
+      }
+    ],
+    "services_cities": [
+      {
+        "new": 481,
+        "city": "Miami",
+        "total": 8857,
+        "queued": 1552
+      },
+      {
+        "new": 1432,
+        "city": "New York",
+        "total": 4074,
+        "queued": 2336
+      },
+      {
+        "new": 558,
+        "city": "Brooklyn",
+        "total": 2069,
+        "queued": 1497
+      },
+      {
+        "new": 86,
+        "city": "Atlanta",
+        "total": 900,
+        "queued": 46
+      },
+      {
+        "new": 0,
+        "city": "Denver",
+        "total": 878,
+        "queued": 0
+      },
+      {
+        "new": 36,
+        "city": "Portland",
+        "total": 873,
+        "queued": 33
+      },
+      {
+        "new": 654,
+        "city": "Staten Island",
+        "total": 873,
+        "queued": 206
+      },
+      {
+        "new": 154,
+        "city": "Miami Beach",
+        "total": 862,
+        "queued": 179
+      },
+      {
+        "new": 63,
+        "city": "Seattle",
+        "total": 861,
+        "queued": 37
+      },
+      {
+        "new": 75,
+        "city": "Mesa",
+        "total": 852,
+        "queued": 5
+      },
+      {
+        "new": 44,
+        "city": "Indianapolis",
+        "total": 831,
+        "queued": 6
+      },
+      {
+        "new": 43,
+        "city": "San Francisco",
+        "total": 828,
+        "queued": 23
+      },
+      {
+        "new": 8,
+        "city": "Charlotte",
+        "total": 827,
+        "queued": 1
+      },
+      {
+        "new": 27,
+        "city": "Las Vegas",
+        "total": 802,
+        "queued": 11
+      },
+      {
+        "new": 19,
+        "city": "Baltimore",
+        "total": 789,
+        "queued": 10
+      }
+    ],
+    "services_sample": [
+      {
+        "ig": true,
+        "city": "Miami",
+        "name": "Locksmith Near Me Florida",
+        "type": "locksmith"
+      },
+      {
+        "ig": true,
+        "city": "Doral",
+        "name": "OCP Photography",
+        "type": "photographer"
+      },
+      {
+        "ig": true,
+        "city": "Miami",
+        "name": "Barbershop God is Love",
+        "type": "barber"
+      },
+      {
+        "ig": true,
+        "city": "Coral Gables",
+        "name": "Ignite Fit Training",
+        "type": "personal trainer"
+      },
+      {
+        "ig": true,
+        "city": "Miami",
+        "name": "Cesar Barbershop",
+        "type": "barber"
+      },
+      {
+        "ig": true,
+        "city": "Miami",
+        "name": "Dogtown",
+        "type": "pet sitter"
+      },
+      {
+        "ig": true,
+        "city": "Miami",
+        "name": "Dogtown Brickell",
+        "type": "dog walker"
+      },
+      {
+        "ig": true,
+        "city": "Miami",
+        "name": "Iwaki Barber",
+        "type": "barber"
+      },
+      {
+        "ig": true,
+        "city": "Coral Gables",
+        "name": "Conde Hair Salon",
+        "type": "hair stylist"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Family Electric LLC",
+        "type": "electrician"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Garden of Eden Landscaping LLC",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "First Choice Home Electrician Miami",
+        "type": "electrician"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Appliances Repair Mculai",
+        "type": "appliance repair"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "AS4Less Landscaping",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Maid Svc",
+        "type": "housekeeper"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "NextGeneration Nutrition",
+        "type": "nutritionist"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "We Train Miami Personal Trainer",
+        "type": "personal trainer"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Elio's Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Planet Fitness",
+        "type": "personal trainer"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "K9 Specialist Inc.",
+        "type": "dog trainer"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "Mobile Miami Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "Central Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Kendall",
+        "name": "Pro Key Solutions",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Fort Lauderdale",
+        "name": "Pro Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "My Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Artiles Lock & Key",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "Locksmith Doral",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Nectech key Supply",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Hialeah",
+        "name": "Majestic Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Caraballo Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Smart Start Puppies - Dog Training",
+        "type": "dog trainer"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Fur & Fun LLC Pet sitter/walker",
+        "type": "dog walker"
+      },
+      {
+        "ig": false,
+        "city": "Homestead",
+        "name": "CCH Landscaping",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "Zulia Locksmith Doral",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Lux Leashes - Dog Sitting, Walking & Boarding",
+        "type": "dog walker"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Appliance Help and Repair LLC",
+        "type": "appliance repair"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "AS4Less Landscaping",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Pro Scape",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Alfa Lock & Alarm",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "TLC of South Florida",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Knoll Landscape Design",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Friends Lawn Service",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Babylon Lawns",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "Speedy Car",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "MORA Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Design Borders",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Astrokey",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Men In Green",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Home and Gardens Doctor",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami Gardens",
+        "name": "Ramos Landscaping Services",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "A-Able Locksmiths",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "The Billy Goat",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "Vazquez Landscaping Services",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "E Rodriguez Landscaping",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Locksmith XXX",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Doral",
+        "name": "Mecanico a Domicilio | Car Locksmith",
+        "type": "locksmith"
+      },
+      {
+        "ig": false,
+        "city": "Kendall",
+        "name": "Romy Landscaping Design & Borders",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Epic Driveway & Landscaping",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Sunset Sod",
+        "type": "landscaping"
+      },
+      {
+        "ig": false,
+        "city": "Miami",
+        "name": "Conde Landscaping",
+        "type": "landscaping"
+      }
+    ],
+    "garbage_in_queued": 0,
+    "creators_by_status": {
+      "dnc": 3038,
+      "new": 0,
+      "total": 4216,
+      "queued": 107
+    },
+    "services_by_status": {
+      "dnc": 33102,
+      "new": 6594,
+      "total": 49906,
+      "queued": 10210
+    },
+    "org_health": {
+      "agents": [
+        {
+          "agent": "coo-execute",
+          "delta": "ran but wrote 0 rows",
+          "health": "empty",
+          "raw_found": 0,
+          "last_error": "",
+          "last_run_at": "2026-07-31T04:05:05.081+00:00",
+          "last_status": "empty",
+          "rows_written": 0,
+          "max_gap_minutes": 60
+        },
+        {
+          "agent": "crawl-seed-osm",
+          "delta": "found 123 but wrote 0 (silent collision)",
+          "health": "silent",
+          "raw_found": 123,
+          "last_error": "",
+          "last_run_at": "2026-07-30T19:00:46.233+00:00",
+          "last_status": "empty",
+          "rows_written": 0,
+          "max_gap_minutes": 1440
+        },
+        {
+          "agent": "creator-harvest",
+          "delta": "no run in 180m (last 07-30 17:36)",
+          "health": "stall",
+          "raw_found": 0,
+          "last_error": "",
+          "last_run_at": "2026-07-30T17:36:45.408+00:00",
+          "last_status": "empty",
+          "rows_written": 0,
+          "max_gap_minutes": 180
+        },
+        {
+          "agent": "enrich-influencers",
+          "delta": "ran but wrote 0 rows",
+          "health": "empty",
+          "raw_found": 0,
+          "last_error": "no candidates: every non-do_not_contact creator either has an email or was mined within the last 7d",
+          "last_run_at": "2026-07-31T04:00:04.747+00:00",
+          "last_status": "empty",
+          "rows_written": 0,
+          "max_gap_minutes": 90
+        },
+        {
+          "agent": "fulfill-crawl",
+          "delta": "no run in 45m (last 07-30 05:23)",
+          "health": "stall",
+          "raw_found": 0,
+          "last_error": "",
+          "last_run_at": "2026-07-30T05:23:45.614+00:00",
+          "last_status": "ok",
+          "rows_written": 0,
+          "max_gap_minutes": 45
+        },
+        {
+          "agent": "qa-suite",
+          "delta": "on spec",
+          "health": "ok",
+          "raw_found": 11,
+          "last_error": "",
+          "last_run_at": "2026-07-31T03:13:05.511+00:00",
+          "last_status": "ok",
+          "rows_written": 11,
+          "max_gap_minutes": 720
+        }
+      ],
+      "status": "down",
+      "generated_at": "2026-07-31T04:10:50.308156+00:00",
+      "failing_count": 5,
+      "open_watchdog_findings": [
+        {
+          "count": 1,
+          "detail": "creator-harvest: no run in 180m (last 2026-07-30T17:36:45.408+00:00) — worker stalled / cron not firing / vault secret wiped",
+          "found_at": "2026-07-30T20:45:13.919494+00:00",
+          "severity": "high",
+          "check_name": "watchdog:stall:creator-harvest"
+        },
+        {
+          "count": 1,
+          "detail": "crawl-seed-osm: SILENT COLLISION — found 123 but wrote 0 rows (upsert/insert masking a no-op as success)",
+          "found_at": "2026-07-30T12:45:39.574963+00:00",
+          "severity": "critical",
+          "check_name": "watchdog:silent:crawl-seed-osm"
+        },
+        {
+          "count": 1,
+          "detail": "fulfill-crawl: no run in 45m (last 2026-07-30T05:23:45.614+00:00) — worker stalled / cron not firing / vault secret wiped",
+          "found_at": "2026-07-30T06:15:49.643604+00:00",
+          "severity": "critical",
+          "check_name": "watchdog:stall:fulfill-crawl"
+        }
+      ]
+    },
+    "qa": {
+      "suites": [
+        {
+          "ok": true,
+          "suite": "responses",
+          "total": 4,
+          "failed": 0,
+          "passed": 4,
+          "ran_at": "2026-07-31T03:13:19.767554+00:00",
+          "duration_ms": 14241
+        },
+        {
+          "ok": true,
+          "suite": "search",
+          "total": 7,
+          "failed": 0,
+          "passed": 7,
+          "ran_at": "2026-07-31T03:13:16.596457+00:00",
+          "duration_ms": 11075
+        }
+      ],
+      "seed_world": {
+        "bookings": 2,
+        "profiles": 6,
+        "requests": 1,
+        "services": 2
+      },
+      "generated_at": "2026-07-31T04:10:51.580904+00:00",
+      "requirements": {
+        "open": 36,
+        "total": 47,
+        "verified": 11,
+        "open_list": [
+          {
+            "id": "top-continuous-qa-ux",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "CONTINUOUS TESTING PLAN",
+            "instruction": "Continuous QA + UX testing against the frozen spec — user journeys must actually work, findings→fixes→regression accrue automatically."
+          },
+          {
+            "id": "crack-comms-system",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "strategic-modules",
+            "instruction": "Unified web comms system: app+support+growth in one live inbox"
+          },
+          {
+            "id": "crack-ux-pipe",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "CONTINUOUS-TESTING-PLAN",
+            "instruction": "UX persona-simulation testing pipe (friction, messaging, off-spec approval)"
+          },
+          {
+            "id": "crack-data-drilldown",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "SUPERIOR-DASHBOARD",
+            "instruction": "In-product data drill-down + crawl controls (city -> services, re-queue)"
+          },
+          {
+            "id": "crack-qa-drillin",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "CONTINUOUS-TESTING-PLAN",
+            "instruction": "Detailed per-test QA drill-in on dashboard (assertion + seeded rows + result)"
+          },
+          {
+            "id": "crack-backup-dr",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "ops",
+            "instruction": "User-data backup / DR: Postgres PITR + off-site photo/media backup"
+          },
+          {
+            "id": "crack-coverage-loop",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "auto",
+            "instruction": "Coverage-expansion loop authoring new tests on schedule (core->edge)"
+          },
+          {
+            "id": "crack-admin-engine",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "strategic-modules",
+            "instruction": "Full in-product admin/growth/scheduling/messaging engine (CleverTap-style)"
+          },
+          {
+            "id": "crack-inapp-approval",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "ops",
+            "instruction": "In-app proposal approval (not via chat)"
+          },
+          {
+            "id": "crack-phase2-tests",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "SPEC-COVERAGE-MAP",
+            "instruction": "Phase-2: author remaining 33 spec acceptance tests"
+          },
+          {
+            "id": "crack-crawl-throughput",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "SPEC-71",
+            "instruction": "Crawl throughput ~1000/hr (YP IP-blocked from edge; use Yelp API/Google Places/proxy)"
+          },
+          {
+            "id": "crack-exec-failures-bug",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "ops",
+            "instruction": "Fix executor execution_failures [object Object] serialization"
+          },
+          {
+            "id": "crack-autofix-proof",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "auto",
+            "instruction": "Prove autonomous-fix pipeline end-to-end hands-free (one cycle)"
+          },
+          {
+            "id": "crack-help-haiku",
+            "suite": "support",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-72 / support",
+            "instruction": "In-app Help/support: a floating Help entry opens a ticket; support-triage runs the Haiku→Opus→human ladder; the AI is reply-only (never account/money/data actions); human-needed tickets notify the founder and surface on the dashboard."
+          },
+          {
+            "id": "crawl-throughput",
+            "suite": "crawl",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-64 / #64 / SPEC-72",
+            "instruction": "The crawl produces NEW services rows: a block/empty fetch is surfaced (failed + yp-blocked, counted in agent_runs.meta.blocked) — never masked as delivered-0 — a normal page still parses to listings, and a working server-side throughput path (crawl-seed-google-places → google_places drain, GOOGLE_PLACES_API_KEY) keeps rows growing when YellowPages is blocked."
+          },
+          {
+            "id": "launch-04-requester-profile",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "BUG: cannot click the requester profile on /inbound/:reqId. Requester profile must be viewable from the inbound request screen."
+          },
+          {
+            "id": "launch-01-outside-city",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "Crawl+Match+Outreach for requests OUTSIDE cities where we have data: on-demand crawl fires, providers found, outreach sent, requester matched. E2E test + report."
+          },
+          {
+            "id": "launch-02-wait-copy",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "Requester message: \"This may take 15 minutes to a few hours to locate and get you a solid offer. We will notify you the moment we have a match.\" — replace current copy."
+          },
+          {
+            "id": "launch-03-best-match",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "Dissemination in covered areas: best match = highest rating + closest location. Test ranking holds deterministically."
+          },
+          {
+            "id": "launch-05-self-notify",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "BUG: user receives a request notification for a request they themselves created (self-notify). Must never notify the requester as a provider."
+          },
+          {
+            "id": "launch-06-location-persist",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "BUG: a saved location did not persist overnight — saved address must survive session/reload."
+          },
+          {
+            "id": "launch-07-calendar-uber",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "UX: replace calendar with an Uber-style scheduling picker (intuitive date+time). OFF-SPEC UX -> founder approval required."
+          },
+          {
+            "id": "launch-08-core-flows",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "Test replies, notifications, matches, adding profiles, seeing data, reviewing a service — E2E each."
+          },
+          {
+            "id": "launch-09-referrals",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "Referral links, bookings, referral fees across degrees of separation — E2E incl. payout attribution."
+          },
+          {
+            "id": "launch-10-free-services",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "Ability to see available FREE services and the connectors who can perform free services."
+          },
+          {
+            "id": "launch-11-ux-simplify",
+            "suite": null,
+            "source": "founder",
+            "status": "captured",
+            "spec_ref": "LAUNCH-QA",
+            "instruction": "UX simplification pass on all launch flows: what to REMOVE, more succinct copy. On-spec simplifications auto-apply; off-spec -> founder approval."
+          },
+          {
+            "id": "launch-03",
+            "suite": "search",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-78 / launch-03",
+            "instruction": "Best match in a covered area = HIGHEST RATING first, then CLOSEST distance (rating_count, then id as stable tie-breakers; an unrated provider is unknown, not 0.0, and sorts below any rated one). listServices' proximity branch orders through the pure exported rankProviders() — the distance-only sort (a 3.1-star next door beating a 5.0-star two miles away) is retired. Locked by qa.mjs spec-launch-03 (executes rankProviders on three fixtures with known rating/distance)."
+          },
+          {
+            "id": "launch-04",
+            "suite": "responses",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-78 / launch-04 / SPEC-48",
+            "instruction": "On /inbound/:reqId the requester's avatar AND name are clickable and open their profile (/u/:requesterId). The identity block renders whenever the requester is known — not only when they are a Connector / have an IG handle / have a bio (which left a plain requester with no route to their profile at all). Locked by qa.mjs spec-launch-04."
+          },
+          {
+            "id": "launch-05",
+            "suite": "responses",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-78 / launch-05",
+            "instruction": "SELF-NOTIFY IS IMPOSSIBLE: a user is NEVER notified as a provider for a request they created. Enforced server-side in notify-request/handleCreated against the request's own requester_id (so no caller — present, future, retried or buggy — can dispatch to the requester), and on every client path that writes a kind=new_request row (createRequestAndFanOut, crossPostRequest, createRequestToProvider). Locked by qa.mjs spec-launch-05, which EXECUTES the shipped recipient filter against a list containing the requester."
+          },
+          {
+            "id": "launch-06",
+            "suite": "search",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-78 / launch-06 / SPEC-2",
+            "instruction": "A saved location survives the night: saveAddress persists to the durable user_metadata store (no migration required), NEVER reports success when nothing persisted, and is not masked as a failure when the optional user_addresses table errors; an address the geocoder cannot verify is still saved (as typed, null coords) instead of living in localStorage alone; getDefaultAddress reads the durable copy first and the session-start load re-hydrates it without clobbering it with a default. Locked by qa.mjs spec-launch-06."
+          },
+          {
+            "id": "launch-02",
+            "suite": "results",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-78 / launch-02 (superseded by launch-15)",
+            "instruction": "RETIRED wait-copy variants are gone from every surface (the original instant/scheduled fork AND the launch-02-v1 single sentence \"This may take 15 minutes to a few hours…\"). The live wait copy is now WAIT_HEADING + WAIT_COPY (launch-15-wait-copy-v2). Locked by qa.mjs spec-launch-02 as the retirement guard."
+          },
+          {
+            "id": "crawl-osm-free",
+            "suite": "crawl",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-72 / #64 / SPEC-64",
+            "instruction": "Services crawl sources from FREE OpenStreetMap/Overpass (keyless) for BOTH bulk (crawl-seed-osm → source=osm) and on-demand (enqueueCityCrawl source=osm) — Google Places is dormant behind GOOGLE_PLACES_ENABLED (default off). fulfill-crawl maps service_type→OSM tags, blocked categories never surface, a block/empty/rate-limited Overpass response is surfaced as error (job re-queued, agent_runs.meta.osm_blocked) and NEVER masked as delivered-0."
+          },
+          {
+            "id": "launch-12-address-isolation",
+            "suite": "search",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-79 / launch-12",
+            "instruction": "A saved address is isolated PER USER — no cross-account bleed. The address localStorage cache is namespaced by the signed-in user's auth id (addrCacheKey(uid) → cergio.addr.<uid>; guests use cergio.guestAddress). A single shared key leaked one account's saved address to the next account on the same browser (signed in as info@, the founder saw t@'s \"134 Henry Street\"). Every cache read/write in HomeScreen + InlineLocationEditor routes through the uid-scoped key; the durable truth is per-user user_metadata. Locked by qa.mjs spec-launch-12-address-isolation (executes addrCacheKey — two users get different keys)."
+          },
+          {
+            "id": "launch-13-match-notify",
+            "suite": "requests",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-79 / launch-13 / SPEC-55 / SPEC-67c",
+            "instruction": "A distinct provider with a matching LISTED service is notified + can see the request. The listing side (ServiceListAboutScreen) resolves a free-text service type through the SAME resolveProviderTypeLocal the request side uses (resolvedProviderType = parserPT || canonicalMatch || localPT), so a phrase like \"french tutor\" locks to \"Tutor\" and never saves taxonomy_provider_type=NULL (which was invisible to getProvidersForNotify + listServices while the SEARCH resolved to \"Tutor\"). The self-notify guard excludes ONLY the requester, never a different matching provider. Locked by qa.mjs spec-launch-13-match-notify (executes the shipped fan-out filter + the ownerIds exclusion + the shared resolver)."
+          },
+          {
+            "id": "launch-14-list-route",
+            "suite": "listings",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-79 / launch-14",
+            "instruction": "List-a-service CTAs open the list flow, not the manage screen. ClaimProfileScreen's \"List your service\" button navigated to /services/manage (the MANAGE screen) instead of /list-service (the list-a-service welcome flow); fixed. /list-service (ServiceListWelcomeScreen) and /services/manage (ManageServicesScreen) stay distinct. Locked by qa.mjs spec-launch-14-list-route."
+          },
+          {
+            "id": "launch-15-wait-copy-v2",
+            "suite": "results",
+            "source": "founder",
+            "status": "built",
+            "spec_ref": "SPEC-79 / launch-15 / SPEC-78",
+            "instruction": "The post-request waiting state shows the founder's heading + body + action: heading \"We'll notify you when Connectors accept\"; body \"Your request is out to matching Connectors. Once one accepts, they show up here — free swaps first. Counter-offers land in Spotlight requests > Sent for you to accept or counter back.\"; action \"Cancel request\"; the pulsing live/working LeafLogo is kept. Exported as WAIT_HEADING + WAIT_COPY (one source of truth). SUPERSEDES launch-02 (the old single sentence is retired). Locked by qa.mjs spec-launch-15-wait-copy-v2 (byte-exact against the exported constants)."
+          }
+        ],
+        "verified_list": [
+          {
+            "id": "p2-instant-vs-scheduled",
+            "evidence": "qa_resp_scheduled_branch PASS @ 2026-07-31T03:13 — Scheduled bookings honor the CHOSEN time at write: scheduled_at > created_at + 12h and schedule_confirmed_at is stamped — not an instant/auto placeholder (fixture age 22d).",
+            "instruction": "Instant (immediate/15-min) vs scheduled (future/24h) bookings branch correctly on scheduled_at.",
+            "verified_at": "2026-07-13T02:45:27.305881+00:00"
+          },
+          {
+            "id": "p1-search-blocked-never-surface",
+            "evidence": "qa_search_blocked_never_surface PASS @ 2026-07-31T03:13 — Blocked categories (massage/tattoo/makeup/chef + SHAFT) never sit sendable in leads_services.",
+            "instruction": "Blocked categories (massage/tattoo/makeup/chef+SHAFT) never resolve to a provider_type nor surface as sendable services.",
+            "verified_at": "2026-07-09T03:07:03.342698+00:00"
+          },
+          {
+            "id": "p2-notify-actually-sends",
+            "evidence": "qa_resp_notify_actually_sends PASS @ 2026-07-31T03:13 — Notify actually SENDS: a notifications row (with deep_link) is created, not merely queued.",
+            "instruction": "Every notify actually SENDS: a notifications row is created (not merely \"queued\") for each key event.",
+            "verified_at": "2026-07-09T03:06:07.931732+00:00"
+          },
+          {
+            "id": "p2-requester-confirm-provider-accept",
+            "evidence": "qa_resp_accept_confirmed_booking PASS @ 2026-07-31T03:13 — A CONFIRMED seed booking exists (provider accept-with-time transition landed).",
+            "instruction": "Requester-confirm + provider-accept transitions land a confirmed booking (accept_request_with_time / respondToRequest).",
+            "verified_at": "2026-07-09T03:06:07.462822+00:00"
+          },
+          {
+            "id": "p2-paths-distinct",
+            "evidence": "qa_resp_paths_distinct PASS @ 2026-07-31T03:13 — Connector-request rows (requests) and direct bookings (bookings) are distinct tables, both seedable.",
+            "instruction": "Connector-request path (requests + request_responses, /inbound/:reqId) stays distinct from direct bookings (bookings, /request/:id).",
+            "verified_at": "2026-07-09T03:06:07.348704+00:00"
+          },
+          {
+            "id": "p1-search-no-false-paid",
+            "evidence": "qa_search_no_false_paid_fallback PASS @ 2026-07-31T03:13 — A free ($0) offering exists so a free search returns hits (no false \"showing paid options\").",
+            "instruction": "No false \"showing paid options\": paid-fallback banner only when the free search truly returned zero.",
+            "verified_at": "2026-07-09T03:06:06.066021+00:00"
+          },
+          {
+            "id": "p1-search-query-relevant",
+            "evidence": "qa_search_query_relevant PASS @ 2026-07-09T03:06 — Canonical query phrases resolve to the seeded provider_type (Plumber / House Cleaner).",
+            "instruction": "A search query returns spec-relevant results (right provider_type, no wrong-type spillover).",
+            "verified_at": "2026-07-09T03:06:05.944125+00:00"
+          },
+          {
+            "id": "p1-search-outofmiami-live",
+            "evidence": "qa_search_outofmiami_live PASS @ 2026-07-31T03:13 — An out-of-Miami (Austin) search returns the live seeded Austin service (multi-city).",
+            "instruction": "Out-of-Miami live matches: a query in a non-Miami seeded city returns that city's live match (multi-city crawl proof).",
+            "verified_at": "2026-07-09T03:06:05.821442+00:00"
+          },
+          {
+            "id": "p1-search-miami-live",
+            "evidence": "qa_search_geo_strict_no_spill PASS @ 2026-07-31T03:13 — Geo is strict: an out-of-city service does not spill into a Miami-radius search.",
+            "instruction": "Miami live matches: a Miami query returns at least one live Miami seeded service.",
+            "verified_at": "2026-07-09T03:06:05.585119+00:00"
+          },
+          {
+            "id": "p1-search-address-persists",
+            "evidence": "qa_search_address_persists PASS @ 2026-07-31T03:13 — A verified service address persists — lat/lng not reverted to null.",
+            "instruction": "A typed/verified address persists (services keep lat/lng) and does not revert to a default.",
+            "verified_at": "2026-07-09T03:06:05.467429+00:00"
+          },
+          {
+            "id": "p1-search-geocode-holds",
+            "evidence": "qa_search_geocode_holds PASS @ 2026-07-31T03:13 — Seeded services carry non-null lat/lng (geocode holds → visible in services_near).",
+            "instruction": "Geocode holds: a seeded service with non-null lat/lng appears in services_near results.",
+            "verified_at": "2026-07-09T03:06:05.349601+00:00"
+          }
+        ]
+      },
+      "open_findings": []
+    },
+    "support": {
+      "counts": {
+        "new": 0,
+        "human": 0,
+        "closed": 0,
+        "escalated": 0,
+        "open_total": 0,
+        "ai_resolved": 0
+      },
+      "human_queue": [],
+      "generated_at": "2026-07-31T04:10:51.930289+00:00"
+    },
+    "executed_autonomously": [
+      {
+        "id": 260,
+        "division": "Data",
+        "title": "Enrich creators to lift the 107-sendable / 720-reachable gap (AUTO-RUN)",
+        "detail": "reachable=720 but sendable=107 — a 613-creator contact gap sitting idle. Re-run enrich-influencers (which just recovered from a silent-collision fix at 12:15) to convert reachable rows into sendable ones so the founding-cohort shortlist has depth. Idempotent, on-spec, free.",
+        "action_kind": "edge_call",
+        "action_payload": "enrich-influencers",
+        "result": "re-invoked edge fn 'enrich-influencers' via cergio_call_edge",
+        "executed_at": "2026-07-29T13:05:13.206+00:00"
+      },
+      {
+        "id": 259,
+        "division": "Data",
+        "title": "Back-fill has_instagram on services that already carry an IG URL (AUTO-RUN)",
+        "detail": "Only 15 services flagged with_ig despite 35k rows and an active IG-priority initiative; many rows have an instagram handle or an instagram.com website_url but has_instagram is not set. Back-filling the derived flag makes the IG-first services cohort actually selectable. Narrow, reversible flag-set.",
+        "action_kind": "sql",
+        "action_payload": "UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\.com/')",
+        "result": "UPDATE affected 0 row(s)",
+        "executed_at": "2026-07-29T13:05:13.13+00:00"
+      },
+      {
+        "id": 258,
+        "division": "Data",
+        "title": "Re-run creator-harvest + enrich-influencers to refill the free creator pipe (AUTO-RUN)",
+        "detail": "harvested_today=0 and creators.new=0 while creator-harvest cron shows succeeded — a classic enqueued-not-delivered gap. Idempotently re-invoke the harvester now to force a real rows-written pass and confirm ingest before the seed fix lands. Safe, idempotent, on-spec free work.",
+        "action_kind": "edge_call",
+        "action_payload": "creator-harvest",
+        "result": "re-invoked edge fn 'creator-harvest' via cergio_call_edge",
+        "executed_at": "2026-07-29T13:05:09.812+00:00"
+      },
+      {
+        "id": 254,
+        "division": "Data",
+        "title": "Back-fill has_instagram on services that already carry an IG URL (AUTO-RUN)",
+        "detail": "services.with_ig=15 is implausibly low against 1666 queued; many rows have an instagram or website_url containing instagram.com but has_instagram is unset, starving the IG-priority selection for the services cohort. Set the derived flag from existing free data.",
+        "action_kind": "sql",
+        "action_payload": "UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\.com/')",
+        "result": "UPDATE affected 0 row(s)",
+        "executed_at": "2026-07-29T08:05:07.266+00:00"
+      },
+      {
+        "id": 253,
+        "division": "Data",
+        "title": "Re-run enrich-influencers to lift more of the 708 reachable to sendable (AUTO-RUN)",
+        "detail": "creators.reachable=708 but sendable stalls at 107; enrich-influencers fills emails/phones from link-in-bio. Re-invoke the idempotent free enricher to convert reachable→sendable and feed the founding cohort pipeline.",
+        "action_kind": "edge_call",
+        "action_payload": "enrich-influencers",
+        "result": "re-invoked edge fn 'enrich-influencers' via cergio_call_edge",
+        "executed_at": "2026-07-29T08:05:03.886+00:00"
+      },
+      {
+        "id": 252,
+        "division": "Data",
+        "title": "Re-run creator-harvest to refill the discovery queue (AUTO-RUN)",
+        "detail": "harvested_today=0 and creators.new=0 today despite the harvest cron showing succeeded — a classic enqueue-not-delivered no-op. Re-invoke the idempotent free harvester now to attempt a real write while the seed-osm root cause is verified; if it writes 0 the failure surfaces immediately as the seed-osm dependency.",
+        "action_kind": "edge_call",
+        "action_payload": "creator-harvest",
+        "result": "re-invoked edge fn 'creator-harvest' via cergio_call_edge",
+        "executed_at": "2026-07-29T08:05:03.725+00:00"
+      },
+      {
+        "id": 249,
+        "division": "Data",
+        "title": "Re-run crawl-health-check to confirm ingest delivery after the fixes",
+        "detail": "Two silent-collision/error findings on enrich-influencers and fulfill-crawl were just closed, and crons report 'succeeded' which historically masks pg_net enqueue-vs-deliver failures. Re-run the health check to verify rows-written (not request-enqueued) so we know the free pipes are truly flowing before the founder greenlights outreach.",
+        "action_kind": "edge_call",
+        "action_payload": "crawl-health-check",
+        "result": "re-invoked edge fn 'crawl-health-check' via cergio_call_edge",
+        "executed_at": "2026-07-28T13:05:04.782+00:00"
+      },
+      {
+        "id": 248,
+        "division": "Data",
+        "title": "Backfill has_instagram on services that already carry an IG URL",
+        "detail": "services.with_ig=11 is absurdly low against 35k rows — the has_instagram flag is not being set even when an instagram handle or instagram.com URL is present. This reversible UPDATE derives the flag so the IG-priority services funnel (initiative #IG-priority) can actually target them, unlocking the 25-IG-services cohort pick.",
+        "action_kind": "sql",
+        "action_payload": "UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\.com/')",
+        "result": "UPDATE affected 0 row(s)",
+        "executed_at": "2026-07-28T13:05:04.697+00:00"
+      },
+      {
+        "id": 247,
+        "division": "Data",
+        "title": "Re-run enrich-influencers to backfill email/phone on the 677 reachable creators (free)",
+        "detail": "reachable=677 but sendable=108 — the gap is missing verified contact. enrich-influencers just had a silent-collision bug fixed at 12:45; re-run it now to fill emails/phones/external_url so more reachable creators cross into sendable and the founding-cohort send can actually happen.",
+        "action_kind": "edge_call",
+        "action_payload": "enrich-influencers",
+        "result": "re-invoked edge fn 'enrich-influencers' via cergio_call_edge",
+        "executed_at": "2026-07-28T13:05:02.144+00:00"
+      },
+      {
+        "id": 246,
+        "division": "Data",
+        "title": "Re-run the idempotent creator harvester now (free volume lever)",
+        "detail": "creator-harvest ran at 13:00 with upserted=null and creators.new=0 despite reachable=677 — the discovery worker is producing but not converting to new sendable creators. Re-invoke the idempotent harvester to force another discovery+write pass while the seed backbone is being fixed; if it still writes 0, that confirms the root cause is the seeder (proposal 1), not the harvester.",
+        "action_kind": "edge_call",
+        "action_payload": "creator-harvest",
+        "result": "re-invoked edge fn 'creator-harvest' via cergio_call_edge",
+        "executed_at": "2026-07-28T13:05:01.934+00:00"
+      },
+      {
+        "id": 242,
+        "division": "Data",
+        "title": "Re-run enrich-influencers to lift the reachable→sendable conversion",
+        "detail": "reachable=675 but sendable=111 — a huge gap of discovered creators lacking verified email/phone. enrich-influencers just recovered from a silent-collision fix at 06:15; re-run it (idempotent) to fill contacts and convert reachable creators into sendable ones for the founding cohort.",
+        "action_kind": "edge_call",
+        "action_payload": "enrich-influencers",
+        "result": "re-invoked edge fn 'enrich-influencers' via cergio_call_edge",
+        "executed_at": "2026-07-28T08:05:07.673+00:00"
+      },
+      {
+        "id": 241,
+        "division": "Data",
+        "title": "Re-run creator-harvest to break the creators.new=0 stall",
+        "detail": "creators.new=0 with CREATORS_NOT_GROWING flagged and last_harvest.upserted=null; the idempotent harvester is the first free lever, not a paid DB. Re-invoke creator-harvest immediately to push fresh discovery toward the 1000/day + 70 sendable target while the deploy-level crawl-seed-osm fix (rank 5) is confirmed by the founder.",
+        "action_kind": "edge_call",
+        "action_payload": "creator-harvest",
+        "result": "re-invoked edge fn 'creator-harvest' via cergio_call_edge",
+        "executed_at": "2026-07-28T08:05:07.604+00:00"
+      },
+      {
+        "id": 240,
+        "division": "Data",
+        "title": "Re-queue Miami services stuck in 'new' so the founding-cohort funnel isn't starved",
+        "detail": "Miami shows queued=60 but the metro that must prove the loop has 846 rows sitting in outreach_status='new' across the queue and services-gate isn't draining Miami fast enough. Re-seed the Miami 'new' rows to 'queued' (narrow, city-scoped) so cohort provider outreach has real inventory.",
+        "action_kind": "sql",
+        "action_payload": "UPDATE public.leads_services SET outreach_status='queued' WHERE outreach_status='new' AND city='Miami'",
+        "result": "UPDATE affected 0 row(s)",
+        "executed_at": "2026-07-28T08:05:07.507+00:00"
+      },
+      {
+        "id": 239,
+        "division": "Data",
+        "title": "Back-fill has_instagram on services that already carry an IG URL",
+        "detail": "Only 11 of 35418 services show with_ig, yet many rows have an instagram handle or an instagram.com link in website_url — the derived flag is stale, starving the IG-priority funnel. Set has_instagram=true wherever the intrinsic IG signal exists so IG-first outreach can actually target them.",
+        "action_kind": "sql",
+        "action_payload": "UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\.com/')",
+        "result": "UPDATE affected 0 row(s)",
+        "executed_at": "2026-07-28T08:05:06.906+00:00"
+      }
+    ],
+    "execution_failures": [],
+    "needs_approval": [
+      {
+        "id": 261,
+        "rank": 5,
+        "division": "Data",
+        "title": "Fix headline bookings KPI to count only distinct-party paid/completed non-seed (GATE)",
+        "detail": "Headline bookings=56 but machine truth is 1 completed between distinct parties, 0 paid — the KPI includes test/seed rows and inflates the proof metric on the ops snapshot. This is a change to the snapshot/metrics fn, so it must be gated as a code change to the founder.",
+        "lift": "Restores honest proof metric so the team optimizes the real loop, not test noise",
+        "effort": "med",
+        "on_spec": true,
+        "action_kind": "none"
+      },
+      {
+        "id": 262,
+        "rank": null,
+        "division": "ops",
+        "title": "Backbone: agent 'crawl-seed-osm' has never run",
+        "detail": "crawl-seed-osm appears deployed-but-never-invoked (never ran). A re-run cannot fix a missing deploy / unwired cron / wiped vault secret. Verify: (1) the fn is deployed, (2) its cron job exists in cron.job, (3) edge_fn_bearer is set in Vault. Run the Post-Deploy Health Check.",
+        "lift": null,
+        "effort": null,
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 263,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: data-no-duplicate-services — open > 12h with no fix",
+        "detail": "data-no-duplicate-services (area 'live', severity 'high') has been OPEN for 12h (since 2026-07-29T20:22) and is still failing.\nFINDING: 1 duplicate listings\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 264,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: data-no-address-in-title — open > 12h with no fix",
+        "detail": "data-no-address-in-title (area 'live', severity 'critical') has been OPEN for 12h (since 2026-07-29T20:22) and is still failing.\nFINDING: 2 titles contain a street address\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 265,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: crawl-spec-cities-only — open > 12h with no fix",
+        "detail": "crawl-spec-cities-only (area 'live', severity 'critical') has been OPEN for 12h (since 2026-07-29T20:22) and is still failing.\nFINDING: OFF-SPEC CITIES: Austin, Seattle, Pittsburgh, El Paso, Fresno, Oakland, Lexington, Minneapolis, Milwaukee, Bakersfield, Albuquerque, Anaheim, Sacramento, Orlando, Toledo, Chesapeake, Jacksonville, Denver, Mesa, 725 Ri\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 266,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: supply-worker-stalled — open > 12h with no fix",
+        "detail": "supply-worker-stalled (area 'supply', severity 'critical') has been OPEN for 12h (since 2026-07-29T22:56) and is still failing.\nFINDING: no fulfill-crawl run in 30m — kicking\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 267,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: supply-dead-source-gmaps_apify — open > 12h with no fix",
+        "detail": "supply-dead-source-gmaps_apify (area 'supply', severity 'critical') has been OPEN for 12h (since 2026-07-30T02:41) and is still failing.\nFINDING: 420 jobs produced 0 rows — source disabled automatically\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 268,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: supply-dead-source-ig_services — open > 12h with no fix",
+        "detail": "supply-dead-source-ig_services (area 'supply', severity 'critical') has been OPEN for 12h (since 2026-07-30T02:41) and is still failing.\nFINDING: 420 jobs produced 0 rows — source disabled automatically\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 269,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: supply-wasteful-source-ig_services — open > 12h with no fix",
+        "detail": "supply-wasteful-source-ig_services (area 'supply', severity 'high') has been OPEN for 12h (since 2026-07-30T05:50) and is still failing.\nFINDING: 523 jobs -> 5 rows (ratio 0.0096) — throttled automatically\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 270,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: watchdog:stall:fulfill-crawl — open > 12h with no fix",
+        "detail": "watchdog:stall:fulfill-crawl (area 'watchdog', severity 'high') has been OPEN for 12h (since 2026-07-30T06:15) and is still failing.\nFINDING: fulfill-crawl: no run in 45m (last 2026-07-30T05:23:45.614+00:00) — worker stalled / cron not firing / vault secret wiped\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 271,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: cron-alive-fulfill-crawl — open > 12h with no fix",
+        "detail": "cron-alive-fulfill-crawl (area 'live', severity 'high') has been OPEN for 12h (since 2026-07-30T12:07) and is still failing.\nFINDING: 0 runs in last 6h\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      },
+      {
+        "id": 272,
+        "rank": null,
+        "division": "qa",
+        "title": "STALE DEFECT: watchdog:silent:crawl-seed-osm — open > 12h with no fix",
+        "detail": "watchdog:silent:crawl-seed-osm (area 'watchdog', severity 'high') has been OPEN for 12h (since 2026-07-30T12:45) and is still failing.\nFINDING: crawl-seed-osm: SILENT COLLISION — found 123 but wrote 0 rows (upsert/insert masking a no-op as success)\nFIX ATTEMPTED: none — no auto-fix proposal was ever written for this check.\nThis is an UNFIXED DEFECT, not a new idea — it needs an engineering fix, not an approval to run something. Escalated automatically after 12h.",
+        "lift": "closes a defect the loop has been carrying unfixed",
+        "effort": "engineering",
+        "on_spec": false,
+        "action_kind": "none"
+      }
+    ],
+    "execution_summary": {
+      "executed_recent": 14,
+      "failed_recent": 0,
+      "awaiting_approval": 12
+    }
+  }
+}
