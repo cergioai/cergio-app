@@ -14,6 +14,9 @@
 # token, so the PR is opened by a real user and thus TRIGGERS ci.yml) and enables
 # "Allow auto-merge" on the repo. Until armed, this workflow no-ops with a notice.
 name: Auto-ship (off-Mac merge)
+# NOTE (run126/SPEC-148): completion of THIS workflow also fires ops-health.yml
+# via its `workflow_run` trigger — the live-prod snapshot now refreshes on every
+# ship, routing around the dead `push: main` trigger (GITHUB_TOKEN no-retrigger).
 
 on:
   push:
