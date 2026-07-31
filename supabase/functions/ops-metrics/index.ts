@@ -57,15 +57,22 @@ serve(async (req: Request) => {
     // headline. Best-effort: on any error the snapshot still serves the fn's value unchanged.
     try {
       const rawHeadline = typeof snap.bookings === 'number' ? snap.bookings : null;
-      const { count: completedNonSeed } = await db
+      // SPEC-107c (audit run124): the honest PROOF headline is non-seed + completed + DISTINCT-PARTY
+      // (consumer_id !== provider_id). Non-seed-completed alone still counted 5 self-bookings (6 vs 1
+      // real distinct-party); a self-booking proves no marketplace loop. PostgREST cannot compare two
+      // columns, so fetch the tiny completed non-seed set and count distinct-party in JS.
+      const { data: rows } = await db
         .from('bookings')
-        .select('id', { count: 'exact', head: true })
+        .select('consumer_id, provider_id, paid_at')
         .not('seed', 'is', true)
         .eq('status', 'completed');
-      if (typeof completedNonSeed === 'number') {
-        snap.bookings_all = rawHeadline;          // raw table count (internal ops visibility)
-        snap.bookings_headline_raw = rawHeadline; // explicit alias so audits can see the old value
-        snap.bookings = completedNonSeed;         // HONEST headline: non-seed completed only
+      if (Array.isArray(rows)) {
+        const real = rows.filter((b: any) => b.consumer_id && b.provider_id && b.consumer_id !== b.provider_id);
+        snap.bookings_all = rawHeadline;                 // raw table count (internal ops visibility)
+        snap.bookings_headline_raw = rawHeadline;        // explicit alias so audits can see the old value
+        snap.bookings_completed = rows.length;           // non-seed completed (prior headline definition)
+        snap.bookings_paid = real.filter((b: any) => b.paid_at).length; // distinct-party AND actually paid
+        snap.bookings = real.length;                     // HONEST headline: non-seed, completed, DISTINCT-PARTY
       }
     } catch (_e) { /* additive; never break the snapshot on this */ }
 

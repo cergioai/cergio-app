@@ -205,7 +205,7 @@ const gdb = growthDb();
     // 2. STREET ADDRESS LEAKED INTO A TITLE ("Housekeeper in 5701 Collins").
     try {
       const { data: bad } = await db.from('services')
-        .select('id, title, category, city').limit(200);
+        .select('id, title, category, city').limit(2000); // SPEC-111b (run124): match the qa-live-verify detector's .limit(2000) scan — a repair that scans fewer rows than the detector can NEVER close the finding (2 leaky titles sat beyond row 200)
       for (const svc of (bad || [])) {
         if (!svc.title || !/\bin\s+\d{2,6}\s+\w/i.test(svc.title)) continue;
         const clean = svc.city ? `${svc.category || 'Service'} in ${svc.city}` : (svc.category || 'Service');
@@ -216,12 +216,19 @@ const gdb = growthDb();
 
     // 3. OFF-SPEC CRAWL CITIES — park them; phase 1 is Miami + NYC only.
     try {
+      // SPEC-111c (run124): P1 MUST equal qa-live-verify's SPEC_CITIES set exactly, or the two
+      // disagree — the old 20-city P1 wrongly PARKED on-spec top-DMA crawls (Los Angeles, Chicago,
+      // Dallas, etc.), suppressing legitimate growth, while the detector kept flagging off-spec rows.
       const P1 = ['Miami','New York','Manhattan','Brooklyn','Queens','Bronx','Staten Island',
-                  'Miami Beach','Brickell','Wynwood','Coral Gables','Doral','South Beach',
-                  'Coconut Grove','Aventura','Little Havana','Hialeah','North Miami','Kendall','Pinecrest'];
+                  'Los Angeles','Chicago','Dallas','Philadelphia','Houston','Atlanta','Washington',
+                  'Boston','San Francisco','Miami Beach','Brickell','Wynwood','Coral Gables','Doral',
+                  'Fort Lauderdale','Hialeah','Kendall','Aventura','Little Havana','North Miami',
+                  'Pinecrest','Coconut Grove','South Beach'];
+      // Park EVERY off-spec crawl that is not already parked (not just new/crawling) — else
+      // delivered/failed off-spec rows persist and the detector flags them forever.
       const { data: off } = await gdb.from('crawl_requests')
         .update({ status: 'parked', updated_at: new Date().toISOString() })
-        .in('status', ['new', 'crawling']).not('city', 'in', `(${P1.map((c) => `"${c}"`).join(',')})`)
+        .neq('status', 'parked').not('city', 'in', `(${P1.map((c) => `"${c}"`).join(',')})`)
         .select('id');
       parked = off?.length ?? 0;
     } catch (_e) { /* best-effort */ }

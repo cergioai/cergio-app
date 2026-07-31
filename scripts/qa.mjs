@@ -4796,22 +4796,27 @@ test('ci-applies-migrations', 'SPEC-109: CI must APPLY migrations, not print a r
 
 test('bookings-headline-counts-only-real-completed', 'SPEC-107: the headline `bookings` KPI in opsPayload must count ONLY non-seed, completed bookings — never the raw bookings table, which mixes QA seed rows + pending/confirmed placeholders and inflated an INVESTOR-FACING number to 53 headline vs 1 real completed (audit check bookings_kpi_includes_test_rows). The raw total may live alongside as bookings_all but must NEVER be surfaced as the headline.', '#107', async () => {
   const shared = readFile('supabase/functions/_shared/opsPayload.ts');
-  const bookingsQuery = (shared.match(/from\('bookings'\)[^;]*;\s*bookings\s*=\s*count/g) || []).join('\n');
-  assert(bookingsQuery.length > 0, 'could not find the headline `bookings` assignment in opsPayload.ts');
-  assert(/\.not\('seed','is',true\)/.test(bookingsQuery),
-    'headline bookings query must exclude seed rows via .not(\'seed\',\'is\',true) — else the KPI recounts QA test rows');
-  assert(/\.eq\('status','completed'\)/.test(bookingsQuery),
-    'headline bookings query must count only completed via .eq(\'status\',\'completed\') — pending/confirmed placeholders must not inflate the headline');
+  // SPEC-107c (run124): the headline must be non-seed + completed + DISTINCT-PARTY.
+  assert(/\.not\('seed','is',true\)[\s\S]*?\.eq\('status','completed'\)/.test(shared),
+    'the real-bookings query must filter non-seed + completed');
+  assert(/consumer_id\s*!==\s*b\.provider_id|b\.consumer_id\s*!==\s*b\.provider_id/.test(shared),
+    'the headline bookings must count only DISTINCT-PARTY rows (consumer_id !== provider_id) — a self-booking proves no marketplace loop and must never inflate the investor KPI');
+  assert(/bookings\s*=\s*real\.length/.test(shared),
+    'snap headline `bookings` must be assigned the distinct-party count (real.length), not the raw or completed-only count');
   assert(/bookings_all\s*=\s*count/.test(shared),
     'the raw bookings total must be preserved separately as bookings_all (internal ops visibility), not as the headline');
+  assert(/bookings_completed\s*=\s*count/.test(shared),
+    'the completed-non-seed count must be preserved as bookings_completed for visibility, never as the headline');
 });
 
 test('ops-metrics-headline-bookings-honest', 'SPEC-107b: the ops-metrics edge fn (the INVESTOR/AUDITOR-facing ops-health snapshot) must NOT surface the raw cergio_ops_snapshot() bookings count as the headline. That DB fn is unversioned (launcher-only, un-fixable off-Mac) and returns the raw table count (inflated 58 vs ~1 real completed). ops-metrics must recompute the headline as non-seed completed and preserve the raw value as bookings_all — the same honest definition enforced for opsPayload.', '#107', async () => {
   const om = readFile('supabase/functions/ops-metrics/index.ts');
   assert(/from\('bookings'\)[\s\S]*?\.not\('seed', 'is', true\)[\s\S]*?\.eq\('status', 'completed'\)/.test(om),
     'ops-metrics must recompute the headline bookings as non-seed + status=completed (else the unversioned snapshot fn inflates the investor-facing KPI)');
-  assert(/snap\.bookings\s*=\s*completedNonSeed/.test(om),
-    'ops-metrics must assign the honest completed-non-seed count to snap.bookings');
+  assert(/consumer_id\s*!==\s*b\.provider_id/.test(om),
+    'SPEC-107c: ops-metrics headline must be DISTINCT-PARTY (consumer_id !== provider_id) — self-bookings must never count as the proof metric');
+  assert(/snap\.bookings\s*=\s*real\.length/.test(om),
+    'ops-metrics must assign the honest distinct-party count (real.length) to snap.bookings');
   assert(/snap\.bookings_all\s*=\s*rawHeadline/.test(om),
     'ops-metrics must preserve the raw snapshot value as snap.bookings_all, never as the headline');
 });
@@ -4824,6 +4829,15 @@ test('standing-findings-self-repair', 'SPEC-111: the standing findings must be F
   assert(/status: 'parked'/.test(hc), 'off-spec crawl cities must be parked, never deleted');
   assert(!/\.delete\(\)/.test(hc), 'a self-repair loop must never hard-delete');
   assert(/repaired: \{ geo: geoFixed, titles: titleFixed, parked \}/.test(hc), 'repairs must be counted into agent_runs so the work is provable');
+  // SPEC-111b/c (run124): a repair that scans fewer rows than the detector, or a
+  // detector that flags rows the repair already remediated, can NEVER close a finding.
+  assert(/\.select\('id, title, category, city'\)\.limit\(2000\)/.test(hc),
+    'title-strip repair must scan .limit(2000) to match the qa-live-verify detector — a narrower scan (was 200) leaves flagged rows unfixed forever');
+  assert(/\.neq\('status', 'parked'\)/.test(hc),
+    'off-spec parking must target every not-already-parked crawl (not just new/crawling) or delivered/failed off-spec rows stay flagged forever');
+  const qv = readFile('supabase/functions/qa-live-verify/index.ts');
+  assert(/\.eq\('kind','services'\)\.neq\('status','parked'\)/.test(qv),
+    'the crawl-spec-cities-only detector must EXCLUDE parked rows — a parked off-spec crawl is remediated, so counting it keeps the critical finding open forever');
 });
 
 test('background-load-cannot-take-the-product-down', 'SPEC-115: background data acquisition must never be able to degrade the live product. Measured 2026-07-30: Supabase REST returned 503 on /rest/v1/services while /auth/v1/user stayed 200 — the founder could not list a service or stay signed in, because supply-engine dispatched 60 parallel fulfill-crawl runs at limit=500 and exhausted the shared connection pool', '#115', async () => {
