@@ -58,14 +58,40 @@ jobs:
           GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
         run: node scripts/apply-growth-schema.mjs
 
-      - name: Prove the tables exist
+      - name: GROWTH STATUS — row counts, job queue, agent liveness
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
         run: |
-          for t in crawl_requests leads_services leads_influencers agent_runs; do
-            CODE=$(curl -s -o /dev/null -w '%{http_code}' \
-              -H "apikey: $GROWTH_SERVICE_ROLE_KEY" -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
-              "$GROWTH_SUPABASE_URL/rest/v1/$t?select=*&limit=1")
-            echo "  $t -> HTTP $CODE"
+          set -uo pipefail
+          H_K="apikey: $GROWTH_SERVICE_ROLE_KEY"
+          H_A="Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY"
+          cnt () {  # $1=table  $2=extra query
+            curl -s -I -H "$H_K" -H "$H_A" -H 'Prefer: count=exact' \
+              "$GROWTH_SUPABASE_URL/rest/v1/$1?select=id&limit=1${2:-}" \
+              | tr -d '\r' | sed -n 's/.*content-range: .*\///p'
+          }
+          echo "=============================================="
+          echo " GROWTH DATABASE STATUS"
+          echo "=============================================="
+          echo "leads_services      : $(cnt leads_services)"
+          echo "leads_influencers   : $(cnt leads_influencers)"
+          echo "crawl_requests      : $(cnt crawl_requests)"
+          echo "  new               : $(cnt crawl_requests '&status=eq.new')"
+          echo "  crawling          : $(cnt crawl_requests '&status=eq.crawling')"
+          echo "  delivered         : $(cnt crawl_requests '&status=eq.delivered')"
+          echo "agent_runs          : $(cnt agent_runs)"
+          echo ""
+          echo "--- rows by source ---"
+          for s in gmaps_apify craigslist yellowpages_apify yelp google_lsa google_sponsored osm ig_services; do
+            printf '  %-20s %s\n' "$s" "$(cnt leads_services "&data_source=eq.$s")"
           done
+          echo ""
+          echo "--- agent runs in the growth DB (last 10) ---"
+          curl -s -H "$H_K" -H "$H_A" \
+            "$GROWTH_SUPABASE_URL/rest/v1/agent_runs?select=agent,status,started_at,rows_written&order=started_at.desc&limit=10" \
+            | head -c 1500
+          echo ""
+          echo "=============================================="
+          echo "A ZERO crawl_requests count means the seeders have not run against"
+          echo "the growth DB yet — the queue must be seeded before anything crawls."
