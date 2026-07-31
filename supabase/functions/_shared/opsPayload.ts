@@ -164,7 +164,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   }
 
   const { count: profiles } = await db.from('profiles').select('id', { count: 'exact', head: true });
-  let withAvatar = 0, connections = 0, services = 0, requests = 0, bookings = 0, bookings_all = 0;
+  let withAvatar = 0, connections = 0, services = 0, requests = 0, bookings = 0, bookings_all = 0, bookings_completed = 0, bookings_paid = 0;
   try { const { count } = await db.from('profiles').select('id', { count: 'exact', head: true }).not('avatar_url','is',null); withAvatar = count ?? 0; } catch (_e) {}
   try { const { count } = await db.from('connections').select('id', { count: 'exact', head: true }); connections = count ?? 0; } catch (_e) {}
   try { const { count } = await db.from('services').select('id', { count: 'exact', head: true }); services = count ?? 0; } catch (_e) {}
@@ -176,7 +176,21 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // must only ever count completed, non-seed bookings. Raw total kept as
   // `bookings_all` for internal ops visibility (never surfaced as the headline).
   try { const { count } = await db.from('bookings').select('id', { count: 'exact', head: true }); bookings_all = count ?? 0; } catch (_e) {}
-  try { const { count } = await db.from('bookings').select('id', { count: 'exact', head: true }).not('seed','is',true).eq('status','completed'); bookings = count ?? 0; } catch (_e) {}
+  try { const { count } = await db.from('bookings').select('id', { count: 'exact', head: true }).not('seed','is',true).eq('status','completed'); bookings_completed = count ?? 0; } catch (_e) {}
+  // HEADLINE bookings = the honest PROOF metric: non-seed, completed, AND between DISTINCT
+  // PARTIES (consumer_id !== provider_id). SPEC-107c (audit run124): the loop's proof is that
+  // ONE person paid/completed ANOTHER person's service. A self-booking (a provider completing
+  // their own listing during testing) proves NO marketplace loop, so it must NEVER count as the
+  // headline — it inflated the investor number to 6 completed vs 1 real distinct-party. PostgREST
+  // cannot compare two columns, so fetch the (tiny) completed non-seed set and count in JS.
+  // bookings_paid is surfaced alongside (0 in the free-first cohort, by design) so the auditor
+  // sees paid vs completed without either inflating the headline.
+  try {
+    const { data: rows } = await db.from('bookings').select('consumer_id, provider_id, paid_at').not('seed','is',true).eq('status','completed');
+    const real = (rows || []).filter((b) => b.consumer_id && b.provider_id && b.consumer_id !== b.provider_id);
+    bookings = real.length;
+    bookings_paid = real.filter((b) => b.paid_at).length;
+  } catch (_e) {}
 
   return {
     generated_at: new Date().toISOString(),
@@ -184,7 +198,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     qa: { open_bugs: openBugs.length, findings: findings || [], recent_runs: qaRuns || [] },
     agents,
     crawls: { by_source: bySource, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
-    product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings, bookings_all },
+    product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings, bookings_all, bookings_completed, bookings_paid },
     counter, creatorsBySource, creatorsUnattributed, engine, download,
     filter: { city, cities: Object.fromEntries(Object.entries(cities).sort((a, b) => b[1] - a[1]).slice(0, 60)) },
     creators_listed_total: listedCreators, creators_total: creTotal ?? 0,

@@ -112,7 +112,7 @@ serve(async (req: Request) => {
   // city list (Miami + top-10 DMAs). A stray city = spec violation, flagged here.
   try {
     const SPEC_CITIES = new Set(['Miami','New York','Manhattan','Brooklyn','Queens','Bronx','Staten Island','Los Angeles','Chicago','Dallas','Philadelphia','Houston','Atlanta','Washington','Boston','San Francisco','Miami Beach','Brickell','Wynwood','Coral Gables','Doral','Fort Lauderdale','Hialeah','Kendall','Aventura','Little Havana','North Miami','Pinecrest','Coconut Grove','South Beach']);
-    const { data: jobs } = await db.from('crawl_requests').select('city').eq('kind','services').limit(2000);
+    const { data: jobs } = await db.from('crawl_requests').select('city').eq('kind','services').neq('status','parked').limit(2000); // SPEC-111c: a PARKED off-spec crawl is remediated, not a live violation — else parking can never close crawl-spec-cities-only
     const off = Array.from(new Set((jobs || []).map((j: any) => j.city).filter((c: string) => c && !SPEC_CITIES.has(c))));
     await record('crawl-spec-cities-only', off.length === 0, 'critical', off.length ? `OFF-SPEC CITIES: ${off.join(', ').slice(0,200)}` : 'all crawl cities on-spec');
     // phase-1 progress is reported so priority drift is visible
