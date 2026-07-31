@@ -10,8 +10,15 @@ if (/vjmwnbftfquyquwaklue/.test(GROWTH_URL)) {
 const fs = await import('node:fs');
 const sql = fs.readFileSync('supabase/migrations/20260730190000_growth_schema_reference.sql', 'utf8');
 const ref = new URL(GROWTH_URL).hostname.split('.')[0];
-const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
-if (!TOKEN) { console.error('SUPABASE_ACCESS_TOKEN is not set — the Management API needs it to run DDL'); process.exit(1); }
+// The growth project lives under a DIFFERENT Supabase account than the product,
+// so one personal access token can never see both (measured: "token sees 1
+// project(s); growth ref present: false"). Prefer a token issued by the GROWTH
+// account; fall back to the product token for the case where they are merged
+// later.
+const TOKEN = process.env.GROWTH_ACCESS_TOKEN || process.env.SUPABASE_ACCESS_TOKEN;
+const TOKEN_SRC = process.env.GROWTH_ACCESS_TOKEN ? 'GROWTH_ACCESS_TOKEN' : 'SUPABASE_ACCESS_TOKEN';
+if (!TOKEN) { console.error('No access token — set GROWTH_ACCESS_TOKEN (issued by the account that owns Cergio Growth)'); process.exit(1); }
+console.log(`using ${TOKEN_SRC} for growth DDL`);
 console.log(`growth project ref: ${ref.slice(0, 4)}...${ref.slice(-4)} (masked)`);
 
 // Does this access token actually see the growth project? Report it plainly
@@ -31,7 +38,9 @@ if (!found) {
   // so CI cannot run DDL there. The schema was applied by hand in the growth SQL
   // editor (2026-07-31). Verify the tables EXIST over REST — which uses the growth
   // service key and does work — and pass if they do.
-  console.log('NOTE: SUPABASE_ACCESS_TOKEN cannot see the growth project — skipping DDL.');
+  console.log(`NOTE: ${TOKEN_SRC} cannot see the growth project — skipping DDL.`);
+  console.log('To let CI manage the growth schema, add GROWTH_ACCESS_TOKEN — a token');
+  console.log('generated on the Supabase account that owns Cergio Growth.');
   const missing = [];
   for (const t of ['crawl_requests', 'leads_services', 'leads_influencers', 'agent_runs']) {
     const rr = await fetch(`${GROWTH_URL}/rest/v1/${t}?select=*&limit=1`, {

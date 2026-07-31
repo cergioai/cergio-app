@@ -52,6 +52,10 @@ jobs:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # The growth project sits under a SEPARATE Supabase account, so it needs
+          # its own token. Optional: without it the step verifies the schema over
+          # REST instead of running DDL.
+          GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
         run: node scripts/apply-growth-schema.mjs
 
       - name: Prove the tables exist
