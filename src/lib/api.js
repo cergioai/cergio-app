@@ -1497,20 +1497,52 @@ export async function respondToRequest(requestId, {
  * SECURITY DEFINER RPC (the provider creates the booking on the Connector's
  * behalf). Either party can reschedule afterwards. Returns { bookingId }.
  */
+// SPEC-128: in-flight accepts, keyed by request. A double-tap fires the RPC twice
+// before the first returns, and each call creates a booking. Founder hit exactly
+// this: accepted a counter-offer twice and got DUPLICATE bookings.
+const _acceptInFlight = new Map();
+
 export async function acceptRequestWithTime({ requestId, serviceId, scheduledAt } = {}) {
   if (!supabaseReady) return NOT_WIRED;
   if (!requestId || !serviceId) return { data: null, error: { message: 'A listed service is required to accept.' } };
-  const { data, error } = await supabase.rpc('accept_request_with_time', {
-    p_request_id:  requestId,
-    p_service_id:  serviceId,
-    p_scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-  });
-  if (error) return { data: null, error };
-  // CERGIO-GUARD (2026-06-18, Tarik): notify the requester their request was
-  // accepted + confirmed. This path creates a booking directly (no
-  // request_response row), so without this fire the consumer got no email/SMS.
-  if (data) fireBookingNotify(data, 'accepted');
-  return { data: { bookingId: data }, error: null };
+
+  // SPEC-128 (founder, 2026-07-31): accepting a counter-offer twice created
+  // DUPLICATE bookings — the CTA stayed live while the RPC was in flight, and a
+  // second tap after it returned simply made another booking. Money must never be
+  // duplicated by a UI race. Two guards, both here so no caller can skip them:
+  //   (a) CONCURRENT taps share ONE in-flight promise
+  //   (b) a REPEAT tap returns the booking that already exists for this request
+  if (_acceptInFlight.has(requestId)) return _acceptInFlight.get(requestId);
+
+  const run = (async () => {
+    try {
+      const { data: existing } = await supabase
+        .from('bookings')
+        .select('id, status')
+        .eq('request_id', requestId)
+        .not('status', 'in', '("cancelled","declined","expired")')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (existing && existing.length) {
+        return { data: { bookingId: existing[0].id }, error: null, deduped: true };
+      }
+    } catch (_e) { /* a failed pre-check must never block a genuine accept */ }
+
+    const { data, error } = await supabase.rpc('accept_request_with_time', {
+      p_request_id:  requestId,
+      p_service_id:  serviceId,
+      p_scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+    });
+    if (error) return { data: null, error };
+    // CERGIO-GUARD (2026-06-18, Tarik): notify the requester their request was
+    // accepted + confirmed. This path creates a booking directly (no
+    // request_response row), so without this fire the consumer got no email/SMS.
+    if (data) fireBookingNotify(data, 'accepted');
+    return { data: { bookingId: data }, error: null };
+  })();
+
+  _acceptInFlight.set(requestId, run);
+  try { return await run; } finally { _acceptInFlight.delete(requestId); }
 }
 
 /** Either party reschedules a confirmed booking (the "change the time together"

@@ -158,7 +158,13 @@ function Layout() {
   }, []);
   const [booking, setBooking]           = useState(null);
   const [paymentSheet, setPaymentSheet] = useState(null); // {clientSecret, bookingId, totalCents, providerName} | null
-  const [freeServices, setFreeServices] = useState(true); // Connector default
+  // SPEC-131 (founder): the toggle must default to WHO the user is.
+  //   • Connector / creator  -> "Free for Connectors" (they trade spotlight for service)
+  //   • everyone else        -> "Pay for service"
+  // It used to hardcode true, so every ordinary consumer landed on the free flow.
+  // Starts false (the safe default: nobody is offered free work by accident) and
+  // flips to true once the signed-in profile is confirmed to be a Connector.
+  const [freeServices, setFreeServices] = useState(false);
   const [serviceMode, setServiceMode]   = useState(false); // false=consumer, true=provider
   // CERGIO-GUARD (2026-06-03): pass freeServices into the chat hook so
   // the budget question is SKIPPED on free flows. Tarik (2026-06-03):
@@ -169,11 +175,31 @@ function Layout() {
   // save a new address (Profile → manage, IntakeScreen label prompt).
   const [defaultAddress, setDefaultAddress] = useState(null);
   const refreshDefaultAddress = useCallback(async () => {
-    if (!auth?.isSignedIn) { setDefaultAddress(null); return; }
+    if (!auth?.isSignedIn) { setDefaultAddress(null); setFreeServices(false); return; }
     const { getDefaultAddress } = await import('./lib/api');
     const { data } = await getDefaultAddress();
     setDefaultAddress(data || null);
   }, [auth?.isSignedIn]);
+
+  // SPEC-131: pick the toggle default from the profile — Connector => free,
+  // everyone else => pay. Best-effort: a failed lookup leaves the safe default.
+  useEffect(() => {
+    let cancelled = false;
+    if (!auth?.isSignedIn || !auth?.user?.id) return;
+    (async () => {
+      try {
+        const { isConnectorProfile } = await import('./lib/api');
+        const { supabase } = await import('./lib/supabase');
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, cc_verified_at, instagram_followers')
+          .eq('id', auth.user.id)
+          .maybeSingle();
+        if (!cancelled && data) setFreeServices(isConnectorProfile(data));
+      } catch (_e) { /* keep the safe default */ }
+    })();
+    return () => { cancelled = true; };
+  }, [auth?.isSignedIn, auth?.user?.id]);
   useEffect(() => { refreshDefaultAddress(); }, [refreshDefaultAddress]);
   const [listingDraft, setListingDraft] = useState({
     category: '', location: '', description: '',

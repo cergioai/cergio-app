@@ -2148,7 +2148,7 @@ test('spec-56-notify-coverage', 'FROZEN: recommendService + acceptRequestWithTim
 
   // acceptRequestWithTime notifies the requester (booking accepted).
   const aw = api.indexOf('export async function acceptRequestWithTime');
-  const awsrc = api.slice(aw, aw + 900);
+  const awsrc = api.slice(aw, aw + 2200);   // SPEC-128 added dedupe guards above the RPC call
   assert(/fireBookingNotify\(\s*data\s*,\s*'accepted'\s*\)/.test(awsrc),
     "acceptRequestWithTime must fire fireBookingNotify(data, 'accepted') — SPEC-56");
 });
@@ -4100,8 +4100,14 @@ test('spec-launch-14-list-route', 'FROZEN: list-a-service CTAs open /list-servic
     'the "List your service" CTA must not route to the MANAGE screen');
 
   const manage = readFile('src/screens/ManageServicesScreen.jsx');
-  assert(/navigate\('\/list-service'\)/.test(manage),
-    '"List another service" must open /list-service');
+  // SPEC-130 (founder 2026-07-31): from Manage Services a provider who ALREADY has
+  // listings must land in the FORM, not the first-time intro. Assert the listing
+  // FLOW (/list-service...) rather than pinning the exact entry screen.
+  assert(/navigate\('\/list-service(\/[a-z-]+)?'\)/.test(manage),
+    // SPEC-130 (founder 2026-07-31): from /services/manage this dropped a provider
+    // who ALREADY has listings back at the first-time intro. That screen now goes
+    // straight to the form. Every OTHER list CTA still opens /list-service.
+    '"List another service" must open the listing flow');
 
   const app = readFile('src/App.jsx');
   assert(/path="\/list-service"[\s\S]{0,80}?ServiceListWelcomeScreen/.test(app),
@@ -4898,6 +4904,30 @@ test('inbox-and-fanout-agree-on-matching', 'SPEC-127 MEASURED 2026-07-31: listIn
   // the fan-out must still bridge as well — the point is that they AGREE
   const fanout = api.slice(api.indexOf('export async function getProvidersForNotify'), api.indexOf('export async function updateService'));
   assert(/expandAllowlist\(/.test(fanout), 'the fan-out must keep using the same bridge');
+});
+
+test('founder-bug-batch-2026-07-31', 'Founder-reported batch: (1) accepting a counter-offer twice created DUPLICATE bookings because the CTA stayed live during the RPC; (2) "List another service" from /services/manage dropped the provider back at the first-time intro; (3) the Help launcher was a floating green pill competing with every primary CTA; (4) the pay/free toggle hardcoded Free-for-Connectors for everyone', '#131', async () => {
+  const api = readFile('src/lib/api.js');
+  // 1. duplicate bookings — race AND repeat must both be impossible
+  assert(/_acceptInFlight/.test(api), 'concurrent accepts must share one in-flight promise, never fire the RPC twice');
+  assert(/\.eq\('request_id', requestId\)[\s\S]{0,400}bookingId: existing\[0\]\.id/.test(api),
+    'an accept for a request that already has a live booking must return THAT booking, never create a second');
+  assert(/not\('status', 'in', '\("cancelled","declined","expired"\)'\)/.test(api),
+    'the existing-booking check must ignore cancelled/declined/expired so a real re-accept still works');
+  // 2. list another service
+  const mng = readFile('src/screens/ManageServicesScreen.jsx');
+  assert(/navigate\('\/list-service\/about'\)/.test(mng),
+    'a provider who already has listings must land in the form, not the first-time intro');
+  // 3. help is a text link
+  const help = readFile('src/components/ui/HelpWidget.jsx');
+  assert(/Need Help/.test(help), 'help entry must read "Need Help · Give us feedback"');
+  assert(!/bg-g text-white rounded-full/.test(help), 'the floating green pill must be gone');
+  // 4. toggle default follows the profile
+  const app = readFile('src/App.jsx');
+  assert(/useState\(false\);?\s*$/m.test(app.slice(app.indexOf('const [freeServices'), app.indexOf('const [freeServices') + 200)),
+    'freeServices must START false — nobody is offered free work by accident');
+  assert(/setFreeServices\(isConnectorProfile\(data\)\)/.test(app),
+    'the default must be derived from the signed-in profile: Connector => free, everyone else => pay');
 });
 
 main().catch(e => {
