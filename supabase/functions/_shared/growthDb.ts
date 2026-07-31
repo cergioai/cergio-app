@@ -16,6 +16,7 @@
 //   • if the growth env is absent we FAIL LOUD rather than silently falling back
 //     to the product DB — a silent fallback would recreate the exact outage
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { normalizeGrowthUrl } from './growthUrl.ts';
 
 export function growthEnvPresent(): boolean {
   return !!(Deno.env.get('GROWTH_SUPABASE_URL') && Deno.env.get('GROWTH_SERVICE_ROLE_KEY'));
@@ -31,7 +32,7 @@ export function growthDb(): SupabaseClient {
       'traffic against the product database — that is what took the app down on 2026-07-30.',
     );
   }
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(normalizeGrowthUrl(url), key, { auth: { persistSession: false } });
 }
 
 /** Product client — auth, profiles, services, requests, bookings. Users only. */

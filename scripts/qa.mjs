@@ -4140,6 +4140,40 @@ test('spec-launch-15-wait-copy-v2', 'FROZEN: post-request wait copy = the founde
     'the waiting-state action must be "Cancel request"');
 });
 
+// ─── SPEC-132b · GROWTH URL NORMALIZE — the PGRST125 supply-outage guard ──────
+// 2026-07-31: the SPEC-132 growth cutover began writing crawl_requests /
+// leads_services / leads_influencers to a separate growth project via growthDb().
+// GROWTH_SUPABASE_URL was set with a trailing slash, so supabase-js built a
+// double "/rest/v1" path and PostgREST rejected EVERY growth write with "Invalid
+// path specified in request URL [PGRST125]" — the whole crawl/enrich supply pipe
+// 0-wrote and the ops snapshot raised CREATORS_NOT_GROWING. This gate EXECUTES
+// normalizeGrowthUrl so that regression cannot ship again.
+test('spec-132b-growth-url-normalize', 'FROZEN (SPEC-132b): GROWTH_SUPABASE_URL normalized — a trailing slash / rest suffix cannot cause PGRST125; reads+writes both on gdb', 'growth-url-normalize', async () => {
+  const src132 = readFile('supabase/functions/_shared/growthUrl.ts');
+  const m = src132.match(/export function normalizeGrowthUrl\([^)]*\)[^{]*\{([\s\S]*?)\n\}/);
+  assert(m, 'growthUrl.ts must export a normalizeGrowthUrl function');
+  const norm = new Function('raw', m[1]);
+  const CANON = 'https://abc123def.supabase.co';
+  for (const good of [CANON, CANON + '/', CANON + '//', CANON + '/rest/v1', CANON + '/rest/v1/', '  ' + CANON + ' ']) {
+    assert(norm(good) === CANON, `normalizeGrowthUrl(${JSON.stringify(good)}) must be ${CANON}, got ${JSON.stringify(norm(good))}`);
+  }
+  for (const bad of ['', 'not-a-url', 'http://abc.supabase.co', 'https://evil.example.com']) {
+    let threw = false; try { norm(bad); } catch { threw = true; }
+    assert(threw, `normalizeGrowthUrl(${JSON.stringify(bad)}) must THROW a named error instead of passing a malformed URL downstream (the PGRST125 cause)`);
+  }
+  const gdbSrc = readFile('supabase/functions/_shared/growthDb.ts');
+  assert(/import \{ normalizeGrowthUrl \} from '\.\/growthUrl\.ts'/.test(gdbSrc),
+    'growthDb.ts must import normalizeGrowthUrl');
+  assert(/createClient\(normalizeGrowthUrl\(/.test(gdbSrc),
+    'growthDb() must route GROWTH_SUPABASE_URL through normalizeGrowthUrl before createClient');
+  // No split-brain: enrich must not read leads_influencers from the product db.
+  const enrich = readFile('supabase/functions/enrich-influencers/index.ts');
+  assert(!/await db\s*\.from\('leads_influencers'\)/.test(enrich) && !/await db\s*\n\s*\.from\('leads_influencers'\)/.test(enrich),
+    'enrich-influencers must NOT read leads_influencers from the product db — growth-table reads belong on gdb');
+  assert(/await gdb[\s\S]{0,30}\.from\('leads_influencers'\)/.test(enrich),
+    'enrich-influencers must read leads_influencers candidates from gdb (growth)');
+});
+
 // ─── SPEC-80 · ONTOLOGY BRIDGE — search↔listing near-miss class fix ──────────
 // (a) a parent/language phrase resolves DETERMINISTICALLY to the canonical Tutor.
 test('spec-80-bridge-a-canonical', 'FROZEN (SPEC-80): "french tutor"/"spanish tutor"/"language immersion" resolve to the canonical Tutor parent', 'ontology-bridge-a', async () => {

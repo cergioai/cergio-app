@@ -75,7 +75,7 @@ const gdb = growthDb();
     let cursor: string = 'enrich_attempted_at';
     let rows: any[] | null = null;
     {
-      const { data, error } = await db
+      const { data, error } = await gdb
         .from('leads_influencers')
         .select('id, ig_handle, bio, external_url, email, phone')
         .neq('outreach_status', 'do_not_contact')
@@ -87,7 +87,7 @@ const gdb = growthDb();
         // Migration 20260713000000 not applied yet → degrade to the legacy query,
         // but record WHY in meta so the dashboard shows the worker is hobbled.
         cursor = `legacy-head-of-table (enrich_attempted_at unavailable: ${serr(error)})`;
-        const { data: legacy, error: e2 } = await db
+        const { data: legacy, error: e2 } = await gdb
           .from('leads_influencers')
           .select('id, ig_handle, bio, external_url, email, phone')
           .neq('outreach_status', 'do_not_contact')
