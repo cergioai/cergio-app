@@ -27,6 +27,8 @@ jobs:
         with: { node-version: '20' }
 
       - name: Verify the GROWTH secrets are present and distinct from the product
+        id: verify
+        continue-on-error: true
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
@@ -42,6 +44,8 @@ jobs:
           echo "secret length check: ${#GROWTH_SERVICE_ROLE_KEY} chars"
 
       - name: Live auth check against the growth project
+        id: auth
+        continue-on-error: true
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
@@ -59,6 +63,7 @@ jobs:
           esac
 
       - name: Apply the growth schema
+        id: schema
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
@@ -67,12 +72,15 @@ jobs:
           # its own token. Optional: without it the step verifies the schema over
           # REST instead of running DDL.
           GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
+        continue-on-error: true
         run: node scripts/apply-growth-schema.mjs
 
       - name: SEED the growth crawl queue (idempotent)
+        id: seed
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+        continue-on-error: true
         run: node scripts/seed-growth-queue.mjs
 
       - name: KICK the workers (drain the freshly seeded queue)
@@ -93,6 +101,11 @@ jobs:
           sleep 25
 
       - name: GROWTH STATUS — write the report INTO the repo
+        # SPEC-141: ALWAYS. Earlier runs died before this step and committed
+        # nothing, so from off-Mac (no api.github.com, no browser) the failure was
+        # invisible — exactly the class of blindness that cost a day already. A
+        # report that only appears on success is not observability.
+        if: always()
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
@@ -111,6 +124,8 @@ jobs:
           OUT=GROWTH-STATUS.md
           {
             echo "# Growth status"
+            echo
+            echo "steps — verify: ${{ steps.verify.outcome }} · auth: ${{ steps.auth.outcome }} · schema: ${{ steps.schema.outcome }} · seed: ${{ steps.seed.outcome }}"
             echo
             echo "generated: $(date -u +%FT%TZ)"
             echo
@@ -143,6 +158,7 @@ jobs:
           cat "$OUT"
 
       - name: Commit the report
+        if: always()
         run: |
           set -uo pipefail
           git config user.name  "cergio-growth[bot]"
