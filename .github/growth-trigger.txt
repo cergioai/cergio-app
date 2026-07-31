@@ -1,2 +1,2 @@
-run: 2026-07-31T22:36:06Z
-reason: SPEC-148b growthDb normalisation — workers should now drain the 51,467 queued jobs.
+run: 2026-07-31T22:39:06Z
+reason: re-kick AFTER the growthDb fix deployed — the previous kick used the old code.
