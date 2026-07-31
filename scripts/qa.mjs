@@ -4888,6 +4888,18 @@ test('new-request-rows-written-server-side', 'SPEC-126: the in-app new_request n
     'the client must never write another user\'s notification row');
 });
 
+test('inbox-and-fanout-agree-on-matching', 'SPEC-127 MEASURED 2026-07-31: listInboundRequests matched the provider\'s own types EXACTLY while the fan-out widened through expandAllowlist. The provider lists "Housekeeper"; the request is stored as "House Cleaner" (the family parent the resolver canonicalises to). So the provider was notified and emailed, but the request never appeared in their inbox. Both sides must use the SAME bridge or they disagree about what a match is', '#127', async () => {
+  const api = readFile('src/lib/api.js');
+  const start = api.indexOf('export async function listInboundRequests');
+  const fn = api.slice(start, api.indexOf('\nexport ', start + 10));
+  assert(/expandAllowlist\(/.test(fn), 'the inbox must widen the provider types through the ontology bridge');
+  assert(/const myTypes = expandAllowlist\(/.test(fn), 'taxonomy types must be bridged');
+  assert(/const myCategories = expandAllowlist\(/.test(fn), 'categories must be bridged too');
+  // the fan-out must still bridge as well — the point is that they AGREE
+  const fanout = api.slice(api.indexOf('export async function getProvidersForNotify'), api.indexOf('export async function updateService'));
+  assert(/expandAllowlist\(/.test(fanout), 'the fan-out must keep using the same bridge');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
