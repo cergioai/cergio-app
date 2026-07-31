@@ -1,2 +1,2 @@
-run: 2026-07-31T21:50:00Z
-reason: SPEC-147 fix the shape-report bash so the status step writes again.
+run: 2026-07-31T22:18:40Z
+reason: GROWTH_SUPABASE_URL corrected — seed the queue and bring growth up.
