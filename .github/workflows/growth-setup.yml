@@ -106,6 +106,16 @@ jobs:
               "$FN/fulfill-crawl?limit=200" --max-time 120 &
           done
           wait
+          # SPEC-149: capture the worker's actual RESPONSE BODY. Kicks were firing
+          # and the queue stayed untouched, but I was only logging status codes to
+          # a log I cannot read. growthDb() THROWS when the edge secret is missing
+          # or malformed, which surfaces as a 500 with the reason in the body —
+          # the single fact needed to tell "not deployed" from "secret wrong".
+          echo "--- single probe with body ---" > /tmp/worker-probe.txt
+          curl -s -w '\nHTTP %{http_code}\n' \
+            -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "$FN/fulfill-crawl?limit=5" --max-time 90 2>&1 | head -c 700 >> /tmp/worker-probe.txt
+          cat /tmp/worker-probe.txt
           echo "workers dispatched — waiting 25s for rows to land"
           sleep 25
 
@@ -177,6 +187,12 @@ jobs:
             for s in gmaps_apify craigslist yellowpages_apify yelp google_lsa google_sponsored osm ig_services; do
               echo "| $s | $(cnt leads_services "&data_source=eq.$s") |"
             done
+            echo
+            echo '## worker probe (fulfill-crawl response)'
+            echo
+            echo '```'
+            cat /tmp/worker-probe.txt 2>/dev/null || echo 'no probe captured'
+            echo '```'
             echo
             echo '## last 10 agent runs (growth DB)'
             echo
