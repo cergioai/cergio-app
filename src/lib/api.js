@@ -3481,8 +3481,26 @@ export async function createRequestAndFanOut({
       deep_link,
     },
   }));
-  const { error: notifyErr } = await supabase.from('notifications').insert(rows);
-  if (notifyErr) return { request, notified: 0, error: notifyErr };
+  // SPEC-125 — ROOT CAUSE, proven live 2026-07-31:
+  //   POST /notifications (profile_id = another user) -> 403 42501
+  //   "new row violates row-level security policy for table notifications"
+  // A user may only write their OWN notification rows, so this insert — one row
+  // per RECIPIENT — failed on every single fan-out. The old code then did
+  // `if (notifyErr) return { notified: 0 }`, returning BEFORE fireRequestNotify.
+  // Net effect: notifications stayed EMPTY forever, notify-request was never
+  // invoked, and no provider was ever emailed. Calling notify-request manually
+  // with the same ids delivered instantly, because it uses the service role.
+  //
+  // notify-request already inserts these rows server-side with admin rights, so
+  // the client must NOT write them. We attempt nothing here; a failure to write
+  // another user's row can never again abort the fan-out.
+  const { error: notifyErr } = await supabase.from('notifications').insert(
+    rows.filter(r => r.profile_id === uid),   // only ever our own row, if any
+  );
+  if (notifyErr) {
+    // eslint-disable-next-line no-console
+    console.warn('[CERGIO/request] own-notification insert failed (non-fatal)', notifyErr.message);
+  }
 
   // CERGIO-GUARD (2026-06-12): email/SMS fan-out to the same providers,
   // best-effort via notify-request edge fn. In-app rows above remain the
