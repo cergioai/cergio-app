@@ -17,6 +17,19 @@ on:
     - cron: '5 * * * *'      # hourly at :05 — cheap, isolated data branch
   push:
     branches: [main]   # deterministic snapshot on every ship (no wait on cron activation)
+  # RUN126 ROOT-CAUSE FIX: the `push: main` trigger above is DEAD in practice.
+  # Ships reach main via GitHub-native auto-merge; that merge does NOT retrigger
+  # `on: push` here (empirically: 5+ merges #159-163 + ~8 cron ticks produced
+  # ZERO new snapshots — frozen 13:14Z for 8h+). The Commit step is `if: always()`,
+  # so a FIRED run would always land a snapshot; zero commits == the trigger never
+  # fired, not a step failure. `workflow_run` fires when the named workflows COMPLETE
+  # regardless of the token that started them (this is the canonical break for the
+  # GITHUB_TOKEN no-retrigger deadlock). Auto-ship runs on every ship/** push (PAT-
+  # authored → always fires); Cergio CI runs on every push/PR to main. Chaining off
+  # both guarantees a fresh live-prod snapshot on every ship, with zero Mac, zero API.
+  workflow_run:
+    workflows: ["Auto-ship (off-Mac merge)", "Cergio CI"]
+    types: [completed]
   workflow_dispatch: {}
 
 permissions:
