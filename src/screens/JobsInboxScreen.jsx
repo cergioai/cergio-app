@@ -451,7 +451,7 @@ export function JobsInboxScreen() {
   useEffect(() => {
     // Eager (was Upcoming/Past-only) so the Overview + folder counts have
     // upcoming/past totals without switching tabs.
-    if (!auth?.isSignedIn) return;
+    if (!auth?.isSignedIn) { setMyJobs({ asConsumer: [], asProvider: [] }); return; }
     let cancelled = false;
     (async () => {
       const [c, p] = await Promise.all([listConsumerBookings(), listProviderBookings()]);
