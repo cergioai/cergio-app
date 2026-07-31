@@ -1,2 +1,2 @@
-run: 2026-07-31T21:29:45Z
-reason: SPEC-145 whitespace-safe URL normalisation + shape report.
+run: 2026-07-31T21:42:30Z
+reason: SPEC-146 put the URL shape in the report.

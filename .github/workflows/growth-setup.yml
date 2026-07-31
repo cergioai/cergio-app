@@ -138,6 +138,21 @@ jobs:
             echo
             echo "steps — verify: ${{ steps.verify.outcome }} · auth: ${{ steps.auth.outcome }} · schema: ${{ steps.schema.outcome }} · seed: ${{ steps.seed.outcome }}"
             echo
+            # SPEC-146: the URL's SHAPE, in the report itself. GitHub step logs are
+            # not reachable from the sandbox, so a diagnostic that only lands in a
+            # log is a diagnostic I cannot read. Nothing secret is revealed — just
+            # length, scheme, host suffix and a probe status.
+            echo '## connection shape'
+            echo
+            echo "- url length: ${#GROWTH_SUPABASE_URL}"
+            echo "- scheme ok (https://): $(printf '%s' "$GROWTH_SUPABASE_URL" | grep -c '^https://')"
+            echo "- ends .supabase.co: $(printf '%s' "$GROWTH_SUPABASE_URL" | grep -c '\.supabase\.co$')"
+            echo "- contains /dashboard/: $(printf '%s' "$GROWTH_SUPABASE_URL" | grep -c '/dashboard/')"
+            echo "- key length: ${#GROWTH_SERVICE_ROLE_KEY}"
+            echo "- key prefix: $(printf '%s' "$GROWTH_SERVICE_ROLE_KEY" | cut -c1-11)…"
+            echo "- GET /rest/v1/ -> HTTP $(curl -s -o /dev/null -w '%{http_code}' -H \"$H_K\" -H \"$H_A\" \"$GROWTH_SUPABASE_URL/rest/v1/\")"
+            echo
+            echo
             echo "generated: $(date -u +%FT%TZ)"
             echo
             echo '| table | rows |'
