@@ -1,2 +1,2 @@
-run: 2026-07-31T21:42:30Z
-reason: SPEC-146 put the URL shape in the report.
+run: 2026-07-31T21:50:00Z
+reason: SPEC-147 fix the shape-report bash so the status step writes again.
