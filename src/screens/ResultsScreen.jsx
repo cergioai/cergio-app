@@ -212,6 +212,44 @@ function ShareRequestRow({ previewLead, shareMsg, onForward, onCopy }) {
 // an accidental cancel, and long enough to actually be usable.
 const CANCEL_DISARM_MS = 12000;
 
+
+/** SPEC-137 (founder 2026-07-31): "after submitting, perhaps suggest notifying
+ *  other services to invite more bids". A targeted custom quote reaches exactly
+ *  ONE provider, which leaves the requester with a single price and no market.
+ *  This offers — never performs automatically — a widening fan-out to the other
+ *  matching providers. One tap, and it disables itself so it cannot double-send. */
+function InviteMoreBids({ requestId }) {
+  const [state, setState] = useState('idle'); // idle | sending | sent | none
+  if (!requestId || state === 'none') return null;
+  const widen = async () => {
+    setState('sending');
+    try {
+      const { widenRequestToMarket } = await import('../lib/api');
+      const { notified, error } = await widenRequestToMarket(requestId);
+      if (error) { setState('idle'); return; }
+      setState(notified > 0 ? 'sent' : 'none');
+    } catch (_e) { setState('idle'); }
+  };
+  if (state === 'sent') {
+    return (
+      <p className="mt-1 text-meta-sm text-gd font-extrabold">
+        Invited other providers — new offers will appear here.
+      </p>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={widen}
+      disabled={state === 'sending'}
+      className="mt-1 text-meta-sm text-gd font-extrabold underline-offset-2 hover:underline
+                 bg-transparent border-none p-0 cursor-pointer disabled:opacity-60"
+    >
+      {state === 'sending' ? 'Inviting…' : 'Invite more bids from other providers →'}
+    </button>
+  );
+}
+
 function CancelRequestLink({ requestId, onCancelled }) {
   const [pending, setPending] = useState(false);
   const [armed,   setArmed]   = useState(false);
@@ -426,6 +464,8 @@ export function ResultsScreen() {
   // first message). Fall back to the navigation `state.query` if chat
   // state wasn't seeded (e.g. arriving from a deep link).
   const userQuery = originalQuery || location.state?.query || null;
+  // SPEC-137: set when the request was a targeted custom quote (one provider).
+  const isTargeted = !!location.state?.targeted;
   const userNoun  = userServiceNoun(userQuery);
 
   // CERGIO-GUARD (2026-05-27): force-resolve provider_type AT THE
@@ -1159,6 +1199,7 @@ export function ResultsScreen() {
                   <p className="text-meta-sm text-b3 font-normal leading-snug mt-0.5">{WAIT_COPY}</p>
                 </>
               )}
+              {requestId && isTargeted && <InviteMoreBids requestId={requestId} />}
               {requestId && (
                 <CancelRequestLink
                   requestId={requestId}

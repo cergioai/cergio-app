@@ -4885,9 +4885,12 @@ test('fanout-never-writes-other-users-notifications', 'SPEC-125 ROOT CAUSE, prov
     'a notification-insert error must NEVER abort the fan-out — that is what silenced every request');
   assert(/fireRequestNotify\(\{ event: 'created'/.test(fn),
     'fireRequestNotify must remain reachable after the insert attempt');
+  // SPEC-136 added a targeted early-return that fires notify before the market
+  // path's insert — legitimate. Assert the MAIN path: the LAST fireRequestNotify
+  // must still follow the notifications insert.
   const idxInsert = fn.indexOf('notifications');
-  const idxFire = fn.indexOf('fireRequestNotify');
-  assert(idxFire > idxInsert, 'fireRequestNotify must run after, and independently of, the insert');
+  const idxFire = fn.lastIndexOf('fireRequestNotify');
+  assert(idxFire > idxInsert, 'on the market path, fireRequestNotify must run after and independently of the insert');
 });
 
 test('new-request-rows-written-server-side', 'SPEC-126: the in-app new_request notification rows must be written by notify-request (service role), not the client. RLS forbids a user inserting a row for another profile (403 42501), so the client could never create them — the provider inbox had nothing to show even when the email arrived. handleCreated previously only sent email/SMS and never inserted a row at all', '#126', async () => {
@@ -4985,6 +4988,29 @@ test('offer-aware-cta-and-persistent-sent', 'SPEC-134/135 (founder 2026-07-31): 
     'the CTA must route to the request holding the offer, not open a new one');
   assert(/\.in\('status', \['offered', 'countered'\]\)/.test(pdp),
     'only a LIVE offer (offered/countered) changes the CTA — settled ones must not');
+});
+
+test('targeted-quote-and-invite-more-bids', 'SPEC-136/137 (founder 2026-07-31): "submit a request for a custom quote should be submitted to the service being looked at as opposed to all others... then after submitting, perhaps suggest notifying other services to invite more bids". The PDP already passed providerId to /home but NOTHING consumed it — every custom quote fanned out to the entire market, which both ignores the founder\'s intent and spams providers', '#136', async () => {
+  const api = readFile('src/lib/api.js');
+  const cStart = api.indexOf('export async function createRequestAndFanOut');
+  const fn = api.slice(cStart, api.indexOf('\nexport ', cStart + 10));
+  assert(/targetProviderId = null/.test(fn), 'createRequestAndFanOut must accept a target provider');
+  assert(/target_provider_id: targetProviderId \|\| null/.test(fn), 'the target must be persisted on the request row');
+  assert(/providerIds: \[targetProviderId\]/.test(fn), 'a targeted request must notify ONLY that provider');
+  assert(/self_target/.test(fn), 'a provider must not be able to request from themselves');
+  // the home screen must actually carry it through
+  const home = readFile('src/screens/HomeScreen.jsx');
+  assert(/location\.state\?\.providerId/.test(home), 'HomeScreen must read the providerId the PDP passes');
+  assert(/targetProviderId,/.test(home), 'and pass it into createRequestAndFanOut');
+  // widening
+  const wStart = api.indexOf('export async function widenRequestToMarket');
+  const widen = api.slice(wStart, api.indexOf('\nexport ', wStart + 10));
+  assert(/req\.requester_id !== uid/.test(widen), 'only the requester may widen their own request');
+  assert(/id !== req\.target_provider_id/.test(widen), 'the already-notified target must be excluded from the widening');
+  const results = readFile('src/screens/ResultsScreen.jsx');
+  assert(/function InviteMoreBids/.test(results), 'the SRP must offer to invite more bids');
+  assert(/isTargeted && <InviteMoreBids/.test(results), 'the offer must appear ONLY for a targeted quote');
+  assert(/state === 'sending'/.test(results), 'the invite must disable itself while sending so it cannot double-send');
 });
 
 main().catch(e => {
