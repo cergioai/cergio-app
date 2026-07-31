@@ -3693,6 +3693,14 @@ export async function createRequestToProvider({
   if (toProviderOwnerId === uid) {
     return { request, error: null, selfNotifySuppressed: true };
   }
+  // SPEC-143 — SAME BUG AS SPEC-125, found by auditing the class rather than
+  // waiting for it to be reported. RLS forbids a user inserting a notifications
+  // row for ANOTHER profile (403 42501), so this insert has always failed and
+  // this direct-request path has never produced an in-app notification.
+  // notify-request creates the row server-side with the service role, which is
+  // the only place it CAN be written. The insert is left as a no-op-safe attempt
+  // ONLY when the recipient is the caller (never true here), and its error can
+  // no longer stop the flow.
   await supabase.from('notifications').insert({
     profile_id: toProviderOwnerId,
     kind:       'new_request',
@@ -3707,7 +3715,13 @@ export async function createRequestToProvider({
       deep_link,
     },
   });
-  return { request, error: null };
+  // SPEC-143: this path never called notify-request, so a direct request to a
+  // provider produced NO email and (because of the RLS trap above) no in-app row
+  // either — it was silent end to end. notify-request writes the row with the
+  // service role AND sends the email, so one call fixes both halves.
+  fireRequestNotify({ event: 'created', requestId: request.id, providerIds: [toProviderOwnerId] });
+  logFanout(request.id, 'direct', `direct request to provider ${toProviderOwnerId}`);
+  return { request, error: null, notified: 1 };
 }
 
 /**
@@ -3781,9 +3795,18 @@ export async function crossPostRequest({
       cross_post:    true,
     },
   }));
-  const { error: notifyErr } = await supabase.from('notifications').insert(rows);
-  if (notifyErr) return { notified: 0, error: notifyErr };
-
+  // SPEC-143: identical to SPEC-125 — these rows belong to OTHER users, so RLS
+  // rejects the insert (403 42501) and the old early-return killed the whole
+  // cross-post. notify-request writes them server-side; a failure here is logged
+  // and IGNORED so the fan-out always proceeds.
+  const { error: notifyErr } = await supabase.from('notifications').insert(
+    rows.filter(r => r.profile_id === uid),
+  );
+  if (notifyErr) {
+    // eslint-disable-next-line no-console
+    console.warn('[CERGIO/crosspost] own-notification insert failed (non-fatal)', notifyErr.message);
+  }
+  fireRequestNotify({ event: 'created', requestId, providerIds: ownerIds });
   return { notified: ownerIds.length, error: null };
 }
 
