@@ -1,5 +1,5 @@
 {
-  "probed_at": "2026-07-31T04:10:43Z",
+  "probed_at": "2026-07-31T13:14:19Z",
   "http": {
     "app": 200,
     "ops_metrics": 200
@@ -73,119 +73,154 @@
         "job": "cergio_coo_brain",
         "active": true,
         "schedule": "0 8,13 * * *",
-        "last_time": "2026-07-30T13:00:00.375858+00:00",
+        "last_time": "2026-07-31T13:00:00.497571+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_coo_execute",
         "active": true,
         "schedule": "5-59/10 * * * *",
-        "last_time": "2026-07-31T04:05:00.421117+00:00",
+        "last_time": "2026-07-31T13:05:00.393548+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_crawl_health",
         "active": true,
         "schedule": "*/30 * * * *",
-        "last_time": "2026-07-31T04:00:00.512366+00:00",
+        "last_time": "2026-07-31T13:00:00.464493+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_crawl_seed_osm",
+        "active": true,
+        "schedule": "7 * * * *",
+        "last_time": "2026-07-31T13:07:00.31435+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_creator_enrich",
+        "active": true,
+        "schedule": "5 * * * *",
+        "last_time": "2026-07-31T13:05:00.394849+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_creator_harvest",
+        "active": true,
+        "schedule": "35 * * * *",
+        "last_time": "2026-07-31T12:35:00.425956+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_enrich_influencers",
         "active": true,
         "schedule": "*/15 * * * *",
-        "last_time": "2026-07-31T04:00:00.507232+00:00",
+        "last_time": "2026-07-31T13:00:00.494246+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_fulfill_crawl",
+        "active": true,
+        "schedule": "*/15 * * * *",
+        "last_time": "2026-07-31T13:00:00.510863+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_ops_metrics",
         "active": true,
         "schedule": "*/15 * * * *",
-        "last_time": "2026-07-31T04:00:00.514009+00:00",
+        "last_time": "2026-07-31T13:00:00.51642+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_orchestrator",
         "active": true,
         "schedule": "7-59/30 * * * *",
-        "last_time": "2026-07-31T04:07:00.361357+00:00",
+        "last_time": "2026-07-31T13:07:00.315648+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_qa_live_verify",
         "active": true,
         "schedule": "7 */3 * * *",
-        "last_time": "2026-07-31T03:07:00.396062+00:00",
+        "last_time": "2026-07-31T12:07:00.369682+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_qa_suite",
         "active": true,
         "schedule": "13 * * * *",
-        "last_time": "2026-07-31T03:13:00.369144+00:00",
+        "last_time": "2026-07-31T13:13:00.411966+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_release_funds",
         "active": true,
         "schedule": "*/15 * * * *",
-        "last_time": "2026-07-31T04:00:00.504128+00:00",
+        "last_time": "2026-07-31T13:00:00.466201+00:00",
+        "last_status": "succeeded"
+      },
+      {
+        "job": "cergio_supply_engine",
+        "active": true,
+        "schedule": "*/10 * * * *",
+        "last_time": "2026-07-31T13:10:00.311278+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio_watchdog",
         "active": true,
         "schedule": "*/15 * * * *",
-        "last_time": "2026-07-31T04:00:00.50915+00:00",
+        "last_time": "2026-07-31T13:00:00.512558+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio-block-categories",
         "active": true,
         "schedule": "43 * * * *",
-        "last_time": "2026-07-31T03:43:00.534295+00:00",
+        "last_time": "2026-07-31T12:43:00.353741+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio-clean-services",
         "active": true,
         "schedule": "23 * * * *",
-        "last_time": "2026-07-31T03:23:00.450424+00:00",
+        "last_time": "2026-07-31T12:23:00.348911+00:00",
         "last_status": "failed"
       },
       {
         "job": "cergio-creators-gate",
         "active": true,
         "schedule": "37 * * * *",
-        "last_time": "2026-07-31T03:37:00.392454+00:00",
+        "last_time": "2026-07-31T12:37:00.344951+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio-daily-impact",
         "active": true,
         "schedule": "55 6 * * *",
-        "last_time": "2026-07-30T06:55:00.391922+00:00",
+        "last_time": "2026-07-31T06:55:00.403675+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio-ops-audit",
         "active": true,
         "schedule": "0 7 * * *",
-        "last_time": "2026-07-30T07:00:00.723747+00:00",
+        "last_time": "2026-07-31T07:00:00.618505+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "cergio-services-gate",
         "active": true,
         "schedule": "17 * * * *",
-        "last_time": "2026-07-31T03:17:00.524934+00:00",
+        "last_time": "2026-07-31T12:17:00.354731+00:00",
         "last_status": "succeeded"
       },
       {
         "job": "expire_unpaid_spotlights",
         "active": true,
         "schedule": "0 * * * *",
-        "last_time": "2026-07-31T04:00:00.505615+00:00",
+        "last_time": "2026-07-31T13:00:00.491331+00:00",
         "last_status": "succeeded"
       }
     ],
@@ -240,7 +275,7 @@
         "creators_sendable": 118
       }
     ],
-    "bookings": 58,
+    "bookings": 6,
     "creators": {
       "new": 0,
       "sendable": 107,
@@ -484,13 +519,22 @@
     ],
     "qa_findings": [
       {
-        "area": "live",
+        "area": "supply",
         "count": 1,
-        "detail": "request 3168a45f-5357-4fd5-a178-281c51c6128d -> matched | services_near+fallback returned 1 listing(s)",
+        "detail": "523 jobs -> 5 rows (ratio 0.0096) — throttled automatically",
         "status": "open",
         "fixed_at": null,
-        "found_at": "2026-07-31T04:10:42.332145+00:00",
-        "check_name": "fanout-outcome"
+        "found_at": "2026-07-30T05:50:12.737972+00:00",
+        "check_name": "supply-wasteful-source-ig_services"
+      },
+      {
+        "area": "supply",
+        "count": 1,
+        "detail": "420 jobs produced 0 rows — source disabled automatically",
+        "status": "open",
+        "fixed_at": null,
+        "found_at": "2026-07-30T02:41:23.37185+00:00",
+        "check_name": "supply-dead-source-gmaps_apify"
       },
       {
         "area": "watchdog",
@@ -504,29 +548,20 @@
       {
         "area": "watchdog",
         "count": 1,
-        "detail": "creator-harvest: no run in 180m (last 2026-07-30T17:36:45.408+00:00) — worker stalled / cron not firing / vault secret wiped",
+        "detail": "enrich-influencers: last run errored — 6 write failure(s): harv:kendallmaynard25: Invalid path specified in request URL [PGRST125] (first attempt: Invalid path specified in request URL [PGRST125]) | harv:danaberez: Invalid path specified i",
         "status": "open",
         "fixed_at": null,
-        "found_at": "2026-07-30T20:45:13.919494+00:00",
-        "check_name": "watchdog:stall:creator-harvest"
+        "found_at": "2026-07-31T08:45:05.404115+00:00",
+        "check_name": "watchdog:error:enrich-influencers"
       },
       {
         "area": "watchdog",
         "count": 1,
-        "detail": "crawl-seed-osm: SILENT COLLISION — found 123 but wrote 0 rows (upsert/insert masking a no-op as success)",
+        "detail": "crawl-seed-osm: last run errored — Invalid path specified in request URL [PGRST125]",
         "status": "open",
         "fixed_at": null,
-        "found_at": "2026-07-30T12:45:39.574963+00:00",
-        "check_name": "watchdog:silent:crawl-seed-osm"
-      },
-      {
-        "area": "live",
-        "count": 1,
-        "detail": "0 runs in last 6h",
-        "status": "open",
-        "fixed_at": null,
-        "found_at": "2026-07-31T00:07:11.52729+00:00",
-        "check_name": "cron-alive-creator-harvest"
+        "found_at": "2026-07-31T06:15:03.580644+00:00",
+        "check_name": "watchdog:error:crawl-seed-osm"
       },
       {
         "area": "live",
@@ -565,22 +600,13 @@
         "check_name": "data-no-duplicate-services"
       },
       {
-        "area": "supply",
+        "area": "live",
         "count": 1,
-        "detail": "523 jobs -> 5 rows (ratio 0.0096) — throttled automatically",
+        "detail": "request ba7d9e81-a88b-40aa-b2b6-177adf0c7158 -> owners | 1 owner(s) after excluding the requester",
         "status": "open",
         "fixed_at": null,
-        "found_at": "2026-07-30T05:50:12.737972+00:00",
-        "check_name": "supply-wasteful-source-ig_services"
-      },
-      {
-        "area": "supply",
-        "count": 1,
-        "detail": "420 jobs produced 0 rows — source disabled automatically",
-        "status": "open",
-        "fixed_at": null,
-        "found_at": "2026-07-30T02:41:23.37185+00:00",
-        "check_name": "supply-dead-source-gmaps_apify"
+        "found_at": "2026-07-31T04:10:42.332145+00:00",
+        "check_name": "fanout-outcome"
       },
       {
         "area": "supply",
@@ -612,11 +638,38 @@
       {
         "area": "watchdog",
         "count": 0,
-        "detail": "enrich-influencers: SILENT COLLISION — found 1 but wrote 0 rows (upsert/insert masking a no-op as success)",
+        "detail": "enrich-influencers: SILENT COLLISION — found 6 but wrote 0 rows (upsert/insert masking a no-op as success)",
         "status": "fixed",
-        "fixed_at": "2026-07-31T03:45:10.404079+00:00",
-        "found_at": "2026-07-31T03:30:16.282884+00:00",
+        "fixed_at": "2026-07-31T08:45:05.435434+00:00",
+        "found_at": "2026-07-31T06:00:05.481504+00:00",
         "check_name": "watchdog:silent:enrich-influencers"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "crawl-seed-osm: SILENT COLLISION — found 123 but wrote 0 rows (upsert/insert masking a no-op as success)",
+        "status": "fixed",
+        "fixed_at": "2026-07-31T06:15:03.612716+00:00",
+        "found_at": "2026-07-30T12:45:39.574963+00:00",
+        "check_name": "watchdog:silent:crawl-seed-osm"
+      },
+      {
+        "area": "live",
+        "count": 0,
+        "detail": "0 runs in last 6h",
+        "status": "fixed",
+        "fixed_at": "2026-07-31T06:07:11.312792+00:00",
+        "found_at": "2026-07-31T00:07:11.52729+00:00",
+        "check_name": "cron-alive-creator-harvest"
+      },
+      {
+        "area": "watchdog",
+        "count": 0,
+        "detail": "creator-harvest: no run in 180m (last 2026-07-30T17:36:45.408+00:00) — worker stalled / cron not firing / vault secret wiped",
+        "status": "fixed",
+        "fixed_at": "2026-07-31T05:45:03.496195+00:00",
+        "found_at": "2026-07-30T20:45:13.919494+00:00",
+        "check_name": "watchdog:stall:creator-harvest"
       },
       {
         "area": "watchdog",
@@ -689,29 +742,11 @@
         "fixed_at": "2026-07-09T03:07:03.315285+00:00",
         "found_at": "2026-07-09T03:06:06.13568+00:00",
         "check_name": "qa_search_blocked_never_surface"
-      },
-      {
-        "area": "audit",
-        "count": 0,
-        "detail": "fulfill-crawl, enrich-influencers and creator-harvest all invoke public.cergio_call_edge (pg_net async POST). Cron status succeeded means the HTTP request was enqueued, NOT that the edge function delivered. all-crons-green is structurally incapable of detecting ingest failure. This is the root of the recurring green-but-false class. Fix = verify rows-written, not request-enqueued. [RECONCILED 2026-07-09 00:28Z — VERIFIED LIVE: the delivery-verification backbone (agent_runs + cergio-watchdog every 15m) is deployed; success is now measured as rows-written, not request-enqueued. Closed by cergio_reconcile_findings().]",
-        "status": "fixed",
-        "fixed_at": "2026-07-09T00:28:32.776847+00:00",
-        "found_at": "2026-07-07T04:13:07.119895+00:00",
-        "check_name": "ingest_cron_status_is_false_signal"
-      },
-      {
-        "area": "audit",
-        "count": 0,
-        "detail": "PARTIAL 2026-07-08. Auth fixed (creator-harvest now 200, 68 candidates). But upserted:0 persists: root cause is NOT id-collision — it is a NOT NULL violation on leads_influencers.ig_handle from handle-less rows (email/linktree-only), which failed the whole 25-row upsert chunk AND admitted non-creator emails (billing@wordfence.com, business front desks). CODE FIX applied to creator-harvest/index.ts (skip handle-less rows + row-by-row upsert retry); DEPLOY staged ('zzz RUN ME - DEPLOY creator-harvest'). Creators grow once deployed. [RECONCILED 2026-07-09 00:28Z — VERIFIED LIVE: creator-harvest agent_runs shows rows_written>0 in the last 6h; write path is unblocked and creators_sendable is growing. Closed by cergio_reconcile_findings().]",
-        "status": "fixed",
-        "fixed_at": "2026-07-09T00:28:32.776847+00:00",
-        "found_at": "2026-07-07T04:13:06.899115+00:00",
-        "check_name": "creator_harvest_write_path_frozen"
       }
     ],
-    "generated_at": "2026-07-31T04:10:45.453385+00:00",
+    "generated_at": "2026-07-31T13:14:20.702766+00:00",
     "last_harvest": {
-      "at": "2026-07-31T04:05:12.697052+00:00",
+      "at": "2026-07-31T13:05:06.626348+00:00",
       "upserted": null,
       "raw_results": null
     },
@@ -1678,6 +1713,8 @@
       "total": 49906,
       "queued": 10210
     },
+    "bookings_all": 58,
+    "bookings_headline_raw": 58,
     "org_health": {
       "agents": [
         {
@@ -1686,41 +1723,41 @@
           "health": "empty",
           "raw_found": 0,
           "last_error": "",
-          "last_run_at": "2026-07-31T04:05:05.081+00:00",
+          "last_run_at": "2026-07-31T13:05:02.03+00:00",
           "last_status": "empty",
           "rows_written": 0,
           "max_gap_minutes": 60
         },
         {
           "agent": "crawl-seed-osm",
-          "delta": "found 123 but wrote 0 (silent collision)",
-          "health": "silent",
-          "raw_found": 123,
-          "last_error": "",
-          "last_run_at": "2026-07-30T19:00:46.233+00:00",
-          "last_status": "empty",
+          "delta": "last run errored: Invalid path specified in request URL [PGRST125]",
+          "health": "error",
+          "raw_found": null,
+          "last_error": "Invalid path specified in request URL [PGRST125]",
+          "last_run_at": "2026-07-31T13:07:01.582+00:00",
+          "last_status": "error",
           "rows_written": 0,
           "max_gap_minutes": 1440
         },
         {
           "agent": "creator-harvest",
-          "delta": "no run in 180m (last 07-30 17:36)",
-          "health": "stall",
+          "delta": "ran but wrote 0 rows",
+          "health": "empty",
           "raw_found": 0,
           "last_error": "",
-          "last_run_at": "2026-07-30T17:36:45.408+00:00",
+          "last_run_at": "2026-07-31T12:35:01.488+00:00",
           "last_status": "empty",
           "rows_written": 0,
           "max_gap_minutes": 180
         },
         {
           "agent": "enrich-influencers",
-          "delta": "ran but wrote 0 rows",
-          "health": "empty",
-          "raw_found": 0,
-          "last_error": "no candidates: every non-do_not_contact creator either has an email or was mined within the last 7d",
-          "last_run_at": "2026-07-31T04:00:04.747+00:00",
-          "last_status": "empty",
+          "delta": "last run errored: 6 write failure(s): harv:kendallmaynard25: Invalid path specified in request URL [PGRST125] (first attempt: Invalid path",
+          "health": "error",
+          "raw_found": 22,
+          "last_error": "6 write failure(s): harv:kendallmaynard25: Invalid path specified in request URL [PGRST125] (first attempt: Invalid path specified in request URL [PGRST125]) | harv:danaberez: Invalid path specified in request URL [PGRST125] (first attempt: Invalid path specified in request URL [PGRST125]) | harv:ex",
+          "last_run_at": "2026-07-31T13:00:02.55+00:00",
+          "last_status": "error",
           "rows_written": 0,
           "max_gap_minutes": 90
         },
@@ -1741,29 +1778,29 @@
           "health": "ok",
           "raw_found": 11,
           "last_error": "",
-          "last_run_at": "2026-07-31T03:13:05.511+00:00",
+          "last_run_at": "2026-07-31T13:13:01.074+00:00",
           "last_status": "ok",
           "rows_written": 11,
           "max_gap_minutes": 720
         }
       ],
       "status": "down",
-      "generated_at": "2026-07-31T04:10:50.308156+00:00",
+      "generated_at": "2026-07-31T13:14:24.997898+00:00",
       "failing_count": 5,
       "open_watchdog_findings": [
         {
           "count": 1,
-          "detail": "creator-harvest: no run in 180m (last 2026-07-30T17:36:45.408+00:00) — worker stalled / cron not firing / vault secret wiped",
-          "found_at": "2026-07-30T20:45:13.919494+00:00",
+          "detail": "enrich-influencers: last run errored — 6 write failure(s): harv:kendallmaynard25: Invalid path specified in request URL [PGRST125] (first attempt: Invalid path specified in request URL [PGRST125]) | harv:danaberez: Invalid path specified i",
+          "found_at": "2026-07-31T08:45:05.404115+00:00",
           "severity": "high",
-          "check_name": "watchdog:stall:creator-harvest"
+          "check_name": "watchdog:error:enrich-influencers"
         },
         {
           "count": 1,
-          "detail": "crawl-seed-osm: SILENT COLLISION — found 123 but wrote 0 rows (upsert/insert masking a no-op as success)",
-          "found_at": "2026-07-30T12:45:39.574963+00:00",
-          "severity": "critical",
-          "check_name": "watchdog:silent:crawl-seed-osm"
+          "detail": "crawl-seed-osm: last run errored — Invalid path specified in request URL [PGRST125]",
+          "found_at": "2026-07-31T06:15:03.580644+00:00",
+          "severity": "high",
+          "check_name": "watchdog:error:crawl-seed-osm"
         },
         {
           "count": 1,
@@ -1782,8 +1819,8 @@
           "total": 4,
           "failed": 0,
           "passed": 4,
-          "ran_at": "2026-07-31T03:13:19.767554+00:00",
-          "duration_ms": 14241
+          "ran_at": "2026-07-31T13:13:04.640612+00:00",
+          "duration_ms": 3554
         },
         {
           "ok": true,
@@ -1791,8 +1828,8 @@
           "total": 7,
           "failed": 0,
           "passed": 7,
-          "ran_at": "2026-07-31T03:13:16.596457+00:00",
-          "duration_ms": 11075
+          "ran_at": "2026-07-31T13:13:04.426749+00:00",
+          "duration_ms": 3337
         }
       ],
       "seed_world": {
@@ -1801,7 +1838,7 @@
         "requests": 1,
         "services": 2
       },
-      "generated_at": "2026-07-31T04:10:51.580904+00:00",
+      "generated_at": "2026-07-31T13:14:26.146824+00:00",
       "requirements": {
         "open": 36,
         "total": 47,
@@ -2099,37 +2136,37 @@
         "verified_list": [
           {
             "id": "p2-instant-vs-scheduled",
-            "evidence": "qa_resp_scheduled_branch PASS @ 2026-07-31T03:13 — Scheduled bookings honor the CHOSEN time at write: scheduled_at > created_at + 12h and schedule_confirmed_at is stamped — not an instant/auto placeholder (fixture age 22d).",
+            "evidence": "qa_resp_scheduled_branch PASS @ 2026-07-31T13:13 — Scheduled bookings honor the CHOSEN time at write: scheduled_at > created_at + 12h and schedule_confirmed_at is stamped — not an instant/auto placeholder (fixture age 22d).",
             "instruction": "Instant (immediate/15-min) vs scheduled (future/24h) bookings branch correctly on scheduled_at.",
             "verified_at": "2026-07-13T02:45:27.305881+00:00"
           },
           {
             "id": "p1-search-blocked-never-surface",
-            "evidence": "qa_search_blocked_never_surface PASS @ 2026-07-31T03:13 — Blocked categories (massage/tattoo/makeup/chef + SHAFT) never sit sendable in leads_services.",
+            "evidence": "qa_search_blocked_never_surface PASS @ 2026-07-31T13:13 — Blocked categories (massage/tattoo/makeup/chef + SHAFT) never sit sendable in leads_services.",
             "instruction": "Blocked categories (massage/tattoo/makeup/chef+SHAFT) never resolve to a provider_type nor surface as sendable services.",
             "verified_at": "2026-07-09T03:07:03.342698+00:00"
           },
           {
             "id": "p2-notify-actually-sends",
-            "evidence": "qa_resp_notify_actually_sends PASS @ 2026-07-31T03:13 — Notify actually SENDS: a notifications row (with deep_link) is created, not merely queued.",
+            "evidence": "qa_resp_notify_actually_sends PASS @ 2026-07-31T13:13 — Notify actually SENDS: a notifications row (with deep_link) is created, not merely queued.",
             "instruction": "Every notify actually SENDS: a notifications row is created (not merely \"queued\") for each key event.",
             "verified_at": "2026-07-09T03:06:07.931732+00:00"
           },
           {
             "id": "p2-requester-confirm-provider-accept",
-            "evidence": "qa_resp_accept_confirmed_booking PASS @ 2026-07-31T03:13 — A CONFIRMED seed booking exists (provider accept-with-time transition landed).",
+            "evidence": "qa_resp_accept_confirmed_booking PASS @ 2026-07-31T13:13 — A CONFIRMED seed booking exists (provider accept-with-time transition landed).",
             "instruction": "Requester-confirm + provider-accept transitions land a confirmed booking (accept_request_with_time / respondToRequest).",
             "verified_at": "2026-07-09T03:06:07.462822+00:00"
           },
           {
             "id": "p2-paths-distinct",
-            "evidence": "qa_resp_paths_distinct PASS @ 2026-07-31T03:13 — Connector-request rows (requests) and direct bookings (bookings) are distinct tables, both seedable.",
+            "evidence": "qa_resp_paths_distinct PASS @ 2026-07-31T13:13 — Connector-request rows (requests) and direct bookings (bookings) are distinct tables, both seedable.",
             "instruction": "Connector-request path (requests + request_responses, /inbound/:reqId) stays distinct from direct bookings (bookings, /request/:id).",
             "verified_at": "2026-07-09T03:06:07.348704+00:00"
           },
           {
             "id": "p1-search-no-false-paid",
-            "evidence": "qa_search_no_false_paid_fallback PASS @ 2026-07-31T03:13 — A free ($0) offering exists so a free search returns hits (no false \"showing paid options\").",
+            "evidence": "qa_search_no_false_paid_fallback PASS @ 2026-07-31T13:13 — A free ($0) offering exists so a free search returns hits (no false \"showing paid options\").",
             "instruction": "No false \"showing paid options\": paid-fallback banner only when the free search truly returned zero.",
             "verified_at": "2026-07-09T03:06:06.066021+00:00"
           },
@@ -2141,25 +2178,25 @@
           },
           {
             "id": "p1-search-outofmiami-live",
-            "evidence": "qa_search_outofmiami_live PASS @ 2026-07-31T03:13 — An out-of-Miami (Austin) search returns the live seeded Austin service (multi-city).",
+            "evidence": "qa_search_outofmiami_live PASS @ 2026-07-31T13:13 — An out-of-Miami (Austin) search returns the live seeded Austin service (multi-city).",
             "instruction": "Out-of-Miami live matches: a query in a non-Miami seeded city returns that city's live match (multi-city crawl proof).",
             "verified_at": "2026-07-09T03:06:05.821442+00:00"
           },
           {
             "id": "p1-search-miami-live",
-            "evidence": "qa_search_geo_strict_no_spill PASS @ 2026-07-31T03:13 — Geo is strict: an out-of-city service does not spill into a Miami-radius search.",
+            "evidence": "qa_search_geo_strict_no_spill PASS @ 2026-07-31T13:13 — Geo is strict: an out-of-city service does not spill into a Miami-radius search.",
             "instruction": "Miami live matches: a Miami query returns at least one live Miami seeded service.",
             "verified_at": "2026-07-09T03:06:05.585119+00:00"
           },
           {
             "id": "p1-search-address-persists",
-            "evidence": "qa_search_address_persists PASS @ 2026-07-31T03:13 — A verified service address persists — lat/lng not reverted to null.",
+            "evidence": "qa_search_address_persists PASS @ 2026-07-31T13:13 — A verified service address persists — lat/lng not reverted to null.",
             "instruction": "A typed/verified address persists (services keep lat/lng) and does not revert to a default.",
             "verified_at": "2026-07-09T03:06:05.467429+00:00"
           },
           {
             "id": "p1-search-geocode-holds",
-            "evidence": "qa_search_geocode_holds PASS @ 2026-07-31T03:13 — Seeded services carry non-null lat/lng (geocode holds → visible in services_near).",
+            "evidence": "qa_search_geocode_holds PASS @ 2026-07-31T13:13 — Seeded services carry non-null lat/lng (geocode holds → visible in services_near).",
             "instruction": "Geocode holds: a seeded service with non-null lat/lng appears in services_near results.",
             "verified_at": "2026-07-09T03:06:05.349601+00:00"
           }
@@ -2177,7 +2214,7 @@
         "ai_resolved": 0
       },
       "human_queue": [],
-      "generated_at": "2026-07-31T04:10:51.930289+00:00"
+      "generated_at": "2026-07-31T13:14:26.25341+00:00"
     },
     "executed_autonomously": [
       {
@@ -2239,86 +2276,6 @@
         "action_payload": "creator-harvest",
         "result": "re-invoked edge fn 'creator-harvest' via cergio_call_edge",
         "executed_at": "2026-07-29T08:05:03.725+00:00"
-      },
-      {
-        "id": 249,
-        "division": "Data",
-        "title": "Re-run crawl-health-check to confirm ingest delivery after the fixes",
-        "detail": "Two silent-collision/error findings on enrich-influencers and fulfill-crawl were just closed, and crons report 'succeeded' which historically masks pg_net enqueue-vs-deliver failures. Re-run the health check to verify rows-written (not request-enqueued) so we know the free pipes are truly flowing before the founder greenlights outreach.",
-        "action_kind": "edge_call",
-        "action_payload": "crawl-health-check",
-        "result": "re-invoked edge fn 'crawl-health-check' via cergio_call_edge",
-        "executed_at": "2026-07-28T13:05:04.782+00:00"
-      },
-      {
-        "id": 248,
-        "division": "Data",
-        "title": "Backfill has_instagram on services that already carry an IG URL",
-        "detail": "services.with_ig=11 is absurdly low against 35k rows — the has_instagram flag is not being set even when an instagram handle or instagram.com URL is present. This reversible UPDATE derives the flag so the IG-priority services funnel (initiative #IG-priority) can actually target them, unlocking the 25-IG-services cohort pick.",
-        "action_kind": "sql",
-        "action_payload": "UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\.com/')",
-        "result": "UPDATE affected 0 row(s)",
-        "executed_at": "2026-07-28T13:05:04.697+00:00"
-      },
-      {
-        "id": 247,
-        "division": "Data",
-        "title": "Re-run enrich-influencers to backfill email/phone on the 677 reachable creators (free)",
-        "detail": "reachable=677 but sendable=108 — the gap is missing verified contact. enrich-influencers just had a silent-collision bug fixed at 12:45; re-run it now to fill emails/phones/external_url so more reachable creators cross into sendable and the founding-cohort send can actually happen.",
-        "action_kind": "edge_call",
-        "action_payload": "enrich-influencers",
-        "result": "re-invoked edge fn 'enrich-influencers' via cergio_call_edge",
-        "executed_at": "2026-07-28T13:05:02.144+00:00"
-      },
-      {
-        "id": 246,
-        "division": "Data",
-        "title": "Re-run the idempotent creator harvester now (free volume lever)",
-        "detail": "creator-harvest ran at 13:00 with upserted=null and creators.new=0 despite reachable=677 — the discovery worker is producing but not converting to new sendable creators. Re-invoke the idempotent harvester to force another discovery+write pass while the seed backbone is being fixed; if it still writes 0, that confirms the root cause is the seeder (proposal 1), not the harvester.",
-        "action_kind": "edge_call",
-        "action_payload": "creator-harvest",
-        "result": "re-invoked edge fn 'creator-harvest' via cergio_call_edge",
-        "executed_at": "2026-07-28T13:05:01.934+00:00"
-      },
-      {
-        "id": 242,
-        "division": "Data",
-        "title": "Re-run enrich-influencers to lift the reachable→sendable conversion",
-        "detail": "reachable=675 but sendable=111 — a huge gap of discovered creators lacking verified email/phone. enrich-influencers just recovered from a silent-collision fix at 06:15; re-run it (idempotent) to fill contacts and convert reachable creators into sendable ones for the founding cohort.",
-        "action_kind": "edge_call",
-        "action_payload": "enrich-influencers",
-        "result": "re-invoked edge fn 'enrich-influencers' via cergio_call_edge",
-        "executed_at": "2026-07-28T08:05:07.673+00:00"
-      },
-      {
-        "id": 241,
-        "division": "Data",
-        "title": "Re-run creator-harvest to break the creators.new=0 stall",
-        "detail": "creators.new=0 with CREATORS_NOT_GROWING flagged and last_harvest.upserted=null; the idempotent harvester is the first free lever, not a paid DB. Re-invoke creator-harvest immediately to push fresh discovery toward the 1000/day + 70 sendable target while the deploy-level crawl-seed-osm fix (rank 5) is confirmed by the founder.",
-        "action_kind": "edge_call",
-        "action_payload": "creator-harvest",
-        "result": "re-invoked edge fn 'creator-harvest' via cergio_call_edge",
-        "executed_at": "2026-07-28T08:05:07.604+00:00"
-      },
-      {
-        "id": 240,
-        "division": "Data",
-        "title": "Re-queue Miami services stuck in 'new' so the founding-cohort funnel isn't starved",
-        "detail": "Miami shows queued=60 but the metro that must prove the loop has 846 rows sitting in outreach_status='new' across the queue and services-gate isn't draining Miami fast enough. Re-seed the Miami 'new' rows to 'queued' (narrow, city-scoped) so cohort provider outreach has real inventory.",
-        "action_kind": "sql",
-        "action_payload": "UPDATE public.leads_services SET outreach_status='queued' WHERE outreach_status='new' AND city='Miami'",
-        "result": "UPDATE affected 0 row(s)",
-        "executed_at": "2026-07-28T08:05:07.507+00:00"
-      },
-      {
-        "id": 239,
-        "division": "Data",
-        "title": "Back-fill has_instagram on services that already carry an IG URL",
-        "detail": "Only 11 of 35418 services show with_ig, yet many rows have an instagram handle or an instagram.com link in website_url — the derived flag is stale, starving the IG-priority funnel. Set has_instagram=true wherever the intrinsic IG signal exists so IG-first outreach can actually target them.",
-        "action_kind": "sql",
-        "action_payload": "UPDATE public.leads_services SET has_instagram=true WHERE has_instagram IS NOT TRUE AND (coalesce(instagram,'') <> '' OR coalesce(website_url,'') ~* 'instagram\\.com/')",
-        "result": "UPDATE affected 0 row(s)",
-        "executed_at": "2026-07-28T08:05:06.906+00:00"
       }
     ],
     "execution_failures": [],
@@ -2457,7 +2414,7 @@
       }
     ],
     "execution_summary": {
-      "executed_recent": 14,
+      "executed_recent": 6,
       "failed_recent": 0,
       "awaiting_approval": 12
     }

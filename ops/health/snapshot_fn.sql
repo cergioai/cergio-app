@@ -1,0 +1,29 @@
+CREATE OR REPLACE FUNCTION public.cergio_ops_snapshot()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+declare res jsonb; gm text := 'miami|hialeah|coral gables|doral|aventura|hallandale|hollywood|pembroke|miramar|fort lauderdale|kendall|homestead|cutler bay|sunny isles|key biscayne|pinecrest|north miami|brickell|davie|weston|plantation|sunrise|deerfield|boca raton|dania';
+begin
+  select jsonb_build_object(
+    'generated_at', now(),
+    'services', jsonb_build_object('queued',(select count(*) from public.leads_services where outreach_status='queued'),'new',(select count(*) from public.leads_services where outreach_status='new'),'dnc',(select count(*) from public.leads_services where outreach_status='do_not_contact'),'queued_miami',(select count(*) from public.leads_services where outreach_status='queued' and lower(coalesce(city,'')) ~ gm),'with_ig',(select count(*) from public.leads_services where outreach_status='queued' and has_instagram)),
+    'services_by_status', jsonb_build_object('total',(select count(*) from public.leads_services),'queued',(select count(*) from public.leads_services where outreach_status='queued'),'new',(select count(*) from public.leads_services where outreach_status='new'),'dnc',(select count(*) from public.leads_services where outreach_status='do_not_contact')),
+    'creators_by_status', jsonb_build_object('total',(select count(*) from public.leads_influencers),'queued',(select count(*) from public.leads_influencers where outreach_status='queued'),'new',(select count(*) from public.leads_influencers where outreach_status='new'),'dnc',(select count(*) from public.leads_influencers where outreach_status='do_not_contact')),
+    'services_cities',(select coalesce(jsonb_agg(jsonb_build_object('city',city,'queued',q,'new',n,'total',t) order by t desc),'[]'::jsonb) from (select coalesce(city,'(none)') city, count(*) filter (where outreach_status='queued') q, count(*) filter (where outreach_status='new') n, count(*) t from public.leads_services group by 1 order by t desc limit 15) x),
+    'creators', jsonb_build_object('sendable',(select count(*) from public.leads_influencers where outreach_status='queued'),'new',(select count(*) from public.leads_influencers where outreach_status='new'),'reachable',(select count(*) from public.leads_influencers where (email is not null or phone is not null) and outreach_status<>'do_not_contact'),'harvested_all',(select count(*) from public.leads_influencers where discovered_via like 'se:web-harvest-%'),'harvested_today',(select count(*) from public.leads_influencers where discovered_via like 'se:web-harvest-%' and created_at::date=current_date)),
+    'garbage_in_queued',(select count(*) from public.leads_services where outreach_status='queued' and lower(coalesce(service_type,'')||' '||coalesce(name,'')) ~ '(restaurant|\ybar\y|nightclub|smoke shop|dispensary|firearm|casino|\yadult\y|hookah|liquor)'),
+    'bookings',(select count(*) from public.bookings),
+    'last_harvest',(select jsonb_build_object('at',at,'raw_results',raw_results,'upserted',upserted) from public.harvest_runs order by at desc limit 1),
+    'qa_findings',(select coalesce(jsonb_agg(jsonb_build_object('area',area,'check_name',check_name,'status',status,'count',count,'found_at',found_at,'fixed_at',fixed_at,'detail',detail) order by (status='open') desc, updated_at desc),'[]'::jsonb) from (select * from public.qa_findings order by (status='open') desc, updated_at desc limit 25) x),
+    'impact',(select coalesce(jsonb_agg(jsonb_build_object('day',day,'services_queued',services_queued,'creators_sendable',creators_sendable,'cities_covered',cities_covered,'harvested_today',harvested_today) order by day desc),'[]'::jsonb) from (select * from public.impact_ledger order by day desc limit 7) x),
+    'creators_list',(select coalesce(jsonb_agg(jsonb_build_object('name',display_name,'handle',ig_handle,'category',category,'followers',followers,'reachable',(email is not null or phone is not null)) order by followers desc nulls last),'[]'::jsonb) from (select * from public.leads_influencers where outreach_status='queued' order by followers desc nulls last limit 60) q),
+    'services_sample',(select coalesce(jsonb_agg(jsonb_build_object('name',name,'type',service_type,'city',city,'ig',has_instagram) order by has_instagram desc nulls last),'[]'::jsonb) from (select * from public.leads_services where outreach_status='queued' and lower(coalesce(city,'')) ~ gm order by has_instagram desc nulls last limit 60) q),
+    'creator_reach',(select coalesce(jsonb_agg(jsonb_build_object('name',name,'type',type,'how',how,'url',url) order by sort),'[]'::jsonb) from public.creator_reach_channels),
+    'plan',(select coalesce(jsonb_agg(jsonb_build_object('label',label,'owner',owner,'target',target,'status',status) order by sort),'[]'::jsonb) from public.execution_plan),
+    'initiatives',(select coalesce(jsonb_agg(jsonb_build_object('area',area,'name',name,'status',status,'note',note) order by sort),'[]'::jsonb) from public.initiatives),
+    'crons',(select coalesce(jsonb_agg(x order by x->>'job'),'[]'::jsonb) from (select jsonb_build_object('job',j.jobname,'schedule',j.schedule,'active',j.active,'last_status',(select d.status from cron.job_run_details d where d.jobid=j.jobid order by d.start_time desc limit 1),'last_time',(select d.start_time from cron.job_run_details d where d.jobid=j.jobid order by d.start_time desc limit 1)) as x from cron.job j) q),
+    'audit_flags',(select red_flags from public.ops_audit_daily order by run_at desc limit 1),
+    'proposals',(select coalesce(jsonb_agg(jsonb_build_object('rank',rank,'division',division,'title',title,'detail',detail,'lift',expected_lift,'effort',effort) order by rank),'[]'::jsonb) from public.coo_proposals where status='pending' and run_date >= current_date - 2)
+  ) into res; return res; end; $function$
+
