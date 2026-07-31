@@ -6,6 +6,14 @@ name: Growth DB setup
 
 on:
   workflow_dispatch: {}
+  # PUSH TRIGGER (SPEC-139). api.github.com is firewalled from the sandbox
+  # (measured: HTTP 000), and the Chrome extension is not always attached, so
+  # neither the API nor the Actions UI is reliably reachable off-Mac. Pushing IS
+  # reachable — so bumping this one file dispatches the workflow. It is the only
+  # off-Mac path that never depends on the founder's laptop being awake.
+  push:
+    branches: [main]
+    paths: ['.github/growth-trigger.txt']
 
 jobs:
   setup:
