@@ -4858,6 +4858,22 @@ test('fanout-fallback-uses-real-columns', 'SPEC-124: MEASURED against the live d
     'services has no city/state column — filtering on them errors 42703 and silently returns nothing');
 });
 
+test('fanout-never-writes-other-users-notifications', 'SPEC-125 ROOT CAUSE, proven live 2026-07-31: the client inserted one notifications row per RECIPIENT, but RLS forbids writing another user\'s row — POST /notifications returned 403 42501 "new row violates row-level security policy". The code then returned early on that error, BEFORE fireRequestNotify, so the notifications table stayed empty forever and notify-request was never invoked. No provider was ever emailed. notify-request creates those rows server-side with the service role', '#125', async () => {
+  const api = readFile('src/lib/api.js');
+  const start = api.indexOf('export async function createRequestAndFanOut');
+  const fn = api.slice(start, api.indexOf('\nexport ', start + 10))
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  assert(/rows\.filter\(r => r\.profile_id === uid\)/.test(fn),
+    'the client may only ever insert its OWN notification row — never a recipient\'s');
+  assert(!/if \(notifyErr\) return/.test(fn),
+    'a notification-insert error must NEVER abort the fan-out — that is what silenced every request');
+  assert(/fireRequestNotify\(\{ event: 'created'/.test(fn),
+    'fireRequestNotify must remain reachable after the insert attempt');
+  const idxInsert = fn.indexOf('notifications');
+  const idxFire = fn.indexOf('fireRequestNotify');
+  assert(idxFire > idxInsert, 'fireRequestNotify must run after, and independently of, the insert');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
