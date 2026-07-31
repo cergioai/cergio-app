@@ -1502,6 +1502,50 @@ export async function respondToRequest(requestId, {
 // this: accepted a counter-offer twice and got DUPLICATE bookings.
 const _acceptInFlight = new Map();
 
+
+/** SPEC-137 — widen a TARGETED custom quote to the rest of the market.
+ *  A targeted request (created from a provider's page) deliberately notified only
+ *  that provider. This invites the other matching providers so the requester gets
+ *  competing bids instead of a single take-it-or-leave-it price.
+ *
+ *  Deliberate design: the original target is EXCLUDED (already notified) and the
+ *  requester is excluded server-side by notify-request's self-notify guard. Safe
+ *  to call twice — the second call simply finds everyone already notified.
+ */
+export async function widenRequestToMarket(requestId) {
+  if (!supabaseReady) return { notified: 0, error: NOT_WIRED.error };
+  if (!requestId) return { notified: 0, error: { message: 'requestId required' } };
+  const { data: userRes } = await supabase.auth.getUser();
+  const uid = userRes?.user?.id;
+  if (!uid) return { notified: 0, error: { message: 'Sign in to invite more providers.' } };
+
+  const { data: req, error: reqErr } = await supabase
+    .from('requests')
+    .select('id, requester_id, provider_type, category, query, what, where_text, lat, lng, target_provider_id')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (reqErr || !req) return { notified: 0, error: reqErr || { message: 'Request not found' } };
+  if (req.requester_id !== uid) return { notified: 0, error: { message: 'Not your request.' } };
+
+  const { data: provs, error: provErr, blocked } = await getProvidersForNotify({
+    verifiedProviderType: req.provider_type,
+    notifySafe:           true,
+    lat: req.lat, lng: req.lng,
+    fallbackCity:  req.where_text || null,
+    fallbackState: null,
+  });
+  if (provErr) return { notified: 0, error: provErr };
+  if (blocked)  return { notified: 0, error: null, blocked };
+
+  const ownerIds = Array.from(new Set((provs || []).map(s => s.owner_id).filter(Boolean)))
+    .filter(id => id !== uid && id !== req.target_provider_id);
+  if (ownerIds.length === 0) { logFanout(requestId, 'widen_none', 'no other providers matched'); return { notified: 0, error: null }; }
+
+  fireRequestNotify({ event: 'created', requestId, providerIds: ownerIds });
+  logFanout(requestId, 'widened', `invited ${ownerIds.length} more provider(s)`);
+  return { notified: ownerIds.length, error: null };
+}
+
 export async function acceptRequestWithTime({ requestId, serviceId, scheduledAt } = {}) {
   if (!supabaseReady) return NOT_WIRED;
   if (!requestId || !serviceId) return { data: null, error: { message: 'A listed service is required to accept.' } };
@@ -3368,6 +3412,13 @@ export async function createRequestAndFanOut({
   budget_cents,
   notifySafe,
   radiusMiles = 25,
+  // SPEC-136 (founder 2026-07-31): "submit a request for a custom quote should
+  // have the search screen but submitted to the service being looked at as
+  // opposed to all others". The PDP already passed a providerId to /home, but
+  // nothing consumed it — every custom quote fanned out to EVERY matching
+  // provider. When set, the request is written with target_provider_id and the
+  // fan-out goes to that one provider only.
+  targetProviderId = null,
 } = {}) {
   if (!supabaseReady) return { request: null, notified: 0, error: NOT_WIRED.error };
   const { data: userRes } = await supabase.auth.getUser();
@@ -3471,10 +3522,25 @@ export async function createRequestAndFanOut({
       lat:           (lat ?? null),
       lng:           (lng ?? null),
       budget_cents:  (typeof budget_cents === 'number') ? budget_cents : null,
+      // SPEC-136: a custom quote aimed at ONE provider (from that provider's page)
+      target_provider_id: targetProviderId || null,
     })
     .select()
     .single();
   if (insErr || !request) return { request: null, notified: 0, error: insErr };
+
+  // SPEC-136 — TARGETED QUOTE. When the request names a provider, skip discovery
+  // entirely and notify only them. Fanning a "quote me specifically" request out
+  // to every matching provider is the wrong behaviour and spams the market.
+  // `notified` is still reported so the caller can offer to widen it afterwards.
+  if (targetProviderId) {
+    if (targetProviderId === uid) {
+      return { request, notified: 0, error: null, blocked: 'self_target: you cannot request from yourself.' };
+    }
+    fireRequestNotify({ event: 'created', requestId: request.id, providerIds: [targetProviderId] });
+    logFanout(request.id, 'targeted', `direct quote to provider ${targetProviderId}`);
+    return { request, notified: 1, error: null, targeted: true };
+  }
 
   // 2) Resolve providers we're allowed to notify. The function refuses
   //    if any of (notifySafe, verifiedProviderType, lat/lng) is missing

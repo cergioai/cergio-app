@@ -749,6 +749,10 @@ export function HomeScreen() {
         const budgetStr = String(s.budget || '');
         const m = budgetStr.match(/\$?\s*(\d{1,5})/);
         const budgetCents = m ? parseInt(m[1], 10) * 100 : null;
+        // SPEC-136: the PDP's "Submit a request for a custom quote" navigates here
+        // with state.providerId. Carry it through so the request targets ONLY that
+        // provider instead of fanning out to the whole market.
+        const targetProviderId = location.state?.providerId || null;
         const res = await createRequestAndFanOut({
           query:         submittedText,
           provider_type: providerType,
@@ -760,6 +764,7 @@ export function HomeScreen() {
           lng:           locationCoords?.lng ?? null,
           budget_cents:  budgetCents,
           notifySafe:    !!providerType || !!s.notifySafe,
+          targetProviderId,
         });
         if (res?.request?.id) requestId = res.request.id;
         if (typeof res?.notified === 'number') notified = res.notified;
@@ -773,7 +778,12 @@ export function HomeScreen() {
       }
       if (cancelled) return;
       navigate('/results', {
-        state: { fromHome: true, query: submittedText, requestId, notified },
+        state: {
+          fromHome: true, query: submittedText, requestId, notified,
+          // SPEC-137: a targeted quote reached ONE provider — the SRP offers to
+          // invite more bids rather than leaving the requester with a single price.
+          targeted: !!location.state?.providerId,
+        },
       });
     }, 700);
     return () => { cancelled = true; clearTimeout(t); };
