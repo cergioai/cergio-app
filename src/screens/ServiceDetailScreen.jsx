@@ -186,6 +186,9 @@ export function ServiceDetailScreen() {
   // join. Renders the avatar + name + role pill + Connector badge at
   // the top of the PDP like the Jennifer Leighton reference.
   const [ownerProfile, setOwnerProfile] = useState(null);
+  // SPEC-135: a live offer/counter this provider already sent to the VIEWER.
+  // Drives the bottom CTA — "Accept counter-offer ($X)" instead of "Request ($Y)".
+  const [liveOffer, setLiveOffer] = useState(null);
   const [selectedOfferingId, setSelectedOfferingId] = useState(
     location.state?.provider?.offeringId || null
   );
@@ -198,6 +201,34 @@ export function ServiceDetailScreen() {
   // Reputational streams (SPEC-49g): the provider's headline trust signal + the
   // social reach of everyone who reco's them. Same source as profiles/previews.
   const [ownerCounts, setOwnerCounts] = useState(null);
+
+  // SPEC-135: does this provider have an outstanding quote for me on any of my
+  // open requests? If so the primary action is to ACCEPT it, not to request again.
+  useEffect(() => {
+    let cancelled = false;
+    if (!supabaseReady || !provider?.ownerId) { setLiveOffer(null); return; }
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        const uid = u?.user?.id;
+        if (!uid) return;
+        const { data: myReqs } = await supabase
+          .from('requests').select('id').eq('requester_id', uid).eq('status', 'pending').limit(50);
+        const ids = (myReqs || []).map(r => r.id);
+        if (!ids.length) return;
+        const { data: offers } = await supabase
+          .from('request_responses')
+          .select('id, request_id, status, offered_price_cents, service_id, responded_at')
+          .eq('responder_id', provider.ownerId)
+          .in('request_id', ids)
+          .in('status', ['offered', 'countered'])
+          .order('responded_at', { ascending: false })
+          .limit(1);
+        if (!cancelled) setLiveOffer(offers && offers.length ? offers[0] : null);
+      } catch (_e) { /* CTA falls back to the default request label */ }
+    })();
+    return () => { cancelled = true; };
+  }, [provider?.ownerId]);
   const [ownerMutuals, setOwnerMutuals] = useState(null); // { count, names[] }
   const [recommenderCounts, setRecommenderCounts] = useState({});
   // recommenderId → { count, names[] } — friends-in-common between the VIEWER
@@ -931,6 +962,9 @@ export function ServiceDetailScreen() {
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-cream border-t border-bdr px-5 pt-3 pb-5 z-10">
         <button
           onClick={() => {
+            // SPEC-135: with a live quote, the CTA ACCEPTS it — routing to the
+            // request where the offer sits — instead of opening a fresh request.
+            if (liveOffer?.request_id) { navigate(`/results?req=${liveOffer.request_id}`); return; }
             handleBook(selectedOffering
               ? { ...provider, offeringId: selectedOffering.id, priceCents: selectedOffering.price_cents, price: selectedPrice }
               : provider);
@@ -938,7 +972,15 @@ export function ServiceDetailScreen() {
           className="w-full bg-g text-white rounded-[24px] py-4 text-heading-2 font-extrabold
                      hover:opacity-90 active:scale-[.98] transition-all"
         >
-          {`Request ${selectedOffering?.name || provider.name} ($${selectedPrice})`}
+          {/* SPEC-135 (founder 2026-07-31): when this provider has already sent
+              the viewer an offer or counter-offer, the CTA must say so — asking
+              someone to "Request ($35)" a service they have a live quote on is
+              the wrong action and reads as if nothing happened. */}
+          {liveOffer
+            ? (liveOffer.status === 'countered'
+                ? `Accept counter-offer ($${Math.round((liveOffer.offered_price_cents || 0) / 100)})`
+                : `Accept & book ($${Math.round((liveOffer.offered_price_cents || 0) / 100)})`)
+            : `Request ${selectedOffering?.name || provider.name} ($${selectedPrice})`}
         </button>
         <p className="text-center text-meta-sm text-b3 font-medium mt-2">You won&apos;t be charged yet</p>
       </div>

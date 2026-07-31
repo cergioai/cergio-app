@@ -4973,6 +4973,20 @@ test('listing-uploads-its-cover-photo', 'SPEC-133 (founder 2026-07-31): every li
   assert(/provider\.coverUrl &&/.test(detail), 'the detail screen must render cover_url when present');
 });
 
+test('offer-aware-cta-and-persistent-sent', 'SPEC-134/135 (founder 2026-07-31): (a) a provider LOST every sent offer from their Sent tab the moment the consumer accepted or declined, because the query filtered to offered/countered only — they had no record of what they had quoted; (b) the service page always said "Request X ($Y)" even when that provider had already sent the viewer a live counter-offer, which is the wrong action and reads as if nothing happened', '#134', async () => {
+  const api = readFile('src/lib/api.js');
+  const sent = api.slice(api.indexOf('export async function listMySentOffers'), api.indexOf('export async function listMySentOffers') + 1200);
+  assert(/'offered', 'countered', 'accepted', 'declined', 'expired'/.test(sent),
+    'Sent must keep every outcome so the provider can track what they quoted');
+  const pdp = readFile('src/screens/ServiceDetailScreen.jsx');
+  assert(/const \[liveOffer, setLiveOffer\]/.test(pdp), 'the PDP must know about a live offer from this provider');
+  assert(/Accept counter-offer \(\$/.test(pdp), 'a countered quote must offer to ACCEPT it');
+  assert(/liveOffer\?\.request_id.*navigate/.test(pdp.replace(/\n/g, ' ')),
+    'the CTA must route to the request holding the offer, not open a new one');
+  assert(/\.in\('status', \['offered', 'countered'\]\)/.test(pdp),
+    'only a LIVE offer (offered/countered) changes the CTA — settled ones must not');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
