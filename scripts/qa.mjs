@@ -4957,6 +4957,22 @@ test('growth-tables-only-on-the-growth-db', 'SPEC-132: every crawl worker must r
   assert(/growthEnvPresent\(\) \? growthDb\(\) : db/.test(ops), 'the ops console must read growth tables from the growth DB');
 });
 
+test('listing-uploads-its-cover-photo', 'SPEC-133 (founder 2026-07-31): every listing rendered the hardcoded generic avatar instead of the uploaded photo. The photo screens captured files into listingDraft.photos and left a comment saying setup "can upload them when the service is created" — but nothing ever did, so cover_url was ALWAYS null and ServiceDetailScreen fell back to photo_class fv-jamie', '#133', async () => {
+  const setup = readFile('src/screens/ServiceListSetupScreen.jsx');
+  assert(/uploadAndPersistServiceCover/.test(setup),
+    'the listing flow must upload the captured cover photo once the service id exists');
+  assert(/listingDraft\?\.photos\?\.\[0\]\?\.file/.test(setup),
+    'it must use the FIRST photo — the arrange screen calls that the cover');
+  assert(/listing kept/.test(setup),
+    'a failed upload must never discard a successfully created listing');
+  // the capture side must keep putting files on the draft
+  const arrange = readFile('src/screens/ServiceListPhotosArrangeScreen.jsx');
+  assert(/updateListingDraft\(\{ photos \}\)/.test(arrange), 'photos must still be persisted to the draft');
+  // and the render side must prefer the real photo
+  const detail = readFile('src/screens/ServiceDetailScreen.jsx');
+  assert(/provider\.coverUrl &&/.test(detail), 'the detail screen must render cover_url when present');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
