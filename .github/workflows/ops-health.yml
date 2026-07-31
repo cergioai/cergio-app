@@ -78,8 +78,19 @@ jobs:
           git config user.name  "cergio-ci"
           git config user.email "ci@cergio.ai"
           if git ls-remote --exit-code --heads origin ops-health >/dev/null 2>&1; then
-            git fetch origin ops-health
-            git checkout -B ops-health origin/ops-health
+            # ROOT CAUSE (run122): only ONE ops-health commit EVER landed despite an
+            # hourly schedule + many pushes. actions/checkout@v4 configures a
+            # single-branch (main-only) fetch refspec, so a bare
+            # `git fetch origin ops-health` updates FETCH_HEAD but never creates
+            # refs/remotes/origin/ops-health. The next `checkout origin/ops-health`
+            # then fails; with `set -uo pipefail` (no -e) the step limped on and no
+            # 2nd snapshot was ever committed — the verification channel died after
+            # its first probe. Map the ref EXPLICITLY so run>=2 checks out cleanly,
+            # and fail LOUD if it cannot (a red run is visible; a silent stale one is
+            # the trap this whole workflow exists to close).
+            git fetch origin ops-health:refs/remotes/origin/ops-health
+            git checkout -B ops-health refs/remotes/origin/ops-health || {
+              echo "::error::could not check out ops-health data branch — aborting"; exit 1; }
           else
             git checkout --orphan ops-health
             git rm -rf . >/dev/null 2>&1 || true
