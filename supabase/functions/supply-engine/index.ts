@@ -12,6 +12,7 @@
 // Every action writes to qa_findings (bug) + agent_runs (fix), so the ledger IS the proof.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } }); }
 const FN_BASE = 'https://vjmwnbftfquyquwaklue.functions.supabase.co';
@@ -29,6 +30,21 @@ const QUEUE_FLOOR = Number(Deno.env.get('QUEUE_FLOOR') || '20000');  // MAX: kee
 const DEAD_AFTER  = 30;                                             // jobs with 0 rows => dead
 
 serve(async (req: Request) => {
+
+// ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
+// crawl_requests / leads_services / leads_influencers are read+written on the
+// SEPARATE growth database. The product DB keeps auth, profiles, services,
+// requests, bookings — and agent_runs / qa_findings so the ops console and the
+// watchdog keep working unchanged.
+//
+// Two projects = two connection pools. On 2026-07-30 background crawling
+// saturated the product pool (/rest/v1/services -> 503 while /auth/v1/user -> 200)
+// and the founder could not sign in or list a service. That is now physically
+// impossible rather than a matter of restraint.
+//
+// If the growth env is absent we FAIL LOUD — a silent fallback to the product DB
+// would recreate exactly that outage.
+const gdb = growthDb();
   const started = Date.now();
   const url = Deno.env.get('SUPABASE_URL')!, svc = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const auth = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -66,7 +82,7 @@ serve(async (req: Request) => {
 
   // ── R5: requeue recoverable failed jobs (transient Overpass/API failures)
   try {
-    const { data: req } = await db.from('crawl_requests').update({ status: 'new', updated_at: new Date().toISOString() })
+    const { data: req } = await gdb.from('crawl_requests').update({ status: 'new', updated_at: new Date().toISOString() })
       .eq('kind', 'services').eq('status', 'failed').not('notes', 'ilike', '%off-spec%').not('notes', 'ilike', '%parked%')
       .in('city', P1_CITIES.map(([c]) => c)).select('id').limit(500);
     if (req?.length) fixes.push(`requeued ${req.length} recoverable failed phase-1 jobs`);
@@ -75,7 +91,7 @@ serve(async (req: Request) => {
   // ── R6 (SPEC-101): PURGE dead-source jobs clogging the queue. `yellowpages` (the
   // dormant page-scrape path, YP_ENABLED=false) had ~97,700 jobs that can never run.
   try {
-    const { data: purged } = await db.from('crawl_requests')
+    const { data: purged } = await gdb.from('crawl_requests')
       .update({ status: 'failed', notes: 'purged: dead source path (never fetched)' })
       .eq('kind', 'services').in('status', ['new', 'crawling']).eq('source', 'yellowpages')
       .select('id').limit(5000);
@@ -123,11 +139,11 @@ serve(async (req: Request) => {
     let batchFail = 0, rowFail = 0;
     for (let i = 0; i < batch.length; i += 100) {
       const chunk = batch.slice(i, i + 100);
-      const { data, error } = await db.from('crawl_requests').insert(chunk).select('id');
+      const { data, error } = await gdb.from('crawl_requests').insert(chunk).select('id');
       if (!error) { seeded += data?.length ?? 0; continue; }
       batchFail++;
       for (const row of chunk) {
-        const { data: one, error: e1 } = await db.from('crawl_requests').insert(row).select('id');
+        const { data: one, error: e1 } = await gdb.from('crawl_requests').insert(row).select('id');
         if (!e1) seeded += one?.length ?? 0; else rowFail++;
       }
     }
@@ -171,11 +187,11 @@ serve(async (req: Request) => {
   // ~1/500th of the pool. Turbo returns to full: 40 workers, env-tunable, with the
   // health probe below as the only brake. Ceiling raised because the load per
   // worker collapsed, NOT because the risk was accepted.
-  const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '0'), 4);
+  const kicks = Math.min(Number(Deno.env.get('TURBO_KICKS') || '40'), 60);   // SPEC-132: growth pool, not the product's
   let kicked = 0;
   for (let i = 0; restOk && i < kicks; i++) {
     try {
-      fetch(`${FN_BASE}/fulfill-crawl?limit=100`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
+      fetch(`${FN_BASE}/fulfill-crawl?limit=400`, { method: 'POST', headers: { Authorization: `Bearer ${svc}` } }).catch(() => {});
       kicked++;
     } catch (_e) {}
   }

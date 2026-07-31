@@ -22,6 +22,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 // Throughput (TUNABLE). Raised so the full YellowPages matrix drains in hours,
@@ -55,10 +56,10 @@ async function flushBuf(db: any): Promise<number> {
   let ok = 0;
   for (let i = 0; i < batch.length; i += 500) {
     const chunk = batch.slice(i, i + 500);
-    const { error } = await db.from('leads_services').upsert(chunk, { onConflict: 'id' });
+    const { error } = await gdb.from('leads_services').upsert(chunk, { onConflict: 'id' });
     if (!error) { ok += chunk.length; continue; }
     for (const row of chunk) {
-      const { error: e1 } = await db.from('leads_services').upsert(row, { onConflict: 'id' });
+      const { error: e1 } = await gdb.from('leads_services').upsert(row, { onConflict: 'id' });
       if (!e1) ok++;
     }
   }
@@ -71,6 +72,21 @@ async function bufUpsert(db: any, row: Record<string, unknown>): Promise<void> {
 }
 
 serve(async (req: Request) => {
+
+// ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
+// crawl_requests / leads_services / leads_influencers are read+written on the
+// SEPARATE growth database. The product DB keeps auth, profiles, services,
+// requests, bookings — and agent_runs / qa_findings so the ops console and the
+// watchdog keep working unchanged.
+//
+// Two projects = two connection pools. On 2026-07-30 background crawling
+// saturated the product pool (/rest/v1/services -> 503 while /auth/v1/user -> 200)
+// and the founder could not sign in or list a service. That is now physically
+// impossible rather than a matter of restraint.
+//
+// If the growth env is absent we FAIL LOUD — a silent fallback to the product DB
+// would recreate exactly that outage.
+const gdb = growthDb();
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
   let dbRef: any = null;
@@ -151,7 +167,7 @@ serve(async (req: Request) => {
       jobs = p1jobs || [];
       // 2) only if phase-1 has no work left, spend the remainder elsewhere
       if (jobs.length < perRun) {
-        let q2 = db.from('crawl_requests')
+        let q2 = gdb.from('crawl_requests')
           .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
           .eq('kind', 'services').eq('status', 'new').not('city', 'in', `(${P1.map(c => `"${c}"`).join(',')})`);
         if (!YP_ENABLED) q2 = q2.or('source.is.null,source.neq.yellowpages');
@@ -165,7 +181,7 @@ serve(async (req: Request) => {
     // Un-burn jobs that a previous run stamped 'failed' purely because the Google
     // account was denied (billing). Those jobs were never bad — they were victims
     // of an account state. Put them back in the queue; they now drain via OSM.
-    await db.from('crawl_requests')
+    await gdb.from('crawl_requests')
       .update({ status: 'new', updated_at: new Date().toISOString() })
       .eq('status', 'failed')
       .or('notes.ilike.%REQUEST_DENIED%,notes.ilike.%places-infra%,notes.ilike.%enable Billing%');
@@ -180,7 +196,7 @@ serve(async (req: Request) => {
     // left in 'crawling' whose updated_at is older than a generous 15-minute
     // watchdog window back to 'new' so the next tick retries it. A legitimately
     // in-flight job updates well inside 15 min, so this never touches live work.
-    await db.from('crawl_requests')
+    await gdb.from('crawl_requests')
       .update({ status: 'new', notes: 'orphan-reclaim: reset from stuck crawling (run timeout/crash)', updated_at: new Date().toISOString() })
       .eq('kind', 'services')
       .eq('status', 'crawling')
@@ -206,7 +222,7 @@ serve(async (req: Request) => {
     const out: Array<Record<string, unknown>> = [];
     for (const job of jobs ?? []) {
       // Mark crawling so concurrent runs don't double-process.
-      await flushBuf(db); await db.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
+      await flushBuf(db); await gdb.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
 
       try {
         // DEFAULT source is now 'osm' (free-first). Legacy rows were backfilled to
@@ -221,7 +237,7 @@ serve(async (req: Request) => {
           // Defense in depth: the query above already excludes YP jobs. If one
           // reaches here (a race with the seeder), stamp it permanently failed
           // WITHOUT a fetch — no 403, no error flood, no retry.
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'failed', notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           ypQuarantined++;
@@ -236,7 +252,7 @@ serve(async (req: Request) => {
           // agent_runs. Only a real fetch that parsed the page marks 'delivered'.
           const r = await fulfillYellowPages(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
             updated_at: new Date().toISOString(),
@@ -245,7 +261,7 @@ serve(async (req: Request) => {
           // ── YellowPages via Apify (trudax) — structured business listings ──
           const r = await fulfillYellowPagesApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no YellowPages results' : 'yellowpages'),
             updated_at: new Date().toISOString(),
@@ -256,7 +272,7 @@ serve(async (req: Request) => {
           //    out-scales Yelp: no daily cap, pay-per-result, returns email+phone.
           const r = await fulfillGmapsApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastApifyError || 'no Google Maps results') : 'gmaps_apify'),
             updated_at: new Date().toISOString(),
@@ -267,7 +283,7 @@ serve(async (req: Request) => {
           //    DUAL creator/service class: a local provider WITH an audience.
           const r = await fulfillIgServices(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no IG accounts for this service/city' : 'ig_services'),
             updated_at: new Date().toISOString(),
@@ -277,7 +293,7 @@ serve(async (req: Request) => {
           //    maxItems (cost), deduped by phone/email/name, first-name parsed.
           const r = await fulfillCraigslist(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Craigslist results' : 'craigslist'),
             updated_at: new Date().toISOString(),
@@ -287,7 +303,7 @@ serve(async (req: Request) => {
           //    with a published phone + Google Guaranteed badge). data_source=google_lsa.
           const r = await fulfillGoogleLSA(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Google local-services ads' : 'google_lsa'),
             updated_at: new Date().toISOString(),
@@ -310,7 +326,7 @@ serve(async (req: Request) => {
             else r = { ...lsa, note: `no LSA + no ads[] (${lsa.note || 'lsa empty'})` };
           }
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Google sponsored/LSA results' : 'google_sponsored via LSA'),
             updated_at: new Date().toISOString(),
@@ -323,7 +339,7 @@ serve(async (req: Request) => {
           // classified (company vs individual) + provenance data_source='yelp'.
           const r = await fulfillYelp(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: r.note || (saved === 0 ? 'no Yelp results for this city/type' : 'yelp'),
             updated_at: new Date().toISOString(),
@@ -339,7 +355,7 @@ serve(async (req: Request) => {
           // delivered-0 (SPEC-72).
           const r = await fulfillOverpass(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: saved === 0
               ? `no OpenStreetMap results for ${job.service_type || 'this type'} in ${job.city || 'this city'}`
@@ -413,7 +429,7 @@ serve(async (req: Request) => {
             if (!upErr) saved++;
           }
 
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
             notes: saved === 0 ? 'no Google Places results for this city/type' : null,
             updated_at: new Date().toISOString(),
@@ -435,7 +451,7 @@ serve(async (req: Request) => {
         // An account-state error must put the job BACK to 'new' so it is retried
         // (the next job in this run already falls through to the free OSM source).
         if (e instanceof PlacesInfraError) {
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'new',
             notes: `places-infra (re-queued, not burned): ${msg}`.slice(0, 500),
             updated_at: new Date().toISOString(),
@@ -451,7 +467,7 @@ serve(async (req: Request) => {
         // cooldowns, so a 429/504 clears on the next run. yp-blocked note appears in
         // the generic branch below (status: 'failed') for the dormant YP path.
         if (e instanceof OverpassBlockedError || /^osm-blocked/i.test(msg)) {
-          await flushBuf(db); await db.from('crawl_requests').update({
+          await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'new',
             notes: `osm-blocked (re-queued, transient): ${msg}`.slice(0, 500),
             updated_at: new Date().toISOString(),
@@ -463,7 +479,7 @@ serve(async (req: Request) => {
         // A block page is stamped 'failed' with a distinct 'yp-blocked' note — NOT
         // 'delivered' — so the queue is not silently drained to delivered-0 and the
         // health-check/watchdog can see the anti-bot block for what it is.
-        await flushBuf(db); await db.from('crawl_requests').update({
+        await flushBuf(db); await gdb.from('crawl_requests').update({
           status: 'failed',
           notes: (blocked ? `yp-blocked: ${msg}` : msg).slice(0, 500),
           updated_at: new Date().toISOString(),
@@ -599,7 +615,7 @@ async function notifyOnDemandProvidersSMS(db: any, job: any) {
     const where = reqRow?.where_text || job.city || 'your area';
     const when = reqRow?.when_text ? ` (${String(reqRow.when_text).slice(0, 30)})` : '';
     const link = `https://cergio.ai/inbound/${job.trigger_request_id}`;
-    const { data: provs } = await db.from('leads_services')
+    const { data: provs } = await gdb.from('leads_services')
       .select('id, name, service_type, phone, outreach_notes')
       .eq('city', job.city).eq('service_type', job.service_type)
       .not('phone', 'is', null).neq('outreach_status', 'do_not_contact').limit(20);
@@ -623,7 +639,7 @@ async function notifyOnDemandProvidersSMS(db: any, job: any) {
         sent++;
         // consent-basis audit trail on the lead
         const note = `${(p.outreach_notes || '').slice(0, 180)} | sms:ondemand consent:published_number ${new Date().toISOString().slice(0, 10)}`;
-        await db.from('leads_services').update({ outreach_notes: note, outreach_last_at: new Date().toISOString() }).eq('id', p.id);
+        await gdb.from('leads_services').update({ outreach_notes: note, outreach_last_at: new Date().toISOString() }).eq('id', p.id);
       }
       await new Promise((res) => setTimeout(res, 2500)); // staggered send (spam-safety)
     }
@@ -647,7 +663,7 @@ async function notifyOnDemandProviders(db: any, job: any) {
     const what = reqRow?.what ? ` for ${String(reqRow.what).slice(0, 80)}` : '';
     const when = reqRow?.when_text ? ` (needed ${String(reqRow.when_text).slice(0, 40)})` : '';
     const link = `https://cergio.ai/inbound/${job.trigger_request_id}`;
-    const { data: provs } = await db.from('leads_services')
+    const { data: provs } = await gdb.from('leads_services')
       .select('name, owner_email, service_type')
       .eq('city', job.city).eq('service_type', job.service_type)
       .not('owner_email', 'is', null).neq('outreach_status', 'do_not_contact').limit(25);
@@ -1856,7 +1872,7 @@ async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; fo
     if (!e1) saved++;
     // CREATOR row — same person as a creator (dual class), fill-only
     try {
-      await db.from('leads_influencers').upsert({
+      await gdb.from('leads_influencers').upsert({
         id: `igs:${handle}`, ig_handle: handle, display_name: name,
         category: job.service_type || null, followers, email,
         city, state: state || null, is_business: !!it?.isBusinessAccount,

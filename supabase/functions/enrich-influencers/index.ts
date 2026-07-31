@@ -33,6 +33,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 
 const BATCH = 40;
 // Re-mine a creator at most this often: a link-in-bio can gain an email later,
@@ -40,6 +41,21 @@ const BATCH = 40;
 const RETRY_AFTER_DAYS = 7;
 
 serve(async (req: Request) => {
+
+// ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
+// crawl_requests / leads_services / leads_influencers are read+written on the
+// SEPARATE growth database. The product DB keeps auth, profiles, services,
+// requests, bookings — and agent_runs / qa_findings so the ops console and the
+// watchdog keep working unchanged.
+//
+// Two projects = two connection pools. On 2026-07-30 background crawling
+// saturated the product pool (/rest/v1/services -> 503 while /auth/v1/user -> 200)
+// and the founder could not sign in or list a service. That is now physically
+// impossible rather than a matter of restraint.
+//
+// If the growth env is absent we FAIL LOUD — a silent fallback to the product DB
+// would recreate exactly that outage.
+const gdb = growthDb();
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
   let dbRef: any = null;
@@ -151,7 +167,7 @@ serve(async (req: Request) => {
       // touched. An error OR an empty return is a FAILURE — never counted as
       // enriched. (The old code awaited the update and threw the result away, so
       // a rejected write and a 0-row write both looked identical to success.)
-      const { data: wrote, error: uErr } = await db.from('leads_influencers')
+      const { data: wrote, error: uErr } = await gdb.from('leads_influencers')
         .update(patch).eq('id', r.id).select('id');
       if (uErr || !(wrote ?? []).length) {
         // Row-by-row retry with ONLY the contact columns: a bad/missing extra
@@ -159,7 +175,7 @@ serve(async (req: Request) => {
         const minimal: Record<string, unknown> = {};
         if (patch.email) minimal.email = patch.email;
         if (patch.phone) minimal.phone = patch.phone;
-        const { data: w2, error: u2 } = await db.from('leads_influencers')
+        const { data: w2, error: u2 } = await gdb.from('leads_influencers')
           .update(minimal).eq('id', r.id).select('id');
         if (u2 || !(w2 ?? []).length) {
           skips.write_failed++;
@@ -178,7 +194,7 @@ serve(async (req: Request) => {
     // ── STAMP THE CURSOR (hit or miss) — this is what breaks the livelock ──────
     let stamped = 0; let stampError: string | null = null;
     if (attempted.length && cursor === 'enrich_attempted_at') {
-      const { data: st, error: sErr } = await db.from('leads_influencers')
+      const { data: st, error: sErr } = await gdb.from('leads_influencers')
         .update({ enrich_attempted_at: new Date().toISOString() })
         .in('id', attempted).select('id');
       if (sErr) stampError = serr(sErr); else stamped = (st ?? []).length;
