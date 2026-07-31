@@ -53,6 +53,31 @@ export function ServiceListSetupScreen() {
         showToast(`Couldn't create service: ${error.message}`);
         return;
       }
+
+      // SPEC-133 (founder 2026-07-31: "the pics are still hard coded generic..
+      // not the ones uploaded by service"). The photo screens captured the files
+      // into listingDraft.photos and left a comment saying setup "can upload them
+      // when the service is created" — but nothing ever did. So every listing was
+      // created with cover_url = null and fell back to the hardcoded
+      // photo_class 'fv-jamie'. Upload the cover now that we have a service id.
+      // Best-effort: a failed upload must never lose a successfully created
+      // listing — the provider can re-upload from the service page.
+      const coverFile = listingDraft?.photos?.[0]?.file || null;
+      if (data?.id && coverFile) {
+        try {
+          const { uploadAndPersistServiceCover } = await import('../lib/storage');
+          const { error: upErr } = await uploadAndPersistServiceCover(coverFile, data.id);
+          if (upErr) {
+            // eslint-disable-next-line no-console
+            console.warn('[CERGIO/list] cover upload failed (listing kept):', upErr.message);
+            showToast('Listed — photo upload failed, add it from your service page.');
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[CERGIO/list] cover upload threw (listing kept):', e?.message);
+        }
+      }
+
       showToast('Service listed!');
       resetListingDraft();
       setTimeout(() => { if (!cancelled) navigate('/list-service/verify'); }, 800);
