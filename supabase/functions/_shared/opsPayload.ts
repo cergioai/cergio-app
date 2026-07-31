@@ -11,6 +11,7 @@
 // bundles imported modules at deploy time, so every future ops change now ships
 // off-Mac automatically via CI. `ops-console` keeps the same contract.
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { growthDb, growthEnvPresent } from './growthDb.ts';
 
 // every agent/cron we claim runs — so "is it on?" is answered by DATA, not belief
 export const AGENTS = ['fulfill-crawl','creator-harvest','enrich-influencers','creator-enrich','qa-suite','qa-live-verify','crawl-health-check','coo-execute','cergio-watchdog','cergio-orchestrator','ops-metrics','supply-engine'];
@@ -54,13 +55,19 @@ export const CREATOR_SOURCE_META: Record<string, { what: string; where: string }
 export const creatorSourceMatch = (q: any, source: string) => q.like('discovered_via', `${source}%`);
 
 export async function buildOpsPayload(db: SupabaseClient, body: Record<string, unknown> = {}) {
+  // SPEC-132: crawl_requests / leads_services / leads_influencers now live in the
+  // SEPARATE growth project. Read them from there so the dashboard keeps showing
+  // real numbers after the cutover. agent_runs / qa_findings / product tables stay
+  // on the product DB. If growth is not configured we fall back to `db` so the
+  // console degrades to "no growth data" instead of throwing.
+  const gdb = growthEnvPresent() ? growthDb() : db;
   const since = (h: number) => new Date(Date.now() - h * 3600e3).toISOString();
   // CITY FILTER (founder request 2026-07-29: "no way to filter by city").
   // null = all cities. Applied to EVERY services/creators count below so the
   // whole console is scoped consistently — not just one panel.
   const city = typeof body.city === 'string' && body.city.trim() ? (body.city as string).trim() : null;
-  const svcQ = () => { const q = db.from('leads_services').select('id', { count: 'exact', head: true }); return city ? q.eq('city', city) : q; };
-  const creQ = () => { const q = db.from('leads_influencers').select('id', { count: 'exact', head: true }); return city ? q.eq('city', city) : q; };
+  const svcQ = () => { const q = gdb.from('leads_services').select('id', { count: 'exact', head: true }); return city ? q.eq('city', city) : q; };
+  const creQ = () => { const q = gdb.from('leads_influencers').select('id', { count: 'exact', head: true }); return city ? q.eq('city', city) : q; };
 
   // ── 1. QA: findings (bugs), recent runs, pass/fail
   const { data: findings } = await db.from('qa_findings').select('check_name, area, severity, status, count, detail, found_at, updated_at').order('updated_at', { ascending: false }).limit(100);
@@ -78,7 +85,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // ── 3. CRAWLS: per-source counts + job queue health
   const bySource: Record<string, number> = {};
   for (const s of SOURCES) { const { count } = await svcQ().eq('data_source', s); bySource[s] = count ?? 0; }
-  const { data: jobs } = await db.from('crawl_requests').select('source, status, city, service_type, delivered_count, updated_at').order('updated_at', { ascending: false }).limit(200);
+  const { data: jobs } = await gdb.from('crawl_requests').select('source, status, city, service_type, delivered_count, updated_at').order('updated_at', { ascending: false }).limit(200);
   const jobStats: Record<string, number> = {};
   for (const j of (jobs || [])) { const k = `${j.source || 'osm'}/${j.status}`; jobStats[k] = (jobStats[k] ?? 0) + 1; }
   const { count: svcTotal } = await svcQ();
@@ -104,7 +111,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   const listedCreators = Object.values(creatorsBySource).reduce((a, b) => a + b.total, 0);
   let creatorsUnattributed: Record<string, number> = {};
   if ((creTotal ?? 0) > listedCreators) {
-    const { data: dv } = await (city ? db.from('leads_influencers').select('discovered_via').eq('city', city) : db.from('leads_influencers').select('discovered_via')).limit(20000);
+    const { data: dv } = await (city ? gdb.from('leads_influencers').select('discovered_via').eq('city', city) : gdb.from('leads_influencers').select('discovered_via')).limit(20000);
     for (const r of (dv || [])) {
       const k = (r as any).discovered_via || 'NULL';
       // prefix-aware: a dated run of a KNOWN algorithm is attributed, not orphaned
@@ -115,15 +122,15 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // CITY LIST for the filter dropdown — real cities that actually have rows.
   const cities: Record<string, number> = {};
   try {
-    const { data: cl } = await db.from('leads_services').select('city').limit(20000);
+    const { data: cl } = await gdb.from('leads_services').select('city').limit(20000);
     for (const r of (cl || [])) { const k = (r as any).city; if (k) cities[k] = (cities[k] || 0) + 1; }
   } catch (_e) {}
 
   // ── 5. LIVE COUNTER (targets per founder spec: NYC 50k / Miami 20k services)
-  const { count: nycSvc } = await db.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'NY');
-  const { count: miaSvc } = await db.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'FL');
-  const { count: nycCre } = await db.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'NY');
-  const { count: miaCre } = await db.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'FL');
+  const { count: nycSvc } = await gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'NY');
+  const { count: miaSvc } = await gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'FL');
+  const { count: nycCre } = await gdb.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'NY');
+  const { count: miaCre } = await gdb.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'FL');
   const counter = { nyc_services: nycSvc ?? 0, nyc_target: 50000, miami_services: miaSvc ?? 0, miami_target: 20000,
                     nyc_creators: nycCre ?? 0, miami_creators: miaCre ?? 0, services_new_24h: svcNew24 ?? 0 };
 
@@ -140,14 +147,14 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     const [kind, ...rest] = wantDl.split(':');
     const key = rest.join(':');
     if (kind === 'services') {
-      let q = db.from('leads_services')
+      let q = gdb.from('leads_services')
         .select('name, service_type, phone, owner_email, instagram, city, state, data_source, outreach_status')
         .eq('data_source', key);
       if (city) q = q.eq('city', city);           // the CSV must match the filtered view
       const { data } = await q.limit(5000);
       download[wantDl] = data || [];
     } else if (kind === 'creators') {
-      let q = db.from('leads_influencers')
+      let q = gdb.from('leads_influencers')
         .select('ig_handle, display_name, category, followers, email, phone, city, state, discovered_via, outreach_status')
         .like('discovered_via', `${key}%`);   // prefix: include every dated run of this algorithm
       if (city) q = q.eq('city', city);

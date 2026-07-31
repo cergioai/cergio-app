@@ -5,6 +5,7 @@
 // APIFY_TOKEN. AUTH: service-role bearer (cron/launcher). Batches to bound run-sync time.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 
 const ACTOR = 'data-slayer~instagram-user-info-scraper-cookieless';
 const BATCH = 40;            // handles per data-slayer run (run-sync time budget)
@@ -12,6 +13,21 @@ function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { st
 const EMAIL = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 
 serve(async (req: Request) => {
+
+// ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
+// crawl_requests / leads_services / leads_influencers are read+written on the
+// SEPARATE growth database. The product DB keeps auth, profiles, services,
+// requests, bookings — and agent_runs / qa_findings so the ops console and the
+// watchdog keep working unchanged.
+//
+// Two projects = two connection pools. On 2026-07-30 background crawling
+// saturated the product pool (/rest/v1/services -> 503 while /auth/v1/user -> 200)
+// and the founder could not sign in or list a service. That is now physically
+// impossible rather than a matter of restraint.
+//
+// If the growth env is absent we FAIL LOUD — a silent fallback to the product DB
+// would recreate exactly that outage.
+const gdb = growthDb();
   const started = Date.now();
   const url = Deno.env.get('SUPABASE_URL')!;
   const svc = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -22,7 +38,7 @@ serve(async (req: Request) => {
   const db = createClient(url, svc);
 
   // candidates: pending_review creators with a handle but no follower count yet
-  const { data: cands } = await db.from('leads_influencers')
+  const { data: cands } = await gdb.from('leads_influencers')
     .select('id, ig_handle, followers, email, phone')
     .eq('outreach_status', 'pending_review').is('followers', null)
     .not('ig_handle', 'is', null).limit(BATCH);
@@ -57,7 +73,7 @@ serve(async (req: Request) => {
     if (!r.external_url && it.external_url) patch.external_url = it.external_url;
     if (Object.keys(patch).length === 0) continue;
     patch.updated_at = new Date().toISOString();
-    const { data: w } = await db.from('leads_influencers').update(patch).eq('id', r.id).select('id');
+    const { data: w } = await gdb.from('leads_influencers').update(patch).eq('id', r.id).select('id');
     if (w && w.length) enriched++;
   }
   const out = { status: 'ok', candidates: rows.length, profiles: items.length, enriched, withEmail, ms: Date.now() - started };

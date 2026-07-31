@@ -12,6 +12,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 
 // On-values creator niches (category is chosen to pass cergio_grade_creators).
 // BLOCKED (never harvested — MEMORY: mobile_first_positioning + no-values guard):
@@ -153,6 +154,21 @@ function isBlockedContent(...parts: Array<string | null | undefined>): boolean {
 }
 
 serve(async (req: Request) => {
+
+// ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
+// crawl_requests / leads_services / leads_influencers are read+written on the
+// SEPARATE growth database. The product DB keeps auth, profiles, services,
+// requests, bookings — and agent_runs / qa_findings so the ops console and the
+// watchdog keep working unchanged.
+//
+// Two projects = two connection pools. On 2026-07-30 background crawling
+// saturated the product pool (/rest/v1/services -> 503 while /auth/v1/user -> 200)
+// and the founder could not sign in or list a service. That is now physically
+// impossible rather than a matter of restraint.
+//
+// If the growth env is absent we FAIL LOUD — a silent fallback to the product DB
+// would recreate exactly that outage.
+const gdb = growthDb();
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
   let stage = 'init';
@@ -175,7 +191,7 @@ serve(async (req: Request) => {
       'weddings','home','real estate','fashion','lifestyle','beauty','shopping','auto','wellness'];
     try {
       const inList = '(' + TARGET_CATEGORIES.map((c) => '"' + c + '"').join(',') + ')';
-      const { data: q } = await db.from('leads_influencers')
+      const { data: q } = await gdb.from('leads_influencers')
         .update({ outreach_status: 'do_not_contact' })
         .eq('outreach_status', 'pending_review')
         .neq('discovered_via', 'modash-vetted-seed')
@@ -212,7 +228,7 @@ serve(async (req: Request) => {
         'bio.ilike.%microneedl%','bio.ilike.%liposuction%','bio.ilike.%rejuven%',
         'bio.ilike.%med aesthetic%','bio.ilike.%medaesthetic%','bio.ilike.%aesthetics%',
       ].join(',');
-      const { data: mq } = await db.from('leads_influencers')
+      const { data: mq } = await gdb.from('leads_influencers')
         .update({ outreach_status: 'do_not_contact' })
         .eq('outreach_status', 'pending_review')
         .neq('discovered_via', 'modash-vetted-seed')
@@ -255,7 +271,7 @@ serve(async (req: Request) => {
       const allow   = '(' + FOUNDER_VETTED_ALLOWLIST.map((h) => '"' + h + '"').join(',') + ')';
       let promoted = 0;
       // (a) vetted seeds inside the category gate
-      const { data: pa } = await db.from('leads_influencers')
+      const { data: pa } = await gdb.from('leads_influencers')
         .update({ outreach_status: 'queued' })
         .eq('outreach_status', 'pending_review')
         .eq('discovered_via', 'modash-vetted-seed')
@@ -276,7 +292,7 @@ serve(async (req: Request) => {
       // outreach-send re-checks outreach_suppressions by email at send time (it
       // skips + re-suppresses any genuine opt-out), so a future opt-out on an
       // allowlisted handle is still honored. Send stays frozen NOT-scheduled.
-      const { data: pb } = await db.from('leads_influencers')
+      const { data: pb } = await gdb.from('leads_influencers')
         .update({ outreach_status: 'queued' })
         .filter('outreach_status', 'in', '("pending_review","do_not_contact")')
         .filter('ig_handle', 'in', allow)
@@ -430,7 +446,7 @@ serve(async (req: Request) => {
       // Insert in small chunks; capture (don't throw) so one bad row can't abort all.
       for (let i = 0; i < uniqueRows.length; i += 25) {
         const chunk = uniqueRows.slice(i, i + 25);
-        const { error } = await db.from('leads_influencers')
+        const { error } = await gdb.from('leads_influencers')
           .upsert(chunk, { onConflict: 'id', ignoreDuplicates: false });
         if (error) {
           upsertError = serr(error);
@@ -438,7 +454,7 @@ serve(async (req: Request) => {
           // chunk row-by-row so a single bad row can no longer abort the batch
           // (Forensic Auditor 2026-07-08 — the resilience the old comment claimed).
           for (const one of chunk) {
-            const { error: e1 } = await db.from('leads_influencers')
+            const { error: e1 } = await gdb.from('leads_influencers')
               .upsert([one], { onConflict: 'id', ignoreDuplicates: false });
             if (!e1) inserted += 1;
           }
@@ -451,7 +467,7 @@ serve(async (req: Request) => {
     try { await db.rpc('cergio_ops_audit'); } catch (_e) { /* non-fatal */ }
 
     stage = 'count';
-    const { count: sendable } = await db.from('leads_influencers')
+    const { count: sendable } = await gdb.from('leads_influencers')
       .select('id', { count: 'exact', head: true }).eq('outreach_status', 'queued');
 
     // Log EVERY run so a no-op can never look like success again.

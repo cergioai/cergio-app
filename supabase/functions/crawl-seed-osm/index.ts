@@ -23,6 +23,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
+import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 
 // ── FOUNDER-FROZEN TARGETS (2026-07-14): Miami (home) + the TOP 10 US DMAs by
 // households. NOT "top cities by population" — DMA reach is what matters. ──
@@ -83,6 +84,21 @@ const TARGET_PER_JOB = 20;   // fulfillOverpass clamps to <= OSM_MAX_RESULTS (50
 const INSERT_BATCH   = 250;  // rows per insert round-trip
 
 serve(async (req: Request) => {
+
+// ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
+// crawl_requests / leads_services / leads_influencers are read+written on the
+// SEPARATE growth database. The product DB keeps auth, profiles, services,
+// requests, bookings — and agent_runs / qa_findings so the ops console and the
+// watchdog keep working unchanged.
+//
+// Two projects = two connection pools. On 2026-07-30 background crawling
+// saturated the product pool (/rest/v1/services -> 503 while /auth/v1/user -> 200)
+// and the founder could not sign in or list a service. That is now physically
+// impossible rather than a matter of restraint.
+//
+// If the growth env is absent we FAIL LOUD — a silent fallback to the product DB
+// would recreate exactly that outage.
+const gdb = growthDb();
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
   let dbRef: any = null;
@@ -103,7 +119,7 @@ serve(async (req: Request) => {
     const NYC_TARGET   = Number(Deno.env.get('NYC_TARGET')   || '50000');
     const MIAMI_TARGET = Number(Deno.env.get('MIAMI_TARGET') || '20000');
     const metroCount = async (states: string[]) => {
-      const { count } = await db.from('leads_services')
+      const { count } = await gdb.from('leads_services')
         .select('id', { count: 'exact', head: true }).in('state', states);
       return count ?? 0;
     };
@@ -126,7 +142,7 @@ serve(async (req: Request) => {
       // attempt it never re-seeded — the founder's approved LSA source (Local Services
       // Ads WITH phone numbers) sat at 0 rows forever. Now: re-seed whenever there is
       // no OPEN LSA work, so the source keeps producing.
-      const { count: lsaCount } = await db.from('crawl_requests')
+      const { count: lsaCount } = await gdb.from('crawl_requests')
         .select('id', { count: 'exact', head: true }).eq('source', 'google_lsa').in('status', ['new', 'crawling']);
       if ((lsaCount ?? 0) === 0) {
         const LSA_TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','mover'].filter((t) => !isBlocked(t));
@@ -134,7 +150,7 @@ serve(async (req: Request) => {
         const lsaRows: Array<Record<string, unknown>> = [];
         for (const [c, st] of LSA_CITIES) for (const t of LSA_TYPES)
           lsaRows.push({ kind: 'services', city: c, state: st, service_type: t, target_count: 20, status: 'new', source: 'google_lsa', created_at: nowIso, updated_at: nowIso });
-        await db.from('crawl_requests').insert(lsaRows);
+        await gdb.from('crawl_requests').insert(lsaRows);
         console.log(`seeded ${lsaRows.length} one-time google_lsa jobs`);
       }
     } catch (_e) { /* best-effort; never blocks the osm seed */ }
@@ -145,7 +161,7 @@ serve(async (req: Request) => {
     // fulfill cron then drains each job via Apify server-side (no Mac). Bounded:
     // 92 jobs x maxItems=40, ~$4-5 total (CL $1.5/1k + YP $3/1k). NO-OP without APIFY_TOKEN.
     try {
-      const { count: scaled } = await db.from('crawl_requests')
+      const { count: scaled } = await gdb.from('crawl_requests')
         .select('id', { count: 'exact', head: true }).eq('source', 'craigslist').eq('service_type', 'barber');
       if ((scaled ?? 0) === 0) {
         const APIFY_TYPES = ['dog trainer','pet sitter','cat sitter','personal trainer','nutritionist','tutor','gmat tutor','housekeeper','plumber','electrician','handyman','contractor','babysitter','driver','personal assistant','life coach','photographer','home decorator','home organizer','personal shopper','barber','weight loss specialist','mover'];
@@ -156,7 +172,7 @@ serve(async (req: Request) => {
             rows2.push({ kind: 'services', city: c, state: st, service_type: t, target_count: 40, status: 'new', source: src, created_at: nowIso, updated_at: nowIso });
         // insert in batches; dedupe index skips any still-OPEN dupes
         for (let i = 0; i < rows2.length; i += INSERT_BATCH) {
-          try { await db.from('crawl_requests').insert(rows2.slice(i, i + INSERT_BATCH)); } catch (_e) { /* dupes */ }
+          try { await gdb.from('crawl_requests').insert(rows2.slice(i, i + INSERT_BATCH)); } catch (_e) { /* dupes */ }
         }
         console.log(`seeded ${rows2.length} one-time craigslist+yellowpages scale jobs`);
       }
@@ -198,11 +214,11 @@ serve(async (req: Request) => {
     let skipped = 0;
     for (let i = 0; i < toInsert.length; i += INSERT_BATCH) {
       const batch = toInsert.slice(i, i + INSERT_BATCH);
-      const { error: insErr } = await db.from('crawl_requests').insert(batch);
+      const { error: insErr } = await gdb.from('crawl_requests').insert(batch);
       if (!insErr) { inserted += batch.length; continue; }
       if ((insErr as any)?.code === '23505') {
         for (const r of batch) {
-          const { error: rowErr } = await db.from('crawl_requests').insert(r);
+          const { error: rowErr } = await gdb.from('crawl_requests').insert(r);
           if (!rowErr) inserted++;
           else if ((rowErr as any)?.code === '23505') skipped++;
           else throw rowErr;

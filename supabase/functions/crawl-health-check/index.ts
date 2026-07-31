@@ -22,10 +22,26 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { isGrowthPaused } from '../_shared/growthPause.ts';
+import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 
 serve(async (req: Request) => {
+
+// ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
+// crawl_requests / leads_services / leads_influencers are read+written on the
+// SEPARATE growth database. The product DB keeps auth, profiles, services,
+// requests, bookings — and agent_runs / qa_findings so the ops console and the
+// watchdog keep working unchanged.
+//
+// Two projects = two connection pools. On 2026-07-30 background crawling
+// saturated the product pool (/rest/v1/services -> 503 while /auth/v1/user -> 200)
+// and the founder could not sign in or list a service. That is now physically
+// impossible rather than a matter of restraint.
+//
+// If the growth env is absent we FAIL LOUD — a silent fallback to the product DB
+// would recreate exactly that outage.
+const gdb = growthDb();
   const hcStarted = Date.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -203,7 +219,7 @@ serve(async (req: Request) => {
       const P1 = ['Miami','New York','Manhattan','Brooklyn','Queens','Bronx','Staten Island',
                   'Miami Beach','Brickell','Wynwood','Coral Gables','Doral','South Beach',
                   'Coconut Grove','Aventura','Little Havana','Hialeah','North Miami','Kendall','Pinecrest'];
-      const { data: off } = await db.from('crawl_requests')
+      const { data: off } = await gdb.from('crawl_requests')
         .update({ status: 'parked', updated_at: new Date().toISOString() })
         .in('status', ['new', 'crawling']).not('city', 'in', `(${P1.map((c) => `"${c}"`).join(',')})`)
         .select('id');

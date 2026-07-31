@@ -4784,7 +4784,7 @@ test('standing-findings-self-repair', 'SPEC-111: the standing findings must be F
 
 test('background-load-cannot-take-the-product-down', 'SPEC-115: background data acquisition must never be able to degrade the live product. Measured 2026-07-30: Supabase REST returned 503 on /rest/v1/services while /auth/v1/user stayed 200 — the founder could not list a service or stay signed in, because supply-engine dispatched 60 parallel fulfill-crawl runs at limit=500 and exhausted the shared connection pool', '#115', async () => {
   const se = readFile('supabase/functions/supply-engine/index.ts');
-  assert(/Math\.min\(Number\(Deno\.env\.get\('TURBO_KICKS'\) \|\| '0'\), 4\)/.test(se),
+  assert(/Math\.min\(Number\(Deno\.env\.get\('TURBO_KICKS'\) \|\| '40'\), 60\)/.test(se),
     'turbo must have a HARD ceiling in code — env may tune within it, never exceed it');
   // Growth runs at full throttle ONLY because writes are batched. If batching is
   // ever removed, high turbo would starve the pool again — so assert the pairing.
@@ -4928,6 +4928,23 @@ test('founder-bug-batch-2026-07-31', 'Founder-reported batch: (1) accepting a co
     'freeServices must START false — nobody is offered free work by accident');
   assert(/setFreeServices\(isConnectorProfile\(data\)\)/.test(app),
     'the default must be derived from the signed-in profile: Connector => free, everyone else => pay');
+});
+
+test('growth-tables-only-on-the-growth-db', 'SPEC-132: every crawl worker must read/write crawl_requests, leads_services and leads_influencers on the SEPARATE growth project. On 2026-07-30 background crawling saturated the PRODUCT pool — /rest/v1/services 503 while /auth/v1/user 200 — and the founder could not sign in. Two projects means two pools, so growth can run flat out and physically cannot take the product down', '#132', async () => {
+  const WORKERS = ['fulfill-crawl','supply-engine','crawl-seed-osm','creator-harvest','enrich-influencers','creator-enrich','crawl-health-check'];
+  const bad = [];
+  for (const w of WORKERS) {
+    const f = `supabase/functions/${w}/index.ts`;
+    if (!fs.existsSync(f)) continue;
+    const src = readFile(f).split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    if (/(^|[^a-zA-Z])(db|supaAdmin)\.from\('(crawl_requests|leads_services|leads_influencers)'\)/m.test(src)) bad.push(w);
+    if (!/growthDb/.test(src)) bad.push(`${w} (no growth client)`);
+  }
+  assert(bad.length === 0, `these still hit growth tables on the PRODUCT database: ${bad.join(', ')}`);
+  const shared = readFile('supabase/functions/_shared/growthDb.ts');
+  assert(/throw new Error\(/.test(shared), 'a missing growth env must FAIL LOUD, never silently fall back to the product DB');
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  assert(/growthEnvPresent\(\) \? growthDb\(\) : db/.test(ops), 'the ops console must read growth tables from the growth DB');
 });
 
 main().catch(e => {
