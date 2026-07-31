@@ -1,2 +1,3 @@
 Bump this file to run the Growth DB setup workflow (seed + kick + status).
-run: 2026-07-31T16:44:55Z
+run: 2026-07-31T18:24:22Z
+reason: bring growth up after the cutover — seed the empty queue, kick the workers, report counts.
