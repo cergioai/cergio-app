@@ -129,6 +129,45 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
     return json({ sent: 0, note: 'no recipients after self-notify guard', selfNotifyBlocked });
   }
 
+  // ── SPEC-126: WRITE THE IN-APP NOTIFICATION ROWS HERE ────────────────────
+  // handleCreated only ever sent email/SMS — it never inserted the in-app
+  // 'new_request' rows. Those were written by the CLIENT, which RLS forbids
+  // (a user cannot insert a row for another profile: 403 42501), so they were
+  // never created for anyone, ever. The provider's inbox therefore had nothing
+  // to show even when the email arrived. This function runs as service role, so
+  // it is the only place these rows CAN be written.
+  //
+  // Idempotent: notify-request is fire-and-forget and may be retried, so an
+  // existing row for the same (profile, request) is left alone.
+  try {
+    const { data: already } = await supaAdmin
+      .from('notifications')
+      .select('profile_id')
+      .eq('kind', 'new_request')
+      .filter('data->>request_id', 'eq', String(requestId));
+    const have = new Set((already || []).map((r: any) => r.profile_id));
+    const fresh = providerIds.filter((pid: string) => !have.has(pid));
+    if (fresh.length) {
+      const deepLink = `${appBase}/results?req=${requestId}`;
+      await supaAdmin.from('notifications').insert(fresh.map((pid: string) => ({
+        profile_id: pid,
+        kind: 'new_request',
+        body: `New ${request.service_type || 'service'} request near you`,
+        data: {
+          request_id: requestId,
+          requester_id: requesterId,
+          provider_type: request.service_type || null,
+          query: (request.description || '').slice(0, 200),
+          where_text: request.location_text || null,
+          deep_link: deepLink,
+        },
+      })));
+    }
+  } catch (e) {
+    // never block delivery on the in-app row
+    console.warn('[notify-request] in-app row insert failed:', String(e).slice(0, 200));
+  }
+
   const requesterName = request.requester?.display_name || 'A Cergio user';
   const serviceType   = request.service_type || 'service';
   const link          = `${appBase}/inbox`;

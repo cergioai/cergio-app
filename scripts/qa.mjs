@@ -4874,6 +4874,20 @@ test('fanout-never-writes-other-users-notifications', 'SPEC-125 ROOT CAUSE, prov
   assert(idxFire > idxInsert, 'fireRequestNotify must run after, and independently of, the insert');
 });
 
+test('new-request-rows-written-server-side', 'SPEC-126: the in-app new_request notification rows must be written by notify-request (service role), not the client. RLS forbids a user inserting a row for another profile (403 42501), so the client could never create them — the provider inbox had nothing to show even when the email arrived. handleCreated previously only sent email/SMS and never inserted a row at all', '#126', async () => {
+  const nr = readFile('supabase/functions/notify-request/index.ts');
+  const created = nr.slice(nr.indexOf('async function handleCreated'), nr.indexOf('async function handleResponse'));
+  assert(/kind: 'new_request'/.test(created), 'handleCreated must insert new_request rows');
+  assert(/supaAdmin\s*\n?\s*\.from\('notifications'\)/.test(created) || /supaAdmin\.from\('notifications'\)/.test(created),
+    'the insert must use the admin (service-role) client so RLS does not block it');
+  assert(/data->>request_id/.test(created), 'it must be idempotent — retries must not duplicate rows');
+  assert(/deep_link/.test(created), 'the row must carry a deep link so the provider can open the request');
+  // and the client must still not attempt it
+  const api = readFile('src/lib/api.js');
+  assert(/rows\.filter\(r => r\.profile_id === uid\)/.test(api),
+    'the client must never write another user\'s notification row');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
