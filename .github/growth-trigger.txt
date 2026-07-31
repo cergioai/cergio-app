@@ -1,2 +1,2 @@
-run: 2026-07-31T22:39:06Z
-reason: re-kick AFTER the growthDb fix deployed — the previous kick used the old code.
+run: 2026-07-31T22:42:29Z
+reason: SPEC-149 capture the worker response body.
