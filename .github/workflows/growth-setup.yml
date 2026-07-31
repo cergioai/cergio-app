@@ -157,13 +157,27 @@ jobs:
           } > "$OUT"
           cat "$OUT"
 
-      - name: Commit the report
+      - name: Publish the report to the growth-status branch
         if: always()
         run: |
           set -uo pipefail
+          # SPEC-142: main is branch-protected (PR + required checks), so the
+          # earlier `git push origin HEAD:main` was REJECTED and the `|| echo`
+          # swallowed it — which is why two runs produced no report and the
+          # failure stayed invisible. Publish to an UNPROTECTED orphan branch
+          # instead; `git fetch origin growth-status` reads it from anywhere,
+          # with no API and no browser.
           git config user.name  "cergio-growth[bot]"
           git config user.email "growth@cergio.ai"
+          TMP=$(mktemp -d)
+          cp GROWTH-STATUS.md "$TMP/GROWTH-STATUS.md" 2>/dev/null || echo "report missing" > "$TMP/GROWTH-STATUS.md"
+          cd "$TMP"
+          git init -q .
+          git checkout -q -b growth-status
           git add GROWTH-STATUS.md
-          git diff --cached --quiet && { echo "no change"; exit 0; }
-          git commit -m "chore(growth): status report $(date -u +%FT%TZ) [skip ci]"
-          git push origin HEAD:main || echo "push failed (non-fatal)"
+          git -c user.name="cergio-growth[bot]" -c user.email="growth@cergio.ai" \
+            commit -q -m "growth status $(date -u +%FT%TZ)"
+          git push -q --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            growth-status
+          echo "published to the growth-status branch"
