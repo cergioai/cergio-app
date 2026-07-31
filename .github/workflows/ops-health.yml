@@ -47,6 +47,25 @@ jobs:
                 '{probed_at:$ts, http:{app:($app|tonumber), ops_metrics:($ops|tonumber)}, healthy:(($app|tonumber)>=200 and ($app|tonumber)<400 and ($ops|tonumber)==200), metrics:$m}' \
                 > out/latest.json
           echo "---- snapshot ----"; cat out/latest.json
+      - name: Dump un-versioned snapshot fn + booking truth (read-only, best-effort)
+        env:
+          SUPA_PAT: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          [ -z "${SUPA_PAT:-}" ] && { echo "no SUPABASE_ACCESS_TOKEN — skip dump"; exit 0; }
+          Q="https://api.supabase.com/v1/projects/vjmwnbftfquyquwaklue/database/query"
+          mkdir -p ops/health
+          # (a) the authoritative snapshot fn body lives only in a launcher; version it so it becomes off-Mac fixable
+          jq -n '{query:"select pg_get_functiondef(p.oid) as def from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname=\'public\' and p.proname=\'cergio_ops_snapshot\' limit 1"}' > /tmp/q1.json
+          curl -s --max-time 25 -X POST "$Q" -H "Authorization: Bearer $SUPA_PAT" -H "Content-Type: application/json" -d @/tmp/q1.json \
+            | jq -r 'if type=="array" and length>0 then .[0].def else empty end' > ops/health/snapshot_fn.sql || true
+          [ -s ops/health/snapshot_fn.sql ] || rm -f ops/health/snapshot_fn.sql
+          # (b) machine-truth bookings: distinct-party, paid/completed, non-seed vs the inflated headline
+          jq -n '{query:"select json_build_object(\'headline_all\',(select count(*) from public.bookings),\'seed\',(select count(*) from public.bookings where coalesce(seed,false)),\'paid_or_completed_nonseed\',(select count(*) from public.bookings where coalesce(seed,false)=false and status in (\'paid\',\'completed\')),\'distinct_party_completed_nonseed\',(select count(*) from (select 1 from public.bookings where coalesce(seed,false)=false and status in (\'paid\',\'completed\') and customer_id is distinct from provider_id group by customer_id,provider_id) t)) as truth"}' > /tmp/q2.json
+          curl -s --max-time 25 -X POST "$Q" -H "Authorization: Bearer $SUPA_PAT" -H "Content-Type: application/json" -d @/tmp/q2.json \
+            | jq -r 'if type=="array" and length>0 then (.[0].truth|tostring) else empty end' > ops/health/bookings_truth.json || true
+          [ -s ops/health/bookings_truth.json ] || rm -f ops/health/bookings_truth.json
+          echo "---- dumped ----"; ls -la ops/health/ || true
       - name: Commit snapshot to ops-health data branch
         run: |
           set -uo pipefail
@@ -62,6 +81,6 @@ jobs:
           mkdir -p ops/health
           cp out/latest.json ops/health/latest.json
           jq -c . out/latest.json >> ops/health/history.ndjson
-          git add ops/health/latest.json ops/health/history.ndjson
+          git add ops/health/
           git commit -m "ops-health: prod snapshot $(date -u +%FT%TZ)" || { echo "no change"; exit 0; }
           git push origin ops-health
