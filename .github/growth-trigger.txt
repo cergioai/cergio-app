@@ -1,3 +1,2 @@
-Bump this file to run the Growth DB setup workflow.
-run: 2026-07-31T21:24:39Z
-reason: SPEC-144 trailing-slash fix — seed should now succeed.
+run: 2026-07-31T21:29:45Z
+reason: SPEC-145 whitespace-safe URL normalisation + shape report.

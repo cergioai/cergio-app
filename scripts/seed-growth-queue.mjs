@@ -13,7 +13,7 @@
 // secret carries a TRAILING SLASH, so every call built "…//rest/v1/…" and the
 // seed failed while the auth check (which accepted 404 as success) passed green.
 // Normalise once, here, so no caller can hit it again.
-const URL_G = (process.env.GROWTH_SUPABASE_URL || '').replace(/\/+$/, '');
+const URL_G = (process.env.GROWTH_SUPABASE_URL || '').trim().replace(/\/+$/, '');
 const KEY = process.env.GROWTH_SERVICE_ROLE_KEY;
 if (!URL_G || !KEY) { console.error('GROWTH_SUPABASE_URL / GROWTH_SERVICE_ROLE_KEY not set'); process.exit(1); }
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };
