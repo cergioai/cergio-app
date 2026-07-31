@@ -1,3 +1,3 @@
-Bump this file to run the Growth DB setup workflow (seed + kick + status).
-run: 2026-07-31T19:55:30Z
-reason: report ALWAYS commits, so a failure is visible off-Mac.
+Bump this file to run the Growth DB setup workflow.
+run: 2026-07-31T19:59:33Z
+reason: publish the report to the unprotected growth-status branch.
