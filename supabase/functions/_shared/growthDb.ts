@@ -23,9 +23,18 @@ export function growthEnvPresent(): boolean {
 }
 
 /** Client for ALL crawl/lead traffic. Never use the product client for these. */
+// SPEC-148: accept ANY pasted form of the project URL. The GitHub secret carried
+// a '/rest/v1' path, which made every CI call resolve to '…/rest/v1/rest/v1/'
+// and 404. The EDGE secret is pasted from the same place, so normalise here too —
+// otherwise every worker silently builds broken URLs and writes nothing.
+function growthOrigin(raw: string | undefined): string {
+  const v = (raw || '').trim();
+  try { return new URL(v).origin; } catch { return v.replace(/\/+$/, ''); }
+}
+
 export function growthDb(): SupabaseClient {
-  const url = Deno.env.get('GROWTH_SUPABASE_URL');
-  const key = Deno.env.get('GROWTH_SERVICE_ROLE_KEY');
+  const url = growthOrigin(Deno.env.get('GROWTH_SUPABASE_URL'));
+  const key = (Deno.env.get('GROWTH_SERVICE_ROLE_KEY') || '').trim();
   if (!url || !key) {
     throw new Error(
       'GROWTH_SUPABASE_URL / GROWTH_SERVICE_ROLE_KEY are not set. Refusing to run crawl ' +
