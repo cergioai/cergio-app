@@ -58,6 +58,29 @@ jobs:
           GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
         run: node scripts/apply-growth-schema.mjs
 
+      - name: SEED the growth crawl queue (idempotent)
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+        run: node scripts/seed-growth-queue.mjs
+
+      - name: KICK the workers (drain the freshly seeded queue)
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -uo pipefail
+          FN="https://vjmwnbftfquyquwaklue.functions.supabase.co"
+          curl -s -o /dev/null -w 'supply-engine   -> HTTP %{http_code}\n' \
+            -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" "$FN/supply-engine" --max-time 120 || true
+          for i in 1 2 3 4 5 6; do
+            curl -s -o /dev/null -w "fulfill-crawl#$i -> HTTP %{http_code}\n" \
+              -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              "$FN/fulfill-crawl?limit=200" --max-time 120 &
+          done
+          wait
+          echo "workers dispatched — waiting 25s for rows to land"
+          sleep 25
+
       - name: GROWTH STATUS — row counts, job queue, agent liveness
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
