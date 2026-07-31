@@ -1,6 +1,6 @@
 // Apply the growth schema to the SEPARATE growth project. Run from CI.
 // Uses GROWTH_SUPABASE_URL + GROWTH_SERVICE_ROLE_KEY. Never touches the product DB.
-const GROWTH_URL = process.env.GROWTH_SUPABASE_URL;   // NOT `URL` — that shadows the global URL constructor
+const GROWTH_URL = (process.env.GROWTH_SUPABASE_URL || '').replace(/\/+$/, '');   // NOT `URL` — that shadows the global URL constructor
 const KEY = process.env.GROWTH_SERVICE_ROLE_KEY;
 if (!GROWTH_URL || !KEY) { console.error('GROWTH_SUPABASE_URL / GROWTH_SERVICE_ROLE_KEY not set'); process.exit(1); }
 if (/vjmwnbftfquyquwaklue/.test(GROWTH_URL)) {

@@ -51,13 +51,15 @@ jobs:
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
+          GROWTH_SUPABASE_URL="${GROWTH_SUPABASE_URL%/}"
           CODE=$(curl -s -o /dev/null -w '%{http_code}' \
             -H "apikey: $GROWTH_SERVICE_ROLE_KEY" \
             -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
             "$GROWTH_SUPABASE_URL/rest/v1/")
           echo "growth REST responded: HTTP $CODE"
           case "$CODE" in
-            200|404) echo "credentials accepted";;
+            200) echo "credentials accepted";;
+            404) echo "::error::REST returned 404 — the URL is malformed (trailing slash?). Treating as FAILURE."; exit 1;;
             401|403) echo "::error::growth key rejected (HTTP $CODE) — re-copy the secret key"; exit 1;;
             *) echo "::error::unexpected HTTP $CODE from the growth project"; exit 1;;
           esac
@@ -111,6 +113,8 @@ jobs:
           GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -uo pipefail
+          # SPEC-144: strip any trailing slash — "…//rest/v1/…" returns PGRST125
+          GROWTH_SUPABASE_URL="${GROWTH_SUPABASE_URL%/}"
           H_K="apikey: $GROWTH_SERVICE_ROLE_KEY"
           H_A="Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY"
           cnt () {
