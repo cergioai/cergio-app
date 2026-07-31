@@ -150,7 +150,8 @@ jobs:
             echo "- contains /dashboard/: $(printf '%s' "$GROWTH_SUPABASE_URL" | grep -c '/dashboard/')"
             echo "- key length: ${#GROWTH_SERVICE_ROLE_KEY}"
             echo "- key prefix: $(printf '%s' "$GROWTH_SERVICE_ROLE_KEY" | cut -c1-11)…"
-            echo "- GET /rest/v1/ -> HTTP $(curl -s -o /dev/null -w '%{http_code}' -H \"$H_K\" -H \"$H_A\" \"$GROWTH_SUPABASE_URL/rest/v1/\")"
+            PROBE=$(curl -s -o /dev/null -w '%{http_code}' -H "$H_K" -H "$H_A" "$GROWTH_SUPABASE_URL/rest/v1/")
+            echo "- GET /rest/v1/ -> HTTP $PROBE"
             echo
             echo
             echo "generated: $(date -u +%FT%TZ)"
