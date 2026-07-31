@@ -3341,7 +3341,26 @@ export async function createRequestAndFanOut({
       .order('created_at', { ascending: false })
       .limit(1);
     if (dupes && dupes.length) {
-      return { request: dupes[0], notified: 0, error: null, deduped: true };
+      // SPEC-122 — MEASURED 2026-07-30. This dedupe was written for a double-FIRE
+      // (one submit writing two rows 753ms apart). But it matched any PENDING
+      // request with the same query in 120s, and a pending row survives long after
+      // the fan-out finished. Testing "housekeeper" twice in two minutes therefore
+      // returned the OLD row and SKIPPED the fan-out — so the provider was never
+      // notified, while the request count still moved. It also silently swallowed
+      // every genuine re-request a real user makes ("housekeeper" today, again
+      // tomorrow within the window of a stale pending row).
+      //
+      // Keep the double-fire protection, drop the false positive: only treat it as
+      // a duplicate inside the 10s window a double-fire actually occupies, AND only
+      // if that row already fanned out to someone. A pending row that notified
+      // NOBODY must never block a fresh attempt — that is the bug being reported.
+      const dupe = dupes[0];
+      const ageMs = Date.now() - new Date(dupe.created_at).getTime();
+      const alreadyFannedOut = (dupe.notified_count ?? 0) > 0;
+      if (ageMs < 10000 || alreadyFannedOut) {
+        return { request: dupe, notified: dupe.notified_count ?? 0, error: null, deduped: true };
+      }
+      // else: fall through and fan out properly against the existing row
     }
   }
 
