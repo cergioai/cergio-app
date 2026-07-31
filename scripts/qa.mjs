@@ -4772,6 +4772,16 @@ test('bookings-headline-counts-only-real-completed', 'SPEC-107: the headline `bo
     'the raw bookings total must be preserved separately as bookings_all (internal ops visibility), not as the headline');
 });
 
+test('ops-metrics-headline-bookings-honest', 'SPEC-107b: the ops-metrics edge fn (the INVESTOR/AUDITOR-facing ops-health snapshot) must NOT surface the raw cergio_ops_snapshot() bookings count as the headline. That DB fn is unversioned (launcher-only, un-fixable off-Mac) and returns the raw table count (inflated 58 vs ~1 real completed). ops-metrics must recompute the headline as non-seed completed and preserve the raw value as bookings_all — the same honest definition enforced for opsPayload.', '#107', async () => {
+  const om = readFile('supabase/functions/ops-metrics/index.ts');
+  assert(/from\('bookings'\)[\s\S]*?\.not\('seed', 'is', true\)[\s\S]*?\.eq\('status', 'completed'\)/.test(om),
+    'ops-metrics must recompute the headline bookings as non-seed + status=completed (else the unversioned snapshot fn inflates the investor-facing KPI)');
+  assert(/snap\.bookings\s*=\s*completedNonSeed/.test(om),
+    'ops-metrics must assign the honest completed-non-seed count to snap.bookings');
+  assert(/snap\.bookings_all\s*=\s*rawHeadline/.test(om),
+    'ops-metrics must preserve the raw snapshot value as snap.bookings_all, never as the headline');
+});
+
 test('standing-findings-self-repair', 'SPEC-111: the standing findings must be FIXED automatically, not reported forever. crawl-health-check (every 30 min) backfills NULL lat/lng (a geo-invisible listing is unreachable by every request — the housekeeper case), strips street addresses leaked into titles, and parks off-spec crawl cities', '#111', async () => {
   const hc = readFile('supabase/functions/crawl-health-check/index.ts');
   assert(/or\('lat\.is\.null,lng\.is\.null'\)/.test(hc), 'must find listings with a NULL in either coordinate');
