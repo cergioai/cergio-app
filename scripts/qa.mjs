@@ -5069,6 +5069,30 @@ test('guest-inbox-no-infinite-spinner', 'QA-nightly 2026-07-31 (live-found in br
     'the myJobs effect must resolve myJobs to an empty shape when signed out so /inbox never hangs for a guest');
 });
 
+test('no-client-writes-another-users-notifications', 'SPEC-143 — AUDIT of the SPEC-125 class rather than waiting for each to be reported. RLS forbids a user inserting a notifications row for ANOTHER profile (403 42501). createRequestAndFanOut was fixed; createRequestToProvider and crossPostRequest had the SAME bug, so the direct-request and cross-post paths have never produced an in-app notification either, and crossPost additionally returned early on the error and killed its whole fan-out', '#143', async () => {
+  const api = readFile('src/lib/api.js');
+  // every notifications insert must be scoped to the caller's own row
+  const inserts = [...api.matchAll(/from\('notifications'\)\s*\.insert\(([\s\S]{0,240}?)\)/g)].map(m => m[1]);
+  assert(inserts.length > 0, 'expected notification inserts to audit');
+  for (const body of inserts) {
+    const ownRow = /profile_id === uid/.test(body) || /profile_id: uid/.test(body) || /profile_id:\s*userId/.test(body);
+    const isRecipientWrite = /profile_id:\s*(toProviderOwnerId|owner_id|pid)/.test(body);
+    assert(ownRow || !isRecipientWrite,
+      `a client-side notifications insert still targets another user: ${body.slice(0, 90).replace(/\n/g, ' ')}`);
+  }
+  // and no notification-insert error may abort a fan-out
+  assert(!/if \(notifyErr\) return \{ notified: 0, error: notifyErr \}/.test(api),
+    'a notification-insert failure must never abort the fan-out — notify-request writes those rows server-side');
+  // EVERY path that opens a request must actually notify somebody
+  for (const fnName of ['createRequestAndFanOut', 'createRequestToProvider', 'crossPostRequest']) {
+    const i = api.indexOf(`export async function ${fnName}`);
+    assert(i > -1, `${fnName} must exist`);
+    const body = api.slice(i, api.indexOf('\nexport ', i + 10));
+    assert(/fireRequestNotify\(/.test(body),
+      `${fnName} must call notify-request — otherwise the request is silent end to end`);
+  }
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
