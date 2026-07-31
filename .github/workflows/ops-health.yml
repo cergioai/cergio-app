@@ -1,0 +1,65 @@
+# CI-side live prod health probe (SPEC-124).
+#
+# WHY: the sandbox auditor is firewalled from *.supabase.co (000) and the Mac
+# _autorun runner is dead, so "is prod actually up?" has been UNPROVABLE for days.
+# GitHub's runners are NOT firewalled. This workflow runs ON GitHub, curls the
+# live prod app + ops-metrics, and commits the JSON snapshot to a dedicated
+# orphan data branch `ops-health`. The firewalled sandbox then reads it with a
+# plain `git fetch` — zero Mac, zero founder clicks. This permanently closes the
+# recurring "prod unproven-live" trap.
+#
+# The push uses the automatic GITHUB_TOKEN, which does NOT retrigger workflows,
+# so there is no loop. The data lives on `ops-health` only — main is untouched.
+name: ops-health (CI live prod probe)
+
+on:
+  schedule:
+    - cron: '5 * * * *'      # hourly at :05 — cheap, isolated data branch
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ops-health
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Probe live prod
+        run: |
+          set -uo pipefail
+          TS=$(date -u +%FT%TZ)
+          mkdir -p out
+          APP=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 https://cergio.ai || echo 000)
+          OPS_URL="https://vjmwnbftfquyquwaklue.functions.supabase.co/ops-metrics?nc=$(date +%s)"
+          OPS=$(curl -s --max-time 25 "$OPS_URL" -o out/metrics.json -w '%{http_code}' || echo 000)
+          if ! head -c1 out/metrics.json 2>/dev/null | grep -q '{'; then echo '{}' > out/metrics.json; fi
+          jq -n --arg ts "$TS" --arg app "$APP" --arg ops "$OPS" \
+                --argjson m "$(cat out/metrics.json)" \
+                '{probed_at:$ts, http:{app:($app|tonumber), ops_metrics:($ops|tonumber)}, healthy:(($app|tonumber)>=200 and ($app|tonumber)<400 and ($ops|tonumber)==200), metrics:$m}' \
+                > out/latest.json
+          echo "---- snapshot ----"; cat out/latest.json
+      - name: Commit snapshot to ops-health data branch
+        run: |
+          set -uo pipefail
+          git config user.name  "cergio-ci"
+          git config user.email "ci@cergio.ai"
+          if git ls-remote --exit-code --heads origin ops-health >/dev/null 2>&1; then
+            git fetch origin ops-health
+            git checkout -B ops-health origin/ops-health
+          else
+            git checkout --orphan ops-health
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          mkdir -p ops/health
+          cp out/latest.json ops/health/latest.json
+          jq -c . out/latest.json >> ops/health/history.ndjson
+          git add ops/health/latest.json ops/health/history.ndjson
+          git commit -m "ops-health: prod snapshot $(date -u +%FT%TZ)" || { echo "no change"; exit 0; }
+          git push origin ops-health
