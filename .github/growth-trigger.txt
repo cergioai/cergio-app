@@ -1,2 +1,2 @@
-run: 2026-07-31T22:42:29Z
-reason: SPEC-149 capture the worker response body.
+run: 2026-07-31T22:52:22Z
+reason: service-role key corrected — drain the 53,700 queued jobs.
