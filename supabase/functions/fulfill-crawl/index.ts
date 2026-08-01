@@ -182,11 +182,43 @@ const gdb = growthDb();
                 'Coconut Grove','Aventura','Little Havana','Hialeah','North Miami','Kendall','Pinecrest'];
     let jobs: any[] = [];
     {
-      // 1) phase-1 metros first
-      const { data: p1jobs, error: e1 } = await jobQ.in('city', P1)
-        .order('created_at', { ascending: true }).limit(perRun);
-      if (e1) throw e1;
-      jobs = p1jobs || [];
+      // 1) phase-1 metros first — but FAIRLY ACROSS SOURCES (SPEC-174).
+      //
+      // Pure FIFO within phase-1 meant the oldest jobs always won, and the oldest
+      // jobs are all osm. Measured 2026-08-01: osm had produced 1,026 leads while
+      // yelp, google_sponsored, gmaps_apify and ig_services showed "no finished
+      // job yet" — they were never STARVED of capacity by failing, they simply sat
+      // behind ~3,600 older rows and were never picked at all. A source cannot be
+      // diagnosed, let alone tuned, if the scheduler never runs it.
+      //
+      // Round-robin gives every source an equal slice of each run, so every source
+      // reports on every cycle and no single one can monopolise the pool. Within a
+      // source it is still oldest-first, so nothing starves inside a slice either.
+      const SOURCES_RR = ['osm', 'craigslist', 'yellowpages_apify', 'yelp',
+                          'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services'];
+      const share = Math.max(1, Math.floor(perRun / SOURCES_RR.length));
+      const perSource = await Promise.all(SOURCES_RR.map(async (src) => {
+        let q = gdb.from('crawl_requests')
+          .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
+          .eq('kind', 'services').eq('status', 'new').eq('source', src).in('city', P1);
+        const { data } = await q.order('created_at', { ascending: true }).limit(share);
+        return data || [];
+      }));
+      // Interleave so the pool starts one job of each source immediately, rather
+      // than eight osm jobs and only then the rest.
+      jobs = [];
+      for (let i = 0; i < share; i++) for (const list of perSource) if (list[i]) jobs.push(list[i]);
+      console.log(`round-robin: ${SOURCES_RR.map((s2, i) => `${s2}=${perSource[i].length}`).join(' ')}`);
+
+      // Anything with a source outside the list (legacy rows, google_local, null)
+      // still gets served, oldest-first, with whatever capacity is left.
+      if (jobs.length < perRun) {
+        const { data: legacy, error: e1 } = await jobQ.in('city', P1)
+          .not('source', 'in', `(${SOURCES_RR.map((x) => `"${x}"`).join(',')})`)
+          .order('created_at', { ascending: true }).limit(perRun - jobs.length);
+        if (e1) throw e1;
+        jobs = jobs.concat(legacy || []);
+      }
       // 2) only if phase-1 has no work left, spend the remainder elsewhere
       if (jobs.length < perRun) {
         let q2 = gdb.from('crawl_requests')

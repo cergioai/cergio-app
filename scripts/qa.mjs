@@ -5398,6 +5398,22 @@ test('zero-yield-notes-distinguish-empty-from-filtered', 'SPEC-173 (2026-08-01):
   assert(!(n < 5), `only ${n} zero-yield notes report raw item counts — a filtered-to-zero source is indistinguishable from an empty one`);
 });
 
+test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): osm had produced 1,026 leads while yelp, google_sponsored, gmaps_apify and ig_services showed "no finished job yet". They were not failing — the claim query was pure FIFO on created_at within phase-1, and the oldest ~3,600 rows are all osm, so those four sources were NEVER PICKED. A source that the scheduler never runs cannot be diagnosed or tuned, and its zero is meaningless. Every source must get an equal slice of each run, interleaved so the pool starts one of each immediately.', '#176', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/SOURCES_RR/.test(f)), 'no round-robin source list — FIFO lets the oldest source monopolise every run');
+  // Scope the membership check to the ARRAY LITERAL. Searching the whole file
+  // passes even when a source is dropped from the rota, because the name still
+  // appears in the dispatch switch — a gate that cannot fail.
+  const m = f.match(/const SOURCES_RR = \[([\s\S]*?)\];/);
+  assert(!(!m), 'SOURCES_RR is not a literal array');
+  for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services']) {
+    assert(!(!new RegExp(`'${src}'`).test(m[1])), `${src} is not in the round-robin list — it would never be scheduled`);
+  }
+  assert(!(!/const share = Math\.max\(1, Math\.floor\(perRun \/ SOURCES_RR\.length\)\)/.test(f)), 'no equal per-source share');
+  assert(!(!/for \(let i = 0; i < share; i\+\+\) for \(const list of perSource\)/.test(f)), 'slices are not interleaved — the pool would still start with one source only');
+});
+
+
 
 
 
