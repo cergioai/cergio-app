@@ -151,12 +151,28 @@ const gdb = growthDb();
     // that only exists in growth. It found none; the phase-2 fallback below then
     // EXCLUDES phase-1 cities, which is every city we seed. Net effect: 3,638
     // queued jobs, 0 claimed, 0 rows, for as long as the cutover has been live.
-    let jobQ = gdb
-      .from('crawl_requests')
-      .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
-      .eq('kind', 'services')
-      .eq('status', 'new');
-    if (!YP_ENABLED) jobQ = jobQ.or('source.is.null,source.neq.yellowpages');
+    // SPEC-162 (measured 2026-08-01, QA-nightly run129): the growth crawl_requests
+    // table — recreated by the SPEC-132 cutover from the reference schema — omits
+    // lat / lng / requested_by, yet this query READS them. Once SPEC-161 moved the
+    // read onto gdb (the growth client that actually holds the jobs), the gap
+    // surfaced as `column crawl_requests.lat does not exist [42703]`, erroring the
+    // WHOLE run (org_health=error) every tick — same shape as the enrich #172 gap.
+    // Degrade, never crash: if the rich columns are absent, retry with only the
+    // guaranteed columns and fall back to CITY scoping (job.lat/lng undefined → the
+    // BBOX path is skipped, city-name search still runs; requested_by undefined →
+    // the searcher-notify step is already guarded by `if (!job.requested_by) return`).
+    // The growth DDL remedy is escalated by scripts/apply-growth-schema.mjs.
+    const JOB_COLS_FULL = 'id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes';
+    const JOB_COLS_SAFE = 'id, kind, city, state, service_type, target_count, status, source, notes';
+    let jobCols = JOB_COLS_FULL;
+    let schemaDegraded = false;
+    const buildJobQ = (cols: string) => {
+      let q = gdb.from('crawl_requests').select(cols).eq('kind', 'services').eq('status', 'new');
+      if (!YP_ENABLED) q = q.or('source.is.null,source.neq.yellowpages');
+      return q;
+    };
+    const isMissingCol = (e: any) =>
+      !!e && (e.code === '42703' || /does not exist|column/i.test(String(e.message || e)));
     // ── PRIORITY QUEUE (SPEC-97b, 2026-07-29) — ROOT CAUSE OF THE CITY DRIFT.
     // This was pure FIFO on created_at, so every city competed equally for worker
     // capacity: Miami/NYC-first lived only in conversation, never in code. Now
@@ -167,20 +183,24 @@ const gdb = growthDb();
     let jobs: any[] = [];
     {
       // 1) phase-1 metros first
-      const { data: p1jobs, error: e1 } = await jobQ.in('city', P1)
+      let { data: p1jobs, error: e1 } = await buildJobQ(jobCols).in('city', P1)
         .order('created_at', { ascending: true }).limit(perRun);
+      if (e1 && isMissingCol(e1)) {
+        console.warn(`fulfill-crawl: crawl_requests missing rich columns (${serr(e1)}) — degrading to safe columns + city scoping. Remedy on the GROWTH project: alter table public.crawl_requests add column if not exists lat double precision, add column if not exists lng double precision, add column if not exists requested_by uuid;`);
+        schemaDegraded = true; jobCols = JOB_COLS_SAFE;
+        ({ data: p1jobs, error: e1 } = await buildJobQ(jobCols).in('city', P1)
+          .order('created_at', { ascending: true }).limit(perRun));
+      }
       if (e1) throw e1;
       jobs = p1jobs || [];
       // 2) only if phase-1 has no work left, spend the remainder elsewhere
       if (jobs.length < perRun) {
-        let q2 = gdb.from('crawl_requests')
-          .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
-          .eq('kind', 'services').eq('status', 'new').not('city', 'in', `(${P1.map(c => `"${c}"`).join(',')})`);
-        if (!YP_ENABLED) q2 = q2.or('source.is.null,source.neq.yellowpages');
-        const { data: rest } = await q2.order('created_at', { ascending: true }).limit(perRun - jobs.length);
+        const { data: rest } = await buildJobQ(jobCols)
+          .not('city', 'in', `(${P1.map(c => `"${c}"`).join(',')})`)
+          .order('created_at', { ascending: true }).limit(perRun - jobs.length);
         jobs = jobs.concat(rest || []);
       }
-      console.log(`priority-queue: ${(jobs || []).filter((j: any) => P1.includes(j.city)).length}/${jobs.length} jobs are phase-1`);
+      console.log(`priority-queue: ${(jobs || []).filter((j: any) => P1.includes(j.city)).length}/${jobs.length} jobs are phase-1${schemaDegraded ? ' [schema-degraded: no lat/lng/requested_by]' : ''}`);
     }
 
     // ── RECOVERY (2026-07-14 FORENSIC) ────────────────────────────────────────

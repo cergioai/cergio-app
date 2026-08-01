@@ -22,6 +22,12 @@ create table if not exists public.crawl_requests (
 );
 create index if not exists crawl_requests_status_city_idx on public.crawl_requests (status, city);
 create index if not exists crawl_requests_source_idx     on public.crawl_requests (source);
+-- QA-nightly run129 (2026-08-01): fulfill-crawl READS lat/lng (on-demand BBOX
+-- scoping) and requested_by (searcher notify). The original create omitted them,
+-- 42703-ing the worker after the SPEC-161 read moved onto growth. Add idempotently.
+alter table public.crawl_requests add column if not exists lat double precision;
+alter table public.crawl_requests add column if not exists lng double precision;
+alter table public.crawl_requests add column if not exists requested_by uuid;
 
 create table if not exists public.leads_services (
   id text primary key,

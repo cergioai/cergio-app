@@ -5260,6 +5260,20 @@ test('growth-tables-are-read-from-the-growth-db', 'SPEC-161 (measured 2026-08-01
   assert(!(fixed.length), `${fixed.join(', ')} no longer has this bug — remove it from KNOWN_GAP so the list keeps shrinking`);
 });
 
+test('fulfill-crawl-degrades-on-missing-crawl-columns', 'SPEC-162 (measured 2026-08-01, QA-nightly run129): the growth crawl_requests table, recreated by the SPEC-132 cutover, omits lat/lng/requested_by, yet fulfill-crawl READS them. After SPEC-161 moved the read onto the growth client, the worker threw `column crawl_requests.lat does not exist [42703]` on EVERY run — org_health=error, 0 rows — while qa stayed green (same blind spot as the enrich #172 gap). The reference schema MUST define the columns, the apply script MUST probe them, and the worker MUST degrade to safe columns + city scoping (never a red crash loop) when they are absent.', '#167', () => {
+  const fn = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(/JOB_COLS_SAFE/.test(fn), 'fulfill-crawl has no JOB_COLS_SAFE fallback — a missing lat/lng/requested_by column will 42703 the whole run');
+  assert(/isMissingCol|42703/.test(fn), 'fulfill-crawl does not detect the 42703 missing-column error to degrade on');
+  assert(!/JOB_COLS_SAFE[^]*?lat/.test(fn.slice(fn.indexOf('JOB_COLS_SAFE'), fn.indexOf('JOB_COLS_SAFE') + 120)), 'the SAFE column set still names lat — it must drop lat/lng/requested_by');
+  const ref = readFile('supabase/migrations/20260730190000_growth_schema_reference.sql');
+  for (const c of ['lat', 'lng', 'requested_by']) {
+    assert(new RegExp(`crawl_requests add column if not exists ${c}`).test(ref), `growth reference schema never adds crawl_requests.${c} — the growth table will keep 42703-ing`);
+  }
+  const apply = readFile('scripts/apply-growth-schema.mjs');
+  assert(/crawl_requests\?select=lat,lng,requested_by/.test(apply.replace(/\\/g, '')) || /crawl_requests\?select=lat,lng,requested_by/.test(apply), 'apply-growth-schema.mjs never column-probes crawl_requests — a missing column would pass the growth verify silently');
+  return true;
+});
+
 
 
 

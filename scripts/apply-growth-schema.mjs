@@ -75,7 +75,23 @@ if (!found) {
     console.error('    add column if not exists enrich_attempted_at timestamptz;');
     process.exit(1);
   }
-  console.log('growth schema verified — all four tables answer + enrichment columns present.');
+  // COLUMN-LEVEL guard #2 (QA-nightly run129, 2026-08-01): fulfill-crawl READS
+  // crawl_requests.lat / lng / requested_by, but the SPEC-132 reference create
+  // omitted them, so after SPEC-161 moved the read onto growth the worker 42703'd
+  // every run (org_health=error) while this verify stayed green. Probe them too.
+  const crawlProbe = await fetch(
+    `${GROWTH_URL}/rest/v1/crawl_requests?select=lat,lng,requested_by&limit=1`,
+    { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } },
+  );
+  if (crawlProbe.status >= 400) {
+    console.error('growth crawl_requests is MISSING lat/lng/requested_by — fulfill-crawl will 42703.');
+    console.error('Run this ONCE on the GROWTH project SQL editor to un-error the supply worker:');
+    console.error('  alter table public.crawl_requests add column if not exists lat double precision,');
+    console.error('    add column if not exists lng double precision,');
+    console.error('    add column if not exists requested_by uuid;');
+    process.exit(1);
+  }
+  console.log('growth schema verified — all four tables answer + enrichment/crawl columns present.');
   process.exit(0);
 }
 
