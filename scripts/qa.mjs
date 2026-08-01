@@ -5398,6 +5398,51 @@ test('zero-yield-notes-distinguish-empty-from-filtered', 'SPEC-173 (2026-08-01):
   assert(!(n < 5), `only ${n} zero-yield notes report raw item counts — a filtered-to-zero source is indistinguishable from an empty one`);
 });
 
+test('growth-rows-only-use-columns-that-exist', 'SPEC-177 (root cause of the entire "six dead sources" mystery, 2026-08-01): the SPEC-132 cutover recreated growth.leads_services WITHOUT zip/yelp_url/cl_post_url/facebook. Every source except osm writes zip, so PostgREST rejected the whole 500-row chunk with 42703, the row-by-row retry failed identically, and BOTH errors were DISCARDED by flushBuf while each fulfiller had already run saved++ — so sources that wrote nothing reported rows as delivered, for their entire lives. osm is the only source that omits zip and the only source that has ever produced a row. Every column a worker writes must exist, and a write error must never be swallowed.', '#177', () => {
+  const mig = readFile(fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations'))
+    .filter(f => /growth_schema_reference/.test(f)).map(f => `supabase/migrations/${f}`)[0]);
+  const leads = mig.slice(mig.indexOf('create table if not exists public.leads_services'));
+  const declared = new Set([...leads.matchAll(/^\s{2}([a-z_]+) /gm)].map(m => m[1]));
+  for (const m of leads.matchAll(/([a-z_]+) (?:text|boolean|double precision)/g)) declared.add(m[1]);
+  // `notes` belongs to crawl_requests, not leads_services — only count row literals
+  // that are actually handed to bufUpsert (the leads_services buffer).
+
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  let literals = 0;
+  // Capture ONLY the object literal immediately handed to bufUpsert (the
+  // leads_services buffer). A greedy span swallowed neighbouring crawl_requests
+  // updates and made this gate fail on their columns instead.
+  for (const m of fc.matchAll(/const row = \{((?:[^{}]|\{[^{}]*\})*)\};\s*\n?\s*await bufUpsert/g)) {
+    literals++;
+    for (const k of m[1].matchAll(/^\s{6,}([a-z_]+):/gm)) {
+      assert(!(!declared.has(k[1])), `fulfill-crawl writes leads_services.${k[1]} but the growth schema does not declare it — PostgREST 42703 silently kills the whole batch`);
+    }
+  }
+  assert(!(literals < 4), `only ${literals} row literals parsed — this gate has stopped checking anything`);
+  assert(!(!/_lastFlushError = serr\(error\)/.test(fc)), 'flushBuf discards its chunk error again — a rejected write is indistinguishable from a successful one');
+  assert(!(!/else _lastFlushError = serr\(e1\)/.test(fc)), 'the row-by-row retry discards its error again');
+  assert(!(!/_lastFlushError \|\|/.test(fc)), 'a write failure never reaches the job notes — it would be reported as "no results"');
+});
+
+test('craigslist-reads-what-the-actor-emits', 'SPEC-178 (root-caused 2026-08-01): craigslist produced ZERO leads for its whole life while _lastApifyError stayed null — proof the actor returned items and our own code rejected all of them. Three defects. (1) memo23/craigslist-scraper pushes 10 rows labelled NO_RESULTS per EMPTY search, and we queried the full service_type phrase ("gmat tutor") which Craigslist matches as an EXACT PHRASE and never hits — so 8 URLs returned 80 placeholders, apifyRun saw a non-empty array and recorded no error, and every placeholder was filtered out. (2) the actor emits the post body as `post`; we read description/body, which it never emits, so desc was ALWAYS empty and the on-topic gate degraded to title-only. (3) maxItems is PER START URL in this actor, so 8x1000 would abort run-sync. A source is not dead until its own output is read correctly.', '#178', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const clRaw = f.slice(f.indexOf('async function fulfillCraigslist'), f.indexOf('async function fulfillYellowPagesApify'));
+  const cl = clRaw;
+  // Grep CODE, not the comments that explain the fix — both `includeEmails` and the
+  // raw-query pattern are named in the guard comments above them.
+  const clCode = stripComments(clRaw);
+  assert(!(cl.length < 500), 'fulfillCraigslist not found — this gate is grading nothing');
+  assert(!(!/NO_RESULTS/.test(cl)), 'no NO_RESULTS guard — empty-search placeholders are counted as listings, so a dead query looks like a filtered one');
+  assert(!(!/found -= placeholders/.test(cl)), 'placeholder rows still inflate raw_found — the zero-yield note would lie again');
+  assert(!(!/const desc = \(it\?\.post/.test(cl)), 'craigslist reads description/body first again; the actor emits `post`, so desc is always empty');
+  assert(!(!/const clQuery = rawType\.split/.test(cl)), 'no broadened query — the full multi-word service_type is exact-phrase matched and returns 0');
+  assert(!(/\?query=\$\{encodeURIComponent\(rawType\)\}/.test(clCode)), 'a start URL still queries the raw multi-word service_type');
+  assert(!(!/maxItems:/.test(cl)), 'maxItems not passed in the actor INPUT — it defaults to 1000 PER start URL and aborts run-sync');
+  assert(!(/includeEmails/.test(clCode)), 'includeEmails is not an input field of this actor');
+});
+
+
+
 
 
 

@@ -73,6 +73,10 @@ await q(`
 `);
 await q(`
   alter table public.leads_services
+    add column if not exists zip text,
+    add column if not exists yelp_url text,
+    add column if not exists cl_post_url text,
+    add column if not exists facebook text,
     add column if not exists address text,
     add column if not exists osm_id text,
     add column if not exists lon double precision,
