@@ -5260,6 +5260,13 @@ test('growth-tables-are-read-from-the-growth-db', 'SPEC-161 (measured 2026-08-01
   assert(!(fixed.length), `${fixed.join(', ')} no longer has this bug — remove it from KNOWN_GAP so the list keeps shrinking`);
 });
 
+test('growth-runs-unattended', 'SPEC-162 (2026-08-01): growth-setup ran ONLY on push, so the workers were kicked for roughly two minutes after a commit and then never again. Overnight — precisely when acquisition should be grinding — nothing fired. Growth must run on a schedule, unattended, or "growth is up" is only ever true while someone is watching.', '#167', () => {
+  const wf = readFile('.github/workflows/growth-setup.yml');
+  assert(!(!/schedule:/.test(wf)), 'growth-setup has no schedule — it only runs when someone pushes');
+  assert(!(!/cron: *'\*\/\d+ \* \* \* \*'/.test(wf)), 'growth-setup has no sub-hourly cron');
+});
+
+
 
 
 
