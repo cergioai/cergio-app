@@ -5369,6 +5369,19 @@ test('crawl-jobs-run-in-parallel', 'SPEC-169 (measured on the live queue 2026-08
   assert(!(/for \(const job of jobs \?\? \[\]\) \{/.test(f)), 'the serial job loop is back');
 });
 
+test('non-osm-sources-query-at-metro-level', 'SPEC-170/170b (root-caused 2026-08-01): six sources produced ZERO rows for a day because we seed at NEIGHBOURHOOD level (Manhattan, Brooklyn, Queens, Bronx, Staten Island, Brickell, Wynwood, Coral Gables, Doral, Miami Beach) while every non-OSM source is METRO level. CL_SUBDOMAIN held only new york + miami, so 10 of 12 cities returned "no craigslist subdomain" before making a single request; Google Local Services Ads are sold per metro so the CID lookup for "Wynwood FL" legitimately found nothing; YellowPages indexes by metro. OSM worked only because Overpass geocodes any place name. Every non-OSM source must normalise the city to its metro first.', '#173', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/function metroOf\(/.test(f)), 'no metroOf() normaliser — neighbourhood names will silently match nothing');
+  for (const n of ['manhattan', 'brooklyn', 'queens', 'bronx', 'staten island', 'brickell', 'wynwood', 'coral gables', 'doral', 'miami beach']) {
+    assert(!(!new RegExp(`'${n}':`).test(f)), `metro map is missing "${n}" — every non-OSM job for that city returns nothing`);
+  }
+  assert(!(!/CL_SUBDOMAIN\[metroOf\(city\)/.test(f)), 'craigslist still looks up the raw city — boroughs have no subdomain');
+  assert(!(!/METRO_OF\[city\.toLowerCase\(\)\.trim\(\)\] \|\| city/.test(f)), 'resolveCid does not normalise to metro');
+  assert(!(!/location: `\$\{metroOf\(city\)\}/.test(f)), 'yellowpages still queries the raw neighbourhood');
+  assert(!(/catch \(_e\) \{ \/\* ignore \*\/ \}/.test(f)), 'the CID resolver still swallows its own errors — a bad key looks identical to an empty market');
+});
+
+
 
 
 

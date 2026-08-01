@@ -1663,15 +1663,63 @@ async function fulfillGoogleSponsored(db: any, job: any): Promise<{ saved: numbe
 // City -> Google CID (data_cid) for the Local Services engine. NYC from SerpAPI
 // docs; others resolved at runtime via google_maps and cached in-process.
 const CITY_CID: Record<string, string> = { 'new york': '14414772292044717666' };
+
+// SPEC-170 — google_lsa/google_sponsored produced ZERO rows for a whole day, and
+// the only thing they ever said was "no data_cid for city". Two causes, both here:
+//
+//  1. WE SEED BOROUGHS AND NEIGHBOURHOODS, NOT METROS. The queue is Manhattan,
+//     Brooklyn, Queens, Bronx, Staten Island, Brickell, Wynwood, Doral, Coral
+//     Gables, Miami Beach. Google Local Services Ads are sold at METRO level, so
+//     asking for a CID for "Wynwood FL" legitimately returns nothing — the ads
+//     exist, we were asking with the wrong key. Every seeded location now maps to
+//     its metro before the lookup, which is also correct behaviour: an LSA pro in
+//     Wynwood IS a Miami LSA pro.
+//  2. THE RESOLVER SWALLOWED ITS OWN ERRORS (`catch { /* ignore */ }`), so a bad
+//     key, a quota block or an HTTP 5xx was indistinguishable from "this city has
+//     no ads". That is what made it look like an empty market for a full day.
+const METRO_OF: Record<string, string> = {
+  'manhattan': 'New York', 'brooklyn': 'New York', 'queens': 'New York',
+  'bronx': 'New York', 'staten island': 'New York', 'new york': 'New York',
+  'miami beach': 'Miami', 'brickell': 'Miami', 'wynwood': 'Miami',
+  'coral gables': 'Miami', 'doral': 'Miami', 'miami': 'Miami',
+};
+const METRO_STATE: Record<string, string> = { 'New York': 'NY', 'Miami': 'FL' };
+
+// SPEC-170b — THE UNIFYING ROOT CAUSE of six silent sources. We seed at
+// NEIGHBOURHOOD level (Manhattan, Brooklyn, Queens, Bronx, Staten Island,
+// Brickell, Wynwood, Coral Gables, Doral, Miami Beach) because that is how the
+// product thinks about coverage. But every non-OSM source is METRO level:
+// craigslist has newyork./miami. subdomains and no borough subdomains at all,
+// Google Local Services Ads are sold per metro, YellowPages indexes by metro.
+// OSM was the only source that worked BECAUSE Overpass geocodes any place name.
+// So 10 of our 12 cities could never match, and the failure was silent — e.g.
+// craigslist returned 'no craigslist subdomain' before making a single request.
+// Normalising to the metro is not a widening of scope: a plumber in Wynwood IS a
+// Miami plumber, and Craigslist/LSA/YP have always filed them that way.
+function metroOf(city: string): string {
+  return METRO_OF[(city || '').toLowerCase().trim()] || city;
+}
+
 async function resolveCid(KEY: string, city: string, state: string): Promise<string | null> {
-  const k = city.toLowerCase();
+  const metro = METRO_OF[city.toLowerCase().trim()] || city;
+  const k = metro.toLowerCase();
   if (CITY_CID[k]) return CITY_CID[k];
+  const st = METRO_STATE[metro] || state;
   try {
-    const u = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(city + ' ' + state)}&type=search&api_key=${KEY}`;
-    const res = await fetch(u); const j = await res.json();
+    const u = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(metro + ' ' + st)}&type=search&api_key=${KEY}`;
+    const res = await fetch(u);
+    if (!res.ok) {
+      _lastSerpError = `SerpAPI CID lookup HTTP ${res.status} for ${metro}, ${st} — key/quota problem, NOT an empty market`;
+      return null;
+    }
+    const j = await res.json();
+    if (j?.error) { _lastSerpError = `SerpAPI: ${String(j.error).slice(0, 160)}`; return null; }
     const cid = (j?.local_results || []).map((r: any) => r?.data_cid).find((x: any) => x);
     if (cid) { CITY_CID[k] = String(cid); return String(cid); }
-  } catch (_e) { /* ignore */ }
+    _lastSerpError = `SerpAPI returned no data_cid for metro ${metro}, ${st} (local_results=${(j?.local_results || []).length})`;
+  } catch (e) {
+    _lastSerpError = `SerpAPI CID lookup threw for ${metro}: ${(e as Error)?.message || String(e)}`;
+  }
   return null;
 }
 // Google Local Services Ads — the sponsored service pros (phone + badge).
@@ -1794,7 +1842,7 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
   const rawType = (job.service_type || '').toLowerCase().trim();
   const city = (job.city || '').trim();
   const state = (job.state || '').trim();
-  const sub = CL_SUBDOMAIN[city.toLowerCase()];
+  const sub = CL_SUBDOMAIN[metroOf(city).toLowerCase()];  // SPEC-170b: boroughs have no CL subdomain
   const query = `${rawType} [craigslist ${city}]`;
   if (!sub || osmIsBlocked(rawType)) return { saved: 0, found: 0, query, note: sub ? 'blocked' : 'no craigslist subdomain' };
   // Map the service to the RIGHT Craigslist services subcategory (bbb was a
@@ -1871,7 +1919,8 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   const query = `${rawType} [yellowpages ${city}]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
   const items = await apifyRun('cryptosignals~yellow-pages-us-scraper',
-    { keyword: rawType, location: `${city}, ${state}`, maxItems: 1000, maxResults: 1000 }, 1000);  // MAX: no provider ceiling
+    // SPEC-170b: YellowPages indexes by METRO — "Wynwood, FL" matches nothing.
+    { keyword: rawType, location: `${metroOf(city)}, ${METRO_STATE[metroOf(city)] || state}`, maxItems: 1000, maxResults: 1000 }, 1000);  // MAX: no provider ceiling
   let found = items.length, saved = 0, ypFetches = 0;
   const seen = new Set<string>();
   for (const it of items) {
