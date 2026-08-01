@@ -5219,6 +5219,24 @@ test('homescreen-jsx-references-only-live-bindings', 'SPEC-159 (my regression, c
   return true;
 });
 
+test('hook-deps-never-read-a-later-const', 'SPEC-160 (my second regression in one hour, caught live 2026-08-01): the SPEC-152 signed-in guard was inserted ABOVE `const returnTo`, so its dependency array read returnTo in the temporal dead zone and threw on every render of /auth — a WHITE SCREEN on the sign-in page, worse than the relogin loop it fixed. Same shape as SPEC-159: an identifier used before it is bound, which vite and every static grep happily accept. A hook dependency array must never name a const declared later in the same component.', '#165', () => {
+  const files = ['src/screens/AuthScreen.jsx', 'src/screens/HomeScreen.jsx', 'src/screens/FreeBarterLandingScreen.jsx', 'src/screens/ServiceDetailScreen.jsx'];
+  for (const f of files) {
+    let src; try { src = readFile(f); } catch { continue; }
+    for (const m of src.matchAll(/\}, \[([^\]]*)\]\);/g)) {
+      const at = m.index;
+      for (const raw of m[1].split(',')) {
+        const name = raw.trim().split(/[?.[\s]/)[0];
+        if (!name || !/^[a-z][A-Za-z0-9_]*$/.test(name)) continue;
+        const decl = src.search(new RegExp(`\\b(?:const|let|var|function) +${name}\\b`));
+        assert(!(decl > -1 && decl > at),
+          `${f}: a hook dependency array reads "${name}" before its declaration — temporal dead zone, blanks the screen at runtime`);
+      }
+    }
+  }
+});
+
+
 
 
 

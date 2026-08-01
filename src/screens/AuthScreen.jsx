@@ -55,18 +55,6 @@ export function AuthScreen() {
   const location = useLocation();
   const { auth, showToast } = useOutletContext();
 
-  // CERGIO-GUARD (2026-08-01, SPEC-152, Tarik live): "I clicked on claim founding
-  // spot… kept on being asked to relogin". /auth honoured ?returnTo= but had NO
-  // already-signed-in guard, so any signed-in user routed here was shown the
-  // sign-in form again — an apparent auth loop with no way forward. This is an
-  // entry-point-agnostic fix: a live session means the gate is already satisfied,
-  // so pass straight through to the destination. Waits for `loading` so we never
-  // bounce before the persisted session has resolved.
-  useEffect(() => {
-    if (auth?.loading) return;
-    if (auth?.isSignedIn) navigate(returnTo, { replace: true });
-  }, [auth?.loading, auth?.isSignedIn, returnTo, navigate]);
-
   const activeRef = getActiveRef();
   const isReset   = new URLSearchParams(location.search).get('reset') === 'true';
   // CERGIO-GUARD (2026-06-16, Tarik): when a logged-out user tries to book,
@@ -75,6 +63,22 @@ export function AuthScreen() {
   // to /home. Only same-origin internal paths are honored.
   const returnToRaw = new URLSearchParams(location.search).get('returnTo') || '';
   const returnTo = /^\/[a-zA-Z0-9/_-]+$/.test(returnToRaw) ? returnToRaw : '/home';
+
+  // CERGIO-GUARD (2026-08-01, SPEC-152, Tarik live): "I clicked on claim founding
+  // spot… kept on being asked to relogin". /auth honoured ?returnTo= but had NO
+  // already-signed-in guard, so any signed-in user routed here was shown the
+  // sign-in form again — an apparent auth loop with no way forward. This is an
+  // entry-point-agnostic fix: a live session means the gate is already satisfied,
+  // so pass straight through to the destination. Waits for `loading` so we never
+  // bounce before the persisted session has resolved.
+  //
+  // MUST stay BELOW `returnTo`: placed above it, the dependency array read
+  // returnTo in its temporal dead zone and threw on every render of /auth —
+  // a white screen on the sign-in page, which is worse than the loop it fixes.
+  useEffect(() => {
+    if (auth?.loading) return;
+    if (auth?.isSignedIn) navigate(returnTo, { replace: true });
+  }, [auth?.loading, auth?.isSignedIn, returnTo, navigate]);
 
   // 'choose'  → Google + Email + More options buttons (calm landing)
   // 'email'   → expanded email/password form
