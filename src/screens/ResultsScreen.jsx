@@ -353,9 +353,19 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
   // price + a strike-through on the official, plus a line like
   // "Maria countered with $5". Counter status is one of
   // offered / countered / accepted — see ResultsScreen poll.
+  // CERGIO-GUARD (2026-08-01, SPEC-211 - NEVER INVENT A PRICE): the old test
+  // was Number.isFinite(+offeredPriceCents) alone. +null is 0 and
+  // Number.isFinite(0) is TRUE, so a countered response carrying NO price
+  // resolved to 0 - the screen showed, and (see priceCents below) would now
+  // have CHARGED, a $0 quote the provider never gave. Reject null/undefined
+  // explicitly: no price quoted means the official rate stands for BOTH the
+  // display and the money. A real 0 (barter / free counter) is still honoured.
+  const rawCounterCents = responseDetail?.offeredPriceCents;
   const counterCents = (responseDetail?.status === 'countered'
-                        && Number.isFinite(+responseDetail?.offeredPriceCents))
-    ? +responseDetail.offeredPriceCents
+                        && rawCounterCents != null
+                        && Number.isFinite(+rawCounterCents)
+                        && +rawCounterCents >= 0)
+    ? +rawCounterCents
     : null;
   // Recompute savings to reflect the COUNTER price so the photo
   // overlay reads correctly ("Saves $35" instead of relying on the
@@ -370,7 +380,16 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     id:          svc.id,
     ownerId:     svc.owner_id,
     offeringId:  offering?.id || null,
-    priceCents:  cents,
+    // CERGIO-GUARD (2026-08-01, SPEC-211 - MONEY): priceCents is the number
+    // the BOOKING is written at (App.proceedBooking -> createBooking
+    // totalCents) and the number ServiceDetailScreen seeds its offering +
+    // bottom CTA from. It used to be the provider's STICKER rate while the
+    // card DISPLAYED the counter, so a user who accepted a $5 counter was
+    // booked and charged $35 - a price they never agreed to. Display and
+    // money now resolve from the SAME effectivePriceCents.
+    // officialPriceCents keeps the sticker for the strike-through ONLY -
+    // it must never reach a charge.
+    priceCents:  effectivePriceCents,
     officialPriceCents: cents,
     counterPriceCents:  counterCents,
     counterStatus:      responseDetail?.status || null,
@@ -381,7 +400,9 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     // vague category ("Beauty"). Falls back to category when absent (SPEC-49g).
     taxonomy_provider_type: svc.taxonomy_provider_type || null,
     bio:         svc.description || '',
-    price:       counterCents != null ? effectivePrice : (price || 0),
+    // Single source with priceCents above - when there is no counter,
+    // effectivePrice IS the official price, so the two can never disagree.
+    price:       effectivePrice || 0,
     officialPrice: price || 0,
     recos:       (svc.recommenders?.length) || svc.rating_count || 0,
     // Counts that drive the "X other friends and Y Connectors" copy.

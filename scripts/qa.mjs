@@ -5747,6 +5747,123 @@ test('one-master-spec-nothing-orphaned', 'SPEC-194 (founder 2026-08-01: "this ne
 
 
 
+// ─── INVARIANT #211: the counter price is the price that gets CHARGED ────
+// Founder, 2026-08-01 (verbatim): "When viewing a reply to book, and seeing
+// profile of the service, need to showcase the booking button with the price
+// (from the counter).. not the generic request to book on profile".
+// MEASURED on 13cd9b3: ResultsScreen.serviceToProvider computed
+// `effectivePriceCents` (counter when present) but used it for DISPLAY ONLY
+// and returned `priceCents: cents` — the provider's STICKER rate. `priceCents`
+// is exactly the field App.proceedBooking writes to createBooking totalCents,
+// and the field ServiceDetailScreen seeds its offering + bottom CTA from. So a
+// user who saw and accepted a $5 counter was shown "Request ($35)" on the
+// profile and booked at $35: charged a price they never agreed to.
+test('counter-price-is-the-price-charged', 'SPEC-211 — the counter price the user SEES must be the price the booking is WRITTEN at. Display and money must resolve from one number (effectivePriceCents), and a counter with no price must never be invented as $0.', '#211', () => {
+  const src  = stripComments(readFile('src/screens/ResultsScreen.jsx'));
+  const m    = src.match(/function serviceToProvider\([^]*?\n\}/);
+  assert(!(!m), 'serviceToProvider not found in ResultsScreen.jsx — the function that shapes booking money moved or was renamed; re-point this gate before trusting a green run');
+  const body = m[0];
+
+  // 1) MONEY: never ship the sticker rate as the bookable price.
+  assert(!(/\bpriceCents\s*:\s*cents\b/.test(body)),
+    'serviceToProvider returns `priceCents: cents` — the STICKER rate. That is the number createBooking writes to total_cents, so the user is charged a price the card never showed. Use effectivePriceCents.');
+  assert(!(!/\bpriceCents\s*:\s*effectivePriceCents\b/.test(body)),
+    'serviceToProvider must return `priceCents: effectivePriceCents` so the money written equals the counter price displayed and accepted');
+
+  // 2) ONE SOURCE: the displayed dollars must derive from the same cents.
+  assert(!(!/\bprice\s*:\s*effectivePrice\b/.test(body)),
+    'the displayed `price` must derive from effectivePrice — two independent expressions for display and charge is exactly how they drifted apart');
+  assert(!(!/const\s+effectivePriceCents\s*=\s*counterCents\s*!=\s*null\s*\?\s*counterCents\s*:\s*cents/.test(body)),
+    'effectivePriceCents must be the counter when one exists and the official rate otherwise — it is the single source both display and money read');
+
+  // 3) The sticker survives for the strike-through ONLY, never for a charge.
+  assert(!(!/officialPriceCents\s*:\s*cents/.test(body)),
+    'officialPriceCents must keep the official rate so ProviderCard can strike it through — but it must not be the bookable price');
+
+  // 4) NEVER INVENT A PRICE: +null === 0 and Number.isFinite(0) === true.
+  assert(!(/Number\.isFinite\(\+responseDetail\?\.offeredPriceCents\)/.test(body)),
+    'the counter guard tests Number.isFinite(+responseDetail?.offeredPriceCents) alone — `+null` is 0 and Number.isFinite(0) is TRUE, so a counter carrying NO price becomes an invented $0 quote that would now also be charged');
+  assert(!(!/rawCounterCents\s*!=\s*null/.test(body)),
+    'the counter guard must reject a null/absent offeredPriceCents explicitly — "no price quoted" means the official rate stands, not $0');
+});
+
+// ─── INVARIANT #212: crossPostRequest binds every identifier it reads ────
+// MEASURED on 13cd9b3: `fallbackCity: request.city || null` inside
+// crossPostRequest, with NO `request` in that function's scope. Every call
+// threw "request is not defined" before reaching the notify insert, so the
+// "also notify other providers" action was 100% dead and RequestQuoteSheet
+// hung with busy=true (the throw escaped past setBusy(false)). This is the
+// SIXTH identifier-scope regression in this codebase; vite build and every
+// static check pass on all of them, because it is a RUNTIME ReferenceError.
+// So this gate does not grep for one name — it resolves the function's real
+// scope chain (params, locals, arrow params, module-level bindings) and fails
+// on ANY member-expression base that is not bound.
+test('crosspost-request-identifiers-are-bound', 'SPEC-212 — every identifier crossPostRequest dereferences must be bound in its scope. An unbound one is a runtime ReferenceError that no build or lint step in this repo catches, and it silently kills a whole user-facing action.', '#212', () => {
+  const src = stripCommentsAndStrings(readFile('src/lib/api.js'));
+  const at  = src.indexOf('export async function crossPostRequest');
+  assert(!(at < 0), 'crossPostRequest not found in src/lib/api.js — re-point this gate before trusting a green run');
+  const sigEnd = src.indexOf(') {', at);
+  assert(!(sigEnd < 0), 'could not locate the end of the crossPostRequest signature');
+  const paramsSrc = src.slice(src.indexOf('{', at), sigEnd);
+  let depth = 0, bodyStart = src.indexOf('{', sigEnd), end = bodyStart;
+  for (; end < src.length; end++) {
+    if (src[end] === '{') depth++;
+    else if (src[end] === '}') { depth--; if (depth === 0) break; }
+  }
+  const body = src.slice(bodyStart, end + 1);
+  assert(!(body.length < 200), 'crossPostRequest body extraction failed — this gate would pass vacuously');
+
+  const bound = new Set();
+  const add = (n) => { if (n) bound.add(n); };
+  // destructured params (`a: b` binds b)
+  for (const part of paramsSrc.replace(/^[{\s]+|[}\s=]+$/g, '').split(',')) {
+    const t = part.trim(); if (!t) continue;
+    const mm = t.match(/^(?:[A-Za-z_$][\w$]*\s*:\s*)?([A-Za-z_$][\w$]*)/); add(mm && mm[1]);
+  }
+  // locals: const/let/var, incl. object + array patterns
+  for (const mm of body.matchAll(/\b(?:const|let|var)\s+(\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)/g)) {
+    const t = mm[1];
+    if (t[0] === '{' || t[0] === '[') {
+      for (const q of t.slice(1, -1).split(',')) {
+        const r = q.trim().match(/(?:[A-Za-z_$][\w$]*\s*:\s*)?([A-Za-z_$][\w$]*)\s*(?:=|$)/); add(r && r[1]);
+      }
+    } else add(t);
+  }
+  // arrow / callback params inside the body
+  for (const mm of body.matchAll(/(?:\(([^()]*)\)|([A-Za-z_$][\w$]*))\s*=>/g)) {
+    for (const q of ((mm[1] !== undefined ? mm[1] : mm[2]) || '').split(',')) {
+      const r = q.trim().match(/^([A-Za-z_$][\w$]*)/); add(r && r[1]);
+    }
+  }
+  for (const mm of body.matchAll(/\bcatch\s*\(\s*([A-Za-z_$][\w$]*)/g)) add(mm[1]);
+  // module-level bindings visible from inside the function
+  for (const mm of src.matchAll(/^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm)) add(mm[1]);
+  for (const mm of src.matchAll(/^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gm)) add(mm[1]);
+  for (const mm of src.matchAll(/^(?:export\s+)?(?:const|let|var)\s+\{([^}]*)\}/gm))
+    for (const q of mm[1].split(',')) {
+      const r = q.trim().match(/(?:[A-Za-z_$][\w$]*\s*:\s*)?([A-Za-z_$][\w$]*)/); add(r && r[1]);
+    }
+  for (const mm of src.matchAll(/^import\s+(?:\{([^}]*)\}|([A-Za-z_$][\w$]*))/gm)) {
+    if (mm[2]) add(mm[2]);
+    if (mm[1]) for (const q of mm[1].split(',')) {
+      const r = q.trim().match(/(?:[A-Za-z_$][\w$]*\s+as\s+)?([A-Za-z_$][\w$]*)$/); add(r && r[1]);
+    }
+  }
+  const GLOBALS = new Set(['window','document','console','globalThis','Math','JSON','Object','Array','String','Number','Boolean','Date','Promise','Set','Map','Error','RegExp','fetch','URL','URLSearchParams','localStorage','navigator','crypto','process','Intl','Symbol','undefined','import']);
+  const KEYWORDS = /^(true|false|null|new|return|typeof|await|this|case|of|in|else|do)$/;
+
+  const unbound = [];
+  for (const mm of body.matchAll(/(^|[^.\w$'"`])([A-Za-z_$][\w$]*)\s*\??\.\s*[A-Za-z_$]/g)) {
+    const n = mm[2];
+    if (bound.has(n) || GLOBALS.has(n) || KEYWORDS.test(n)) continue;
+    unbound.push(n);
+  }
+  const bad = [...new Set(unbound)];
+  assert(!(bad.length > 0),
+    `crossPostRequest dereferences ${bad.map(b => `\`${b}\``).join(', ')} but nothing binds ${bad.length === 1 ? 'it' : 'them'} in that scope — this throws a ReferenceError on EVERY call and kills the whole "also notify other providers" action, while the build stays green`);
+});
+
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

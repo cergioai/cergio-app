@@ -3758,8 +3758,19 @@ export async function crossPostRequest({
     notifySafe:           !!notifySafe,
     lat, lng,
     radiusMiles,
-    fallbackCity:  request.city  || null,   // SPEC-113
-    fallbackState: request.state || null,
+    // CERGIO-GUARD (2026-08-01, SPEC-212 - UNBOUND IDENTIFIER): these two lines
+    // read `request.city` / `request.state`. There is no `request` binding in
+    // this function's scope - the params are requestId / provider_type / query /
+    // where_text / lat / lng / notifySafe / excludeOwnerId / radiusMiles - so
+    // EVERY call threw "request is not defined" before reaching the notify
+    // insert. The whole "also notify other providers" action was 100% dead and
+    // RequestQuoteSheet.crossPost hung with busy=true (the throw escaped past
+    // setBusy(false)). The SPEC-113 intent is a free-text location fallback for
+    // when lat/lng are missing; the value carrying that here is the `where_text`
+    // param - exactly the shape inviteMoreProviders already passes
+    // (fallbackCity: req.where_text). No signature change, no other caller.
+    fallbackCity:  where_text || null,   // SPEC-113
+    fallbackState: null,
   });
   if (provErr) return { notified: 0, error: provErr };
   if (blocked) return { notified: 0, error: null, blocked };
