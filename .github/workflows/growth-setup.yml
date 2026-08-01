@@ -9,6 +9,12 @@ permissions:
 
 on:
   workflow_dispatch: {}
+  # SPEC-162: growth ran ONLY on push, so the moment nobody was pushing — nights,
+  # weekends, exactly when it should be grinding — the workers were never kicked
+  # and the queue sat still. Every "growth is up" claim so far has been true only
+  # for the ~2 minutes after a commit. Every 10 minutes, all night, unattended.
+  schedule:
+    - cron: '*/10 * * * *'
   # PUSH TRIGGER (SPEC-139). api.github.com is firewalled from the sandbox
   # (measured: HTTP 000), and the Chrome extension is not always attached, so
   # neither the API nor the Actions UI is reliably reachable off-Mac. Pushing IS

@@ -58,7 +58,7 @@ const gdb = growthDb();
     const sinceIso = new Date(Date.now() - staleHours * 3600 * 1000).toISOString();
 
     // STALLED — open requests older than the threshold.
-    const { data: stalled } = await db
+    const { data: stalled } = await gdb
       .from('crawl_requests')
       .select('id, kind, city, state, service_type, status, created_at')
       .in('status', ['new', 'crawling'])
@@ -67,7 +67,7 @@ const gdb = growthDb();
       .limit(100);
 
     // FAILED.
-    const { data: failed } = await db
+    const { data: failed } = await gdb
       .from('crawl_requests')
       .select('id, kind, city, service_type, status, notes, updated_at')
       .eq('status', 'failed')
@@ -75,7 +75,7 @@ const gdb = growthDb();
       .limit(100);
 
     // EMPTY — delivered but nothing found.
-    const { data: empty } = await db
+    const { data: empty } = await gdb
       .from('crawl_requests')
       .select('id, kind, city, service_type, delivered_count, updated_at')
       .eq('status', 'delivered')
@@ -84,7 +84,7 @@ const gdb = growthDb();
       .limit(100);
 
     // Overall queue snapshot.
-    const { data: queue } = await db
+    const { data: queue } = await gdb
       .from('crawl_requests')
       .select('kind, status')
       .limit(2000);
