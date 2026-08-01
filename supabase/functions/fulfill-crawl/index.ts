@@ -73,9 +73,15 @@ async function flushBuf(_db: any): Promise<number> {
     const chunk = batch.slice(i, i + 500);
     const { error } = await growthClient().from('leads_services').upsert(chunk, { onConflict: 'id' });
     if (!error) { ok += chunk.length; continue; }
+    // SPEC-177: both of these errors used to be DISCARDED. A single unknown column
+    // (zip) made PostgREST reject the entire chunk with 42703, the row-by-row retry
+    // failed identically, and the caller had already run saved++ — so a source that
+    // wrote nothing reported rows as delivered, for its whole life. A write error is
+    // the most important fact a worker can have; it is never swallowed again.
+    _lastFlushError = serr(error);
     for (const row of chunk) {
       const { error: e1 } = await growthClient().from('leads_services').upsert(row, { onConflict: 'id' });
-      if (!e1) ok++;
+      if (!e1) ok++; else _lastFlushError = serr(e1);
     }
   }
   _bufSaved += ok;
@@ -307,7 +313,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || `no YellowPages results (raw items returned: ${r.found ?? 0})`) : 'yellowpages'),
+            notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no YellowPages results (raw items returned: ${r.found ?? 0})`) : 'yellowpages'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'gmaps_apify') {
@@ -318,7 +324,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || `no Google Maps results (raw items returned: ${r.found ?? 0})`) : 'gmaps_apify'),
+            notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no Google Maps results (raw items returned: ${r.found ?? 0})`) : 'gmaps_apify'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'ig_services') {
@@ -329,7 +335,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || `no IG accounts for this service/city (raw items returned: ${r.found ?? 0})`) : 'ig_services'),
+            notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no IG accounts for this service/city (raw items returned: ${r.found ?? 0})`) : 'ig_services'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'craigslist') {
@@ -339,7 +345,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || `no Craigslist results (raw items returned: ${r.found ?? 0})`) : 'craigslist'),
+            notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no Craigslist results (raw items returned: ${r.found ?? 0})`) : 'craigslist'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'google_lsa') {
@@ -349,7 +355,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastSerpError || `no Google local-services ads (raw items returned: ${r.found ?? 0})`) : 'google_lsa'),
+            notes: r.note || (saved === 0 ? (_lastFlushError || _lastSerpError || `no Google local-services ads (raw items returned: ${r.found ?? 0})`) : 'google_lsa'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'google_sponsored') {
@@ -385,7 +391,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastYelpError || `no Yelp results for this city/type (raw items returned: ${r.found ?? 0})`) : 'yelp'),
+            notes: r.note || (saved === 0 ? (_lastFlushError || _lastYelpError || `no Yelp results for this city/type (raw items returned: ${r.found ?? 0})`) : 'yelp'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'osm' || placesDown) {
@@ -1815,6 +1821,7 @@ function msLeft(cap: number): number {
   return Math.max(1000, Math.min(cap, left > 0 ? left : 1000));
 }
 
+let _lastFlushError: string | null = null;
 let _lastApifyError: string | null = null;
 // SPEC-168: apify already recorded WHY it returned nothing, but the caller threw it
 // away and wrote a generic "no X results" — so seven sources reported 0 rows for
@@ -1869,23 +1876,39 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     'driver':'lbs','personal assistant':'lbs',
   };
   const subcat = CL_SUBCAT[rawType] || 'bbb';
-  const clUrl = `https://${sub}.craigslist.org/search/${subcat}?query=${encodeURIComponent(rawType)}`;
+  // (the single-URL clUrl was dead since the SUBCATS sweep landed — removed, SPEC-178)
   // VOLUME (SPEC-101): 40 -> 250 per job, and sweep EVERY relevant services
   // subcategory in one run instead of a single URL. Craigslist has ~8 service
   // subcats; one URL was leaving ~90% of the inventory on the table.
   const MAXITEMS = Number(Deno.env.get('CL_MAX_ITEMS') || '1000');   // MAX: Apify sets no per-run ceiling; 1000 = a full CL subcat page-set
   const SUBCATS = Array.from(new Set([subcat, 'sks', 'hss', 'lbs', 'crs', 'lss', 'pas', 'cps']));
-  const startUrls = SUBCATS.map((sc) => ({ url: `https://${sub}.craigslist.org/search/${sc}?query=${encodeURIComponent(rawType)}` }));
-  const items = await apifyRun('memo23~craigslist-scraper', { startUrls, includeEmails: true }, MAXITEMS);
+  // SPEC-178: Craigslist matches ?query= as an EXACT PHRASE. "gmat tutor" matches
+  // zero posts in every services subcat; "tutor" matches hundreds. Query the head
+  // noun and let our own keyword + blocked-category gates do the narrowing.
+  const clQuery = rawType.split(' ').filter(Boolean).pop() || rawType;
+  const startUrls = SUBCATS.map((sc) => `https://${sub}.craigslist.org/search/${sc}?query=${encodeURIComponent(clQuery)}`);
+  // maxItems is PER START URL in this actor (default 1000) — 8 urls x 1000 would
+  // abort run-sync and cost a fortune. `includeEmails` is not an input field at all.
+  const items = await apifyRun('memo23~craigslist-scraper',
+    { startUrls, maxItems: Math.max(20, Math.floor(MAXITEMS / SUBCATS.length)) }, MAXITEMS);
   let found = items.length, saved = 0;
   const seen = new Set<string>();
   // Reject FOR-SALE items (cars/products) + spammy ALL-CAPS/price posts.
   const FORSALE = /(19|20)\d{2}\b|\b(mercedes|toyota|honda|ford|nissan|bmw|chevy|chevrolet|jeep|hyundai|kia|audi|lexus|acura|dodge|ram\b|gmc|subaru|volkswagen|\bvw\b|cadillac|tesla|mazda|infiniti|for sale|miles\b|mileage|sedan|\bsuv\b|coupe|pickup|\bvin\b|obo\b)/i;
-  const kw = rawType.split(' ')[0]; // core service keyword must appear
+  const kw = rawType.split(' ').filter(Boolean).pop() || rawType;  // SPEC-178: head noun, not the modifier // core service keyword must appear
+  let placeholders = 0;
   for (const it of items) {
+    // SPEC-178: an EMPTY craigslist search does not return an empty dataset — this
+    // actor pushes 10 rows labelled NO_RESULTS per URL. 8 URLs = 80 items, so
+    // apifyRun saw a non-empty array and recorded NO error, our filters dropped
+    // every placeholder, and the job reported "no Craigslist results" forever.
+    if (it?.label === 'NO_RESULTS' || it?.causes) { placeholders++; continue; }
     const name = cleanText(it?.title || it?.name);
     if (!name) continue;
-    const desc = (it?.description || it?.body || '').toString();
+    // SPEC-178: this actor emits the body as `post`. It emits no description/body, so
+    // desc was ALWAYS '' — the on-topic gate degraded to title-only and the body-phone
+    // fallback below was unreachable code.
+    const desc = (it?.post || it?.description || it?.body || '').toString();
     const hay = `${name} ${desc}`;
     if (osmIsBlocked(hay)) continue;
     if (FORSALE.test(name)) continue;                                   // drop cars/products
@@ -1921,7 +1944,9 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
-  return { saved, found, query };
+  found -= placeholders;   // placeholders are diagnostics, not listings
+  return { saved, found, query, note: (saved === 0 && placeholders > 0)
+    ? `craigslist: 0 real listings — ${placeholders} NO_RESULTS placeholders for "${clQuery}" (search too narrow or wrong subcat)` : undefined };
 }
 
 async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {

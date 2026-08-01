@@ -33,6 +33,12 @@ create table if not exists public.leads_services (
   city text, state text, lat double precision, lon double precision,
   -- SPEC-163: written by the OSM (primary) and Places paths.
   address text, osm_id text,
+  -- SPEC-177: EVERY source except osm writes these. They were absent, so PostgREST
+  -- rejected the whole chunk with 42703, flushBuf discarded the error, and each
+  -- fulfiller had already done saved++ — so delivered_count reported rows that were
+  -- never written. osm is the only source that omits zip and the only source that
+  -- has ever produced a row. That is the entire "6 dead sources" mystery.
+  zip text, yelp_url text, cl_post_url text, facebook text,
   data_source text, outreach_status text default 'new', outreach_notes text,
   fetched_at timestamptz default now()
 );
