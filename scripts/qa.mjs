@@ -5389,6 +5389,13 @@ test('no-single-fetch-can-outlive-the-run', 'SPEC-172 (risk introduced by the SP
   assert(!(/setTimeout\(\(\) => ctrl\.abort\(\), OSM_HTTP_TIMEOUT_MS\)/.test(f)), 'Overpass still uses a fixed 90s timeout instead of the remaining budget');
 });
 
+test('zero-yield-notes-distinguish-empty-from-filtered', 'SPEC-173 (2026-08-01): craigslist reported "no Craigslist results" for Miami — a metro that DOES have a subdomain — while _lastApifyError was null. A null apify error means the actor did NOT return zero items; it means items came back and our own filters rejected every one. Those are opposite bugs with opposite fixes (actor input vs over-aggressive filtering) and the note could not tell them apart. Every zero-saved note must state how many RAW items the source returned.', '#175', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const n = (f.match(/raw items returned/g) || []).length;
+  assert(!(n < 5), `only ${n} zero-yield notes report raw item counts — a filtered-to-zero source is indistinguishable from an empty one`);
+});
+
+
 
 
 
