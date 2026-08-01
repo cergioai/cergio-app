@@ -130,7 +130,7 @@ const gdb = growthDb();
     let ypQuarantined = 0;
     let ypSweepError: string | null = null;
     if (!YP_ENABLED) {
-      const { data: swept, error: sErr } = await db
+      const { data: swept, error: sErr } = await gdb
         .from('crawl_requests')
         .update({ status: 'failed', notes: YP_DEAD_NOTE, updated_at: new Date().toISOString() })
         .eq('kind', 'services')
@@ -145,7 +145,13 @@ const gdb = growthDb();
     // → Places API but ONLY when GOOGLE_PLACES_ENABLED=true (dormant by default).
     // 'yellowpages' rows are EXCLUDED here (see above) so a dead queue can never be
     // fetched or re-errored.
-    let jobQ = db
+    // SPEC-161 (measured 2026-08-01): this read `db` — the PRODUCT client. The
+    // SPEC-132 cutover moved every WRITE to gdb but left the primary job query
+    // and the YP sweep behind, so the worker asked the product database for work
+    // that only exists in growth. It found none; the phase-2 fallback below then
+    // EXCLUDES phase-1 cities, which is every city we seed. Net effect: 3,638
+    // queued jobs, 0 claimed, 0 rows, for as long as the cutover has been live.
+    let jobQ = gdb
       .from('crawl_requests')
       .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
       .eq('kind', 'services')

@@ -5236,6 +5236,31 @@ test('hook-deps-never-read-a-later-const', 'SPEC-160 (my second regression in on
   }
 });
 
+test('growth-tables-are-read-from-the-growth-db', 'SPEC-161 (measured 2026-08-01): the SPEC-132 cutover moved every WRITE in fulfill-crawl to the growth client but left the PRIMARY JOB QUERY and the YP sweep on the product client. The worker asked the product database for work that only exists in growth, found none, and the phase-2 fallback excludes phase-1 cities — which is every city we seed. Result: 3,638 queued jobs, 0 claimed, 0 rows, for as long as the cutover has been live. An audit found the same miss in 10 more functions; they are listed below and the list must only ever SHRINK.', '#166', () => {
+  const GROWTH = ['crawl_requests', 'leads_services', 'leads_influencers'];
+  // Functions still on the product client for growth tables. Each is a live bug
+  // of the same class; they are enumerated so the gap is visible instead of
+  // silent, and so a NEW one cannot be introduced unnoticed.
+  const KNOWN_GAP = new Set(['admin-crawl-status', 'agent-ops', 'crawl-health-check',
+    'crawl-seed-google-places', 'crawl-seed-osm', 'crawl-seed-yellowpages',
+    'creator-marketplace-enrich', 'early-offers', 'outreach-send', 'qa-live-verify', 'qa-suite']);
+  const dir = 'supabase/functions';
+  const names = fs.readdirSync(path.join(REPO_ROOT, dir)).filter(n => !n.startsWith('_'));
+  const offenders = [];
+  for (const n of names) {
+    let src; try { src = readFile(`${dir}/${n}/index.ts`); } catch { continue; }
+    const re = /\b(gdb|growthDb\(\)|db|supabase|admin)\b\s*\n?\s*\.from\('([a-z_]+)'\)/g;
+    for (const m of src.matchAll(re)) {
+      if (GROWTH.includes(m[2]) && m[1] !== 'gdb' && m[1] !== 'growthDb()') { offenders.push(n); break; }
+    }
+  }
+  const unexpected = offenders.filter(n => !KNOWN_GAP.has(n));
+  assert(!(unexpected.length), `these functions read growth tables from the PRODUCT database: ${unexpected.join(', ')} — growth work must go through growthDb()`);
+  const fixed = [...KNOWN_GAP].filter(n => !offenders.includes(n));
+  assert(!(fixed.length), `${fixed.join(', ')} no longer has this bug — remove it from KNOWN_GAP so the list keeps shrinking`);
+});
+
+
 
 
 
