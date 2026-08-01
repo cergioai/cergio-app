@@ -91,3 +91,23 @@ for (const [tbl, cols] of [
   });
   console.log(`column probe ${tbl}: HTTP ${r.status}${r.ok ? ' — every column the worker uses exists' : ' ' + (await r.text()).slice(0, 160)}`);
 }
+
+// SPEC-167b: the queue still holds thousands of OPEN jobs for sources measured at
+// zero (see the seeder for the per-source evidence). Leaving them 'new' means the
+// workers grind through dead combinations before reaching osm — the seeder change
+// alone only stops NEW ones being added. Park them: reversible (a single UPDATE
+// back to 'new'), auditable via the note, and never a delete — these are jobs, but
+// the no-hard-delete habit is the right one to keep.
+console.log('parking queued jobs for sources with zero measured yield…');
+const parked = await q(`
+  update crawl_requests
+     set status = 'parked',
+         notes  = 'SPEC-167: parked — source produced 0 rows in 8h of live running. Reversible: set status back to new.',
+         updated_at = now()
+   where status = 'new'
+     and source in ('craigslist','yellowpages_apify','google_lsa','yelp','gmaps_apify','google_sponsored','ig_services')
+  returning 1
+`);
+console.log(`parked ${Array.isArray(parked) ? parked.length : '?'} dead-source job(s)`);
+const openNow = await q(`select source, count(*)::int as n from crawl_requests where status = 'new' group by source order by n desc`);
+console.log('open queue by source now:', JSON.stringify(openNow));
