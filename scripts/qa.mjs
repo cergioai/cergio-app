@@ -4888,7 +4888,11 @@ test('apify-failures-are-reported', 'SPEC-117: apifyRun discarded every failure 
   const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
   assert(/_lastApifyError/.test(fc), 'apify failures must be captured, not discarded');
   assert(/HTTP \$\{res\.status\}/.test(fc), 'a non-OK apify response must record its status');
-  assert(/TIMED OUT after 140s/.test(fc), 'an abort must be reported as a timeout with the cause, not as "no results"');
+  // SPEC-183 widened this from the literal "140s" to the INVARIANT: an abort must be
+  // reported as a timeout with its cause. The window is now derived from the
+  // remaining budget, so pinning one number made a strictly better message fail.
+  assert(/TIMED OUT after \$\{actorTimeoutSecs\}s|TIMED OUT after 140s/.test(fc),
+    'an abort must be reported as a timeout with the cause, not as "no results"');
   assert(/returned 0 items \(check actor input\)/.test(fc), 'an empty-but-successful run must be distinguished from a failure');
   assert(!/setTimeout\(\(\) => ctrl\.abort\(\), 110000\)/.test(fc), 'the 110s timer that guaranteed failure for slow actors must be gone');
   // SPEC-182 widened this from one literal expression to the INVARIANT: the per-run
@@ -5472,6 +5476,18 @@ test('gmaps-uses-an-actor-that-fits-the-run-sync-wall', 'SPEC-182 (verified agai
   assert(!(!/locationQuery: `\$\{metroOf\(city\)\}, United States`/.test(gmRaw)), 'locationQuery must be metro + country per the actor docs');
   assert(!(!/const gmApifyErr = _lastApifyError;/.test(gm)), 'the apify reason must be captured into a local — 6 pool workers share that global');
 });
+
+test('paid-sources-cannot-spend-without-delivering', 'SPEC-183/184 (2026-08-01, after ~$70 of Apify spend produced ZERO rows). Two independent failures. (1) THE MONEY LEAK: ctrl.abort() aborts OUR HTTP request but does NOT cancel the Apify run — the actor kept executing, kept scraping and kept BILLING while we discarded the result and logged a timeout. Apify must be told to kill the run server-side at the same deadline, or our client-side timeout is financially meaningless. (2) NO COST-vs-YIELD CHECK EVER EXISTED: four paid sources ran for hours at zero yield and nothing compared spend against delivery. A paid source that has finished PROOF_JOBS jobs with zero leads must be auto-parked, so worst-case spend per source is bounded instead of open-ended. Free sources are exempt — they can fail all day for free.', '#183', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/timeout=\$\{actorTimeoutSecs\}/.test(f)), 'apify runs are not killed server-side at our deadline — an abandoned run keeps scraping and keeps billing');
+  assert(!(!/const actorTimeoutSecs = Math\.max\(20, Math\.floor\(budgetMs \/ 1000\)\)/.test(f)), 'the actor timeout is not derived from the remaining budget');
+  const g = readFile('scripts/growth-dedupe-queue.mjs');
+  assert(!(!/PAID_SOURCES/.test(g)), 'no spend guard — a paid source can bill forever at zero yield');
+  assert(!(!/PROOF_JOBS/.test(g)), 'no proof cap — spend per source is unbounded');
+  assert(!(!/SPEND GUARD/.test(g)), 'the guard never parks anything');
+  assert(!(/'osm'/.test(g.slice(g.indexOf('const PAID_SOURCES'), g.indexOf('const PROOF_JOBS')))), 'osm is listed as paid — it is free and must never be parked for cost');
+});
+
 
 
 

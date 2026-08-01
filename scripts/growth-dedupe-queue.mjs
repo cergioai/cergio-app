@@ -114,3 +114,36 @@ const openNow = await q(`select source, count(*)::int as n from crawl_requests w
 console.log('open queue by source:', JSON.stringify(openNow));
 const yields = await q(`select data_source, count(*)::int as n from leads_services group by data_source order by n desc`);
 console.log('leads by source (measured yield):', JSON.stringify(yields));
+
+// SPEC-184 — SPEND CIRCUIT BREAKER. "Never burn budget with zero delivery."
+//
+// Apify and SerpAPI bill per run. Nothing in this system ever compared what a PAID
+// source COST against what it DELIVERED, so four paid sources ran for hours,
+// produced zero rows, and the only signal was a note nobody was reading. ~$70 went
+// out for nothing. Free sources (osm) are exempt — they can fail all day for free.
+//
+// Rule: a PAID source that has finished >= PROOF_JOBS jobs and produced ZERO leads
+// is auto-parked. It cannot spend again until a human un-parks it, and the parking
+// note says exactly what it cost us in jobs. This runs every cycle, so the worst
+// case is bounded at PROOF_JOBS jobs of spend per source, not an open tab.
+const PAID_SOURCES = ['craigslist', 'yellowpages_apify', 'gmaps_apify', 'ig_services',
+                      'google_lsa', 'google_sponsored', 'yelp'];
+const PROOF_JOBS = 15;   // enough to prove a source works; small enough to be cheap
+
+console.log('spend guard — checking paid sources deliver against what they cost…');
+for (const src of PAID_SOURCES) {
+  const done = await q(`select count(*)::int as n from crawl_requests where source = '${src}' and status in ('delivered','failed')`);
+  const got  = await q(`select count(*)::int as n from leads_services where data_source = '${src}'`);
+  const jobs = done?.[0]?.n ?? 0, leads = got?.[0]?.n ?? 0;
+  if (jobs >= PROOF_JOBS && leads === 0) {
+    const parked = await q(`
+      update crawl_requests
+         set status = 'parked',
+             notes  = 'SPEC-184 SPEND GUARD: ${jobs} paid jobs run, 0 leads produced. Parked to stop spend. Un-park only after a fix is PROVEN to yield.',
+             updated_at = now()
+       where source = '${src}' and status = 'new' returning 1`);
+    console.log(`  ${src}: PARKED — ${jobs} paid jobs, ${leads} leads (${Array.isArray(parked) ? parked.length : '?'} queued jobs stopped)`);
+  } else {
+    console.log(`  ${src}: ${jobs} jobs -> ${leads} leads ${jobs >= PROOF_JOBS ? '(earning its spend)' : '(still proving, under the ' + PROOF_JOBS + '-job cap)'}`);
+  }
+}

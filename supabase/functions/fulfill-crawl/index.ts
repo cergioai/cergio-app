@@ -1860,11 +1860,21 @@ async function apifyRun(actor: string, input: unknown, maxItems: number): Promis
   _lastApifyError = null;
   const TOKEN = Deno.env.get('APIFY_TOKEN');
   if (!TOKEN) { _lastApifyError = 'pending APIFY_TOKEN'; return []; }
-  const url = `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${TOKEN}&maxItems=${maxItems}`;
+  // SPEC-183 — THE MONEY LEAK. ctrl.abort() aborts OUR HTTP REQUEST. It does NOT
+  // cancel the Apify run: the actor keeps executing on Apify's side, keeps scraping,
+  // and keeps BILLING — while we discard the result and record a timeout. Every slow
+  // actor therefore charged for a full run and delivered nothing to us. That is how
+  // ~$70 was spent for zero rows.
+  //
+  // `timeout` makes APIFY kill the run server-side at the same moment we stop
+  // waiting, so an abandoned run cannot keep spending. It is the one parameter that
+  // makes our client-side deadline financially real.
+  const budgetMs = msLeft(140000);
+  const actorTimeoutSecs = Math.max(20, Math.floor(budgetMs / 1000));
+  const url = `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items`
+    + `?token=${TOKEN}&maxItems=${maxItems}&timeout=${actorTimeoutSecs}&memory=1024`;
   const ctrl = new AbortController();
-  // Edge functions cap around 150s wall clock; give the actor as much of it as we
-  // safely can instead of the arbitrary 110s that guaranteed failure for slow actors.
-  const to = setTimeout(() => ctrl.abort(), msLeft(140000));  // SPEC-172
+  const to = setTimeout(() => ctrl.abort(), budgetMs);  // SPEC-172
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: ctrl.signal });
     if (!res.ok) {
@@ -1878,7 +1888,7 @@ async function apifyRun(actor: string, input: unknown, maxItems: number): Promis
     return items;
   } catch (e) {
     _lastApifyError = (e as Error)?.name === 'AbortError'
-      ? `apify ${actor} TIMED OUT after 140s (actor too slow for run-sync at maxItems=${maxItems} — lower the per-run target)`
+      ? `apify ${actor} TIMED OUT after ${actorTimeoutSecs}s — Apify was told to kill the run at the same moment, so it is not still billing (SPEC-183). Actor too slow for run-sync at maxItems=${maxItems}.`
       : `apify ${actor} threw: ${String(e).slice(0, 160)}`;
     return [];
   } finally { clearTimeout(to); }
