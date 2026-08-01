@@ -289,7 +289,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: saved === 0 ? 'no YellowPages results for this city/type' : null,
+            notes: saved === 0 ? (_lastApifyError || 'no YellowPages results for this city/type') : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'yellowpages_apify') {
@@ -298,7 +298,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no YellowPages results' : 'yellowpages'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || 'no YellowPages results') : 'yellowpages'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'gmaps_apify') {
@@ -320,7 +320,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no IG accounts for this service/city' : 'ig_services'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || 'no IG accounts for this service/city') : 'ig_services'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'craigslist') {
@@ -330,7 +330,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no Craigslist results' : 'craigslist'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || 'no Craigslist results') : 'craigslist'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'google_lsa') {
@@ -340,7 +340,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no Google local-services ads' : 'google_lsa'),
+            notes: r.note || (saved === 0 ? (_lastSerpError || 'no Google local-services ads') : 'google_lsa'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'google_sponsored') {
@@ -363,7 +363,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no Google sponsored/LSA results' : 'google_sponsored via LSA'),
+            notes: r.note || (saved === 0 ? (_lastSerpError || 'no Google sponsored/LSA results') : 'google_sponsored via LSA'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'yelp') {
@@ -376,7 +376,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? 'no Yelp results for this city/type' : 'yelp'),
+            notes: r.note || (saved === 0 ? (_lastYelpError || 'no Yelp results for this city/type') : 'yelp'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'osm' || placesDown) {
@@ -1483,11 +1483,12 @@ function classifyEntity(name: string): 'company' | 'individual' {
 // ── Yelp Fusion search → leads_services. Reuses inUS/normPhone/cleanText.
 async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
   const KEY = Deno.env.get('YELP_API_KEY');
+  _lastYelpError = null;
   const rawType = (job.service_type || '').toLowerCase().trim();
   const city = (job.city || '').trim();
   const state = (job.state || '').trim();
   const query = `${rawType || 'service'} in ${[city, state].filter(Boolean).join(', ')} [yelp]`;
-  if (!KEY) return { saved: 0, found: 0, query, note: 'pending YELP_API_KEY' };
+  if (!KEY) { _lastYelpError = 'pending YELP_API_KEY (secret not set on the product project)'; return { saved: 0, found: 0, query, note: _lastYelpError }; }
   if (!city) return { saved: 0, found: 0, query };
   if (osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
 
@@ -1663,7 +1664,13 @@ async function fulfillGoogleLSA(db: any, job: any, provenance = 'google_lsa'): P
   if (!KEY) return { saved: 0, found: 0, query, note: 'pending SERPAPI_KEY' };
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
   const data_cid = await resolveCid(KEY, city, state);
-  if (!data_cid) return { saved: 0, found: 0, query, note: 'no data_cid for city' };
+  if (!data_cid) {
+    // SPEC-168: this is the ONLY thing google_lsa/google_sponsored ever reported,
+    // and it is a CONFIG gap, not "no ads exist": resolveCid could not map this
+    // city to a Google CID. Say which city, so it is fixable instead of mysterious.
+    _lastSerpError = `no data_cid resolved for ${city}, ${state} — SerpAPI CID lookup returned nothing (config gap, not an empty market)`;
+    return { saved: 0, found: 0, query, note: _lastSerpError };
+  }
 
   const url = `https://serpapi.com/search.json?engine=google_local_services`
     + `&q=${encodeURIComponent(rawType)}&data_cid=${data_cid}&hl=en&api_key=${KEY}`;
@@ -1725,6 +1732,13 @@ function parseFirstName(text: string): string | null {
 // below was 110s, so it was aborted every single time. Craigslist survives only
 // because it is fast. Failures are now REPORTED, and the timeout is honest.
 let _lastApifyError: string | null = null;
+// SPEC-168: apify already recorded WHY it returned nothing, but the caller threw it
+// away and wrote a generic "no X results" — so seven sources reported 0 rows for
+// eight hours with no recoverable reason, and I wrongly concluded they were dead
+// and parked them. SerpAPI and Yelp had no error carrier at all. A source is not
+// dead until its own error says so.
+let _lastSerpError: string | null = null;
+let _lastYelpError: string | null = null;
 async function apifyRun(actor: string, input: unknown, maxItems: number): Promise<any[]> {
   _lastApifyError = null;
   const TOKEN = Deno.env.get('APIFY_TOKEN');
