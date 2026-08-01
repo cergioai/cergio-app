@@ -5535,8 +5535,11 @@ test('no-paid-source-may-spend-a-dollar-without-output', 'SPEC-185 (Tarik, bindi
 });
 
 test('spec-and-gates-cannot-drift-apart', 'SPEC-186 — THE BINDING. FROZEN_SPEC.md holds the agreed behaviour and qa.mjs holds 180+ gates, but NOTHING connected them: a spec line could exist with no gate, and a gate could exist for behaviour nobody agreed to, and neither was visible. That gap is where drift lives. SPEC-REGISTRY.md is now one row per micro-feature and this gate welds it to the code: every row must name a gate that actually exists, and a row may only claim PROVEN with a dated live-proof artifact. A row without a gate is a regression waiting to happen; a PROVEN row without live proof is the false green that put a blank homepage into production behind a passing build.', '#186', () => {
-  const reg = readFile('SPEC-REGISTRY.md');
-  assert(!(!/REGISTRY:START/.test(reg)), 'SPEC-REGISTRY.md has no registry block');
+  // SPEC-194: the criterion table now lives in MASTER-SPEC.md, the single entry point.
+  // SPEC-REGISTRY.md is kept as the machine table it mirrors; both must carry the block
+  // and they must agree, or there are two sources of truth again.
+  const reg = readFile('MASTER-SPEC.md');
+  assert(!(!/REGISTRY:START/.test(reg)), 'MASTER-SPEC.md has no criterion table');
   const block = reg.split('REGISTRY:START')[1].split('REGISTRY:END')[0];
   const rows = block.split('\n')
     .filter((l) => l.trim().startsWith('|') && !/^\|\s*-+/.test(l.trim()))
@@ -5704,6 +5707,26 @@ test('all-paid-crawling-goes-through-apify', 'SPEC-193 (founder decision, restat
   assert(!(!/google_sponsored: 'apify'/.test(m[0])), 'google_sponsored is not on Apify');
   assert(!(/await fulfillGoogleLSA\(db, job/.test(code)), 'the SerpAPI LSA fetcher is still being called');
 });
+
+test('one-master-spec-nothing-orphaned', 'SPEC-194 (founder 2026-08-01: "this needs to be linked to a master spec... so the entire spec is in one place to reference"). The spec was spread across 8 files totalling ~2,400 lines with no entry point, which is how a rule can exist that nobody reads and a paraphrase can quietly outrank it. MASTER-SPEC.md is now the single entry point: it names every spec file, carries the founder\'s verbatim instructions, and holds the criterion table. This gate fails if a spec file exists that the master does not name — nothing can hide — and if the master and the registry table disagree, because two sources of truth is the condition we are removing.', '#194', () => {
+  const master = readFile('MASTER-SPEC.md');
+  assert(!(!/## 2 · Founder instructions/.test(master)), 'the master spec no longer carries the founder\'s verbatim instructions');
+  assert(!(!/REGISTRY:START/.test(master)), 'the master spec no longer carries the criterion table');
+  // every spec-ish file at the repo root must be named by the master
+  const roots = fs.readdirSync(REPO_ROOT).filter((f) => /^[A-Z_-]+\.md$/.test(f));
+  const specish = roots.filter((f) => /SPEC|FLOW|ROADMAP|CHECKLIST|CLAUDE/.test(f) && f !== 'MASTER-SPEC.md');
+  for (const f of specish) {
+    assert(!(!master.includes(f)), `${f} holds spec but the master index does not name it — a rule nobody reads is a rule that drifts`);
+  }
+  // the two copies of the table must agree
+  const regFile = readFile('SPEC-REGISTRY.md');
+  const ids = (t2) => (t2.split('REGISTRY:START')[1] || '').split('REGISTRY:END')[0]
+    .split('\n').filter((l) => l.trim().startsWith('| S-')).map((l) => l.split('|')[1].trim());
+  const a = ids(master), b = ids(regFile);
+  assert(!(a.length !== b.length), `MASTER-SPEC lists ${a.length} criteria but SPEC-REGISTRY lists ${b.length} — two sources of truth`);
+  for (let i = 0; i < a.length; i++) assert(!(a[i] !== b[i]), `criterion ${i + 1} differs: master has ${a[i]}, registry has ${b[i]}`);
+});
+
 
 
 
