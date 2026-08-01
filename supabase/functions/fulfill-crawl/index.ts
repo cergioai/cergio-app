@@ -1982,7 +1982,7 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     'house cleaning':'hss','housekeeper':'hss','home organizer':'hss','home decorator':'hss',
     'dog walker':'pas','pet sitter':'pas','cat sitter':'pas','dog trainer':'pas','pet sitting':'pas',
     'tutor':'lss','gmat tutor':'lss','personal trainer':'lss','nutritionist':'lss','life coach':'lss',
-    'babysitter':'cps','barber':'bts','personal shopper':'bts','photographer':'crs','mover':'lbs',
+    'babysitter':'kid','barber':'bts','personal shopper':'bts','photographer':'crs','mover':'lbs',
     'driver':'lbs','personal assistant':'lbs',
   };
   const subcat = CL_SUBCAT[rawType] || 'bbb';
@@ -2004,7 +2004,16 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
   let found = items.length, saved = 0;
   const seen = new Set<string>();
   // Reject FOR-SALE items (cars/products) + spammy ALL-CAPS/price posts.
-  const FORSALE = /(19|20)\d{2}\b|\b(mercedes|toyota|honda|ford|nissan|bmw|chevy|chevrolet|jeep|hyundai|kia|audi|lexus|acura|dodge|ram\b|gmc|subaru|volkswagen|\bvw\b|cadillac|tesla|mazda|infiniti|for sale|miles\b|mileage|sedan|\bsuv\b|coupe|pickup|\bvin\b|obo\b)/i;
+  // SPEC-187: measured against 49 real craigslist service titles, the old regex threw
+  // away 6 GENUINE posts — a bare year ("Licensed Plumber serving NYC since 2005"),
+  // "miles" ("travel up to 15 miles"), "pickup" ("free pickup and delivery"), and
+  // substring hits where audi/ram/tesla sit inside Audio, RAM upgrades and Tesla Charger
+  // Installation. Every vehicle signal is preserved (5/5 car listings still rejected);
+  // only the false positives are removed.
+  const CAR_MAKE = 'mercedes|toyota|honda|ford|nissan|bmw|chevy|chevrolet|jeep|hyundai|kia|audi|lexus|acura|dodge|gmc|subaru|volkswagen|vw|cadillac|mazda|infiniti';
+  const FORSALE = new RegExp(
+    `\\b(?:${CAR_MAKE})\\b|\\b(?:for sale|mileage|sedan|suv|coupe|vin|obo)\\b`
+    + `|\\b\\d{2,3}[,.]?\\d{3}\\s*miles\\b|\\b\\d{2,3}k\\s*miles\\b|\\bpick-?up truck\\b`, 'i');
   const kw = rawType.split(' ').filter(Boolean).pop() || rawType;  // SPEC-178: head noun, not the modifier // core service keyword must appear
   let placeholders = 0;
   for (const it of items) {
@@ -2021,30 +2030,43 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     const desc = (it?.post || it?.description || it?.body || '').toString();
     const hay = `${name} ${desc}`;
     if (osmIsBlocked(hay)) continue;
-    if (FORSALE.test(name)) continue;                                   // drop cars/products
+    if (FORSALE.test(name)) continue;
+    // SPEC-187: a BUYER, not a provider. Matched 1 real post ("IT Specialist Needed")
+    // and 0 of the other 48. "looking for"/"seeking" deliberately excluded — real
+    // providers write "Developer Seeking Projects".
+    if (/\b(needed|wanted)\b/i.test(name)) continue;                                   // drop cars/products
     if (name.startsWith('$') || /\$\d+[^a-z]{0,3}(visit|off|special|install|repair|drain)/i.test(name)) continue; // price-spam
     const letters = name.replace(/[^A-Za-z]/g,''); const caps = name.replace(/[^A-Z]/g,'');
     if (letters.length > 8 && caps.length / letters.length > 0.7) continue; // ALL-CAPS spam
     if (kw && !new RegExp(kw.replace(/[^a-z]/gi,''),'i').test(hay)) continue; // must be on-topic
     // robust phone: explicit fields first, then a phone in the body.
     let phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || it?.contactPhone || '')) || '');
-    if (!phone) { const m = desc.match(/\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/); if (m) phone = normPhone(m[0]); }
+    if (!phone) { const m = `${name} ${it?.location || ''} ${desc}`.match(/\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/); if (m) phone = normPhone(m[0]); }
     const emailsArr = Array.isArray(it?.emails) ? it.emails : (it?.email ? [it.email] : []);
     const email = (emailsArr.map((e: any) => String(e || '').toLowerCase())
       .find((e: string) => e.includes('@') && !/craigslist\.org|reply\./i.test(e))) || null; // DIRECT email only
-    if (!phone && !email) continue;                                     // uncontactable
-    const dkey = phone ? `p:${phone}` : `e:${email}`;
+    // SPEC-187: most craigslist service posters use the anonymised reply button and
+    // paste neither phone nor email, so this discarded the majority of REAL posts. The
+    // post URL is itself a working contact path. Never invent a contact — keep them null.
+    const postUrl = String(it?.url || it?.postUrl || it?.link || '');
+    if (!phone && !email && !postUrl) continue;                                     // uncontactable
+    const dkey = phone ? `p:${phone}` : (email ? `e:${email}` : `u:${postUrl}`);
     if (seen.has(dkey)) continue; seen.add(dkey);                        // dedup reposts within run
     const lat = it?.mapCoordinates?.latitude ?? it?.latitude ?? it?.lat ?? null;
     const lon = it?.mapCoordinates?.longitude ?? it?.longitude ?? it?.lon ?? null;
     if (lat != null && lon != null && !inUS(Number(lat), Number(lon))) continue;
     const first = parseFirstName(`${name} ${desc}`);
-    const idbase = phone ? phone.replace(/\D/g, '') : (email || '').slice(0, 50);
+    const clPostId = postUrl
+      ? (postUrl.match(/([A-Za-z0-9]{8,})(?:\.html)?\/?$/)?.[1] || postUrl.replace(/[^A-Za-z0-9]/g, '').slice(-40))
+      : '';
+    const idbase = (phone ? phone.replace(/\D/g, '') : (email || clPostId)).slice(0, 60);
+    if (!idbase) continue;   // never upsert a colliding `cl:<city>` id
     const row = {
       id: `cl:${idbase}:${city.toLowerCase().replace(/[^a-z]/g, '')}`,
       name, service_type: job.service_type || null,
       phone, phone_origin: phone ? 'craigslist' : null,
-      website_url: it?.url || null, owner_email: email,
+      website_url: it?.url || null,
+      cl_post_url: postUrl || null, owner_email: email,
       instagram: null, has_instagram: false,
       address: it?.location || null, city, state: state || null, zip: null,
       lat, lon, data_source: 'craigslist', fetched_at: new Date().toISOString(),

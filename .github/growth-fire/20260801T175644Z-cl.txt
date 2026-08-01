@@ -1,0 +1,2 @@
+fired: 2026-08-01T17:56:44Z
+reason: SPEC-187 craigslist filters.

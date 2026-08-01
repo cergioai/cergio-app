@@ -5565,6 +5565,55 @@ test('spec-and-gates-cannot-drift-apart', 'SPEC-186 — THE BINDING. FROZEN_SPEC
   }
 });
 
+test('craigslist-filters-keep-real-service-posts', 'SPEC-187 (measured against 49 REAL craigslist service titles, 2026-08-01): craigslist is producing (129 leads) but its own filters were discarding genuine posts. Four defects. (1) babysitter mapped to subcategory `cps`, which is COMPUTER SERVICES — verified live, that job searched web developers and could never return a sitter. (2) the for-sale regex threw away 6 of 49 real titles: a bare year ("Licensed Plumber serving NYC since 2005"), "miles" ("travel up to 15 miles"), "pickup" ("free pickup and delivery"), and substring hits where audi/ram/tesla sit inside Audio, RAM upgrades, Tesla Charger Installation. (3) requiring a phone or email discarded the MAJORITY of real posts, because craigslist service posters use the anonymised reply button. (4) with no phone or email the id fell back to an empty string, so a whole run upserted onto `cl:<city>` and collapsed into one lead. This gate EXECUTES the shipped regex against real titles rather than grepping it.', '#187', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const cl = f.slice(f.indexOf('async function fulfillCraigslist'), f.indexOf('async function fulfillYellowPagesApify'));
+  const code = stripComments(cl);
+
+  assert(!(/'babysitter':'cps'/.test(code)), 'babysitter is mapped to craigslist `cps`, which is COMPUTER SERVICES — that job searches web developers and can never return a sitter');
+  assert(!(!/'babysitter':'kid'/.test(code)), 'babysitter must map to the child-care subcategory');
+
+  // Rebuild the SHIPPED regex and run it against real titles — grepping the source
+  // would pass even if the pattern were wrong.
+  // stripComments() blanks template literals — and the pattern LIVES in one, so these
+  // two must be read from the RAW slice, not from `code`.
+  const mkMake = cl.match(/const CAR_MAKE = '([^']+)'/);
+  assert(!(!mkMake), 'CAR_MAKE list is gone — vehicle listings would be ingested as services');
+  const src = cl.match(/const FORSALE = new RegExp\(([\s\S]*?), 'i'\);/);
+  assert(!(!src), 'FORSALE is no longer a built RegExp');
+  // Join the template literals and drop the newlines + indentation between them —
+  // leftover whitespace inside a regex matches LITERALLY and silently breaks it.
+  const pattern = src[1]
+    .replace(/`\s*\+\s*`/g, '')      // template concat
+    .replace(/`/g, '')
+    .replace(/\n\s*/g, '')            // stray newlines/indent
+    .replace(/\$\{CAR_MAKE\}/g, mkMake[1])
+    .replace(/\\\\/g, '\\');
+  const FORSALE = new RegExp(pattern, 'i');
+
+  const realPosts = [
+    'Licensed Plumber serving NYC since 2005',
+    'House Cleaning - we travel up to 15 miles',
+    'Laptop Repair - free pickup and delivery',
+    'Audio Video Installation - TV mounting',
+    'RAM & SSD upgrades - same day',
+    'Tesla Charger Installation - licensed electrician',
+  ];
+  for (const t2 of realPosts) {
+    assert(!(FORSALE.test(t2)), `the for-sale filter rejects the REAL service post "${t2}" — posts like this were thrown away every run`);
+  }
+  const carAds = ['2015 Toyota Camry for sale', 'Honda Civic 120,000 miles obo', 'Mercedes sedan clean VIN'];
+  for (const t2 of carAds) {
+    assert(!(!FORSALE.test(t2)), `the for-sale filter no longer rejects the vehicle listing "${t2}"`);
+  }
+
+  assert(!(/if \(!phone && !email\) continue;/.test(code)), 'craigslist again discards every post with no phone and no email — that is the MAJORITY of real service posts, which use the anonymised reply button');
+  assert(!(!/if \(!idbase\) continue;/.test(code)), 'an empty idbase is allowed through, so every contactless row upserts onto the same id and a whole run collapses into one lead');
+  assert(!(!/cl_post_url: postUrl/.test(code)), 'the post URL is not persisted — a lead with no phone or email would be unreachable');
+  assert(!(!/\(needed\|wanted\)/.test(code)), 'demand-side posts ("IT Specialist Needed") are ingested as providers again');
+});
+
+
 
 
 
