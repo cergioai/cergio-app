@@ -5488,6 +5488,25 @@ test('paid-sources-cannot-spend-without-delivering', 'SPEC-183/184 (2026-08-01, 
   assert(!(/'osm'/.test(g.slice(g.indexOf('const PAID_SOURCES'), g.indexOf('const PROOF_JOBS')))), 'osm is listed as paid — it is free and must never be parked for cost');
 });
 
+test('no-paid-source-may-spend-a-dollar-without-output', 'SPEC-185 (Tarik, binding, after $108.17 of Apify spend produced ZERO leads): "we can never spend another $1 without output". A paid source gets a $1 tranche and may not spend the next dollar until that dollar has produced leads at or under the cost-per-lead ceiling; the allowance only steps up on PROVEN yield, so volume rises gradually and only where output is real. The check must run BEFORE the paid call — a guard that runs afterwards is a report, not a control — and it must use the REAL dollars read back from the vendor, because a budget rule built on estimates is guesswork.', '#185', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/SPEND_TRANCHES/.test(f)), 'no tranche ladder — spend is unbounded');
+  assert(!(!/const SPEND_TRANCHES = \[1,/.test(f)), 'the ladder must START at $1');
+  assert(!(!/MAX_COST_PER_LEAD/.test(f)), 'no cost-per-lead ceiling — a source could "earn" its next tranche at any price');
+  assert(!(!/async function spendBlockedReason/.test(f)), 'no spend gate');
+  assert(!(!/usageTotalUsd/.test(f)), 'cost is not read back from the vendor — a dollar budget on estimates is guesswork');
+  assert(!(!/cost_usd: _lastApifyCostUsd/.test(f)), 'the real cost is never recorded against the job');
+  // the gate MUST be evaluated before the job does any paid work
+  const gateAt = f.indexOf('const blocked = await spendBlockedReason');
+  const claimAt = f.indexOf("update({ status: 'crawling'");
+  assert(!(gateAt < 0), 'the gate is never called from the job path');
+  assert(!(gateAt > claimAt), 'the spend gate runs AFTER the job is claimed — it must block before any paid call, or it is a report not a control');
+  const mig = readFile(fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations'))
+    .filter(x => /growth_schema_reference/.test(x)).map(x => `supabase/migrations/${x}`)[0]);
+  assert(!(!/cost_usd/.test(mig)), 'crawl_requests.cost_usd is not in the schema — per-source spend cannot be summed');
+});
+
+
 
 
 

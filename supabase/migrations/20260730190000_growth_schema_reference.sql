@@ -15,6 +15,9 @@ create table if not exists public.crawl_requests (
   -- SPEC-163: the workers SELECT lat/lng/requested_by; omitting them made every
   -- claim fail 42703 while the queue looked perfectly healthy.
   lat double precision, lng double precision, requested_by uuid,
+  -- SPEC-185: the REAL dollars this job cost, read back from the vendor. The $1
+  -- tranche gate sums this per source; without it a budget rule is guesswork.
+  cost_usd numeric default 0,
   status text not null default 'new',
   target_count int default 100,
   delivered_count int default 0,
