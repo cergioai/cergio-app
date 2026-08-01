@@ -1903,8 +1903,8 @@ async function apifyLastRunCostUsd(actor: string, token: string): Promise<number
 async function spendBlockedReason(source: string): Promise<string | null> {
   if (!APIFY_ACTOR_OF_SOURCE[source]) return null;          // free/non-apify source
   const [spendRes, leadsRes] = await Promise.all([
-    gdb.from('crawl_requests').select('cost_usd').eq('source', source).not('cost_usd', 'is', null),
-    gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('data_source', source),
+    growthClient().from('crawl_requests').select('cost_usd').eq('source', source).not('cost_usd', 'is', null),
+    growthClient().from('leads_services').select('id', { count: 'exact', head: true }).eq('data_source', source),
   ]);
   const spent = (spendRes.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
   const leads = leadsRes.count ?? 0;
