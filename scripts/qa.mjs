@@ -2571,6 +2571,15 @@ test('crawl-osm-free', 'REQ-crawl-osm-free: services crawl sources from FREE Ope
   // ── Overpass etiquette: mirror fallback, descriptive UA, cap, timeout ───────
   assert(/OSM_ENDPOINTS\s*=\s*\[[\s\S]*?overpass-api\.de[\s\S]*?kumi\.systems/.test(fc),
     'Overpass must have a primary endpoint + a mirror fallback — crawl-osm-free');
+  // SPEC: a THIRD public mirror (osm.ch) is required so a simultaneous overload of
+  // the first two (both 504'd together 2026-08-01T07:00Z → org_health=down) still
+  // has a live slot. Guard ≥3 distinct interpreter URLs so the resilience can't regress.
+  {
+    const arr = (fc.match(/OSM_ENDPOINTS\s*=\s*\[([\s\S]*?)\]/) || [,''])[1];
+    const eps = (arr.match(/https?:\/\/[^'"\s]+\/api\/interpreter/g) || []);
+    assert(eps.length >= 3 && /osm\.ch/.test(arr),
+      'Overpass must have >=3 mirror endpoints incl. osm.ch (simultaneous-overload resilience) — crawl-osm-free');
+  }
   assert(/CergioServicesCrawl/.test(fc) && /'User-Agent':\s*OSM_UA/.test(fc),
     'Overpass calls must send a descriptive User-Agent (etiquette) — crawl-osm-free');
   assert(/const OSM_MAX_RESULTS = (50|100)/.test(fc),
