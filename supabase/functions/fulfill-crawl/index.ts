@@ -188,11 +188,37 @@ const gdb = growthDb();
                 'Coconut Grove','Aventura','Little Havana','Hialeah','North Miami','Kendall','Pinecrest'];
     let jobs: any[] = [];
     {
-      // 1) phase-1 metros first
-      const { data: p1jobs, error: e1 } = await jobQ.in('city', P1)
-        .order('created_at', { ascending: true }).limit(perRun);
-      if (e1) throw e1;
-      jobs = p1jobs || [];
+      // 1) phase-1 metros first — FAIRLY ACROSS SOURCES (SPEC-174).
+      // Pure FIFO meant the oldest jobs always won, and the oldest ~3,600 rows are
+      // all osm. Measured: osm at 1,067 leads while yelp, google_sponsored,
+      // gmaps_apify and ig_services read "no finished job yet" — never STARVED by
+      // failing, simply never PICKED. A source the scheduler never runs cannot be
+      // diagnosed, and its zero is not evidence of anything.
+      const SOURCES_RR = ['osm', 'craigslist', 'yellowpages_apify', 'yelp',
+                          'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services'];
+      const share = Math.max(1, Math.floor(perRun / SOURCES_RR.length));
+      const perSource = await Promise.all(SOURCES_RR.map(async (src) => {
+        const { data } = await gdb.from('crawl_requests')
+          .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
+          .eq('kind', 'services').eq('status', 'new').eq('source', src).in('city', P1)
+          .order('created_at', { ascending: true }).limit(share);
+        return data || [];
+      }));
+      // Interleave so the pool starts one job of EACH source immediately, rather
+      // than filling every worker with osm and only then reaching the others.
+      jobs = [];
+      for (let i = 0; i < share; i++) for (const list of perSource) if (list[i]) jobs.push(list[i]);
+      console.log(`round-robin: ${SOURCES_RR.map((s2, i) => `${s2}=${perSource[i].length}`).join(' ')}`);
+
+      // Rows with a source outside the rota (legacy, google_local, null) still get
+      // served with whatever capacity is left, so nothing is stranded.
+      if (jobs.length < perRun) {
+        const { data: legacy, error: e1 } = await jobQ.in('city', P1)
+          .not('source', 'in', `(${SOURCES_RR.map((x) => `"${x}"`).join(',')})`)
+          .order('created_at', { ascending: true }).limit(perRun - jobs.length);
+        if (e1) throw e1;
+        jobs = jobs.concat(legacy || []);
+      }
       // 2) only if phase-1 has no work left, spend the remainder elsewhere
       if (jobs.length < perRun) {
         let q2 = gdb.from('crawl_requests')

@@ -1,0 +1,2 @@
+fired: 2026-08-01T15:10:15Z
+reason: SPEC-174 round-robin, rebased onto current main.
