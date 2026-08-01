@@ -5381,6 +5381,15 @@ test('non-osm-sources-query-at-metro-level', 'SPEC-170/170b (root-caused 2026-08
   assert(!(/catch \(_e\) \{ \/\* ignore \*\/ \}/.test(f)), 'the CID resolver still swallows its own errors — a bad key looks identical to an empty market');
 });
 
+test('no-single-fetch-can-outlive-the-run', 'SPEC-172 (risk introduced by the SPEC-169 pool): Promise.all AWAITS in-flight tasks, and a single outbound call is allowed 140s (apify run-sync) or 90s (Overpass). A task starting near the 105s budget edge would therefore push the run past the 150s platform limit, get killed, and strand every buffered row — the SPEC-166 data-loss failure returning through a different door. Every slow fetch must clamp its timeout to the time actually remaining in the run.', '#174', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/_runDeadline = started \+ 138_000/.test(f)), 'no hard per-run deadline — a slow call can outlive the platform limit');
+  assert(!(!/function msLeft\(/.test(f)), 'no msLeft() clamp helper');
+  assert(!(/setTimeout\(\(\) => ctrl\.abort\(\), 140000\)/.test(f)), 'apify still uses a fixed 140s timeout instead of the remaining budget');
+  assert(!(/setTimeout\(\(\) => ctrl\.abort\(\), OSM_HTTP_TIMEOUT_MS\)/.test(f)), 'Overpass still uses a fixed 90s timeout instead of the remaining budget');
+});
+
+
 
 
 

@@ -104,6 +104,7 @@ serve(async (req: Request) => {
 const gdb = growthDb();
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
   const started = Date.now();
+  _runDeadline = started + 138_000;  // SPEC-172: hard wall, safely inside the 150s platform limit
   let dbRef: any = null;
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -997,7 +998,7 @@ async function overpassFetch(body: string): Promise<{ json: any; endpoint: strin
       await sleep(OSM_POLITE_DELAY_MS + Math.floor(Math.random() * 500));
       try {
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), OSM_HTTP_TIMEOUT_MS);
+        const t = setTimeout(() => ctrl.abort(), msLeft(OSM_HTTP_TIMEOUT_MS));  // SPEC-172
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -1802,6 +1803,18 @@ function parseFirstName(text: string): string | null {
 // run-sync on compass~crawler-google-places takes minutes, and the abort timer
 // below was 110s, so it was aborted every single time. Craigslist survives only
 // because it is fast. Failures are now REPORTED, and the timeout is honest.
+// SPEC-172: a HARD per-run deadline. The SPEC-169 pool awaits in-flight tasks, so
+// one slow call (apify run-sync is allowed 140s, Overpass 90s) started near the
+// budget edge would outlive the 150s platform limit — the run gets killed and the
+// buffered rows are lost, which is exactly the SPEC-166 failure returning by a
+// different door. Every outbound fetch now clamps its own timeout to the time
+// ACTUALLY left, so no single call can push the run past the wall.
+let _runDeadline = 0;
+function msLeft(cap: number): number {
+  const left = _runDeadline - Date.now();
+  return Math.max(1000, Math.min(cap, left > 0 ? left : 1000));
+}
+
 let _lastApifyError: string | null = null;
 // SPEC-168: apify already recorded WHY it returned nothing, but the caller threw it
 // away and wrote a generic "no X results" — so seven sources reported 0 rows for
@@ -1818,7 +1831,7 @@ async function apifyRun(actor: string, input: unknown, maxItems: number): Promis
   const ctrl = new AbortController();
   // Edge functions cap around 150s wall clock; give the actor as much of it as we
   // safely can instead of the arbitrary 110s that guaranteed failure for slow actors.
-  const to = setTimeout(() => ctrl.abort(), 140000);
+  const to = setTimeout(() => ctrl.abort(), msLeft(140000));  // SPEC-172
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: ctrl.signal });
     if (!res.ok) {
