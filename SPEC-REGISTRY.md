@@ -22,15 +22,15 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-174 | Every crawl source is scheduled every run; none can be starved by another | #181 | per-source table 2026-08-01 | PROVEN |
 | S-177 | A worker never writes a column the growth schema lacks, and a write failure is never swallowed | #177 | leads 1067 -> 2816 | PROVEN |
 | S-183 | A metered vendor run is cancelled server-side at our deadline, so an abandoned run cannot keep billing | #183 | — | CODED |
-| S-185 | No paid source may spend past its $1 tranche without producing leads at <= $0.05/lead | #185 | spend ledger | CODED |
+| S-185 | No paid source may spend past its $1 tranche without producing leads at <= $0.05/lead | #185, #189 | $23.59 -> 9,742 leads = $0.0024/lead 2026-08-01 | PROVEN |
 | S-CRAWL-OSM | OpenStreetMap produces service leads for Miami + NYC, free | #64 | 1,107 leads 2026-08-01 | PROVEN |
 | S-CRAWL-YELP | Yelp produces service leads within its 240-result ceiling | #180 | 1,620 leads 2026-08-01 | PROVEN |
 | S-CRAWL-GSPON | Google Sponsored (LSA) produces service leads | #105 | 68 leads 2026-08-01 | PROVEN |
 | S-CRAWL-CL | Craigslist produces service leads at <= $0.05/lead | #178, #187 | 129 leads 2026-08-01 | PROVEN |
-| S-CRAWL-YP | YellowPages produces service leads at <= $0.05/lead | #179 | — | CODED |
-| S-CRAWL-GMAPS | Google Maps produces service leads at <= $0.05/lead | #182 | — | CODED |
-| S-CRAWL-IG | IG-for-services — founder APPROVED 2026-08-01, sequenced AFTER Meta app review resolves (4 frozen-spec features depend on that approval) | — | — | DEFERRED |
-| S-CRAWL-LSA | Google Local Services Ads resolves a metro CID and produces leads | #173 | — | CODED |
+| S-CRAWL-YP | YellowPages produces service leads at <= $0.05/lead | #179 | not yet run | CODED |
+| S-CRAWL-GMAPS | Google Maps produces service leads at <= $0.05/lead | #182 | 1,659 leads @ $0.0018 2026-08-01 | PROVEN |
+| S-CRAWL-IG | IG-for-services — founder OVERRODE the IG rule and instructed it to keep running (2026-08-01). Producing, but no gate guards it yet. | — | 262 leads @ $0.0017 2026-08-01 | UNGUARDED |
+| S-CRAWL-LSA | Google Local Services Ads resolves a metro CID and produces leads | #173 | 188 leads 2026-08-01 | PROVEN |
 | S-BOOK-PAID | A consumer completes a PAID booking end to end — **FINAL step of soft launch, after features stabilise (founder, 2026-08-01)** | — | — | SCHEDULED-LAST |
 | S-LOOP-ACCEPT | A provider receives a request and accepts it | #143 | — | CODED |
 | S-P01 | A visitor searches in plain English and gets the right kind of provider (not a fabricated match) | #13, #29, #67c, #68 | live walk 2026-08-01 | PROVEN |
@@ -55,6 +55,15 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-P20 | Referral credit is server-authoritative and states the real rate and cap | #57, #A1g, #A1h | — | CODED |
 | S-P21 | No screen promises equity, IPO or securities upside | #170 | live audit 2026-08-01 | PROVEN |
 | S-P22 | Cold outreach is CAN-SPAM compliant and never auto-sends SMS | #65, #70, #83, #84 | — | CODED |
+| S-B01 | The request flow captures the WHEN even from a typo ("tonoight") — it must not silently drop the time | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B02 | A requester can see their existing requests and any replies from one place | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B03 | Viewing a counter-offer shows a Book button AT THE COUNTER PRICE, not the generic profile CTA | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B04 | Accepting a counter-offer charges the card automatically (Stripe, testable with a test card) | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B05 | The IG story-highlight step is MANDATORY, not optional | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B06 | "Copy link" on a spotlight points at the SERVICE's profile, not the recommender's | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B07 | When a spotlight/IG review is submitted, the other party is notified to review and approve | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B08 | /services/manage opens the manage screen, never the first-time listing form | — | founder-found 2026-08-01 | UNGUARDED |
+| S-B09 | The Inbox never shows duplicated jobs or notifications for the same booking | — | founder-found 2026-08-01 | UNGUARDED |
 <!-- REGISTRY:END -->
 
 ## Open drift (found by #186 on its first run)
