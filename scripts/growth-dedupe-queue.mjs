@@ -92,22 +92,21 @@ for (const [tbl, cols] of [
   console.log(`column probe ${tbl}: HTTP ${r.status}${r.ok ? ' — every column the worker uses exists' : ' ' + (await r.text()).slice(0, 160)}`);
 }
 
-// SPEC-167b: the queue still holds thousands of OPEN jobs for sources measured at
-// zero (see the seeder for the per-source evidence). Leaving them 'new' means the
-// workers grind through dead combinations before reaching osm — the seeder change
-// alone only stops NEW ones being added. Park them: reversible (a single UPDATE
-// back to 'new'), auditable via the note, and never a delete — these are jobs, but
-// the no-hard-delete habit is the right one to keep.
-console.log('parking queued jobs for sources with zero measured yield…');
-const parked = await q(`
+// SPEC-168: UNPARK. SPEC-167b parked every job whose source had produced 0 rows.
+// The parking was based on a generic "no results" note that hid the real error, so
+// it condemned sources that are configured and running. Restore them to 'new' and
+// let the evidence — now carried in the notes — decide.
+console.log('un-parking every source parked by SPEC-167…');
+const unparked = await q(`
   update crawl_requests
-     set status = 'parked',
-         notes  = 'SPEC-167: parked — source produced 0 rows in 8h of live running. Reversible: set status back to new.',
+     set status = 'new',
+         notes  = 'SPEC-168: un-parked — parked on a generic note that hid the real error',
          updated_at = now()
-   where status = 'new'
-     and source in ('craigslist','yellowpages_apify','google_lsa','yelp','gmaps_apify','google_sponsored','ig_services')
+   where status = 'parked'
   returning 1
 `);
-console.log(`parked ${Array.isArray(parked) ? parked.length : '?'} dead-source job(s)`);
+console.log(`un-parked ${Array.isArray(unparked) ? unparked.length : '?'} job(s)`);
 const openNow = await q(`select source, count(*)::int as n from crawl_requests where status = 'new' group by source order by n desc`);
-console.log('open queue by source now:', JSON.stringify(openNow));
+console.log('open queue by source:', JSON.stringify(openNow));
+const yields = await q(`select data_source, count(*)::int as n from leads_services group by data_source order by n desc`);
+console.log('leads by source (measured yield):', JSON.stringify(yields));
