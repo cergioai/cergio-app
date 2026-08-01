@@ -18,7 +18,12 @@ const PRODUCT_REF = 'vjmwnbftfquyquwaklue';
 const MGMT = 'https://api.supabase.com/v1';
 
 const out = [];
-const log = (s) => console.log(s);
+const lines = [];
+// SPEC-155: this step's output lived only in the Actions log, which I cannot read
+// from the sandbox — so "did the edge secrets actually land?" was unanswerable and
+// I was reduced to inferring it from a bare HTTP 000. Tee every line to a file the
+// report pastes verbatim. A diagnostic nobody can read is not a diagnostic.
+const log = (s) => { console.log(s); lines.push(String(s)); };
 const emit = (k, v) => {
   console.log(`::add-mask::${v}`);
   out.push(`${k}<<__EOK__\n${v}\n__EOK__`);
@@ -82,6 +87,9 @@ if (prodTok && growthUrl && growthKey) {
 } else {
   log(`edge secrets: SKIPPED (prodToken=${!!prodTok} url=${!!growthUrl} key=${!!growthKey})`);
 }
+
+const { writeFileSync } = await import('node:fs');
+writeFileSync('/tmp/growth-keys.txt', lines.join('\n') + '\n');
 
 if (process.env.GITHUB_ENV && out.length) {
   const { appendFileSync } = await import('node:fs');
