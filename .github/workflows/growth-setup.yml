@@ -169,6 +169,51 @@ jobs:
           echo "workers dispatched — waiting 25s for rows to land"
           sleep 25
 
+      # SPEC-191: the founder cannot audit a summary. Export the ACTUAL rows so every
+      # claim in the ledger is checkable against real data, per source, with contact
+      # coverage — the thing that decides whether a "lead" is worth anything.
+      - name: EXPORT audit CSVs
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p audit
+          U="$(printf '%s' "$GROWTH_SUPABASE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')"
+          H1="apikey: $GROWTH_SERVICE_ROLE_KEY"; H2="Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY"
+          COLS='id,name,service_type,phone,owner_email,website_url,instagram,address,city,state,lat,lon,data_source,outreach_status,fetched_at'
+          # full lead export, paged
+          echo "$COLS" > audit/leads_services.csv
+          for OFF in $(seq 0 1000 20000); do
+            N=$(curl -s -H "$H1" -H "$H2" -H "Accept: text/csv" -H "Range: ${OFF}-$((OFF+999))" \
+              "$U/rest/v1/leads_services?select=$COLS&order=fetched_at.desc" | tail -n +2 | tee -a audit/leads_services.csv | wc -l)
+            [ "$N" -lt 1000 ] && break
+          done
+          # per-source spend + yield, from the jobs table
+          echo 'source,jobs_finished,cost_usd_total,leads,cost_per_lead' > audit/spend_by_source.csv
+          for SRC in osm craigslist yellowpages_apify yelp google_lsa google_sponsored gmaps_apify ig_services; do
+            J=$(curl -s -H "$H1" -H "$H2" -H 'Prefer: count=exact' -H 'Range: 0-0' \
+              "$U/rest/v1/crawl_requests?select=id&source=eq.$SRC&status=in.(delivered,failed)" -D - -o /dev/null \
+              | sed -n 's|.*content-range: [0-9*-]*/\([0-9]*\).*|\1|p' | tr -d '\r')
+            C=$(curl -s -H "$H1" -H "$H2" "$U/rest/v1/crawl_requests?select=cost_usd&source=eq.$SRC" \
+              | python3 -c "import sys,json;print(round(sum(float(r.get('cost_usd') or 0) for r in json.load(sys.stdin)),4))" 2>/dev/null || echo 0)
+            L=$(curl -s -H "$H1" -H "$H2" -H 'Prefer: count=exact' -H 'Range: 0-0' \
+              "$U/rest/v1/leads_services?select=id&data_source=eq.$SRC" -D - -o /dev/null \
+              | sed -n 's|.*content-range: [0-9*-]*/\([0-9]*\).*|\1|p' | tr -d '\r')
+            P=$(python3 -c "l=${L:-0};c=$C;print('' if l==0 else round(c/l,6))" 2>/dev/null || echo '')
+            echo "$SRC,${J:-0},$C,${L:-0},$P" >> audit/spend_by_source.csv
+          done
+          # contact coverage — a lead with no way to reach it is not a lead
+          echo 'source,leads,with_phone,with_email,with_website,with_instagram' > audit/contact_coverage.csv
+          for SRC in osm craigslist yellowpages_apify yelp google_lsa google_sponsored gmaps_apify ig_services; do
+            cnt() { curl -s -H "$H1" -H "$H2" -H 'Prefer: count=exact' -H 'Range: 0-0' \
+              "$U/rest/v1/leads_services?select=id&data_source=eq.$SRC$1" -D - -o /dev/null \
+              | sed -n 's|.*content-range: [0-9*-]*/\([0-9]*\).*|\1|p' | tr -d '\r'; }
+            echo "$SRC,$(cnt ''),$(cnt '&phone=not.is.null'),$(cnt '&owner_email=not.is.null'),$(cnt '&website_url=not.is.null'),$(cnt '&instagram=not.is.null')" >> audit/contact_coverage.csv
+          done
+          wc -l audit/*.csv
+
       - name: GROWTH STATUS — write the report INTO the repo
         # SPEC-141: ALWAYS. Earlier runs died before this step and committed
         # nothing, so from off-Mac (no api.github.com, no browser) the failure was
@@ -329,7 +374,7 @@ jobs:
           cd "$TMP"
           git init -q .
           git checkout -q -b growth-status
-          git add GROWTH-STATUS.md
+          git add GROWTH-STATUS.md && git add -f audit/ 2>/dev/null || true
           git -c user.name="cergio-growth[bot]" -c user.email="growth@cergio.ai" \
             commit -q -m "growth status $(date -u +%FT%TZ)"
           git push -q --force \
