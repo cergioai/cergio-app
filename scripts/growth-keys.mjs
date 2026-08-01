@@ -40,10 +40,17 @@ async function serviceKey(ref, token, label) {
   const keys = await r.json();
   // Both key generations are accepted: the legacy JWT named "service_role" and
   // the newer opaque secret keys (type "secret_key" / sb_secret_…).
+  // SPEC-158: order matters, and I had it backwards. Preferring name==='service_role'
+  // returns the LEGACY JWT (eyJhbGciOiJ…, 219 chars). This project has migrated to
+  // the new API key system where the legacy JWTs are DISABLED, so that key is
+  // syntactically perfect and rejected — the worker probe returned exactly the same
+  // {"error":"Unauthorized"} 401 as when the secret was missing entirely, which is
+  // how this hid. Prefer the new sb_secret_ key and fall back to the JWT only for
+  // projects that have not migrated.
   const k =
-    keys.find((x) => x.name === 'service_role') ||
+    keys.find((x) => String(x.api_key || '').startsWith('sb_secret_')) ||
     keys.find((x) => x.type === 'secret' || x.type === 'secret_key') ||
-    keys.find((x) => String(x.api_key || '').startsWith('sb_secret_'));
+    keys.find((x) => x.name === 'service_role');
   if (!k?.api_key) {
     log(`${label}: no service key among [${keys.map((x) => x.name).join(', ')}]`);
     return null;
