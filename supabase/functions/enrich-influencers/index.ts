@@ -93,7 +93,33 @@ const gdb = growthDb();
           .neq('outreach_status', 'do_not_contact')
           .is('email', null)
           .limit(BATCH);
-        if (e2) throw e2;
+        if (e2) {
+          // SPEC-132 CUTOVER GAP (Forensic run 2026-08-01): the growth DB's
+          // leads_influencers was created WITHOUT the enrichment columns this
+          // worker reads (bio / external_url / enrich_attempted_at), so every
+          // run threw 42703 "column ... does not exist" -> status='error',
+          // org_health=down, audit_flag CREATORS_NOT_GROWING. A missing column is
+          // a SCHEMA gap the founder must close on the growth project (CI's token
+          // cannot see it); it is NOT a code failure and must not masquerade as one.
+          // Degrade to an explicit, non-error 'schema_incomplete' status carrying
+          // the exact remedy, so the dashboard shows an actionable gate, not a red
+          // crash loop.
+          const em = serr(e2);
+          if (/does not exist|42703|column/i.test(em)) {
+            const remedy =
+              "growth leads_influencers is missing enrichment columns - run on the GROWTH project: " +
+              "alter table public.leads_influencers add column if not exists bio text, " +
+              "add column if not exists external_url text, " +
+              "add column if not exists enrich_attempted_at timestamptz;";
+            await logAgentRun(db, 'enrich-influencers', {
+              started, raw_found: 0, rows_written: 0,
+              status: 'schema_incomplete', error: remedy,
+              meta: { schema_error: em, remedy },
+            });
+            return json({ status: 'schema_incomplete', error: remedy, schema_error: em }, 200);
+          }
+          throw e2;
+        }
         rows = legacy ?? [];
       } else {
         rows = data ?? [];

@@ -40,8 +40,15 @@ create table if not exists public.leads_influencers (
   ig_handle text, display_name text, category text, followers int,
   email text, phone text, city text, state text,
   discovered_via text, outreach_status text default 'pending_review',
+  -- Enrichment columns the enrich-influencers worker READS (SPEC-132 cutover
+  -- omitted these, so every run threw 42703 and CREATORS_NOT_GROWING fired).
+  bio text, external_url text, enrich_attempted_at timestamptz,
   fetched_at timestamptz default now()
 );
+-- Idempotent guards so an EXISTING (bio-less) growth table gets healed on apply.
+alter table public.leads_influencers add column if not exists bio text;
+alter table public.leads_influencers add column if not exists external_url text;
+alter table public.leads_influencers add column if not exists enrich_attempted_at timestamptz;
 create index if not exists leads_influencers_via_idx  on public.leads_influencers (discovered_via);
 create index if not exists leads_influencers_city_idx on public.leads_influencers (city, state);
 
