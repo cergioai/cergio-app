@@ -5190,6 +5190,17 @@ test('growth-trigger-is-not-a-shared-mutable-file', 'SPEC-157 (self-inflicted, 2
   return true;
 });
 
+test('growth-prefers-the-new-secret-key', 'SPEC-158 (measured 2026-08-01): the Management API returns BOTH the legacy service_role JWT and the new sb_secret_ key. Preferring the JWT handed the workers a key this project has disabled under the new API key system, so fulfill-crawl returned the exact same {"error":"Unauthorized"} 401 as when the secret was missing entirely — indistinguishable failures from opposite causes. The new-format key must be preferred, with the JWT only as a fallback for unmigrated projects.', '#163', () => {
+  const k = readFile('scripts/growth-keys.mjs');
+  if (!k) return 'growth-keys.mjs missing';
+  const iNew = k.indexOf("startsWith('sb_secret_')");
+  const iJwt = k.indexOf("x.name === 'service_role'");
+  if (iNew < 0) return 'never looks for the new sb_secret_ key';
+  if (iJwt >= 0 && iJwt < iNew) return 'legacy service_role JWT is preferred over sb_secret_ — disabled keys will 401';
+  return true;
+});
+
+
 
 
 
