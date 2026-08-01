@@ -197,7 +197,7 @@ const gdb = growthDb();
 
     // Idempotent insert: skip any (kind, city, service_type) with an OPEN row —
     // matching crawl_requests_open_dedupe_idx. Pre-filter, then batch the rest.
-    const { data: existing, error: exErr } = await db
+    const { data: existing, error: exErr } = await gdb
       .from('crawl_requests')
       .select('city, service_type')
       .eq('kind', 'services')

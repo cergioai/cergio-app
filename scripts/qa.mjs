@@ -5241,8 +5241,8 @@ test('growth-tables-are-read-from-the-growth-db', 'SPEC-161 (measured 2026-08-01
   // Functions still on the product client for growth tables. Each is a live bug
   // of the same class; they are enumerated so the gap is visible instead of
   // silent, and so a NEW one cannot be introduced unnoticed.
-  const KNOWN_GAP = new Set(['admin-crawl-status', 'agent-ops', 'crawl-health-check',
-    'crawl-seed-google-places', 'crawl-seed-osm', 'crawl-seed-yellowpages',
+  const KNOWN_GAP = new Set(['admin-crawl-status', 'agent-ops',
+    'crawl-seed-google-places', 'crawl-seed-yellowpages',
     'creator-marketplace-enrich', 'early-offers', 'outreach-send', 'qa-live-verify', 'qa-suite']);
   const dir = 'supabase/functions';
   const names = fs.readdirSync(path.join(REPO_ROOT, dir)).filter(n => !n.startsWith('_'));
