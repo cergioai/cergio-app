@@ -5361,6 +5361,15 @@ test('growth-seeds-every-source-and-reports-why-one-is-empty', 'SPEC-168 (correc
     'a zero-result note still hardcodes a generic string instead of surfacing the captured error');
 });
 
+test('crawl-jobs-run-in-parallel', 'SPEC-169 (measured on the live queue 2026-08-01): 14.7 jobs/hour — 3,733 open jobs would take 10.6 DAYS to drain. The cause was not the cron cadence but the worker looping jobs ONE AT A TIME while a single Overpass query can block for up to 90s, so nearly the whole 105s budget went to a single job. Jobs must be processed by a bounded worker pool, with the budget checked per task so the run still returns inside the 150s platform limit.', '#172', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/CRAWL_CONCURRENCY/.test(f)), 'no concurrency control — jobs run serially and the queue cannot drain');
+  assert(!(!/await Promise\.all\(Array\.from\(\{ length: Math\.max\(1, CONCURRENCY\) \}/.test(f)), 'no worker pool driving the job queue');
+  assert(!(!/if \(Date\.now\(\) - started > BUDGET_MS\) \{ budgetHit = true; return; \}/.test(f)), 'the pool does not check the time budget per task — a run could exceed the platform limit and strand rows');
+  assert(!(/for \(const job of jobs \?\? \[\]\) \{/.test(f)), 'the serial job loop is back');
+});
+
+
 
 
 

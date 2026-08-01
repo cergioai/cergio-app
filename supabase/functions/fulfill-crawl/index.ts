@@ -250,12 +250,20 @@ const gdb = growthDb();
     // jobs that vanish, and the 10-minute schedule takes the rest.
     const BUDGET_MS = 105_000;
     let budgetHit = false;
-    for (const job of jobs ?? []) {
-      if (Date.now() - started > BUDGET_MS) {
-        budgetHit = true;
-        console.log(`time budget reached after ${out.length} job(s) — flushing and returning cleanly`);
-        break;
-      }
+    // SPEC-169 — PARALLEL JOBS. Measured on the live queue: 14.7 jobs/hour, which
+    // would take 10.6 DAYS to drain 3,733 open jobs. The cause was not the cron
+    // cadence — it was this loop running jobs ONE AT A TIME while a single Overpass
+    // query can block for up to 90s. Nearly the whole 105s budget went to one job.
+    //
+    // A small worker pool fixes it without touching any per-job logic: each task
+    // still claims, crawls, records and buffers exactly as before. Concurrency is
+    // deliberately modest — these are free public endpoints (Overpass etiquette),
+    // and hammering them earns 429s that would cost more throughput than they gain.
+    // Writes are unaffected: _rowBuf is append-then-batch-upsert, so more producers
+    // simply fill batches faster.
+    const CONCURRENCY = Number(Deno.env.get('CRAWL_CONCURRENCY') || '6');
+    const queue = [...(jobs ?? [])];
+    const runJob = async (job: any) => {
       // Mark crawling so concurrent runs don't double-process.
       await flushBuf(db); await gdb.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
 
@@ -276,7 +284,7 @@ const gdb = growthDb();
             status: 'failed', notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           ypQuarantined++;
-          continue;
+          return;
         } else if (source === 'yellowpages') {
           // ── YellowPages page-scrape path (free, keyless) — DORMANT ──────────
           // Only reachable with YP_ENABLED=true (a residential/proxy egress).
@@ -492,7 +500,7 @@ const gdb = growthDb();
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           out.push({ id: job.id, error: msg, infra: true });
-          continue;
+          return;
         }
         // ── Overpass rate-limit / block / timeout is TRANSIENT, not a bad job ────
         // SPEC-72: the block is SURFACED (this pushes an error → the run logs
@@ -508,7 +516,7 @@ const gdb = growthDb();
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           out.push({ id: job.id, error: msg, blocked: true, osm: true });
-          continue;
+          return;
         }
         const blocked = e instanceof YpBlockedError || /^yp-blocked/i.test(msg);
         // A block page is stamped 'failed' with a distinct 'yp-blocked' note — NOT
@@ -521,7 +529,22 @@ const gdb = growthDb();
         }).eq('id', job.id);
         out.push({ id: job.id, error: msg, blocked });
       }
-    }
+    };
+
+    // Pool driver: CONCURRENCY workers pull from the shared queue until it is empty
+    // or the budget is spent. The budget is checked per TASK (not per batch), so a
+    // run still returns cleanly inside the 150s platform limit — SPEC-164 — while
+    // doing several jobs' worth of work in the same wall-clock window.
+    await Promise.all(Array.from({ length: Math.max(1, CONCURRENCY) }, async () => {
+      for (;;) {
+        if (Date.now() - started > BUDGET_MS) { budgetHit = true; return; }
+        const job = queue.shift();
+        if (!job) return;
+        await runJob(job);
+      }
+    }));
+    if (budgetHit) console.log(`time budget reached after ${out.length} job(s) — flushing and returning cleanly`);
+    console.log(`processed ${out.length} job(s) at concurrency ${CONCURRENCY} in ${Date.now() - started}ms`);
 
     // BACKBONE: unified agent_runs ledger. raw_found = businesses parsed across
     // all jobs this run, rows_written = rows actually upserted to leads_services.
