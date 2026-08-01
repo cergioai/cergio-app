@@ -5728,8 +5728,12 @@ test('one-master-spec-nothing-orphaned', 'SPEC-194 (founder 2026-08-01: "this ne
 });
 
 test('the-chinese-wall-is-enforced-in-ci', 'SPEC-195/196 (founder diagnosis 2026-08-01, and the correct one): "every edit came with an avalanche of unrelated changes that were never prescribed... GUARANTEE each part is COMPLETELY ISOLATED... NOT JUST THEORY, ACTUALLY CHINESE WALLED." On 2026-08-01 a FREE-link change blanked the homepage, a spend-gate change killed ALL crawling, and a YellowPages fix silently reverted craigslist — each a change to X that broke Y. Two enforcements, both in CI because agent-side hooks DO NOT FIRE IN COWORK (anthropics/claude-code#40495) and a guard that does not run is not a guard: (1) deno check on every edge function, which is the ONLY thing that would have caught the five identifier-scope outages — they all passed npm run build because edge functions are Deno and invisible to Vite; (2) a blast-radius guard that refuses any diff reaching outside the declared SCOPE.md, and refuses MODIFYING an existing line in a shared file, since that changes behaviour for every caller at once.', '#195', () => {
-  const ci = readFile('.github/workflows/ci.yml');
-  assert(!(!/deno check/.test(ci)), 'CI does not type-check the edge functions — the exact blind spot behind five outages');
+  const ciRaw = readFile('.github/workflows/ci.yml');
+  // Strip YAML comments — my first version of this gate matched the phrase inside its
+  // OWN explanatory comment and passed while the actual step was deleted. A gate that
+  // greps its own prose is a gate that cannot fail.
+  const ci = ciRaw.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert(!(!/run:[\s\S]{0,400}deno check/.test(ci)), 'CI does not RUN deno check on the edge functions — the exact blind spot behind five outages');
   assert(!(!/denoland\/setup-deno/.test(ci)), 'Deno is not installed in CI, so the type-check cannot run');
   assert(!(!/scripts\/scope-guard\.mjs/.test(ci)), 'the blast-radius guard is not wired into CI');
   const guardInRequired = ci.slice(ci.indexOf('build-and-qa:'), ci.indexOf('  e2e:'));
