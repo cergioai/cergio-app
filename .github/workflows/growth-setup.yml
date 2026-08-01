@@ -102,6 +102,15 @@ jobs:
         continue-on-error: true
         run: node scripts/apply-growth-schema.mjs
 
+      # SPEC-156: collapse the 56x-duplicated queue and install the partial
+      # unique index BEFORE seeding, so this run is the last one that can grow it.
+      - name: DEDUPE the crawl queue
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
+        continue-on-error: true
+        run: node scripts/growth-dedupe-queue.mjs 2>&1 | tee /tmp/growth-dedupe.txt
+
       - name: SEED the growth crawl queue (idempotent)
         id: seed
         env:
@@ -215,6 +224,12 @@ jobs:
             for s in gmaps_apify craigslist yellowpages_apify yelp google_lsa google_sponsored osm ig_services; do
               echo "| $s | $(cnt leads_services "&data_source=eq.$s") |"
             done
+            echo
+            echo '## queue dedupe'
+            echo
+            echo '```'
+            cat /tmp/growth-dedupe.txt 2>/dev/null || echo 'dedupe step produced no log'
+            echo '```'
             echo
             echo '## key derivation + edge secrets'
             echo

@@ -5133,6 +5133,21 @@ test('growth-keys-derived-not-pasted', 'SPEC-151 — service-role keys must be D
   return true;
 });
 
+test('growth-queue-cannot-reduplicate', 'SPEC-156 (measured 2026-08-01): crawl_requests held 151,714 open jobs against only 12 cities x 28 types x 8 sources = 2,688 real combinations — ~56x duplication. seed-growth-queue.mjs built its "already queued" set from a single limit=20000 read, so once the queue passed 20k every job beyond that window looked unseen and was re-seeded on EVERY run. Workers would have burned nearly all their capacity re-crawling identical triples. The dedupe set must page to exhaustion AND the database must enforce uniqueness over open jobs, so no future caller can reintroduce it.', '#161', () => {
+  const seed = readFile('scripts/seed-growth-queue.mjs');
+  if (!seed) return 'seed-growth-queue.mjs missing';
+  if (/limit=20000/.test(seed)) return 'dedupe read is still capped — the queue will re-duplicate past the cap';
+  if (!/Range: `\$\{from\}-\$\{from \+ PAGE - 1\}`/.test(seed)) return 'dedupe read does not paginate';
+  if (!/resolution=ignore-duplicates/.test(seed)) return 'inserts do not tolerate the unique index';
+  const d = readFile('scripts/growth-dedupe-queue.mjs');
+  if (!d) return 'growth-dedupe-queue.mjs missing';
+  if (!/create unique index if not exists crawl_requests_open_uniq/.test(d)) return 'no DB-level uniqueness — dedupe would be undone by the next seed';
+  const wf = readFile('.github/workflows/growth-setup.yml');
+  if (!/node scripts\/growth-dedupe-queue\.mjs/.test(wf || '')) return 'dedupe never runs in CI';
+  return true;
+});
+
+
 
 main().catch(e => {
   console.error(e);
