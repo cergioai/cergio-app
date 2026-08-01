@@ -250,6 +250,25 @@ jobs:
             cat /tmp/growth-keys.txt 2>/dev/null || echo 'derive step produced no log'
             echo '```'
             echo
+            echo '## PER-SOURCE DIAGNOSIS (latest finished job for each source)'
+            echo
+            echo '| source | city | type | rows | reason |'
+            echo '|---|---|---|---|---|'
+            for SRC in osm craigslist yellowpages_apify yelp google_lsa google_sponsored gmaps_apify ig_services; do
+              ROW=$(curl -s -H "apikey: $GROWTH_SERVICE_ROLE_KEY" -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
+                "$GROWTH_SUPABASE_URL/rest/v1/crawl_requests?select=city,service_type,delivered_count,notes&source=eq.$SRC&status=in.(delivered,failed)&order=updated_at.desc&limit=1")
+              CITY=$(printf '%s' "$ROW" | sed -n 's/.*"city":"\([^"]*\)".*/\1/p')
+              TYPE=$(printf '%s' "$ROW" | sed -n 's/.*"service_type":"\([^"]*\)".*/\1/p')
+              CNT=$(printf '%s' "$ROW"  | sed -n 's/.*"delivered_count":\([0-9]*\).*/\1/p')
+              NOTE=$(printf '%s' "$ROW" | sed -n 's/.*"notes":"\([^"]*\)".*/\1/p' | cut -c1-120)
+              TOT=$(curl -s -H "apikey: $GROWTH_SERVICE_ROLE_KEY" -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
+                -H 'Prefer: count=exact' -H 'Range: 0-0' \
+                "$GROWTH_SUPABASE_URL/rest/v1/leads_services?select=id&data_source=eq.$SRC" -D - -o /dev/null \
+                | sed -n 's|.*content-range: [0-9*-]*/\([0-9]*\).*|\1|p' | tr -d '\r')
+              echo "| **$SRC** (leads: ${TOT:-?}) | ${CITY:-—} | ${TYPE:-—} | ${CNT:-—} | ${NOTE:-no finished job yet} |"
+            done
+            echo
+
             echo '## last finished jobs (why a crawl produced 0 rows)'
             echo
             echo '```json'
