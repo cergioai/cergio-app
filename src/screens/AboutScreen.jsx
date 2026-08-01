@@ -150,11 +150,11 @@ export function AboutScreen() {
               3. Asset Participation Growth Income (APGI)
             </p>
             <p className="text-body-sm text-b2 leading-snug mt-0.5">
-              Every dollar earned also accrues a share of Cergio&apos;s
-              growth, scaled to your participation. Regular income
-              tied to the network you helped build — not a one-off
-              referral bonus. This is how the abundance gets
-              distributed.
+              Every dollar earned also builds Asset Participation Growth
+              Income (APGI), scaled to your participation — a loyalty-style
+              bonus, not a security and with no fixed dollar value. It
+              rewards the network you help build beyond a one-off
+              referral bonus.
             </p>
           </div>
         </div>

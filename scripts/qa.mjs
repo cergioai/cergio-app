@@ -5274,6 +5274,29 @@ test('growth-runs-unattended', 'SPEC-162 (2026-08-01): growth-setup ran ONLY on 
 
 
 
+test('securities-copy-no-howey', 'Rewards/APGI copy must never promise securities-like upside. Terms §7 fixes APGI as a discretionary loyalty bonus, NOT a security; no screen may tie the bonus to an IPO / \'going public\', or promise a "share of Cergio\'s growth" that "compounds". Encodes the frozen legal position + guards drift (feedback_no_securities_in_outreach; Howey exposure was live in RewardFlowAnimation/EarnExplainer/About/Earnings through 2026-08-01).', '#170', () => {
+  const banned = [
+    /goes?\s+public\s*\(?\s*IPO/i,
+    /if\s+Cergio\s+goes\s+public/i,
+    /activates\s+if\s+cergio/i,
+    /share\s+of\s+Cergio[\u2019'\u2019&a-z;]*\s+growth/i,
+    /your\s+share\s+compounds/i,
+  ];
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(rel); continue; }
+      if (!/\.(jsx?|tsx?)$/.test(e.name)) continue;
+      let src = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+      src = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      for (const b of banned) if (b.test(src)) offenders.push(rel + ' :: ' + b);
+    }
+  };
+  walk('src');
+  assert(offenders.length === 0, 'securities-exposure copy found (Howey risk; align to Terms §7 loyalty-bonus framing):\n  ' + offenders.join('\n  '));
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

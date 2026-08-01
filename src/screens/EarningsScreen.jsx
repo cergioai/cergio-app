@@ -935,7 +935,7 @@ export function EarningsScreen() {
               </button>
             </div>
             <p className="text-body-sm text-b2 leading-relaxed mb-3">
-              Like airmiles — but tied to Cergio's growth instead of flights.
+              Like airmiles — a loyalty-style bonus that grows with how much you earn on Cergio.
               The more you make on Cergio, the higher your participation score, the bigger your bonus.
             </p>
             <p className="text-body-sm text-b2 leading-relaxed mb-3">
@@ -943,8 +943,8 @@ export function EarningsScreen() {
               also accrues a Growth Participation Score. We track it from day one.
             </p>
             <p className="text-body-sm text-b2 leading-relaxed mb-3">
-              <span className="font-extrabold">When it activates:</span> if Cergio goes public (IPO).
-              IPO isn't guaranteed — community participation in our growth helps accelerate it.
+              <span className="font-extrabold">How it pays:</span> APGI is a discretionary, loyalty-style
+              bonus with no fixed dollar value and no guaranteed payout. It is not a security and not equity.
             </p>
             <div className="bg-gl border border-g/25 rounded-[14px] p-3 mt-4">
               <p className="text-meta text-gd font-extrabold leading-snug">
