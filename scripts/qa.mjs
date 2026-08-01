@@ -5542,7 +5542,11 @@ test('spec-and-gates-cannot-drift-apart', 'SPEC-186 — THE BINDING. FROZEN_SPEC
   assert(!(rows.length < 5), `registry has only ${rows.length} rows — it has stopped tracking the product`);
 
   const self = readFile('scripts/qa.mjs');
-  const declared = new Set([...self.matchAll(/, '(#[A-Za-z0-9._-]+)', *(?:async )?\(\) =>/g)].map((m) => m[1]));
+  // Gate ids are the THIRD argument of test(). Not all begin with '#' — launch-02,
+  // ontology-bridge-c and crack-help-haiku are real ids too, and the old '#'-only
+  // pattern silently failed to see them, so a registry row pointing at one looked
+  // like a missing gate.
+  const declared = new Set([...self.matchAll(/^test\('[^']+',\s*'[\s\S]*?',\s*'([^']+)',/gm)].map((m) => m[1]));
   for (const [id, behaviour, gate, proof, statusRaw] of rows) {
     const status = statusRaw.replace(/\*/g, '');
     assert(!(!behaviour), `${id} has no plain-English behaviour line`);

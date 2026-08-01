@@ -33,6 +33,28 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-CRAWL-LSA | Google Local Services Ads resolves a metro CID and produces leads | #173 | — | CODED |
 | S-BOOK-PAID | A consumer completes a PAID booking end to end — **FINAL step of soft launch, after features stabilise (founder, 2026-08-01)** | — | — | SCHEDULED-LAST |
 | S-LOOP-ACCEPT | A provider receives a request and accepts it | #143 | — | CODED |
+| S-P01 | A visitor searches in plain English and gets the right kind of provider (not a fabricated match) | #13, #29, #67c, #68 | live walk 2026-08-01 | PROVEN |
+| S-P02 | A blocked category (massage, tattoo, DJ…) never appears in results or the feed | #83, #96, A1j-v2, ontology-bridge-c | — | CODED |
+| S-P03 | A search that finds nothing says so honestly — never a fake "we'll notify you" wait | #96, launch-02, #15 | live walk 2026-08-01 | PROVEN |
+| S-P04 | A typed address is verified, saved, and never silently reverts | #21, #19, launch-06, launch-12-address-isolation | 134 Henry held 2026-08-01 | PROVEN |
+| S-P05 | A budget or date can never be mistaken for the address | #A1c, #A1i | — | CODED |
+| S-P06 | Submitting a request creates a real row and fans out to matching providers | #28, #55, #F34 | requests 276→277 | PROVEN |
+| S-P07 | The requester is never notified about their own request | launch-05 | — | CODED |
+| S-P08 | A matched provider is notified in-app AND by email, server-side | #125, #126, #143, #56 | housekeeper confirmed 2026-07-31 | PROVEN |
+| S-P09 | A provider's inbox shows the request using the same matching rule as the fan-out | #127 | housekeeper confirmed 2026-07-31 | PROVEN |
+| S-P10 | A guest tapping Inbox sees a calm empty state, never an endless spinner | #154 | live walk 2026-08-01 | PROVEN |
+| S-P11 | A provider can accept a request and set a time, without creating duplicate bookings | #131, #56, #47j | — | CODED |
+| S-P12 | A provider keeps a record of every offer they sent, after accept or decline | #134 | — | CODED |
+| S-P13 | The service page shows the right CTA when that provider already sent an offer | #134 | — | CODED |
+| S-P14 | A custom quote goes to the service being viewed, not the whole market | #136 | — | CODED |
+| S-P15 | Listing a service uploads the provider's own photos, never a generic avatar | #133 | — | CODED |
+| S-P16 | A listing always saves real coordinates, so it is reachable by search | #124, #111 | — | CODED |
+| S-P17 | A $0 spotlight skips payment entirely and is exempt from the 24h expiry | #45, #47g | — | CODED |
+| S-P18 | The barter loop requires a real IG post before the swap completes | #47, #47i, #53 | — | CODED |
+| S-P19 | A Connector's reach and trust signals are real, never fabricated counts | #49, #92, #12 | — | CODED |
+| S-P20 | Referral credit is server-authoritative and states the real rate and cap | #57, #A1g, #A1h | — | CODED |
+| S-P21 | No screen promises equity, IPO or securities upside | #170 | live audit 2026-08-01 | PROVEN |
+| S-P22 | Cold outreach is CAN-SPAM compliant and never auto-sends SMS | #65, #70, #83, #84 | — | CODED |
 <!-- REGISTRY:END -->
 
 ## Open drift (found by #186 on its first run)
