@@ -14,7 +14,7 @@
 // direct request). No fake data (SPEC-12): every row is a real DB row; empty
 // tabs show an honest empty state.
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { compactN } from '../components/ui/reputation';
 
@@ -26,7 +26,14 @@ function gradFor(id) {
 }
 function initials(n) { return (n || '?').trim().split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase(); }
 
+// Where "Claim your founding spot" actually takes you. The founding group is
+// defined by HAVING a free-for-spotlight listing, so the claim has to land in the
+// listing flow — anything else lets someone "claim" without joining anything.
+const CLAIM_DEST = '/list-service/setup';
+
 export function FreeBarterLandingScreen() {
+  const { auth } = useOutletContext() || {};
+  const isSignedIn = !!auth?.isSignedIn;
   const navigate = useNavigate();
   const [tab, setTab] = useState('services'); // 'services' | 'creators'
   const [services, setServices] = useState(null);
@@ -189,7 +196,16 @@ export function FreeBarterLandingScreen() {
           </p>
           <button
             type="button"
-            onClick={() => navigate('/auth?src=soft_launch')}
+            onClick={() => navigate(
+              // CERGIO-GUARD (2026-08-01, SPEC-152, Tarik live): "clicked claim
+              // founding spot… but wasn't added to the list of services". The CTA
+              // navigated to /auth unconditionally and with NO destination, so a
+              // signed-in founder was re-prompted to log in, and anyone who did
+              // sign in landed on /home having claimed nothing. Send them to the
+              // listing flow that actually creates the founding listing, and only
+              // route through auth when there is genuinely no session.
+              isSignedIn ? CLAIM_DEST : `/auth?src=soft_launch&returnTo=${encodeURIComponent(CLAIM_DEST)}`,
+            )}
             className="mt-4 bg-g text-white rounded-[24px] py-3 px-6 text-body-sm font-extrabold cg-cta"
           >
             Claim your founding spot →

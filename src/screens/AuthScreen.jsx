@@ -55,6 +55,18 @@ export function AuthScreen() {
   const location = useLocation();
   const { auth, showToast } = useOutletContext();
 
+  // CERGIO-GUARD (2026-08-01, SPEC-152, Tarik live): "I clicked on claim founding
+  // spot… kept on being asked to relogin". /auth honoured ?returnTo= but had NO
+  // already-signed-in guard, so any signed-in user routed here was shown the
+  // sign-in form again — an apparent auth loop with no way forward. This is an
+  // entry-point-agnostic fix: a live session means the gate is already satisfied,
+  // so pass straight through to the destination. Waits for `loading` so we never
+  // bounce before the persisted session has resolved.
+  useEffect(() => {
+    if (auth?.loading) return;
+    if (auth?.isSignedIn) navigate(returnTo, { replace: true });
+  }, [auth?.loading, auth?.isSignedIn, returnTo, navigate]);
+
   const activeRef = getActiveRef();
   const isReset   = new URLSearchParams(location.search).get('reset') === 'true';
   // CERGIO-GUARD (2026-06-16, Tarik): when a logged-out user tries to book,
