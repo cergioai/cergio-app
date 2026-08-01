@@ -226,7 +226,21 @@ const gdb = growthDb();
       : 'GOOGLE_PLACES_ENABLED=false (OpenStreetMap is the free primary source)';
 
     const out: Array<Record<string, unknown>> = [];
+    // SPEC-164 (measured live 2026-08-01): the platform kills an edge request at
+    // 150s. With no budget of its own the worker was killed MID-JOB — which is why
+    // the first live run showed 11 jobs delivered and ZERO leads: rows sat in
+    // _rowBuf and the process died before flushBuf ever ran, and a job already
+    // stamped 'crawling' was abandoned. Stop taking NEW jobs at 105s, flush, and
+    // return a real response. Fewer jobs per run that actually PERSIST beat more
+    // jobs that vanish, and the 10-minute schedule takes the rest.
+    const BUDGET_MS = 105_000;
+    let budgetHit = false;
     for (const job of jobs ?? []) {
+      if (Date.now() - started > BUDGET_MS) {
+        budgetHit = true;
+        console.log(`time budget reached after ${out.length} job(s) — flushing and returning cleanly`);
+        break;
+      }
       // Mark crawling so concurrent runs don't double-process.
       await flushBuf(db); await gdb.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
 
@@ -525,7 +539,11 @@ const gdb = growthDb();
       },
     });
     return json({
-      processed: out.length, yp_quarantined: ypQuarantined, yp_enabled: YP_ENABLED, results: out,
+      processed: out.length, yp_quarantined: ypQuarantined, yp_enabled: YP_ENABLED,
+      // SPEC-164: say so when the run stopped on its budget rather than on an
+      // empty queue, so "few jobs processed" is never mistaken for "no work left".
+      budget_hit: budgetHit, elapsed_ms: Date.now() - started,
+      results: out,
     });
   } catch (e) {
     await logAgentRun(dbRef, 'fulfill-crawl', {
