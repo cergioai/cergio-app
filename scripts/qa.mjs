@@ -5133,6 +5133,43 @@ test('growth-keys-derived-not-pasted', 'SPEC-151 — service-role keys must be D
   return true;
 });
 
+test('auth-screen-passes-through-signed-in-users', 'SPEC-152 (Tarik live): "I clicked on claim founding spot… kept on being asked to relogin". /auth honoured ?returnTo= but had NO already-signed-in guard, so any signed-in user routed there was shown the sign-in form again — an auth loop with no exit, blocking real signups. AuthScreen must redirect a live session straight to returnTo, and must wait for auth.loading so it never bounces before the persisted session resolves.', '#157', () => {
+  const a = readFile('src/screens/AuthScreen.jsx');
+  if (!a) return 'AuthScreen.jsx missing';
+  if (!/auth\?\.isSignedIn/.test(a)) return 'AuthScreen never checks isSignedIn — a signed-in user sees the login form again';
+  if (!/navigate\(returnTo, \{ replace: true \}\)/.test(a)) return 'signed-in users are not sent to returnTo';
+  if (!/auth\?\.loading/.test(a)) return 'no loading guard — would bounce before the session resolves';
+  return true;
+});
+
+test('claim-founding-spot-lands-somewhere-real', 'SPEC-152 (Tarik live): "I clicked on claim founding spot… but wasn\'t added to the list of services". The CTA called navigate(\'/auth?src=soft_launch\') unconditionally and with NO destination, so a signed-in founder was re-prompted to log in and anyone who did sign in landed on /home having claimed nothing. The CTA must branch on session state and always carry the listing destination through auth.', '#158', () => {
+  const f = readFile('src/screens/FreeBarterLandingScreen.jsx');
+  if (!f) return 'FreeBarterLandingScreen.jsx missing';
+  if (/navigate\('\/auth\?src=soft_launch'\)/.test(f)) return 'CTA still navigates to bare /auth with no destination';
+  if (!/CLAIM_DEST/.test(f)) return 'no claim destination defined';
+  if (!/isSignedIn \? CLAIM_DEST/.test(f)) return 'CTA does not branch on session state';
+  if (!/returnTo=\$\{encodeURIComponent\(CLAIM_DEST\)\}/.test(f)) return 'destination is not carried through /auth';
+  return true;
+});
+
+test('reco-rows-link-out-to-instagram', 'SPEC-154 (Tarik live): "when service clicks to see instagram post by connector they\'re sent to the reco on cergio which doesn\'t include instagram link". Every link on a "What people say" row pointed at /u/:id, and the profiles SELECT did not even fetch instagram_handle — so a provider could read the Cergio quote and the reach numbers beside it but had no route to the actual account to verify either.', '#159', () => {
+  const d = readFile('src/screens/ServiceDetailScreen.jsx');
+  if (!d) return 'ServiceDetailScreen.jsx missing';
+  if (!/select\('id, display_name, cc_verified_at, instagram_handle'\)/.test(d)) return 'recommender profiles are fetched without instagram_handle — nothing to link to';
+  if (!/ig: +profMap\[r\.recommender_id\]\?\.instagram_handle/.test(d)) return 'handle is fetched but never carried onto the reco row';
+  if (!/https:\/\/instagram\.com\/\$\{String\(r\.ig\)/.test(d)) return 'no outbound Instagram link on the reco row';
+  return true;
+});
+
+test('homepage-exposes-the-free-loop', 'SPEC-153 (Tarik): "Need a link to brows FREE (services for creators and free IG spotlights for services)… from the homepage… under the search". The free-barter loop is the entire soft-launch offer, yet /free was reachable only by typing the URL, so the highest-intent visitors never saw it.', '#160', () => {
+  const h = readFile('src/screens/HomeScreen.jsx');
+  if (!h) return 'HomeScreen.jsx missing';
+  if (!/navigate\('\/free'\)/.test(h)) return 'homepage has no route into /free';
+  if (!/Free services for creators/.test(h)) return 'the two-sided free offer is not spelled out';
+  return true;
+});
+
+
 
 main().catch(e => {
   console.error(e);

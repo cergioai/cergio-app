@@ -314,7 +314,9 @@ export function ServiceDetailScreen() {
         // pass (SPEC-49g): every "what people say" row carries the recommender's
         // mutual badge + Connector badge + IG/network counts.
         const [{ data: profs }, netRes, { data: rc }] = await Promise.all([
-          supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', ids),
+          // instagram_handle (2026-08-01, SPEC-154): without it the reco row has
+          // no route to the actual post — see the guard on the IG link below.
+          supabase.from('profiles').select('id, display_name, cc_verified_at, instagram_handle').in('id', ids),
           getMyNetworkIds(),
           getInboxPartyCounts(ids),
         ]);
@@ -328,6 +330,7 @@ export function ServiceDetailScreen() {
           message:      r.message,
           created_at:   r.sent_at,
           is_connector: !!profMap[r.recommender_id]?.cc_verified_at,
+          ig:           profMap[r.recommender_id]?.instagram_handle || null,
           isMutual:     netSet.has(r.recommender_id),
         })));
         // Friends-in-common with the viewer for the displayed recommenders
@@ -949,6 +952,29 @@ export function ServiceDetailScreen() {
                     {/* Recommender's social reach — IG / Cergio network. */}
                     <SocialReachLine counts={rc} />
                     <p className="text-body-lg text-b2 leading-relaxed mt-2">{r.message}</p>
+                    {/* CERGIO-GUARD (2026-08-01, SPEC-154, Tarik live): "when service
+                        clicks to see instagram post by connector they're sent to the
+                        reco on cergio which doesn't include instagram link". Every
+                        link on this row pointed at /u/:id, so a provider evaluating a
+                        Connector could read the Cergio quote but never reach the
+                        actual Instagram post or account — the reach numbers next to it
+                        were unverifiable. The profiles SELECT didn't even fetch
+                        instagram_handle, so there was nothing to render. Opens in a new
+                        tab so the Cergio page stays put and coming back is one tab
+                        switch, not a re-navigation. */}
+                    {r.ig && (
+                      <a
+                        href={`https://instagram.com/${String(r.ig).replace(/^@/, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 mt-2 text-body-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                          <rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" />
+                        </svg>
+                        See @{String(r.ig).replace(/^@/, '')} on Instagram
+                      </a>
+                    )}
                   </div>
                 </div>
               );
