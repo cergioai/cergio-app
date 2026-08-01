@@ -1,2 +1,2 @@
-run: 2026-07-31T22:52:22Z
-reason: service-role key corrected — drain the 53,700 queued jobs.
+run: 2026-08-01T03:18:19Z
+reason: SPEC-150 guards — name a missing/crossed secret instead of 401ing silently.

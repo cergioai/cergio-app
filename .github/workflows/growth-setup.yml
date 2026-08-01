@@ -36,6 +36,10 @@ jobs:
           set -euo pipefail
           [ -n "${GROWTH_SUPABASE_URL:-}" ] || { echo "::error::GROWTH_SUPABASE_URL is empty"; exit 1; }
           [ -n "${GROWTH_SERVICE_ROLE_KEY:-}" ] || { echo "::error::GROWTH_SERVICE_ROLE_KEY is empty"; exit 1; }
+          # SPEC-150: the two service keys are easy to cross-paste — doing so breaks
+          # growth auth AND leaves the workers unauthorised, which is exactly what
+          # happened. Report both prefixes so a swap is obvious at a glance.
+          echo "growth key prefix : $(printf '%s' "$GROWTH_SERVICE_ROLE_KEY" | cut -c1-11)…"
           case "$GROWTH_SUPABASE_URL" in
             *vjmwnbftfquyquwaklue*) echo "::error::points at the PRODUCT project — that is the outage"; exit 1;;
             https://*.supabase.co*) echo "URL shape OK (host masked)";;
@@ -106,6 +110,16 @@ jobs:
               "$FN/fulfill-crawl?limit=200" --max-time 120 &
           done
           wait
+          # SPEC-150: SUPABASE_SERVICE_ROLE_KEY did not EXIST as a repo secret, so
+          # every kick sent an empty Bearer and got 401 — for hours, silently. A
+          # missing secret must be named immediately, not inferred from a 401.
+          if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY is EMPTY or missing. Add it as a repo secret (product project service_role key). Workers cannot be kicked without it."
+            echo "SUPABASE_SERVICE_ROLE_KEY missing — workers not kicked" > /tmp/worker-probe.txt
+            exit 0
+          fi
+          echo "product key length: ${#SUPABASE_SERVICE_ROLE_KEY} · prefix: $(printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | cut -c1-11)…"
+
           # SPEC-149: capture the worker's actual RESPONSE BODY. Kicks were firing
           # and the queue stayed untouched, but I was only logging status codes to
           # a log I cannot read. growthDb() THROWS when the edge secret is missing
