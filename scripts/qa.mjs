@@ -5123,82 +5123,102 @@ test('growth-leads-influencers-has-enrichment-columns', 'Forensic run 2026-08-01
 // see the right project. This gate fails if a consumer step reads them raw again.
 test('growth-keys-derived-not-pasted', 'SPEC-151 — service-role keys must be DERIVED per-run from the access tokens, never hand-pasted. SUPABASE_SERVICE_ROLE_KEY was never created (every worker kick sent an empty Bearer and got a bare 401) and the product key was pasted into GROWTH_SERVICE_ROLE_KEY (growth auth died with "might also be owned by another Supabase project"): one day, zero rows. Minting each key from the token that can only see its own project makes both impossible. The workflow must also push GROWTH_* into the EDGE FUNCTION runtime, because growthDb() reads Deno.env and GitHub secrets are not Deno secrets.', '#156', () => {
   const wf = readFile('.github/workflows/growth-setup.yml');
-  if (!wf) return 'growth-setup.yml missing';
-  if (!/node scripts\/growth-keys\.mjs/.test(wf)) return 'growth-keys.mjs is not invoked';
+  assert(!(!wf), 'growth-setup.yml missing');
+  assert(!(!/node scripts\/growth-keys\.mjs/.test(wf)), 'growth-keys.mjs is not invoked');
   const raw = [...wf.matchAll(/(GROWTH_SERVICE_ROLE_KEY|SUPABASE_SERVICE_ROLE_KEY): \$\{\{ secrets\./g)];
-  if (raw.length > 2) return `${raw.length} steps still read a service key from secrets. (only the deriving step may)`;
+  assert(!(raw.length > 2), `${raw.length} steps still read a service key from secrets. (only the deriving step may)`);
   const k = readFile('scripts/growth-keys.mjs');
-  if (!k) return 'scripts/growth-keys.mjs missing';
-  if (!/\/secrets/.test(k) || !/GROWTH_SUPABASE_URL/.test(k)) return 'edge-function GROWTH_* secrets are never set — growthDb() reads Deno.env, not GitHub secrets';
+  assert(!(!k), 'scripts/growth-keys.mjs missing');
+  assert(!(!/\/secrets/.test(k) || !/GROWTH_SUPABASE_URL/.test(k)), 'edge-function GROWTH_* secrets are never set — growthDb() reads Deno.env, not GitHub secrets');
   return true;
 });
 
 test('auth-screen-passes-through-signed-in-users', 'SPEC-152 (Tarik live): "I clicked on claim founding spot… kept on being asked to relogin". /auth honoured ?returnTo= but had NO already-signed-in guard, so any signed-in user routed there was shown the sign-in form again — an auth loop with no exit, blocking real signups. AuthScreen must redirect a live session straight to returnTo, and must wait for auth.loading so it never bounces before the persisted session resolves.', '#157', () => {
   const a = readFile('src/screens/AuthScreen.jsx');
-  if (!a) return 'AuthScreen.jsx missing';
-  if (!/auth\?\.isSignedIn/.test(a)) return 'AuthScreen never checks isSignedIn — a signed-in user sees the login form again';
-  if (!/navigate\(returnTo, \{ replace: true \}\)/.test(a)) return 'signed-in users are not sent to returnTo';
-  if (!/auth\?\.loading/.test(a)) return 'no loading guard — would bounce before the session resolves';
+  assert(!(!a), 'AuthScreen.jsx missing');
+  assert(!(!/auth\?\.isSignedIn/.test(a)), 'AuthScreen never checks isSignedIn — a signed-in user sees the login form again');
+  assert(!(!/navigate\(returnTo, \{ replace: true \}\)/.test(a)), 'signed-in users are not sent to returnTo');
+  assert(!(!/auth\?\.loading/.test(a)), 'no loading guard — would bounce before the session resolves');
   return true;
 });
 
 test('claim-founding-spot-lands-somewhere-real', 'SPEC-152 (Tarik live): "I clicked on claim founding spot… but wasn\'t added to the list of services". The CTA called navigate(\'/auth?src=soft_launch\') unconditionally and with NO destination, so a signed-in founder was re-prompted to log in and anyone who did sign in landed on /home having claimed nothing. The CTA must branch on session state and always carry the listing destination through auth.', '#158', () => {
   const f = readFile('src/screens/FreeBarterLandingScreen.jsx');
-  if (!f) return 'FreeBarterLandingScreen.jsx missing';
-  if (/navigate\('\/auth\?src=soft_launch'\)/.test(f)) return 'CTA still navigates to bare /auth with no destination';
-  if (!/CLAIM_DEST/.test(f)) return 'no claim destination defined';
-  if (!/isSignedIn \? CLAIM_DEST/.test(f)) return 'CTA does not branch on session state';
-  if (!/returnTo=\$\{encodeURIComponent\(CLAIM_DEST\)\}/.test(f)) return 'destination is not carried through /auth';
+  assert(!(!f), 'FreeBarterLandingScreen.jsx missing');
+  assert(!(/navigate\('\/auth\?src=soft_launch'\)/.test(f)), 'CTA still navigates to bare /auth with no destination');
+  assert(!(!/CLAIM_DEST/.test(f)), 'no claim destination defined');
+  assert(!(!/isSignedIn \? CLAIM_DEST/.test(f)), 'CTA does not branch on session state');
+  assert(!(!/returnTo=\$\{encodeURIComponent\(CLAIM_DEST\)\}/.test(f)), 'destination is not carried through /auth');
   return true;
 });
 
 test('reco-rows-link-out-to-instagram', 'SPEC-154 (Tarik live): "when service clicks to see instagram post by connector they\'re sent to the reco on cergio which doesn\'t include instagram link". Every link on a "What people say" row pointed at /u/:id, and the profiles SELECT did not even fetch instagram_handle — so a provider could read the Cergio quote and the reach numbers beside it but had no route to the actual account to verify either.', '#159', () => {
   const d = readFile('src/screens/ServiceDetailScreen.jsx');
-  if (!d) return 'ServiceDetailScreen.jsx missing';
-  if (!/select\('id, display_name, cc_verified_at, instagram_handle'\)/.test(d)) return 'recommender profiles are fetched without instagram_handle — nothing to link to';
-  if (!/ig: +profMap\[r\.recommender_id\]\?\.instagram_handle/.test(d)) return 'handle is fetched but never carried onto the reco row';
-  if (!/https:\/\/instagram\.com\/\$\{String\(r\.ig\)/.test(d)) return 'no outbound Instagram link on the reco row';
+  assert(!(!d), 'ServiceDetailScreen.jsx missing');
+  assert(!(!/select\('id, display_name, cc_verified_at, instagram_handle'\)/.test(d)), 'recommender profiles are fetched without instagram_handle — nothing to link to');
+  assert(!(!/ig: +profMap\[r\.recommender_id\]\?\.instagram_handle/.test(d)), 'handle is fetched but never carried onto the reco row');
+  assert(!(!/https:\/\/instagram\.com\/\$\{String\(r\.ig\)/.test(d)), 'no outbound Instagram link on the reco row');
   return true;
 });
 
 test('homepage-exposes-the-free-loop', 'SPEC-153 (Tarik): "Need a link to brows FREE (services for creators and free IG spotlights for services)… from the homepage… under the search". The free-barter loop is the entire soft-launch offer, yet /free was reachable only by typing the URL, so the highest-intent visitors never saw it.', '#160', () => {
   const h = readFile('src/screens/HomeScreen.jsx');
-  if (!h) return 'HomeScreen.jsx missing';
-  if (!/navigate\('\/free'\)/.test(h)) return 'homepage has no route into /free';
-  if (!/Free services for creators/.test(h)) return 'the two-sided free offer is not spelled out';
+  assert(!(!h), 'HomeScreen.jsx missing');
+  assert(!(!/navigate\('\/free'\)/.test(h)), 'homepage has no route into /free');
+  assert(!(!/Free services for creators/.test(h)), 'the two-sided free offer is not spelled out');
   return true;
 });
 
 test('growth-queue-cannot-reduplicate', 'SPEC-156 (measured 2026-08-01): crawl_requests held 151,714 open jobs against only 12 cities x 28 types x 8 sources = 2,688 real combinations — ~56x duplication. seed-growth-queue.mjs built its "already queued" set from a single limit=20000 read, so once the queue passed 20k every job beyond that window looked unseen and was re-seeded on EVERY run. Workers would have burned nearly all their capacity re-crawling identical triples. The dedupe set must page to exhaustion AND the database must enforce uniqueness over open jobs, so no future caller can reintroduce it.', '#161', () => {
   const seed = readFile('scripts/seed-growth-queue.mjs');
-  if (!seed) return 'seed-growth-queue.mjs missing';
-  if (/limit=20000/.test(seed)) return 'dedupe read is still capped — the queue will re-duplicate past the cap';
-  if (!/Range: `\$\{from\}-\$\{from \+ PAGE - 1\}`/.test(seed)) return 'dedupe read does not paginate';
-  if (!/resolution=ignore-duplicates/.test(seed)) return 'inserts do not tolerate the unique index';
+  assert(!(!seed), 'seed-growth-queue.mjs missing');
+  // stripComments: the cap is described in the fix's own comment, and a gate that
+  // trips on its own documentation is noise.
+  assert(!(/limit=20000/.test(stripComments(seed))), 'dedupe read is still capped — the queue will re-duplicate past the cap');
+  assert(!(!/Range: `\$\{from\}-\$\{from \+ PAGE - 1\}`/.test(seed)), 'dedupe read does not paginate');
+  assert(!(!/resolution=ignore-duplicates/.test(seed)), 'inserts do not tolerate the unique index');
   const d = readFile('scripts/growth-dedupe-queue.mjs');
-  if (!d) return 'growth-dedupe-queue.mjs missing';
-  if (!/create unique index if not exists crawl_requests_open_uniq/.test(d)) return 'no DB-level uniqueness — dedupe would be undone by the next seed';
+  assert(!(!d), 'growth-dedupe-queue.mjs missing');
+  assert(!(!/create unique index if not exists crawl_requests_open_uniq/.test(d)), 'no DB-level uniqueness — dedupe would be undone by the next seed');
   const wf = readFile('.github/workflows/growth-setup.yml');
-  if (!/node scripts\/growth-dedupe-queue\.mjs/.test(wf || '')) return 'dedupe never runs in CI';
+  assert(!(!/node scripts\/growth-dedupe-queue\.mjs/.test(wf || '')), 'dedupe never runs in CI');
   return true;
 });
 
 test('growth-trigger-is-not-a-shared-mutable-file', 'SPEC-157 (self-inflicted, 2026-08-01): growth-trigger.txt was a single shared line that every ship branch rewrote to fire a run. With more than one branch open they all modified the same path, so each PR conflicted with main — and GitHub will not run the required build-and-qa check on a conflicted PR. Four PRs, including four live UX fixes Tarik was waiting on, sat blocked behind a one-line file whose only job was to say "go". A trigger must be an append-only unique path so parallel work can never deadlock on it.', '#162', () => {
   const wf = readFile('.github/workflows/growth-setup.yml');
-  if (!wf) return 'growth-setup.yml missing';
-  if (!/growth-fire\/\*\*/.test(wf)) return 'no unique-path trigger — parallel branches will conflict on the shared trigger file again';
+  assert(!(!wf), 'growth-setup.yml missing');
+  assert(!(!/growth-fire\/\*\*/.test(wf)), 'no unique-path trigger — parallel branches will conflict on the shared trigger file again');
   return true;
 });
 
 test('growth-prefers-the-new-secret-key', 'SPEC-158 (measured 2026-08-01): the Management API returns BOTH the legacy service_role JWT and the new sb_secret_ key. Preferring the JWT handed the workers a key this project has disabled under the new API key system, so fulfill-crawl returned the exact same {"error":"Unauthorized"} 401 as when the secret was missing entirely — indistinguishable failures from opposite causes. The new-format key must be preferred, with the JWT only as a fallback for unmigrated projects.', '#163', () => {
   const k = readFile('scripts/growth-keys.mjs');
-  if (!k) return 'growth-keys.mjs missing';
+  assert(!(!k), 'growth-keys.mjs missing');
   const iNew = k.indexOf("startsWith('sb_secret_')");
   const iJwt = k.indexOf("x.name === 'service_role'");
-  if (iNew < 0) return 'never looks for the new sb_secret_ key';
-  if (iJwt >= 0 && iJwt < iNew) return 'legacy service_role JWT is preferred over sb_secret_ — disabled keys will 401';
+  assert(!(iNew < 0), 'never looks for the new sb_secret_ key');
+  assert(!(iJwt >= 0 && iJwt < iNew), 'legacy service_role JWT is preferred over sb_secret_ — disabled keys will 401');
   return true;
 });
+
+test('homescreen-jsx-references-only-live-bindings', 'SPEC-159 (my regression, caught in production 2026-08-01): the SPEC-153 FREE link referenced `mode`, which is a PARAMETER of startEngine — not component state. It threw "ReferenceError: mode is not defined" on mount and rendered the ENTIRE homepage blank. vite build succeeded and 164 static checks passed, because neither resolves identifier scope. Any identifier used in HomeScreen JSX must be bound in the component, at module scope, or imported.', '#164', () => {
+  const h = readFile('src/screens/HomeScreen.jsx');
+  assert(!(!h), 'HomeScreen.jsx missing');
+  const body = h.slice(h.indexOf('export function HomeScreen()'));
+  const declared = new Set();
+  for (const m of body.matchAll(/const \[([A-Za-z0-9_]+), *set[A-Za-z0-9_]+\]/g)) declared.add(m[1]);
+  for (const m of body.matchAll(/(?:const|let|var) +([A-Za-z0-9_]+) *=/g)) declared.add(m[1]);
+  for (const m of h.matchAll(/(?:const|let|var|function) +([A-Za-z0-9_]+)/g)) declared.add(m[1]);
+  for (const m of h.matchAll(/import +\{([^}]+)\}/g)) m[1].split(',').forEach(x => declared.add(x.trim().split(' ')[0]));
+  // Identifiers compared against a string literal inside JSX braces — the exact
+  // shape of the bug. Cheap, targeted, and it fails loudly on a repeat.
+  for (const m of body.matchAll(/\{ *([a-z][A-Za-z0-9_]*) === '[^']+'/g)) {
+    assert(!(!declared.has(m[1])), `JSX references "${m[1]}", which is not bound in HomeScreen — this blanks the page at runtime`);
+  }
+  return true;
+});
+
 
 
 
