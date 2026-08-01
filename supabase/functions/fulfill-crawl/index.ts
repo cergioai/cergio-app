@@ -327,7 +327,7 @@ const gdb = growthDb();
           // reaches here (a race with the seeder), stamp it permanently failed
           // WITHOUT a fetch — no 403, no error flood, no retry.
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'failed', notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
+            status: 'failed', cost_usd: _lastApifyCostUsd, cost_usd: _lastApifyCostUsd, notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           ypQuarantined++;
           return;
@@ -569,7 +569,7 @@ const gdb = growthDb();
         // 'delivered' — so the queue is not silently drained to delivered-0 and the
         // health-check/watchdog can see the anti-bot block for what it is.
         await flushBuf(db); await gdb.from('crawl_requests').update({
-          status: 'failed',
+          status: 'failed', cost_usd: _lastApifyCostUsd,
           notes: (blocked ? `yp-blocked: ${msg}` : msg).slice(0, 500),
           updated_at: new Date().toISOString(),
         }).eq('id', job.id);
@@ -1908,13 +1908,49 @@ async function apifyLastRunCostUsd(actor: string, token: string): Promise<number
 }
 
 /** Hard stop: may `source` spend another dollar? Returns null if allowed, else the reason. */
+// SPEC-189: our per-job cost capture is STRUCTURALLY incomplete. Measured 2026-08-01:
+// Apify billed \$23.59 while our ledger recorded \$5.11 — 78% invisible. Three causes:
+// an aborted run still bills but we return before recording; six pool workers share one
+// "last run" lookup so a cost lands on the wrong job; and cost was written only on
+// 'delivered', never on failed or parked. A gate that sees a fifth of the spend cannot
+// guarantee anything, which is exactly what Tarik pays for.
+//
+// So the gate no longer trusts our own arithmetic. It asks APIFY what the account has
+// actually spent this period and uses the LARGER of (our ledger, the vendor's truth).
+// Under-counting is the only failure mode that costs money.
+let _vendorSpendCache: { at: number; usd: number } | null = null;
+async function apifyAccountSpendUsd(): Promise<number> {
+  const TOKEN = Deno.env.get('APIFY_TOKEN');
+  if (!TOKEN) return 0;
+  if (_vendorSpendCache && Date.now() - _vendorSpendCache.at < 60_000) return _vendorSpendCache.usd;
+  try {
+    const r = await fetch(`https://api.apify.com/v2/users/me/usage/monthly?token=${TOKEN}`,
+      { signal: AbortSignal.timeout(Math.min(8000, msLeft(8000))) });
+    if (!r.ok) return _vendorSpendCache?.usd ?? 0;
+    const j = await r.json();
+    const usd = Number(j?.data?.totalUsageCreditsUsdAfterVolumeDiscount ?? j?.data?.totalUsageCreditsUsd ?? 0) || 0;
+    _vendorSpendCache = { at: Date.now(), usd };
+    return usd;
+  } catch { return _vendorSpendCache?.usd ?? 0; }
+}
+
 async function spendBlockedReason(source: string): Promise<string | null> {
   if (!APIFY_ACTOR_OF_SOURCE[source]) return null;          // free/non-apify source
   const [spendRes, leadsRes] = await Promise.all([
     growthClient().from('crawl_requests').select('cost_usd').eq('source', source).not('cost_usd', 'is', null),
     growthClient().from('leads_services').select('id', { count: 'exact', head: true }).eq('data_source', source),
   ]);
-  const spent = (spendRes.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
+  const ledgerSpent = (spendRes.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
+  // SPEC-189: reconcile with the vendor. Our ledger under-reported by 78% once; if the
+  // account total exceeds what all apify sources have recorded between them, attribute
+  // the shortfall proportionally rather than pretending it does not exist.
+  const vendorTotal = await apifyAccountSpendUsd();
+  const allApify = await growthClient().from('crawl_requests').select('cost_usd')
+    .in('source', Object.keys(APIFY_ACTOR_OF_SOURCE)).not('cost_usd', 'is', null);
+  const ledgerAll = (allApify.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
+  const shortfall = Math.max(0, vendorTotal - ledgerAll);
+  const share = ledgerAll > 0 ? ledgerSpent / ledgerAll : 1 / Object.keys(APIFY_ACTOR_OF_SOURCE).length;
+  const spent = ledgerSpent + shortfall * share;
   const leads = leadsRes.count ?? 0;
   // Allowance = the first tranche the proven yield justifies.
   let allowance = SPEND_TRANCHES[0];

@@ -5640,6 +5640,19 @@ test('yelp-is-honest-and-inside-its-documented-ceiling', 'SPEC-180 (2026-08-01):
   assert(!(!/note: saved > 0 \? undefined :/.test(y)), 'a late-page HTTP error still erases the note of a run that saved rows');
 });
 
+test('the-spend-gate-must-see-the-REAL-spend', 'SPEC-189 (measured 2026-08-01): Apify billed $23.59 while our ledger recorded $5.11 — the gate was blind to 78% of actual spend. Three structural causes: an aborted run still bills but we returned before recording; six pool workers share one "last run" lookup so a cost lands on the wrong job; and cost was written only on delivered jobs, never on failed or parked ones. A gate that sees a fifth of the money cannot guarantee anything, and guaranteeing output against spend is the whole point. The gate must therefore reconcile against the VENDOR account total and use the larger figure — under-counting is the only failure mode that costs money.', '#189', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  assert(!(!/apifyAccountSpendUsd/.test(code)), 'no vendor reconciliation — the gate trusts our own arithmetic, which under-reported by 78%');
+  // The URL lives in a template literal, and stripComments() blanks those — assert this
+  // one against the RAW file. Third time this trap has bitten; it is now a habit.
+  assert(!(!/users\/me\/usage\/monthly/.test(f)), 'the account-level usage endpoint is not queried');
+  assert(!(!/const shortfall = Math\.max\(0, vendorTotal - ledgerAll\)/.test(code)), 'the ledger-vs-vendor shortfall is not computed');
+  assert(!(!/const spent = ledgerSpent \+ shortfall \* share/.test(code)), 'the gate does not add the unattributed vendor spend — it would under-count again');
+  assert(!(!/status: 'failed', cost_usd/.test(code)), 'a FAILED job records no cost, yet an aborted vendor run still bills');
+});
+
+
 
 
 
