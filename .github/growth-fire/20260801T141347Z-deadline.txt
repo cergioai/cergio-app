@@ -1,0 +1,2 @@
+fired: 2026-08-01T14:13:47Z
+reason: SPEC-172 hard run deadline.
