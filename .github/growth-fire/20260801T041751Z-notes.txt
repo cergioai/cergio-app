@@ -1,0 +1,2 @@
+fired: 2026-08-01T04:17:51Z
+reason: SPEC-165 — publish per-job notes; diagnose delivered-0.
