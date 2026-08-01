@@ -16,7 +16,7 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-152b | The claim CTA carries its destination through sign-in, so a new user lands on the listing flow after auth | #158 | live walk 2026-08-01 | PROVEN |
 | S-153 | The homepage shows a FREE entry point under the search box, naming both sides of the offer | #160 | screenshot 2026-08-01 | PROVEN |
 | S-154 | A provider reading a recommendation can click through to the Connector's real Instagram account | #159 | — | CODED |
-| S-159 | No screen may reference an identifier that is not bound in its scope | #164, #165, #170 | homepage restored 2026-08-01 | PROVEN |
+| S-159 | No identifier may be used where it is not bound — screens AND module-level worker code | #164, #165, #170 | homepage restored + 4 gdb refs fixed 2026-08-01 | PROVEN |
 | S-174 | Every crawl source is scheduled every run; none can be starved by another | #181 | per-source table 2026-08-01 | PROVEN |
 | S-177 | A worker never writes a column the growth schema lacks, and a write failure is never swallowed | #177 | leads 1067 -> 2816 | PROVEN |
 | S-183 | A metered vendor run is cancelled server-side at our deadline, so an abandoned run cannot keep billing | #183 | — | CODED |
@@ -24,7 +24,7 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-CRAWL-OSM | OpenStreetMap produces service leads for Miami + NYC, free | #64 | 1,107 leads 2026-08-01 | PROVEN |
 | S-CRAWL-YELP | Yelp produces service leads within its 240-result ceiling | — | 1,620 leads 2026-08-01 | UNGUARDED |
 | S-CRAWL-GSPON | Google Sponsored (LSA) produces service leads | #105 | 68 leads 2026-08-01 | PROVEN |
-| S-CRAWL-CL | Craigslist produces service leads at <= $0.05/lead | #178 | — | CODED |
+| S-CRAWL-CL | Craigslist produces service leads at <= $0.05/lead | #178, #187 | 129 leads 2026-08-01 | PROVEN |
 | S-CRAWL-YP | YellowPages produces service leads at <= $0.05/lead | — | — | UNGUARDED |
 | S-CRAWL-GMAPS | Google Maps produces service leads at <= $0.05/lead | #182 | — | CODED |
 | S-CRAWL-IG | IG-for-services — **policy decision required before any spend** | — | — | BLOCKER |
