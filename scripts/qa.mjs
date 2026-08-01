@@ -5441,6 +5441,19 @@ test('craigslist-reads-what-the-actor-emits', 'SPEC-178 (root-caused 2026-08-01)
   assert(!(/includeEmails/.test(clCode)), 'includeEmails is not an input field of this actor');
 });
 
+test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): osm had produced 1,067 leads while yelp, google_sponsored, gmaps_apify and ig_services still read "no finished job yet" hours later. They were not failing and not blocked — the claim query was pure FIFO on created_at and the oldest ~3,600 queued rows are all osm, so those four were NEVER PICKED. A source the scheduler never runs cannot be diagnosed and its zero is not evidence. Every source must get an equal, interleaved slice of every run.', '#181', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/SOURCES_RR/.test(f)), 'no round-robin — FIFO lets the oldest source monopolise every run');
+  const m = f.match(/const SOURCES_RR = \[([\s\S]*?)\];/);
+  assert(!(!m), 'SOURCES_RR is not a literal array');
+  for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services']) {
+    assert(!(!new RegExp(`'${src}'`).test(m[1])), `${src} is not in the rota — it would never be scheduled`);
+  }
+  assert(!(!/const share = Math\.max\(1, Math\.floor\(perRun \/ SOURCES_RR\.length\)\)/.test(f)), 'no equal per-source share');
+  assert(!(!/for \(let i = 0; i < share; i\+\+\) for \(const list of perSource\)/.test(f)), 'slices are not interleaved');
+});
+
+
 
 
 
