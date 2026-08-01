@@ -1,0 +1,2 @@
+fired: 2026-08-01T19:07:46Z
+reason: SPEC-192 hard contact gate + SPEC-193 all-apify.

@@ -4718,13 +4718,17 @@ test('ops-city-filter-and-creator-provenance', 'SPEC-104b: the ops console must 
 
 test('google-sponsored-uses-the-proven-lsa-engine', 'SPEC-105: the google_sponsored source must run the Local Services Ads engine (what the founder actually pasted: "Sponsored <service> | <city>" WITH phone numbers), not only the generic engine=google ads[] array which measured 0 rows on every job. Provenance stays google_sponsored so the dashboard row the founder watches is the one that fills', '#105', async () => {
   const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
-  assert(/async function fulfillGoogleLSA\(db: any, job: any, provenance = 'google_lsa'\)/.test(fc),
-    'the LSA fetcher must be provenance-parameterised so google_sponsored can reuse it');
+  // The SerpAPI fetcher is kept in the tree (reversible) but must be unreachable.
   const branch = fc.slice(fc.indexOf("source === 'google_sponsored'"), fc.indexOf("source === 'yelp'"));
-  assert(/fulfillGoogleLSA\(db, job, 'google_sponsored'\)/.test(branch),
-    'google_sponsored must call the LSA engine FIRST (measured: 88 rows / 100% phone vs 0 rows for ads[])');
-  assert(/fulfillGoogleSponsored\(db, job\)/.test(branch),
-    'the generic ads[] scrape must remain as a supplement, not the primary');
+  // SUPERSEDED 2026-08-01 by SPEC-193. The original invariant was "use the LSA engine,
+  // not the empty ads[] array" — correct at the time, measured 88 rows vs 0. The founder
+  // then retired ALL paid crawling onto Apify, so the SerpAPI LSA engine must no longer
+  // be called at all. The invariant underneath is unchanged and still enforced: this
+  // source must use the path that actually returns pros WITH a phone.
+  assert(!/fulfillGoogleLSA\(db, job/.test(branch),
+    'google_sponsored still calls the SerpAPI LSA engine — SPEC-193 retired all paid crawling onto Apify');
+  assert(/fulfillGmapsApify\(db, job\)/.test(branch),
+    'google_sponsored must use the Apify extractor, which returns a phone for nearly every place (SPEC-192/193)');
   assert(/data_source: provenance/.test(fc), 'rows must carry the requesting provenance, not a hardcoded one');
 });
 
@@ -5611,7 +5615,11 @@ test('craigslist-filters-keep-real-service-posts', 'SPEC-187 (measured against 4
     assert(!(!FORSALE.test(t2)), `the for-sale filter no longer rejects the vehicle listing "${t2}"`);
   }
 
-  assert(!(/if \(!phone && !email\) continue;/.test(code)), 'craigslist again discards every post with no phone and no email — that is the MAJORITY of real service posts, which use the anonymised reply button');
+  // SUPERSEDED 2026-08-01 by SPEC-192. I originally asserted that craigslist must KEEP
+  // contactless posts. The founder then made it a HARD spec that a lead without phone or
+  // email is useless and must never be paid for. His spec wins; this assert is inverted
+  // rather than deleted, so the reversal stays on the record.
+  assert(!(/!phone && !email && !postUrl/.test(code)), 'craigslist accepts a post URL in place of a contact again — SPEC-192 forbids saving an unreachable lead');
   assert(!(!/if \(!idbase\) continue;/.test(code)), 'an empty idbase is allowed through, so every contactless row upserts onto the same id and a whole run collapses into one lead');
   assert(!(!/cl_post_url: postUrl/.test(code)), 'the post URL is not persisted — a lead with no phone or email would be unreachable');
   assert(!(!/\(needed\|wanted\)/.test(code)), 'demand-side posts ("IT Specialist Needed") are ingested as providers again');
@@ -5659,8 +5667,11 @@ test('every-paid-vendor-is-metered-not-just-apify', 'SPEC-190 (founder caught th
   const m = f.match(/const VENDOR_OF_SOURCE[\s\S]*?\};/);
   assert(!(!m), 'VENDOR_OF_SOURCE is not a literal map');
   assert(!(!/yelp: 'yelp'/.test(m[0])), 'yelp is not billed to a paid vendor — Yelp Fusion is a paid tier');
-  assert(!(!/google_lsa: 'serpapi'/.test(m[0])), 'google_lsa is not billed to SerpAPI');
-  assert(!(!/google_sponsored: 'serpapi'/.test(m[0])), 'google_sponsored is not billed to SerpAPI');
+  // SUPERSEDED 2026-08-01 by SPEC-193: these two moved off SerpAPI onto Apify. The
+  // invariant that matters is unchanged — every paid source names a real biller and
+  // only osm is free.
+  assert(!(!/google_lsa: 'apify'/.test(m[0])), 'google_lsa names no biller');
+  assert(!(!/google_sponsored: 'apify'/.test(m[0])), 'google_sponsored names no biller');
   assert(!(!/osm: 'free'/.test(m[0])), 'osm must be the ONLY source marked free');
   assert(!(/if \(!APIFY_ACTOR_OF_SOURCE\[source\]\) return null;/.test(code)), 'the spend gate exits early for any non-Apify source again — that is the hole that left yelp ungated');
   assert(!(!/_lastNonApifyCostUsd/.test(code)), 'non-Apify vendors record no cost, so their tranche gate can never fire');
@@ -5669,6 +5680,31 @@ test('every-paid-vendor-is-metered-not-just-apify', 'SPEC-190 (founder caught th
   assert(!(!/audit\/spend_by_source\.csv/.test(wf)), 'no per-source spend export');
   assert(!(!/audit\/contact_coverage\.csv/.test(wf)), 'no contact-coverage export — a lead with no way to reach it is not a lead');
 });
+
+test('a-lead-without-phone-or-email-is-never-saved', 'SPEC-192 — HARD SPEC (founder, 2026-08-01, verbatim): "the spec specifically calls for email and or phone... without it the lead is useless... we can\'t SPEND on lists that don\'t have email and or phone. This should have been a HARD spec." It was enforced in three crawlers and MISSING from yelp, google_lsa and ig_services, and I had actively WEAKENED it for craigslist by accepting a post URL as a substitute for a contact. A per-source rule is a rule that gets missed. It now lives in bufUpsert — the single function every source writes through — so no crawler can save an unreachable row and no future source can forget it. The reject count is reported, so the loss is visible rather than silent.', '#192', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  assert(!(!/function hasContact\(/.test(code)), 'no central contact check — each source would have to remember, and three did not');
+  assert(!(!/if \(!hasContact\(row\)\) \{ _rejectedNoContact\+\+; return; \}/.test(code)),
+    'bufUpsert does not reject contactless rows — an unreachable lead is not a lead and we must not pay for it');
+  const buf = code.slice(code.indexOf('async function bufUpsert'));
+  const guardAt = buf.indexOf('hasContact'); const pushAt = buf.indexOf('_rowBuf.push');
+  assert(!(guardAt < 0 || guardAt > pushAt), 'the contact guard must run BEFORE the row is buffered');
+  assert(!(/!phone && !email && !postUrl/.test(code)), 'craigslist accepts a post URL in place of a contact again — reverted for a reason');
+  assert(!(!/rejected_no_contact/.test(code)), 'the reject count is not reported — a silent loss is how this went unnoticed');
+});
+
+test('all-paid-crawling-goes-through-apify', 'SPEC-193 (founder decision, restated 2026-08-01): "we decided to switch out serpapi with apify... all paid should be apify as it\'s most economical and/or best crawler". I left SerpAPI running and then reported it as free, which is exactly how it survived unnoticed. google_lsa and google_sponsored are retired onto the Apify Google-Maps extractor — the best proven cost per lead on the board ($0.0018) and a source that carries a phone for nearly every place, which is what SPEC-192 requires.', '#193', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  const m = f.match(/const VENDOR_OF_SOURCE[\s\S]*?\};/);
+  assert(!(!m), 'VENDOR_OF_SOURCE is missing');
+  assert(!(/'serpapi'/.test(m[0].replace(/\|/g, ''))), 'a source is still billed to SerpAPI — all paid crawling must go through Apify');
+  assert(!(!/google_lsa: 'apify'/.test(m[0])), 'google_lsa is not on Apify');
+  assert(!(!/google_sponsored: 'apify'/.test(m[0])), 'google_sponsored is not on Apify');
+  assert(!(/await fulfillGoogleLSA\(db, job/.test(code)), 'the SerpAPI LSA fetcher is still being called');
+});
+
 
 
 
