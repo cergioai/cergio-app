@@ -4892,7 +4892,10 @@ test('apify-failures-are-reported', 'SPEC-117: apifyRun discarded every failure 
   assert(/returned 0 items \(check actor input\)/.test(fc), 'an empty-but-successful run must be distinguished from a failure');
   assert(!/setTimeout\(\(\) => ctrl\.abort\(\), 110000\)/.test(fc), 'the 110s timer that guaranteed failure for slow actors must be gone');
   assert(/Math\.min\(want, 60\)/.test(fc), 'the Google Places per-run target must fit inside the run-sync window');
-  assert(/_lastApifyError \|\| 'no Google Maps results'/.test(fc), 'the real reason must land on the job notes');
+  // SPEC-173 widened this from an exact string to the INVARIANT: the captured
+  // apify error must reach the note. The note text now also carries the raw item
+  // count, so pinning the literal made a strictly better message fail the gate.
+  assert(/_lastApifyError \|\| [`']no Google Maps results/.test(fc), 'the real reason must land on the job notes');
 });
 
 test('paused-growth-cannot-be-self-healed-back-on', 'SPEC-119: the self-heal backbone must NEVER re-invoke a PAUSED growth agent. SPEC-118 (#121) paused background growth by UNSCHEDULING its crons after DB saturation took the product down (/rest/v1/services 503). But a paused agent reads as `stall`, and cergio-orchestrator (30m, left running) re-runs any can_rerun+enabled stalled agent via cergio_call_edge, and crawl-health-check (2h) re-kicks crawl-seed-osm — either path would silently UNDO the pause and re-saturate the pool within ~30 min. The product outranks growth unconditionally, so every self-heal path must honour the pause, not just the removed cron', '#119', async () => {
@@ -5388,6 +5391,13 @@ test('no-single-fetch-can-outlive-the-run', 'SPEC-172 (risk introduced by the SP
   assert(!(/setTimeout\(\(\) => ctrl\.abort\(\), 140000\)/.test(f)), 'apify still uses a fixed 140s timeout instead of the remaining budget');
   assert(!(/setTimeout\(\(\) => ctrl\.abort\(\), OSM_HTTP_TIMEOUT_MS\)/.test(f)), 'Overpass still uses a fixed 90s timeout instead of the remaining budget');
 });
+
+test('zero-yield-notes-distinguish-empty-from-filtered', 'SPEC-173 (2026-08-01): craigslist reported "no Craigslist results" for Miami — a metro that DOES have a subdomain — while _lastApifyError was null. A null apify error means the actor did NOT return zero items; it means items came back and our own filters rejected every one. Those are opposite bugs with opposite fixes (actor input vs over-aggressive filtering) and the note could not tell them apart. Every zero-saved note must state how many RAW items the source returned.', '#175', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const n = (f.match(/raw items returned/g) || []).length;
+  assert(!(n < 5), `only ${n} zero-yield notes report raw item counts — a filtered-to-zero source is indistinguishable from an empty one`);
+});
+
 
 
 

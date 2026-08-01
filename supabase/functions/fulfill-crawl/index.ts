@@ -307,7 +307,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || 'no YellowPages results') : 'yellowpages'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || `no YellowPages results (raw items returned: ${r.found ?? 0})`) : 'yellowpages'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'gmaps_apify') {
@@ -318,7 +318,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || 'no Google Maps results') : 'gmaps_apify'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || `no Google Maps results (raw items returned: ${r.found ?? 0})`) : 'gmaps_apify'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'ig_services') {
@@ -329,7 +329,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || 'no IG accounts for this service/city') : 'ig_services'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || `no IG accounts for this service/city (raw items returned: ${r.found ?? 0})`) : 'ig_services'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'craigslist') {
@@ -339,7 +339,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastApifyError || 'no Craigslist results') : 'craigslist'),
+            notes: r.note || (saved === 0 ? (_lastApifyError || `no Craigslist results (raw items returned: ${r.found ?? 0})`) : 'craigslist'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'google_lsa') {
@@ -349,7 +349,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastSerpError || 'no Google local-services ads') : 'google_lsa'),
+            notes: r.note || (saved === 0 ? (_lastSerpError || `no Google local-services ads (raw items returned: ${r.found ?? 0})`) : 'google_lsa'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'google_sponsored') {
@@ -372,7 +372,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastSerpError || 'no Google sponsored/LSA results') : 'google_sponsored via LSA'),
+            notes: r.note || (saved === 0 ? (_lastSerpError || `no Google sponsored/LSA results (raw items returned: ${r.found ?? 0})`) : 'google_sponsored via LSA'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'yelp') {
@@ -385,7 +385,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastYelpError || 'no Yelp results for this city/type') : 'yelp'),
+            notes: r.note || (saved === 0 ? (_lastYelpError || `no Yelp results for this city/type (raw items returned: ${r.found ?? 0})`) : 'yelp'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'osm' || placesDown) {
