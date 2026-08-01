@@ -5266,6 +5266,23 @@ test('growth-runs-unattended', 'SPEC-162 (2026-08-01): growth-setup ran ONLY on 
   assert(!(!/cron: *'\*\/\d+ \* \* \* \*'/.test(wf)), 'growth-setup has no sub-hourly cron');
 });
 
+test('growth-schema-has-every-column-the-workers-use', 'SPEC-163 (measured live 2026-08-01): the worker finally reached the growth queue and died on "column crawl_requests.lat does not exist [42703]". The growth schema was created without columns the workers read and write — the same gap that killed enrich-influencers. An audit of both write paths found three more queued behind it (leads_services.address, .osm_id, crawl_requests.requested_by), and OSM is the PRIMARY path so osm_id would have failed on the very next cycle. Every column the workers touch must exist in the reference schema AND be ensured at runtime, because a missing column is indistinguishable from a dead worker at the HTTP layer.', '#168', () => {
+  const mig = readFile(fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations'))
+    .filter(f => /growth_schema_reference/.test(f)).map(f => `supabase/migrations/${f}`)[0]);
+  for (const c of ['lat', 'lng', 'requested_by']) {
+    assert(!(!new RegExp(`\\b${c}\\b`).test(mig.slice(mig.indexOf('crawl_requests'), mig.indexOf('leads_services')))),
+      `growth crawl_requests is missing ${c} — the worker SELECTs it and will 42703 on every claim`);
+  }
+  const leads = mig.slice(mig.indexOf('leads_services'));
+  for (const c of ['address', 'osm_id', 'lon']) {
+    assert(!(!new RegExp(`\\b${c}\\b`).test(leads)), `growth leads_services is missing ${c} — the OSM path writes it`);
+  }
+  const d = readFile('scripts/growth-dedupe-queue.mjs');
+  assert(!(!/add column if not exists lat/.test(d)), 'columns are not ensured at runtime — a fresh growth project would fail again');
+  assert(!(!/column probe/.test(d)), 'no live column probe — a schema gap would again look like a dead worker');
+});
+
+
 
 
 

@@ -12,6 +12,9 @@ create table if not exists public.crawl_requests (
   id uuid primary key default gen_random_uuid(),
   kind text not null,
   city text, state text, service_type text, source text,
+  -- SPEC-163: the workers SELECT lat/lng/requested_by; omitting them made every
+  -- claim fail 42703 while the queue looked perfectly healthy.
+  lat double precision, lng double precision, requested_by uuid,
   status text not null default 'new',
   target_count int default 100,
   delivered_count int default 0,
@@ -28,6 +31,8 @@ create table if not exists public.leads_services (
   name text, service_type text, phone text, phone_origin text,
   owner_email text, website_url text, instagram text, has_instagram boolean default false,
   city text, state text, lat double precision, lon double precision,
+  -- SPEC-163: written by the OSM (primary) and Places paths.
+  address text, osm_id text,
   data_source text, outreach_status text default 'new', outreach_notes text,
   fetched_at timestamptz default now()
 );
