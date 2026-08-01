@@ -8,6 +8,8 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 - `CODED` — code and gate exist, never proven live. **Not** trustworthy.
 - `UNGUARDED` — spec line with no gate. This is where regressions come from.
 - `BLOCKER` — required for soft launch and not proven.
+- `DEFERRED` — approved, deliberately sequenced later; not a gap.
+- `SCHEDULED-LAST` — intentionally the final step before launch.
 
 <!-- REGISTRY:START -->
 | SPEC ID | Behaviour (plain English) | Gate | Live proof | Status |
@@ -22,14 +24,14 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-183 | A metered vendor run is cancelled server-side at our deadline, so an abandoned run cannot keep billing | #183 | — | CODED |
 | S-185 | No paid source may spend past its $1 tranche without producing leads at <= $0.05/lead | #185 | spend ledger | CODED |
 | S-CRAWL-OSM | OpenStreetMap produces service leads for Miami + NYC, free | #64 | 1,107 leads 2026-08-01 | PROVEN |
-| S-CRAWL-YELP | Yelp produces service leads within its 240-result ceiling | — | 1,620 leads 2026-08-01 | UNGUARDED |
+| S-CRAWL-YELP | Yelp produces service leads within its 240-result ceiling | #180 | 1,620 leads 2026-08-01 | PROVEN |
 | S-CRAWL-GSPON | Google Sponsored (LSA) produces service leads | #105 | 68 leads 2026-08-01 | PROVEN |
 | S-CRAWL-CL | Craigslist produces service leads at <= $0.05/lead | #178, #187 | 129 leads 2026-08-01 | PROVEN |
-| S-CRAWL-YP | YellowPages produces service leads at <= $0.05/lead | — | — | UNGUARDED |
+| S-CRAWL-YP | YellowPages produces service leads at <= $0.05/lead | #179 | — | CODED |
 | S-CRAWL-GMAPS | Google Maps produces service leads at <= $0.05/lead | #182 | — | CODED |
-| S-CRAWL-IG | IG-for-services — **policy decision required before any spend** | — | — | BLOCKER |
+| S-CRAWL-IG | IG-for-services — founder APPROVED 2026-08-01, sequenced AFTER Meta app review resolves (4 frozen-spec features depend on that approval) | — | — | DEFERRED |
 | S-CRAWL-LSA | Google Local Services Ads resolves a metro CID and produces leads | #173 | — | CODED |
-| S-BOOK-PAID | A consumer completes a PAID booking end to end | — | — | **BLOCKER** |
+| S-BOOK-PAID | A consumer completes a PAID booking end to end — **FINAL step of soft launch, after features stabilise (founder, 2026-08-01)** | — | — | SCHEDULED-LAST |
 | S-LOOP-ACCEPT | A provider receives a request and accepts it | #143 | — | CODED |
 <!-- REGISTRY:END -->
 
