@@ -250,6 +250,15 @@ jobs:
             cat /tmp/growth-keys.txt 2>/dev/null || echo 'derive step produced no log'
             echo '```'
             echo
+            echo '## last finished jobs (why a crawl produced 0 rows)'
+            echo
+            echo '```json'
+            curl -s -H "apikey: $GROWTH_SERVICE_ROLE_KEY" -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
+              "$GROWTH_SUPABASE_URL/rest/v1/crawl_requests?select=city,service_type,source,status,delivered_count,notes&status=in.(delivered,failed)&order=updated_at.desc&limit=12" \
+              | head -c 2500
+            echo
+            echo '```'
+            echo
             echo '## worker probe (fulfill-crawl response)'
             echo
             echo '```'
