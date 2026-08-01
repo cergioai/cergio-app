@@ -54,3 +54,40 @@ await q(`
 
 const after = await q(`select count(*)::int as n from crawl_requests where status = 'new'`);
 console.log(`open jobs after : ${after?.[0]?.n ?? '?'} (expected ~2,688 = 12 cities x 28 types x 8 sources)`);
+
+// SPEC-163 (measured live 2026-08-01): the worker finally reached the growth queue
+// and died on `column crawl_requests.lat does not exist [42703]`. The growth schema
+// was created without several columns the workers read and write — the same gap
+// that killed enrich-influencers. Auditing both write paths found three more
+// waiting behind it (leads_services.address, .osm_id, crawl_requests.requested_by),
+// and OSM is the PRIMARY path, so osm_id would have failed on the very next run.
+// Adding them all in one pass rather than discovering them one 10-minute cycle at
+// a time. ADD COLUMN IF NOT EXISTS is idempotent, so this is safe every run.
+console.log('ensuring every column the workers read/write exists…');
+await q(`
+  alter table public.crawl_requests
+    add column if not exists lat double precision,
+    add column if not exists lng double precision,
+    add column if not exists requested_by uuid,
+    add column if not exists delivered_count int default 0
+`);
+await q(`
+  alter table public.leads_services
+    add column if not exists address text,
+    add column if not exists osm_id text,
+    add column if not exists lon double precision,
+    add column if not exists lat double precision
+`);
+
+// Prove it, rather than assuming the ALTER took: a missing column here is
+// indistinguishable from a dead worker at the HTTP layer, which is exactly how
+// this cost a night.
+for (const [tbl, cols] of [
+  ['crawl_requests', 'id,kind,city,state,lat,lng,service_type,target_count,requested_by,status,source,notes'],
+  ['leads_services', 'id,name,service_type,phone,address,osm_id,city,state,lat,lon,data_source,outreach_status'],
+]) {
+  const r = await fetch(`${url}/rest/v1/${tbl}?select=${cols}&limit=1`, {
+    headers: { apikey: process.env.GROWTH_SERVICE_ROLE_KEY || '', Authorization: `Bearer ${process.env.GROWTH_SERVICE_ROLE_KEY || ''}` },
+  });
+  console.log(`column probe ${tbl}: HTTP ${r.status}${r.ok ? ' — every column the worker uses exists' : ' ' + (await r.text()).slice(0, 160)}`);
+}
