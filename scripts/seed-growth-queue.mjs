@@ -41,9 +41,30 @@ const TYPES = [
   'appliance repair', 'dog walker', 'hair stylist', 'window cleaning',
   'pressure washing', 'junk removal', 'painter',
 ];
+// SPEC-167 — SEED ONLY WHAT MEASURABLY YIELDS.
+// Measured on the live growth DB 2026-08-01 12:53Z, after ~8h of unattended
+// running: leads_services 511, and every single one came from `osm`. The other
+// seven sources produced ZERO between them, and the per-job notes say why —
+// they are not flaky, they are structurally dead from this egress:
+//   craigslist        0 — "no Craigslist results" on every job
+//   yellowpages_apify 0 — "no YellowPages results" (YP 403s datacenter IPs, SPEC-64)
+//   google_lsa        0 — "no data_cid for city"
+//   yelp / gmaps_apify / google_sponsored / ig_services — 0 rows, ever
+// Seeding them was not free: each dead job still consumes a worker slot out of a
+// 105s budget, so ~7/8 of capacity was being spent on combinations that cannot
+// return a row. Concentrating the queue on osm is the single highest-yield change
+// available and costs nothing — no new spend, no new geography (both forbidden as
+// yield fixes). Each dead source keeps its depth here, commented with its measured
+// result, so re-enabling one is a one-line change the moment it can be shown to work.
 const SOURCES = [
-  ['yelp', 240], ['craigslist', 1000], ['gmaps_apify', 60], ['yellowpages_apify', 1000],
-  ['google_lsa', 1000], ['google_sponsored', 50], ['osm', 100], ['ig_services', 200],
+  ['osm', 100],
+  // ['yelp', 240],            // measured 0 rows
+  // ['craigslist', 1000],     // measured 0 rows — "no Craigslist results"
+  // ['gmaps_apify', 60],      // measured 0 rows
+  // ['yellowpages_apify', 1000], // measured 0 rows — YP 403s datacenter IPs
+  // ['google_lsa', 1000],     // measured 0 rows — "no data_cid for city"
+  // ['google_sponsored', 50], // measured 0 rows
+  // ['ig_services', 200],     // measured 0 rows
 ];
 
 // SPEC-156: this read was capped at limit=20000. Once the queue passed 20k rows,

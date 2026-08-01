@@ -5347,6 +5347,17 @@ test('edge-helpers-never-close-over-a-handler-scoped-client', 'SPEC-166 (found l
   }
 });
 
+test('growth-seeds-only-sources-with-measured-yield', 'SPEC-167 (measured live 2026-08-01 12:53Z, ~8h unattended): leads_services 511, ALL of them from osm. The other seven sources produced ZERO between them and the per-job notes show they are structurally dead from this egress, not flaky — "no Craigslist results", "no YellowPages results", "no data_cid for city". Seeding them still consumed a worker slot each out of a 105s budget, so ~7/8 of capacity went to combinations that cannot return a row. A source must not be seeded until it can be SHOWN to yield.', '#171', () => {
+  const seed = readFile('scripts/seed-growth-queue.mjs');
+  const block = seed.slice(seed.indexOf('const SOURCES'), seed.indexOf('];', seed.indexOf('const SOURCES')));
+  const live = stripComments(block);
+  for (const dead of ['craigslist', 'yellowpages_apify', 'google_lsa', 'yelp', 'gmaps_apify', 'google_sponsored', 'ig_services']) {
+    assert(!(new RegExp(`'${dead}'`).test(live)), `${dead} is seeded again but measured 0 rows — it burns worker capacity that osm could use`);
+  }
+  assert(!(!/'osm'/.test(live)), 'osm is not seeded — it is the only source with measured yield');
+});
+
+
 
 
 main().catch(e => {
