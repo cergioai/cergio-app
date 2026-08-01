@@ -30,7 +30,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`  PROVEN     ${String(by('PROVEN')).padStart(2)}   <- trustworthy`);
   console.log(`  CODED      ${String(by('CODED')).padStart(2)}   <- exists, never proven live`);
   console.log(`  UNGUARDED  ${String(by('UNGUARDED')).padStart(2)}   <- regression risk`);
-  console.log(`  BLOCKER    ${String(by('BLOCKER')).padStart(2)}   <- blocks soft launch\n`);
-  for (const x of r.filter((x) => x.status === 'BLOCKER')) console.log(`  BLOCKER  ${x.id}  ${x.behaviour}`);
+  console.log(`  BLOCKER    ${String(by('BLOCKER')).padStart(2)}   <- blocks soft launch`);
+  console.log(`  DEFERRED   ${String(by('DEFERRED')).padStart(2)}   <- approved, sequenced later`);
+  console.log(`  FINAL      ${String(by('SCHEDULED-LAST')).padStart(2)}   <- last step before launch\n`);
+  for (const x of r.filter((x) => x.status === 'BLOCKER')) console.log(`  BLOCKER        ${x.id}  ${x.behaviour}`);
+  for (const x of r.filter((x) => x.status === 'SCHEDULED-LAST')) console.log(`  FINAL STEP     ${x.id}  ${x.behaviour.split('—')[0].trim()}`);
+  for (const x of r.filter((x) => x.status === 'DEFERRED')) console.log(`  DEFERRED       ${x.id}  ${x.behaviour.split('—')[0].trim()}`);
   console.log('');
 }

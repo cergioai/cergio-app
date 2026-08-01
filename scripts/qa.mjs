@@ -5543,13 +5543,36 @@ test('spec-and-gates-cannot-drift-apart', 'SPEC-186 — THE BINDING. FROZEN_SPEC
     if (status === 'PROVEN') {
       assert(!(!proof || proof === '—'), `${id} claims PROVEN with no live-proof artifact — that is a false green`);
     }
-    assert(!(!['PROVEN', 'CODED', 'UNGUARDED', 'BLOCKER'].includes(status)), `${id} has invalid status "${status}"`);
+    assert(!(!['PROVEN', 'CODED', 'UNGUARDED', 'BLOCKER', 'DEFERRED', 'SCHEDULED-LAST'].includes(status)), `${id} has invalid status "${status}"`);
   }
   assert(!(!fs.existsSync(path.join(REPO_ROOT, 'scripts/spec-readiness.mjs'))), 'the readiness reporter is missing — the launch number cannot be computed');
   assert(!(!fs.existsSync(path.join(REPO_ROOT, 'CLAUDE.md'))), 'CLAUDE.md constitution is missing — session rules would not survive compaction');
   for (const a of ['planner', 'source-doctor', 'feature-builder', 'verifier', 'spend-auditor']) {
     assert(!(!fs.existsSync(path.join(REPO_ROOT, `.claude/agents/${a}.md`))), `subagent ${a} is missing`);
   }
+});
+
+test('yellowpages-uses-a-live-actor-with-the-right-input-key', 'SPEC-179 (verified against Apify 2026-08-01): yellowpages_apify produced 0 leads for its whole life while every job was stamped delivered with the benign note "no YellowPages results". The actor cryptosignals~yellow-pages-us-scraper is DEPRECATED (isDeprecated:true since 2026-07-29) and FAILED 169 of its last 299 public runs; we also asked it for 1000 results inside a run-sync window that aborts at 140s — the exact SPEC-117 mistake, already fixed for gmaps and never applied here. trudax is the maintained equivalent and its input key is `search`, not `keyword`: a wrong input key returns an empty dataset and reads as an empty market. And because _lastApifyError is a module-level global shared by 6 concurrent pool workers, the real reason must be captured into a LOCAL immediately after the call or a sibling run nulls it first.', '#179', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const i = f.indexOf('async function fulfillYellowPagesApify');
+  assert(!(i < 0), 'fulfillYellowPagesApify is gone while yellowpages_apify is still seeded');
+  const yp = stripComments(f.slice(i, f.indexOf('\nasync function ', i + 10)));
+  assert(!(/cryptosignals~yellow-pages-us-scraper/.test(yp)), 'the DEPRECATED cryptosignals actor is back — 169/299 public runs failed');
+  assert(!(!/apifyRun\('trudax~yellow-pages-us-scraper'/.test(yp)), 'yellowpages must call the maintained trudax actor');
+  assert(!(!/\bsearch:/.test(yp)), 'trudax takes `search`; a wrong input key returns an empty dataset that looks like an empty market');
+  assert(!(/maxItems: *\d{3,}/.test(yp)), 'the per-run target is unbounded again — run-sync aborts at 140s, exactly how gmaps died in SPEC-117');
+  assert(!(!/const ypApifyErr = _lastApifyError;/.test(yp)), 'the apify reason must be captured into a local — 6 pool workers share that global');
+  assert(!(!/osmIsBlocked/.test(yp)), 'the blocked-category gate is gone');
+});
+
+test('yelp-is-honest-and-inside-its-documented-ceiling', 'SPEC-180 (2026-08-01): three defects that would have made yelp\'s FIRST scheduled run wrong. (1) Yelp caps /businesses/search at 240 businesses, but we paged offset 0..200 always asking limit=50 — offset=200 requests items 200-250, returns HTTP 400, and that error then OVERWROTE the note of a run that had already saved 200 rows. (2) SPEC-170 metro normalisation was applied to craigslist/YP/LSA and never to yelp, so Brickell/Wynwood/Doral were queried as Yelp locations. (3) a missing key must report "pending YELP_API_KEY" rather than a generic zero, because Yelp Fusion is now a PAID tier and an absent key is the honest expected state, not a bug.', '#180', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const i = f.indexOf('async function fulfillYelp');
+  const y = f.slice(i, f.indexOf('\nasync function ', i + 10));
+  assert(!(!/pending YELP_API_KEY/.test(y)), 'a missing key must be reported by name, never as a generic zero');
+  assert(!(!/limit=\$\{Math\.min\(50, 240 - offset\)\}/.test(y)), 'the last page requests past Yelp\'s documented 240 ceiling and will HTTP 400');
+  assert(!(!/metroOf\(city\)/.test(y)), 'yelp still queries the raw neighbourhood — SPEC-170 was never applied here');
+  assert(!(!/note: saved > 0 \? undefined :/.test(y)), 'a late-page HTTP error still erases the note of a run that saved rows');
 });
 
 
