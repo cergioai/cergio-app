@@ -921,11 +921,15 @@ class PlacesInfraError extends Error {
 // visible to services_near (historic failure #9: NULL lat/lng = invisible).
 // Public Overpass endpoints, tried in order with a mirror fallback. Both are free
 // and keyless. overpass-api.de is the reference instance; kumi.systems is a fast
-// community mirror. If the first rate-limits/times out we back off and try the
-// next (Overpass etiquette: ≤2 concurrent slots, short cooldowns on 429/504).
+// community mirror; osm.ch (Switzerland) is a third public fallback added so a
+// simultaneous overload of the first two (both 504’d together 2026-08-01T07:00Z,
+// flipping org_health=down) still has a live slot to try. If one rate-limits/times
+// out we back off and try the next (Overpass etiquette: ≤2 concurrent slots, short
+// cooldowns on 429/504).
 const OSM_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
 ];
 // A descriptive User-Agent is REQUIRED etiquette on the public Overpass API (an
 // anonymous UA gets throttled/blocked first). Identifies the app + a contact.
