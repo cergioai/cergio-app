@@ -5517,6 +5517,42 @@ test('no-paid-source-may-spend-a-dollar-without-output', 'SPEC-185 (Tarik, bindi
   assert(!(!/cost_usd/.test(mig)), 'crawl_requests.cost_usd is not in the schema — per-source spend cannot be summed');
 });
 
+test('spec-and-gates-cannot-drift-apart', 'SPEC-186 — THE BINDING. FROZEN_SPEC.md holds the agreed behaviour and qa.mjs holds 180+ gates, but NOTHING connected them: a spec line could exist with no gate, and a gate could exist for behaviour nobody agreed to, and neither was visible. That gap is where drift lives. SPEC-REGISTRY.md is now one row per micro-feature and this gate welds it to the code: every row must name a gate that actually exists, and a row may only claim PROVEN with a dated live-proof artifact. A row without a gate is a regression waiting to happen; a PROVEN row without live proof is the false green that put a blank homepage into production behind a passing build.', '#186', () => {
+  const reg = readFile('SPEC-REGISTRY.md');
+  assert(!(!/REGISTRY:START/.test(reg)), 'SPEC-REGISTRY.md has no registry block');
+  const block = reg.split('REGISTRY:START')[1].split('REGISTRY:END')[0];
+  const rows = block.split('\n')
+    .filter((l) => l.trim().startsWith('|') && !/^\|\s*-+/.test(l.trim()))
+    .slice(1)
+    .map((l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()))
+    .filter((c) => c.length >= 5);
+  assert(!(rows.length < 5), `registry has only ${rows.length} rows — it has stopped tracking the product`);
+
+  const self = readFile('scripts/qa.mjs');
+  const declared = new Set([...self.matchAll(/, '(#[A-Za-z0-9._-]+)', *(?:async )?\(\) =>/g)].map((m) => m[1]));
+  for (const [id, behaviour, gate, proof, statusRaw] of rows) {
+    const status = statusRaw.replace(/\*/g, '');
+    assert(!(!behaviour), `${id} has no plain-English behaviour line`);
+    // UNGUARDED/BLOCKER rows are ALLOWED to have no gate — that is what those states mean.
+    if (status === 'PROVEN' || status === 'CODED') {
+      assert(!(!gate || gate === '—'), `${id} is ${status} but names no gate — an unguarded feature regresses silently`);
+      for (const g of gate.split(',').map((x) => x.trim()).filter(Boolean)) {
+        assert(!(!declared.has(g)), `${id} names gate ${g}, which does not exist in qa.mjs`);
+      }
+    }
+    if (status === 'PROVEN') {
+      assert(!(!proof || proof === '—'), `${id} claims PROVEN with no live-proof artifact — that is a false green`);
+    }
+    assert(!(!['PROVEN', 'CODED', 'UNGUARDED', 'BLOCKER'].includes(status)), `${id} has invalid status "${status}"`);
+  }
+  assert(!(!fs.existsSync(path.join(REPO_ROOT, 'scripts/spec-readiness.mjs'))), 'the readiness reporter is missing — the launch number cannot be computed');
+  assert(!(!fs.existsSync(path.join(REPO_ROOT, 'CLAUDE.md'))), 'CLAUDE.md constitution is missing — session rules would not survive compaction');
+  for (const a of ['planner', 'source-doctor', 'feature-builder', 'verifier', 'spend-auditor']) {
+    assert(!(!fs.existsSync(path.join(REPO_ROOT, `.claude/agents/${a}.md`))), `subagent ${a} is missing`);
+  }
+});
+
+
 
 
 
