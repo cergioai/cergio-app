@@ -1460,7 +1460,10 @@ export function HomeScreen() {
             >
               <span className="bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">FREE</span>
               <span className="text-body-sm font-extrabold text-black group-hover:text-gd transition-colors">
-                {mode === 'spotlight'
+                {/* `intent`, not `mode`: mode is a PARAMETER of startEngine, not
+                    component state. Referencing it here threw ReferenceError on
+                    mount and blanked the entire homepage in production. */}
+                {intent === 'spotlight'
                   ? 'Browse creators offering free IG spotlights'
                   : 'Browse services going free right now'}
               </span>
