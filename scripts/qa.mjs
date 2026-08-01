@@ -5314,6 +5314,16 @@ test('securities-copy-no-howey', 'Rewards/APGI copy must never promise securitie
   assert(offenders.length === 0, 'securities-exposure copy found (Howey risk; align to Terms §7 loyalty-bonus framing):\n  ' + offenders.join('\n  '));
 });
 
+test('fulfill-crawl-returns-within-the-platform-limit', 'SPEC-164 (measured live 2026-08-01): Supabase kills an edge request at 150s. fulfill-crawl had no budget of its own, so it was killed MID-JOB — the first live run showed 11 jobs delivered and ZERO leads, because rows sat in _rowBuf and the process died before flushBuf ran, stranding every crawled row and abandoning a job already stamped crawling. The worker must stop taking NEW jobs well before the platform limit, flush, and return: fewer jobs that persist beat more that vanish.', '#169', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/BUDGET_MS/.test(f)), 'fulfill-crawl has no wall-clock budget — it will be killed mid-job and strand buffered rows');
+  const m = f.match(/const BUDGET_MS = ([0-9_]+)/);
+  assert(!(!m), 'BUDGET_MS is not a literal');
+  assert(!(Number(m[1].replace(/_/g, '')) >= 150000), 'the budget is at or above the 150s platform limit — it cannot prevent the kill');
+  assert(!(!/Date\.now\(\) - started > BUDGET_MS/.test(f)), 'the budget is never checked in the job loop');
+});
+
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
