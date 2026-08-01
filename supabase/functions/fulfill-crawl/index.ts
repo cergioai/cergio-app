@@ -2096,15 +2096,29 @@ async function fulfillGmapsApify(db: any, job: any): Promise<{ saved: number; fo
   const state = (job.state || '').trim();
   const query = `${rawType} in ${city}, ${state} [gmaps_apify]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
-  const want = Number(Deno.env.get('GMAPS_MAX') || '1000');   // MAX: no provider ceiling
-  const items = await apifyRun('compass~crawler-google-places', {
-    searchStringsArray: [`${rawType} ${city}`],
-    locationQuery: `${city}, ${state}, United States`,
-    maxCrawledPlacesPerSearch: Math.min(want, 60),   // SPEC-117: must finish inside run-sync
+  // SPEC-182: compass~crawler-google-places routinely takes 8-9 MINUTES, and worse
+  // with scrapeContacts (which opens every business website and costs extra). Our
+  // run-sync wall is ~138s, so this actor could never finish — every run aborted,
+  // was stamped delivered-0, and the job was consumed. That is SPEC-117 repeating
+  // with a bigger timer.
+  //
+  // compass~google-maps-extractor is the same publisher's FAST variant, built for
+  // "hundreds of places" per run, and it fits inside run-sync at a modest cap.
+  // scrapeContacts is OFF: Google Maps already gives phone for nearly every place,
+  // and the website-crawl add-on is what pushes the run past the wall (and bills
+  // extra). We take phone-first leads now rather than nothing forever.
+  const want = Math.min(Number(job.target_count || 0) || Number(Deno.env.get('GMAPS_MAX') || '60'), 120);
+  const items = await apifyRun('compass~google-maps-extractor', {
+    // Docs: "Adding a location directly to the search can limit you to 120 results
+    // per search term" — so the city goes in locationQuery, never in the term.
+    searchStringsArray: [rawType],
+    // Docs: "simpler formats work best; use City + Country rather than City + Country + State".
+    locationQuery: `${metroOf(city)}, United States`,
+    maxCrawledPlacesPerSearch: want,
     language: 'en',
     skipClosedPlaces: true,
-    scrapeContacts: true,          // emails + socials from the business website
   }, want);
+  const gmApifyErr = _lastApifyError;   // capture NOW: 6 pool workers share this global
   let found = items.length, saved = 0;
   const seen = new Set<string>();
   for (const it of items) {
@@ -2140,7 +2154,8 @@ async function fulfillGmapsApify(db: any, job: any): Promise<{ saved: number; fo
     await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
-  return { saved, found, query };
+  return { saved, found, query, note: saved === 0
+    ? (_lastFlushError || gmApifyErr || `no Google Maps results (raw items returned: ${found})`) : undefined };
 }
 
 function json(body: unknown, status = 200) {

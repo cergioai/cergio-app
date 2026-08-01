@@ -4891,7 +4891,11 @@ test('apify-failures-are-reported', 'SPEC-117: apifyRun discarded every failure 
   assert(/TIMED OUT after 140s/.test(fc), 'an abort must be reported as a timeout with the cause, not as "no results"');
   assert(/returned 0 items \(check actor input\)/.test(fc), 'an empty-but-successful run must be distinguished from a failure');
   assert(!/setTimeout\(\(\) => ctrl\.abort\(\), 110000\)/.test(fc), 'the 110s timer that guaranteed failure for slow actors must be gone');
-  assert(/Math\.min\(want, 60\)/.test(fc), 'the Google Places per-run target must fit inside the run-sync window');
+  // SPEC-182 widened this from one literal expression to the INVARIANT: the per-run
+  // target must be BOUNDED so it fits inside the run-sync window. The bound now lives
+  // in `want` itself (min of target_count / env / 120).
+  assert(/Math\.min\(want, 60\)|Math\.min\(Number\(job\.target_count[\s\S]{0,120}?, 120\)/.test(fc),
+    'the Google Places per-run target must fit inside the run-sync window');
   // SPEC-173 widened this from an exact string to the INVARIANT: the captured
   // apify error must reach the note. The note text now also carries the raw item
   // count, so pinning the literal made a strictly better message fail the gate.
@@ -5452,6 +5456,23 @@ test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): o
   assert(!(!/const share = Math\.max\(1, Math\.floor\(perRun \/ SOURCES_RR\.length\)\)/.test(f)), 'no equal per-source share');
   assert(!(!/for \(let i = 0; i < share; i\+\+\) for \(const list of perSource\)/.test(f)), 'slices are not interleaved');
 });
+
+test('gmaps-uses-an-actor-that-fits-the-run-sync-wall', 'SPEC-182 (verified against the vendor 2026-08-01): compass~crawler-google-places routinely takes 8-9 MINUTES (its own issue tracker) and worse with scrapeContacts, which opens every business website. Apify caps run-sync at 300s and our hard deadline is ~138s, so that actor could NEVER finish — every run aborted, was stamped delivered-0, and consumed the job. That is SPEC-117 repeating with a bigger timer. The fast same-publisher extractor fits the wall; the city must go in locationQuery not the search term (the docs cap term-embedded locations at 120 results); and the apify reason must be captured locally because 6 pool workers share that global.', '#182', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const i = f.indexOf('async function fulfillGmapsApify');
+  const gmRaw = f.slice(i, f.indexOf('\nfunction json(', i));
+  // stripComments() also blanks template literals, which is where locationQuery lives —
+  // grep the RAW slice for those, and the stripped slice only where a term also appears
+  // in the guard comments.
+  const gm = stripComments(gmRaw);
+  assert(!(/crawler-google-places/.test(gm)), 'the slow crawler actor is back — it takes minutes and the run-sync wall is ~138s, so every run aborts');
+  assert(!(!/google-maps-extractor/.test(gm)), 'gmaps must use the fast extractor that fits inside run-sync');
+  assert(!(/scrapeContacts/.test(gm)), 'scrapeContacts is back — it opens every business website, pushing the run past the wall and billing extra');
+  assert(!(/searchStringsArray: \[`\$\{rawType\} \$\{city\}`\]/.test(gmRaw)), 'the city is embedded in the search term again — the actor caps such searches at 120 results per term');
+  assert(!(!/locationQuery: `\$\{metroOf\(city\)\}, United States`/.test(gmRaw)), 'locationQuery must be metro + country per the actor docs');
+  assert(!(!/const gmApifyErr = _lastApifyError;/.test(gm)), 'the apify reason must be captured into a local — 6 pool workers share that global');
+});
+
 
 
 
