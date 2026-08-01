@@ -723,7 +723,10 @@ async function notifyOnDemandProvidersSMS(db: any, job: any) {
     const where = reqRow?.where_text || job.city || 'your area';
     const when = reqRow?.when_text ? ` (${String(reqRow.when_text).slice(0, 30)})` : '';
     const link = `https://cergio.ai/inbound/${job.trigger_request_id}`;
-    const { data: provs } = await gdb.from('leads_services')
+    // SPEC-188: these notify helpers are MODULE-LEVEL — `gdb` is created inside serve()
+    // and was never in scope here. Same defect as SPEC-166 (which silently discarded
+    // every crawled row) and SPEC-185. growthClient() resolves at module scope.
+    const { data: provs } = await growthClient().from('leads_services')
       .select('id, name, service_type, phone, outreach_notes')
       .eq('city', job.city).eq('service_type', job.service_type)
       .not('phone', 'is', null).neq('outreach_status', 'do_not_contact').limit(20);
@@ -747,7 +750,7 @@ async function notifyOnDemandProvidersSMS(db: any, job: any) {
         sent++;
         // consent-basis audit trail on the lead
         const note = `${(p.outreach_notes || '').slice(0, 180)} | sms:ondemand consent:published_number ${new Date().toISOString().slice(0, 10)}`;
-        await gdb.from('leads_services').update({ outreach_notes: note, outreach_last_at: new Date().toISOString() }).eq('id', p.id);
+        await growthClient().from('leads_services').update({ outreach_notes: note, outreach_last_at: new Date().toISOString() }).eq('id', p.id);
       }
       await new Promise((res) => setTimeout(res, 2500)); // staggered send (spam-safety)
     }
@@ -771,7 +774,7 @@ async function notifyOnDemandProviders(db: any, job: any) {
     const what = reqRow?.what ? ` for ${String(reqRow.what).slice(0, 80)}` : '';
     const when = reqRow?.when_text ? ` (needed ${String(reqRow.when_text).slice(0, 40)})` : '';
     const link = `https://cergio.ai/inbound/${job.trigger_request_id}`;
-    const { data: provs } = await gdb.from('leads_services')
+    const { data: provs } = await growthClient().from('leads_services')
       .select('name, owner_email, service_type')
       .eq('city', job.city).eq('service_type', job.service_type)
       .not('owner_email', 'is', null).neq('outreach_status', 'do_not_contact').limit(25);
@@ -2146,7 +2149,10 @@ async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; fo
     if (!e1) saved++;
     // CREATOR row — same person as a creator (dual class), fill-only
     try {
-      await gdb.from('leads_influencers').upsert({
+      // SPEC-188: this is a MODULE-LEVEL function; `gdb` is created INSIDE serve(), so it
+      // was never in scope here. Identical to the SPEC-166 failure that silently discarded
+      // every crawled row. growthClient() resolves at module scope.
+      await growthClient().from('leads_influencers').upsert({
         id: `igs:${handle}`, ig_handle: handle, display_name: name,
         category: job.service_type || null, followers, email,
         city, state: state || null, is_business: !!it?.isBusinessAccount,

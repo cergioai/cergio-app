@@ -5358,9 +5358,22 @@ test('edge-helpers-never-close-over-a-handler-scoped-client', 'SPEC-166 (found l
   const dir = 'supabase/functions';
   for (const n of fs.readdirSync(path.join(REPO_ROOT, dir)).filter(x => !x.startsWith('_'))) {
     let src; try { src = readFile(`${dir}/${n}/index.ts`); } catch { continue; }
-    const serveAt = src.indexOf('serve(async');
-    if (serveAt < 0) continue;
-    const head = stripComments(src.slice(0, serveAt));
+    // SPEC-188: brace-match the serve() callback and check EVERYTHING OUTSIDE it.
+    // Regex-extracting function bodies produced false positives; and the original
+    // version only scanned code BEFORE serve(), which is why fulfillIgServices sat
+    // there using handler-scoped `gdb` unnoticed. Code inside the callback may use
+    // gdb freely — code outside it cannot see gdb at all.
+    const stripped = stripComments(src);
+    const sAt = stripped.indexOf('serve(async');
+    if (sAt < 0) continue;
+    const open = stripped.indexOf('{', sAt);
+    let depth = 0, close = -1;
+    for (let k = open; k < stripped.length; k++) {
+      if (stripped[k] === '{') depth++;
+      else if (stripped[k] === '}') { depth--; if (depth === 0) { close = k; break; } }
+    }
+    const head = close < 0 ? stripped.slice(0, sAt)
+                           : stripped.slice(0, sAt) + '\n' + stripped.slice(close);
     // a handler-scoped client name used in module-level code
     for (const name of ['gdb']) {
       assert(!(new RegExp(`\\b${name}\\s*\\.`).test(head)),
