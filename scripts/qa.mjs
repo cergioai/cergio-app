@@ -5652,6 +5652,25 @@ test('the-spend-gate-must-see-the-REAL-spend', 'SPEC-189 (measured 2026-08-01): 
   assert(!(!/status: 'failed', cost_usd/.test(code)), 'a FAILED job records no cost, yet an aborted vendor run still bills');
 });
 
+test('every-paid-vendor-is-metered-not-just-apify', 'SPEC-190 (founder caught this 2026-08-01): the spend ledger metered ONLY Apify, so yelp and the two SerpAPI sources printed "$0 · FREE" in the report. They are not free — Yelp Fusion is a paid tier and SerpAPI bills per search. Far worse than a wrong label: spendBlockedReason returned null for any source outside the Apify map, commented "free/non-apify source", so yelp produced 7,803 leads with NO tranche gate on it at all. A source with no meter is a source with no brake. Only osm (Overpass) is genuinely free.', '#190', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  assert(!(!/VENDOR_OF_SOURCE/.test(code)), 'no vendor map — non-Apify paid sources are treated as free and escape the spend gate');
+  const m = f.match(/const VENDOR_OF_SOURCE[\s\S]*?\};/);
+  assert(!(!m), 'VENDOR_OF_SOURCE is not a literal map');
+  assert(!(!/yelp: 'yelp'/.test(m[0])), 'yelp is not billed to a paid vendor — Yelp Fusion is a paid tier');
+  assert(!(!/google_lsa: 'serpapi'/.test(m[0])), 'google_lsa is not billed to SerpAPI');
+  assert(!(!/google_sponsored: 'serpapi'/.test(m[0])), 'google_sponsored is not billed to SerpAPI');
+  assert(!(!/osm: 'free'/.test(m[0])), 'osm must be the ONLY source marked free');
+  assert(!(/if \(!APIFY_ACTOR_OF_SOURCE\[source\]\) return null;/.test(code)), 'the spend gate exits early for any non-Apify source again — that is the hole that left yelp ungated');
+  assert(!(!/_lastNonApifyCostUsd/.test(code)), 'non-Apify vendors record no cost, so their tranche gate can never fire');
+  const wf = readFile('.github/workflows/growth-setup.yml');
+  assert(!(!/audit\/leads_services\.csv/.test(wf)), 'no lead-level audit export — a summary cannot be audited');
+  assert(!(!/audit\/spend_by_source\.csv/.test(wf)), 'no per-source spend export');
+  assert(!(!/audit\/contact_coverage\.csv/.test(wf)), 'no contact-coverage export — a lead with no way to reach it is not a lead');
+});
+
+
 
 
 
