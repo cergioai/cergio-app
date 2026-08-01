@@ -50,16 +50,31 @@ const YP_FETCH_JITTER_MS = 1200; // polite pacing between YP page fetches (+ ran
 // 500; a failed chunk retries row-by-row so one bad row never costs 499 good ones.
 const _rowBuf: Record<string, unknown>[] = [];
 let _bufSaved = 0;
-async function flushBuf(db: any): Promise<number> {
+// SPEC-166 (found live 2026-08-01 in crawl_requests.notes): flushBuf referenced
+// `gdb`, which is created INSIDE the serve() handler — this function is module
+// level, so gdb was never in scope and EVERY flush threw "gdb is not defined".
+// Jobs completed and were stamped delivered while every crawled row was silently
+// discarded: 33 jobs delivered, leads_services 0. The failure was invisible at the
+// HTTP layer and only the per-job notes exposed it.
+// A lazily-created module-level client fixes every call site at once, including
+// logAgentRun's internal flush, and lazy (not top-level) so a missing growth env
+// cannot 500 the whole function at import time.
+let _gdbShared: any = null;
+function growthClient(): any {
+  if (!_gdbShared) _gdbShared = growthDb();
+  return _gdbShared;
+}
+
+async function flushBuf(_db: any): Promise<number> {
   if (_rowBuf.length === 0) return 0;
   const batch = _rowBuf.splice(0, _rowBuf.length);
   let ok = 0;
   for (let i = 0; i < batch.length; i += 500) {
     const chunk = batch.slice(i, i + 500);
-    const { error } = await gdb.from('leads_services').upsert(chunk, { onConflict: 'id' });
+    const { error } = await growthClient().from('leads_services').upsert(chunk, { onConflict: 'id' });
     if (!error) { ok += chunk.length; continue; }
     for (const row of chunk) {
-      const { error: e1 } = await gdb.from('leads_services').upsert(row, { onConflict: 'id' });
+      const { error: e1 } = await growthClient().from('leads_services').upsert(row, { onConflict: 'id' });
       if (!e1) ok++;
     }
   }

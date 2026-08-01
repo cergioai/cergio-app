@@ -5323,6 +5323,22 @@ test('fulfill-crawl-returns-within-the-platform-limit', 'SPEC-164 (measured live
   assert(!(!/Date\.now\(\) - started > BUDGET_MS/.test(f)), 'the budget is never checked in the job loop');
 });
 
+test('edge-helpers-never-close-over-a-handler-scoped-client', 'SPEC-166 (found live 2026-08-01 in crawl_requests.notes): flushBuf is a MODULE-LEVEL function that referenced `gdb`, which is created inside the serve() handler. It was never in scope, so every flush threw "gdb is not defined" — jobs completed and were stamped delivered while every crawled row was silently discarded (33 delivered, leads_services 0). Invisible at the HTTP layer. Any code above serve() must resolve its client through a module-level accessor, never a handler-scoped const.', '#170', () => {
+  const dir = 'supabase/functions';
+  for (const n of fs.readdirSync(path.join(REPO_ROOT, dir)).filter(x => !x.startsWith('_'))) {
+    let src; try { src = readFile(`${dir}/${n}/index.ts`); } catch { continue; }
+    const serveAt = src.indexOf('serve(async');
+    if (serveAt < 0) continue;
+    const head = stripComments(src.slice(0, serveAt));
+    // a handler-scoped client name used in module-level code
+    for (const name of ['gdb']) {
+      assert(!(new RegExp(`\\b${name}\\s*\\.`).test(head)),
+        `${n}: module-level code uses "${name}", which is declared inside serve() — it is not in scope and will throw at runtime`);
+    }
+  }
+});
+
+
 
 main().catch(e => {
   console.error(e);
