@@ -29,7 +29,7 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-CRAWL-CL | Craigslist produces service leads at <= $0.05/lead | #178, #187 | 129 leads 2026-08-01 | PROVEN |
 | S-CRAWL-YP | YellowPages produces service leads at <= $0.05/lead | #179 | not yet run | CODED |
 | S-CRAWL-GMAPS | Google Maps produces service leads at <= $0.05/lead | #182 | 1,659 leads @ $0.0018 2026-08-01 | PROVEN |
-| S-CRAWL-IG | IG-for-services — founder OVERRODE the IG rule and instructed it to keep running (2026-08-01). Producing. | — | 262 leads @ $0.0017 2026-08-01 | PROVEN |
+| S-CRAWL-IG | IG-for-services — founder OVERRODE the IG rule and instructed it to keep running (2026-08-01). Producing, but no gate guards it yet. | — | 262 leads @ $0.0017 2026-08-01 | UNGUARDED |
 | S-CRAWL-LSA | Google Local Services Ads resolves a metro CID and produces leads | #173 | 188 leads 2026-08-01 | PROVEN |
 | S-BOOK-PAID | A consumer completes a PAID booking end to end — **FINAL step of soft launch, after features stabilise (founder, 2026-08-01)** | — | — | SCHEDULED-LAST |
 | S-LOOP-ACCEPT | A provider receives a request and accepts it | #143 | — | CODED |
