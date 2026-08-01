@@ -46,12 +46,24 @@ const SOURCES = [
   ['google_lsa', 1000], ['google_sponsored', 50], ['osm', 100], ['ig_services', 200],
 ];
 
+// SPEC-156: this read was capped at limit=20000. Once the queue passed 20k rows,
+// every job beyond that window looked unseen and was re-seeded on EVERY run — the
+// queue compounded to 151,714 jobs against 2,688 real combinations (~56x), so
+// workers would have burned nearly all their capacity re-crawling the same
+// triples. Page until the source is exhausted; a truncated dedupe set is worse
+// than none, because it silently looks like it worked.
 const existing = new Set();
 try {
-  const r = await fetch(
-    `${URL_G}/rest/v1/crawl_requests?select=city,service_type,source&status=in.(new,crawling)&limit=20000`,
-    { headers: H });
-  if (r.ok) for (const j of await r.json()) existing.add(`${j.city}|${j.service_type}|${j.source}`);
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const r = await fetch(
+      `${URL_G}/rest/v1/crawl_requests?select=city,service_type,source&status=in.(new,crawling)`,
+      { headers: { ...H, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' } });
+    if (!r.ok) break;
+    const page = await r.json();
+    for (const j of page) existing.add(`${j.city}|${j.service_type}|${j.source}`);
+    if (page.length < PAGE) break;
+  }
 } catch { /* first run: nothing open yet */ }
 console.log(`open jobs already queued: ${existing.size}`);
 
@@ -67,14 +79,17 @@ console.log(`seeding ${rows.length} new job(s) — ${SOURCES.length} sources x $
 let ok = 0, fail = 0;
 for (let i = 0; i < rows.length; i += 200) {
   const chunk = rows.slice(i, i + 200);
-  const r = await fetch(`${URL_G}/rest/v1/crawl_requests`, {
-    method: 'POST', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify(chunk),
+  // Prefer resolution=ignore-duplicates pairs with the SPEC-156 partial unique
+  // index: even if the dedupe set above is somehow stale, the DB refuses the
+  // duplicate instead of growing the queue.
+  const r = await fetch(`${URL_G}/rest/v1/crawl_requests?on_conflict=city,service_type,source`, {
+    method: 'POST', headers: { ...H, Prefer: 'return=minimal,resolution=ignore-duplicates' }, body: JSON.stringify(chunk),
   });
   if (r.ok) { ok += chunk.length; continue; }
   // one bad row must never cost the other 199
   for (const row of chunk) {
     const rr = await fetch(`${URL_G}/rest/v1/crawl_requests`, {
-      method: 'POST', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify(row),
+      method: 'POST', headers: { ...H, Prefer: 'return=minimal,resolution=ignore-duplicates' }, body: JSON.stringify(row),
     });
     if (rr.ok) ok++; else fail++;
   }

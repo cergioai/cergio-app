@@ -16,7 +16,14 @@ on:
   # off-Mac path that never depends on the founder's laptop being awake.
   push:
     branches: [main]
-    paths: ['.github/growth-trigger.txt']
+    # SPEC-157: growth-trigger.txt is a SINGLE shared line that every ship branch
+    # rewrote to fire a run. The moment two branches were open at once they both
+    # modified it, so each conflicted with main — and GitHub will not run the
+    # required build-and-qa check on a conflicted PR. Four PRs, including four live
+    # UX fixes, sat blocked behind a one-line file whose only job was to say "go".
+    # A trigger must never be a shared mutable path; firing now writes a NEW file
+    # under growth-fire/, which cannot conflict with anything.
+    paths: ['.github/growth-trigger.txt', '.github/growth-fire/**']
 
 jobs:
   setup:
@@ -26,12 +33,26 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
 
+      # SPEC-151: mint both service-role keys from the access tokens we already
+      # hold, and push GROWTH_* into the edge-function runtime. Removes the two
+      # hand-pasted secrets that produced a missing key and a cross-pasted key.
+      - name: Derive service keys + set edge secrets
+        id: keys
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        continue-on-error: true
+        run: node scripts/growth-keys.mjs
+
       - name: Verify the GROWTH secrets are present and distinct from the product
         id: verify
         continue-on-error: true
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
           [ -n "${GROWTH_SUPABASE_URL:-}" ] || { echo "::error::GROWTH_SUPABASE_URL is empty"; exit 1; }
@@ -52,7 +73,7 @@ jobs:
         continue-on-error: true
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
           # SPEC-148: reduce to scheme://host — the secret carried a /rest/v1 path,
@@ -79,7 +100,7 @@ jobs:
         id: schema
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           # The growth project sits under a SEPARATE Supabase account, so it needs
           # its own token. Optional: without it the step verifies the schema over
@@ -88,17 +109,26 @@ jobs:
         continue-on-error: true
         run: node scripts/apply-growth-schema.mjs
 
+      # SPEC-156: collapse the 56x-duplicated queue and install the partial
+      # unique index BEFORE seeding, so this run is the last one that can grow it.
+      - name: DEDUPE the crawl queue
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
+        continue-on-error: true
+        run: node scripts/growth-dedupe-queue.mjs 2>&1 | tee /tmp/growth-dedupe.txt
+
       - name: SEED the growth crawl queue (idempotent)
         id: seed
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         continue-on-error: true
         run: node scripts/seed-growth-queue.mjs
 
       - name: KICK the workers (drain the freshly seeded queue)
         env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -uo pipefail
           FN="https://vjmwnbftfquyquwaklue.functions.supabase.co"
@@ -128,7 +158,7 @@ jobs:
           echo "--- single probe with body ---" > /tmp/worker-probe.txt
           curl -s -w '\nHTTP %{http_code}\n' \
             -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-            "$FN/fulfill-crawl?limit=5" --max-time 90 2>&1 | head -c 700 >> /tmp/worker-probe.txt
+            "$FN/fulfill-crawl?limit=3" --max-time 170 2>&1 | head -c 700 >> /tmp/worker-probe.txt
           cat /tmp/worker-probe.txt
           echo "workers dispatched — waiting 25s for rows to land"
           sleep 25
@@ -141,7 +171,7 @@ jobs:
         if: always()
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -uo pipefail
           # SPEC-145: trim whitespace/newlines AND trailing slashes. A pasted
@@ -201,6 +231,18 @@ jobs:
             for s in gmaps_apify craigslist yellowpages_apify yelp google_lsa google_sponsored osm ig_services; do
               echo "| $s | $(cnt leads_services "&data_source=eq.$s") |"
             done
+            echo
+            echo '## queue dedupe'
+            echo
+            echo '```'
+            cat /tmp/growth-dedupe.txt 2>/dev/null || echo 'dedupe step produced no log'
+            echo '```'
+            echo
+            echo '## key derivation + edge secrets'
+            echo
+            echo '```'
+            cat /tmp/growth-keys.txt 2>/dev/null || echo 'derive step produced no log'
+            echo '```'
             echo
             echo '## worker probe (fulfill-crawl response)'
             echo

@@ -1442,6 +1442,36 @@ export function HomeScreen() {
           {/* Example pills removed — examples now rotate INSIDE the
               search box as a toast-style overlay (see ROTATING_*_EXAMPLES
               + the cg-example-rotate animation). */}
+
+          {/* CERGIO-GUARD (2026-08-01, SPEC-153, Tarik): "Need a link to brows
+              FREE (services for creators and free IG spotlights for services)…
+              from the homepage… under the search". The free-barter loop is the
+              whole soft-launch offer and /free was reachable only by typing the
+              URL — the highest-intent visitors never saw it. It reuses the lane
+              the old direction switch vacated (see the guard above), so it gets
+              its own visual space without crowding the search box. The sub-label
+              leads with whichever side of the marketplace the user is already in,
+              because each side wants the OTHER side's free offer. */}
+          <div className="px-5 mt-4">
+            <button
+              type="button"
+              onClick={() => navigate('/free')}
+              className="w-full flex items-center justify-center gap-2 border-t border-line pt-3 group"
+            >
+              <span className="bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">FREE</span>
+              <span className="text-body-sm font-extrabold text-black group-hover:text-gd transition-colors">
+                {mode === 'spotlight'
+                  ? 'Browse creators offering free IG spotlights'
+                  : 'Browse services going free right now'}
+              </span>
+              <svg width="7" height="12" viewBox="0 0 11 18" fill="none" className="flex-shrink-0 text-black/40">
+                <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <p className="text-meta-sm text-b3 text-center mt-1 leading-snug">
+              Free services for creators · Free IG spotlights for providers
+            </p>
+          </div>
         </>
       )}
 
