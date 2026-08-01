@@ -95,12 +95,12 @@ export function EarnExplainerScreen() {
       {/* Growth Participation Income teaser. */}
       <div className="mx-5 bg-gl border border-g/25 rounded-[18px] p-4 mb-4">
         <p className="text-body font-extrabold text-gd leading-tight mb-1">
-          Plus: Growth Participation Income
+          Plus: Asset Participation Growth Income (APGI)
         </p>
         <p className="text-meta text-gd/85 leading-snug font-normal">
-          Every dollar you earn also builds a participation score — like airmiles, but tied to
-          Cergio's growth. Activates if Cergio goes public (IPO). Community participation in
-          growth helps accelerate it.
+          Every dollar you earn also builds a participation score — a loyalty-style bonus that
+          grows with how much you use and help grow Cergio. It is not a security, has no fixed
+          dollar value, and terms are discretionary.
         </p>
       </div>
 

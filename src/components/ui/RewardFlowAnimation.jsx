@@ -36,7 +36,7 @@ const STEPS = [
     num: '03',
     title: 'Asset Participation Growth Income.',
     body: () =>
-      `Every dollar you earn becomes a share of Cergio's growth (APGI). Show up early, your share compounds with the network you helped build.`,
+      `Every dollar you earn also builds Asset Participation Growth Income (APGI) — a loyalty-style bonus that grows with your participation, not a security and with no fixed dollar value. Show up early and it grows with the network you help build.`,
   },
 ];
 
