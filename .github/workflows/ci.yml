@@ -26,6 +26,39 @@ jobs:
       - name: Flow QA (qa.mjs — the spec journey checks)
         run: node scripts/qa.mjs
 
+      # ── SPEC-195 · THE EDGE FUNCTIONS WERE NEVER TYPE-CHECKED ──────────────
+      # Five production outages on 2026-08-01 were the SAME defect: an identifier
+      # used where it is not bound. `gdb is not defined` in flushBuf silently
+      # discarded every crawled row for hours. All five passed `npm run build`
+      # and every static gate, because edge functions are DENO and the Vite build
+      # never sees them. `deno check` finds that class in seconds. This is the
+      # single highest-value check in this file, and it did not exist.
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check every edge function (catches unbound identifiers)
+        run: |
+          set -uo pipefail
+          fail=0
+          for f in supabase/functions/*/index.ts; do
+            out=$(deno check --no-lock "$f" 2>&1) || { echo "::error file=$f::$out"; fail=1; }
+          done
+          [ "$fail" = 0 ] && echo "all edge functions type-check clean"
+          exit $fail
+
+      # ── SPEC-196 · BLAST-RADIUS GUARD ─────────────────────────────────────
+      # The founder's diagnosis, and the correct one: "every edit came with an
+      # avalanche of unrelated changes that were never prescribed." Fixing X
+      # broke Y — the FREE link blanked the homepage, the spend gate killed all
+      # crawling, the YellowPages fix silently reverted craigslist.
+      # A change must declare the files it may touch, and CI refuses anything
+      # wider. Enforcement lives HERE, not in an agent hook: hooks do not fire in
+      # Cowork at all (anthropics/claude-code#40495), so an agent-side guard is
+      # no guard.
+      - name: Blast-radius guard (diff must match the declared scope)
+        run: node scripts/scope-guard.mjs
+
   # BEHAVIOURAL LAYER — E2E (Playwright) real-browser journeys against spec.
   #
   # build-and-qa is a CODE-INVARIANT gate: it greps the source for the shape of a

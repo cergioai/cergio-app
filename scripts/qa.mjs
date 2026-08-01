@@ -5727,6 +5727,22 @@ test('one-master-spec-nothing-orphaned', 'SPEC-194 (founder 2026-08-01: "this ne
   for (let i = 0; i < a.length; i++) assert(!(a[i] !== b[i]), `criterion ${i + 1} differs: master has ${a[i]}, registry has ${b[i]}`);
 });
 
+test('the-chinese-wall-is-enforced-in-ci', 'SPEC-195/196 (founder diagnosis 2026-08-01, and the correct one): "every edit came with an avalanche of unrelated changes that were never prescribed... GUARANTEE each part is COMPLETELY ISOLATED... NOT JUST THEORY, ACTUALLY CHINESE WALLED." On 2026-08-01 a FREE-link change blanked the homepage, a spend-gate change killed ALL crawling, and a YellowPages fix silently reverted craigslist — each a change to X that broke Y. Two enforcements, both in CI because agent-side hooks DO NOT FIRE IN COWORK (anthropics/claude-code#40495) and a guard that does not run is not a guard: (1) deno check on every edge function, which is the ONLY thing that would have caught the five identifier-scope outages — they all passed npm run build because edge functions are Deno and invisible to Vite; (2) a blast-radius guard that refuses any diff reaching outside the declared SCOPE.md, and refuses MODIFYING an existing line in a shared file, since that changes behaviour for every caller at once.', '#195', () => {
+  const ci = readFile('.github/workflows/ci.yml');
+  assert(!(!/deno check/.test(ci)), 'CI does not type-check the edge functions — the exact blind spot behind five outages');
+  assert(!(!/denoland\/setup-deno/.test(ci)), 'Deno is not installed in CI, so the type-check cannot run');
+  assert(!(!/scripts\/scope-guard\.mjs/.test(ci)), 'the blast-radius guard is not wired into CI');
+  const guardInRequired = ci.slice(ci.indexOf('build-and-qa:'), ci.indexOf('  e2e:'));
+  assert(!(!/scope-guard/.test(guardInRequired)), 'the scope guard must live in build-and-qa, the REQUIRED job — an advisory guard is how a red e2e suite survived weeks of auto-shipping');
+  assert(!(!/deno check/.test(guardInRequired)), 'deno check must be in the REQUIRED job');
+  const g = readFile('scripts/scope-guard.mjs');
+  assert(!(!/SHARED/.test(g)), 'the guard does not protect shared files, which are the actual contamination path');
+  assert(!(!/SHARED-CHANGE-APPROVED/.test(g)), 'no explicit approval marker for a shared-file change');
+  assert(!(!/process\.exit\(1\)/.test(g)), 'the guard never fails the build');
+  assert(!(!fs.existsSync(path.join(REPO_ROOT, 'SCOPE.md'))), 'SCOPE.md is missing — nothing declares what a change may touch');
+});
+
+
 
 
 
