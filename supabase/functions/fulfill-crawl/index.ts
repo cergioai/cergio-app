@@ -87,7 +87,24 @@ async function flushBuf(_db: any): Promise<number> {
   _bufSaved += ok;
   return ok;
 }
-async function bufUpsert(db: any, row: Record<string, unknown>): Promise<void> {
+// SPEC-192 — HARD SPEC, founder 2026-08-01: "the spec specifically calls for email
+// and or phone... without it the lead is useless... we can't SPEND on lists that don't
+// have email and or phone. This should have been a HARD spec."
+//
+// It was enforced in three sources and missing from three others (yelp, google_lsa,
+// ig_services), and I had actively WEAKENED it for craigslist by accepting a post URL
+// as a substitute. A per-source rule is a rule that will be missed. It now lives in the
+// ONE function every source writes through, so no crawler can save an unreachable row
+// and no future source can forget it.
+let _rejectedNoContact = 0;
+function hasContact(row: Record<string, unknown>): boolean {
+  const p = String(row.phone ?? '').trim();
+  const e = String(row.owner_email ?? row.email ?? '').trim();
+  return !!(p || e);
+}
+
+async function bufUpsert(_db: any, row: Record<string, unknown>): Promise<void> {
+  if (!hasContact(row)) { _rejectedNoContact++; return; }   // SPEC-192: unreachable = not a lead
   _rowBuf.push(row);
   if (_rowBuf.length >= 500) await flushBuf(db);
 }
@@ -394,7 +411,11 @@ const gdb = growthDb();
         } else if (source === 'google_lsa') {
           // ── Google LOCAL SERVICES ADS via SerpAPI (the "Sponsored" service pros
           //    with a published phone + Google Guaranteed badge). data_source=google_lsa.
-          const r = await fulfillGoogleLSA(db, job);
+          // SPEC-193: retired off SerpAPI onto the Apify Google-Maps extractor —
+          // same data class (local pros with a published phone), best proven cost per
+          // lead on the board, and it satisfies SPEC-192 because Google Maps carries a
+          // phone for nearly every place.
+          const r = await fulfillGmapsApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, delivered_count: saved,
@@ -411,7 +432,8 @@ const gdb = growthDb();
           // So run the PROVEN LSA fetcher first and keep the ads[] scrape only as
           // a supplement. Provenance stays 'google_sponsored' so the founder's
           // dashboard row is the one that fills.
-          const lsa = await fulfillGoogleLSA(db, job, 'google_sponsored');
+          // SPEC-193: retired off SerpAPI onto the Apify extractor (see google_lsa).
+          const lsa = await fulfillGmapsApify(db, job);
           let r = lsa;
           if (lsa.saved === 0) {
             const alt = await fulfillGoogleSponsored(db, job);
@@ -631,6 +653,7 @@ const gdb = growthDb();
       // SPEC-164: say so when the run stopped on its budget rather than on an
       // empty queue, so "few jobs processed" is never mistaken for "no work left".
       budget_hit: budgetHit, elapsed_ms: Date.now() - started,
+      rejected_no_contact: _rejectedNoContact,   // SPEC-192
       results: out,
     });
   } catch (e) {
@@ -1896,12 +1919,21 @@ let _lastYelpError: string | null = null;
 // search. Worse than a wrong label: spendBlockedReason returned null for any source
 // outside the Apify map ("free/non-apify source"), so yelp produced 7,803 leads with NO
 // tranche gate at all. Only `osm` (Overpass) is genuinely free.
-const VENDOR_OF_SOURCE: Record<string, 'apify' | 'serpapi' | 'yelp' | 'free'> = {
+// SPEC-193 — ALL PAID CRAWLING GOES THROUGH APIFY (founder decision, restated
+// 2026-08-01: "we decided to switch out serpapi with apify... all paid should be apify
+// as it's most economical and/or best crawler"). I had left SerpAPI running and then
+// reported it as free, which is how it survived. SerpAPI-backed sources are retired to
+// the Apify Google-Maps extractor, which already proves the best cost per lead on the
+// board (\$0.0018) and returns a phone for nearly every place — the thing SPEC-192
+// requires. Yelp Fusion stays only while its key is present; it is not re-enabled.
+const VENDOR_OF_SOURCE: Record<string, 'apify' | 'yelp' | 'free'> = {
   craigslist: 'apify', yellowpages_apify: 'apify', gmaps_apify: 'apify', ig_services: 'apify',
-  google_lsa: 'serpapi', google_sponsored: 'serpapi',
+  google_lsa: 'apify', google_sponsored: 'apify',   // SPEC-193: retired off SerpAPI
   yelp: 'yelp',
   osm: 'free',
 };
+// SPEC-193: the two ex-SerpAPI sources now run the same Apify extractor as gmaps.
+const RETIRED_TO_APIFY = new Set(['google_lsa', 'google_sponsored']);
 // Published per-search list prices, used to ESTIMATE cost where the vendor exposes no
 // usage API we can read from an edge function. An estimate that is visible beats a zero
 // that is wrong — a source with no meter is a source with no brake.
@@ -1909,6 +1941,8 @@ const EST_COST_PER_CALL_USD: Record<string, number> = { serpapi: 0.005, yelp: 0.
 
 const APIFY_ACTOR_OF_SOURCE: Record<string, string> = {
   craigslist:        'memo23~craigslist-scraper',
+  google_lsa:        'compass~google-maps-extractor',   // SPEC-193
+  google_sponsored:  'compass~google-maps-extractor',   // SPEC-193
   yellowpages_apify: 'trudax~yellow-pages-us-scraper',
   gmaps_apify:       'compass~google-maps-extractor',
   ig_services:       'apify~instagram-scraper',
@@ -2113,7 +2147,9 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     // paste neither phone nor email, so this discarded the majority of REAL posts. The
     // post URL is itself a working contact path. Never invent a contact — keep them null.
     const postUrl = String(it?.url || it?.postUrl || it?.link || '');
-    if (!phone && !email && !postUrl) continue;                                     // uncontactable
+    // SPEC-192: reverted. I had allowed a contactless post through on its URL alone;
+    // the founder's spec is explicit that a lead without phone or email is useless.
+    if (!phone && !email) continue;                                     // uncontactable
     const dkey = phone ? `p:${phone}` : (email ? `e:${email}` : `u:${postUrl}`);
     if (seen.has(dkey)) continue; seen.add(dkey);                        // dedup reposts within run
     const lat = it?.mapCoordinates?.latitude ?? it?.latitude ?? it?.lat ?? null;

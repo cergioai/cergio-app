@@ -30,7 +30,7 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-CRAWL-YP | YellowPages produces service leads at <= $0.05/lead | #179 | not yet run | CODED |
 | S-CRAWL-GMAPS | Google Maps produces service leads at <= $0.05/lead | #182 | 1,659 leads @ $0.0018 2026-08-01 | PROVEN |
 | S-CRAWL-IG | IG-for-services — founder OVERRODE the IG rule and instructed it to keep running (2026-08-01). Producing, but no gate guards it yet. | — | 262 leads @ $0.0017 2026-08-01 | UNGUARDED |
-| S-CRAWL-LSA | Google Local Services Ads resolves a metro CID and produces leads | #173 | 188 leads 2026-08-01 | PROVEN |
+| S-CRAWL-LSA | google_lsa produces leads WITH contact, via Apify (SerpAPI retired) | #193 | — | CODED |
 | S-BOOK-PAID | A consumer completes a PAID booking end to end — **FINAL step of soft launch, after features stabilise (founder, 2026-08-01)** | — | — | SCHEDULED-LAST |
 | S-LOOP-ACCEPT | A provider receives a request and accepts it | #143 | — | CODED |
 | S-P01 | A visitor searches in plain English and gets the right kind of provider (not a fabricated match) | #13, #29, #67c, #68 | live walk 2026-08-01 | PROVEN |
@@ -64,6 +64,8 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-B07 | When a spotlight/IG review is submitted, the other party is notified to review and approve | — | founder-found 2026-08-01 | UNGUARDED |
 | S-B08 | /services/manage opens the manage screen, never the first-time listing form | — | founder-found 2026-08-01 | UNGUARDED |
 | S-B09 | The Inbox never shows duplicated jobs or notifications for the same booking | — | founder-found 2026-08-01 | UNGUARDED |
+| S-192 | HARD SPEC: a lead with no phone AND no email is never saved — we do not pay for unreachable rows | #192 | — | CODED |
+| S-193 | HARD SPEC: all paid crawling goes through Apify — SerpAPI is retired | #193 | — | CODED |
 <!-- REGISTRY:END -->
 
 ## Open drift (found by #186 on its first run)
