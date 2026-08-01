@@ -26,12 +26,26 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
 
+      # SPEC-151: mint both service-role keys from the access tokens we already
+      # hold, and push GROWTH_* into the edge-function runtime. Removes the two
+      # hand-pasted secrets that produced a missing key and a cross-pasted key.
+      - name: Derive service keys + set edge secrets
+        id: keys
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        continue-on-error: true
+        run: node scripts/growth-keys.mjs
+
       - name: Verify the GROWTH secrets are present and distinct from the product
         id: verify
         continue-on-error: true
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
           [ -n "${GROWTH_SUPABASE_URL:-}" ] || { echo "::error::GROWTH_SUPABASE_URL is empty"; exit 1; }
@@ -52,7 +66,7 @@ jobs:
         continue-on-error: true
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
           # SPEC-148: reduce to scheme://host — the secret carried a /rest/v1 path,
@@ -79,7 +93,7 @@ jobs:
         id: schema
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           # The growth project sits under a SEPARATE Supabase account, so it needs
           # its own token. Optional: without it the step verifies the schema over
@@ -92,13 +106,13 @@ jobs:
         id: seed
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         continue-on-error: true
         run: node scripts/seed-growth-queue.mjs
 
       - name: KICK the workers (drain the freshly seeded queue)
         env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -uo pipefail
           FN="https://vjmwnbftfquyquwaklue.functions.supabase.co"
@@ -141,7 +155,7 @@ jobs:
         if: always()
         env:
           GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
-          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
         run: |
           set -uo pipefail
           # SPEC-145: trim whitespace/newlines AND trailing slashes. A pasted

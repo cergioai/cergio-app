@@ -5116,6 +5116,24 @@ test('growth-leads-influencers-has-enrichment-columns', 'Forensic run 2026-08-01
     'enrich-influencers must detect the 42703 missing-column case explicitly');
 });
 
+// SPEC-151 — service-role keys must be DERIVED from access tokens, never pasted.
+// A missing SUPABASE_SERVICE_ROLE_KEY (empty Bearer -> bare 401) and a product
+// key cross-pasted into GROWTH_SERVICE_ROLE_KEY cost a full day and 0 rows. Both
+// are impossible once the keys are minted per-run from the token that can only
+// see the right project. This gate fails if a consumer step reads them raw again.
+test('growth-keys-derived-not-pasted', 'SPEC-151 — service-role keys must be DERIVED per-run from the access tokens, never hand-pasted. SUPABASE_SERVICE_ROLE_KEY was never created (every worker kick sent an empty Bearer and got a bare 401) and the product key was pasted into GROWTH_SERVICE_ROLE_KEY (growth auth died with "might also be owned by another Supabase project"): one day, zero rows. Minting each key from the token that can only see its own project makes both impossible. The workflow must also push GROWTH_* into the EDGE FUNCTION runtime, because growthDb() reads Deno.env and GitHub secrets are not Deno secrets.', '#156', () => {
+  const wf = readFile('.github/workflows/growth-setup.yml');
+  if (!wf) return 'growth-setup.yml missing';
+  if (!/node scripts\/growth-keys\.mjs/.test(wf)) return 'growth-keys.mjs is not invoked';
+  const raw = [...wf.matchAll(/(GROWTH_SERVICE_ROLE_KEY|SUPABASE_SERVICE_ROLE_KEY): \$\{\{ secrets\./g)];
+  if (raw.length > 2) return `${raw.length} steps still read a service key from secrets. (only the deriving step may)`;
+  const k = readFile('scripts/growth-keys.mjs');
+  if (!k) return 'scripts/growth-keys.mjs missing';
+  if (!/\/secrets/.test(k) || !/GROWTH_SUPABASE_URL/.test(k)) return 'edge-function GROWTH_* secrets are never set — growthDb() reads Deno.env, not GitHub secrets';
+  return true;
+});
+
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
