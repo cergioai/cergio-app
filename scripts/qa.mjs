@@ -2341,6 +2341,17 @@ test('spec-64-crawl-fulfillment', 'FROZEN: fulfill-crawl sources businesses via 
     'fulfill-crawl must leave business leads at outreach_status=new (no auto cold-send) — SPEC-64');
 });
 
+test('spec-185-spendgate-scope', 'FROZEN: spendBlockedReason is a MODULE-LEVEL helper and cannot see the serve-scoped `const gdb` — it must reach the growth DB via growthClient(). Referencing bare gdb threw \"gdb is not defined\" on EVERY fulfill-crawl run (2026-08-01, SPEC-185 regression).', '#206', async () => {
+  const fc = path.join(REPO_ROOT, 'supabase/functions/fulfill-crawl/index.ts');
+  const src = fs.readFileSync(fc, 'utf8');
+  const m = src.match(/async function spendBlockedReason\([^]*?\n\}/);
+  assert(m, 'spendBlockedReason must exist — SPEC-185');
+  assert(!/\bgdb\b/.test(m[0]),
+    'spendBlockedReason must NOT reference the serve-scoped `gdb` (ReferenceError on every run) — use growthClient() — SPEC-185');
+  assert(/growthClient\(\)\.from/.test(m[0]),
+    'spendBlockedReason must query the growth DB via growthClient() — SPEC-185');
+});
+
 // ─── REGRESSION LOCK: YELLOWPAGES IS RETIRED (supersedes REQ-P10-crawl-yp-drain)
 // 2026-07-13. The old invariant demanded fulfill-crawl DRAIN queued YellowPages
 // jobs. It cannot: YP answers every request from a datacenter IP with HTTP 403
