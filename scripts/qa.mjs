@@ -5100,6 +5100,22 @@ test('no-client-writes-another-users-notifications', 'SPEC-143 — AUDIT of the 
   }
 });
 
+test('growth-leads-influencers-has-enrichment-columns', 'Forensic run 2026-08-01: the SPEC-132 growth-DB cutover created leads_influencers WITHOUT the columns enrich-influencers READS (bio/external_url/enrich_attempted_at), so the worker threw 42703 every run -> org_health=down + audit_flag CREATORS_NOT_GROWING. The growth reference schema MUST define these columns, the apply script MUST verify them, and the worker MUST degrade to a non-error schema_incomplete status (never a red crash loop) when they are absent.', '#155b', async () => {
+  const mig = readFile('supabase/migrations/20260730190000_growth_schema_reference.sql');
+  for (const col of ['bio', 'external_url', 'enrich_attempted_at']) {
+    assert(new RegExp(`add column if not exists ${col}`).test(mig),
+      `growth reference migration must add leads_influencers.${col} (enrich-influencers reads it)`);
+  }
+  const apply = readFile('scripts/apply-growth-schema.mjs');
+  assert(/select=bio,external_url,enrich_attempted_at/.test(apply),
+    'apply-growth-schema must PROBE the enrichment columns, not just table existence');
+  const fn = readFile('supabase/functions/enrich-influencers/index.ts');
+  assert(/schema_incomplete/.test(fn),
+    'enrich-influencers must degrade a missing-column read to status schema_incomplete, not a hard 500 error');
+  assert(/does not exist\|42703\|column/.test(fn),
+    'enrich-influencers must detect the 42703 missing-column case explicitly');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

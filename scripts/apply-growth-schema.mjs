@@ -59,7 +59,23 @@ if (!found) {
     console.error(`growth schema INCOMPLETE: ${missing.join(', ')}`);
     process.exit(1);
   }
-  console.log('growth schema verified — all four tables answer.');
+  // COLUMN-LEVEL guard (Forensic run 2026-08-01): tables existing is NOT enough —
+  // enrich-influencers READS leads_influencers.bio / external_url / enrich_attempted_at,
+  // and the SPEC-132 create omitted them, so the worker 42703'd every run while this
+  // verify stayed green. Probe the columns explicitly and report the exact remedy.
+  const colProbe = await fetch(
+    `${GROWTH_URL}/rest/v1/leads_influencers?select=bio,external_url,enrich_attempted_at&limit=1`,
+    { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } },
+  );
+  if (colProbe.status >= 400) {
+    console.error('growth leads_influencers is MISSING enrichment columns — enrich-influencers will 42703.');
+    console.error('Run this ONCE on the GROWTH project SQL editor to close CREATORS_NOT_GROWING:');
+    console.error('  alter table public.leads_influencers add column if not exists bio text,');
+    console.error('    add column if not exists external_url text,');
+    console.error('    add column if not exists enrich_attempted_at timestamptz;');
+    process.exit(1);
+  }
+  console.log('growth schema verified — all four tables answer + enrichment columns present.');
   process.exit(0);
 }
 
