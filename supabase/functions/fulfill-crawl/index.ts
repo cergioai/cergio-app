@@ -1565,16 +1565,21 @@ async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: n
   if (osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
 
   const want = 240;   // MAX: Yelp Fusion caps offset at 240 — this IS the API ceiling
-  const loc = [city, state].filter(Boolean).join(', ');
+  // SPEC-180: SPEC-170 metro normalisation reached craigslist/YP/LSA but never yelp.
+  const loc = [metroOf(city), METRO_STATE[metroOf(city)] || state].filter(Boolean).join(', ');
   let saved = 0, found = 0;
   const seen = new Set<string>();
   for (let offset = 0; offset < want && offset < 240; offset += 50) {   // yelp API caps offset at 240
     const url = `https://api.yelp.com/v3/businesses/search?location=${encodeURIComponent(loc)}`
-      + `&term=${encodeURIComponent(rawType)}&limit=50&offset=${offset}&sort_by=best_match`;
+      + `&term=${encodeURIComponent(rawType)}&limit=${Math.min(50, 240 - offset)}&offset=${offset}&sort_by=best_match`;
     let j: any;
     try {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${KEY}` } });
-      if (!res.ok) return { saved, found, query, note: `yelp http ${res.status}` };
+      // SPEC-180: Yelp caps this endpoint at 240, so offset=200&limit=50 asked for 250,
+      // returned HTTP 400, and that error OVERWROTE the note of a run that had already
+      // saved 200 rows. A last-page error must not erase a partial success.
+      if (!res.ok) { _lastYelpError = `yelp http ${res.status} at offset=${offset}`;
+                     return { saved, found, query, note: saved > 0 ? undefined : _lastYelpError }; }
       j = await res.json();
     } catch (e) { return { saved, found, query, note: `yelp fetch ${String(e).slice(0,60)}` }; }
     const list: any[] = j?.businesses || [];
@@ -2088,9 +2093,17 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   const state = (job.state || '').trim();
   const query = `${rawType} [yellowpages ${city}]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
-  const items = await apifyRun('cryptosignals~yellow-pages-us-scraper',
+  // SPEC-179: cryptosignals~yellow-pages-us-scraper is DEPRECATED on Apify
+  // (isDeprecated:true since 2026-07-29) and FAILED 169 of its last 299 public runs.
+  // trudax is the maintained equivalent and its input key is `search`, NOT `keyword` —
+  // a wrong key returns an empty dataset that reads as an empty market. 1000 results
+  // also cannot finish inside run-sync: the SPEC-117 mistake, never applied here.
+  const YP_MAX_ITEMS = Math.min(Number(Deno.env.get('YP_MAX_ITEMS') || '60'), 100);
+  const items = await apifyRun('trudax~yellow-pages-us-scraper',
     // SPEC-170b: YellowPages indexes by METRO — "Wynwood, FL" matches nothing.
-    { keyword: rawType, location: `${metroOf(city)}, ${METRO_STATE[metroOf(city)] || state}`, maxItems: 1000, maxResults: 1000 }, 1000);  // MAX: no provider ceiling
+    { search: rawType, location: `${metroOf(city)}, ${METRO_STATE[metroOf(city)] || state}`, maxItems: YP_MAX_ITEMS }, YP_MAX_ITEMS);
+  // Capture NOW: _lastApifyError is module-level and 6 pool workers share it.
+  const ypApifyErr = _lastApifyError;
   let found = items.length, saved = 0, ypFetches = 0;
   const seen = new Set<string>();
   for (const it of items) {
@@ -2123,7 +2136,8 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
     await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
-  return { saved, found, query };
+  return { saved, found, query, note: saved === 0
+    ? (_lastFlushError || ypApifyErr || `no YellowPages results (raw items returned: ${found})`) : undefined };
 }
 
 // ── IG-FOR-SERVICES: apify~instagram-scraper user search. Writes BOTH a service row
