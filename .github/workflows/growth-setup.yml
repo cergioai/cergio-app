@@ -250,6 +250,24 @@ jobs:
             cat /tmp/growth-keys.txt 2>/dev/null || echo 'derive step produced no log'
             echo '```'
             echo
+            echo '## SPEND LEDGER — dollars in vs leads out (SPEC-185)'
+            echo
+            echo '| source | spent | leads | $/lead | verdict |'
+            echo '|---|---|---|---|---|'
+            for SRC in craigslist yellowpages_apify gmaps_apify ig_services yelp google_lsa google_sponsored osm; do
+              SPENT=$(curl -s -H "apikey: $GROWTH_SERVICE_ROLE_KEY" -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
+                "$GROWTH_SUPABASE_URL/rest/v1/crawl_requests?select=cost_usd&source=eq.$SRC" \
+                | python3 -c "import sys,json;print(round(sum(float(r.get('cost_usd') or 0) for r in json.load(sys.stdin)),4))" 2>/dev/null || echo 0)
+              LEADS=$(curl -s -H "apikey: $GROWTH_SERVICE_ROLE_KEY" -H "Authorization: Bearer $GROWTH_SERVICE_ROLE_KEY" \
+                -H 'Prefer: count=exact' -H 'Range: 0-0' \
+                "$GROWTH_SUPABASE_URL/rest/v1/leads_services?select=id&data_source=eq.$SRC" -D - -o /dev/null \
+                | sed -n 's|.*content-range: [0-9*-]*/\([0-9]*\).*|\1|p' | tr -d '\r')
+              PER=$(python3 -c "s=$SPENT;l=${LEADS:-0};print('—' if l==0 else round(s/l,4))" 2>/dev/null || echo '—')
+              VERDICT=$(python3 -c "s=$SPENT;l=${LEADS:-0};print('FREE' if s==0 and l>0 else ('BLOCKED - spent, zero output' if s>0 and l==0 else ('earning' if l>0 else 'not yet run')))" 2>/dev/null || echo '?')
+              echo "| **$SRC** | \$$SPENT | ${LEADS:-0} | $PER | $VERDICT |"
+            done
+            echo
+
             echo '## PER-SOURCE DIAGNOSIS (latest finished job for each source)'
             echo
             echo '| source | city | type | rows | reason |'

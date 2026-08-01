@@ -297,6 +297,19 @@ const gdb = growthDb();
     const CONCURRENCY = Number(Deno.env.get('CRAWL_CONCURRENCY') || '6');
     const queue = [...(jobs ?? [])];
     const runJob = async (job: any) => {
+      // SPEC-185 HARD STOP: check the dollar budget BEFORE doing any paid work.
+      // This is the only place that can actually prevent a charge — a guard that
+      // runs after the fact is a report, not a control.
+      const blocked = await spendBlockedReason(String(job.source || ''));
+      if (blocked) {
+        await gdb.from('crawl_requests').update({
+          status: 'parked', notes: blocked, updated_at: new Date().toISOString(),
+        }).eq('id', job.id);
+        out.push({ id: job.id, source: job.source, spend_blocked: true, note: blocked });
+        console.log(blocked);
+        return;
+      }
+      _lastApifyCostUsd = 0;
       // Mark crawling so concurrent runs don't double-process.
       await flushBuf(db); await gdb.from('crawl_requests').update({ status: 'crawling', updated_at: new Date().toISOString() }).eq('id', job.id).eq('status', 'new');
 
@@ -329,7 +342,7 @@ const gdb = growthDb();
           const r = await fulfillYellowPages(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: saved === 0 ? (_lastApifyError || 'no YellowPages results for this city/type') : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -338,7 +351,7 @@ const gdb = growthDb();
           const r = await fulfillYellowPagesApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no YellowPages results (raw items returned: ${r.found ?? 0})`) : 'yellowpages'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -349,7 +362,7 @@ const gdb = growthDb();
           const r = await fulfillGmapsApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no Google Maps results (raw items returned: ${r.found ?? 0})`) : 'gmaps_apify'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -360,7 +373,7 @@ const gdb = growthDb();
           const r = await fulfillIgServices(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no IG accounts for this service/city (raw items returned: ${r.found ?? 0})`) : 'ig_services'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -370,7 +383,7 @@ const gdb = growthDb();
           const r = await fulfillCraigslist(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no Craigslist results (raw items returned: ${r.found ?? 0})`) : 'craigslist'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -380,7 +393,7 @@ const gdb = growthDb();
           const r = await fulfillGoogleLSA(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastFlushError || _lastSerpError || `no Google local-services ads (raw items returned: ${r.found ?? 0})`) : 'google_lsa'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -403,7 +416,7 @@ const gdb = growthDb();
           }
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastSerpError || `no Google sponsored/LSA results (raw items returned: ${r.found ?? 0})`) : 'google_sponsored via LSA'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -416,7 +429,7 @@ const gdb = growthDb();
           const r = await fulfillYelp(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastFlushError || _lastYelpError || `no Yelp results for this city/type (raw items returned: ${r.found ?? 0})`) : 'yelp'),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -432,7 +445,7 @@ const gdb = growthDb();
           const r = await fulfillOverpass(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: saved === 0
               ? `no OpenStreetMap results for ${job.service_type || 'this type'} in ${job.city || 'this city'}`
               : `osm (${r.endpoint || 'overpass'})`,
@@ -506,7 +519,7 @@ const gdb = growthDb();
           }
 
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'delivered', delivered_count: saved,
+            status: 'delivered', cost_usd: _lastApifyCostUsd, delivered_count: saved,
             notes: saved === 0 ? 'no Google Places results for this city/type' : null,
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
@@ -1849,6 +1862,9 @@ function msLeft(cap: number): number {
 
 let _lastFlushError: string | null = null;
 let _lastApifyError: string | null = null;
+// SPEC-185: the ACTUAL dollars the last apify run cost, read back from Apify.
+// Estimates are not good enough when the rule is "never spend $1 without output".
+let _lastApifyCostUsd = 0;
 // SPEC-168: apify already recorded WHY it returned nothing, but the caller threw it
 // away and wrote a generic "no X results" — so seven sources reported 0 rows for
 // eight hours with no recoverable reason, and I wrongly concluded they were dead
@@ -1856,6 +1872,58 @@ let _lastApifyError: string | null = null;
 // dead until its own error says so.
 let _lastSerpError: string | null = null;
 let _lastYelpError: string | null = null;
+// SPEC-185 — PROVE OUTPUT BEFORE SPENDING THE NEXT DOLLAR.
+// Apify cost $108.17 and delivered ZERO leads. The rule from here: a paid source
+// gets a $1 tranche; it may not spend the next dollar until that dollar has
+// produced leads. Allowance steps up only on PROVEN yield, so volume rises
+// gradually and only where output is real.
+const APIFY_ACTOR_OF_SOURCE: Record<string, string> = {
+  craigslist:        'memo23~craigslist-scraper',
+  yellowpages_apify: 'trudax~yellow-pages-us-scraper',
+  gmaps_apify:       'compass~google-maps-extractor',
+  ig_services:       'apify~instagram-scraper',
+};
+// Tranches in dollars. A source starts at $1 and only advances a step once the
+// spend so far has produced leads at or under the cost-per-lead ceiling.
+const SPEND_TRANCHES = [1, 2, 5, 10, 25, 50];
+const MAX_COST_PER_LEAD = 0.05;   // $0.05/lead ceiling — osm is free, this must earn its place
+
+async function apifyLastRunCostUsd(actor: string, token: string): Promise<number> {
+  try {
+    const r = await fetch(`https://api.apify.com/v2/acts/${actor}/runs?token=${token}&limit=1&desc=true`,
+      { signal: AbortSignal.timeout(Math.min(8000, msLeft(8000))) });
+    if (!r.ok) return 0;
+    const j = await r.json();
+    const run = j?.data?.items?.[0];
+    return Number(run?.usageTotalUsd ?? 0) || 0;
+  } catch { return 0; }
+}
+
+/** Hard stop: may `source` spend another dollar? Returns null if allowed, else the reason. */
+async function spendBlockedReason(source: string): Promise<string | null> {
+  if (!APIFY_ACTOR_OF_SOURCE[source]) return null;          // free/non-apify source
+  const [spendRes, leadsRes] = await Promise.all([
+    gdb.from('crawl_requests').select('cost_usd').eq('source', source).not('cost_usd', 'is', null),
+    gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('data_source', source),
+  ]);
+  const spent = (spendRes.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
+  const leads = leadsRes.count ?? 0;
+  // Allowance = the first tranche the proven yield justifies.
+  let allowance = SPEND_TRANCHES[0];
+  if (leads > 0) {
+    const costPerLead = spent / leads;
+    if (costPerLead <= MAX_COST_PER_LEAD) {
+      for (const t of SPEND_TRANCHES) { if (spent >= t * 0.9) allowance = t; }
+      const next = SPEND_TRANCHES.find((t) => t > allowance);
+      if (next) allowance = next;                            // earned the next step
+    }
+  }
+  if (spent < allowance) return null;                        // inside budget
+  return leads === 0
+    ? `SPEND GATE: ${source} has spent $${spent.toFixed(2)} for 0 leads. Blocked at the $${allowance} tranche until it produces output.`
+    : `SPEND GATE: ${source} spent $${spent.toFixed(2)} for ${leads} leads ($${(spent / leads).toFixed(4)}/lead) — above the $${MAX_COST_PER_LEAD}/lead ceiling. Blocked at $${allowance}.`;
+}
+
 async function apifyRun(actor: string, input: unknown, maxItems: number): Promise<any[]> {
   _lastApifyError = null;
   const TOKEN = Deno.env.get('APIFY_TOKEN');
@@ -1885,6 +1953,9 @@ async function apifyRun(actor: string, input: unknown, maxItems: number): Promis
     const j = await res.json();
     const items = Array.isArray(j) ? j : [];
     if (items.length === 0) _lastApifyError = `apify ${actor} returned 0 items (check actor input)`;
+    // Read back what that run actually COST. One cheap call, and it is the only way
+    // to enforce a real dollar budget rather than a guess.
+    _lastApifyCostUsd = await apifyLastRunCostUsd(actor, TOKEN);
     return items;
   } catch (e) {
     _lastApifyError = (e as Error)?.name === 'AbortError'

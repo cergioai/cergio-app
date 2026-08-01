@@ -66,6 +66,7 @@ console.log(`open jobs after : ${after?.[0]?.n ?? '?'} (expected ~2,688 = 12 cit
 console.log('ensuring every column the workers read/write exists…');
 await q(`
   alter table public.crawl_requests
+    add column if not exists cost_usd numeric default 0,
     add column if not exists lat double precision,
     add column if not exists lng double precision,
     add column if not exists requested_by uuid,
