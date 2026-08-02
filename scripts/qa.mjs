@@ -6210,6 +6210,29 @@ test('used-before-declared-is-caught-because-nothing-else-catches-it', 'SPEC-219
   assert(!(iUse > -1 && iDecl > iUse), 'emailCol is used above its declaration again — this is the exact line that returned 500 on /ops/data');
 });
 
+test('ci-subagent-status-is-in-the-product-not-on-a-git-branch', 'SPEC-220 (founder, 2026-08-02): "need dashboard with live numbers and download a report of CI subagents... not github." A status page that requires opening a git branch is not a dashboard — it is a file, and it excludes anyone who does not read git. Each subagent now publishes its run into the product database, and /ops/agents renders the latest run per subagent with a CSV download of both the current state and the full history. The publish step must never fail the job: a reporting problem must not be able to hide the report it was meant to deliver, which is the same reasoning that made CANNOT RUN outrank everything else.', '#220', () => {
+  const fn = readFile('supabase/functions/ci-subagents/index.ts');
+  assert(!(!/ci_subagent_runs/.test(fn)), 'the function does not read the runs table');
+  assert(!(!/admins\.includes\(email\)/.test(fn)), 'the fleet status is not admin-gated');
+  const scr = readFile('src/screens/AgentFleetScreen.jsx');
+  assert(!(!/Download report/.test(scr)), 'no download — the founder asked for a downloadable report');
+  assert(!(!/full history/i.test(scr)), 'only the latest run is downloadable, so trend over time is invisible');
+  assert(!(!/CANNOT RUN/.test(scr)), 'the screen cannot show a subagent that never started, which would read as idle');
+  const app = readFile('src/App.jsx');
+  assert(!(!/\/ops\/agents/.test(app)), 'no route — the screen would be unreachable');
+  assert(!(!/AgentFleetScreen/.test(app)), 'the screen is never imported');
+  const api = stripComments(readFile('src/lib/api.js'));
+  assert(!(!/ci-subagents/.test(api)), 'the api layer cannot call the function');
+  const pub = readFile('scripts/agent-publish.mjs');
+  assert(!(!/ci_subagent_runs/.test(pub)), 'nothing publishes the run, so the dashboard would stay empty forever');
+  assert(!(/process\.exit\(1\)/.test(pub)), 'a publish failure fails the job — a reporting problem must not hide the report it was meant to deliver');
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/agent-publish\.mjs/.test(wf)), 'the workflow never publishes to the dashboard');
+  const mig = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations')).filter((f) => /ci_subagent_runs/.test(f));
+  assert(!(!mig.length), 'no migration creates the table, so the publish would 404 every run');
+});
+
+
 
 
 

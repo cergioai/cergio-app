@@ -50,6 +50,15 @@ jobs:
         run: node scripts/agent-work.mjs ${{ matrix.id }} || true
 
       # A kept fix becomes a PR on its own branch. Never a push to main, never auto-merge.
+      # Live numbers land in the PRODUCT DB so /ops/agents needs no GitHub.
+      - name: Publish this run to the dashboard
+        if: always()
+        continue-on-error: true
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/agent-publish.mjs ${{ matrix.id }}
+
       - name: Open a PR if this subagent kept a fix
         if: always()
         continue-on-error: true
