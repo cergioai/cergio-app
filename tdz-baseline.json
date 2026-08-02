@@ -1,0 +1,20 @@
+[
+ "src/components/ui/LeafLogo.jsx:34 uses \"MARKS_KEYS\" but it is declared at line 38",
+ "src/components/ui/LeafLogo.jsx:58 uses \"MARKS\" but it is declared at line 394",
+ "src/components/ui/RewardFlowAnimation.jsx:364 uses \"s\" but it is declared at line 369",
+ "src/lib/api.js:162 uses \"r\" but it is declared at line 163",
+ "src/lib/api.js:787 uses \"MATCH_STOPWORDS\" but it is declared at line 822",
+ "src/screens/ActivityScreen.jsx:221 uses \"relation\" but it is declared at line 242",
+ "src/screens/CrossPostScreen.jsx:67 uses \"doPost\" but it is declared at line 80",
+ "src/screens/FindFriendsScreen.jsx:159 uses \"copyInvite\" but it is declared at line 207",
+ "src/screens/IntakeScreen.jsx:34 uses \"validatedAddressRef\" but it is declared at line 74",
+ "src/screens/InviteFriendPopupScreen.jsx:116 uses \"ICONS\" but it is declared at line 134",
+ "src/screens/JobsInboxScreen.jsx:333 uses \"refreshJobs\" but it is declared at line 447",
+ "supabase/functions/coo-brain/index.ts:388 uses \"m\" but it is declared at line 426",
+ "supabase/functions/crawl-seed-google-places/index.ts:88 uses \"i\" but it is declared at line 129",
+ "supabase/functions/crawl-seed-yellowpages/index.ts:115 uses \"i\" but it is declared at line 161",
+ "supabase/functions/creator-harvest/index.ts:180 uses \"i\" but it is declared at line 325",
+ "supabase/functions/fulfill-crawl/index.ts:174 uses \"_runDeadline\" but it is declared at line 1973",
+ "supabase/functions/fulfill-crawl/index.ts:410 uses \"_lastApifyCostUsd\" but it is declared at line 1984",
+ "supabase/functions/fulfill-crawl/index.ts:414 uses \"_lastNonApifyCostUsd\" but it is declared at line 1985"
+]

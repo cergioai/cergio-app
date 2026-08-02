@@ -50,6 +50,9 @@ existing caller keeps its behaviour because both default to null/false.
 - `MORNING-REPORT.md`
 - `scripts/agent-work.mjs`
 - `scripts/agent-pr.mjs`
+- `scripts/tdz-guard.mjs`
+- `tdz-baseline.json`
+- `.github/workflows/ci.yml`
 - `scripts/auto-build.mjs`
 - `scripts/auto-fix.mjs`
 - `scripts/expand-coverage.mjs`

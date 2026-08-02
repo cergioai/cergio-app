@@ -12,7 +12,7 @@ name: night-fleet
 
 on:
   schedule:
-    - cron: '0 * * * *'      # hourly, so the morning page is never more than an hour stale
+    - cron: '0 */3 * * *'    # every 3h — nothing here changes fast enough to need 60 checks a day
   workflow_dispatch:
   push:
     paths: ['agents/fleet.json', 'specs/**', 'scripts/agent-report.mjs', 'scripts/morning-report.mjs']
@@ -44,7 +44,8 @@ jobs:
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AGENT_MODEL: claude-opus-5
+          AGENT_SCAN_MODEL: claude-haiku-4-5-20251001
+          AGENT_FIX_MODEL: claude-opus-5
           AGENT_CTX_CAP: '80000'
         run: node scripts/agent-work.mjs ${{ matrix.id }} || true
 

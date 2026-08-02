@@ -6187,6 +6187,30 @@ test('a-subagent-fix-must-prove-itself-and-can-never-merge-itself', 'SPEC-218 (f
   assert(!(!/pull-requests: write/.test(wf)), 'the workflow cannot open a PR — it would fail silently every run');
 });
 
+test('used-before-declared-is-caught-because-nothing-else-catches-it', 'SPEC-219 (found live 2026-08-02): /ops/data returned "Edge Function returned a non-2xx status code". The cause was ReferenceError: Cannot access emailCol before initialization — I declared it seven lines BELOW its first use. THIS IS THE FOURTH PRODUCTION OUTAGE OF EXACTLY THIS SHAPE: the blank homepage (mode used before binding), the white /auth (useEffect above const returnTo), every crawled row discarded (flushBuf referencing a handler-scoped gdb), and now this. Every one passed the production build. Every one passed the full gate suite. And deno check does NOT catch it either — verified by running it against the real broken file, which produced ZERO type errors, because TypeScript treats a reference inside a closure as deferred even when that closure is awaited immediately. So this needed a scope check, not another type check. Eighteen pre-existing occurrences are baselined rather than fixed in one change, because making them all fail today would block every unrelated PR — the mistake that broke the Chinese wall on its first attempt.', '#219', () => {
+  const g = readFile('scripts/tdz-guard.mjs');
+  assert(!(!/const\|let/.test(g) || !/matchAll/.test(g)), 'the guard does not scan declarations');
+  assert(!(!/tdz-baseline\.json/.test(g)), 'no baseline — 18 pre-existing occurrences would fail every unrelated PR');
+  assert(!(!/process\.exit\(1\)/.test(g)), 'the guard cannot fail the build, so it is decoration');
+  // It must blank comments, strings AND regex literals. Each of those produced a
+  // confident false finding while I was building it, and a guard that cries wolf is one
+  // people learn to ignore.
+  for (const k of ['//', '`', 'regex']) void k;
+  assert(!(!/function blank/.test(g)), 'the guard does not blank comments and strings, so a name inside a SQL string or a comment reads as a use');
+  assert(!(!/\[gimsuyd\]/.test(g)), 'regex literals are not blanked — /^osm-blocked/i made the guard report a use of "blocked" that was part of a pattern');
+  const base = JSON.parse(readFile('tdz-baseline.json'));
+  assert(!(!Array.isArray(base)), 'the baseline is not a list');
+  assert(!(base.some((b) => /leads-dashboard/.test(b))), 'the live /ops/data defect is in the baseline — the one occurrence that actually broke production must never be excused');
+  const ci = readFile('.github/workflows/ci.yml');
+  assert(!(!/tdz-guard\.mjs/.test(ci)), 'the guard does not run in CI, so it would only ever catch what someone remembered to check by hand');
+  const dash = readFile('supabase/functions/leads-dashboard/index.ts');
+  const iDecl = dash.indexOf('const emailCol');
+  const iUse = dash.indexOf('b.not(emailCol');
+  assert(!(iDecl < 0), 'emailCol is no longer declared at all');
+  assert(!(iUse > -1 && iDecl > iUse), 'emailCol is used above its declaration again — this is the exact line that returned 500 on /ops/data');
+});
+
+
 
 
 
