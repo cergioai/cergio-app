@@ -5482,7 +5482,8 @@ test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): o
   assert(!(!/SOURCES_RR/.test(f)), 'no round-robin — FIFO lets the oldest source monopolise every run');
   const m = f.match(/const SOURCES_RR = \[([\s\S]*?)\];/);
   assert(!(!m), 'SOURCES_RR is not a literal array');
-  for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services']) {
+  // google_sponsored deprecated in SPEC-222 — kept out of this list on purpose.
+  for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'gmaps_apify', 'ig_services']) {
     assert(!(!new RegExp(`'${src}'`).test(m[1])), `${src} is not in the rota — it would never be scheduled`);
   }
   // SPEC-205 amended this line. The share must divide by the number of sources ACTUALLY
@@ -5940,7 +5941,9 @@ test('creators-are-a-real-class-that-can-actually-be-written', 'SPEC-202 (found 
   assert(!(!/_lastCreatorError/.test(code)), 'creator write failures are not recorded anywhere');
   const d = readFile('scripts/growth-dedupe-queue.mjs');
   assert(!(!/CREATOR_FLOOR/.test(d)), 'no creator floor — creators would remain a by-product of a services crawl');
-  assert(!(!/ig-creator-marketplace/.test(d)), 'the first-party creator path is not reported, so its blocked state stays invisible');
+  // SPEC-221 removed ig-creator-marketplace entirely: it never produced a row and needed
+  // a Meta permission we do not have. What must stay visible is the creator count itself.
+  assert(!(!/CREATOR_FLOOR/.test(d)), 'creator progress is not reported, so the 100-lead audit target would be invisible');
 });
 
 test('the-data-dashboard-reads-the-database-the-leads-are-actually-in', 'SPEC-203 (found 2026-08-02): founder reported /ops/data as truncated. It was not truncated — leads-dashboard called createClient(SUPABASE_URL, service) which is the PRODUCT project, while every lead lives in the GROWTH project. It was faithfully reporting a nearly empty table. Auth belongs on product; leads belong on growth, and the two must not be confused again. Two further silent-staleness bugs rode along: the creator source list was hardcoded to modash-vetted-seed (abandoned) so real creator sources fell into "(other/unlabeled)", and creators were counted by data_source when creator rows label their origin in discovered_via.', '#203', () => {
@@ -6018,7 +6021,7 @@ test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (20
   if (String(cfg.CRAWLS_SUSPENDED) === 'false') {
     assert(!(!String(cfg.CREATOR_TARGET || '').trim()), 'crawling is ON with no creator target — nothing would stop it at 100');
   }
-  assert(!(/ig-creator-marketplace/.test(String(cfg.CRAWLS_ONLY || ''))), 'ig-creator-marketplace is in the allowlist but it is PARKED — it cannot run without IG_USER_ID + IG_MARKETPLACE_TOKEN');
+  assert(!(!/ig_services/.test(String(cfg.CRAWLS_ONLY || ''))), 'ig_services is not in the allowlist — it is the ONLY creator source, so creators could never reach the 100-lead audit target');
   const wf = readFile('.github/workflows/growth-setup.yml');
   assert(!(!/growth-controls\.mjs/.test(wf)), 'nothing pushes the controls to the edge runtime, so the file would be decorative and git would disagree with production');
   assert(!(!/growth-controls\.json/.test(wf)), 'editing the controls does not trigger the workflow, so a change would sit unapplied');

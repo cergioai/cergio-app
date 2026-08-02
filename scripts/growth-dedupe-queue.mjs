@@ -226,11 +226,9 @@ const CREATOR_FLOOR = Number(process.env.CREATOR_FLOOR || 100);
 const creators = await q(`select discovered_via, count(*)::int as n from leads_influencers group by discovered_via`);
 const cmap = Object.fromEntries((creators || []).map((r) => [r.discovered_via, r.n]));
 const scraperN = cmap['ig-scraper-user-search'] || 0;
-const marketN = cmap['ig-creator-marketplace'] || 0;
 
 console.log(`\ncreators — floor ${CREATOR_FLOOR} each`);
-console.log(`  ig-scraper-user-search   ${String(scraperN).padStart(5)}  ${scraperN < CREATOR_FLOOR ? 'BELOW FLOOR — seeding' : 'ok'}`);
-console.log(`  ig-creator-marketplace   ${String(marketN).padStart(5)}  PARKED (founder, 2026-08-02) — needs IG_USER_ID + IG_MARKETPLACE_TOKEN, gated on the pending Meta permission. Not counted against the floor; not retried.`);
+console.log(`  ig_services (creators)   ${String(scraperN).padStart(5)}  ${scraperN < CREATOR_FLOOR ? 'BELOW FLOOR — seeding' : 'ok'}`);
 
 if (scraperN < CREATOR_FLOOR) {
   // ig_services is the only creator path we can actually run today. Seed a focused set

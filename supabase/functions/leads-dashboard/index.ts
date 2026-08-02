@@ -13,7 +13,13 @@ const cors = {
 };
 const DEFAULT_ADMINS = ['t@cergio.ai', 'info@cergio.ai', 'tarik.sansal2@gmail.com', 'tarik@cergio.ai', 'tariksansal@gmail.com'];  // founder's signed-in emails (Forbidden fix 2026-07-29)
 const SVC_SOURCES = ['yelp', 'google_local', 'google_lsa', 'google_sponsored', 'craigslist', 'yellowpages', 'osm', 'google_places'];
-const CRE_SOURCES = ['ig-scraper-user-search', 'ig-creator-marketplace'];
+// SPEC-221 (founder, 2026-08-02): "remove the creator marketplace as a source.. and add
+// the IG service as a source (duplicate it as a services and creator source)".
+// ig_services is DUAL-CLASS: one crawl writes a service row AND a creator row for the same
+// person. It is now the only creator source. ig-creator-marketplace is REMOVED, not parked
+// — it never produced a row and depended on a Meta permission we do not have, and a source
+// that can never run is noise on every report it appears in.
+const CRE_SOURCES = ['ig-scraper-user-search'];
 function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } }); }
 
 serve(async (req: Request) => {

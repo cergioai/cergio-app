@@ -170,8 +170,8 @@ export function DataExportScreen() {
               })}
               {audience === 'creators' && (
                 <div className="mt-2 text-[11px] text-b3 leading-snug">
-                  ig-creator-marketplace reads 0 until <b>IG_USER_ID</b> + <b>IG_MARKETPLACE_TOKEN</b>
-                  {' '}are set — that needs the pending Meta permission, not a code change.
+                  Creators come from <b>ig_services</b> — the same crawl writes a service row and a
+                  creator row for each person, so it counts in both classes.
                 </div>
               )}
             </div>
@@ -184,24 +184,32 @@ export function DataExportScreen() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
-            {/* Say what the filter really holds. A silent cap reads as a small market —
-                the same shape as the audit that reported 0 rows for every source. */}
-            <div className="px-3 py-2 text-meta-sm font-bold text-black">
+          {/* CARDS, NOT A TABLE. A table with 8-10 columns clips the last one on any
+              screen narrower than a desktop, and the founder could not read his own data.
+              A card wraps and never needs a horizontal scroll. */}
+          <div className="mt-4">
+            <div className="text-meta-sm font-bold text-black">
               Rows — {rows.length.toLocaleString()} loaded
               {data.filteredTotal > rows.length && (
-                <span className="text-red-600"> of {data.filteredTotal.toLocaleString()} matching (capped at {data.rowCap.toLocaleString()} — narrow the filters or use “Download every source”)</span>
+                <span className="text-red-600"> of {data.filteredTotal.toLocaleString()} matching (capped at {data.rowCap.toLocaleString()})</span>
               )}
             </div>
-            <table className="w-full text-[12px]">
-              <thead className="bg-bg5 text-b3"><tr>{cols.map(c => <th key={c} className="text-left px-2 py-1 font-bold">{c}</th>)}</tr></thead>
-              <tbody>
-                {rows.slice(0, 200).map((r, i) => (
-                  <tr key={i} className="border-t border-bg5">{cols.map(c => <td key={c} className="px-2 py-1 text-black truncate max-w-[180px]">{String(r[c] ?? '')}</td>)}</tr>
-                ))}
-              </tbody>
-            </table>
-            {rows.length > 200 && <div className="px-3 py-2 text-[11px] text-b3">Showing first 200 on screen — the download contains all {rows.length.toLocaleString()}.</div>}
+            <div className="mt-2 space-y-2">
+              {rows.slice(0, 100).map((r, i) => (
+                <div key={i} className="rounded-xl border border-bg5 p-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                    {cols.map((c) => (
+                      <div key={c} className="min-w-0">
+                        <div className="text-[10px] text-b3 font-bold uppercase tracking-wide">{c}</div>
+                        <div className="text-[12px] text-black break-words">{String(r[c] ?? '—')}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {rows.length > 100 && <div className="mt-2 text-[11px] text-b3">Showing first 100 — the download has all {rows.length.toLocaleString()}.</div>}
+            {!rows.length && <div className="mt-2 text-meta-sm text-b3">No rows for this filter.</div>}
           </div>
         </>
       )}
