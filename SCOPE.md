@@ -42,6 +42,7 @@ SHARED-CHANGE-APPROVED — src/lib/api.js: leadsDashboard gains two optional fil
 arguments (status, contactableOnly) and forwards them in the request body. Additive; every
 existing caller keeps its behaviour because both default to null/false.
 - `agents/fleet.json`
+- `specs/`
 - `scripts/agent-report.mjs`
 - `scripts/morning-report.mjs`
 - `.github/workflows/night-fleet.yml`

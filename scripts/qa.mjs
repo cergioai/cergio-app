@@ -6133,6 +6133,34 @@ test('a-ci-agent-is-equivalent-to-a-subagent-and-cannot-merge-itself', 'SPEC-216
   assert(!(/push origin main|push .* HEAD:main/.test(wf)), 'the fleet pushes to main directly');
 });
 
+test('ci-subagents-read-the-spec-first-and-stay-out-of-the-dumb-zone', 'SPEC-217 (research-driven, 2026-08-02). Two findings from practitioners who solved our exact problems in production, applied here. (1) HumanLayer/Dex Horthy measured 100,000 developer sessions and found a "dumb zone" — the middle of a large context window where recall degrades and reasoning falters — and their Frequent Intentional Compaction keeps utilisation in the 40-60 percent band, validated on 100k-300k line codebases. That is the best available explanation for a specific failure of mine: inventing a 6-city list when 12 were authorised, writing a second URL parser when one existed, reusing a gate ID already taken. Each happened deep into a long session; each was a recall failure dressed as a decision. So each subagent gets a hard context cap. (2) GitHub Spec Kit and Geoffrey Huntley both put the SPEC before the code and keep progress in files and git history rather than in the window. Reading code first is how a spec gets rebuilt from bugs — exactly what Tarik caught me doing. So the spec is loaded before the source, and a missing spec is itself the first defect.', '#217', () => {
+  const w = readFile('scripts/agent-work.mjs');
+  const c = stripComments(w);
+  assert(!(!/CTX_CAP/.test(c)), 'no context cap — the subagent is handed an unbounded window and lands in the dumb zone, which is where invented values come from');
+  const cap = Number((c.match(/AGENT_CTX_CAP \|\| (\d+)/) || [, '0'])[1]);
+  assert(!(cap <= 0 || cap > 150000), `context cap is ${cap}; keep it well inside the window so recall stays in the 40-60% band`);
+  assert(!(/slice\(0, 300000\)/.test(c)), 'the 300k slice is back — that is the dumb zone by construction');
+  // RAW, not stripped: both the spec read and the FILES: header live inside template
+  // literals, and stripComments blanks those as well as comments. Scanning the stripped
+  // copy made both read as absent — a gate that fires on nothing. Third time tonight this
+  // exact trap has caught me; it is now the first thing to check when a gate looks wrong.
+  // Assert on the ORDER INSIDE THE BRIEF, which is what the model actually reads. My
+  // first version compared where the two lines appear in the source file, which a
+  // reordering of the prompt would not change at all — a gate measuring the wrong thing.
+  const iSpec = w.indexOf('THE SPEC FOR YOUR AREA');
+  const iCode = w.indexOf('FILES:');
+  assert(!(iSpec < 0), 'the subagent never loads its spec, so it can only infer intent from code that may itself be the bug');
+  assert(!(iSpec > iCode && iCode > -1), 'the code is loaded before the spec — that is how a spec gets rebuilt from bugs');
+  const fleet = JSON.parse(readFile('agents/fleet.json'));
+  for (const a of fleet.agents) {
+    let sp = '';
+    try { sp = readFile(`specs/${a.id}.md`); } catch { sp = ''; }
+    assert(!(!sp || sp.length < 100), `specs/${a.id}.md is missing or empty — that subagent has no source of truth but the code, and inferring intent from code that may itself be the bug is how this project got here`);
+    assert(!(!/Founder decisions on record/.test(sp)), `specs/${a.id}.md has nowhere to record a founder decision verbatim, so decisions would survive only as my paraphrase`);
+  }
+});
+
+
 
 
 

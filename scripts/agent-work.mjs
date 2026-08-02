@@ -25,14 +25,31 @@ const out = (o) => { fs.mkdirSync('reports', { recursive: true }); fs.writeFileS
 // dashboard read green, because nothing distinguished "idle" from "broken".
 if (!KEY) { out({ state: 'CANNOT RUN', detail: 'ANTHROPIC_API_KEY is not set on this runner — the agent is not idle, it is unable to start' }); process.exit(0); }
 
-// Only the files this agent owns. Reading is the cheap part of isolation; the cell
-// enforces the rest.
+// FREQUENT INTENTIONAL COMPACTION (HumanLayer / Dex Horthy, validated on 100k-300k line
+// production codebases). Keep context utilisation in the 40-60% band. Above that you enter
+// what they call the "dumb zone" — the middle of a large window where recall degrades and
+// reasoning falters, measured across 100,000 developer sessions.
+//
+// This is not a micro-optimisation. It is the best available explanation for a specific
+// failure of mine: inventing values that the spec already contained. A 6-city list when 12
+// were authorised, a second URL parser when one existed, a gate ID already in use. Each
+// happened deep into a long session, and each was a recall failure dressed as a decision.
+//
+// So each subagent gets its SPEC first, its own files second, and a hard cap. Progress
+// lives in files and git history, never in the window (Geoffrey Huntley's Ralph pattern).
+const CTX_CAP = Number(process.env.AGENT_CTX_CAP || 80000);
 const context = a.owns.flatMap((f) => {
   try {
     if (fs.statSync(f).isDirectory()) return fs.readdirSync(f).slice(0, 12).map((x) => `${f}/${x}`);
     return [f];
   } catch { return []; }
-}).map((f) => { try { return `--- ${f}\n${fs.readFileSync(f, 'utf8').slice(0, 60000)}`; } catch { return ''; } }).filter(Boolean).join('\n\n');
+}).map((f) => { try { return `--- ${f}\n${fs.readFileSync(f, 'utf8')}`; } catch { return ''; } }).filter(Boolean).join('\n\n').slice(0, CTX_CAP);
+
+// The spec comes BEFORE the code, deliberately. Spec Kit's one honest idea: the spec is
+// the source of truth, not the code. Reading the code first is how a spec gets rebuilt
+// from bugs — which is exactly what Tarik caught me doing.
+let spec = '';
+try { spec = fs.readFileSync(`specs/${id}.md`, 'utf8'); } catch { spec = '(no spec file — treat that as the first defect)'; }
 
 const brief = `You are the "${a.id}" agent for the Cergio codebase. You own ONLY these files: ${a.owns.join(', ')}.
 
@@ -48,6 +65,9 @@ House rules, which are absolute:
 - Never invent a value the spec does not contain. If a number is missing, say so; do not pick one.
 - A check that cannot fail is worse than no check.
 
+THE SPEC FOR YOUR AREA (source of truth — if the code disagrees with this, the code is wrong):
+${spec}
+
 Reply with STRICT JSON only:
 {"finding":"one sentence naming the single most important real defect you can see in YOUR files, or the string NONE",
  "evidence":"the exact code or line that proves it",
@@ -58,7 +78,7 @@ Reply with STRICT JSON only:
 Do not propose refactors, style changes, or improvements. Only real defects with evidence.
 
 FILES:
-${context.slice(0, 300000)}`;
+${context}`;
 
 let r, body;
 try {

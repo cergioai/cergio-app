@@ -15,7 +15,7 @@ on:
     - cron: '0 * * * *'      # hourly, so the morning page is never more than an hour stale
   workflow_dispatch:
   push:
-    paths: ['agents/fleet.json', 'scripts/agent-report.mjs', 'scripts/morning-report.mjs']
+    paths: ['agents/fleet.json', 'specs/**', 'scripts/agent-report.mjs', 'scripts/morning-report.mjs']
 
 permissions:
   contents: write
@@ -44,6 +44,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AGENT_MODEL: claude-opus-5
+          AGENT_CTX_CAP: '80000'
         run: node scripts/agent-work.mjs ${{ matrix.id }} || true
       - uses: actions/upload-artifact@v4
         with:
