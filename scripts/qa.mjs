@@ -6060,7 +6060,7 @@ test('every-dataset-is-live-and-downloadable-and-the-cap-is-stated', 'SPEC-210 (
   // signature's default parameter, so removing it from the body still passed — a gate
   // that could not fail, caught by mutating it.
   const api = stripComments(readFile('src/lib/api.js'));
-  const invoke = (api.match(/invoke\('leads-dashboard',[\s\S]{0,220}?\}\)/) || [''])[0];
+  const invoke = (api.match(/invoke\('leads-dashboard',[\s\S]{0,900}?\n  \}\)/) || [''])[0];
   assert(!(!invoke), 'the leads-dashboard invoke call could not be found');
   assert(!(!/contactableOnly/.test(invoke)), 'the api layer drops reachable-only from the request body, so the checkbox would silently do nothing');
   assert(!(!/status/.test(invoke)), 'the api layer drops status from the request body, so the status filter would silently do nothing');
@@ -6234,6 +6234,27 @@ test('ci-subagent-status-is-in-the-product-not-on-a-git-branch', 'SPEC-220 (foun
   const mig = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations')).filter((f) => /ci_subagent_runs/.test(f));
   assert(!(!mig.length), 'no migration creates the table, so the publish would 404 every run');
 });
+
+test('metro-and-locality-are-separate-filters-and-every-facet-comes-from-the-data', 'SPEC-224 (founder spec, 2026-08-02): "per city per type (personal trainer..) per city (nyc miami etc) and general location (manhattan brooklyn etc) for services .. and any category (if any for creators)". METRO and LOCALITY are different columns — state is the metro (NY/FL) and city is the neighbourhood (Manhattan, Brooklyn, Wynwood) — and one control trying to mean both is why the Miami filter appeared to vanish. Every facet list is derived from the data and scoped to the current metro, so an option that cannot return a row is never offered: the neighbourhoods of NYC are not choices once the metro is Miami. Recency is a filter too — last 24h, last 100, last 1000 — because "download the newest 100" is a different question from "download everything" and the old screen could only answer the second.', '#224', () => {
+  const fn = stripComments(readFile('supabase/functions/leads-dashboard/index.ts'));
+  assert(!(!/body\.locality/.test(fn)), 'no locality filter — neighbourhoods cannot be selected');
+  assert(!(!/body\.serviceType/.test(fn)), 'no service-type filter, so "personal trainers in Brooklyn" is unanswerable');
+  assert(!(!/body\.category/.test(fn)), 'no creator category filter');
+  assert(!(!/sinceHours/.test(fn)), 'no recency filter — last 24h cannot be requested');
+  assert(!(!/localities|serviceTypes|categories/.test(fn)), 'facet lists are never returned, so the screen would have to hardcode them and go stale');
+  assert(!(!/const facet =/.test(fn)), 'facets are not derived from the data');
+  const scr = stripComments(readFile('src/screens/DataExportScreen.jsx'));
+  assert(!(!/METROS/.test(scr)), 'the metro control is gone');
+  assert(!(!/pickMetro/.test(scr)), 'changing metro does not clear locality, leaving an impossible filter applied');
+  assert(!(!/RECENCY/.test(scr)), 'no recency control');
+  assert(!(!/setServiceType/.test(scr) && /setCategory/.test(scr)), 'type and category filters are not wired');
+  const api = stripComments(readFile('src/lib/api.js'));
+  const invoke = (api.match(/invoke\('leads-dashboard',[\s\S]{0,600}?\}\)/) || [''])[0];
+  for (const k of ['locality', 'serviceType', 'category', 'sinceHours', 'limit']) {
+    assert(!(!new RegExp(k).test(invoke)), `the api layer drops ${k} from the request body, so that filter would silently do nothing`);
+  }
+});
+
 
 
 

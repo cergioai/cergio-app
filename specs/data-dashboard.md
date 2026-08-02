@@ -32,3 +32,33 @@ list and a spec built from buggy code.)_
 ## Progress log
 
 _(One line per CI-subagent run that changed something. Append, never rewrite.)_
+
+## Founder decisions on record
+
+**2026-08-02, verbatim:**
+
+> dashboard design
+>
+> view per source and class (creator / services)
+> filter per contactable…
+> date download (last 24 hours, last 100 or 1000 pieces of data)..
+> per city per type (personal trainer..) per city (nyc miami etc) and general location
+> (manhattan brooklyn etc) for services .. and any category (if any for creators
+> (parenting, pets etc)…
+
+Read as the required filter set:
+
+| filter | applies to | column |
+|---|---|---|
+| class | all | table selection |
+| source | all | `data_source` / `discovered_via` / `source` |
+| contactable | leads | `phone` OR email present |
+| metro | leads | `state` (NY = NYC, FL = Miami) |
+| locality | services | `city` (Manhattan, Brooklyn, Wynwood, …) |
+| service type | services | `service_type` |
+| category | creators | `category` |
+| recency / size | all | last 24h · last 100 · last 1000 · all |
+
+Metro and locality are SEPARATE filters. `state` is the metro and `city` is the
+neighbourhood, so "Miami" as a metro must not be confused with "Miami" the city value —
+that conflation is what made the Miami filter appear to vanish.

@@ -28,7 +28,15 @@ const STATUSES = {
   crawls: ['new', 'crawling', 'delivered', 'failed', 'parked'],
   runs: [],
 };
-const CITIES = [{ id: '', label: 'All' }, { id: 'NY', label: 'NYC' }, { id: 'FL', label: 'Miami' }];
+// METRO is `state`; LOCALITY is `city`. Two columns, two controls. One control trying to
+// mean both is why the Miami filter appeared to vanish.
+const METROS = [{ id: '', label: 'All' }, { id: 'NY', label: 'NYC' }, { id: 'FL', label: 'Miami' }];
+const RECENCY = [
+  { id: '0-10000', label: 'All' },
+  { id: '24-10000', label: 'Last 24h' },
+  { id: '0-100', label: 'Last 100' },
+  { id: '0-1000', label: 'Last 1000' },
+];
 const COLS = {
   services: ['name', 'service_type', 'phone', 'owner_email', 'city', 'data_source', 'outreach_status'],
   creators: ['ig_handle', 'display_name', 'category', 'followers', 'email', 'city', 'is_business', 'discovered_via'],
@@ -74,6 +82,10 @@ export function DataExportScreen() {
   const [city, setCity] = useState('');
   const [source, setSource] = useState('');
   const [status, setStatus] = useState('');
+  const [locality, setLocality] = useState('');
+  const [serviceType, setServiceType] = useState('');
+  const [category, setCategory] = useState('');
+  const [recency, setRecency] = useState('0-10000');
   const [reachableOnly, setReachableOnly] = useState(false);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -82,18 +94,25 @@ export function DataExportScreen() {
 
   // DEFECT 1. Every filter below the class is scoped TO that class. Carrying them across
   // sent nonsense to the server and returned an empty view that read as broken data.
-  const pickAudience = (id) => { setAudience(id); setSource(''); setStatus(''); setReachableOnly(false); };
+  const pickAudience = (id) => { setAudience(id); setSource(''); setStatus(''); setReachableOnly(false); setLocality(''); setServiceType(''); setCategory(''); };
+  // Neighbourhoods of NYC are not choices once the metro is Miami, so changing metro
+  // clears the locality rather than leaving an impossible filter applied.
+  const pickMetro = (id) => { setCity(id); setLocality(''); };
+  const clearAll = () => { setCity(''); setLocality(''); setSource(''); setStatus(''); setServiceType(''); setCategory(''); setReachableOnly(false); setRecency('0-10000'); };
 
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
+    const [h, lim] = recency.split('-').map(Number);
     const { data: d, error } = await leadsDashboard(audience, {
-      city: city || null, source: source || null, status: status || null, contactableOnly: reachableOnly,
+      city: city || null, locality: locality || null, source: source || null, status: status || null,
+      serviceType: serviceType || null, category: category || null,
+      contactableOnly: reachableOnly, sinceHours: h, limit: lim,
     });
     setBusy(false);
     if (error) { setErr(error.message || 'Load failed'); setData(null); return; }
     if (d?.error) { setErr(d.error); setData(null); return; }
     setData(d);
-  }, [audience, city, source, status, reachableOnly]);
+  }, [audience, city, locality, source, status, serviceType, category, reachableOnly, recency]);
   useEffect(() => { load(); }, [load]);
 
   // DEFECT 2. Only offer sources that actually have rows. An option that can only ever
@@ -106,11 +125,11 @@ export function DataExportScreen() {
   const cols = COLS[audience] || Object.keys(rows[0] || {}).slice(0, 8);
   const noteCol = NOTE_COL[audience];
   const isLead = data?.isLeadTable;
-  const filtered = !!(city || source || status || reachableOnly);
+  const filtered = !!(city || locality || source || status || serviceType || category || reachableOnly || recency !== '0-10000');
 
   const download = () => {
     if (!rows.length) { setErr('Nothing to download for this filter.'); return; }
-    saveCsv(toCsv(rows), `Cergio ${audience}${city ? ' ' + city : ''}${source ? ' ' + source : ''}${status ? ' ' + status : ''}${reachableOnly ? ' reachable' : ''}.csv`);
+    saveCsv(toCsv(rows), ['Cergio', audience, city, locality, source, serviceType, category, status, reachableOnly ? 'reachable' : '', recency !== '0-10000' ? recency : ''].filter(Boolean).join(' ') + '.csv');
   };
   const downloadEach = async () => {
     const list = sources.map(([s]) => s).filter((s) => s !== '(other/unlabeled)');
@@ -135,9 +154,9 @@ export function DataExportScreen() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div>
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">City</div>
+          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Metro</div>
           <div className="flex gap-1.5">
-            {CITIES.map((c) => <Pill key={c.id} on={city === c.id} onClick={() => setCity(c.id)}>{c.label}</Pill>)}
+            {METROS.map((c) => <Pill key={c.id} on={city === c.id} onClick={() => pickMetro(c.id)}>{c.label}</Pill>)}
           </div>
         </div>
         <div>
@@ -158,11 +177,49 @@ export function DataExportScreen() {
         </div>
       </div>
 
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        {!!(data?.localities || []).length && (
+          <div>
+            <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Location</div>
+            <select value={locality} onChange={(e) => setLocality(e.target.value)}
+              className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+              <option value="">All locations</option>
+              {data.localities.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+        )}
+        {!!(data?.serviceTypes || []).length && (
+          <div>
+            <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Service type</div>
+            <select value={serviceType} onChange={(e) => setServiceType(e.target.value)}
+              className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+              <option value="">All types</option>
+              {data.serviceTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
+        {!!(data?.categories || []).length && (
+          <div>
+            <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Category</div>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+              <option value="">All categories</option>
+              {data.categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Recency</div>
+          <div className="flex flex-wrap gap-1.5">
+            {RECENCY.map((r) => <Pill key={r.id} on={recency === r.id} onClick={() => setRecency(r.id)}>{r.label}</Pill>)}
+          </div>
+        </div>
+      </div>
+
       <div className="mt-4 flex flex-wrap gap-2 items-center">
         {isLead && <Pill on={reachableOnly} onClick={() => setReachableOnly((v) => !v)}>Reachable only</Pill>}
         {filtered && (
-          <button onClick={() => { setCity(''); setSource(''); setStatus(''); setReachableOnly(false); }}
-            className="text-[13px] font-bold text-b3 underline">Clear</button>
+          <button onClick={clearAll} className="text-[13px] font-bold text-b3 underline">Clear</button>
         )}
         <div className="flex-1" />
         <button onClick={load} className="rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-b3">↻</button>
