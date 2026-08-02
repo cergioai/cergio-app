@@ -1,0 +1,9 @@
+source,leads,sample,with_phone,with_email,contactable,contactable_pct,with_website,with_instagram,with_name,with_coords,duplicate_phones,newest,oldest
+osm,0,0,0,0,0,0,0,0,0,0,0,,
+craigslist,0,0,0,0,0,0,0,0,0,0,0,,
+yellowpages_apify,0,0,0,0,0,0,0,0,0,0,0,,
+yelp,0,0,0,0,0,0,0,0,0,0,0,,
+google_lsa,0,0,0,0,0,0,0,0,0,0,0,,
+google_sponsored,0,0,0,0,0,0,0,0,0,0,0,,
+gmaps_apify,0,0,0,0,0,0,0,0,0,0,0,,
+ig_services,0,0,0,0,0,0,0,0,0,0,0,,
