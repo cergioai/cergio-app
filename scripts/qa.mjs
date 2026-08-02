@@ -5482,7 +5482,8 @@ test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): o
   assert(!(!/SOURCES_RR/.test(f)), 'no round-robin — FIFO lets the oldest source monopolise every run');
   const m = f.match(/const SOURCES_RR = \[([\s\S]*?)\];/);
   assert(!(!m), 'SOURCES_RR is not a literal array');
-  for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services']) {
+  // google_sponsored deprecated in SPEC-222 — kept out of this list on purpose.
+  for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'gmaps_apify', 'ig_services']) {
     assert(!(!new RegExp(`'${src}'`).test(m[1])), `${src} is not in the rota — it would never be scheduled`);
   }
   // SPEC-205 amended this line. The share must divide by the number of sources ACTUALLY
