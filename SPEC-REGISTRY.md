@@ -67,6 +67,7 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-192 | HARD SPEC: a lead with no phone AND no email is never saved — we do not pay for unreachable rows | #192 | — | CODED |
 | S-193 | HARD SPEC: all paid crawling goes through Apify — SerpAPI is retired | #193 | — | CODED |
 | S-237 | Each creator source stops ITSELF at CREATOR_TARGET and obeys the committed crawl switch; creator writes cannot fail silently on a missing column (is_business/created_at healed on the LIVE table) | #237 | — | CODED |
+| S-238 | /status2 and /agents2 are dedicated founder URLs, aliases of /ops/status and /ops/agents (never copies) | #238 | — | CODED |
 <!-- REGISTRY:END -->
 
 ## Open drift (found by #186 on its first run)
