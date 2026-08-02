@@ -6063,6 +6063,37 @@ test('every-dataset-is-live-and-downloadable-and-the-cap-is-stated', 'SPEC-210 (
   assert(!(!/status/.test(invoke)), 'the api layer drops status from the request body, so the status filter would silently do nothing');
 });
 
+test('every-gate-the-fleet-claims-to-own-actually-exists', 'SPEC-213 (found by the fleet on its first run, 2026-08-02): the manifest listed #155 and #48b as the guards for payments and the booking loop. Neither id exists — the real gates are #155b and #48. A manifest that names a gate which does not exist is worse than one that names a failing gate: the area reads as guarded, the suite reads green, and nothing is actually watching. Since the whole fleet is built on "these gates guard this feature", a drifted manifest makes every report on this page confidently wrong. This runs on the same file the fleet reads, so the two cannot separate.', '#213', () => {
+  const fleet = JSON.parse(readFile('agents/fleet.json'));
+  const suite = readFile('scripts/qa.mjs');
+  const known = new Set([...suite.matchAll(/'(#[0-9]+[a-z]?)'/g)].map((m) => m[1]));
+  const bad = [];
+  for (const a of fleet.agents) for (const g of (a.gates || [])) if (!known.has(g)) bad.push(`${a.id} -> ${g}`);
+  assert(!(bad.length > 0), `the fleet claims gates that do not exist: ${bad.join(', ')} — that area reads as guarded while nothing watches it`);
+  for (const a of fleet.agents) {
+    assert(!(!a.green_when || !a.green_when.trim()), `agent "${a.id}" has no green_when — an agent with no definition of done can never report anything but an opinion`);
+    assert(!(!Array.isArray(a.owns) || !a.owns.length), `agent "${a.id}" owns no files, so its wall cannot be built or proven`);
+  }
+});
+
+test('the-overnight-fleet-actually-runs-with-the-mac-off', 'SPEC-213 (founder, 2026-08-02): "run off mac.. turning mac off... need to wake up to army of agents and their individual reports." Subagents inside a Cowork session die the moment the session ends, so anything promised to run overnight has to be a scheduled CI workflow — that is the only thing on this project that runs with the laptop shut. The fleet must also survive its own failures: fail-fast would let one agent silence the other seven, and skipping the aggregator when an agent dies would hide the single most alarming state, an agent that produced no report at all. Silence must read as alarming, never as success.', '#214', () => {
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/schedule:/.test(wf) || !/cron:/.test(wf)), 'the fleet is not scheduled — it would only run while someone is watching, which is the opposite of the ask');
+  assert(!(!/fail-fast: false/.test(wf)), 'fail-fast is on: one agent failing would cancel the other seven and the morning page would be mostly blank');
+  assert(!(!/if: always\(\)/.test(wf)), 'the aggregator is skipped when an agent fails — that hides DID NOT RUN, the most alarming state there is');
+  const fleet = JSON.parse(readFile('agents/fleet.json'));
+  const matrix = (wf.match(/id: \[([^\]]+)\]/) || [, ''])[1].split(',').map((x) => x.trim());
+  for (const a of fleet.agents) assert(!(!matrix.includes(a.id)), `agent "${a.id}" is in the fleet but not in the workflow matrix — it would never run, and its silence would read as success`);
+  for (const m of matrix) assert(!(!fleet.agents.some((a) => a.id === m)), `the workflow runs "${m}" but no such agent exists in the fleet`);
+  const agent = readFile('scripts/agent-report.mjs');
+  assert(!(!/NOT FOUND/.test(agent)), 'the agent does not detect a gate that does not exist — a missing guard would read identically to a passing one');
+  assert(!(!/does NOT prove/i.test(agent)), 'the report makes no statement of its own limits, so a static green would read as live proof');
+  const morning = readFile('scripts/morning-report.mjs');
+  assert(!(!/DID NOT RUN/.test(morning)), 'the morning page cannot express an agent that produced nothing');
+});
+
+
+
 
 
 

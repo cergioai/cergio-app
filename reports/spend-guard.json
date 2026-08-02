@@ -1,0 +1,35 @@
+{
+ "id": "spend-guard",
+ "title": "No dollar without output",
+ "priority": 5,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-02T04:12:53.377Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 411 of 421 repo files",
+ "gates": [
+  {
+   "id": "#185",
+   "state": "PASS"
+  },
+  {
+   "id": "#189",
+   "state": "PASS"
+  },
+  {
+   "id": "#190",
+   "state": "PASS"
+  },
+  {
+   "id": "#207",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 207,
+  "fail": 0
+ },
+ "defects": [
+  "ledger was blind to 78% of spend once; reconciliation must keep proving itself"
+ ],
+ "green_when": "ledger total matches the vendor account total within 5%"
+}

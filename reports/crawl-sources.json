@@ -1,0 +1,44 @@
+{
+ "id": "crawl-sources",
+ "title": "The 8 crawl sources",
+ "priority": 3,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-02T04:12:43.947Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 412 of 421 repo files",
+ "gates": [
+  {
+   "id": "#179",
+   "state": "PASS"
+  },
+  {
+   "id": "#180",
+   "state": "PASS"
+  },
+  {
+   "id": "#181",
+   "state": "PASS"
+  },
+  {
+   "id": "#182",
+   "state": "PASS"
+  },
+  {
+   "id": "#187",
+   "state": "PASS"
+  },
+  {
+   "id": "#205",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 207,
+  "fail": 0
+ },
+ "defects": [
+  "google_sponsored still calls SerpAPI while VENDOR_OF_SOURCE claims apify — the spend meter is wrong on this source",
+  "yelp is a third paid vendor, against 'all paid via Apify'"
+ ],
+ "green_when": "every paid source routes through Apify, or is parked with the reason recorded"
+}

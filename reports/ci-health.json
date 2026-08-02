@@ -1,0 +1,24 @@
+{
+ "id": "ci-health",
+ "title": "CI honesty",
+ "priority": 7,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-02T04:13:02.725Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 405 of 421 repo files",
+ "gates": [
+  {
+   "id": "#209",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 207,
+  "fail": 0
+ },
+ "defects": [
+  "the e2e Playwright suite has been RED on main since roughly CI #11 and is advisory, so it never blocks a merge",
+  "9 duplicate gate IDs baselined in qa-id-baseline.json"
+ ],
+ "green_when": "e2e is green and required, or deleted with the reason recorded — a permanently red advisory check is worse than no check"
+}

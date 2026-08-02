@@ -1,0 +1,68 @@
+# THE OVERNIGHT FLEET (SPEC-213)
+#
+# This runs on GitHub's runners, so it runs with the Mac off, the laptop shut, and no
+# Cowork session open. That distinction matters: subagents inside a Cowork session die
+# the moment the session ends. Anything promised to run "overnight" has to live here.
+#
+# Every agent VERIFIES and REPORTS. None of them edits code unattended. Every serious
+# outage on this project came from an unattended change that passed static checks — a
+# blank homepage, a white /auth, every crawled row silently discarded. A wrong report
+# costs a minute of reading. A wrong 4am edit costs a morning.
+name: night-fleet
+
+on:
+  schedule:
+    - cron: '0 * * * *'      # hourly, so the morning page is never more than an hour stale
+  workflow_dispatch:
+  push:
+    paths: ['agents/fleet.json', 'scripts/agent-report.mjs', 'scripts/morning-report.mjs']
+
+permissions:
+  contents: write
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false        # one agent failing must never silence the other seven
+      matrix:
+        id: [payments, booking-loop, crawl-sources, creators, spend-guard, data-dashboard, ci-health, legal-copy]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci --no-audit --no-fund
+      - name: Run the agent
+        run: node scripts/agent-report.mjs ${{ matrix.id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ matrix.id }}
+          path: reports/${{ matrix.id }}.*
+          retention-days: 14
+
+  morning:
+    needs: agent
+    if: always()              # an agent that DID NOT RUN is the loudest line on the page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/download-artifact@v4
+        with: { path: dl, pattern: 'report-*', merge-multiple: true }
+      - run: mkdir -p reports && cp -f dl/*.md dl/*.json reports/ 2>/dev/null || true
+      - run: node scripts/morning-report.mjs
+      - name: Publish to the night-report branch
+        run: |
+          set -uo pipefail
+          git config user.email "t@cergio.ai"; git config user.name "Cergio Bot"
+          git checkout --orphan night-report
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          # Only the reports. A branch that also carries the code invites someone to
+          # merge it by accident.
+          git add -f MORNING-REPORT.md reports/
+          git commit -q -m "night fleet $(date -u +%FT%TZ)" || exit 0
+          git push -f origin night-report
+      - uses: actions/upload-artifact@v4
+        with: { name: MORNING-REPORT, path: MORNING-REPORT.md, retention-days: 30 }

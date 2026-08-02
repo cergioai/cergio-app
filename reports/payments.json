@@ -1,0 +1,28 @@
+{
+ "id": "payments",
+ "title": "Payment on accept — THE LAUNCH BLOCKER",
+ "priority": 1,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-02T04:12:33.993Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 411 of 421 repo files",
+ "gates": [
+  {
+   "id": "#47g",
+   "state": "PASS"
+  },
+  {
+   "id": "#155",
+   "state": "NOT FOUND"
+  }
+ ],
+ "suite": {
+  "pass": 207,
+  "fail": 0
+ },
+ "defects": [
+  "bookings_paid has been 0 for the life of the project — no card has ever been charged end to end",
+  "counter-offer price shown vs charged (SPEC-211/212 shipped; needs live proof)"
+ ],
+ "green_when": "one real booking reaches paid_at with a Stripe charge id"
+}

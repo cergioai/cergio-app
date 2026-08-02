@@ -1,0 +1,31 @@
+{
+ "id": "booking-loop",
+ "title": "Request -> accept -> schedule -> complete",
+ "priority": 2,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-02T04:12:39.531Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 412 of 421 repo files",
+ "gates": [
+  {
+   "id": "#154",
+   "state": "PASS"
+  },
+  {
+   "id": "#48b",
+   "state": "NOT FOUND"
+  },
+  {
+   "id": "#47i",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 207,
+  "fail": 0
+ },
+ "defects": [
+  "core loop is auth-gated so it has only ever been verified in code, never walked live"
+ ],
+ "green_when": "a live walk completes the loop with two real accounts"
+}

@@ -1,0 +1,32 @@
+{
+ "id": "creators",
+ "title": "Creators as a first-class class",
+ "priority": 4,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-02T04:12:48.723Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 411 of 421 repo files",
+ "gates": [
+  {
+   "id": "#202",
+   "state": "PASS"
+  },
+  {
+   "id": "#204",
+   "state": "PASS"
+  },
+  {
+   "id": "#208",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 207,
+  "fail": 0
+ },
+ "defects": [
+  "ig-creator-marketplace PARKED pending IG_USER_ID + IG_MARKETPLACE_TOKEN (founder/Meta action)",
+  "follower band 5k-500k not enforced on the ig_services creator path"
+ ],
+ "green_when": "100 creators from ig-scraper-user-search, then the source stops itself"
+}
