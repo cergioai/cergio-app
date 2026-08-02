@@ -6050,7 +6050,11 @@ test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (20
 
 test('no-two-gates-may-share-an-id', 'SPEC-209 (found 2026-08-02 by colliding with my own gate): I filed a new gate as #206 and #206 already existed — spec-185-spendgate-scope. Nothing caught it, because nothing has ever checked. Nine IDs on main are already shared. This matters beyond tidiness: every report, every commit message and every "which gate covers this?" question is keyed by ID, so a duplicate makes the answer ambiguous and a grep silently returns the wrong gate — which is exactly how I concluded a change had merged when it had not. The nine existing collisions are BASELINED rather than fixed in this change: making them fail today would block every unrelated PR, which is the mistake that broke the Chinese wall on its first attempt.', '#209', () => {
   const src = readFile('scripts/qa.mjs');
-  const ids = [...src.matchAll(/'(#[0-9]+[a-z]?)'/g)].map((m) => m[1]);
+  // DECLARATION position only: `, '#id', () =>`. The first version matched every
+  // occurrence of the pattern anywhere, so a gate that MENTIONS another gate's id in an
+  // assertion was reported as a duplicate declaration. A detector that cannot tell a
+  // definition from a reference sends you hunting for a collision that does not exist.
+  const ids = [...src.matchAll(/,\s*'(#[0-9]+[a-z]?)',\s*(?:async\s*)?\(\)\s*=>/g)].map((m) => m[1]);
   const dupes = [...new Set(ids.filter((i) => ids.filter((x) => x === i).length > 1))].sort();
   const baseline = JSON.parse(readFile('qa-id-baseline.json'));
   const added = dupes.filter((d) => !baseline.includes(d));
@@ -6087,7 +6091,7 @@ test('every-dataset-is-live-and-downloadable-and-the-cap-is-stated', 'SPEC-210 (
 test('every-gate-the-fleet-claims-to-own-actually-exists', 'SPEC-213 (found by the fleet on its first run, 2026-08-02): the manifest listed #155 and #48b as the guards for payments and the booking loop. Neither id exists — the real gates are #155b and #48. A manifest that names a gate which does not exist is worse than one that names a failing gate: the area reads as guarded, the suite reads green, and nothing is actually watching. Since the whole fleet is built on "these gates guard this feature", a drifted manifest makes every report on this page confidently wrong. This runs on the same file the fleet reads, so the two cannot separate.', '#213', () => {
   const fleet = JSON.parse(readFile('agents/fleet.json'));
   const suite = readFile('scripts/qa.mjs');
-  const known = new Set([...suite.matchAll(/'(#[0-9]+[a-z]?)'/g)].map((m) => m[1]));
+  const known = new Set([...suite.matchAll(/,\s*'(#[0-9]+[a-z]?)',\s*(?:async\s*)?\(\)\s*=>/g)].map((m) => m[1]));
   const bad = [];
   for (const a of fleet.agents) for (const g of (a.gates || [])) if (!known.has(g)) bad.push(`${a.id} -> ${g}`);
   assert(!(bad.length > 0), `the fleet claims gates that do not exist: ${bad.join(', ')} — that area reads as guarded while nothing watches it`);
@@ -6365,6 +6369,42 @@ test('the-ops-console-tab-is-named-services-and-carries-category-and-row-size', 
     assert(!(!new RegExp(`\\b${v}\\b`).test((u.match(/const SIZES = \[[^\]]*\]/) || [''])[0])), `row size ${v} is missing`);
   }
 });
+
+test('exactly-two-creator-sources-and-sponsored-folded-into-lsa', 'SPEC-233 (founder, 2026-08-02): "google sponsored is still there (should be merged under lsa).. 2 creator sources not updated". The console listed SIX creator sources when two exist, so four permanently-zero rows sat beside the real ones — an abandoned Modash seed, a Feedspot list never built, and two labels no function ever writes. Zeros for things that do not exist make the two that DO exist look like failures. And google_sponsored appeared as its own row after being retired in SPEC-222: both it and google_lsa read the same Google local-ads inventory through the same SerpAPI call, so its 34 historical rows are real leads that belong under LSA. Showing them separately implies a source we still run; deleting them would throw away real leads. Folded in.', '#233', () => {
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const list = (ops.match(/export const CREATOR_SOURCES = \[[\s\S]*?\];/) || [''])[0];
+  const entries = (list.match(/'[^']+'/g) || []);
+  assert(!(entries.length !== 2), `the console lists ${entries.length} creator sources; there are exactly TWO, and zeros for sources that do not exist make the real ones look like failures`);
+  assert(!(!/ig-scraper-user-search/.test(list)), 'the IG user-search creator source is missing');
+  assert(!(!/se:web-harvest/.test(list)), 'the web-harvest creator source is missing');
+  const c = stripComments(ops);
+  assert(!(!/bySource\['google_lsa'\] = \(bySource\['google_lsa'\] \|\| 0\) \+ sponsored/.test(c)),
+    'google_sponsored is not folded into google_lsa — it reads as a source we still run, when it was retired in SPEC-222');
+  const meta = (ops.match(/CREATOR_SOURCE_META[\s\S]*?\n\};/) || [''])[0];
+  for (const dead of ['modash-vetted-seed', 'homegrown-feedspot', 'localbiz_bridge', 'provider-with-following']) {
+    assert(!(new RegExp(dead).test(meta)), `${dead} is still described as a creator source — it produces nothing and pads the console with a permanent zero`);
+  }
+});
+
+test('the-loop-runs-per-subagent-and-stops-after-two-attempts', 'SPEC-234 (founder, 2026-08-02): "apply the loop and the upgrades we implemented yesterday (ralph etc) to force fixing at subagent level". Huntley Ralph loop: the same brief every run with progress accumulating in FILES and git history rather than a context window, so a subagent reads its own log off disk and does not need to remember anything — which is precisely why it survives the session ending and the Mac being off. Two additions this project paid for the hard way. ATTEMPTS ARE BOUNDED: two strikes on the same finding and it halts with what it tried, because today cost five craigslist iterations and three spend-gate iterations and an unbounded loop is a spiral, not persistence. And FAILED ATTEMPTS ARE LOGGED TOO: logging only successes meant the next run saw a clean history, proposed the same fix and failed the same way — a loop with no memory is just repetition.', '#234', () => {
+  const w = readFile('scripts/agent-work.mjs');
+  const c = stripComments(w);
+  assert(!(!/priorAttempts/.test(c)), 'the subagent does not count prior attempts, so it can loop on the same failing fix forever');
+  assert(!(!/priorAttempts >= 2/.test(c)), 'no two-strike stop — an unbounded loop is a spiral, not persistence');
+  assert(!(!/'STOPPED'/.test(c)), 'the subagent cannot express having given up, so a halt would read as idle');
+  // RAW: the log line is inside a template literal and stripComments blanks those.
+  assert(!(!/attempt REVERTED/.test(w)), 'a failed attempt is not logged, so the next run proposes the same fix and fails the same way');
+  assert(!(!/specs\/\$\{id\}\.md/.test(w)), 'progress is not written to the spec file, so it would live only in a context window that dies with the session');
+  const m = readFile('scripts/morning-report.mjs');
+  assert(!(!/STOPPED/.test(stripComments(m))), 'the morning page cannot show a stopped subagent');
+  assert(!(!/'STOPPED' \? 0\.5/.test(m)), 'STOPPED does not outrank routine work, so a subagent waiting on a decision could sit below it');
+  const fleet = JSON.parse(readFile('agents/fleet.json'));
+  const ops = fleet.agents.find((a) => a.id === 'ops-dashboard');
+  assert(!(!ops), 'the ops console has no owning subagent, so it can regress with nobody accountable');
+  assert(!(!ops.gates.includes('#233')), 'the ops subagent does not guard the creator-source and sponsored-merge rules it was created for');
+});
+
+
 
 
 

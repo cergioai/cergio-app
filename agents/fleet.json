@@ -112,12 +112,15 @@
         "#227",
         "#229",
         "#231",
-        "#232"
+        "#232",
+        "#233"
       ],
       "defects": [
-        "every count and CSV must obey City (DMA), Location, Category, Time and Rows \u2014 the LIVE counts bypassed all of them once and made working filters look broken",
+        "every count and CSV must obey City (DMA), Location, Category, Time and Rows \u2014 the LIVE counts bypassed all of them and made working filters look broken",
         "DMAs and every facet must come FROM THE DATA, never a hardcoded list",
-        "deleting an export from this file crashed the whole console with 'SOURCES is not defined' \u2014 no count, no filter, no DMA"
+        "deleting an export from opsPayload crashed the whole console with 'SOURCES is not defined' \u2014 no count, no filter, no DMA",
+        "exactly TWO creator sources; a list of six put four permanent zeros beside the real ones",
+        "google_sponsored is folded into google_lsa, never shown as its own row"
       ],
       "green_when": "changing any filter changes the counts, and every facet list is derived from live rows"
     },

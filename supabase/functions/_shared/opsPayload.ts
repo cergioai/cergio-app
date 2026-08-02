@@ -25,13 +25,14 @@ export const AGENTS = ['fulfill-crawl','creator-harvest','enrich-influencers','c
 // DMA gone at once. A regex that matches a line is not a regex that matches an item.
 export const SOURCES = ['gmaps_apify','craigslist','yellowpages_apify','ig_services','yelp','google_local','google_lsa','yellowpages','osm','google_places','openstreetmap'];
 // CREATOR sources — the algorithm decided these (each with its own discovery method):
+// SPEC-233 (founder, 2026-08-02): "we're supposed to have 2 (IG services and the other IG
+// local creator search)". There are TWO, and listing six meant four permanently-zero rows
+// sat beside them on the console — an abandoned Modash seed, a Feedspot list we never
+// built, and two labels that were never written by any function. Zeros for things that do
+// not exist make the two that DO exist look like failures.
 export const CREATOR_SOURCES = [
-  'modash-vetted-seed',        // founder-vetted Modash handles (seed pool)
-  'se:web-harvest',            // SerpAPI/DDG "top <cat> influencers <city>" -> handles
-  'homegrown-feedspot',        // curated city lists (Feedspot etc)
-  'ig-scraper-user-search',    // apify~instagram-scraper searchType=user
-  'provider-with-following',   // service providers who have an IG audience (dual)
-  'localbiz_bridge',           // local businesses bridged in as creator candidates
+  'ig-scraper-user-search',    // ig_services, DUAL-CLASS: one person -> a service row AND a creator row
+  'se:web-harvest',            // creator-harvest: FREE keyless web search, contact from their own link-in-bio
 ];
 
 // Admin allowlist — env wins, but the default must contain every address the
@@ -46,12 +47,8 @@ export function isAdminEmail(email: string, envList?: string | null): boolean {
 // WHAT each creator algorithm actually does + WHERE it looks. The founder asked
 // "what are they... where are they" — a bare source key answers neither.
 export const CREATOR_SOURCE_META: Record<string, { what: string; where: string }> = {
-  'modash-vetted-seed':         { what: 'Founder-vetted handles imported as the seed pool', where: 'manual list (Miami + NYC)' },
-  'se:web-harvest':             { what: 'Free web search "top <category> influencers <city>" -> IG handles', where: 'search engines (SerpAPI/DDG)' },
-  'homegrown-feedspot':         { what: 'Curated city "top 20" editorial lists, scored + labelled', where: 'Feedspot & similar city lists' },
-  'ig-scraper-user-search':     { what: 'apify~instagram-scraper searchType=user, geo-verified per city', where: 'Instagram user search (via Apify)' },
-  'provider-with-following':    { what: 'Our OWN services pool, filtered to providers who have an IG audience (dual service+creator)', where: 'leads_services (internal)' },
-  'localbiz_bridge':            { what: 'Local businesses bridged in as creator candidates', where: 'leads_services (internal)' },
+  'ig-scraper-user-search': { what: 'Apify Instagram user search, run by the DUAL-CLASS ig_services crawl — one person yields a service row AND a creator row', where: 'Instagram (Apify)' },
+  'se:web-harvest':         { what: 'FREE keyless web search for local on-values creators; contact taken from their own link-in-bio. Stamped per run day, so it must be matched by PREFIX', where: 'DuckDuckGo HTML (no key, no Mac)' },
 };
 
 // creator-harvest writes one discovered_via PER RUN DAY (e.g. se:web-harvest-2026-07-28).
@@ -114,6 +111,15 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // ── 3. CRAWLS: per-source counts + job queue health
   const bySource: Record<string, number> = {};
   for (const s of SOURCES) { const { count } = await svcQ().eq('data_source', s); bySource[s] = count ?? 0; }
+  // SPEC-233 — google_sponsored is MERGED INTO google_lsa, not shown beside it. Both read
+  // the same Google local-ads inventory through the same SerpAPI call; sponsored was
+  // retired in SPEC-222 and its 34 historical rows are real leads. Showing them as their
+  // own row implies a source we still run. Folding them in keeps the leads and drops the
+  // false impression.
+  {
+    const { count: sponsored } = await svcQ().eq('data_source', 'google_sponsored');
+    if (sponsored) bySource['google_lsa'] = (bySource['google_lsa'] || 0) + sponsored;
+  }
   const { data: jobs } = await gdb.from('crawl_requests').select('source, status, city, service_type, delivered_count, updated_at').order('updated_at', { ascending: false }).limit(200);
   const jobStats: Record<string, number> = {};
   for (const j of (jobs || [])) { const k = `${j.source || 'osm'}/${j.status}`; jobStats[k] = (jobStats[k] ?? 0) + 1; }
