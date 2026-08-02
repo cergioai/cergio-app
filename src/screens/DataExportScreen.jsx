@@ -236,7 +236,10 @@ export function DataExportScreen() {
       {data && (
         <>
           <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Stat label={audience === 'crawls' ? 'Jobs' : audience === 'runs' ? 'Runs' : 'Leads'} value={n(data.total)} />
+            {/* Name the count after the CLASS being viewed. "Leads" was a generic label
+                for four different things, so the headline number never said what it was
+                counting — services, creators, crawl jobs and agent runs all read "Leads". */}
+            <Stat label={AUDIENCES.find((a) => a.id === audience)?.label || audience} value={n(data.total)} />
             {isLead && <Stat label="With phone" value={n(data.withPhone)} />}
             {isLead && <Stat label="With email" value={n(data.withEmail)} />}
             <Stat label="New 24h" value={n(data.growth?.last1d)} />

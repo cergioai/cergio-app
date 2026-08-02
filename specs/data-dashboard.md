@@ -62,3 +62,18 @@ Read as the required filter set:
 Metro and locality are SEPARATE filters. `state` is the metro and `city` is the
 neighbourhood, so "Miami" as a metro must not be confused with "Miami" the city value —
 that conflation is what made the Miami filter appear to vanish.
+
+**2026-08-02, verbatim:** "you're calling services LIVE counts.. call it services"
+
+The headline count is labelled with the CLASS being viewed — Services, Creators, Crawl
+queue, Agent runs — never a generic "Leads". One label for four different things means the
+headline number never says what it counts.
+
+## Naming rule
+
+| class | headline label | table |
+|---|---|---|
+| Services | **Services** | `leads_services` |
+| Creators | **Creators** | `leads_influencers` |
+| Crawl queue | **Crawl queue** | `crawl_requests` |
+| Agent runs | **Agent runs** | `agent_runs` |
