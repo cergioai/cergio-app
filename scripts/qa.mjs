@@ -6378,6 +6378,34 @@ test('status2-and-agents2-are-aliases-of-the-real-screens', 'SPEC-238 (founder, 
   assert(!(!/'\/agents2'/.test(hide)), '/agents2 does not hide the bottom nav while /ops/agents does — the alias behaves differently from the original');
 });
 
+test('yelp-is-paused-by-founder-order-not-deleted-and-the-dashboard-says-so', 'SPEC-239 (founder, 2026-08-02, verbatim: "ignore yelp as a source", then clarified "don\'t delete yelp.. just pause as a source"). PAUSED means KEPT: yelp stays in the crawl rota, the seeder and the dashboards, its rows are kept, and it simply stays OUT of CRAWLS_ONLY until the founder re-activates it. Every clause here guards a real failure shape from this project\'s own history. Someone adding yelp back to CRAWLS_ONLY is a founder decision taken by config drift. Someone removing yelp from SOURCES_RR or the dashboard source list is SPEC-221\'s deletion arriving disguised as cleanup — and rows that vanish from the one screen meant to prove what we have might as well be deleted. And a paused source with no visible reason reads as a BROKEN source: the fleet brief listed yelp as a defect for exactly that reason, which invites the next agent to "fix" a founder order. The pause reason therefore travels on the payload and renders on the screen, and the fleet brief records the order instead of a defect. NOTE for the day the founder re-activates yelp: that is a founder decision — update this gate with the new verbatim order, never just delete it.', '#239', () => {
+  // growth-controls.json is the committed switch — the ONE place "are we crawling yelp?"
+  // is answered. The pause IS yelp\'s absence from the allowlist.
+  const cfg = JSON.parse(readFile('growth-controls.json').replace(/^\s*\/\/.*$/gm, ''));
+  const only = String(cfg.CRAWLS_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
+  assert(!(only.includes('yelp')), 'yelp is in CRAWLS_ONLY while the founder pause order stands — re-activation is a founder decision, not config drift');
+  // RAW text throughout, not stripComments(): the rota entries, the payload reason and the
+  // JSX all live inside string literals, and the comment-stripper blanks template literals
+  // too (the Part-6 trap) — a stripped scan here could fire on nothing.
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const rota = (fc.match(/const SOURCES_RR = \[[\s\S]*?\];/) || [''])[0];
+  assert(!(!/'yelp'/.test(rota)), 'yelp fell out of SOURCES_RR — paused means KEPT in the rota (just never allowed by CRAWLS_ONLY), deleted is the thing the founder explicitly forbade');
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const srcList = (ops.match(/export const SOURCES = \[[^\]]*\]/) || [''])[0];
+  assert(!(!/'yelp'/.test(srcList)), 'yelp fell off the dashboard SOURCES list — its rows just vanished from the one screen meant to prove what we have');
+  // Scan the sourceStates INITIALIZER, not the whole file: the explanatory comment above
+  // it quotes the same verbatim order, so a whole-file scan would stay green after the
+  // actual data was gutted — a gate satisfied by its own documentation cannot fail.
+  const ssBlock = (ops.match(/const sourceStates[\s\S]*?\};/) || [''])[0];
+  assert(!(!/don't delete yelp\.\. just pause as a source/.test(ssBlock)), "the payload does not carry the founder's verbatim pause reason — an unexplained idle source reads as broken and gets cleaned up");
+  assert(!(!/source_states: sourceStates/.test(ops)), 'sourceStates never reaches the returned payload — the pause exists only in a local, invisible to every consumer');
+  const scr = readFile('src/screens/OpsStatusScreen.jsx');
+  assert(!(!/source_states/.test(scr)), 'the ops screen never reads source_states — the reason exists in the payload and dies there, so the founder still sees an unexplained dead row');
+  const fleet = readFile('agents/fleet.json');
+  assert(!(/third paid vendor/.test(fleet)), 'fleet.json still lists yelp as a DEFECT — the crawl-sources subagent will keep hunting a founder decision as a bug');
+  assert(!(!/just pause as a source/.test(fleet)), "the crawl-sources brief does not record the pause order — the next agent re-diagnoses yelp's silence from scratch and proposes deleting it");
+});
+
 test('the-headline-live-counts-obey-the-filters-and-dmas-come-from-the-data', 'SPEC-231 (founder, 2026-08-02): "the filter isnt holding.. clicking 4 wks doesnt change the counts". The four LIVE-counter numbers — the ones actually read on that page — were hardcoded queries built straight off the table, bypassing the city, location and time helpers entirely. So every filter appeared broken while the data behind it was fine, which is the worst kind of defect: it destroys trust in a correct system. Separately the DMA list was hardcoded to two, so a third DMA could be crawled and never appear in the filter, leaving its rows invisible on the one screen meant to prove what we have. DMAs are derived from the data, known codes get their proper name, and an unknown code is shown by its code rather than dropped.', '#231', () => {
   const ops = readFile('supabase/functions/_shared/opsPayload.ts');
   const c = stripComments(ops);
