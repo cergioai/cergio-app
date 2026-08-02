@@ -25,21 +25,44 @@ const csv = (rows, cols) => [cols.join(','),
     return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
   }).join(','))].join('\n');
 
-async function get(url) {
+const diag = [];
+async function get(url, label) {
   const r = await fetch(url, { headers: H });
-  if (!r.ok) { console.error(`  ${r.status} ${(await r.text()).slice(0, 120)}`); return []; }
-  return r.json();
+  const body = await r.text();
+  if (!r.ok) {
+    const msg = `${r.status} ${body.slice(0, 200)}`;
+    console.error(`  FAIL ${label}: ${msg}`);
+    diag.push(`${label}: HTTP ${msg}`);
+    return [];
+  }
+  try { return JSON.parse(body); }
+  catch (e) {
+    diag.push(`${label}: unparseable body (${body.slice(0, 120)})`);
+    return [];
+  }
 }
 
+// Prove the connection ONCE before looping — an export that silently writes eight empty
+// files is worse than one that fails loudly.
+async function preflight() {
+  const r = await fetch(`${URL_G}/rest/v1/leads_services?select=id&limit=1`, { headers: H });
+  const b = await r.text();
+  const line = `preflight: HTTP ${r.status} · key ${KEY.slice(0, 11)}… (${KEY.length} chars) · ${b.slice(0, 120)}`;
+  console.log(line); diag.push(line);
+  if (!r.ok) { console.error('PREFLIGHT FAILED — the export cannot read the growth DB'); }
+  return r.ok;
+}
+
+const ok = await preflight();
 const summary = [];
 for (const src of SOURCES) {
   // newest first — "since reset" means the most recent output, not the oldest
-  const sample = await get(`${URL_G}/rest/v1/leads_services?select=${COLS}&data_source=eq.${src}&order=fetched_at.desc&limit=100`);
+  const sample = await get(`${URL_G}/rest/v1/leads_services?select=${COLS}&data_source=eq.${src}&order=fetched_at.desc&limit=100`, `sample ${src}`);
   fs.writeFileSync(`audit/sample-100-${src}.csv`, csv(sample, COLS.split(',')));
 
   let all = [], from = 0;
   for (;;) {
-    const page = await get(`${URL_G}/rest/v1/leads_services?select=${COLS}&data_source=eq.${src}&order=fetched_at.desc&offset=${from}&limit=1000`);
+    const page = await get(`${URL_G}/rest/v1/leads_services?select=${COLS}&data_source=eq.${src}&order=fetched_at.desc&offset=${from}&limit=1000`, `all ${src} @${from}`);
     all = all.concat(page);
     if (page.length < 1000 || all.length >= 20000) break;
     from += 1000;
@@ -84,5 +107,12 @@ for (const s of summary) {
   md.push(`| **${s.source}** | ${s.leads} | **${s.contactable_pct}%** | ${s.with_phone} | ${s.with_email} | ${s.with_website} | ${s.with_instagram} | ${s.with_coords} | ${v} |`);
 }
 md.push('', '## Files', '', 'Per source: `sample-100-<source>.csv` (newest 100, for eyeballing) and `all-<source>.csv` (everything).', '', '`QUALITY-SUMMARY.csv` holds these numbers as data.');
+// Every diagnostic goes in the artifact. If a source reads zero, the reason is on the
+// page next to it — never a bare zero the reader has to interpret.
+md.push('', '## Connection diagnostics', '', '```', ...diag, '```');
+const totalRows = summary.reduce((a, s2) => a + s2.leads, 0);
+if (totalRows === 0) {
+  md.splice(4, 0, '> **THIS EXPORT READ NOTHING.** Every source returned 0 rows. See Connection diagnostics at the bottom — the database is not empty, the export could not read it.', '');
+}
 fs.writeFileSync('audit/QUALITY-SUMMARY.md', md.join('\n') + '\n');
 console.log('\nwrote audit/QUALITY-SUMMARY.md + per-source CSVs');

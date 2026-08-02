@@ -1,0 +1,2 @@
+fired: 2026-08-02T02:46:42Z
+reason: SPEC-197b export read 0 rows silently — surfacing the reason.
