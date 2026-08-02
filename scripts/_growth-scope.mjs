@@ -29,29 +29,69 @@ export const TYPES = [
 // it may be seeded until Phase 1 is full.
 export const PHASE1 = CITIES;
 
-// PHASE 2 — the rest of the top-10 US metros by population.
+// PHASE 2 — the rest of the top-10 US metros by population, PLUS the 9th.
 //
-// NOTE, AND I AM NOT GUESSING PAST IT: you said "the next 9 cities from top 10". The
-// top 10 US metros minus New York and Miami is EIGHT, listed below. Either the 9th is a
-// metro you have in mind that I do not, or the intended list is top 11. Phase 2 is
-// locked regardless (see below), so this costs nothing today — but I am not inventing a
-// 9th city to make the number match, which is exactly the mistake that produced the
-// 6-city list.
+// The earlier note here refused to invent a 9th city ("next 9 cities from top 10" names
+// nine, top 10 minus NYC and Miami is eight). RESOLVED BY THE FOUNDER, 2026-08-02: the
+// 9th metro is BOSTON (chosen from options presented). Recorded in the build spec §3.4.
 export const PHASE2 = [
   ['Los Angeles', 'CA'], ['Chicago', 'IL'], ['Dallas', 'TX'], ['Houston', 'TX'],
   ['Washington', 'DC'], ['Philadelphia', 'PA'], ['Atlanta', 'GA'], ['Phoenix', 'AZ'],
+  ['Boston', 'MA'],
 ];
 
-// THE QUOTA IS NOT MINE TO PICK. No per-city quota exists anywhere in the spec, so there
-// is no default here: unset means Phase 2 stays locked forever. Fail-closed. A default
-// invented by me would silently authorise a national crawl.
-export const PHASE1_CITY_QUOTA = Number(process.env.PHASE1_CITY_QUOTA || 0);
+// ─── THE QUOTA IS A FORMULA, PER DMA — founder, 2026-08-02, verbatim: "50k services for
+// nyc (with 5% of that as creators).. adjusting each city based on relative size of dma
+// (eg: if miami is 10% of new it should be 5k services and 250 creators.." ─────────────
+//
+// services(city) = 50,000 × DMA(city)/DMA(NYC), Nielsen TV households, rounded to the
+// nearest 100 → the committed map in growth-controls.json: {"NY":50000,"FL":11700}.
+// The quota lives on the DMA, so the locations of one DMA fill ONE shared bucket —
+// Brooklyn and Queens do not each get 50,000.
+//
+// DMA_LOCATIONS is that grouping: every location whose leads count toward a DMA's
+// quota. It is the SEED list (CITIES) plus the legacy Miami areas that already hold
+// queue rows and leads — shrinking to the seed list would strand real Phase-1 rows
+// behind the phase-2 lock. fulfill-crawl carries the same grouping as a literal (Deno
+// cannot import this module); gate #240 welds the two so they cannot drift — two city
+// lists was already this project's Part-6 defect once.
+export const DMA_LOCATIONS = {
+  NY: ['New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'],
+  FL: ['Miami', 'Miami Beach', 'Brickell', 'Wynwood', 'Coral Gables', 'Doral',
+       'South Beach', 'Coconut Grove', 'Aventura', 'Little Havana', 'Hialeah',
+       'North Miami', 'Kendall', 'Pinecrest'],
+};
+
+// FAIL-CLOSED parser: only a JSON object with exclusively positive numeric values
+// counts as a quota. Empty, unparseable, a bare number, an array, a zero — all mean
+// "no quota set" and Phase 2 stays locked. A value invented or mangled in transit must
+// never authorise a national crawl.
+export function parseQuotaMap(raw) {
+  try {
+    const j = JSON.parse(String(raw || ''));
+    if (!j || typeof j !== 'object' || Array.isArray(j)) return null;
+    const keys = Object.keys(j);
+    if (!keys.length) return null;
+    if (!keys.every((k) => typeof j[k] === 'number' && Number.isFinite(j[k]) && j[k] > 0)) return null;
+    return j;
+  } catch (_e) { return null; }
+}
+export const PHASE1_DMA_QUOTA = parseQuotaMap(process.env.PHASE1_CITY_QUOTA);
 
 // Returns the cities that may be crawled RIGHT NOW.
-// countsByCity: { 'Miami': 412, 'Brooklyn': 88, ... }
+// countsByCity: { 'Miami': 412, 'Brooklyn': 88, ... } — summed into DMA buckets here.
 export function activeCities(countsByCity = {}) {
-  if (!PHASE1_CITY_QUOTA) return { cities: PHASE1, phase: 1, reason: 'PHASE1_CITY_QUOTA unset — Phase 2 locked (founder must set the quota)' };
-  const short = PHASE1.filter(([c]) => (countsByCity[c] || 0) < PHASE1_CITY_QUOTA);
-  if (short.length) return { cities: short, phase: 1, reason: `${short.length} of ${PHASE1.length} Phase-1 metros below quota ${PHASE1_CITY_QUOTA}` };
-  return { cities: [...PHASE1, ...PHASE2], phase: 2, reason: `all ${PHASE1.length} Phase-1 metros at quota ${PHASE1_CITY_QUOTA} — Phase 2 unlocked` };
+  if (!PHASE1_DMA_QUOTA) return { cities: PHASE1, phase: 1, reason: 'PHASE1_CITY_QUOTA unset or unparseable — Phase 2 locked (fail closed; the founder formula map is the only key)' };
+  const dmaTotals = {};
+  for (const [dma, locs] of Object.entries(DMA_LOCATIONS)) {
+    dmaTotals[dma] = locs.reduce((a, c) => a + (countsByCity[c] || 0), 0);
+  }
+  // Every Phase-1 DMA must have a quota AND meet it. A DMA missing from the map is a
+  // DMA whose quota we do not know — fail closed, never "unbounded".
+  const short = Object.keys(DMA_LOCATIONS).filter((dma) => !(PHASE1_DMA_QUOTA[dma] > 0) || dmaTotals[dma] < PHASE1_DMA_QUOTA[dma]);
+  if (short.length) {
+    const cities = PHASE1.filter(([, st]) => short.includes(st));
+    return { cities, phase: 1, reason: `${short.map((d) => `${d} ${dmaTotals[d]}/${PHASE1_DMA_QUOTA[d] ?? '?'}`).join(', ')} below DMA quota` };
+  }
+  return { cities: [...PHASE1, ...PHASE2], phase: 2, reason: `every Phase-1 DMA at quota (${Object.entries(dmaTotals).map(([d, n]) => `${d} ${n}/${PHASE1_DMA_QUOTA[d]}`).join(', ')}) — Phase 2 unlocked` };
 }

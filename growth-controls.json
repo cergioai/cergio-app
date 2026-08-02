@@ -11,8 +11,8 @@
   "CREATOR_TARGET": "100",
   "_CREATOR_TARGET": "EACH creator source stops ITSELF at this count — founder, 2026-08-02: 'get 100 of each then pause alongside the rest to audit.' ig_services counts eq(discovered_via, ig-scraper-user-search); creator-harvest counts by PREFIX like(discovered_via, se:web-harvest%) because its tag is stamped per run day (SPEC-237). Checked before any job is claimed / any search is fired, so neither can overshoot while nobody is watching.",
 
-  "PHASE1_CITY_QUOTA": "",
-  "_PHASE1_CITY_QUOTA": "EMPTY ON PURPOSE. No per-city quota exists in the spec. Empty = phase 2 locked, so only Miami and NYC are crawled. Set a number to unlock the other top-10 metros — nothing else authorises a national crawl.",
+  "PHASE1_CITY_QUOTA": "{\"NY\":50000,\"FL\":11700}",
+  "_PHASE1_CITY_QUOTA": "SET BY THE FOUNDER — a FORMULA, not a number (2026-08-02, verbatim: '50k services for nyc (with 5% of that as creators).. adjusting each city based on relative size of dma (eg: if miami is 10% of new it should be 5k services and 250 creators..'). services(city) = 50,000 × DMA(city)/DMA(NYC), DMA size in Nielsen TV households (2024-25 LTMUE), rounded to the nearest 100; creators = 5% of that (informational here — CREATOR_TARGET=100 is the standing get-100-then-audit order and governs creators until the founder lifts it). The value is a JSON map keyed by DMA code: NYC 7,494,510 households → 50,000; Miami 1,756,920 (23.4%) → 11,700. Phase 2 quotas are PRE-COMPUTED in the build spec (LA 38,900 · Chicago 24,400 · Dallas 21,800 · Philadelphia 21,000 · Houston 18,700 · Atlanta 18,400 · DC 17,600 · Boston 17,200 · Phoenix 14,700; 9th metro = Boston, founder 2026-08-02) but stay OUT of this map until Phase 1 is full — a DMA absent from the map cannot be crawled past phase gating. Both consumers (fulfill-crawl, _growth-scope.mjs) parse this map FAIL-CLOSED: empty, unparseable, or non-positive values mean Phase 2 stays locked. Refresh the numbers when Nielsen publishes new estimates.",
 
   "CONTACT_BAR_PCT": "40",
   "_CONTACT_BAR_PCT": "A source under 40% contactable is PARKED, not retried (founder, 2026-08-02)."
