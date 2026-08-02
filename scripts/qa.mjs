@@ -5938,6 +5938,19 @@ test('creators-are-a-real-class-that-can-actually-be-written', 'SPEC-202 (found 
   assert(!(!/ig-creator-marketplace/.test(d)), 'the first-party creator path is not reported, so its blocked state stays invisible');
 });
 
+test('the-data-dashboard-reads-the-database-the-leads-are-actually-in', 'SPEC-203 (found 2026-08-02): founder reported /ops/data as truncated. It was not truncated — leads-dashboard called createClient(SUPABASE_URL, service) which is the PRODUCT project, while every lead lives in the GROWTH project. It was faithfully reporting a nearly empty table. Auth belongs on product; leads belong on growth, and the two must not be confused again. Two further silent-staleness bugs rode along: the creator source list was hardcoded to modash-vetted-seed (abandoned) so real creator sources fell into "(other/unlabeled)", and creators were counted by data_source when creator rows label their origin in discovered_via.', '#203', () => {
+  const f = readFile('supabase/functions/leads-dashboard/index.ts');
+  const code = stripComments(f);
+  assert(!(!/growthDb\(\)/.test(code)), 'leads-dashboard does not use the growth client — it is querying the product project, where the leads are not');
+  assert(!(/const db = createClient\(url, svc\)/.test(code)), 'the lead query still builds a PRODUCT service client — this is the exact line that made the dashboard look truncated');
+  assert(!(!/discovered_via/.test(code)), 'creators are still counted by data_source; creator rows record their origin in discovered_via, so every creator source would read zero');
+  assert(!(/modash-vetted-seed/.test(code)), 'the abandoned modash source is still listed — a hardcoded source list is how a dead source keeps looking alive');
+  assert(!(!/contactBySource/.test(code)), 'no per-source contactable breakdown — a platform-wide total hides which source is producing unusable leads, which is what we were paying for');
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  assert(!(!/contactBySource/.test(stripComments(scr))), 'the dashboard does not surface contactable % per source, so the number that should decide spend is invisible');
+});
+
+
 
 
 

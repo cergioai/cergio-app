@@ -7,6 +7,8 @@
 - `.github/growth-audit-fire/`
 - `SCOPE.md`
 - `agent-runs/`
+- `supabase/functions/leads-dashboard/index.ts`
+- `src/screens/DataExportScreen.jsx`
 
 ## Shared files
 May only GROW. To modify an existing line add `SHARED-CHANGE-APPROVED`.
