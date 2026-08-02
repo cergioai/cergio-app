@@ -1,0 +1,55 @@
+# /ops/status — the founder's console
+
+**CI subagent:** `ops-dashboard`
+
+> This file is the SOURCE OF TRUTH for this screen, not the code. If the code and this file
+> disagree, the code is wrong.
+
+## Green when
+
+Changing any filter changes the counts, and every facet list is derived from live rows.
+
+## The filter contract — ALL of it applies to EVERY count and EVERY CSV
+
+| filter | column | notes |
+|---|---|---|
+| **City** | `state` | a **DMA** — NYC, Miami. Derived from data; a new DMA appears as soon as it has rows |
+| **Location** | `city` | sub-filter of City. Normalised (Astoria / ASTORIA / "Astoria " are ONE entry) |
+| **Category** | `service_type` | personal trainer, dog trainer, … |
+| **Time** | `fetched_at` | All · 6h · 12h · 24h · 2d · 3d · 7d · 2w · 4w |
+| **Rows** | limit | 100 · 500 · 1000 · 5000 · 10000 · 25000 |
+
+The column NAMED `city` holds LOCATIONS. `state` holds the DMA. This mismatch is the single
+biggest source of confusion on this screen and must be mapped in the query, never papered
+over in the UI.
+
+## Tab names
+
+`Services` (not "LIVE counts") · `Creator sources` · `QA & Bugs` · `Agents` · `Crawls` ·
+`Product data`. The headline count carries the class name — a generic label means the
+biggest number on the page never says what it counts.
+
+## Three defects that must never return
+
+1. **The LIVE counts bypassed every filter.** Four hardcoded queries built straight off the
+   table. Every control looked broken while the data behind it was fine — which destroys
+   trust in a working system. They go through one shared helper now.
+2. **Hardcoded facet lists.** DMAs were fixed at two, so a third would be crawled and never
+   appear. Every list comes from the data.
+3. **A deleted export crashed the whole console.** A regex meant to remove one entry from
+   `SOURCES` deleted the entire declaration, and the page died with `SOURCES is not
+   defined` — no counts, no filters, no DMAs. A regex that matches a LINE is not a regex
+   that matches an ITEM.
+
+## Founder decisions on record
+
+- 2026-08-02: "cities are DMA's only ..what you have under cities is locations ... which
+  should be a sub filter of city.. alongside service type or category"
+- 2026-08-02: "time filter (last 6 hours, 12 hours, 24 hours, 2 days, 3 days, 7 days,
+  2 weeks, 4 weeks) alongside last 100, 500, 1000, then increments up to 25000 or all"
+- 2026-08-02: "No services tab (relabel live counts)"
+- 2026-08-02: "force this report onto one CI subagent.. so they don't regress"
+
+## Progress log
+
+- 2026-08-02 — subagent created; owns OpsStatusScreen.jsx + opsPayload.ts, guards #227 #229 #231 #232.

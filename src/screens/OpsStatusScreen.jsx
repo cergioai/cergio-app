@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { opsConsole } from '../lib/api';
 
 const TABS = [
-  { id: 'live', label: 'LIVE counts' },
+  { id: 'live', label: 'Services' },
   { id: 'creators', label: 'Creator sources' },
   { id: 'qa', label: 'QA & Bugs' },
   { id: 'agents', label: 'Agents' },
@@ -43,22 +43,26 @@ export function OpsStatusScreen() {
   // SPEC-229 — same time windows as /ops/data so the two screens cannot disagree.
   const [hours, setHours] = useState(0);
   const TIMES = [[0, 'All'], [6, '6h'], [12, '12h'], [24, '24h'], [48, '2d'], [72, '3d'], [168, '7d'], [336, '2w'], [672, '4w']];
+  // SPEC-232 — how many rows a CSV contains is a separate question from which rows match.
+  const SIZES = [100, 500, 1000, 5000, 10000, 25000];
+  const [size, setSize] = useState(1000);
+  const [category, setCategory] = useState('');
   const [d, setD] = useState(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
-    const { data, error } = await opsConsole({ ...(city ? { city } : {}), ...(location ? { location } : {}), ...(hours ? { sinceHours: hours } : {}) }); setBusy(false);
+    const { data, error } = await opsConsole({ ...(city ? { city } : {}), ...(location ? { location } : {}), ...(hours ? { sinceHours: hours } : {}), ...(category ? { category } : {}), limit: size }); setBusy(false);
     if (error || data?.error) { setErr(error?.message || data?.error); return; }
     setD(data);
-  }, [city, location, hours]);
+  }, [city, location, hours, category, size]);
   useEffect(() => { load(); }, [load]);
 
   // download ONE source on click (the console used to preload every source -> timeout).
   // The CSV is scoped to the SAME city filter as the view it was clicked from.
   const fetchDl = useCallback(async (key) => {
-    const { data, error } = await opsConsole({ download: key, ...(city ? { city } : {}), ...(location ? { location } : {}), ...(hours ? { sinceHours: hours } : {}) });
+    const { data, error } = await opsConsole({ download: key, ...(city ? { city } : {}), ...(location ? { location } : {}), ...(hours ? { sinceHours: hours } : {}), ...(category ? { category } : {}), limit: size });
     if (error || !data?.download?.[key]?.length) { setErr(error?.message || `no rows for ${key}${location || city ? ` in ${location || city}` : ''}`); return; }
     dl([key.replace(':', '_'), city || 'all', location || ''].filter(Boolean).join('_'), data.download[key]);
-  }, [city, location, hours]);
+  }, [city, location, hours, category, size]);
 
   return (
     <div className="w-full max-w-full mx-auto px-4 py-6">
@@ -98,7 +102,20 @@ export function OpsStatusScreen() {
               className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${hours === h ? 'bg-black text-white' : 'bg-bg5 text-b3'}`}>{l}</button>
           ))}
         </div>
-        {(city || location || hours) && <button onClick={() => { setCity(''); setLocation(''); setHours(0); }} className="text-[12px] font-bold text-gd">clear</button>}
+        <label className="text-[11px] font-bold uppercase tracking-wide text-b3">Category</label>
+        <select value={category} onChange={e => setCategory(e.target.value)}
+          className="rounded-xl border border-bg5 bg-white px-3 py-2 text-meta-sm font-bold text-black">
+          <option value="">All categories</option>
+          {Object.entries(d?.filter?.categories || {}).map(([c, n]) => (
+            <option key={c} value={c}>{c} ({n.toLocaleString()})</option>
+          ))}
+        </select>
+        <label className="text-[11px] font-bold uppercase tracking-wide text-b3">Rows</label>
+        <select value={size} onChange={e => setSize(Number(e.target.value))}
+          className="rounded-xl border border-bg5 bg-white px-3 py-2 text-meta-sm font-bold text-black">
+          {SIZES.map(v => <option key={v} value={v}>Last {v.toLocaleString()}</option>)}
+        </select>
+        {(city || location || hours || category) && <button onClick={() => { setCity(''); setLocation(''); setHours(0); setCategory(''); }} className="text-[12px] font-bold text-gd">clear</button>}
         <span className="text-[11px] text-b3">every count + CSV below is scoped to this city and location</span>
       </div>
       {busy && <div className="mt-4 text-b3">Loading…</div>}

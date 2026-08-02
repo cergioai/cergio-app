@@ -6342,6 +6342,31 @@ test('the-headline-live-counts-obey-the-filters-and-dmas-come-from-the-data', 'S
   assert(!(!/DMA_NAMES\[code\] \|\| code/.test(c)), 'an unrecognised DMA code is dropped instead of shown');
 });
 
+test('the-ops-console-tab-is-named-services-and-carries-category-and-row-size', 'SPEC-232 (founder, 2026-08-02): "No services tab (relabel live counts).. no download per 100 500 etc.. no categories". The first tab was called LIVE counts, which named the mechanism instead of the thing — it holds services, so it says Services. Category (service_type) and row size were both missing: how many rows a CSV contains is a separate question from which rows match it, and asking for the newest 500 personal trainers in Brooklyn was impossible. This gate also pins the exports that this file depends on, because a regex meant to remove ONE entry from SOURCES deleted the whole declaration and the console died with "SOURCES is not defined" — no counts, no filters, no DMAs, everything gone at once.', '#232', () => {
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  // A missing export takes the entire console down, so each one is pinned by name.
+  for (const name of ['SOURCES', 'CREATOR_SOURCES', 'AGENTS']) {
+    assert(!(!new RegExp(`export const ${name}\\s*(:|=)`).test(ops)),
+      `export ${name} is gone — the console crashes with "${name} is not defined" and loses every count, filter and DMA at once`);
+  }
+  assert(!(/'google_sponsored'/.test((ops.match(/export const SOURCES = \[[^\]]*\]/) || [''])[0])),
+    'google_sponsored is back in the scheduled source list — it was removed in SPEC-222');
+  const c = stripComments(ops);
+  assert(!(!/body\.category/.test(c)), 'no category filter, so "personal trainers in Brooklyn" cannot be asked');
+  assert(!(!/categoryCounts/.test(c)), 'the category list is not derived from the data');
+  assert(!(!/rowLimit/.test(c)), 'no row-size control — a CSV size cannot be chosen');
+  const ui = readFile('src/screens/OpsStatusScreen.jsx');
+  assert(!(/label: 'LIVE counts'/.test(ui)), 'the first tab still says LIVE counts — it holds services, so it must say Services');
+  assert(!(!/label: 'Services'/.test(ui)), 'the Services tab is missing');
+  const u = stripComments(ui);
+  assert(!(!/setCategory/.test(u)), 'the screen has no category control');
+  assert(!(!/const SIZES/.test(u)), 'the screen has no row-size control');
+  for (const v of [100, 500, 1000, 25000]) {
+    assert(!(!new RegExp(`\\b${v}\\b`).test((u.match(/const SIZES = \[[^\]]*\]/) || [''])[0])), `row size ${v} is missing`);
+  }
+});
+
+
 
 
 
