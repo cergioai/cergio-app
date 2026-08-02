@@ -5863,6 +5863,25 @@ test('crosspost-request-identifiers-are-bound', 'SPEC-212 — every identifier c
     `crossPostRequest dereferences ${bad.map(b => `\`${b}\``).join(', ')} but nothing binds ${bad.length === 1 ? 'it' : 'them'} in that scope — this throws a ReferenceError on EVERY call and kills the whole "also notify other providers" action, while the build stays green`);
 });
 
+test('the-chinese-wall-is-enforced-in-ci', 'SPEC-195/196 (founder diagnosis 2026-08-01, and the correct one): "every edit came with an avalanche of unrelated changes that were never prescribed... GUARANTEE each part is COMPLETELY ISOLATED... NOT JUST THEORY, ACTUALLY CHINESE WALLED." SIX outages that day were a change to X breaking Y. Two enforcements, both in CI because agent-side hooks DO NOT FIRE IN COWORK (anthropics/claude-code#40495) and a guard that does not run is not a guard: (1) a BASELINED deno type-check on every edge function — the only thing that would have caught all six identifier-scope regressions, since they all passed npm run build because edge functions are Deno and invisible to Vite; baselined because a strict check on 42 never-checked files blocks every merge on pre-existing errors, which is exactly how the first version of this guard failed its OWN pull request; (2) a blast-radius guard refusing any diff outside the declared SCOPE.md, and refusing modification of an existing line in a shared file.', '#195', () => {
+  const ciRaw = readFile('.github/workflows/ci.yml');
+  // Strip YAML comments — an earlier version of this gate matched the phrase inside its
+  // own explanatory comment and passed while the step was deleted.
+  const ci = ciRaw.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  const required = ci.slice(ci.indexOf('build-and-qa:'), ci.indexOf('  e2e:'));
+  assert(!(!/deno-guard\.mjs/.test(required)), 'the edge-function type-check is not in the REQUIRED job — the exact blind spot behind six outages');
+  assert(!(!/setup-deno/.test(required)), 'Deno is not installed in CI, so the type-check cannot run');
+  assert(!(!/scope-guard\.mjs/.test(required)), 'the blast-radius guard is not in the REQUIRED job — advisory is how a red e2e suite survived weeks of auto-shipping');
+  const dg = readFile('scripts/deno-guard.mjs');
+  assert(!(!/deno-baseline\.json/.test(dg)), 'the type-check is not baselined — it would block every merge on pre-existing errors');
+  assert(!(!/added\.length/.test(dg)), 'the guard does not fail on NEW errors, which is its only job');
+  const sg = readFile('scripts/scope-guard.mjs');
+  assert(!(!/SHARED/.test(sg)), 'the guard does not protect shared files, which are the actual contamination path');
+  assert(!(!/process\.exit\(1\)/.test(sg)), 'the scope guard never fails the build');
+  assert(!(!fs.existsSync(path.join(REPO_ROOT, 'SCOPE.md'))), 'SCOPE.md is missing — nothing declares what a change may touch');
+});
+
+
 
 main().catch(e => {
   console.error(e);

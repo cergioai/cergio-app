@@ -26,6 +26,30 @@ jobs:
       - name: Flow QA (qa.mjs — the spec journey checks)
         run: node scripts/qa.mjs
 
+      # ── SPEC-195 · THE EDGE FUNCTIONS WERE NEVER TYPE-CHECKED ──────────────
+      # SIX outages on 2026-08-01 were the same defect: an identifier used where it
+      # is not bound. `gdb is not defined` in flushBuf silently discarded every
+      # crawled row for hours; `request.city` made crossPostRequest throw on EVERY
+      # call. Every one passed `npm run build`, because edge functions are Deno and
+      # the Vite build never sees them.
+      # BASELINED: a strict check on 42 never-checked files would block every merge
+      # on pre-existing errors — the first version of this guard failed its own PR.
+      # So known errors are recorded and only a NEW one fails the build.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check edge functions (fails only on NEW errors)
+        run: node scripts/deno-guard.mjs
+
+      # ── SPEC-196 · BLAST-RADIUS GUARD ─────────────────────────────────────
+      # The founder's diagnosis, and the correct one: "every edit came with an
+      # avalanche of unrelated changes that were never prescribed." A change must
+      # declare the files it may touch; anything wider fails. Enforcement lives
+      # HERE, not in an agent hook — hooks do not fire in Cowork at all
+      # (anthropics/claude-code#40495), so an agent-side guard is no guard.
+      - name: Blast-radius guard (diff must match the declared scope)
+        run: node scripts/scope-guard.mjs
+
   # BEHAVIOURAL LAYER — E2E (Playwright) real-browser journeys against spec.
   #
   # build-and-qa is a CODE-INVARIANT gate: it greps the source for the shape of a

@@ -1,28 +1,34 @@
-# SCOPE — counter-price + crossPostRequest scope fix
+# SCOPE — what this change is allowed to touch
 
-Branch task: two closely-related deviations, one shared file. No push.
+The blast-radius guard (`scripts/scope-guard.mjs`, required in CI) refuses any diff that
+reaches outside this list. Update it as part of the change, not afterwards.
 
-## Files touched (exhaustive)
+**Why this exists:** on 2026-08-01 a FREE-link change blanked the homepage, a spend-gate
+change killed all crawling, and a YellowPages fix silently reverted craigslist. Every one
+was a change to X that broke Y. This makes that mechanically impossible rather than
+discouraged.
 
-| File | Change |
-|---|---|
-| `src/screens/ResultsScreen.jsx` | SPEC-211 — `serviceToProvider` now returns the COUNTER price as the bookable `priceCents`; the counter guard no longer turns a missing price into $0. |
-| `src/lib/api.js` | SPEC-212 — `crossPostRequest` read `request.city` / `request.state` with no `request` bound in scope. Two lines inside that one function now read the `where_text` param. |
-| `scripts/qa.mjs` | Added gates `#211` and `#212`. Both mutation-tested. |
-| `SCOPE.md` | This file. |
+## Files this change may touch
 
-Nothing else was modified. `src/lib/api.js` gained a comment block and changed
-two lines *inside `crossPostRequest` only* — no exported signature changed, no
-other function touched, no caller updated (see report).
+- `.github/workflows/ci.yml`
+- `scripts/scope-guard.mjs`
+- `scripts/deno-guard.mjs`
+- `scripts/qa.mjs`
+- `deno-baseline.json`
+- `SCOPE.md`
+- `agent-runs/`
 
-## Deliberately NOT touched
-- `src/screens/ServiceDetailScreen.jsx` — its PDP CTA already reads
-  `provider.priceCents`, so it inherits the correct counter price from the fix
-  above without an edit.
-- `src/App.jsx` — `proceedBooking` already writes `provider.priceCents` to
-  `createBooking({ totalCents })`; it inherits the fix.
-- `src/components/ui/RequestQuoteSheet.jsx` — the caller of
-  `crossPostRequest` already passes `where_text`; no change needed.
-- `FROZEN_SPEC.md` / `SPEC-REGISTRY.md` / `MASTER-SPEC.md` — out of the
-  assigned blast radius; spec rows are NOT filed, so by the project's
-  Definition of Done this is not "done", it is "fixed + gated".
+## Shared files
+
+Imported by many features, so one change alters behaviour for every caller at once. They
+may only GROW — new exports, or new optional parameters with defaults that preserve
+current behaviour. To modify or delete an existing line, add `SHARED-CHANGE-APPROVED`
+below with the reason.
+
+- `src/lib/api.js`
+- `supabase/functions/_shared/**`
+- `supabase/functions/fulfill-crawl/index.ts`
+- `scripts/qa.mjs`
+
+SHARED-CHANGE-APPROVED — this change adds gate #195 to qa.mjs, which is append-only in
+practice but the guard counts any diff line, so the marker is required.
