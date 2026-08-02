@@ -19,7 +19,20 @@ const SVC_SOURCES = ['yelp', 'google_local', 'google_lsa', 'google_sponsored', '
 // person. It is now the only creator source. ig-creator-marketplace is REMOVED, not parked
 // — it never produced a row and depended on a Meta permission we do not have, and a source
 // that can never run is noise on every report it appears in.
-const CRE_SOURCES = ['ig-scraper-user-search'];
+// SPEC-230 (founder, 2026-08-02): "we're supposed to have 2 (IG services and the other IG
+// local creator search)". They are:
+//   1. ig-scraper-user-search — Apify Instagram user search, written by the DUAL-CLASS
+//      ig_services crawl: one person yields a service row AND a creator row.
+//   2. se:web-harvest        — creator-harvest, FREE keyless web search (DuckDuckGo HTML)
+//      for local on-values creators, with contact taken from their own link-in-bio. Not
+//      Meta property, no key, no Mac.
+// ig-creator-marketplace was the Meta first-party path and is removed: it never produced a
+// row and needs a permission we do not have.
+//
+// se:web-harvest is stamped PER RUN DAY (se:web-harvest-2026-07-28, …), so it must be
+// matched by PREFIX. An eq() on the bare name once reported 0 beside a real total of 4,211.
+const CRE_SOURCES = ['ig-scraper-user-search', 'se:web-harvest'];
+const isPrefixSource = (s: string) => s.startsWith('se:');
 function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } }); }
 
 serve(async (req: Request) => {
@@ -66,7 +79,10 @@ serve(async (req: Request) => {
     const typeFilter: string | null = body.serviceType || null;
     const categoryFilter: string | null = body.category || null;
     const sinceHours = Number(body.sinceHours || 0);
-    const limit = Math.min(Number(body.limit || 10000), 10000);
+    // The cap was 10,000 while the screen now offers 25,000. A control that silently returns
+    // less than it promises is the same defect as the capped row count that read as a small
+    // market, so the ceiling moves with it.
+    const limit = Math.min(Number(body.limit || 1000), 25000);
     const sourceFilter: string | null = body.source || null;
     const stateCol = 'state';
     // Creator rows label their origin in discovered_via; service rows use data_source.
@@ -92,14 +108,23 @@ serve(async (req: Request) => {
     // stale silently is how a dead source keeps looking alive.
     const { data: srcRows } = await db.from(table).select(srcCol).limit(50000);
     const seen = new Set<string>();
-    for (const r of (srcRows || [])) { const v = String((r as any)[srcCol] ?? '').trim(); if (v) seen.add(v); }
+    for (const r of (srcRows || [])) {
+      let v = String((r as any)[srcCol] ?? '').trim();
+      if (!v) continue;
+      // Collapse per-run-day tags to their algorithm, or one source reads as forty.
+      const m = v.match(/^(se:[a-z-]+)/);
+      if (m) v = m[1];
+      seen.add(v);
+    }
     const known = audience === 'creators' ? CRE_SOURCES : SVC_SOURCES;
     for (const k of known) seen.add(k);
     const sources = [...seen].sort();
 
     // by source
     const bySource: Record<string, number> = {};
-    await Promise.all(sources.map(async (src) => { bySource[src] = await count((b) => b.eq(srcCol, src)); }));
+    await Promise.all(sources.map(async (src) => {
+      bySource[src] = await count((b) => (isPrefixSource(src) ? b.like(srcCol, `${src}%`) : b.eq(srcCol, src)));
+    }));
     bySource['(other/unlabeled)'] = Math.max(0, (await count((b) => b)) - Object.values(bySource).reduce((a, c) => a + c, 0));
 
     // by city (NY / FL / other) and by status
@@ -132,8 +157,9 @@ serve(async (req: Request) => {
     // broken out per source — that is the number that should decide where a dollar goes.
     const contactBySource: Record<string, { total: number; contactable: number; pct: number }> = {};
     if (isLeadTable) await Promise.all(sources.map(async (src) => {
-      const t = await count((b) => b.eq(srcCol, src));
-      const c = await count((b) => b.eq(srcCol, src).or(`phone.not.is.null,${emailCol}.not.is.null`));
+      const m = (b: any) => (isPrefixSource(src) ? b.like(srcCol, `${src}%`) : b.eq(srcCol, src));
+      const t = await count((b) => m(b));
+      const c = await count((b) => m(b).or(`phone.not.is.null,${emailCol}.not.is.null`));
       contactBySource[src] = { total: t, contactable: c, pct: t ? Math.round((c / t) * 100) : 0 };
     }));
 
@@ -161,7 +187,7 @@ serve(async (req: Request) => {
     if (sinceHours > 0) rq = rq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
     rq = rq.order(tsCol, { ascending: false });
     if (cityFilter) rq = rq.eq(stateCol, cityFilter);
-    if (sourceFilter) rq = rq.eq(srcCol, sourceFilter);
+    if (sourceFilter) rq = isPrefixSource(sourceFilter) ? rq.like(srcCol, `${sourceFilter}%`) : rq.eq(srcCol, sourceFilter);
     if (body.status) rq = rq.eq(statusCol, body.status);
     // "Contactable only" is the 40% bar made actionable: it exports the rows we can
     // actually reach, so a download is a working list rather than a row count.
@@ -176,7 +202,7 @@ serve(async (req: Request) => {
     if (categoryFilter) cq = cq.eq('category', categoryFilter);
     if (sinceHours > 0) cq = cq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
     if (cityFilter) cq = cq.eq(stateCol, cityFilter);
-    if (sourceFilter) cq = cq.eq(srcCol, sourceFilter);
+    if (sourceFilter) cq = isPrefixSource(sourceFilter) ? cq.like(srcCol, `${sourceFilter}%`) : cq.eq(srcCol, sourceFilter);
     if (body.status) cq = cq.eq(statusCol, body.status);
     if (body.contactableOnly && isLeadTable) cq = cq.or(`phone.not.is.null,${emailCol}.not.is.null`);
     const { count: filteredTotal } = await cq;

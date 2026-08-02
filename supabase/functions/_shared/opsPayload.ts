@@ -15,7 +15,8 @@ import { growthDb, growthEnvPresent } from './growthDb.ts';
 
 // every agent/cron we claim runs — so "is it on?" is answered by DATA, not belief
 export const AGENTS = ['fulfill-crawl','creator-harvest','enrich-influencers','creator-enrich','qa-suite','qa-live-verify','crawl-health-check','coo-execute','cergio-watchdog','cergio-orchestrator','ops-metrics','supply-engine'];
-export const SOURCES = ['gmaps_apify','craigslist','yellowpages_apify','ig_services','yelp','google_local','google_lsa','google_sponsored','yellowpages','osm','google_places','openstreetmap'];
+  // google_sponsored REMOVED (SPEC-222): 34 rows in its whole life, ran on SerpAPI against
+  // the Apify-only rule, and overlapped google_lsa almost entirely. Existing rows kept.
 // CREATOR sources — the algorithm decided these (each with its own discovery method):
 export const CREATOR_SOURCES = [
   'modash-vetted-seed',        // founder-vetted Modash handles (seed pool)
@@ -63,9 +64,26 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // CITY FILTER (founder request 2026-07-29: "no way to filter by city").
   // null = all cities. Applied to EVERY services/creators count below so the
   // whole console is scoped consistently — not just one panel.
-  const city = typeof body.city === 'string' && body.city.trim() ? (body.city as string).trim() : null;
-  const svcQ = () => { const q = gdb.from('leads_services').select('id', { count: 'exact', head: true }); return city ? q.eq('city', city) : q; };
-  const creQ = () => { const q = gdb.from('leads_influencers').select('id', { count: 'exact', head: true }); return city ? q.eq('city', city) : q; };
+  // SPEC-227 (founder, 2026-08-02): "cities are DMA's only.. what you have under cities is
+  // locations.. which should be a sub filter of city".
+  //
+  // CITY is the DMA — NYC or Miami — and lives in `state` (NY / FL). LOCATION is the
+  // neighbourhood and lives in the column confusingly NAMED `city`. The dropdown was
+  // listing Bronx, Astoria, Bayside as "cities", which is why it read as wrong: it was
+  // showing locations under a City label.
+  const city = typeof body.city === 'string' && body.city.trim() ? (body.city as string).trim() : null;          // DMA: 'NY' | 'FL'
+  const location = typeof body.location === 'string' && body.location.trim() ? (body.location as string).trim() : null;
+  const scope = (q: any) => {
+    let out = q;
+    if (city) out = out.eq('state', city);
+    if (location) out = out.eq('city', location);
+    return out;
+  };
+  // SPEC-229 — time window applies to every count on the console, not just the table.
+  const sinceHours = Number(body.sinceHours || 0);
+  const timed = (q: any) => (sinceHours > 0 ? q.gte('fetched_at', new Date(Date.now() - sinceHours * 36e5).toISOString()) : q);
+  const svcQ = () => timed(scope(gdb.from('leads_services').select('id', { count: 'exact', head: true })));
+  const creQ = () => timed(scope(gdb.from('leads_influencers').select('id', { count: 'exact', head: true })));
 
   // ── 1. QA: findings (bugs), recent runs, pass/fail
   const { data: findings } = await db.from('qa_findings').select('check_name, area, severity, status, count, detail, found_at, updated_at').order('updated_at', { ascending: false }).limit(100);
@@ -117,11 +135,24 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     }
   }
 
-  // CITY LIST for the filter dropdown — real cities that actually have rows.
-  const cities: Record<string, number> = {};
+  // LOCATION LIST, scoped to the selected DMA and NORMALISED. The raw column holds
+  // "Astoria", "ASTORIA", "Astoria " and " Brooklyn" as four different values, so the
+  // dropdown showed the same place four times with the count split between them. Trim,
+  // collapse inner whitespace, and title-case for display while keeping the variants
+  // grouped under one entry.
+  const locations: Record<string, number> = {};
   try {
-    const { data: cl } = await gdb.from('leads_services').select('city').limit(20000);
-    for (const r of (cl || [])) { const k = (r as any).city; if (k) cities[k] = (cities[k] || 0) + 1; }
+    let lq = gdb.from('leads_services').select('city, state').limit(20000);
+    if (city) lq = lq.eq('state', city);
+    const { data: cl } = await lq;
+    for (const r of (cl || [])) {
+      const raw = String((r as any).city ?? '').trim().replace(/\s+/g, ' ');
+      if (!raw || raw.length < 2) continue;
+      // Junk the crawler occasionally produces: "bellmore .. 1", "Bergen country".
+      if (/\d/.test(raw) || /\.\./.test(raw)) continue;
+      const key = raw.toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
+      locations[key] = (locations[key] || 0) + 1;
+    }
   } catch (_e) {}
 
   // ── 5. LIVE COUNTER (targets per founder spec: NYC 50k / Miami 20k services)
@@ -198,7 +229,12 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     crawls: { by_source: bySource, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
     product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings, bookings_all, bookings_completed, bookings_paid },
     counter, creatorsBySource, creatorsUnattributed, engine, download,
-    filter: { city, cities: Object.fromEntries(Object.entries(cities).sort((a, b) => b[1] - a[1]).slice(0, 60)) },
+    filter: {
+      city, location, sinceHours,
+      // Cities are DMAs. There are exactly two.
+      cities: { NY: 'NYC', FL: 'Miami' },
+      locations: Object.fromEntries(Object.entries(locations).sort((a, b) => b[1] - a[1]).slice(0, 200)),
+    },
     creators_listed_total: listedCreators, creators_total: creTotal ?? 0,
   };
 }

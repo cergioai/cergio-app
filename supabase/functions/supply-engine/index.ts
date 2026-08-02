@@ -60,15 +60,29 @@ const gdb = growthDb();
   // ── MEASURE: per-source yield (rows per job) — the engine's own scoreboard
   const yields: Record<string, { rows: number; jobs: number; ratio: number }> = {};
   for (const s of SOURCES) {
-    const rows = await cnt('leads_services', (b) => b.eq('data_source', s === 'yellowpages_apify' ? 'yellowpages' : s));
+    let rows = await cnt('leads_services', (b) => b.eq('data_source', s === 'yellowpages_apify' ? 'yellowpages' : s));
+    // SPEC-228 — ig_services is DUAL-CLASS: one crawl writes a service row AND a creator
+    // row for the same person. Judging it on leads_services alone undercounts its real
+    // output by half and got it auto-disabled — which silently killed the ONLY creator
+    // source we have, so creators could never reach the 100-lead audit target no matter
+    // how long we waited. Count both halves.
+    if (s === 'ig_services') rows += await cnt('leads_influencers', (b) => b.eq('discovered_via', 'ig-scraper-user-search'));
     const jobs = await cnt('crawl_requests', (b) => b.eq('source', s));
     yields[s] = { rows, jobs, ratio: jobs > 0 ? rows / jobs : 0 };
   }
+  // The only creator source may not be auto-disabled while creators are below the audit
+  // floor. An automatic rule that removes the last path to a founder-set target is not a
+  // safety mechanism, it is the failure.
+  const creatorCount = await cnt('leads_influencers', (b) => b);
+  const CREATOR_FLOOR = Number(Deno.env.get('CREATOR_TARGET') || 100);
+  const PROTECTED = creatorCount < CREATOR_FLOOR ? new Set(['ig_services']) : new Set<string>();
 
   // ── R1/R4: dead + wasteful sources
   const DISABLED: string[] = [];
   for (const [s, y] of Object.entries(yields)) {
-    if (y.jobs >= DEAD_AFTER && y.rows === 0) {
+    if (PROTECTED.has(s)) {
+      await note(`supply-source-${s}`, true, 'high', `${y.rows} rows / ${y.jobs} jobs — PROTECTED: only creator source and creators are ${creatorCount}/${CREATOR_FLOOR}`);
+    } else if (y.jobs >= DEAD_AFTER && y.rows === 0) {
       DISABLED.push(s); await note(`supply-dead-source-${s}`, false, 'critical', `${y.jobs} jobs produced 0 rows — source disabled automatically`);
       fixes.push(`disabled dead source ${s}`);
     } else if (y.jobs >= 500 && y.ratio < 0.05) {

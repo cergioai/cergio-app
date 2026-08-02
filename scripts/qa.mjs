@@ -4696,13 +4696,31 @@ test('ops-city-filter-and-creator-provenance', 'SPEC-104b: the ops console must 
   assert(!/\.eq\('discovered_via'/.test(shared), 'no equality match on discovered_via anywhere — it silently returns 0');
   assert(/creatorsUnattributed/.test(shared),
     'creators under an unlisted discovered_via must be reported, never silently dropped (founder saw 0 per source beside a 4,211 total)');
-  assert(/filter: \{ city, cities:/.test(shared), 'payload must return the real city list for the filter control');
+  // SPEC-227 changed this shape deliberately: cities are the two DMAs and the long list
+  // moved to `locations`, because the old list was showing neighbourhoods under a City
+  // label. What must remain true is that BOTH controls get their options from the payload.
+  assert(/filter: \{[\s\S]{0,80}city, location,/.test(shared), 'payload must expose both the city (DMA) and location filters');
+  assert(/locations: Object\.fromEntries/.test(shared), 'payload must return the real location list for the sub-filter control');
 
   const ui = readFile('src/screens/OpsStatusScreen.jsx');
-  assert(/const \[city, setCity\] = useState\(''\)/.test(ui) && /opsConsole\(city \? \{ city \} : \{\}\)/.test(ui),
-    'the screen must own a city filter and pass it to the endpoint');
-  assert(/opsConsole\(city \? \{ download: key, city \} : \{ download: key \}\)/.test(ui),
-    'a CSV downloaded from a filtered view must contain the filtered rows');
+  // SPEC-227: the call now carries city AND location. The assertion checks that both
+  // reach the endpoint, not the exact old one-argument shape — an assertion pinned to a
+  // call signature blocks every legitimate change to it.
+  assert(/const \[city, setCity\] = useState\(''\)/.test(ui) && /const \[location, setLocation\] = useState\(''\)/.test(ui),
+    'the screen must own both a city (DMA) and a location filter');
+  // [^)]* cannot cross the ')' inside `...(city ? { city } : {})`, so the first version of
+  // this assertion could never match anything — a gate that fires on nothing.
+  assert(/opsConsole\([\s\S]{0,200}\blocation\b/.test(ui) && /opsConsole\([\s\S]{0,200}\bcity\b/.test(ui),
+    'the screen must pass city AND location to the endpoint, or the controls would do nothing');
+  // Pinned to the exact old one-argument call, which SPEC-227 had to change to carry
+  // location too. What actually matters is that the download request carries BOTH filters.
+  // ONE LINE, not a 160-character window. The window version bled into the following
+  // lines, which happen to mention city and location in an error message — so deleting
+  // both filters from the call still passed. Another gate that could not fail, caught by
+  // mutating it.
+  const dlCall = (ui.split('\n').find((l) => /opsConsole\(\{ download: key/.test(l)) || '');
+  assert(/\bcity\b/.test(dlCall) && /\blocation\b/.test(dlCall),
+    'a CSV downloaded from a filtered view must contain the filtered rows — the download call drops city or location');
   assert(/<b>what:<\/b>/.test(ui) && /<b>where:<\/b>/.test(ui), 'each creator source must render what it does + where it looks');
   assert(/max-w-full/.test(ui),
     'the ops screen renders inside a ~408px mobile shell — a max-w-5xl container overflowed it and the shell CLIPPED every count column off-screen. Width must be shell-bound, with scrolling confined to each table wrapper');
@@ -6246,7 +6264,9 @@ test('metro-and-locality-are-separate-filters-and-every-facet-comes-from-the-dat
   const scr = stripComments(readFile('src/screens/DataExportScreen.jsx'));
   assert(!(!/CITIES/.test(scr)), 'the city (DMA) control is gone');
   assert(!(!/pickCity/.test(scr)), 'changing city does not clear location, leaving an impossible filter applied');
-  assert(!(!/RECENCY/.test(scr)), 'no recency control');
+  // SPEC-229 split recency into TIME and SIZE, which is what the founder actually asked
+  // for. Both must exist; the single combined control was the thing being replaced.
+  assert(!(!/const TIMES/.test(scr) && /const SIZES/.test(scr)), 'no time or size control');
   assert(!(!/setServiceType/.test(scr) && /setCategory/.test(scr)), 'type and category filters are not wired');
   const api = stripComments(readFile('src/lib/api.js'));
   const invoke = (api.match(/invoke\('leads-dashboard',[\s\S]{0,600}?\}\)/) || [''])[0];
@@ -6254,6 +6274,62 @@ test('metro-and-locality-are-separate-filters-and-every-facet-comes-from-the-dat
     assert(!(!new RegExp(k).test(invoke)), `the api layer drops ${k} from the request body, so that filter would silently do nothing`);
   }
 });
+
+test('ops-console-city-is-a-dma-and-the-only-creator-source-cannot-be-auto-killed', 'SPEC-227/228 (founder, 2026-08-02): the /ops LIVE-counts City dropdown listed Bronx, Astoria, Bayside — those are LOCATIONS, not cities. City is the DMA (NYC/Miami, stored in state); location is the neighbourhood (stored in the column confusingly NAMED city). The same list also showed one place several times — Astoria, ASTORIA, Astoria with a trailing space — splitting its count across four entries, plus crawler junk like "bellmore .. 1". FAR WORSE, the ops payload revealed ig_services AUTO-DISABLED. It is dual-class: one crawl writes a service row AND a creator row for the same person, so judging it on leads_services alone undercounts it by half. Auto-disabling it silently removed the ONLY creator source, which means creators could never reach the founder 100-lead audit target no matter how long anyone waited. An automatic rule that deletes the last path to a founder-set target is not a safety mechanism, it is the failure.', '#227', () => {
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const c = stripComments(ops);
+  assert(!(!/body\.location/.test(c)), 'the ops payload has no location filter, so locations cannot be a sub-filter of city');
+  assert(!(!/eq\('state', city\)/.test(c)), 'City still filters the location column instead of the DMA column');
+  assert(!(!/NY: 'NYC'/.test(c) && /FL: 'Miami'/.test(c)), 'the city list is not the two DMAs');
+  assert(!(!/toLowerCase\(\)/.test(c) && /locations/.test(c)), 'locations are not normalised, so one place appears several times with its count split');
+  const scr = stripComments(readFile('src/screens/OpsStatusScreen.jsx'));
+  assert(!(!/setLocation/.test(scr)), 'the ops screen has no location control');
+  assert(!(!/setCity\(e\.target\.value\); setLocation\(''\)/.test(scr)), 'changing city does not clear location, leaving an impossible filter applied');
+  const eng = stripComments(readFile('supabase/functions/supply-engine/index.ts'));
+  // Not just the word: the protection must be CONDITIONAL on the creator count being
+  // below the floor. `const PROTECTED = new Set()` also contains the word and disables
+  // nothing — my first version of this passed on exactly that.
+  assert(!(!/creatorCount < CREATOR_FLOOR[\s\S]{0,80}ig_services/.test(eng)),
+    'the only creator source is not protected while creators are below the audit floor, so auto-disable can silently remove the last path to 100');
+  assert(!(!/leads_influencers/.test(eng)), 'ig_services yield ignores its creator half, undercounting a dual-class source by half');
+});
+
+test('time-and-size-are-separate-filters-on-both-consoles', 'SPEC-229 (founder, 2026-08-02): "time filter (last 6 hours, 12 hours, 24 hours, 2 days, 3 days, 7 days, 2 weeks, 4 weeks) alongside last 100, 500, 1000, then increments up to 25000 or all". TIME and SIZE answer different questions — "what arrived since yesterday" versus "give me the newest 500" — and one control was being asked to answer both, so neither could be expressed properly. They are separate now and combine: last 7 days AND the newest 1000 of them is a legitimate query. The server ceiling had to move with the control: it was capped at 10,000 while the screen offered 25,000, and a control that silently returns less than it promises is the same defect as the capped row count that made a large market read as a small one. Both consoles carry the same windows so they cannot disagree with each other.', '#229', () => {
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  const c = stripComments(scr);
+  assert(!(!/const TIMES/.test(c)), 'no time window control on the data dashboard');
+  assert(!(!/const SIZES/.test(c)), 'no size control — "the newest 500" cannot be asked');
+  for (const h of [6, 12, 24, 48, 72, 168, 336, 672]) {
+    assert(!(!new RegExp(`h: ${h}[,}]`).test(c)), `the ${h}h window the founder asked for is missing`);
+  }
+  for (const v of [100, 500, 1000, 25000]) {
+    assert(!(!new RegExp(`\\b${v}\\b`).test((c.match(/const SIZES = \[[^\]]*\]/) || [''])[0])), `size ${v} is missing`);
+  }
+  const fn = stripComments(readFile('supabase/functions/leads-dashboard/index.ts'));
+  assert(!(/Math\.min\(Number\(body\.limit \|\| 10000\), 10000\)/.test(fn)), 'the server still caps at 10,000 while the screen offers 25,000 — it would silently return less than promised');
+  assert(!(!/25000/.test(fn)), 'the server ceiling was not raised with the control');
+  const ops = stripComments(readFile('supabase/functions/_shared/opsPayload.ts'));
+  assert(!(!/sinceHours/.test(ops)), 'the ops console has no time window, so the two consoles would disagree');
+  assert(!(!/const timed =/.test(ops)), 'the time window is not applied to the ops counts');
+  const ui = stripComments(readFile('src/screens/OpsStatusScreen.jsx'));
+  assert(!(!/setHours/.test(ui)), 'the ops screen has no time control');
+});
+
+test('there-are-two-creator-sources-and-neither-can-be-silently-closed', 'SPEC-230 (founder, 2026-08-02): "fix creator sources.. we are supposed to have 2 (IG services and the other IG local creator search)". They are ig-scraper-user-search (Apify IG user search, written by the dual-class ig_services crawl) and se:web-harvest (creator-harvest, free keyless web search, contact taken from the creator own link-in-bio). CREATORS SAT AT ZERO BECAUSE ALL THREE PATHS WERE CLOSED AT ONCE, each for a defensible-looking reason: ig-creator-marketplace removed for needing a Meta permission we do not have, creator-harvest unscheduled by SPEC-198 as a no-op alongside the COO stack, and ig_services auto-disabled by the supply engine for low SERVICE yield without anyone counting its creator half. No single decision was obviously wrong and the combination made a founder target unreachable by any route. se:web-harvest is stamped per run day, so it must be matched by PREFIX — an eq() on the bare name once reported 0 beside a real total of 4,211.', '#230', () => {
+  const fn = readFile('supabase/functions/leads-dashboard/index.ts');
+  const c = stripComments(fn);
+  assert(!(!/'ig-scraper-user-search'/.test(c)), 'the IG user-search creator source is missing');
+  assert(!(!/'se:web-harvest'/.test(c)), 'the web-harvest creator source is missing — the founder expects TWO');
+  assert(!(!/isPrefixSource/.test(c)), 'per-run-day sources are matched by equality, which reports 0 beside a real total');
+  assert(!(!/like\(srcCol/.test(c)), 'no prefix match on the source column');
+  const mig = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations')).filter((f) => /restore_creator_harvest/.test(f));
+  assert(!(!mig.length), 'creator-harvest is still unscheduled, so only one creator path exists and the 100-lead target is unreachable');
+  const spec = readFile('specs/creators.md');
+  assert(!(!/se:web-harvest/.test(spec)), 'the creator spec does not record both sources, so the next agent would close one again');
+});
+
+
+
 
 
 
