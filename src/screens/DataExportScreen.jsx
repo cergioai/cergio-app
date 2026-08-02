@@ -4,6 +4,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { leadsDashboard } from '../lib/api';
 
+// Services and Creators are two DIFFERENT CLASSES of data, not two filters on one pile:
+// they live in different tables, label their origin in different columns (data_source vs
+// discovered_via) and carry different fields. Keeping them visibly separate is the point.
 const AUDIENCES = [{ id: 'services', label: 'Services' }, { id: 'creators', label: 'Creators' }];
 const CITIES = [{ id: '', label: 'All' }, { id: 'NY', label: 'NYC' }, { id: 'FL', label: 'Miami' }];
 
@@ -39,6 +42,8 @@ export function DataExportScreen() {
 
   const sources = useMemo(() => Object.entries(data?.bySource || {}).sort((a, b) => b[1] - a[1]), [data]);
 
+  // Download exactly what is on screen — the filters ARE the segment. Downloading "all
+  // leads" and filtering in a spreadsheet is what made the old export useless.
   const download = () => {
     const rows = data?.rows || [];
     if (!rows.length) { setErr('No rows to download for this filter.'); return; }
@@ -54,13 +59,13 @@ export function DataExportScreen() {
 
   const rows = data?.rows || [];
   const cols = audience === 'creators'
-    ? ['ig_handle', 'display_name', 'category', 'followers', 'email', 'phone', 'city']
+    ? ['ig_handle', 'display_name', 'category', 'followers', 'email', 'phone', 'city', 'discovered_via']
     : ['name', 'service_type', 'phone', 'owner_email', 'city', 'data_source', 'outreach_notes'];
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <h1 className="text-xl font-extrabold text-black">Data dashboard</h1>
-      <p className="text-meta-sm text-b3 mt-1">Live counts by source, city, and status — pick filters, review, download.</p>
+      <p className="text-meta-sm text-b3 mt-1">Live from the growth database. Pick a class and filters — the table and the CSV are that exact segment.</p>
 
       <div className="mt-4 flex flex-wrap gap-2 items-center">
         {AUDIENCES.map(a => (
@@ -96,13 +101,30 @@ export function DataExportScreen() {
 
           <div className="mt-4 grid sm:grid-cols-2 gap-4">
             <div className="rounded-xl border border-bg5 p-3">
-              <div className="text-meta-sm font-bold text-black mb-2">By source</div>
-              {sources.map(([s, n]) => (
-                <div key={s} className="flex justify-between text-meta-sm py-0.5">
-                  <button className={`text-left ${source === s ? 'text-g font-bold' : 'text-b3'}`} onClick={() => setSource(s)}>{s}</button>
-                  <span className="font-bold text-black">{n.toLocaleString()}</span>
+              <div className="text-meta-sm font-bold text-black mb-2">By source · contactable %</div>
+              {/* A lead with no phone and no email is not a lead (SPEC-192). A raw count
+                  per source flatters a source that produces volume and no contacts, which
+                  is exactly what we were paying for. The % is the number worth reading. */}
+              {sources.map(([s, n]) => {
+                const c = data?.contactBySource?.[s];
+                const pct = c ? c.pct : null;
+                const tone = pct == null ? 'text-b3' : pct >= 80 ? 'text-g' : pct >= 40 ? 'text-black' : 'text-red-600';
+                return (
+                  <div key={s} className="flex justify-between items-baseline text-meta-sm py-0.5">
+                    <button className={`text-left ${source === s ? 'text-g font-bold' : 'text-b3'}`} onClick={() => setSource(s)}>{s}</button>
+                    <span className="flex gap-2 items-baseline">
+                      <span className={`text-[11px] font-bold ${tone}`}>{pct == null ? '—' : `${pct}% reachable`}</span>
+                      <span className="font-bold text-black">{n.toLocaleString()}</span>
+                    </span>
+                  </div>
+                );
+              })}
+              {audience === 'creators' && (
+                <div className="mt-2 text-[11px] text-b3 leading-snug">
+                  ig-creator-marketplace reads 0 until <b>IG_USER_ID</b> + <b>IG_MARKETPLACE_TOKEN</b>
+                  {' '}are set — that needs the pending Meta permission, not a code change.
                 </div>
-              ))}
+              )}
             </div>
             <div className="rounded-xl border border-bg5 p-3">
               <div className="text-meta-sm font-bold text-black mb-2">By status</div>
@@ -114,7 +136,7 @@ export function DataExportScreen() {
           </div>
 
           <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
-            <div className="px-3 py-2 text-meta-sm font-bold text-black">Rows ({rows.length}{rows.length >= 2000 ? '+ capped' : ''})</div>
+            <div className="px-3 py-2 text-meta-sm font-bold text-black">Rows ({rows.length}{rows.length >= 10000 ? '+ capped' : ''})</div>
             <table className="w-full text-[12px]">
               <thead className="bg-bg5 text-b3"><tr>{cols.map(c => <th key={c} className="text-left px-2 py-1 font-bold">{c}</th>)}</tr></thead>
               <tbody>
