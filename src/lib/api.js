@@ -5173,9 +5173,20 @@ export async function ciSubagents() {
   return { data, error: null };
 }
 
-export async function leadsDashboard(audience = 'services', { city = null, source = null, status = null, contactableOnly = false } = {}) {
+export async function leadsDashboard(audience = 'services', f = {}) {
   const { data, error } = await supabase.functions.invoke('leads-dashboard', {
-    body: { audience, city, source, status, contactableOnly },
+    body: {
+      audience,
+      city: f.city ?? null,                 // METRO — state code (NY | FL)
+      locality: f.locality ?? null,         // neighbourhood — city column
+      source: f.source ?? null,
+      status: f.status ?? null,
+      serviceType: f.serviceType ?? null,
+      category: f.category ?? null,
+      contactableOnly: !!f.contactableOnly,
+      sinceHours: f.sinceHours ?? 0,
+      limit: f.limit ?? 10000,
+    },
   });
   if (error) return { data: null, error };
   return { data, error: null };

@@ -57,7 +57,16 @@ serve(async (req: Request) => {
     const DS = DATASETS[audience];
     const table = DS.table;
     const isLeadTable = audience === 'services' || audience === 'creators';
-    const cityFilter: string | null = body.city || null;   // 'NY' | 'FL' | null
+    // SPEC-224 — METRO and LOCALITY are different columns and must be different filters.
+    // `state` is the metro (NY = NYC, FL = Miami); `city` is the neighbourhood (Manhattan,
+    // Brooklyn, Wynwood). Conflating them is what made the Miami filter appear to vanish:
+    // one control was trying to mean both.
+    const cityFilter: string | null = body.city || null;      // metro: 'NY' | 'FL' | null
+    const locality: string | null = body.locality || null;    // 'Brooklyn', 'Wynwood', …
+    const typeFilter: string | null = body.serviceType || null;
+    const categoryFilter: string | null = body.category || null;
+    const sinceHours = Number(body.sinceHours || 0);
+    const limit = Math.min(Number(body.limit || 10000), 10000);
     const sourceFilter: string | null = body.source || null;
     const stateCol = 'state';
     // Creator rows label their origin in discovered_via; service rows use data_source.
@@ -129,8 +138,28 @@ serve(async (req: Request) => {
     }));
 
     // filtered rows for the table/download
-    const ROW_CAP = 10000;
+    const ROW_CAP = limit;
+    // The facet lists come from the data, so an option that cannot return a row is never
+    // offered. Scoped to the CURRENT metro, because the neighbourhoods of NYC are not
+    // choices when the metro is Miami.
+    const facet = async (col: string) => {
+      let q2 = db.from(table).select(col).limit(20000);
+      if (cityFilter) q2 = q2.eq(stateCol, cityFilter);
+      const { data } = await q2;
+      const set = new Set<string>();
+      for (const r of (data || [])) { const v = String((r as any)[col] ?? '').trim(); if (v) set.add(v); }
+      return [...set].sort();
+    };
+    const localities = isLeadTable || audience === 'crawls' ? await facet('city') : [];
+    const serviceTypes = audience === 'services' || audience === 'crawls' ? await facet('service_type') : [];
+    const categories = audience === 'creators' ? await facet('category') : [];
+
     let rq = db.from(table).select('*').limit(ROW_CAP);
+    if (locality) rq = rq.eq('city', locality);
+    if (typeFilter) rq = rq.eq('service_type', typeFilter);
+    if (categoryFilter) rq = rq.eq('category', categoryFilter);
+    if (sinceHours > 0) rq = rq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
+    rq = rq.order(tsCol, { ascending: false });
     if (cityFilter) rq = rq.eq(stateCol, cityFilter);
     if (sourceFilter) rq = rq.eq(srcCol, sourceFilter);
     if (body.status) rq = rq.eq(statusCol, body.status);
@@ -142,13 +171,17 @@ serve(async (req: Request) => {
     // instead of quietly implying the cap is the whole set. A silent cap reads as a
     // small market.
     let cq = db.from(table).select('id', { count: 'exact', head: true });
+    if (locality) cq = cq.eq('city', locality);
+    if (typeFilter) cq = cq.eq('service_type', typeFilter);
+    if (categoryFilter) cq = cq.eq('category', categoryFilter);
+    if (sinceHours > 0) cq = cq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
     if (cityFilter) cq = cq.eq(stateCol, cityFilter);
     if (sourceFilter) cq = cq.eq(srcCol, sourceFilter);
     if (body.status) cq = cq.eq(statusCol, body.status);
     if (body.contactableOnly && isLeadTable) cq = cq.or(`phone.not.is.null,${emailCol}.not.is.null`);
     const { count: filteredTotal } = await cq;
 
-    return json({ audience, label: DS.label, srcCol, isLeadTable, total, filteredTotal: filteredTotal ?? 0, rowCap: ROW_CAP, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, rows: rows || [] });
+    return json({ audience, label: DS.label, srcCol, isLeadTable, total, filteredTotal: filteredTotal ?? 0, rowCap: ROW_CAP, localities, serviceTypes, categories, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, rows: rows || [] });
   } catch (e) {
     return json({ error: String(e).slice(0, 300) }, 500);
   }
