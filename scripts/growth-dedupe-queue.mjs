@@ -148,3 +148,57 @@ for (const src of PAID_SOURCES) {
     console.log(`  ${src}: ${jobs} jobs -> ${leads} leads ${jobs >= PROOF_JOBS ? '(earning its spend)' : '(still proving, under the ' + PROOF_JOBS + '-job cap)'}`);
   }
 }
+
+// SPEC-200 — PER-SOURCE QUOTA, so one source cannot dominate the dataset.
+//
+// Founder, 2026-08-02: "need to scale other sources so we top up 100 leads per source
+// with the spend ... rather than have yelp dominate sources."
+//
+// Measured 2026-08-02: yelp 15,796 of 21,367 rows = 74% of the entire database, while
+// google_sponsored had 34 and yellowpages 0. A dataset that is three-quarters one
+// vendor is a single point of failure — if yelp blocks us or changes terms, the supply
+// side collapses. It also hides quality: yelp's contactability sets the headline number
+// for everything.
+//
+// So each source gets a FLOOR to reach before any source is allowed to run ahead. A
+// source below its floor is prioritised; a source far above it is throttled. This is
+// about DIVERSITY, not volume — the tranche gate still governs money.
+const LEAD_FLOOR = Number(process.env.LEAD_FLOOR || 100);
+
+console.log(`\nsource balance — floor ${LEAD_FLOOR} leads each`);
+const bySource = await q(`select data_source, count(*)::int as n from leads_services group by data_source order by n desc`);
+const counts = Object.fromEntries((bySource || []).map((r) => [r.data_source, r.n]));
+const ALL = ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services'];
+const below = ALL.filter((s) => (counts[s] || 0) < LEAD_FLOOR);
+const above = ALL.filter((s) => (counts[s] || 0) >= LEAD_FLOOR * 5);
+
+for (const s of ALL) {
+  const n = counts[s] || 0;
+  const mark = n < LEAD_FLOOR ? 'BELOW FLOOR — prioritise' : (n >= LEAD_FLOOR * 5 ? 'far ahead — throttle' : 'balanced');
+  console.log(`  ${s.padEnd(20)} ${String(n).padStart(6)}  ${mark}`);
+}
+
+// UN-PARK any source sitting below the floor. yellowpages was auto-parked by the spend
+// guard for producing 0 from 165 jobs — but its ACTOR was the problem (deprecated,
+// 169 of 299 public runs failed) and has since been replaced, so it deserves a fresh
+// tranche rather than a permanent sentence.
+if (below.length) {
+  const list = below.map((s) => `'${s}'`).join(',');
+  const un = await q(`
+    update crawl_requests set status = 'new',
+        notes = 'SPEC-200: below the ${LEAD_FLOOR}-lead floor — re-queued to balance the dataset',
+        updated_at = now()
+      where status = 'parked' and source in (${list}) returning 1`);
+  console.log(`  un-parked ${Array.isArray(un) ? un.length : '?'} job(s) for: ${below.join(', ')}`);
+}
+// THROTTLE a source that is far ahead: park its surplus open jobs so worker capacity
+// goes to the sources that need it. Reversible — they return when the floor is met.
+if (above.length && below.length) {
+  const list = above.map((s) => `'${s}'`).join(',');
+  const th = await q(`
+    update crawl_requests set status = 'parked',
+        notes = 'SPEC-200: throttled — this source is 5x past the floor while others are below it',
+        updated_at = now()
+      where status = 'new' and source in (${list}) returning 1`);
+  console.log(`  throttled ${Array.isArray(th) ? th.length : '?'} job(s) for: ${above.join(', ')}`);
+}
