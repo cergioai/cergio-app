@@ -122,6 +122,7 @@ elsewhere, these win.
 | S-B09 | The Inbox never shows duplicated jobs or notifications for the same booking | — | founder-found 2026-08-01 | UNGUARDED |
 | S-192 | HARD SPEC: a lead with no phone AND no email is never saved — we do not pay for unreachable rows | #192 | — | CODED |
 | S-193 | HARD SPEC: all paid crawling goes through Apify — SerpAPI is retired | #193 | — | CODED |
+| S-237 | Each creator source stops ITSELF at CREATOR_TARGET and obeys the committed crawl switch; creator writes cannot fail silently on a missing column (is_business/created_at healed on the LIVE table) | #237 | — | CODED |
 <!-- REGISTRY:END -->
 
 ---

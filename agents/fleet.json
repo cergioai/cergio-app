@@ -73,13 +73,14 @@
       "gates": [
         "#202",
         "#204",
-        "#208"
+        "#208",
+        "#237"
       ],
       "defects": [
         "follower band 5k-500k not enforced on the ig_services creator path",
-        "ig_services must reach 100 creators before any other source is activated"
+        "prove LIVE that the is_business heal landed on the growth table and ig_services creator rows are being written (SPEC-237) — 262 service rows produced 0 creators while the reference healed and the table did not"
       ],
-      "green_when": "100 creators from ig_services (ig-scraper-user-search), then the source stops itself"
+      "green_when": "100 creators from EACH source — ig-scraper-user-search (eq) and se:web-harvest (PREFIX) — then each source stops itself (SPEC-205/237)"
     },
     {
       "id": "spend-guard",

@@ -181,6 +181,54 @@ const gdb = growthDb();
     if (!auth || auth !== serviceKey) return json({ error: 'Unauthorized' }, 401);
     const db = createClient(supabaseUrl, serviceKey);
 
+    // ── SPEC-237: THE ACTIVATION CONTRACT, ENFORCED HERE — founder, 2026-08-02:
+    // "activate the crawls just for the creator sources to get 100 of each then
+    // pause alongside the rest to audit."
+    //
+    // (a) The committed kill-switch (growth-controls.json) covers this function.
+    //     Until now creator-harvest read NO control at all, so "are we crawling?"
+    //     had a different answer for this source than for the other eight. It
+    //     defaults to SUSPENDED, so a missing env fails CLOSED — refusing costs
+    //     nothing (the same rule that gates fulfill-crawl).
+    // (b) The target stops the source ITSELF. "Get 100 then pause" cannot depend
+    //     on someone watching a dashboard — that is how a $1 tranche became $108.
+    //     Rows are counted by PREFIX: se:web-harvest is stamped per run day, and
+    //     an eq() on the bare name once reported 0 beside a real total of 4,211.
+    const SUSPENDED = (Deno.env.get('CRAWLS_SUSPENDED') || 'true').toLowerCase() !== 'false';
+    const ONLY = (Deno.env.get('CRAWLS_ONLY') || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (SUSPENDED || (ONLY.length > 0 && !ONLY.includes('se:web-harvest'))) {
+      const reason = SUSPENDED
+        ? 'CRAWLS_SUSPENDED — growth-controls.json is the committed switch'
+        : 'se:web-harvest is not in CRAWLS_ONLY — growth-controls.json is the committed allowlist';
+      await logAgentRun(db, 'creator-harvest', {
+        started, raw_found: 0, rows_written: 0, status: 'ok',
+        meta: { suspended: true, reason },
+      });
+      return json({ ok: true, suspended: true, reason });
+    }
+    const CREATOR_TARGET = Number(Deno.env.get('CREATOR_TARGET') || 100);
+    if (CREATOR_TARGET > 0) {
+      const { count: harvested, error: cntErr } = await gdb.from('leads_influencers')
+        .select('id', { count: 'exact', head: true })
+        .like('discovered_via', 'se:web-harvest%');
+      // If the target cannot be READ, refuse to crawl — refusing costs nothing.
+      if (cntErr) {
+        await logAgentRun(db, 'creator-harvest', {
+          started, raw_found: 0, rows_written: 0, status: 'error',
+          error: `target unreadable — refusing to crawl: ${serr(cntErr)}`, meta: { stage: 'target-check' },
+        });
+        return json({ error: `target unreadable — refusing to crawl: ${serr(cntErr)}` }, 500);
+      }
+      if ((harvested ?? 0) >= CREATOR_TARGET) {
+        const reason = `creator target met — ${harvested} of ${CREATOR_TARGET} from se:web-harvest (prefix). Paused for audit alongside the rest (founder, 2026-08-02).`;
+        await logAgentRun(db, 'creator-harvest', {
+          started, raw_found: 0, rows_written: 0, status: 'ok',
+          meta: { target_met: true, harvested, target: CREATOR_TARGET, reason },
+        });
+        return json({ ok: true, paused: true, reason });
+      }
+    }
+
     // ── ONE-TIME SELF-HEALING CLEANUP (SPEC-86b): the earlier harvest pulled
     // bookable SERVICE providers (photographers, lash techs, event planners), not
     // influencers. Quarantine every pending_review row whose category is NOT one of

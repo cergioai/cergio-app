@@ -9,7 +9,8 @@
 
 ## Green when
 
-100 creators from ig-scraper-user-search, then the source stops itself
+100 creators from EACH of the two sources — ig-scraper-user-search (eq match) and
+se:web-harvest (PREFIX match) — then each source stops ITSELF (SPEC-205 / SPEC-237)
 
 ## Owned files
 
@@ -52,3 +53,28 @@ bare name once reported 0 beside a real total of 4,211.
 **Why creators sat at 0:** all three paths were closed at once — marketplace removed,
 creator-harvest unscheduled by SPEC-198, and the supply engine then auto-disabled
 ig_services for low *service* yield without counting its creator half.
+
+**2026-08-02, verbatim:** "activate the crawls just for the creator sources to get 100 of
+each then pause alongside the rest to audit" · "set up CI subagents and dashboard and
+share when they're live... ignore yelp as a source.. get the initial 100"
+
+**SPEC-237 (activation, 2026-08-02):**
+
+- `CRAWLS_ONLY = ig_services,se:web-harvest` — BOTH creator sources, nothing else.
+  Listing only one re-creates the SPEC-230 failure (last path silently closed).
+- **Each source stops ITSELF at CREATOR_TARGET=100**: ig_services counts
+  `eq(discovered_via,'ig-scraper-user-search')` before any job is claimed (SPEC-205);
+  creator-harvest counts `like(discovered_via,'se:web-harvest%')` — PREFIX, per-run-day
+  tag — before any search fires, honours CRAWLS_SUSPENDED / CRAWLS_ONLY (fail closed),
+  and refuses to crawl if the count is unreadable. Gate `#237`.
+- **Why ig_services produced 262 service rows and 0 creators:** the SPEC-202 fix healed
+  the schema REFERENCE, not the live TABLE — `is_business` had no
+  `add column if not exists` guard, so every creator upsert still threw 42703. Healed,
+  plus `created_at` (creator-harvest writes it), plus the verify now probes writer
+  columns. Gate `#237`.
+
+## Progress log
+
+- 2026-08-02 SPEC-237: is_business/created_at heal guards; creator-harvest reads the
+  committed controls + stops itself at 100 (prefix count); CRAWLS_ONLY carries both
+  creator sources.

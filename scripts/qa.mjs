@@ -6344,6 +6344,32 @@ test('there-are-two-creator-sources-and-neither-can-be-silently-closed', 'SPEC-2
   assert(!(!/se:web-harvest/.test(spec)), 'the creator spec does not record both sources, so the next agent would close one again');
 });
 
+test('each-creator-source-stops-itself-and-obeys-the-committed-switch', 'SPEC-237 (founder, 2026-08-02): "activate the crawls just for the creator sources to get 100 of each then pause alongside the rest to audit" — 100 of EACH. ig_services already stopped itself (SPEC-205); creator-harvest read NO control at all: no kill-switch, no allowlist, no target. It would have run forever on its cron, and "are we crawling?" had a different answer for this source than for the other eight. Both halves of the contract now live in the source: it refuses to run unless the committed controls say so (fail CLOSED — a missing env means suspended), and it counts its own rows by PREFIX (se:web-harvest is stamped per run day; an eq() on the bare name once reported 0 beside a real 4,211) and pauses itself at CREATOR_TARGET. If the count is unreadable it refuses to crawl — refusing costs nothing. And while the creator target stands, the allowlist must hold BOTH creator sources: listing only one re-creates the SPEC-230 failure where the last path to a founder target silently closed.', '#237', () => {
+  const h = stripComments(readFile('supabase/functions/creator-harvest/index.ts'));
+  assert(!(!/CRAWLS_SUSPENDED/.test(h)), 'creator-harvest ignores the committed kill-switch — the one setting that decides whether we are crawling does not cover this source');
+  assert(!(!/\|\| 'true'/.test(h)), 'the kill-switch does not fail CLOSED — a missing env would mean crawling');
+  assert(!(!/ONLY\.includes\('se:web-harvest'\)/.test(h)), 'creator-harvest ignores CRAWLS_ONLY — the committed allowlist cannot switch it off');
+  assert(!(!/CREATOR_TARGET/.test(h)), 'creator-harvest has no target — "get 100 then pause" depends on someone watching a dashboard');
+  assert(!(!/\.like\('discovered_via', 'se:web-harvest%'\)/.test(h)), 'the target count is not a PREFIX match — per-run-day tags make an eq() report 0 beside the real total');
+  assert(!(!/if \(cntErr\)/.test(h)), 'an unreadable target does not refuse to crawl — the count error is not acted on');
+  const cfg = JSON.parse(readFile('growth-controls.json').replace(/^\s*\/\/.*$/gm, ''));
+  const on = String(cfg.CRAWLS_SUSPENDED) === 'false' && Number(cfg.CREATOR_TARGET) > 0;
+  if (on) {
+    for (const s of ['ig_services', 'se:web-harvest']) {
+      assert(!(!String(cfg.CRAWLS_ONLY || '').split(',').map((x) => x.trim()).includes(s)),
+        `${s} is missing from CRAWLS_ONLY while the creator target stands — one of the two paths to a founder target is silently closed (SPEC-230)`);
+    }
+  }
+  const ref = readFile('supabase/migrations/20260730190000_growth_schema_reference.sql');
+  assert(!(!/add column if not exists is_business/.test(ref)), 'no heal guard for is_business — the live table predates the reference, so every ig_services creator upsert 42703s and creators sit at 0 (the SPEC-202 defect surviving its own fix)');
+  assert(!(!/add column if not exists created_at/.test(ref)), 'no heal guard for created_at — creator-harvest writes it and the reference declares only fetched_at');
+  // RAW text, not stripComments(): the probe URL lives inside a template literal,
+  // and the comment-stripper blanks template literals too (the Part-6 trap) — a
+  // stripped scan here fires on nothing and the gate could never fail.
+  const ags = readFile('scripts/apply-growth-schema.mjs');
+  assert(!(!/select=bio,external_url,enrich_attempted_at,is_business,created_at/.test(ags)), 'the schema verify probes only reader columns — a writer column can be missing while the verify stays green');
+});
+
 test('the-headline-live-counts-obey-the-filters-and-dmas-come-from-the-data', 'SPEC-231 (founder, 2026-08-02): "the filter isnt holding.. clicking 4 wks doesnt change the counts". The four LIVE-counter numbers — the ones actually read on that page — were hardcoded queries built straight off the table, bypassing the city, location and time helpers entirely. So every filter appeared broken while the data behind it was fine, which is the worst kind of defect: it destroys trust in a correct system. Separately the DMA list was hardcoded to two, so a third DMA could be crawled and never appear in the filter, leaving its rows invisible on the one screen meant to prove what we have. DMAs are derived from the data, known codes get their proper name, and an unknown code is shown by its code rather than dropped.', '#231', () => {
   const ops = readFile('supabase/functions/_shared/opsPayload.ts');
   const c = stripComments(ops);
