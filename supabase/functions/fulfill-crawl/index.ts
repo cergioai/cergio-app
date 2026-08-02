@@ -244,9 +244,19 @@ const gdb = growthDb();
     // This was pure FIFO on created_at, so every city competed equally for worker
     // capacity: Miami/NYC-first lived only in conversation, never in code. Now
     // PHASE-1 metros (Miami + NYC/boroughs) drain FIRST, every run, always.
-    const P1 = ['Miami','New York','Manhattan','Brooklyn','Queens','Bronx','Staten Island',
-                'Miami Beach','Brickell','Wynwood','Coral Gables','Doral','South Beach',
-                'Coconut Grove','Aventura','Little Havana','Hialeah','North Miami','Kendall','Pinecrest'];
+    // SPEC-240 — grouped BY DMA, because the founder's quota lives on the DMA, not the
+    // location: "50k services for nyc.. adjusting each city based on relative size of
+    // dma". One DMA's locations fill ONE shared bucket. This literal must stay equal to
+    // DMA_LOCATIONS in scripts/_growth-scope.mjs (Deno cannot import it) — gate #240
+    // welds the two, because two city lists that disagree is exactly the Part-6
+    // two-sources-of-truth defect this project has already paid for.
+    const P1_DMA: Record<string, string[]> = {
+      NY: ['New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'],
+      FL: ['Miami', 'Miami Beach', 'Brickell', 'Wynwood', 'Coral Gables', 'Doral',
+           'South Beach', 'Coconut Grove', 'Aventura', 'Little Havana', 'Hialeah',
+           'North Miami', 'Kendall', 'Pinecrest'],
+    };
+    const P1 = Object.values(P1_DMA).flat();
     let jobs: any[] = [];
     {
       // 1) phase-1 metros first — FAIRLY ACROSS SOURCES (SPEC-174).
@@ -307,20 +317,35 @@ const gdb = growthDb();
       // other geographies while Miami and NYC were nowhere near full, which is the
       // opposite of the instruction.
       //
-      // PHASE1_CITY_QUOTA has NO DEFAULT anywhere. Unset means locked: no per-city quota
-      // exists in the spec and inventing one would silently authorise a national crawl.
-      const P1_QUOTA = Number(Deno.env.get('PHASE1_CITY_QUOTA') || 0);
+      // SPEC-240 — THE QUOTA IS A FORMULA, PER DMA (founder, 2026-08-02, verbatim: "50k
+      // services for nyc (with 5% of that as creators).. adjusting each city based on
+      // relative size of dma (eg: if miami is 10% of new it should be 5k services and
+      // 250 creators.."). The committed map ({"NY":50000,"FL":11700}) is the formula's
+      // output — services(city) = 50,000 × DMA/DMA(NYC), Nielsen TV households, rounded
+      // to the nearest 100. Parsed FAIL-CLOSED: empty, unparseable, a bare number, or a
+      // non-positive value means Phase 2 stays LOCKED. There is still NO DEFAULT — a
+      // quota this code invented would silently authorise a national crawl. And every
+      // Phase-1 DMA must have a quota AND meet it: a DMA missing from the map is a DMA
+      // whose quota we do not know, never one that is "unbounded".
+      let P1_QUOTA: Record<string, number> | null = null;
+      try {
+        const j = JSON.parse(Deno.env.get('PHASE1_CITY_QUOTA') || '');
+        const ks = j && typeof j === 'object' && !Array.isArray(j) ? Object.keys(j) : [];
+        if (ks.length && ks.every((k) => typeof j[k] === 'number' && Number.isFinite(j[k]) && j[k] > 0)) P1_QUOTA = j;
+      } catch (_e) { /* fail closed — locked */ }
       let phase2Open = false;
-      if (P1_QUOTA > 0) {
-        const shortfall = await Promise.all(P1.map(async (c) => {
-          const { count } = await gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('city', c);
-          return (count ?? 0) < P1_QUOTA ? c : null;
+      if (P1_QUOTA) {
+        const quota = P1_QUOTA;
+        const dmaTotals = await Promise.all(Object.entries(P1_DMA).map(async ([dma, locs]) => {
+          const { count } = await gdb.from('leads_services').select('id', { count: 'exact', head: true }).in('city', locs);
+          return [dma, count ?? 0] as [string, number];
         }));
-        const short = shortfall.filter(Boolean);
+        const short = dmaTotals.filter(([dma, n]) => !(quota[dma] > 0) || n < quota[dma]);
         phase2Open = short.length === 0;
-        if (!phase2Open) console.log(`phase-2 LOCKED — ${short.length}/${P1.length} phase-1 metros below quota ${P1_QUOTA}: ${short.slice(0, 6).join(', ')}`);
+        if (!phase2Open) console.log(`phase-2 LOCKED — DMAs below quota: ${short.map(([d, n]) => `${d} ${n}/${quota[d] ?? 'NO QUOTA'}`).join(', ')}`);
+        else console.log(`phase-2 OPEN — every Phase-1 DMA at quota: ${dmaTotals.map(([d, n]) => `${d} ${n}/${quota[d]}`).join(', ')}`);
       } else {
-        console.log('phase-2 LOCKED — PHASE1_CITY_QUOTA unset (founder must set it; there is no default)');
+        console.log('phase-2 LOCKED — PHASE1_CITY_QUOTA unset or unparseable (fail closed; the founder formula map is the only key)');
       }
       if (jobs.length < perRun && phase2Open) {
         let q2 = gdb.from('crawl_requests')
