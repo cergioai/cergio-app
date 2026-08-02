@@ -5166,6 +5166,13 @@ export async function opsConsole(opts = {}) {
   return { data: null, error: { ...fb.error, message: `${fbMsg} (admin-crawl-status: ${primaryMsg})` } };
 }
 
+// SPEC-220 — CI subagent fleet status for /ops/agents.
+export async function ciSubagents() {
+  const { data, error } = await supabase.functions.invoke('ci-subagents', { body: {} });
+  if (error) return { data: null, error };
+  return { data, error: null };
+}
+
 export async function leadsDashboard(audience = 'services', { city = null, source = null, status = null, contactableOnly = false } = {}) {
   const { data, error } = await supabase.functions.invoke('leads-dashboard', {
     body: { audience, city, source, status, contactableOnly },

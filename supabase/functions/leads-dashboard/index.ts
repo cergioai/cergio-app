@@ -56,6 +56,16 @@ serve(async (req: Request) => {
     const stateCol = 'state';
     // Creator rows label their origin in discovered_via; service rows use data_source.
     const srcCol = DS.srcCol;
+    // SPEC-219 — DECLARED HERE, ABOVE EVERY USE. This was declared 7 lines BELOW its first
+    // use on line 102, which is the temporal dead zone: a const is hoisted but unusable
+    // until its declaration runs, so the function threw ReferenceError on every call and
+    // /ops/data returned "Edge Function returned a non-2xx status code".
+    //
+    // THIS IS THE FOURTH OUTAGE OF EXACTLY THIS SHAPE on this project: the blank homepage
+    // (mode used before binding), the white /auth (useEffect above const returnTo), every
+    // crawled row discarded (flushBuf referencing a handler-scoped gdb), and now this.
+    // Every one passed the build. Every one passed the gate suite.
+    const emailCol = DS.emailCol;
 
     const count = async (q: (b: any) => any) => {
       const { count } = await q(db.from(table).select('id', { count: 'exact', head: true }));
@@ -106,7 +116,6 @@ serve(async (req: Request) => {
     // platform-wide contactable total hides which source is producing the junk, so it is
     // broken out per source — that is the number that should decide where a dollar goes.
     const contactBySource: Record<string, { total: number; contactable: number; pct: number }> = {};
-    const emailCol = DS.emailCol;
     if (isLeadTable) await Promise.all(sources.map(async (src) => {
       const t = await count((b) => b.eq(srcCol, src));
       const c = await count((b) => b.eq(srcCol, src).or(`phone.not.is.null,${emailCol}.not.is.null`));

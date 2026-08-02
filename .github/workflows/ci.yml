@@ -41,6 +41,12 @@ jobs:
       - name: Type-check edge functions (fails only on NEW errors)
         run: node scripts/deno-guard.mjs
 
+      # SPEC-219 — four production outages have had one shape: an identifier used above
+      # the line that declares it. The build does not catch it and deno check does not
+      # catch it (verified against the real broken file: zero type errors).
+      - name: Used-before-declared guard
+        run: node scripts/tdz-guard.mjs
+
       # ── SPEC-196 · BLAST-RADIUS GUARD ─────────────────────────────────────
       # The founder's diagnosis, and the correct one: "every edit came with an
       # avalanche of unrelated changes that were never prescribed." A change must
