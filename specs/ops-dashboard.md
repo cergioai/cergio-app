@@ -53,3 +53,25 @@ biggest number on the page never says what it counts.
 ## Progress log
 
 - 2026-08-02 — subagent created; owns OpsStatusScreen.jsx + opsPayload.ts, guards #227 #229 #231 #232.
+
+## Run order for the ops-dashboard subagent
+
+Founder, 2026-08-02: "allocate the dashboard to CI subagent.. and let him immediately fix
+the issues". Credit added, so the thinking half can run.
+
+Work these in order. Each must pass the gate suite, the production build AND the scope
+guard after the edit, or be reverted and reported as an attempt.
+
+1. **Rows-per-download control on /ops/status.** 100 / 500 / 1000 / 5000 / 10000 / 25000.
+   The founder asked twice and it is still missing from the deployed screen.
+2. **Service type facet must render.** It exists in the payload; confirm the control is
+   present and populated, and that choosing one narrows every count and CSV.
+3. **Verify the DMA list shows exactly NYC and Miami** with off-target states reported
+   beneath, and that selecting a DMA does not drop the count (all spellings matched).
+4. **Reconcile the headline totals.** "Services total" must equal a direct count for the
+   same filter. If a count query fails, its error must be on screen in red.
+5. **yellowpages source-name mismatch** — the exporter reads `yellowpages_apify` while the
+   crawler writes `yellowpages`, so 859 real rows export as zero. Pick ONE name and make
+   both sides use it. This is a two-sources-of-truth defect, the third mechanism.
+
+Anything requiring a founder decision is REFUSED, not guessed.
