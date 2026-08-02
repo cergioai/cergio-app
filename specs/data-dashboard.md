@@ -77,3 +77,16 @@ headline number never says what it counts.
 | Creators | **Creators** | `leads_influencers` |
 | Crawl queue | **Crawl queue** | `crawl_requests` |
 | Agent runs | **Agent runs** | `agent_runs` |
+
+**2026-08-02, verbatim:** "cities are DMA's only ..what you have under cities is
+locations ... which should be a sub filter of city.. alongside service type or category
+(dog trainer etc)"
+
+| term | means | column | note |
+|---|---|---|---|
+| **City** | the DMA — NYC, Miami | `state` (NY / FL) | the top-level geography |
+| **Location** | neighbourhood inside a city — Manhattan, Brooklyn, Wynwood | `city` | sub-filter of City |
+
+The database column named `city` holds LOCATIONS, not cities. That mismatch is the source
+of the confusion and must not be papered over in the UI: the screen uses the founder's
+words, and the query maps them to the columns.

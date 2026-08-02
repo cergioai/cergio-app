@@ -6244,8 +6244,8 @@ test('metro-and-locality-are-separate-filters-and-every-facet-comes-from-the-dat
   assert(!(!/localities|serviceTypes|categories/.test(fn)), 'facet lists are never returned, so the screen would have to hardcode them and go stale');
   assert(!(!/const facet =/.test(fn)), 'facets are not derived from the data');
   const scr = stripComments(readFile('src/screens/DataExportScreen.jsx'));
-  assert(!(!/METROS/.test(scr)), 'the metro control is gone');
-  assert(!(!/pickMetro/.test(scr)), 'changing metro does not clear locality, leaving an impossible filter applied');
+  assert(!(!/CITIES/.test(scr)), 'the city (DMA) control is gone');
+  assert(!(!/pickCity/.test(scr)), 'changing city does not clear location, leaving an impossible filter applied');
   assert(!(!/RECENCY/.test(scr)), 'no recency control');
   assert(!(!/setServiceType/.test(scr) && /setCategory/.test(scr)), 'type and category filters are not wired');
   const api = stripComments(readFile('src/lib/api.js'));
