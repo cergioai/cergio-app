@@ -102,6 +102,7 @@ import { OpsStatusScreen }                  from './screens/OpsStatusScreen';
 import { EarlyOffersScreen }                from './screens/EarlyOffersScreen';
 import { P2pSmsQueueScreen }               from './screens/P2pSmsQueueScreen';
 import { DataExportScreen }                from './screens/DataExportScreen';
+import { AgentFleetScreen } from './screens/AgentFleetScreen';
 import { SupportInboxScreen }               from './screens/SupportInboxScreen';
 import { PublicProfileServicesScreen }      from './screens/PublicProfileServicesScreen';
 import { InviteLandingScreen }              from './screens/InviteLandingScreen';
@@ -125,6 +126,7 @@ const HIDE_NAV_PATHS_EXTRA = [
   '/ops',                             // founder console — renders its own full shell
   '/ops/sms',                         // P2P tap-to-send queue — own full shell
   '/ops/data',                        // data export dashboard — own full shell
+  '/ops/agents',                      // CI subagent fleet — own full shell
   '/support-inbox',                   // founder support inbox — own full shell
 ];
 
@@ -629,6 +631,7 @@ export default function App() {
           <Route path="/ops/status"            element={<OpsStatusScreen />} />
           <Route path="/ops/sms"               element={<P2pSmsQueueScreen />} />
           <Route path="/ops/data"              element={<DataExportScreen />} />
+          <Route path="/ops/agents"            element={<AgentFleetScreen />} />
           {/* crack-help-haiku — founder support inbox (admin-gated inside the
               screen, RLS-gated in the DB). Reads all tickets, reply closes. */}
           <Route path="/support-inbox"         element={<SupportInboxScreen />} />

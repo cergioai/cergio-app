@@ -12,7 +12,12 @@
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 
-const MODEL = process.env.AGENT_MODEL || 'claude-opus-5';
+// COST. Eight subagents on Opus every hour is wasteful and Tarik has been right to say so.
+// The hourly SCAN — read the spec and the files, name one defect — runs on Haiku. Opus is
+// used only when a real defect needs an actual fix written, which is rare and worth it.
+const SCAN_MODEL = process.env.AGENT_SCAN_MODEL || 'claude-haiku-4-5-20251001';
+const FIX_MODEL = process.env.AGENT_FIX_MODEL || 'claude-opus-5';
+const MODEL = SCAN_MODEL;
 const KEY = process.env.ANTHROPIC_API_KEY || '';
 const id = process.argv[2];
 const fleet = JSON.parse(fs.readFileSync('agents/fleet.json', 'utf8'));
@@ -132,7 +137,7 @@ try {
   const r2 = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, max_tokens: 16000, messages: [{ role: 'user', content: askFix }] }),
+    body: JSON.stringify({ model: FIX_MODEL, max_tokens: 16000, messages: [{ role: 'user', content: askFix }] }),
   });
   if (!r2.ok) { out({ state: 'FINDING', acted: false, why_not: `fix call HTTP ${r2.status}`, ...finding }); process.exit(0); }
   const t2 = JSON.parse(await r2.text()).content?.map((c) => c.text || '').join('') || '';

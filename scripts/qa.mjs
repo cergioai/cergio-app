@@ -6187,6 +6187,53 @@ test('a-subagent-fix-must-prove-itself-and-can-never-merge-itself', 'SPEC-218 (f
   assert(!(!/pull-requests: write/.test(wf)), 'the workflow cannot open a PR — it would fail silently every run');
 });
 
+test('used-before-declared-is-caught-because-nothing-else-catches-it', 'SPEC-219 (found live 2026-08-02): /ops/data returned "Edge Function returned a non-2xx status code". The cause was ReferenceError: Cannot access emailCol before initialization — I declared it seven lines BELOW its first use. THIS IS THE FOURTH PRODUCTION OUTAGE OF EXACTLY THIS SHAPE: the blank homepage (mode used before binding), the white /auth (useEffect above const returnTo), every crawled row discarded (flushBuf referencing a handler-scoped gdb), and now this. Every one passed the production build. Every one passed the full gate suite. And deno check does NOT catch it either — verified by running it against the real broken file, which produced ZERO type errors, because TypeScript treats a reference inside a closure as deferred even when that closure is awaited immediately. So this needed a scope check, not another type check. Eighteen pre-existing occurrences are baselined rather than fixed in one change, because making them all fail today would block every unrelated PR — the mistake that broke the Chinese wall on its first attempt.', '#219', () => {
+  const g = readFile('scripts/tdz-guard.mjs');
+  assert(!(!/const\|let/.test(g) || !/matchAll/.test(g)), 'the guard does not scan declarations');
+  assert(!(!/tdz-baseline\.json/.test(g)), 'no baseline — 18 pre-existing occurrences would fail every unrelated PR');
+  assert(!(!/process\.exit\(1\)/.test(g)), 'the guard cannot fail the build, so it is decoration');
+  // It must blank comments, strings AND regex literals. Each of those produced a
+  // confident false finding while I was building it, and a guard that cries wolf is one
+  // people learn to ignore.
+  for (const k of ['//', '`', 'regex']) void k;
+  assert(!(!/function blank/.test(g)), 'the guard does not blank comments and strings, so a name inside a SQL string or a comment reads as a use');
+  assert(!(!/\[gimsuyd\]/.test(g)), 'regex literals are not blanked — /^osm-blocked/i made the guard report a use of "blocked" that was part of a pattern');
+  const base = JSON.parse(readFile('tdz-baseline.json'));
+  assert(!(!Array.isArray(base)), 'the baseline is not a list');
+  assert(!(base.some((b) => /leads-dashboard/.test(b))), 'the live /ops/data defect is in the baseline — the one occurrence that actually broke production must never be excused');
+  const ci = readFile('.github/workflows/ci.yml');
+  assert(!(!/tdz-guard\.mjs/.test(ci)), 'the guard does not run in CI, so it would only ever catch what someone remembered to check by hand');
+  const dash = readFile('supabase/functions/leads-dashboard/index.ts');
+  const iDecl = dash.indexOf('const emailCol');
+  const iUse = dash.indexOf('b.not(emailCol');
+  assert(!(iDecl < 0), 'emailCol is no longer declared at all');
+  assert(!(iUse > -1 && iDecl > iUse), 'emailCol is used above its declaration again — this is the exact line that returned 500 on /ops/data');
+});
+
+test('ci-subagent-status-is-in-the-product-not-on-a-git-branch', 'SPEC-220 (founder, 2026-08-02): "need dashboard with live numbers and download a report of CI subagents... not github." A status page that requires opening a git branch is not a dashboard — it is a file, and it excludes anyone who does not read git. Each subagent now publishes its run into the product database, and /ops/agents renders the latest run per subagent with a CSV download of both the current state and the full history. The publish step must never fail the job: a reporting problem must not be able to hide the report it was meant to deliver, which is the same reasoning that made CANNOT RUN outrank everything else.', '#220', () => {
+  const fn = readFile('supabase/functions/ci-subagents/index.ts');
+  assert(!(!/ci_subagent_runs/.test(fn)), 'the function does not read the runs table');
+  assert(!(!/admins\.includes\(email\)/.test(fn)), 'the fleet status is not admin-gated');
+  const scr = readFile('src/screens/AgentFleetScreen.jsx');
+  assert(!(!/Download report/.test(scr)), 'no download — the founder asked for a downloadable report');
+  assert(!(!/full history/i.test(scr)), 'only the latest run is downloadable, so trend over time is invisible');
+  assert(!(!/CANNOT RUN/.test(scr)), 'the screen cannot show a subagent that never started, which would read as idle');
+  const app = readFile('src/App.jsx');
+  assert(!(!/\/ops\/agents/.test(app)), 'no route — the screen would be unreachable');
+  assert(!(!/AgentFleetScreen/.test(app)), 'the screen is never imported');
+  const api = stripComments(readFile('src/lib/api.js'));
+  assert(!(!/ci-subagents/.test(api)), 'the api layer cannot call the function');
+  const pub = readFile('scripts/agent-publish.mjs');
+  assert(!(!/ci_subagent_runs/.test(pub)), 'nothing publishes the run, so the dashboard would stay empty forever');
+  assert(!(/process\.exit\(1\)/.test(pub)), 'a publish failure fails the job — a reporting problem must not hide the report it was meant to deliver');
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/agent-publish\.mjs/.test(wf)), 'the workflow never publishes to the dashboard');
+  const mig = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations')).filter((f) => /ci_subagent_runs/.test(f));
+  assert(!(!mig.length), 'no migration creates the table, so the publish would 404 every run');
+});
+
+
+
 
 
 

@@ -50,6 +50,9 @@ existing caller keeps its behaviour because both default to null/false.
 - `MORNING-REPORT.md`
 - `scripts/agent-work.mjs`
 - `scripts/agent-pr.mjs`
+- `scripts/tdz-guard.mjs`
+- `tdz-baseline.json`
+- `.github/workflows/ci.yml`
 - `scripts/auto-build.mjs`
 - `scripts/auto-fix.mjs`
 - `scripts/expand-coverage.mjs`
@@ -58,3 +61,8 @@ existing caller keeps its behaviour because both default to null/false.
 SHARED-CHANGE-APPROVED — scripts/qa.mjs: the support-triage assertion demanded the model
 name 'claude-opus-4-8', which does not exist. The gate was ENFORCING the defect. Changed
 to 'claude-opus-5'.
+- `src/screens/AgentFleetScreen.jsx`
+- `supabase/functions/ci-subagents/index.ts`
+- `scripts/agent-publish.mjs`
+- `supabase/migrations/20260802050000_ci_subagent_runs.sql`
+- `src/App.jsx`
