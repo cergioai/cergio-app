@@ -6129,8 +6129,12 @@ test('a-ci-agent-is-equivalent-to-a-subagent-and-cannot-merge-itself', 'SPEC-216
   const wf = readFile('.github/workflows/night-fleet.yml');
   assert(!(!/agent-work\.mjs/.test(wf)), 'the workflow never runs the thinking half, so the fleet only reports gate results');
   assert(!(!/continue-on-error: true/.test(wf)), 'a model outage would fail the job and take the whole report with it');
-  assert(!(/--auto|gh pr merge|auto-merge/i.test(wf)), 'the fleet can merge its own work — every past outage reached production through an automatic merge');
-  assert(!(/push origin main|push .* HEAD:main/.test(wf)), 'the fleet pushes to main directly');
+  // Strip YAML comments first: the workflow explains IN A COMMENT why it never
+  // auto-merges, and scanning raw text flagged the explanation. Deleting the comment to
+  // satisfy the gate would have removed the only record of why the rule exists.
+  const wfCode = wf.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert(!(/--auto|gh pr merge|auto-merge/i.test(wfCode)), 'the fleet can merge its own work — every past outage reached production through an automatic merge');
+  assert(!(/push origin main|push .* HEAD:main/.test(wfCode)), 'the fleet pushes to main directly');
 });
 
 test('ci-subagents-read-the-spec-first-and-stay-out-of-the-dumb-zone', 'SPEC-217 (research-driven, 2026-08-02). Two findings from practitioners who solved our exact problems in production, applied here. (1) HumanLayer/Dex Horthy measured 100,000 developer sessions and found a "dumb zone" — the middle of a large context window where recall degrades and reasoning falters — and their Frequent Intentional Compaction keeps utilisation in the 40-60 percent band, validated on 100k-300k line codebases. That is the best available explanation for a specific failure of mine: inventing a 6-city list when 12 were authorised, writing a second URL parser when one existed, reusing a gate ID already taken. Each happened deep into a long session; each was a recall failure dressed as a decision. So each subagent gets a hard context cap. (2) GitHub Spec Kit and Geoffrey Huntley both put the SPEC before the code and keep progress in files and git history rather than in the window. Reading code first is how a spec gets rebuilt from bugs — exactly what Tarik caught me doing. So the spec is loaded before the source, and a missing spec is itself the first defect.', '#217', () => {
@@ -6159,6 +6163,30 @@ test('ci-subagents-read-the-spec-first-and-stay-out-of-the-dumb-zone', 'SPEC-217
     assert(!(!/Founder decisions on record/.test(sp)), `specs/${a.id}.md has nowhere to record a founder decision verbatim, so decisions would survive only as my paraphrase`);
   }
 });
+
+test('a-subagent-fix-must-prove-itself-and-can-never-merge-itself', 'SPEC-218 (founder, 2026-08-02): "need proof in the morning with CI subagents reports of what they have done and how they are hammering towards a bug free against spec green." Reporting is not doing, so the subagents now act — but on this project an unattended edit has caused every serious outage, so the loop closes on itself the way Anthropic describes: act, run a HARD pass/fail, read the result, keep or throw away. Three checks must all pass AFTER the edit — the gate suite, the production build, and the scope guard proving the change never left the agent wall — or the file is restored byte for byte and the run reports an ATTEMPT rather than a fix. Two further rules: a model may NAME a path it does not own even when the cell hides it, so ownership is re-checked before writing; and anything needing a founder decision is refused outright rather than guessed, because inventing values the spec does not contain is the single failure that has cost this project the most.', '#218', () => {
+  const w = readFile('scripts/agent-work.mjs');
+  const c = stripComments(w);
+  assert(!(!/a\.owns\.includes\(fixed\.path\)/.test(c)), 'the subagent does not re-check ownership before writing — a model can name a path the cell hides, and an agent that writes outside its wall has no wall');
+  assert(!(!/scripts\/qa\.mjs/.test(c) && /npm run build/.test(c)), 'a fix is not re-verified against the gates and the build, so an unattended edit could ship on the model saying it was fine');
+  assert(!(!/scope-guard/.test(c)), 'the scope guard is not re-run, so a fix could quietly widen its own blast radius');
+  assert(!(!/writeFileSync\(fixed\.path, before\)/.test(c)), 'a failed fix is not reverted — the working tree would keep a change that failed its own checks');
+  assert(!(!/needs_founder/.test(c)), 'the subagent will act on a defect that needs a founder decision, which means guessing a value the spec does not contain');
+  const pr = readFile('scripts/agent-pr.mjs');
+  // RAW, not stripped: every git and gh command here lives inside a template literal, and
+  // stripComments blanks those. On the stripped copy these three assertions fired on
+  // nothing — gates that could not fail. Fourth time tonight this trap has caught me, so
+  // it is now the first thing I check when a new gate behaves oddly.
+  const prCode = pr.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  assert(!(!/gh pr create/.test(prCode)), 'a kept fix never becomes a PR, so the work would be invisible');
+  assert(!(/--auto|pr merge/.test(prCode)), 'the subagent can merge its own PR — every past outage here reached production through an automatic merge');
+  assert(!(/HEAD:main|push origin main/.test(prCode)), 'the subagent pushes to main directly');
+  assert(!(!/agent\/\$\{id\}/.test(pr)), 'the branch does not carry the agent id, so a bad change is not attributable to one owner');
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/agent-pr\.mjs/.test(wf)), 'the workflow never opens PRs');
+  assert(!(!/pull-requests: write/.test(wf)), 'the workflow cannot open a PR — it would fail silently every run');
+});
+
 
 
 

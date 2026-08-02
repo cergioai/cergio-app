@@ -100,4 +100,79 @@ try {
   parsed = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
 } catch { out({ state: 'UNREADABLE', detail: body.slice(0, 300) }); process.exit(0); }
 
-out({ state: parsed.finding && parsed.finding !== 'NONE' ? 'FINDING' : 'NO FINDING', model: MODEL, ...parsed });
+const finding = parsed.finding && parsed.finding !== 'NONE' ? parsed : null;
+if (!finding) { out({ state: 'NO FINDING', model: MODEL }); process.exit(0); }
+
+// ─── THE RALPH LOOP (Geoffrey Huntley) ────────────────────────────────────────────
+// Same brief every run; progress accumulates in FILES and git history, never in the
+// window. So this run does not need to remember the last one — it reads the spec's
+// progress log, which is on disk.
+//
+// The loop closes on itself the way Anthropic describes: the subagent acts, runs a hard
+// pass/fail, reads the result, and either keeps the change or throws it away. Nothing
+// here is trusted because the model said so.
+if (finding.needs_founder || finding.confidence === 'low') {
+  out({ state: 'FINDING', model: MODEL, acted: false, why_not: finding.needs_founder ? 'needs a founder decision — I will not invent the answer' : 'confidence too low to act unattended', ...finding });
+  process.exit(0);
+}
+
+const target = a.owns.find((f) => { try { return fs.statSync(f).isFile(); } catch { return false; } });
+const askFix = `You found this defect: ${finding.finding}
+Evidence: ${finding.evidence}
+Proposed: ${finding.fix}
+
+Return the COMPLETE new contents of exactly ONE file you own, as strict JSON:
+{"path":"<one of: ${a.owns.join(', ')}>","contents":"<the entire file>"}
+
+Rules: change the minimum. Do not reformat. Do not rename. Do not touch anything outside
+the defect. Add a comment above the change explaining WHY, naming what went wrong.`;
+
+let fixed = null;
+try {
+  const r2 = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: MODEL, max_tokens: 16000, messages: [{ role: 'user', content: askFix }] }),
+  });
+  if (!r2.ok) { out({ state: 'FINDING', acted: false, why_not: `fix call HTTP ${r2.status}`, ...finding }); process.exit(0); }
+  const t2 = JSON.parse(await r2.text()).content?.map((c) => c.text || '').join('') || '';
+  fixed = JSON.parse(t2.slice(t2.indexOf('{'), t2.lastIndexOf('}') + 1));
+} catch (e) { out({ state: 'FINDING', acted: false, why_not: `fix unreadable: ${String(e).slice(0, 150)}`, ...finding }); process.exit(0); }
+
+// THE WALL, ENFORCED HERE TOO. The cell hides other files from view, but a model can still
+// NAME a path it does not own. Refuse it — an agent that can write outside its wall has no
+// wall.
+if (!fixed?.path || !a.owns.includes(fixed.path) || !fixed.contents || fixed.contents.length < 50) {
+  out({ state: 'FINDING', acted: false, why_not: `refused: proposed writing "${fixed?.path}" which is outside this agent's owned files`, ...finding });
+  process.exit(0);
+}
+
+const before = fs.readFileSync(fixed.path, 'utf8');
+fs.writeFileSync(fixed.path, fixed.contents);
+
+// THE HARD PASS/FAIL. If the gates or the build reject it, the change is thrown away and
+// the run reports the attempt. A fix that cannot prove itself is not a fix.
+let verdict = 'kept', detail = '';
+try { execSync('node scripts/qa.mjs', { stdio: 'pipe' }); }
+catch (e) { verdict = 'reverted'; detail = 'qa gates failed'; }
+if (verdict === 'kept') {
+  try { execSync('npm run build', { stdio: 'pipe' }); }
+  catch { verdict = 'reverted'; detail = 'build failed'; }
+}
+if (verdict === 'kept') {
+  try { execSync('node scripts/scope-guard.mjs', { stdio: 'pipe' }); }
+  catch { verdict = 'reverted'; detail = 'change left its wall'; }
+}
+if (verdict === 'reverted') {
+  fs.writeFileSync(fixed.path, before);
+  out({ state: 'ATTEMPTED', acted: false, file: fixed.path, why_not: detail, ...finding });
+  process.exit(0);
+}
+
+// Progress goes in the file, not the window.
+try {
+  const sp = `specs/${id}.md`;
+  fs.appendFileSync(sp, `\n- ${new Date().toISOString().slice(0, 16)} — fixed in \`${fixed.path}\`: ${finding.finding}\n`);
+} catch { /* the spec log is a record, not a gate */ }
+
+out({ state: 'FIXED', model: MODEL, acted: true, file: fixed.path, ...finding });

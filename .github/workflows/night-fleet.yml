@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   agent:
@@ -46,6 +47,14 @@ jobs:
           AGENT_MODEL: claude-opus-5
           AGENT_CTX_CAP: '80000'
         run: node scripts/agent-work.mjs ${{ matrix.id }} || true
+
+      # A kept fix becomes a PR on its own branch. Never a push to main, never auto-merge.
+      - name: Open a PR if this subagent kept a fix
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/agent-pr.mjs ${{ matrix.id }}
       - uses: actions/upload-artifact@v4
         with:
           name: report-${{ matrix.id }}

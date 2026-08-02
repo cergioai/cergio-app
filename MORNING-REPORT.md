@@ -1,4 +1,4 @@
-# Morning report — 2026-08-02 04:24 UTC
+# Morning report — 2026-08-02 04:39 UTC
 
 **0 of 8 agents GREEN.** Everything below is sorted worst first.
 
@@ -20,6 +20,10 @@ agent for weeks: it was dark on a 400 while every dashboard read green, because
 nothing distinguished "idle" from "unable to start". The API's own words follow.
 
 - **data-dashboard** — ANTHROPIC_API_KEY is not set on this runner — the agent is not idle, it is unable to start
+
+## What the CI subagents DID this run
+
+No subagent changed anything this run.
 
 ## What the agents found this run
 

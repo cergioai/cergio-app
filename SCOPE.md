@@ -49,6 +49,7 @@ existing caller keeps its behaviour because both default to null/false.
 - `reports/`
 - `MORNING-REPORT.md`
 - `scripts/agent-work.mjs`
+- `scripts/agent-pr.mjs`
 - `scripts/auto-build.mjs`
 - `scripts/auto-fix.mjs`
 - `scripts/expand-coverage.mjs`

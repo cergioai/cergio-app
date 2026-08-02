@@ -56,6 +56,22 @@ if (cant.length) {
   say();
 }
 
+// WHAT THEY DID, not just what they saw. Founder: "proof of what they've done."
+const acted = rs.filter((r) => r.work && (r.work.state === 'FIXED' || r.work.state === 'ATTEMPTED'));
+say('## What the CI subagents DID this run');
+say();
+if (!acted.length) say('No subagent changed anything this run.');
+for (const r of acted) {
+  if (r.work.state === 'FIXED') {
+    say(`- **${r.id} — FIXED** \`${r.work.file}\`: ${r.work.finding}`);
+    say(`  Kept because the gate suite, the build and the scope guard all passed after the edit. A PR is open; it is NOT merged.`);
+  } else {
+    say(`- **${r.id} — ATTEMPTED and REVERTED** \`${r.work.file}\`: ${r.work.finding}`);
+    say(`  Thrown away because ${r.work.why_not}. The working tree is byte-for-byte as it was. This is the loop working, not failing.`);
+  }
+}
+say();
+
 say('## What the agents found this run');
 say();
 const found = rs.filter((r) => r.work && r.work.state === 'FINDING');
