@@ -1,0 +1,2 @@
+fired: 2026-08-02T17:36:44Z
+reason: full data export for founder download — URL parser fixed in SPEC-204, so this run should actually read rows.
