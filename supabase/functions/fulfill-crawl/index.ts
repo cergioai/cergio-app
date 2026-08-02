@@ -404,7 +404,7 @@ const gdb = growthDb();
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, delivered_count: saved,
-            notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no IG accounts for this service/city (raw items returned: ${r.found ?? 0})`) : 'ig_services'),
+            notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no IG accounts for this service/city (raw items returned: ${r.found ?? 0})`) : `ig_services${_lastCreatorError ? ' · ' + _lastCreatorError : ''}`),
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'craigslist') {
@@ -1905,6 +1905,7 @@ function msLeft(cap: number): number {
 }
 
 let _lastFlushError: string | null = null;
+let _lastCreatorError: string | null = null;   // SPEC-202
 let _lastApifyError: string | null = null;
 // SPEC-185: the ACTUAL dollars the last apify run cost, read back from Apify.
 // Estimates are not good enough when the rule is "never spend $1 without output".
@@ -2299,7 +2300,13 @@ async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; fo
         external_url: ext, discovered_via: 'ig-scraper-user-search',
         outreach_status: 'pending_review',
       }, { onConflict: 'id' });
-    } catch (_e) { /* creator half is best-effort */ }
+    } catch (e) {
+      // SPEC-202: this used to swallow the error entirely. It hid a 42703 on a column
+      // that did not exist, so 262 ig_services rows produced ZERO creators and nothing
+      // anywhere said why. A best-effort write that never reports is not best-effort,
+      // it is invisible. Record it once — the job note then carries the real reason.
+      if (!_lastCreatorError) _lastCreatorError = `creator row rejected: ${serr(e)}`;
+    }
   }
   return { saved, found, query };
 }

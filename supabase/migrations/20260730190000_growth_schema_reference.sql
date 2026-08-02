@@ -57,6 +57,10 @@ create table if not exists public.leads_influencers (
   -- Enrichment columns the enrich-influencers worker READS (SPEC-132 cutover
   -- omitted these, so every run threw 42703 and CREATORS_NOT_GROWING fired).
   bio text, external_url text, enrich_attempted_at timestamptz,
+  -- SPEC-202: fulfill-crawl writes is_business on every creator row. It was missing, so
+  -- EVERY creator upsert failed 42703 — and the catch below it swallowed the reason.
+  -- 262 ig_services rows produced 0 creators, silently, for as long as this has run.
+  is_business boolean,
   fetched_at timestamptz default now()
 );
 -- Idempotent guards so an EXISTING (bio-less) growth table gets healed on apply.
