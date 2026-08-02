@@ -6370,6 +6370,14 @@ test('each-creator-source-stops-itself-and-obeys-the-committed-switch', 'SPEC-23
   assert(!(!/select=bio,external_url,enrich_attempted_at,is_business,created_at/.test(ags)), 'the schema verify probes only reader columns — a writer column can be missing while the verify stays green');
 });
 
+test('status2-and-agents2-are-aliases-of-the-real-screens', 'SPEC-238 (founder, 2026-08-02): "want to create another dedicated url for the dashboard.. call it /status2 and /agents2". Dedicated short URLs for the two screens the founder opens most. They are ALIASES of the same components, never copies — a duplicated screen is a second source of truth and the untested copy is always the one reporting to the founder. /agents2 must hide the bottom nav exactly like /ops/agents does (the original renders its own full shell), or the alias visibly behaves differently from the original and reads as a broken page.', '#238', () => {
+  const app = stripComments(readFile('src/App.jsx'));
+  assert(!(!/path="\/status2"\s+element=\{<OpsStatusScreen \/>\}/.test(app)), '/status2 is missing or does not render OpsStatusScreen — the founder dedicated URL is dead or points at a copy');
+  assert(!(!/path="\/agents2"\s+element=\{<AgentFleetScreen \/>\}/.test(app)), '/agents2 is missing or does not render AgentFleetScreen — the founder dedicated URL is dead or points at a copy');
+  const hide = (app.match(/const HIDE_NAV_PATHS_EXTRA = \[[\s\S]*?\];/) || [''])[0];
+  assert(!(!/'\/agents2'/.test(hide)), '/agents2 does not hide the bottom nav while /ops/agents does — the alias behaves differently from the original');
+});
+
 test('the-headline-live-counts-obey-the-filters-and-dmas-come-from-the-data', 'SPEC-231 (founder, 2026-08-02): "the filter isnt holding.. clicking 4 wks doesnt change the counts". The four LIVE-counter numbers — the ones actually read on that page — were hardcoded queries built straight off the table, bypassing the city, location and time helpers entirely. So every filter appeared broken while the data behind it was fine, which is the worst kind of defect: it destroys trust in a correct system. Separately the DMA list was hardcoded to two, so a third DMA could be crawled and never appear in the filter, leaving its rows invisible on the one screen meant to prove what we have. DMAs are derived from the data, known codes get their proper name, and an unknown code is shown by its code rather than dropped.', '#231', () => {
   const ops = readFile('supabase/functions/_shared/opsPayload.ts');
   const c = stripComments(ops);
