@@ -35,23 +35,30 @@ function Stat({ label, value, bad }) {
 }
 export function OpsStatusScreen() {
   const [tab, setTab] = useState('live');
-  const [city, setCity] = useState('');   // '' = all cities (founder request: filter by city)
+  // SPEC-227: CITY is the DMA (NYC / Miami). LOCATION is the neighbourhood inside it.
+  // The dropdown used to list Bronx, Astoria, Bayside under a "City" label — those are
+  // locations, which is exactly why it read as wrong.
+  const [city, setCity] = useState('');       // '' = both DMAs
+  const [location, setLocation] = useState('');
+  // SPEC-229 — same time windows as /ops/data so the two screens cannot disagree.
+  const [hours, setHours] = useState(0);
+  const TIMES = [[0, 'All'], [6, '6h'], [12, '12h'], [24, '24h'], [48, '2d'], [72, '3d'], [168, '7d'], [336, '2w'], [672, '4w']];
   const [d, setD] = useState(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
-    const { data, error } = await opsConsole(city ? { city } : {}); setBusy(false);
+    const { data, error } = await opsConsole({ ...(city ? { city } : {}), ...(location ? { location } : {}), ...(hours ? { sinceHours: hours } : {}) }); setBusy(false);
     if (error || data?.error) { setErr(error?.message || data?.error); return; }
     setD(data);
-  }, [city]);
+  }, [city, location, hours]);
   useEffect(() => { load(); }, [load]);
 
   // download ONE source on click (the console used to preload every source -> timeout).
   // The CSV is scoped to the SAME city filter as the view it was clicked from.
   const fetchDl = useCallback(async (key) => {
-    const { data, error } = await opsConsole(city ? { download: key, city } : { download: key });
-    if (error || !data?.download?.[key]?.length) { setErr(error?.message || `no rows for ${key}${city ? ` in ${city}` : ''}`); return; }
-    dl([key.replace(':', '_'), city || 'all'].join('_'), data.download[key]);
-  }, [city]);
+    const { data, error } = await opsConsole({ download: key, ...(city ? { city } : {}), ...(location ? { location } : {}), ...(hours ? { sinceHours: hours } : {}) });
+    if (error || !data?.download?.[key]?.length) { setErr(error?.message || `no rows for ${key}${location || city ? ` in ${location || city}` : ''}`); return; }
+    dl([key.replace(':', '_'), city || 'all', location || ''].filter(Boolean).join('_'), data.download[key]);
+  }, [city, location, hours]);
 
   return (
     <div className="w-full max-w-full mx-auto px-4 py-6">
@@ -69,15 +76,30 @@ export function OpsStatusScreen() {
       </div>
       <div className="mt-3 flex items-center gap-2 flex-wrap">
         <label className="text-[11px] font-bold uppercase tracking-wide text-b3">City</label>
-        <select value={city} onChange={e => setCity(e.target.value)}
+        <select value={city} onChange={e => { setCity(e.target.value); setLocation(''); }}
           className="rounded-xl border border-bg5 bg-white px-3 py-2 text-meta-sm font-bold text-black">
           <option value="">All cities</option>
-          {Object.entries(d?.filter?.cities || {}).map(([c, n]) => (
-            <option key={c} value={c}>{c} ({n.toLocaleString()})</option>
+          {Object.entries(d?.filter?.cities || {}).map(([code, label]) => (
+            <option key={code} value={code}>{label}</option>
           ))}
         </select>
-        {city && <button onClick={() => setCity('')} className="text-[12px] font-bold text-gd">clear</button>}
-        <span className="text-[11px] text-b3">every count + CSV below is scoped to this city</span>
+        <label className="text-[11px] font-bold uppercase tracking-wide text-b3">Location</label>
+        <select value={location} onChange={e => setLocation(e.target.value)}
+          className="rounded-xl border border-bg5 bg-white px-3 py-2 text-meta-sm font-bold text-black">
+          <option value="">All locations</option>
+          {Object.entries(d?.filter?.locations || {}).map(([l, n]) => (
+            <option key={l} value={l}>{l} ({n.toLocaleString()})</option>
+          ))}
+        </select>
+        <label className="text-[11px] font-bold uppercase tracking-wide text-b3">Time</label>
+        <div className="flex flex-wrap gap-1">
+          {TIMES.map(([h, l]) => (
+            <button key={h} onClick={() => setHours(h)}
+              className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${hours === h ? 'bg-black text-white' : 'bg-bg5 text-b3'}`}>{l}</button>
+          ))}
+        </div>
+        {(city || location || hours) && <button onClick={() => { setCity(''); setLocation(''); setHours(0); }} className="text-[12px] font-bold text-gd">clear</button>}
+        <span className="text-[11px] text-b3">every count + CSV below is scoped to this city and location</span>
       </div>
       {busy && <div className="mt-4 text-b3">Loading…</div>}
       {d && (!d.counter || !d.creatorsBySource) && (

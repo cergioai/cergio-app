@@ -36,12 +36,18 @@ const STATUSES = {
 // why one control trying to mean both made Miami appear to vanish. The column named
 // `city` holds LOCATIONS, not cities; that mismatch is the whole confusion.
 const CITIES = [{ id: '', label: 'All' }, { id: 'NY', label: 'NYC' }, { id: 'FL', label: 'Miami' }];
-const RECENCY = [
-  { id: '0-10000', label: 'All' },
-  { id: '24-10000', label: 'Last 24h' },
-  { id: '0-100', label: 'Last 100' },
-  { id: '0-1000', label: 'Last 1000' },
+// SPEC-229 (founder, 2026-08-02): "time filter (last 6 hours, 12 hours, 24 hours, 2 days,
+// 3 days, 7 days, 2 weeks, 4 weeks) alongside last 100, 500, 1000, then increments up to
+// 25000 or all".
+//
+// TIME and SIZE are separate questions: "what arrived since yesterday" and "give me the
+// newest 500" are different asks and were being answered by one control. Two controls now,
+// combined — last 7 days AND the newest 1000 of them is a legitimate query.
+const TIMES = [
+  { h: 0, label: 'All time' }, { h: 6, label: '6h' }, { h: 12, label: '12h' }, { h: 24, label: '24h' },
+  { h: 48, label: '2d' }, { h: 72, label: '3d' }, { h: 168, label: '7d' }, { h: 336, label: '2w' }, { h: 672, label: '4w' },
 ];
+const SIZES = [100, 500, 1000, 5000, 10000, 25000];
 const COLS = {
   services: ['name', 'service_type', 'phone', 'owner_email', 'city', 'data_source', 'outreach_status'],
   creators: ['ig_handle', 'display_name', 'category', 'followers', 'email', 'city', 'is_business', 'discovered_via'],
@@ -90,7 +96,8 @@ export function DataExportScreen() {
   const [locality, setLocality] = useState('');
   const [serviceType, setServiceType] = useState('');
   const [category, setCategory] = useState('');
-  const [recency, setRecency] = useState('0-10000');
+  const [hours, setHours] = useState(0);
+  const [size, setSize] = useState(1000);
   const [reachableOnly, setReachableOnly] = useState(false);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -102,21 +109,20 @@ export function DataExportScreen() {
   const pickAudience = (id) => { setAudience(id); setSource(''); setStatus(''); setReachableOnly(false); setLocality(''); setServiceType(''); setCategory(''); };
   // Changing city clears the location: Brooklyn is not a choice once the city is Miami.
   const pickCity = (id) => { setCity(id); setLocality(''); };
-  const clearAll = () => { setCity(''); setLocality(''); setSource(''); setStatus(''); setServiceType(''); setCategory(''); setReachableOnly(false); setRecency('0-10000'); };
+  const clearAll = () => { setCity(''); setLocality(''); setSource(''); setStatus(''); setServiceType(''); setCategory(''); setReachableOnly(false); setHours(0); setSize(1000); };
 
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
-    const [h, lim] = recency.split('-').map(Number);
     const { data: d, error } = await leadsDashboard(audience, {
       city: city || null, locality: locality || null, source: source || null, status: status || null,
       serviceType: serviceType || null, category: category || null,
-      contactableOnly: reachableOnly, sinceHours: h, limit: lim,
+      contactableOnly: reachableOnly, sinceHours: hours, limit: size,
     });
     setBusy(false);
     if (error) { setErr(error.message || 'Load failed'); setData(null); return; }
     if (d?.error) { setErr(d.error); setData(null); return; }
     setData(d);
-  }, [audience, city, locality, source, status, serviceType, category, reachableOnly, recency]);
+  }, [audience, city, locality, source, status, serviceType, category, reachableOnly, hours, size]);
   useEffect(() => { load(); }, [load]);
 
   // DEFECT 2. Only offer sources that actually have rows. An option that can only ever
@@ -129,11 +135,11 @@ export function DataExportScreen() {
   const cols = COLS[audience] || Object.keys(rows[0] || {}).slice(0, 8);
   const noteCol = NOTE_COL[audience];
   const isLead = data?.isLeadTable;
-  const filtered = !!(city || locality || source || status || serviceType || category || reachableOnly || recency !== '0-10000');
+  const filtered = !!(city || locality || source || status || serviceType || category || reachableOnly || hours > 0);
 
   const download = () => {
     if (!rows.length) { setErr('Nothing to download for this filter.'); return; }
-    saveCsv(toCsv(rows), ['Cergio', audience, city, locality, source, serviceType, category, status, reachableOnly ? 'reachable' : '', recency !== '0-10000' ? recency : ''].filter(Boolean).join(' ') + '.csv');
+    saveCsv(toCsv(rows), ['Cergio', audience, city, locality, source, serviceType, category, status, reachableOnly ? 'reachable' : '', hours ? hours + 'h' : ''].filter(Boolean).join(' ') + '.csv');
   };
   const downloadEach = async () => {
     const list = sources.map(([s]) => s).filter((s) => s !== '(other/unlabeled)');
@@ -212,11 +218,18 @@ export function DataExportScreen() {
             </select>
           </div>
         )}
-        <div>
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Recency</div>
+        <div className="sm:col-span-2">
+          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Time</div>
           <div className="flex flex-wrap gap-1.5">
-            {RECENCY.map((r) => <Pill key={r.id} on={recency === r.id} onClick={() => setRecency(r.id)}>{r.label}</Pill>)}
+            {TIMES.map((t) => <Pill key={t.h} on={hours === t.h} onClick={() => setHours(t.h)}>{t.label}</Pill>)}
           </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">How many (newest first)</div>
+          <select value={size} onChange={(e) => setSize(Number(e.target.value))}
+            className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+            {SIZES.map((v) => <option key={v} value={v}>Last {v.toLocaleString()}</option>)}
+          </select>
         </div>
       </div>
 
