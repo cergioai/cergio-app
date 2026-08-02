@@ -4745,8 +4745,15 @@ test('google-sponsored-uses-the-proven-lsa-engine', 'SPEC-105: the google_sponso
   // source must use the path that actually returns pros WITH a phone.
   assert(!/fulfillGoogleLSA\(db, job/.test(branch),
     'google_sponsored still calls the SerpAPI LSA engine — SPEC-193 retired all paid crawling onto Apify');
-  assert(/fulfillGmapsApify\(db, job\)/.test(branch),
+  // SPEC-236: the call now carries an explicit provenance argument, because
+  // fulfillGmapsApify hardcoded data_source:'gmaps_apify' and every LSA/sponsored job was
+  // therefore writing rows under the WRONG source — the row the founder watches could
+  // never fill. Assert the extractor is used AND that it is told which source it is
+  // serving.
+  assert(/fulfillGmapsApify\(db, job(, '[a-z_]+')?\)/.test(branch),
     'google_sponsored must use the Apify extractor, which returns a phone for nearly every place (SPEC-192/193)');
+  assert(/fulfillGmapsApify\(db, job, 'google_sponsored'\)/.test(branch),
+    'the extractor is not told it is serving google_sponsored, so its rows would be labelled gmaps_apify and this source would silently vanish');
   assert(/data_source: provenance/.test(fc), 'rows must carry the requesting provenance, not a hardcoded one');
 });
 
@@ -6424,6 +6431,22 @@ test('dma-list-is-canonical-and-a-zero-count-can-never-be-silent', 'SPEC-235 (fo
   assert(!(!/count_errors/.test(ui)), 'the screen never shows that a zero came from a failed query');
   assert(!(!/off_scope_states/.test(ui)), 'off-target rows are invisible on the console');
 });
+
+test('no-callable-serpapi-remains-and-every-source-labels-its-own-rows', 'SPEC-236 (founder, 2026-08-02): "why does the spec still have Serp instead of apify for lsa". Because a function named fulfillGoogleLSA still contained a live serpapi.com URL — and was NEVER CALLED. The google_lsa branch has routed to the Apify extractor since SPEC-193, but anyone grepping this file for which vendor LSA uses read SerpAPI and believed it, including me while writing the founder build spec. Dead code that names a vendor is not harmless; it is a second source of truth that answers confidently and wrongly. Deleting it then exposed the defect underneath: fulfillGmapsApify HARDCODED data_source gmaps_apify, so every LSA and sponsored job was writing rows under the wrong source and the row the founder watches could never fill. The old SerpAPI function had carried provenance, so removing the vendor removed the labelling with it. A source that cannot label its own rows is a source that silently disappears.', '#236', () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(fc);
+  assert(!(/serpapi\.com\/search\.json\?engine=google_local_services/.test(code)),
+    'the SerpAPI Local-Services engine is back in callable code — every paid source must run on Apify');
+  assert(!(/fulfillGoogleLSA/.test(code)), 'the dead SerpAPI LSA function is back; it is what made the vendor unreadable');
+  assert(!(/fulfillGoogleSponsored/.test(code)), 'the dead SerpAPI sponsored function is back');
+  assert(!(!/data_source: provenance/.test(code)),
+    'the Apify extractor hardcodes its data_source again, so LSA and sponsored rows would be labelled gmaps_apify and those sources would vanish from the dashboard');
+  assert(!(!/fulfillGmapsApify\(db, job, 'google_lsa'\)/.test(code)),
+    'the google_lsa branch does not tell the extractor which source it serves — its rows would be labelled gmaps_apify and the LSA count would never fill');
+  const gm = code.slice(code.indexOf('async function fulfillGmapsApify'));
+  assert(!(!/provenance = 'gmaps_apify'/.test(gm)), 'the extractor has no provenance default, so a plain call would write an undefined source');
+});
+
 
 
 
