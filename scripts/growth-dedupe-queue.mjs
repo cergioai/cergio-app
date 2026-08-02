@@ -257,3 +257,35 @@ if (scraperN < CREATOR_FLOOR) {
   });
   console.log(`  seeded ${rows.length} ig_services job(s) -> HTTP ${r.status}`);
 }
+
+// ─── SPEC-206 · THE CONTACTABILITY BAR (founder, 2026-08-02: "1. yes fine") ──────
+// A lead with no phone and no email cannot be contacted, so it is not a lead. The bar is
+// 40%: a source whose output is less than 40% reachable is PARKED. Parked, not retried —
+// retrying a source that has already proven what it produces is how $108 left the account
+// for zero usable rows.
+//
+// This is measured per source on real stored rows, not on vendor promises.
+const CONTACT_BAR_PCT = Number(process.env.CONTACT_BAR_PCT || 40);
+{
+  const rows = await q(`
+    select data_source,
+           count(*)::int as n,
+           count(*) filter (where coalesce(nullif(trim(phone), ''), nullif(trim(owner_email), '')) is not null)::int as reachable
+      from leads_services group by data_source order by n desc`);
+  console.log(`\ncontactability — bar ${CONTACT_BAR_PCT}% (below this a source is PARKED, not retried)`);
+  const toPark = [];
+  for (const r of rows || []) {
+    const pct = r.n ? Math.round((r.reachable / r.n) * 100) : 0;
+    const verdict = r.n < 100 ? 'too few to judge' : (pct < CONTACT_BAR_PCT ? 'PARK' : 'keep');
+    if (verdict === 'PARK') toPark.push(r.data_source);
+    console.log(`  ${String(r.data_source).padEnd(20)} ${String(r.n).padStart(6)} leads  ${String(pct).padStart(3)}% reachable  ${verdict}`);
+  }
+  if (toPark.length) {
+    // Park the QUEUE, not the data. Nothing is deleted — the rows stay for audit; the
+    // source simply stops being given new work.
+    const list = toPark.map((x) => `'${x}'`).join(',');
+    await q(`update crawl_requests set status='parked', notes=coalesce(notes,'')||' | parked: below ${CONTACT_BAR_PCT}% contactable (SPEC-206)'
+              where status in ('new','crawling') and source in (${list})`);
+    console.log(`  PARKED ${toPark.length} source(s): ${toPark.join(', ')}`);
+  }
+}

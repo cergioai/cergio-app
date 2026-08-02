@@ -5485,7 +5485,12 @@ test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): o
   for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services']) {
     assert(!(!new RegExp(`'${src}'`).test(m[1])), `${src} is not in the rota — it would never be scheduled`);
   }
-  assert(!(!/const share = Math\.max\(1, Math\.floor\(perRun \/ SOURCES_RR\.length\)\)/.test(f)), 'no equal per-source share');
+  // SPEC-205 amended this line. The share must divide by the number of sources ACTUALLY
+  // scheduled this run, not by the full declared rota: with an allowlist active, dividing
+  // by 8 while running 1 source would hand that source an eighth of capacity and idle the
+  // rest. The declaration above still has to list all 8 — that is what stops a source
+  // being silently dropped — but the arithmetic follows what is really running.
+  assert(!(!/const share = Math\.max\(1, Math\.floor\(perRun \/ (SOURCES_RR|ROTA)\.length\)\)/.test(f)), 'no equal per-source share');
   assert(!(!/for \(let i = 0; i < share; i\+\+\) for \(const list of perSource\)/.test(f)), 'slices are not interleaved');
 });
 
@@ -5968,6 +5973,43 @@ test('one-parser-for-the-growth-connection-and-one-authorised-scope', 'SPEC-204 
   const seed = stripComments(readFile('scripts/seed-growth-queue.mjs'));
   assert(!(/const CITIES = \[/.test(seed)), 'the seeder restates the city list — the scope module is meant to be the only copy');
 });
+
+test('miami-and-nyc-fill-to-quota-before-anywhere-else-and-a-target-stops-itself', 'SPEC-205 (founder, 2026-08-02): "spec calls for miami and nyc to be filled first up to quota before moving to the next 9 cities from top 10... activate the crawls just for the creator sources to get 100 of each then pause alongside the rest to audit." Three things had to be true. (1) The phase-2 step fired whenever phase-1 had no jobs QUEUED — but an empty queue is not a met quota, it usually means the seeder has not run, so capacity leaked to other geographies while Miami and NYC were nowhere near full. It now measures actual leads per phase-1 metro. (2) No per-city quota exists anywhere in the spec, so PHASE1_CITY_QUOTA has NO DEFAULT: unset means phase 2 stays locked, because a default invented by me would silently authorise a national crawl. (3) "100 then pause" must not depend on someone watching a dashboard and flipping a switch at the right moment — that is how a $1 tranche became $108 — so the creator target is checked before any job is claimed and stops the source itself.', '#205', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  assert(!(!/CRAWLS_ONLY/.test(code)), 'no source allowlist — activating creators would resume all seven unaudited sources with it');
+  assert(!(!/CREATOR_TARGET/.test(code)), 'the creator target is not enforced in the crawler, so "100 then pause" depends on someone watching');
+  assert(!(!/PHASE1_CITY_QUOTA/.test(code)), 'no phase-1 quota gate — phase 2 opens on an empty queue rather than a filled one');
+  assert(!(/PHASE1_CITY_QUOTA'\)\s*\|\|\s*[1-9]/.test(code)), 'PHASE1_CITY_QUOTA has a non-zero default — an invented quota silently authorises a national crawl');
+  const phase2 = code.slice(code.indexOf('phase2Open'));
+  assert(!(!/jobs\.length < perRun && phase2Open/.test(code)), 'the phase-2 branch does not require the quota to be met');
+  assert(!(!/leads_services[\s\S]{0,200}count: 'exact'/.test(phase2)), 'the quota check does not count actual leads per metro — it is not measuring fill');
+  assert(!(!/const ROTA = SOURCES_RR[\s\S]{0,200}ONLY\.includes/.test(code)), 'the allowlist is not applied to job selection, so a blocked source could still be claimed');
+  assert(!(!/creatorTargetMet && x === 'ig_services'/.test(code)), 'a met creator target does not remove ig_services from the rota');
+  assert(!(!/perSource = await Promise\.all\(ROTA\./.test(code)), 'job selection still walks the unfiltered rota');
+  assert(!(!/jobs\.length < perRun && !ONLY\.length/.test(code)), 'the legacy sweep ignores the allowlist — that is a back door around the gate');
+  const scope = readFile('scripts/_growth-scope.mjs');
+  assert(!(!/PHASE2/.test(scope)), 'no phase-2 city list exists');
+  assert(!(/PHASE1_CITY_QUOTA = Number\(process\.env\.PHASE1_CITY_QUOTA \|\| [1-9]/.test(scope)), 'the scope module invents a default quota');
+});
+
+test('a-source-below-the-contactability-bar-is-parked-not-retried', 'SPEC-206 (founder, 2026-08-02, answering "what contactable % parks a source?" with "1. yes fine" to a 40% bar): a lead with no phone and no email cannot be contacted, so it is not a lead and must not be paid for. The bar is measured per source on real stored rows, never on vendor promises, and a source below it is PARKED rather than retried — retrying a source that has already proven what it produces is how $108 left the account for zero usable rows. Parking stops the QUEUE, never the data: rows are kept for audit, because deleting the evidence of a bad source is how the same source gets re-approved later. A source with under 100 rows is reported as "too few to judge" rather than parked on noise.', '#206', () => {
+  const d = readFile('scripts/growth-dedupe-queue.mjs');
+  const c = stripComments(d);
+  assert(!(!/CONTACT_BAR_PCT/.test(c)), 'no contactability bar — sources are judged on volume alone, which is what let yelp dominate with unmeasured quality');
+  // The SQL lives in template literals, and stripComments BLANKS those as well as
+  // comments — so these three must scan the raw file or they would assert on nothing and
+  // pass forever. That is the same "gate that cannot fail" shape as the returned-string
+  // bug, arriving by a different route.
+  assert(!(!/owner_email/.test(d) || !/trim\(phone\)/.test(d)), 'the bar does not measure phone OR email, which is the definition of contactable');
+  assert(!(!/status='parked'/.test(d)), 'a failing source is not parked, so it keeps being given work after proving what it produces');
+  assert(!(/delete\s+from\s+leads_services/i.test(d)), 'parking deletes lead rows — the evidence of a bad source must survive for audit');
+  assert(!(!/too few to judge/.test(d)), 'a source with almost no rows can be parked on noise');
+  const f = stripComments(readFile('supabase/functions/fulfill-crawl/index.ts'));
+  assert(!(!/is_business: !!it\?\.isBusinessAccount/.test(f)), 'business accounts are no longer stored as creators — founder decided KEEP, because the creator pivot targets providers who already have an audience');
+});
+
+
 
 
 
