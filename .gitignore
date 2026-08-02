@@ -6,3 +6,9 @@ dist
 .env.*
 .vite
 *.bak
+
+# Agent cells are sparse-checkout WORKTREES, not source. Committing them embeds a
+# repo inside the repo and would ship every agent a copy of the walls it is meant to be
+# behind.
+.cells/
+reports/*.json

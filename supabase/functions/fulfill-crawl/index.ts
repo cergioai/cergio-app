@@ -135,6 +135,41 @@ const gdb = growthDb();
   if (CRAWLS_SUSPENDED) {
     return json({ suspended: true, reason: 'CRAWLS_SUSPENDED — founder audit in progress (SPEC-197)', processed: 0 });
   }
+
+  // SPEC-205 — PARTIAL ACTIVATION (founder, 2026-08-02): "activate the crawls just for
+  // the creator sources to get 100 of each then pause alongside the rest to audit."
+  //
+  // Resuming everything to reach a creator target would spend money on seven sources the
+  // audit has not cleared. CRAWLS_ONLY is an allowlist of sources that may run while the
+  // rest stay suspended; empty means no restriction. A source outside the list is never
+  // claimed, so it cannot reach a vendor.
+  const ONLY = (Deno.env.get('CRAWLS_ONLY') || '').split(',').map((x) => x.trim()).filter(Boolean);
+
+  // THE TARGET STOPS ITSELF. "get 100 of each then pause" must not depend on anyone
+  // watching a dashboard and flipping a switch at the right moment — that is how a $1
+  // tranche became $108. When the creator table reaches the target, ig_services stops
+  // being claimable and the run says so. Checked BEFORE any job is claimed.
+  const CREATOR_TARGET = Number(Deno.env.get('CREATOR_TARGET') || 100);
+  let creatorTargetMet = false;
+  if (CREATOR_TARGET > 0 && (ONLY.length === 0 || ONLY.includes('ig_services'))) {
+    try {
+      const { count } = await growthClient()
+        .from('leads_influencers')
+        .select('id', { count: 'exact', head: true })
+        .eq('discovered_via', 'ig-scraper-user-search');
+      creatorTargetMet = (count ?? 0) >= CREATOR_TARGET;
+      if (creatorTargetMet && ONLY.length === 1 && ONLY[0] === 'ig_services') {
+        return json({
+          suspended: true, processed: 0,
+          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search. Paused for audit (SPEC-205). ig-creator-marketplace stays PARKED: needs IG_USER_ID + IG_MARKETPLACE_TOKEN.`,
+        });
+      }
+    } catch (e) {
+      // A target we cannot read is a target we cannot enforce. Fail CLOSED — refusing to
+      // crawl costs nothing; crawling past an unreadable stop is how money leaks.
+      return json({ suspended: true, processed: 0, reason: `creator target unreadable, refusing to crawl: ${serr(e)}` }, 200);
+    }
+  }
   const started = Date.now();
   _runDeadline = started + 138_000;  // SPEC-172: hard wall, safely inside the 150s platform limit
   let dbRef: any = null;
@@ -220,10 +255,22 @@ const gdb = growthDb();
       // gmaps_apify and ig_services read "no finished job yet" — never STARVED by
       // failing, simply never PICKED. A source the scheduler never runs cannot be
       // diagnosed, and its zero is not evidence of anything.
+      // The FULL rota stays a literal and stays complete — gate #181 exists because a
+      // source missing from this list is a source the scheduler never runs, and its zero
+      // then reads as a dead market rather than as a scheduling bug. Filtering happens
+      // downstream, on a derived list, so the declaration can never quietly shrink.
       const SOURCES_RR = ['osm', 'craigslist', 'yellowpages_apify', 'yelp',
                           'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services'];
-      const share = Math.max(1, Math.floor(perRun / SOURCES_RR.length));
-      const perSource = await Promise.all(SOURCES_RR.map(async (src) => {
+      // SPEC-205: the allowlist is applied at the point jobs are selected, so a source
+      // outside it is never claimed and can never reach a vendor. A met creator target
+      // removes ig_services even when other sources run, so "100 then pause" holds in
+      // every configuration rather than only the one I happened to test.
+      const ROTA = SOURCES_RR
+        .filter((x) => !ONLY.length || ONLY.includes(x))
+        .filter((x) => !(creatorTargetMet && x === 'ig_services'));
+      if (!ROTA.length) return json({ suspended: true, processed: 0, reason: `no source is currently allowed to run (CRAWLS_ONLY=${ONLY.join(',') || 'unset'}${creatorTargetMet ? ', creator target met' : ''})` });
+      const share = Math.max(1, Math.floor(perRun / ROTA.length));
+      const perSource = await Promise.all(ROTA.map(async (src) => {
         const { data } = await gdb.from('crawl_requests')
           .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
           .eq('kind', 'services').eq('status', 'new').eq('source', src).in('city', P1)
@@ -234,19 +281,44 @@ const gdb = growthDb();
       // than filling every worker with osm and only then reaching the others.
       jobs = [];
       for (let i = 0; i < share; i++) for (const list of perSource) if (list[i]) jobs.push(list[i]);
-      console.log(`round-robin: ${SOURCES_RR.map((s2, i) => `${s2}=${perSource[i].length}`).join(' ')}`);
+      console.log(`round-robin: ${ROTA.map((s2, i) => `${s2}=${perSource[i].length}`).join(' ')}`);
 
       // Rows with a source outside the rota (legacy, google_local, null) still get
       // served with whatever capacity is left, so nothing is stranded.
-      if (jobs.length < perRun) {
+      // With an allowlist active the legacy sweep is DISABLED. Its whole purpose is to
+      // pick up rows whose source is outside the rota — which is precisely what the
+      // allowlist exists to prevent. Leaving it on would be a back door around the gate.
+      if (jobs.length < perRun && !ONLY.length) {
         const { data: legacy, error: e1 } = await jobQ.in('city', P1)
           .not('source', 'in', `(${SOURCES_RR.map((x) => `"${x}"`).join(',')})`)
           .order('created_at', { ascending: true }).limit(perRun - jobs.length);
         if (e1) throw e1;
         jobs = jobs.concat(legacy || []);
       }
-      // 2) only if phase-1 has no work left, spend the remainder elsewhere
-      if (jobs.length < perRun) {
+      // 2) SPEC-205 (founder, 2026-08-02): "miami and nyc to be filled first up to quota
+      // before moving to the next 9 cities from top 10."
+      //
+      // This step used to fire whenever phase-1 had no jobs QUEUED. An empty queue is not
+      // a met quota — it usually means the seeder has not run yet. So capacity leaked to
+      // other geographies while Miami and NYC were nowhere near full, which is the
+      // opposite of the instruction.
+      //
+      // PHASE1_CITY_QUOTA has NO DEFAULT anywhere. Unset means locked: no per-city quota
+      // exists in the spec and inventing one would silently authorise a national crawl.
+      const P1_QUOTA = Number(Deno.env.get('PHASE1_CITY_QUOTA') || 0);
+      let phase2Open = false;
+      if (P1_QUOTA > 0) {
+        const shortfall = await Promise.all(P1.map(async (c) => {
+          const { count } = await gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('city', c);
+          return (count ?? 0) < P1_QUOTA ? c : null;
+        }));
+        const short = shortfall.filter(Boolean);
+        phase2Open = short.length === 0;
+        if (!phase2Open) console.log(`phase-2 LOCKED — ${short.length}/${P1.length} phase-1 metros below quota ${P1_QUOTA}: ${short.slice(0, 6).join(', ')}`);
+      } else {
+        console.log('phase-2 LOCKED — PHASE1_CITY_QUOTA unset (founder must set it; there is no default)');
+      }
+      if (jobs.length < perRun && phase2Open) {
         let q2 = gdb.from('crawl_requests')
           .select('id, kind, city, state, lat, lng, service_type, target_count, requested_by, status, source, notes')
           .eq('kind', 'services').eq('status', 'new').not('city', 'in', `(${P1.map(c => `"${c}"`).join(',')})`);
@@ -357,7 +429,7 @@ const gdb = growthDb();
           // reaches here (a race with the seeder), stamp it permanently failed
           // WITHOUT a fetch — no 403, no error flood, no retry.
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'failed', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
+            status: 'failed', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           ypQuarantined++;
           return;
@@ -2296,6 +2368,12 @@ async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; fo
       await growthClient().from('leads_influencers').upsert({
         id: `igs:${handle}`, ig_handle: handle, display_name: name,
         category: job.service_type || null, followers, email,
+        // SPEC-206b — BUSINESS ACCOUNTS ARE KEPT (founder, 2026-08-02: "2. keep").
+        // FROZEN_SPEC 750 had creator-harvest DROP business accounts, because that path
+        // was hunting individual creators and brand accounts were noise. This path is the
+        // creator PIVOT: we mine our own services pool for providers who already have an
+        // audience, and there a business account is the target, not the noise. So the flag
+        // is STORED and filterable rather than used to discard the row at ingest.
         city, state: state || null, is_business: !!it?.isBusinessAccount,
         external_url: ext, discovered_via: 'ig-scraper-user-search',
         outreach_status: 'pending_review',

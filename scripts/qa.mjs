@@ -3930,7 +3930,7 @@ test('spec-crack-help-haiku', 'FROZEN: in-app Help → Haiku→Opus→human tria
   // ── (3) THE LADDER: Haiku → Opus → human, in that order ──
   const fn = readFile('supabase/functions/support-triage/index.ts');
   assert(/claude-haiku-4-5-20251001/.test(fn), 'support-triage must call Haiku (claude-haiku-4-5-20251001) for triage');
-  assert(/claude-opus-4-8/.test(fn),           'support-triage must escalate to Opus (claude-opus-4-8)');
+  assert(/claude-opus-5/.test(fn),            'support-triage must escalate to Opus (claude-opus-5)');
   const iHaiku = fn.indexOf("const haiku = await askClaude(HAIKU");
   const iOpus  = fn.indexOf("const opus = await askClaude(OPUS");
   const iHuman = fn.indexOf('routeToHuman(db, ticket');
@@ -5485,7 +5485,12 @@ test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): o
   for (const src of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services']) {
     assert(!(!new RegExp(`'${src}'`).test(m[1])), `${src} is not in the rota — it would never be scheduled`);
   }
-  assert(!(!/const share = Math\.max\(1, Math\.floor\(perRun \/ SOURCES_RR\.length\)\)/.test(f)), 'no equal per-source share');
+  // SPEC-205 amended this line. The share must divide by the number of sources ACTUALLY
+  // scheduled this run, not by the full declared rota: with an allowlist active, dividing
+  // by 8 while running 1 source would hand that source an eighth of capacity and idle the
+  // rest. The declaration above still has to list all 8 — that is what stops a source
+  // being silently dropped — but the arithmetic follows what is really running.
+  assert(!(!/const share = Math\.max\(1, Math\.floor\(perRun \/ (SOURCES_RR|ROTA)\.length\)\)/.test(f)), 'no equal per-source share');
   assert(!(!/for \(let i = 0; i < share; i\+\+\) for \(const list of perSource\)/.test(f)), 'slices are not interleaved');
 });
 
@@ -5968,6 +5973,230 @@ test('one-parser-for-the-growth-connection-and-one-authorised-scope', 'SPEC-204 
   const seed = stripComments(readFile('scripts/seed-growth-queue.mjs'));
   assert(!(/const CITIES = \[/.test(seed)), 'the seeder restates the city list — the scope module is meant to be the only copy');
 });
+
+test('miami-and-nyc-fill-to-quota-before-anywhere-else-and-a-target-stops-itself', 'SPEC-205 (founder, 2026-08-02): "spec calls for miami and nyc to be filled first up to quota before moving to the next 9 cities from top 10... activate the crawls just for the creator sources to get 100 of each then pause alongside the rest to audit." Three things had to be true. (1) The phase-2 step fired whenever phase-1 had no jobs QUEUED — but an empty queue is not a met quota, it usually means the seeder has not run, so capacity leaked to other geographies while Miami and NYC were nowhere near full. It now measures actual leads per phase-1 metro. (2) No per-city quota exists anywhere in the spec, so PHASE1_CITY_QUOTA has NO DEFAULT: unset means phase 2 stays locked, because a default invented by me would silently authorise a national crawl. (3) "100 then pause" must not depend on someone watching a dashboard and flipping a switch at the right moment — that is how a $1 tranche became $108 — so the creator target is checked before any job is claimed and stops the source itself.', '#205', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  assert(!(!/CRAWLS_ONLY/.test(code)), 'no source allowlist — activating creators would resume all seven unaudited sources with it');
+  assert(!(!/CREATOR_TARGET/.test(code)), 'the creator target is not enforced in the crawler, so "100 then pause" depends on someone watching');
+  assert(!(!/PHASE1_CITY_QUOTA/.test(code)), 'no phase-1 quota gate — phase 2 opens on an empty queue rather than a filled one');
+  assert(!(/PHASE1_CITY_QUOTA'\)\s*\|\|\s*[1-9]/.test(code)), 'PHASE1_CITY_QUOTA has a non-zero default — an invented quota silently authorises a national crawl');
+  const phase2 = code.slice(code.indexOf('phase2Open'));
+  assert(!(!/jobs\.length < perRun && phase2Open/.test(code)), 'the phase-2 branch does not require the quota to be met');
+  assert(!(!/leads_services[\s\S]{0,200}count: 'exact'/.test(phase2)), 'the quota check does not count actual leads per metro — it is not measuring fill');
+  assert(!(!/const ROTA = SOURCES_RR[\s\S]{0,200}ONLY\.includes/.test(code)), 'the allowlist is not applied to job selection, so a blocked source could still be claimed');
+  assert(!(!/creatorTargetMet && x === 'ig_services'/.test(code)), 'a met creator target does not remove ig_services from the rota');
+  assert(!(!/perSource = await Promise\.all\(ROTA\./.test(code)), 'job selection still walks the unfiltered rota');
+  assert(!(!/jobs\.length < perRun && !ONLY\.length/.test(code)), 'the legacy sweep ignores the allowlist — that is a back door around the gate');
+  const scope = readFile('scripts/_growth-scope.mjs');
+  assert(!(!/PHASE2/.test(scope)), 'no phase-2 city list exists');
+  assert(!(/PHASE1_CITY_QUOTA = Number\(process\.env\.PHASE1_CITY_QUOTA \|\| [1-9]/.test(scope)), 'the scope module invents a default quota');
+});
+
+test('a-source-below-the-contactability-bar-is-parked-not-retried', 'SPEC-208 (founder, 2026-08-02, answering "what contactable % parks a source?" with "1. yes fine" to a 40% bar): a lead with no phone and no email cannot be contacted, so it is not a lead and must not be paid for. The bar is measured per source on real stored rows, never on vendor promises, and a source below it is PARKED rather than retried — retrying a source that has already proven what it produces is how $108 left the account for zero usable rows. Parking stops the QUEUE, never the data: rows are kept for audit, because deleting the evidence of a bad source is how the same source gets re-approved later. A source with under 100 rows is reported as "too few to judge" rather than parked on noise.', '#208', () => {
+  const d = readFile('scripts/growth-dedupe-queue.mjs');
+  const c = stripComments(d);
+  assert(!(!/CONTACT_BAR_PCT/.test(c)), 'no contactability bar — sources are judged on volume alone, which is what let yelp dominate with unmeasured quality');
+  // The SQL lives in template literals, and stripComments BLANKS those as well as
+  // comments — so these three must scan the raw file or they would assert on nothing and
+  // pass forever. That is the same "gate that cannot fail" shape as the returned-string
+  // bug, arriving by a different route.
+  assert(!(!/owner_email/.test(d) || !/trim\(phone\)/.test(d)), 'the bar does not measure phone OR email, which is the definition of contactable');
+  assert(!(!/status='parked'/.test(d)), 'a failing source is not parked, so it keeps being given work after proving what it produces');
+  assert(!(/delete\s+from\s+leads_services/i.test(d)), 'parking deletes lead rows — the evidence of a bad source must survive for audit');
+  assert(!(!/too few to judge/.test(d)), 'a source with almost no rows can be parked on noise');
+  const f = stripComments(readFile('supabase/functions/fulfill-crawl/index.ts'));
+  assert(!(!/is_business: !!it\?\.isBusinessAccount/.test(f)), 'business accounts are no longer stored as creators — founder decided KEEP, because the creator pivot targets providers who already have an audience');
+});
+
+test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (2026-08-02): whether we were crawling, and which sources, lived only in Supabase edge secrets — invisible in git, unreviewable, and unreadable from the sandbox, so the honest answer to "are we crawling right now?" was always "I cannot see". That is unacceptable for the one setting that decides whether money leaves the account. The state is now a committed file, the change is a diff, and CI is the only writer. PHASE1_CITY_QUOTA is deliberately EMPTY: no per-city quota exists in the spec, and empty keeps phase 2 locked to Miami and NYC. A number invented here would silently authorise a national crawl.', '#207', () => {
+  const raw = readFile('growth-controls.json');
+  const cfg = JSON.parse(raw);
+  assert(!(cfg.CRAWLS_SUSPENDED === undefined), 'no global crawl stop in the controls file');
+  assert(!(cfg.PHASE1_CITY_QUOTA !== ''), `PHASE1_CITY_QUOTA is set to "${cfg.PHASE1_CITY_QUOTA}" — the spec names no per-city quota, so any value here was invented and unlocks crawling outside Miami and NYC`);
+  assert(!(String(cfg.CRAWLS_SUSPENDED) === 'false' && !String(cfg.CRAWLS_ONLY || '').trim()), 'crawling is ON with an EMPTY allowlist — that resumes all seven unaudited sources, which is the opposite of "creator sources only"');
+  if (String(cfg.CRAWLS_SUSPENDED) === 'false') {
+    assert(!(!String(cfg.CREATOR_TARGET || '').trim()), 'crawling is ON with no creator target — nothing would stop it at 100');
+  }
+  assert(!(/ig-creator-marketplace/.test(String(cfg.CRAWLS_ONLY || ''))), 'ig-creator-marketplace is in the allowlist but it is PARKED — it cannot run without IG_USER_ID + IG_MARKETPLACE_TOKEN');
+  const wf = readFile('.github/workflows/growth-setup.yml');
+  assert(!(!/growth-controls\.mjs/.test(wf)), 'nothing pushes the controls to the edge runtime, so the file would be decorative and git would disagree with production');
+  assert(!(!/growth-controls\.json/.test(wf)), 'editing the controls does not trigger the workflow, so a change would sit unapplied');
+  const push = readFile('scripts/growth-controls.mjs');
+  assert(!(!/process\.exit\(1\)/.test(push)), 'the push does not fail loud — a silent failure means git and production disagree, which is worse than having no file');
+  assert(!(!/startsWith\('_'\)/.test(push)), 'documentation keys would be pushed as real secrets');
+});
+
+test('no-two-gates-may-share-an-id', 'SPEC-209 (found 2026-08-02 by colliding with my own gate): I filed a new gate as #206 and #206 already existed — spec-185-spendgate-scope. Nothing caught it, because nothing has ever checked. Nine IDs on main are already shared. This matters beyond tidiness: every report, every commit message and every "which gate covers this?" question is keyed by ID, so a duplicate makes the answer ambiguous and a grep silently returns the wrong gate — which is exactly how I concluded a change had merged when it had not. The nine existing collisions are BASELINED rather than fixed in this change: making them fail today would block every unrelated PR, which is the mistake that broke the Chinese wall on its first attempt.', '#209', () => {
+  const src = readFile('scripts/qa.mjs');
+  const ids = [...src.matchAll(/'(#[0-9]+[a-z]?)'/g)].map((m) => m[1]);
+  const dupes = [...new Set(ids.filter((i) => ids.filter((x) => x === i).length > 1))].sort();
+  const baseline = JSON.parse(readFile('qa-id-baseline.json'));
+  const added = dupes.filter((d) => !baseline.includes(d));
+  assert(!(added.length > 0), `these gate IDs are now shared by more than one gate: ${added.join(', ')} — pick an unused number, because every report and grep keyed by ID would return the wrong gate`);
+  const fixed = baseline.filter((b) => !dupes.includes(b));
+  if (fixed.length) console.log(`  (note: ${fixed.join(', ')} no longer collide — remove them from qa-id-baseline.json)`);
+});
+
+test('every-dataset-is-live-and-downloadable-and-the-cap-is-stated', 'SPEC-210 (founder, 2026-08-02): "also need all available on dashboard to download live". The dashboard exposed only the two lead tables, so the crawl queue — which is where cost_usd and the parked status actually live — was invisible, and the question "what did this source cost and why did it stop?" had no answer on screen. It also capped rows at 10,000 and printed only the loaded count, so a filter matching 41,000 rows displayed as 10,000 with no indication anything was missing. That is the same shape as the audit that reported 0 rows for all 8 sources: a number that is wrong in the safe-looking direction. The screen must state the true matching total against the cap, and offer a per-source export so a segment arrives ready to work rather than as one pile to split in a spreadsheet.', '#210', () => {
+  const fn = readFile('supabase/functions/leads-dashboard/index.ts');
+  const code = stripComments(fn);
+  for (const t2 of ['leads_services', 'leads_influencers', 'crawl_requests', 'agent_runs']) {
+    assert(!(!new RegExp(t2).test(code)), `${t2} is not exposed by the dashboard — it cannot be viewed or downloaded`);
+  }
+  assert(!(!/filteredTotal/.test(code)), 'the true matching total is never computed, so a capped result silently reads as the whole set');
+  assert(!(!/rowCap/.test(code)), 'the row cap is not reported to the screen');
+  assert(!(!/contactableOnly/.test(code)), 'no reachable-only filter — the 40% bar cannot be turned into a working list');
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  const sc = stripComments(scr);
+  assert(!(!/downloadAllSources/.test(sc)), 'no per-source export — every segment would have to be split by hand');
+  assert(!(!/filteredTotal > rows\.length/.test(sc)), 'the screen does not warn when the cap hides rows, which is a wrong number in the safe-looking direction');
+  assert(!(!/crawls/.test(sc) && /runs/.test(sc)), 'the crawl queue and agent runs are not selectable on screen');
+  assert(!(!/cost_usd/.test(sc)), 'spend is not shown in any column, so the dashboard cannot answer what a source cost');
+  // Assert on the PAYLOAD, not the file. Grepping for the name matched the function
+  // signature's default parameter, so removing it from the body still passed — a gate
+  // that could not fail, caught by mutating it.
+  const api = stripComments(readFile('src/lib/api.js'));
+  const invoke = (api.match(/invoke\('leads-dashboard',[\s\S]{0,220}?\}\)/) || [''])[0];
+  assert(!(!invoke), 'the leads-dashboard invoke call could not be found');
+  assert(!(!/contactableOnly/.test(invoke)), 'the api layer drops reachable-only from the request body, so the checkbox would silently do nothing');
+  assert(!(!/status/.test(invoke)), 'the api layer drops status from the request body, so the status filter would silently do nothing');
+});
+
+test('every-gate-the-fleet-claims-to-own-actually-exists', 'SPEC-213 (found by the fleet on its first run, 2026-08-02): the manifest listed #155 and #48b as the guards for payments and the booking loop. Neither id exists — the real gates are #155b and #48. A manifest that names a gate which does not exist is worse than one that names a failing gate: the area reads as guarded, the suite reads green, and nothing is actually watching. Since the whole fleet is built on "these gates guard this feature", a drifted manifest makes every report on this page confidently wrong. This runs on the same file the fleet reads, so the two cannot separate.', '#213', () => {
+  const fleet = JSON.parse(readFile('agents/fleet.json'));
+  const suite = readFile('scripts/qa.mjs');
+  const known = new Set([...suite.matchAll(/'(#[0-9]+[a-z]?)'/g)].map((m) => m[1]));
+  const bad = [];
+  for (const a of fleet.agents) for (const g of (a.gates || [])) if (!known.has(g)) bad.push(`${a.id} -> ${g}`);
+  assert(!(bad.length > 0), `the fleet claims gates that do not exist: ${bad.join(', ')} — that area reads as guarded while nothing watches it`);
+  for (const a of fleet.agents) {
+    assert(!(!a.green_when || !a.green_when.trim()), `agent "${a.id}" has no green_when — an agent with no definition of done can never report anything but an opinion`);
+    assert(!(!Array.isArray(a.owns) || !a.owns.length), `agent "${a.id}" owns no files, so its wall cannot be built or proven`);
+  }
+});
+
+test('the-overnight-fleet-actually-runs-with-the-mac-off', 'SPEC-213 (founder, 2026-08-02): "run off mac.. turning mac off... need to wake up to army of agents and their individual reports." Subagents inside a Cowork session die the moment the session ends, so anything promised to run overnight has to be a scheduled CI workflow — that is the only thing on this project that runs with the laptop shut. The fleet must also survive its own failures: fail-fast would let one agent silence the other seven, and skipping the aggregator when an agent dies would hide the single most alarming state, an agent that produced no report at all. Silence must read as alarming, never as success.', '#214', () => {
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/schedule:/.test(wf) || !/cron:/.test(wf)), 'the fleet is not scheduled — it would only run while someone is watching, which is the opposite of the ask');
+  assert(!(!/fail-fast: false/.test(wf)), 'fail-fast is on: one agent failing would cancel the other seven and the morning page would be mostly blank');
+  assert(!(!/if: always\(\)/.test(wf)), 'the aggregator is skipped when an agent fails — that hides DID NOT RUN, the most alarming state there is');
+  const fleet = JSON.parse(readFile('agents/fleet.json'));
+  const matrix = (wf.match(/id: \[([^\]]+)\]/) || [, ''])[1].split(',').map((x) => x.trim());
+  for (const a of fleet.agents) assert(!(!matrix.includes(a.id)), `agent "${a.id}" is in the fleet but not in the workflow matrix — it would never run, and its silence would read as success`);
+  for (const m of matrix) assert(!(!fleet.agents.some((a) => a.id === m)), `the workflow runs "${m}" but no such agent exists in the fleet`);
+  const agent = readFile('scripts/agent-report.mjs');
+  assert(!(!/NOT FOUND/.test(agent)), 'the agent does not detect a gate that does not exist — a missing guard would read identically to a passing one');
+  assert(!(!/does NOT prove/i.test(agent)), 'the report makes no statement of its own limits, so a static green would read as live proof');
+  const morning = readFile('scripts/morning-report.mjs');
+  assert(!(!/DID NOT RUN/.test(morning)), 'the morning page cannot express an agent that produced nothing');
+});
+
+test('every-model-name-we-ship-is-a-model-that-exists', 'SPEC-215 (root-caused 2026-08-02): the autonomous build agent has been DARK for weeks. Nightly reports blamed a credit balance; after the balance was topped up the error moved to 400 invalid_request, which is the API saying the model does not exist. It did not. "claude-opus-4-8" is not a real model, and it was hardcoded in auto-build, auto-fix, expand-coverage AND the support-triage escalation ladder — so support tickets silently never escalated past Haiku either. WORST OF ALL, A GATE ASSERTED THE BROKEN NAME: it demanded support-triage contain "claude-opus-4-8", so the defect was not merely unguarded, it was ENFORCED. That is the sharpest example yet of the real failure mode here — a check that locks in an invented criterion and then passes forever while the thing it guards is dead. A dead agent and an idle agent look identical from the outside, which is why nothing ever surfaced it.', '#215', () => {
+  const VALID = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'];
+  // stripComments, and NOT qa.mjs: the fix's own comments quote the broken name in order
+  // to explain it, and this gate's description names it deliberately so the lesson is
+  // readable. Scanning raw text would flag the explanation and force us to delete the one
+  // record of why this happened.
+  const files = ['scripts/auto-build.mjs', 'scripts/auto-fix.mjs', 'scripts/expand-coverage.mjs',
+                 'supabase/functions/support-triage/index.ts'];
+  const bad = new Set();
+  for (const f of files) {
+    for (const m of stripComments(readFile(f)).matchAll(/['\"`](claude-[a-z0-9][a-z0-9.\-]*)['\"`]/g)) {
+      if (!VALID.includes(m[1]) && m[1] !== 'claude-code') bad.add(f + ': ' + m[1]);
+    }
+  }
+  assert(!(bad.size > 0), 'these model names do not exist, so every call using them returns 400 and the agent goes dark: ' + [...bad].join(', '));
+});
+
+test('a-ci-agent-is-equivalent-to-a-subagent-and-cannot-merge-itself', 'SPEC-216 (founder, 2026-08-02): "can CI but equivalent/identical to subagents?... can not have my mac be a blocker." A subagent is a model call with a brief, a bounded set of files, and a way to act — all three exist on a CI runner, and a runner does not care whether the laptop is open. One thing is deliberately NOT identical: a subagent talks to you and can be stopped mid-thought, this one cannot. So its output is a pull request on its own branch, never a push to main. Every past outage here reached production through an automatic merge; a PR waiting for you cannot. The second requirement is that a dead agent SCREAMS: the build agent was dark for weeks on a 400 while every dashboard read green, because nothing distinguished "idle" from "unable to start". CANNOT RUN must outrank every other state on the morning page and must carry the API response verbatim.', '#216', () => {
+  const w = readFile('scripts/agent-work.mjs');
+  const c = stripComments(w);
+  assert(!(!/api\.anthropic\.com/.test(c)), 'the agent makes no model call — it is a reporter, not an agent');
+  assert(!(!/CANNOT RUN/.test(c)), 'the agent cannot express being unable to start, so a dead agent would read as idle');
+  assert(!(!/if \(!KEY\)/.test(c)), 'a missing API key is not detected up front, so the agent would fail deep inside with a confusing error');
+  // Assert on the BRANCH, not on the file. Grepping for the string passed even after I
+  // deliberately silenced two of the three failure paths, because a third still mentioned
+  // it. A gate that is satisfied by an unrelated occurrence is a gate that cannot fail.
+  const notOk = (c.match(/if \(!r\.ok\)[^\n]*/) || [''])[0];
+  assert(!(!/CANNOT RUN/.test(notOk)), 'an API error does not report CANNOT RUN — that is exactly how the build agent stayed dark on a 400 while every dashboard read green');
+  assert(!(!/r\.status/.test(notOk)), 'the API failure path drops the HTTP status, which is how "Build blocked" told us nothing for weeks');
+  const noKey = (c.match(/if \(!KEY\)[^\n]*/) || [''])[0];
+  assert(!(!/CANNOT RUN/.test(noKey)), 'a missing API key does not report CANNOT RUN, so an agent that never started would read as idle');
+  const m = readFile('scripts/morning-report.mjs');
+  assert(!(!/CANNOT RUN/.test(stripComments(m))), 'the morning page has no CANNOT RUN state');
+  assert(!(!/v === 'CANNOT RUN' \? -1/.test(m)), 'CANNOT RUN does not sort above every other state, so an agent that never started could appear below routine work');
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/agent-work\.mjs/.test(wf)), 'the workflow never runs the thinking half, so the fleet only reports gate results');
+  assert(!(!/continue-on-error: true/.test(wf)), 'a model outage would fail the job and take the whole report with it');
+  // Strip YAML comments first: the workflow explains IN A COMMENT why it never
+  // auto-merges, and scanning raw text flagged the explanation. Deleting the comment to
+  // satisfy the gate would have removed the only record of why the rule exists.
+  const wfCode = wf.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert(!(/--auto|gh pr merge|auto-merge/i.test(wfCode)), 'the fleet can merge its own work — every past outage reached production through an automatic merge');
+  assert(!(/push origin main|push .* HEAD:main/.test(wfCode)), 'the fleet pushes to main directly');
+});
+
+test('ci-subagents-read-the-spec-first-and-stay-out-of-the-dumb-zone', 'SPEC-217 (research-driven, 2026-08-02). Two findings from practitioners who solved our exact problems in production, applied here. (1) HumanLayer/Dex Horthy measured 100,000 developer sessions and found a "dumb zone" — the middle of a large context window where recall degrades and reasoning falters — and their Frequent Intentional Compaction keeps utilisation in the 40-60 percent band, validated on 100k-300k line codebases. That is the best available explanation for a specific failure of mine: inventing a 6-city list when 12 were authorised, writing a second URL parser when one existed, reusing a gate ID already taken. Each happened deep into a long session; each was a recall failure dressed as a decision. So each subagent gets a hard context cap. (2) GitHub Spec Kit and Geoffrey Huntley both put the SPEC before the code and keep progress in files and git history rather than in the window. Reading code first is how a spec gets rebuilt from bugs — exactly what Tarik caught me doing. So the spec is loaded before the source, and a missing spec is itself the first defect.', '#217', () => {
+  const w = readFile('scripts/agent-work.mjs');
+  const c = stripComments(w);
+  assert(!(!/CTX_CAP/.test(c)), 'no context cap — the subagent is handed an unbounded window and lands in the dumb zone, which is where invented values come from');
+  const cap = Number((c.match(/AGENT_CTX_CAP \|\| (\d+)/) || [, '0'])[1]);
+  assert(!(cap <= 0 || cap > 150000), `context cap is ${cap}; keep it well inside the window so recall stays in the 40-60% band`);
+  assert(!(/slice\(0, 300000\)/.test(c)), 'the 300k slice is back — that is the dumb zone by construction');
+  // RAW, not stripped: both the spec read and the FILES: header live inside template
+  // literals, and stripComments blanks those as well as comments. Scanning the stripped
+  // copy made both read as absent — a gate that fires on nothing. Third time tonight this
+  // exact trap has caught me; it is now the first thing to check when a gate looks wrong.
+  // Assert on the ORDER INSIDE THE BRIEF, which is what the model actually reads. My
+  // first version compared where the two lines appear in the source file, which a
+  // reordering of the prompt would not change at all — a gate measuring the wrong thing.
+  const iSpec = w.indexOf('THE SPEC FOR YOUR AREA');
+  const iCode = w.indexOf('FILES:');
+  assert(!(iSpec < 0), 'the subagent never loads its spec, so it can only infer intent from code that may itself be the bug');
+  assert(!(iSpec > iCode && iCode > -1), 'the code is loaded before the spec — that is how a spec gets rebuilt from bugs');
+  const fleet = JSON.parse(readFile('agents/fleet.json'));
+  for (const a of fleet.agents) {
+    let sp = '';
+    try { sp = readFile(`specs/${a.id}.md`); } catch { sp = ''; }
+    assert(!(!sp || sp.length < 100), `specs/${a.id}.md is missing or empty — that subagent has no source of truth but the code, and inferring intent from code that may itself be the bug is how this project got here`);
+    assert(!(!/Founder decisions on record/.test(sp)), `specs/${a.id}.md has nowhere to record a founder decision verbatim, so decisions would survive only as my paraphrase`);
+  }
+});
+
+test('a-subagent-fix-must-prove-itself-and-can-never-merge-itself', 'SPEC-218 (founder, 2026-08-02): "need proof in the morning with CI subagents reports of what they have done and how they are hammering towards a bug free against spec green." Reporting is not doing, so the subagents now act — but on this project an unattended edit has caused every serious outage, so the loop closes on itself the way Anthropic describes: act, run a HARD pass/fail, read the result, keep or throw away. Three checks must all pass AFTER the edit — the gate suite, the production build, and the scope guard proving the change never left the agent wall — or the file is restored byte for byte and the run reports an ATTEMPT rather than a fix. Two further rules: a model may NAME a path it does not own even when the cell hides it, so ownership is re-checked before writing; and anything needing a founder decision is refused outright rather than guessed, because inventing values the spec does not contain is the single failure that has cost this project the most.', '#218', () => {
+  const w = readFile('scripts/agent-work.mjs');
+  const c = stripComments(w);
+  assert(!(!/a\.owns\.includes\(fixed\.path\)/.test(c)), 'the subagent does not re-check ownership before writing — a model can name a path the cell hides, and an agent that writes outside its wall has no wall');
+  assert(!(!/scripts\/qa\.mjs/.test(c) && /npm run build/.test(c)), 'a fix is not re-verified against the gates and the build, so an unattended edit could ship on the model saying it was fine');
+  assert(!(!/scope-guard/.test(c)), 'the scope guard is not re-run, so a fix could quietly widen its own blast radius');
+  assert(!(!/writeFileSync\(fixed\.path, before\)/.test(c)), 'a failed fix is not reverted — the working tree would keep a change that failed its own checks');
+  assert(!(!/needs_founder/.test(c)), 'the subagent will act on a defect that needs a founder decision, which means guessing a value the spec does not contain');
+  const pr = readFile('scripts/agent-pr.mjs');
+  // RAW, not stripped: every git and gh command here lives inside a template literal, and
+  // stripComments blanks those. On the stripped copy these three assertions fired on
+  // nothing — gates that could not fail. Fourth time tonight this trap has caught me, so
+  // it is now the first thing I check when a new gate behaves oddly.
+  const prCode = pr.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  assert(!(!/gh pr create/.test(prCode)), 'a kept fix never becomes a PR, so the work would be invisible');
+  assert(!(/--auto|pr merge/.test(prCode)), 'the subagent can merge its own PR — every past outage here reached production through an automatic merge');
+  assert(!(/HEAD:main|push origin main/.test(prCode)), 'the subagent pushes to main directly');
+  assert(!(!/agent\/\$\{id\}/.test(pr)), 'the branch does not carry the agent id, so a bad change is not attributable to one owner');
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/agent-pr\.mjs/.test(wf)), 'the workflow never opens PRs');
+  assert(!(!/pull-requests: write/.test(wf)), 'the workflow cannot open a PR — it would fail silently every run');
+});
+
+
+
+
+
+
+
+
+
+
+
 
 
 

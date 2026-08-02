@@ -4,7 +4,7 @@
 //   1. HAIKU (claude-haiku-4-5-20251001) reads the ticket + a concise product/FAQ
 //      context and either (a) resolves with a helpful reply, or (b) says it
 //      cannot and why.
-//   2. If Haiku can't resolve confidently → escalate to OPUS (claude-opus-4-8)
+//   2. If Haiku can't resolve confidently → escalate to OPUS (claude-opus-5)
 //      with more context. If Opus resolves → ai_resolved (ai_stage='opus').
 //   3. If Opus also can't — or the issue needs a human/account/refund/bug/data
 //      action — the ticket goes to status='human', ai_reason is set, and the
@@ -36,7 +36,10 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 
 const HAIKU = 'claude-haiku-4-5-20251001'; // fast triage
-const OPUS  = 'claude-opus-4-8';           // deep escalation
+// SPEC-215: was 'claude-opus-4-8', which is not a model that exists. Every escalation
+// returned 400 invalid_request, so the ladder silently ended at Haiku and no ticket was
+// ever escalated. A gate asserted the broken name, which is how it survived.
+const OPUS  = 'claude-opus-5';             // deep escalation
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
