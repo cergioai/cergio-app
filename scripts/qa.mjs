@@ -5993,7 +5993,7 @@ test('miami-and-nyc-fill-to-quota-before-anywhere-else-and-a-target-stops-itself
   assert(!(/PHASE1_CITY_QUOTA = Number\(process\.env\.PHASE1_CITY_QUOTA \|\| [1-9]/.test(scope)), 'the scope module invents a default quota');
 });
 
-test('a-source-below-the-contactability-bar-is-parked-not-retried', 'SPEC-206 (founder, 2026-08-02, answering "what contactable % parks a source?" with "1. yes fine" to a 40% bar): a lead with no phone and no email cannot be contacted, so it is not a lead and must not be paid for. The bar is measured per source on real stored rows, never on vendor promises, and a source below it is PARKED rather than retried — retrying a source that has already proven what it produces is how $108 left the account for zero usable rows. Parking stops the QUEUE, never the data: rows are kept for audit, because deleting the evidence of a bad source is how the same source gets re-approved later. A source with under 100 rows is reported as "too few to judge" rather than parked on noise.', '#206', () => {
+test('a-source-below-the-contactability-bar-is-parked-not-retried', 'SPEC-208 (founder, 2026-08-02, answering "what contactable % parks a source?" with "1. yes fine" to a 40% bar): a lead with no phone and no email cannot be contacted, so it is not a lead and must not be paid for. The bar is measured per source on real stored rows, never on vendor promises, and a source below it is PARKED rather than retried — retrying a source that has already proven what it produces is how $108 left the account for zero usable rows. Parking stops the QUEUE, never the data: rows are kept for audit, because deleting the evidence of a bad source is how the same source gets re-approved later. A source with under 100 rows is reported as "too few to judge" rather than parked on noise.', '#208', () => {
   const d = readFile('scripts/growth-dedupe-queue.mjs');
   const c = stripComments(d);
   assert(!(!/CONTACT_BAR_PCT/.test(c)), 'no contactability bar — sources are judged on volume alone, which is what let yelp dominate with unmeasured quality');
@@ -6026,6 +6026,18 @@ test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (20
   assert(!(!/process\.exit\(1\)/.test(push)), 'the push does not fail loud — a silent failure means git and production disagree, which is worse than having no file');
   assert(!(!/startsWith\('_'\)/.test(push)), 'documentation keys would be pushed as real secrets');
 });
+
+test('no-two-gates-may-share-an-id', 'SPEC-209 (found 2026-08-02 by colliding with my own gate): I filed a new gate as #206 and #206 already existed — spec-185-spendgate-scope. Nothing caught it, because nothing has ever checked. Nine IDs on main are already shared. This matters beyond tidiness: every report, every commit message and every "which gate covers this?" question is keyed by ID, so a duplicate makes the answer ambiguous and a grep silently returns the wrong gate — which is exactly how I concluded a change had merged when it had not. The nine existing collisions are BASELINED rather than fixed in this change: making them fail today would block every unrelated PR, which is the mistake that broke the Chinese wall on its first attempt.', '#209', () => {
+  const src = readFile('scripts/qa.mjs');
+  const ids = [...src.matchAll(/'(#[0-9]+[a-z]?)'/g)].map((m) => m[1]);
+  const dupes = [...new Set(ids.filter((i) => ids.filter((x) => x === i).length > 1))].sort();
+  const baseline = JSON.parse(readFile('qa-id-baseline.json'));
+  const added = dupes.filter((d) => !baseline.includes(d));
+  assert(!(added.length > 0), `these gate IDs are now shared by more than one gate: ${added.join(', ')} — pick an unused number, because every report and grep keyed by ID would return the wrong gate`);
+  const fixed = baseline.filter((b) => !dupes.includes(b));
+  if (fixed.length) console.log(`  (note: ${fixed.join(', ')} no longer collide — remove them from qa-id-baseline.json)`);
+});
+
 
 
 

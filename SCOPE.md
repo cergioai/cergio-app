@@ -7,6 +7,7 @@
 - `.github/growth-audit-fire/`
 - `SCOPE.md`
 - `agent-runs/`
+- `qa-id-baseline.json`
 - `scripts/_growth-env.mjs`
 - `scripts/_growth-scope.mjs`
 - `scripts/growth-audit-export.mjs`
