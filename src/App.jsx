@@ -127,6 +127,7 @@ const HIDE_NAV_PATHS_EXTRA = [
   '/ops/sms',                         // P2P tap-to-send queue — own full shell
   '/ops/data',                        // data export dashboard — own full shell
   '/ops/agents',                      // CI subagent fleet — own full shell
+  '/agents2',                         // SPEC-238 alias of /ops/agents — must hide nav IDENTICALLY, or the alias behaves differently from the original
   '/support-inbox',                   // founder support inbox — own full shell
 ];
 
@@ -632,6 +633,13 @@ export default function App() {
           <Route path="/ops/sms"               element={<P2pSmsQueueScreen />} />
           <Route path="/ops/data"              element={<DataExportScreen />} />
           <Route path="/ops/agents"            element={<AgentFleetScreen />} />
+          {/* SPEC-238 (founder, 2026-08-02): "want to create another dedicated url
+              for the dashboard.. call it /status2 and /agents2". Dedicated short
+              URLs, SAME screens — aliases, not copies (a second implementation
+              would be a second source of truth). Admin gating lives INSIDE each
+              screen (isAdminEmail), so the aliases inherit it. */}
+          <Route path="/status2"               element={<OpsStatusScreen />} />
+          <Route path="/agents2"               element={<AgentFleetScreen />} />
           {/* crack-help-haiku — founder support inbox (admin-gated inside the
               screen, RLS-gated in the DB). Reads all tickets, reply closes. */}
           <Route path="/support-inbox"         element={<SupportInboxScreen />} />
