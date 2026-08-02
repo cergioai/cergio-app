@@ -6,7 +6,7 @@
   "_CRAWLS_SUSPENDED": "Global stop. false = the allowlist below decides. Defaults to SUSPENDED in code, so a typo here fails closed.",
 
   "CRAWLS_ONLY": "ig_services",
-  "_CRAWLS_ONLY": "ONLY these sources may be claimed. ig_services is the sole creator path that can run — ig-creator-marketplace is PARKED pending IG_USER_ID + IG_MARKETPLACE_TOKEN. The other seven stay suspended until the audit clears them.",
+  "_CRAWLS_ONLY": "ONLY these sources may be claimed. ig_services is DUAL-CLASS: it produces both a service row and a creator row per person, so it is the services source AND the creator source. ig-creator-marketplace was REMOVED (SPEC-221) — it never produced a row and needed a Meta permission we do not have. The other seven sources stay suspended until the audit clears them.",
 
   "CREATOR_TARGET": "100",
   "_CREATOR_TARGET": "ig_services stops itself at 100 creators from ig-scraper-user-search. Checked before any job is claimed, so it cannot overshoot while nobody is watching.",

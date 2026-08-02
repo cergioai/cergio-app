@@ -26,7 +26,8 @@ const H = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 //             the same person, which is why it appears in both tables.
 const SOURCES = ['osm', 'craigslist', 'yellowpages_apify', 'yelp',
                  'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services'];
-const CREATOR_SOURCES = ['ig-creator-marketplace', 'ig-scraper-user-search'];
+// SPEC-221 — ig_services is the only creator source; the marketplace path was removed.
+const CREATOR_SOURCES = ['ig-scraper-user-search'];
 const CREATOR_COLS = 'id,ig_handle,display_name,category,followers,email,phone,bio,external_url,city,state,is_business,discovered_via,outreach_status';
 const COLS = 'id,name,service_type,phone,owner_email,website_url,instagram,address,city,state,lat,lon,data_source,outreach_status,fetched_at';
 
@@ -144,9 +145,7 @@ md.push('', '---', '', '## CREATORS — a SEPARATE data class', '',
   '| creator source | what it is | creators | contactable | with followers |',
   '|---|---|---|---|---|');
 for (const c of creatorSummary) {
-  const what = c.creator_source === 'ig-creator-marketplace' ? 'FIRST-PARTY Meta Creator Marketplace API'
-    : c.creator_source === 'ig-scraper-user-search' ? 'Apify Instagram scraper (founder override)'
-    : '—';
+  const what = 'ig_services dual-class crawl (Apify Instagram, founder override)';
   md.push(`| **${c.creator_source}** | ${what} | ${c.creators} | ${c.contactable_pct}% | ${c.with_followers} |`);
 }
 md.push('', '`ig_services` is DUAL-CLASS: it writes a service row AND a creator row for the same person.', '');

@@ -161,7 +161,7 @@ const gdb = growthDb();
       if (creatorTargetMet && ONLY.length === 1 && ONLY[0] === 'ig_services') {
         return json({
           suspended: true, processed: 0,
-          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search. Paused for audit (SPEC-205). ig-creator-marketplace stays PARKED: needs IG_USER_ID + IG_MARKETPLACE_TOKEN.`,
+          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search. Paused for audit (SPEC-205). ig_services is the only creator source (SPEC-221).`,
         });
       }
     } catch (e) {
