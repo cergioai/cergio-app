@@ -5901,6 +5901,30 @@ test('crawls-are-suspended-until-the-founder-audit-clears', 'SPEC-197 (founder, 
   assert(!(!/contactable/.test(ex)), 'the export does not report contactability — the one number that decides if a lead is worth anything');
 });
 
+test('the-agent-cell-actually-isolates', 'SPEC-199 (founder, 2026-08-02): "i need to make sure the chinese wall is definitive so the agent is isolated from the rest and looking at just his feature". Every earlier isolation was a RULE checked after the damage — the FREE-link change had already blanked the homepage by the time anything noticed, and research confirms Claude Code hooks do not fire in Cowork at all (anthropics/claude-code#40495) while git worktrees isolate sessions from each other rather than a change from the codebase. A cell is different in kind: a sparse-checkout worktree where files outside the feature are NOT ON DISK. The first attempt FAILED — patterns were not root-anchored, so 0 of 388 files were hidden and the isolation claim was false. It now verifies the wall on disk and REFUSES to hand a cell to an agent that is not isolating.', '#199', () => {
+  const c = readFile('scripts/agent-cell.mjs');
+  assert(!(!/sparse-checkout/.test(c)), 'the cell does not use sparse-checkout — nothing is physically hidden');
+  assert(!(!/'\/' \+ f\.replace/.test(c)), 'sparse-checkout patterns are not root-anchored; without a leading slash NOTHING is hidden and the wall is fiction');
+  assert(!(!/find \. -type f/.test(c)), 'the cell counts tracked files rather than files ON DISK — only the on-disk set is the real wall');
+  assert(!(!/CELL FAILED/.test(c)), 'the cell does not verify it actually isolated — the first version silently hid 0 files');
+  assert(!(!/process\.exit\(1\)/.test(c)), 'a non-isolating cell is still handed to an agent');
+  assert(!(!/may only GROW/.test(c)), 'the cell brief does not carry the shared-code rule');
+  assert(!(!/MUTATION-TESTED/.test(c)), 'the cell brief does not require mutation-testing');
+});
+
+test('the-old-autonomous-ops-are-retired', 'SPEC-198 (founder, 2026-08-02): "suspend the old system of coo forensic auditor etc.. they are wasteful and did not deliver anything... we are resetting the ops with sub agents.. one at a time one feature at a time." Record over recent weeks: coo-execute executed 0 rows with 13 items stuck awaiting approval; the build agent went dark on an API billing error while every dashboard read green; cergio-orchestrator RE-RAN PAUSED agents because a paused agent reads as a stall; cergio-watchdog held 4 standing false-reds; cergio-clean-services is an orphan cron with no function and no migration, failing hourly. They also act CONCURRENTLY with the isolated agents, which destroys the one property that now matters: a change attributable to exactly one owner inside one wall. Unscheduled, not deleted.', '#198', () => {
+  const migs = fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations'));
+  const f = migs.filter((m) => /retire_autonomous_agents/.test(m))[0];
+  assert(!(!f), 'no migration retires the old autonomous agents');
+  const sql = readFile(`supabase/migrations/${f}`);
+  for (const j of ['cergio_coo_execute', 'cergio_orchestrator', 'cergio_watchdog', 'cergio_supply_engine']) {
+    assert(!(!sql.includes(j)), `${j} is still scheduled — it acts concurrently with the isolated agents`);
+  }
+  assert(!(!/cron\.unschedule/.test(sql)), 'the migration does not actually unschedule anything');
+  assert(!(/drop function/i.test(sql)), 'functions must be UNSCHEDULED, not dropped — re-enabling must stay one line');
+});
+
+
 
 
 
