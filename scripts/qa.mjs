@@ -6328,6 +6328,21 @@ test('there-are-two-creator-sources-and-neither-can-be-silently-closed', 'SPEC-2
   assert(!(!/se:web-harvest/.test(spec)), 'the creator spec does not record both sources, so the next agent would close one again');
 });
 
+test('the-headline-live-counts-obey-the-filters-and-dmas-come-from-the-data', 'SPEC-231 (founder, 2026-08-02): "the filter isnt holding.. clicking 4 wks doesnt change the counts". The four LIVE-counter numbers — the ones actually read on that page — were hardcoded queries built straight off the table, bypassing the city, location and time helpers entirely. So every filter appeared broken while the data behind it was fine, which is the worst kind of defect: it destroys trust in a correct system. Separately the DMA list was hardcoded to two, so a third DMA could be crawled and never appear in the filter, leaving its rows invisible on the one screen meant to prove what we have. DMAs are derived from the data, known codes get their proper name, and an unknown code is shown by its code rather than dropped.', '#231', () => {
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const c = stripComments(ops);
+  assert(!(/const \{ count: nycSvc \} = await gdb\.from\('leads_services'\)/.test(c)),
+    'the LIVE counter still queries the table directly, so it ignores every filter — clicking a time window would change nothing');
+  assert(!(!/const dmaCount = async/.test(c)), 'no shared helper for the DMA counts, so they can drift from the filters again');
+  assert(!(!/if \(sinceHours > 0\)[\s\S]{0,200}gte/.test(c)), 'the LIVE counter does not apply the time window');
+  assert(!(!/if \(location\) q = q\.eq\('city', location\)/.test(c)), 'the LIVE counter does not apply the location filter');
+  assert(!(/cities: \{ NY: 'NYC', FL: 'Miami' \}/.test(c)),
+    'the DMA list is hardcoded to two — a third DMA would be crawled and never appear in the filter, hiding its rows');
+  assert(!(!/const dmaCounts/.test(c) && /cities: dmas/.test(c)), 'DMAs are not derived from the data');
+  assert(!(!/DMA_NAMES\[code\] \|\| code/.test(c)), 'an unrecognised DMA code is dropped instead of shown');
+});
+
+
 
 
 

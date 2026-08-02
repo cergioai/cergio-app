@@ -135,6 +135,16 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     }
   }
 
+  // DMA LIST — every state that actually has rows, newest-first by volume.
+  const DMA_NAMES: Record<string, string> = { NY: 'NYC', FL: 'Miami', CA: 'Los Angeles', IL: 'Chicago', TX: 'Texas', DC: 'Washington DC', PA: 'Philadelphia', GA: 'Atlanta', AZ: 'Phoenix', NJ: 'New Jersey', CT: 'Connecticut' };
+  const dmaCounts: Record<string, number> = {};
+  try {
+    const { data: dl } = await gdb.from('leads_services').select('state').limit(20000);
+    for (const r of (dl || [])) { const k = String((r as any).state ?? '').trim().toUpperCase(); if (k) dmaCounts[k] = (dmaCounts[k] || 0) + 1; }
+  } catch (_e) {}
+  const dmas: Record<string, string> = {};
+  for (const [code] of Object.entries(dmaCounts).sort((a, b) => b[1] - a[1])) dmas[code] = DMA_NAMES[code] || code;
+
   // LOCATION LIST, scoped to the selected DMA and NORMALISED. The raw column holds
   // "Astoria", "ASTORIA", "Astoria " and " Brooklyn" as four different values, so the
   // dropdown showed the same place four times with the count split between them. Trim,
@@ -155,13 +165,26 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     }
   } catch (_e) {}
 
-  // ── 5. LIVE COUNTER (targets per founder spec: NYC 50k / Miami 20k services)
-  const { count: nycSvc } = await gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'NY');
-  const { count: miaSvc } = await gdb.from('leads_services').select('id', { count: 'exact', head: true }).eq('state', 'FL');
-  const { count: nycCre } = await gdb.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'NY');
-  const { count: miaCre } = await gdb.from('leads_influencers').select('id', { count: 'exact', head: true }).eq('state', 'FL');
-  const counter = { nyc_services: nycSvc ?? 0, nyc_target: 50000, miami_services: miaSvc ?? 0, miami_target: 20000,
-                    nyc_creators: nycCre ?? 0, miami_creators: miaCre ?? 0, services_new_24h: svcNew24 ?? 0 };
+  // ── 5. LIVE COUNTER
+  //
+  // SPEC-231 — THESE IGNORED EVERY FILTER. They were four hardcoded queries built straight
+  // off the table, bypassing the city, location and time helpers entirely — which is why
+  // selecting "4 weeks" changed nothing on the numbers the founder actually reads. A
+  // filter that visibly does nothing is worse than no filter: it makes the page look
+  // wrong and hides the fact that the data behind it is fine.
+  const dmaCount = async (state: string, table: string, col?: string) => {
+    let q = gdb.from(table).select('id', { count: 'exact', head: true }).eq('state', state);
+    if (location) q = q.eq('city', location);
+    if (sinceHours > 0) q = q.gte(table === 'leads_services' ? 'fetched_at' : 'created_at', new Date(Date.now() - sinceHours * 36e5).toISOString());
+    const { count } = await q;
+    return count ?? 0;
+  };
+  const nycSvc = await dmaCount('NY', 'leads_services');
+  const miaSvc = await dmaCount('FL', 'leads_services');
+  const nycCre = await dmaCount('NY', 'leads_influencers');
+  const miaCre = await dmaCount('FL', 'leads_influencers');
+  const counter = { nyc_services: nycSvc, nyc_target: 50000, miami_services: miaSvc, miami_target: 20000,
+                    nyc_creators: nycCre, miami_creators: miaCre, services_new_24h: svcNew24 ?? 0 };
 
   // latest supply-engine run (bugs found + auto-fixes)
   let engine: unknown = null;
@@ -231,8 +254,11 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     counter, creatorsBySource, creatorsUnattributed, engine, download,
     filter: {
       city, location, sinceHours,
-      // Cities are DMAs. There are exactly two.
-      cities: { NY: 'NYC', FL: 'Miami' },
+      // SPEC-231 — DMAs come FROM THE DATA. Hardcoding two meant a third DMA would be
+      // crawled and never appear in the filter, so its rows would be invisible on the one
+      // screen meant to prove what we have. Known codes get their proper name; anything
+      // else is shown by its code rather than dropped.
+      cities: dmas,
       locations: Object.fromEntries(Object.entries(locations).sort((a, b) => b[1] - a[1]).slice(0, 200)),
     },
     creators_listed_total: listedCreators, creators_total: creTotal ?? 0,
