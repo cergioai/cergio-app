@@ -116,6 +116,29 @@ if (!finding) { out({ state: 'NO FINDING', model: MODEL }); process.exit(0); }
 // The loop closes on itself the way Anthropic describes: the subagent acts, runs a hard
 // pass/fail, reads the result, and either keeps the change or throws it away. Nothing
 // here is trusted because the model said so.
+// ─── THE LOOP, PER SUBAGENT (founder, 2026-08-02: "apply the loop and the upgrades we
+// implemented yesterday (ralph etc) to force fixing at subagent level") ────────────────
+//
+// Huntley's Ralph loop: the same brief every run, with progress accumulating in FILES and
+// git history rather than the context window. A subagent therefore does not need to
+// remember the last run — it reads its own progress log off disk, which is exactly why
+// this survives the session ending and the Mac being off.
+//
+// ATTEMPTS ARE BOUNDED. Two strikes on the same finding and it stops and comes to Tarik
+// with what was tried. Today cost him five craigslist iterations and three spend-gate
+// iterations; a bounded loss is the difference between a setback and a spiral.
+const LOG = `specs/${id}.md`;
+const priorLog = (() => { try { return fs.readFileSync(LOG, 'utf8'); } catch { return ''; } })();
+const sig = String(finding.finding || '').slice(0, 60).toLowerCase();
+const priorAttempts = (priorLog.toLowerCase().match(new RegExp(sig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+if (priorAttempts >= 2) {
+  out({ state: 'STOPPED', acted: false, attempts: priorAttempts,
+        why_not: `two attempts on this same finding already failed — stopping rather than looping. Needs a decision: ${finding.fix}`,
+        ...finding });
+  try { fs.appendFileSync(LOG, `\n- ${new Date().toISOString().slice(0, 16)} — STOPPED after ${priorAttempts} attempts: ${finding.finding}\n`); } catch {}
+  process.exit(0);
+}
+
 if (finding.needs_founder || finding.confidence === 'low') {
   out({ state: 'FINDING', model: MODEL, acted: false, why_not: finding.needs_founder ? 'needs a founder decision — I will not invent the answer' : 'confidence too low to act unattended', ...finding });
   process.exit(0);
@@ -170,14 +193,17 @@ if (verdict === 'kept') {
 }
 if (verdict === 'reverted') {
   fs.writeFileSync(fixed.path, before);
-  out({ state: 'ATTEMPTED', acted: false, file: fixed.path, why_not: detail, ...finding });
+  // Log the FAILED attempt too. Only logging successes meant the next run saw a clean
+  // history, proposed the same fix, and failed the same way — a loop with no memory is
+  // just repetition.
+  try { fs.appendFileSync(LOG, `\n- ${new Date().toISOString().slice(0, 16)} — attempt REVERTED (${detail}): ${finding.finding}\n`); } catch {}
+  out({ state: 'ATTEMPTED', acted: false, file: fixed.path, attempt: priorAttempts + 1, why_not: detail, ...finding });
   process.exit(0);
 }
 
 // Progress goes in the file, not the window.
 try {
-  const sp = `specs/${id}.md`;
-  fs.appendFileSync(sp, `\n- ${new Date().toISOString().slice(0, 16)} — fixed in \`${fixed.path}\`: ${finding.finding}\n`);
+  fs.appendFileSync(LOG, `\n- ${new Date().toISOString().slice(0, 16)} — FIXED in \`${fixed.path}\`: ${finding.finding}\n`);
 } catch { /* the spec log is a record, not a gate */ }
 
 out({ state: 'FIXED', model: MODEL, acted: true, file: fixed.path, ...finding });

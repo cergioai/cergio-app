@@ -1,10 +1,11 @@
-# Morning report — 2026-08-02 15:22 UTC
+# Morning report — 2026-08-02 16:58 UTC
 
-**0 of 8 agents GREEN.** Everything below is sorted worst first.
+**0 of 9 agents GREEN.** Everything below is sorted worst first.
 
 | agent | verdict | gates | defects |
 |---|---|---|---|
 | **data-dashboard** | **CANNOT RUN** | 2/2 | 1 |
+| **ops-dashboard** | **DID NOT RUN** | 0/0 | 5 |
 | **payments** | **NEEDS WORK** | 1/2 | 2 |
 | **booking-loop** | **NEEDS WORK** | 2/3 | 1 |
 | **crawl-sources** | **NEEDS WORK** | 6/6 | 2 |
@@ -16,6 +17,7 @@
 **Green when:**
 
 - **data-dashboard** — the screen total equals a direct count for the same filter
+- **ops-dashboard** — changing any filter changes the counts, and every facet list is derived from live rows
 - **payments** — one real booking reaches paid_at with a Stripe charge id
 - **booking-loop** — a live walk completes the loop with two real accounts
 - **crawl-sources** — every paid source routes through Apify, or is parked with the reason recorded
@@ -23,6 +25,13 @@
 - **spend-guard** — ledger total matches the vendor account total within 5%
 - **ci-health** — e2e is green and required, or deleted with the reason recorded — a permanently red advisory check is worse than no check
 - **legal-copy** — legal review clears the copy, or it is de-securitised and the paraphrases are added to the gate
+
+## Did not run — read this first
+
+An agent that produced no report is the most dangerous state on this page, because
+silence reads like success. Treat each of these as UNKNOWN, not as fine.
+
+- **ops-dashboard** — /ops/status — the founder's console
 
 ## COULD NOT START — read this before anything else
 
@@ -46,6 +55,16 @@ No agent reported a new defect in its own files this run.
 - screen counts have never been reconciled against a direct REST count
 
 Full report: `reports/data-dashboard.md`
+
+### ops-dashboard — /ops/status — the founder's console
+
+- every count and CSV must obey City (DMA), Location, Category, Time and Rows — the LIVE counts bypassed all of them and made working filters look broken
+- DMAs and every facet must come FROM THE DATA, never a hardcoded list
+- deleting an export from opsPayload crashed the whole console with 'SOURCES is not defined' — no count, no filter, no DMA
+- exactly TWO creator sources; a list of six put four permanent zeros beside the real ones
+- google_sponsored is folded into google_lsa, never shown as its own row
+
+Full report: `reports/ops-dashboard.md`
 
 ### payments — Payment on accept — THE LAUNCH BLOCKER
 

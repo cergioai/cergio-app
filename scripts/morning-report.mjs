@@ -9,11 +9,15 @@ const rs = fleet.agents.map((a) => {
   try { base.work = JSON.parse(fs.readFileSync(`reports/${a.id}.work.json`, 'utf8')); } catch { base.work = null; }
   // An agent that could not start is not idle. It must outrank everything else on the page.
   if (base.work && base.work.state === 'CANNOT RUN') base.verdict = 'CANNOT RUN';
+  if (base.work && base.work.state === 'STOPPED') base.verdict = 'STOPPED';
   return base;
 });
 // Failures first (feedback_never_retype_report_failures_first): an agent that did not run
 // is the most alarming state of all, because its silence reads like success.
-const rank = (v) => (v === 'CANNOT RUN' ? -1 : v === 'DID NOT RUN' ? 0 : v === 'NEEDS WORK' ? 1 : 2);
+// STOPPED sits just under the two "it never ran" states: a subagent that has given up
+// after two attempts is waiting on a decision, and that is the second most urgent thing
+// on the page after something that could not start at all.
+const rank = (v) => (v === 'CANNOT RUN' ? -1 : v === 'DID NOT RUN' ? 0 : v === 'STOPPED' ? 0.5 : v === 'NEEDS WORK' ? 1 : 2);
 rs.sort((a, b) => rank(a.verdict) - rank(b.verdict) || a.priority - b.priority);
 
 const green = rs.filter((r) => r.verdict === 'GREEN');
@@ -64,6 +68,20 @@ if (cant.length) {
 
 // WHAT THEY DID, not just what they saw. Founder: "proof of what they've done."
 const acted = rs.filter((r) => r.work && (r.work.state === 'FIXED' || r.work.state === 'ATTEMPTED'));
+const stopped = rs.filter((r) => r.work && r.work.state === 'STOPPED');
+if (stopped.length) {
+  say('## STOPPED after two attempts — these need a decision from you');
+  say();
+  say('Two strikes and a subagent halts rather than looping. Each of these tried twice,');
+  say('failed its own checks both times, and is now waiting rather than burning more.');
+  say();
+  for (const r of stopped) {
+    say(`- **${r.id}** — ${r.work.finding}`);
+    say(`  Proposed: ${r.work.fix || '—'}`);
+  }
+  say();
+}
+
 say('## What the CI subagents DID this run');
 say();
 if (!acted.length) say('No subagent changed anything this run.');
