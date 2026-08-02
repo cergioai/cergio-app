@@ -5938,6 +5938,39 @@ test('creators-are-a-real-class-that-can-actually-be-written', 'SPEC-202 (found 
   assert(!(!/ig-creator-marketplace/.test(d)), 'the first-party creator path is not reported, so its blocked state stays invisible');
 });
 
+test('the-data-dashboard-reads-the-database-the-leads-are-actually-in', 'SPEC-203 (found 2026-08-02): founder reported /ops/data as truncated. It was not truncated — leads-dashboard called createClient(SUPABASE_URL, service) which is the PRODUCT project, while every lead lives in the GROWTH project. It was faithfully reporting a nearly empty table. Auth belongs on product; leads belong on growth, and the two must not be confused again. Two further silent-staleness bugs rode along: the creator source list was hardcoded to modash-vetted-seed (abandoned) so real creator sources fell into "(other/unlabeled)", and creators were counted by data_source when creator rows label their origin in discovered_via.', '#203', () => {
+  const f = readFile('supabase/functions/leads-dashboard/index.ts');
+  const code = stripComments(f);
+  assert(!(!/growthDb\(\)/.test(code)), 'leads-dashboard does not use the growth client — it is querying the product project, where the leads are not');
+  assert(!(/const db = createClient\(url, svc\)/.test(code)), 'the lead query still builds a PRODUCT service client — this is the exact line that made the dashboard look truncated');
+  assert(!(!/discovered_via/.test(code)), 'creators are still counted by data_source; creator rows record their origin in discovered_via, so every creator source would read zero');
+  assert(!(/modash-vetted-seed/.test(code)), 'the abandoned modash source is still listed — a hardcoded source list is how a dead source keeps looking alive');
+  assert(!(!/contactBySource/.test(code)), 'no per-source contactable breakdown — a platform-wide total hides which source is producing unusable leads, which is what we were paying for');
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  assert(!(!/contactBySource/.test(stripComments(scr))), 'the dashboard does not surface contactable % per source, so the number that should decide spend is invisible');
+});
+
+test('one-parser-for-the-growth-connection-and-one-authorised-scope', 'SPEC-204 (found 2026-08-02): the 03:06Z audit reported 0 leads for all 8 sources while the database held thousands. GROWTH_SUPABASE_URL was parsed two different ways — the seeder reduced it to new URL(raw).origin, the audit export only stripped trailing slashes — and the secret carries a path, so the export requested /rest/v1/rest/v1/leads_services and got 404 PGRST125 on every table. Separately, the creator floor hardcoded 6 cities and 8 service types of my own invention when seed-growth-queue.mjs already held the authorised 12 metros and 28 types; that silently dropped Queens, Bronx, Staten Island, Brickell, Coral Gables and Doral and put the blocked-category exclusion at risk. Two parsers for one secret, and two lists for one scope, are two sources of truth — and in both cases the copy nobody tested was the one reporting to the founder.', '#204', () => {
+  for (const f of ['scripts/growth-audit-export.mjs', 'scripts/seed-growth-queue.mjs', 'scripts/growth-dedupe-queue.mjs']) {
+    const c = stripComments(readFile(f));
+    assert(!(!/growthBase\(\)/.test(c)), `${f} does not use the shared growth URL parser — a second parser is how the audit 404'd on every table while the seeder worked`);
+    assert(!(/process\.env\.GROWTH_SUPABASE_URL/.test(c)), `${f} reads GROWTH_SUPABASE_URL directly instead of through the one parser`);
+  }
+  // stripComments: the file's own comment NAMES the blocked categories in order to
+  // explain why they are absent. Scanning the raw text would flag the explanation.
+  const scope = stripComments(readFile('scripts/_growth-scope.mjs'));
+  const cities = (scope.match(/\['[^']+',\s*'(NY|FL)'\]/g) || []).length;
+  assert(!(cities < 12), `the authorised scope lists ${cities} metros, not the 12 Phase-1 metros — someone truncated the geography`);
+  assert(!(/massage|tattoo|makeup|personal chef/i.test(scope)), 'a BLOCKED category is present in the authorised service types');
+  const ded = stripComments(readFile('scripts/growth-dedupe-queue.mjs'));
+  assert(!(/const CITIES = \[/.test(ded)), 'the creator floor restates its own city list instead of importing the authorised one');
+  assert(!(!/_growth-scope\.mjs/.test(ded)), 'the creator floor does not import the authorised scope');
+  const seed = stripComments(readFile('scripts/seed-growth-queue.mjs'));
+  assert(!(/const CITIES = \[/.test(seed)), 'the seeder restates the city list — the scope module is meant to be the only copy');
+});
+
+
+
 
 
 

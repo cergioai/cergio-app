@@ -14,7 +14,13 @@
 // conflict the seeder can ignore. The invariant then lives in the database, where
 // no future caller can forget it.
 const MGMT = 'https://api.supabase.com/v1';
-const url = (process.env.GROWTH_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+import { growthBase } from './_growth-env.mjs';
+import { CITIES, TYPES } from './_growth-scope.mjs';
+// Which of the AUTHORISED types actually attract someone with an audience. This narrows
+// the authorised list; it never adds to it, so a blocked category cannot re-enter here.
+const CREATOR_HEAVY = new Set(['photographer', 'personal trainer', 'hair stylist', 'barber',
+  'dog trainer', 'life coach', 'tutor', 'home organizer', 'nutritionist', 'dog walker']);
+const url = growthBase();
 const token = process.env.GROWTH_ACCESS_TOKEN;
 if (!url || !token) { console.log('dedupe SKIPPED (need GROWTH_SUPABASE_URL + GROWTH_ACCESS_TOKEN)'); process.exit(0); }
 const ref = new URL(url).hostname.split('.')[0];
@@ -224,15 +230,23 @@ const marketN = cmap['ig-creator-marketplace'] || 0;
 
 console.log(`\ncreators — floor ${CREATOR_FLOOR} each`);
 console.log(`  ig-scraper-user-search   ${String(scraperN).padStart(5)}  ${scraperN < CREATOR_FLOOR ? 'BELOW FLOOR — seeding' : 'ok'}`);
-console.log(`  ig-creator-marketplace   ${String(marketN).padStart(5)}  BLOCKED: needs IG_USER_ID + IG_MARKETPLACE_TOKEN (Meta permission pending) — founder action, not a code gate`);
+console.log(`  ig-creator-marketplace   ${String(marketN).padStart(5)}  PARKED (founder, 2026-08-02) — needs IG_USER_ID + IG_MARKETPLACE_TOKEN, gated on the pending Meta permission. Not counted against the floor; not retried.`);
 
 if (scraperN < CREATOR_FLOOR) {
   // ig_services is the only creator path we can actually run today. Seed a focused set
   // of jobs so creators reach the floor instead of arriving as a by-product.
-  const CITIES = [['New York','NY'],['Manhattan','NY'],['Brooklyn','NY'],['Miami','FL'],['Miami Beach','FL'],['Wynwood','FL']];
-  const TYPES = ['photographer','personal trainer','hair stylist','barber','dog trainer','life coach','tutor','home organizer'];
+  // SPEC-204 — I INVENTED A GEOGRAPHY AND I SHOULD NOT HAVE.
+  // The first version of this block hardcoded 6 cities and 8 service types of my own
+  // choosing. There was no reason for either number. seed-growth-queue.mjs already
+  // holds the authorised Phase-1 list — 12 metros (6 NYC boroughs + 6 Miami areas) and
+  // 28 service types with the blocked categories deliberately absent. By writing a
+  // second list I created a second source of truth that nobody agreed to, silently
+  // dropped Queens, Bronx, Staten Island, Brickell, Coral Gables and Doral, and put the
+  // blocked-category exclusion at risk the moment someone edited one list and not the
+  // other. Import the authorised list; never restate it.
+  const CREATOR_TYPES = TYPES.filter((t) => CREATOR_HEAVY.has(t));
   const rows = [];
-  for (const [city, state] of CITIES) for (const t of TYPES) {
+  for (const [city, state] of CITIES) for (const t of CREATOR_TYPES) {
     rows.push({ kind: 'services', city, state, service_type: t, source: 'ig_services', status: 'new', target_count: 60 });
   }
   const r = await fetch(`${url}/rest/v1/crawl_requests?on_conflict=city,service_type,source`, {
