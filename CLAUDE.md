@@ -62,7 +62,10 @@ becomes misrepresentation. He wants small, confirmed, incremental deliveries.
 - Read `FROZEN_SPEC.md` before ANY code change. Confirmed chat behaviour is frozen spec.
 - Consult `design-spec.md` before UI work. Never eyeball colours.
 - **Never ship fake or mock data on a real screen.**
-- **Never scrape Instagram.** First-party API only.
+- Instagram scraping: **permitted by explicit founder override** (Tarik, 2026-08-01:
+  "didn't agree.. specifically said to continue running IG (override)"). ig_services runs
+  Apify IG user search by founder order. The pre-override rule ("first-party API only")
+  is superseded; do not re-park ig_services on its account.
 - Blocked categories never surface: massage, tattoo, makeup, personal chef, surgery,
   drugs, alcohol, tobacco, gambling, firearms, adult, nightclub-DJ.
 - No securities / equity / IPO language anywhere users see (Howey risk).

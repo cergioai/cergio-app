@@ -5,11 +5,11 @@
   "CRAWLS_SUSPENDED": "false",
   "_CRAWLS_SUSPENDED": "Global stop. false = the allowlist below decides. Defaults to SUSPENDED in code, so a typo here fails closed.",
 
-  "CRAWLS_ONLY": "ig_services",
-  "_CRAWLS_ONLY": "ONLY these sources may be claimed. ig_services is DUAL-CLASS: it produces both a service row and a creator row per person, so it is the services source AND the creator source. ig-creator-marketplace was REMOVED (SPEC-221) — it never produced a row and needed a Meta permission we do not have. The other seven sources stay suspended until the audit clears them.",
+  "CRAWLS_ONLY": "ig_services,se:web-harvest",
+  "_CRAWLS_ONLY": "ONLY these sources may run. The founder's order names creator sourceS, plural — there are exactly TWO (SPEC-230): ig_services (DUAL-CLASS: a service row AND a creator row per person, via ig-scraper-user-search) and se:web-harvest (creator-harvest, free keyless web search). Listing only ig_services here re-created the exact failure SPEC-230 documents — the last free path to the founder's creator target silently closed. se:web-harvest is not in the crawl rota (it is cron-driven, SPEC-237), but creator-harvest now reads this allowlist and refuses to run when its name is absent. ig-creator-marketplace stays REMOVED (SPEC-221). The other seven sources stay suspended until the audit clears them. yelp is PAUSED as a source, not deleted (founder, 2026-08-02: 'don't delete yelp.. just pause as a source') — it stays in the code and the dashboards, its rows are kept, and it simply stays out of this allowlist until the founder re-activates it.",
 
   "CREATOR_TARGET": "100",
-  "_CREATOR_TARGET": "ig_services stops itself at 100 creators from ig-scraper-user-search. Checked before any job is claimed, so it cannot overshoot while nobody is watching.",
+  "_CREATOR_TARGET": "EACH creator source stops ITSELF at this count — founder, 2026-08-02: 'get 100 of each then pause alongside the rest to audit.' ig_services counts eq(discovered_via, ig-scraper-user-search); creator-harvest counts by PREFIX like(discovered_via, se:web-harvest%) because its tag is stamped per run day (SPEC-237). Checked before any job is claimed / any search is fired, so neither can overshoot while nobody is watching.",
 
   "PHASE1_CITY_QUOTA": "",
   "_PHASE1_CITY_QUOTA": "EMPTY ON PURPOSE. No per-city quota exists in the spec. Empty = phase 2 locked, so only Miami and NYC are crawled. Set a number to unlock the other top-10 metros — nothing else authorises a national crawl.",
