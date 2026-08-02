@@ -161,7 +161,7 @@ const gdb = growthDb();
       if (creatorTargetMet && ONLY.length === 1 && ONLY[0] === 'ig_services') {
         return json({
           suspended: true, processed: 0,
-          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search. Paused for audit (SPEC-205). ig-creator-marketplace stays PARKED: needs IG_USER_ID + IG_MARKETPLACE_TOKEN.`,
+          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search. Paused for audit (SPEC-205). ig_services is the only creator source (SPEC-221).`,
         });
       }
     } catch (e) {
@@ -259,8 +259,12 @@ const gdb = growthDb();
       // source missing from this list is a source the scheduler never runs, and its zero
       // then reads as a dead market rather than as a scheduling bug. Filtering happens
       // downstream, on a derived list, so the declaration can never quietly shrink.
+      // SPEC-222 (founder, 2026-08-02): "just keep lsa and deprecate google sponsored".
+      // google_sponsored produced 34 rows in its whole life, still called SerpAPI against
+      // the "all paid goes through Apify" rule, and overlaps LSA almost entirely — both
+      // read Google's local ad inventory. Removed from the rota; existing rows are kept.
       const SOURCES_RR = ['osm', 'craigslist', 'yellowpages_apify', 'yelp',
-                          'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services'];
+                          'google_lsa', 'gmaps_apify', 'ig_services'];
       // SPEC-205: the allowlist is applied at the point jobs are selected, so a source
       // outside it is never claimed and can never reach a vendor. A met creator target
       // removes ig_services even when other sources run, so "100 then pause" holds in

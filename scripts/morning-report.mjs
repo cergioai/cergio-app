@@ -25,12 +25,18 @@ say(`# Morning report — ${now.slice(0, 16).replace('T', ' ')} UTC`);
 say();
 say(`**${green.length} of ${rs.length} agents GREEN.** Everything below is sorted worst first.`);
 say();
-say('| agent | verdict | own gates | open defects | green when |');
-say('|---|---|---|---|---|');
+// Four short columns only. The old table carried the full "green when" sentence, which
+// made it wider than any phone or GitHub page and cut off on the right.
+say('| agent | verdict | gates | defects |');
+say('|---|---|---|---|');
 for (const r of rs) {
   const p = (r.gates || []).filter((g) => g.state === 'PASS').length;
-  say(`| **${r.id}** | ${r.verdict === 'GREEN' ? 'GREEN' : `**${r.verdict}**`} | ${p}/${(r.gates || []).length} | ${(r.defects || []).length} | ${r.green_when} |`);
+  say(`| **${r.id}** | ${r.verdict === 'GREEN' ? 'GREEN' : `**${r.verdict}**`} | ${p}/${(r.gates || []).length} | ${(r.defects || []).length} |`);
 }
+say();
+say('**Green when:**');
+say();
+for (const r of rs) say(`- **${r.id}** — ${r.green_when}`);
 say();
 
 const notRun = rs.filter((r) => r.verdict === 'DID NOT RUN');

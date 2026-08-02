@@ -70,30 +70,31 @@ export function AgentFleetScreen() {
           </div>
           {d.last_run && <div className="mt-2 text-[11px] text-b3">Last run {new Date(d.last_run).toLocaleString()}</div>}
 
-          <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
-            <table className="w-full text-[12px]">
-              <thead className="bg-bg5 text-b3"><tr>
-                {['agent', 'verdict', 'gates', 'defects', 'did', 'green when'].map((h) => <th key={h} className="text-left px-2 py-1 font-bold">{h}</th>)}
-              </tr></thead>
-              <tbody>
-                {agents.map((a) => (
-                  <tr key={a.agent} className="border-t border-bg5 align-top">
-                    <td className="px-2 py-1 font-bold text-black">{a.agent}</td>
-                    <td className={`px-2 py-1 font-bold ${TONE[a.verdict] || 'text-b3'}`}>{a.verdict}</td>
-                    <td className="px-2 py-1 text-black">{a.gates_pass}/{a.gates_total}</td>
-                    <td className="px-2 py-1 text-black">{a.defects}</td>
-                    <td className="px-2 py-1 text-b3 max-w-[260px]">
-                      {a.work_state === 'FIXED' ? <span className="text-g font-bold">fixed {a.file_changed}</span>
-                        : a.work_state === 'ATTEMPTED' ? <span className="text-red-600">tried, reverted — {a.why_not}</span>
-                        : a.work_state === 'CANNOT RUN' ? <span className="text-red-600">{String(a.why_not || '').slice(0, 120)}</span>
-                        : (a.finding || '—')}
-                    </td>
-                    <td className="px-2 py-1 text-b3 max-w-[220px]">{a.green_when}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!agents.length && <div className="px-3 py-3 text-meta-sm text-b3">No runs recorded yet — the fleet publishes after its next cycle.</div>}
+          {/* CARDS, NOT A TABLE. Six columns with a full sentence in two of them was wider
+              than any phone and cut off on the right — the founder could not read his own
+              status page. A card wraps and never needs a horizontal scroll. */}
+          <div className="mt-4 space-y-2">
+            {agents.map((a) => (
+              <div key={a.agent} className="rounded-xl border border-bg5 p-3">
+                <div className="flex justify-between items-baseline gap-2 flex-wrap">
+                  <span className="font-extrabold text-black">{a.agent}</span>
+                  <span className={`text-meta-sm font-bold ${TONE[a.verdict] || 'text-b3'}`}>{a.verdict}</span>
+                </div>
+                <div className="mt-1 flex gap-3 text-[11px] text-b3 font-bold">
+                  <span>gates {a.gates_pass}/{a.gates_total}</span>
+                  <span>defects {a.defects}</span>
+                  {a.build && <span>build {a.build}</span>}
+                </div>
+                <div className="mt-2 text-meta-sm break-words">
+                  {a.work_state === 'FIXED' ? <span className="text-g font-bold">fixed {a.file_changed}</span>
+                    : a.work_state === 'ATTEMPTED' ? <span className="text-red-600">tried, reverted — {a.why_not}</span>
+                    : a.work_state === 'CANNOT RUN' ? <span className="text-red-600">{a.why_not}</span>
+                    : <span className="text-b3">{a.finding || 'no finding this run'}</span>}
+                </div>
+                <div className="mt-1 text-[11px] text-b3 break-words"><b>Green when:</b> {a.green_when}</div>
+              </div>
+            ))}
+            {!agents.length && <div className="rounded-xl border border-bg5 px-3 py-3 text-meta-sm text-b3">No runs recorded yet — the fleet publishes after its next cycle.</div>}
           </div>
         </>
       )}

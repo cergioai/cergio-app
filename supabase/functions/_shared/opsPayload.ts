@@ -20,7 +20,6 @@ export const SOURCES = ['gmaps_apify','craigslist','yellowpages_apify','ig_servi
 export const CREATOR_SOURCES = [
   'modash-vetted-seed',        // founder-vetted Modash handles (seed pool)
   'se:web-harvest',            // SerpAPI/DDG "top <cat> influencers <city>" -> handles
-  'ig-creator-marketplace',    // Meta Graph creator_marketplace_creators (first-party)
   'homegrown-feedspot',        // curated city lists (Feedspot etc)
   'ig-scraper-user-search',    // apify~instagram-scraper searchType=user
   'provider-with-following',   // service providers who have an IG audience (dual)
@@ -41,7 +40,6 @@ export function isAdminEmail(email: string, envList?: string | null): boolean {
 export const CREATOR_SOURCE_META: Record<string, { what: string; where: string }> = {
   'modash-vetted-seed':         { what: 'Founder-vetted handles imported as the seed pool', where: 'manual list (Miami + NYC)' },
   'se:web-harvest':             { what: 'Free web search "top <category> influencers <city>" -> IG handles', where: 'search engines (SerpAPI/DDG)' },
-  'ig-creator-marketplace':     { what: 'Meta Graph creator_marketplace_creators (first-party, free)', where: 'Instagram Creator Marketplace' },
   'homegrown-feedspot':         { what: 'Curated city "top 20" editorial lists, scored + labelled', where: 'Feedspot & similar city lists' },
   'ig-scraper-user-search':     { what: 'apify~instagram-scraper searchType=user, geo-verified per city', where: 'Instagram user search (via Apify)' },
   'provider-with-following':    { what: 'Our OWN services pool, filtered to providers who have an IG audience (dual service+creator)', where: 'leads_services (internal)' },

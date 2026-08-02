@@ -103,7 +103,11 @@ for (const f of files) {
     if (found != null) {
       const line = raw.slice(0, start + found).split('\n').length;
       const dline = raw.slice(0, at).split('\n').length;
-      hits.push(`${f}:${line} uses "${name}" but it is declared at line ${dline}`);
+      // Key the baseline on FILE + NAME, never on line numbers. The first version keyed on
+      // lines, so inserting a four-line comment anywhere above a baselined occurrence made
+      // it read as brand new and failed the build for no reason. A guard that fires on
+      // unrelated edits is one people learn to disable.
+      hits.push({ key: `${f}::${name}`, msg: `${f}:${line} uses "${name}" but it is declared at line ${dline}` });
     }
   }
 }
@@ -112,15 +116,15 @@ const BASE = 'tdz-baseline.json';
 let baseline = [];
 try { baseline = JSON.parse(fs.readFileSync(BASE, 'utf8')); } catch {}
 if (process.argv.includes('--baseline')) {
-  fs.writeFileSync(BASE, JSON.stringify(hits.sort(), null, 1));
+  fs.writeFileSync(BASE, JSON.stringify([...new Set(hits.map((h) => h.key))].sort(), null, 1));
   console.log(`tdz guard: baselined ${hits.length} existing occurrence(s)`);
   process.exit(0);
 }
-const isNew = hits.filter((h) => !baseline.includes(h));
+const isNew = hits.filter((h) => !baseline.includes(h.key));
 console.log(`tdz guard: ${files.length} files · ${hits.length} occurrence(s) · baseline ${baseline.length} · new ${isNew.length}`);
 if (isNew.length) {
   console.error('\nUSED BEFORE IT IS DECLARED — this is the shape that has caused four production outages here:\n');
-  for (const h of isNew) console.error('  ' + h);
+  for (const h of isNew) console.error('  ' + h.msg);
   console.error('\nThe build will not catch this. deno check will not catch this. Move the declaration above its first use.');
   process.exit(1);
 }
