@@ -84,7 +84,13 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   const rowLimit = Math.min(Number(body.limit || 1000), 25000);
   const scope = (q: any) => {
     let out = q;
-    if (city) out = out.eq('state', city);
+    // Match EVERY spelling of the chosen DMA. Filtering on 'NY' alone missed every row
+    // stored as 'NEW YORK', so the count dropped when a filter was applied and the filter
+    // looked broken rather than the data looking dirty.
+    if (city) {
+      const spellings = Object.entries(DMA_CANON).filter(([, v]) => v === city).map(([k]) => k);
+      out = out.in('state', spellings.length ? spellings : [city]);
+    }
     if (location) out = out.eq('city', location);
     if (category) out = out.eq('service_type', category);
     return out;
@@ -123,9 +129,15 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   const { data: jobs } = await gdb.from('crawl_requests').select('source, status, city, service_type, delivered_count, updated_at').order('updated_at', { ascending: false }).limit(200);
   const jobStats: Record<string, number> = {};
   for (const j of (jobs || [])) { const k = `${j.source || 'osm'}/${j.status}`; jobStats[k] = (jobStats[k] ?? 0) + 1; }
-  const { count: svcTotal } = await svcQ();
-  const { count: creTotal } = await creQ();
+  // SPEC-235 — a zero here used to be indistinguishable from a failed query. The founder
+  // saw "Services total 0" beside "NYC services 12,034" and had no way to tell which was
+  // lying. The error now travels with the number.
+  const { count: svcTotal, error: svcErr } = await svcQ();
+  const { count: creTotal, error: creErr } = await creQ();
   const { count: svcNew24 } = await svcQ().gte('fetched_at', since(24));
+  const countErrors: string[] = [];
+  if (svcErr) countErrors.push(`services total: ${svcErr.message}`);
+  if (creErr) countErrors.push(`creators total: ${creErr.message}`);
 
   // ── 4. CREATORS per source (discovered_via) + contactability
   const creatorsBySource: Record<string, { total: number; withEmail: number; withFollowers: number; nyc: number; miami: number; what: string; where: string }> = {};
@@ -154,12 +166,31 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     }
   }
 
-  // DMA LIST — every state that actually has rows, newest-first by volume.
-  const DMA_NAMES: Record<string, string> = { NY: 'NYC', FL: 'Miami', CA: 'Los Angeles', IL: 'Chicago', TX: 'Texas', DC: 'Washington DC', PA: 'Philadelphia', GA: 'Atlanta', AZ: 'Phoenix', NJ: 'New Jersey', CT: 'Connecticut' };
+  // SPEC-235 (founder, 2026-08-02): "New York needs to be NYC.. why do we have connecticut
+  // and CO.. we're only doing miami and new york city to start".
+  //
+  // The raw `state` column is DIRTY — NY, "NEW YORK", NJ, "NEW JERSEY", CT, CO all appear —
+  // so deriving the list straight from it printed the same DMA twice under two spellings
+  // and offered Colorado as somewhere we crawl. Two rules:
+  //   1. CANONICALISE first: full names and casing collapse to one code.
+  //   2. Only the AUTHORISED Phase-1 DMAs are offered. Anything else is an OFF-TARGET row,
+  //      which is a data-quality finding, not a filter option.
+  const DMA_CANON: Record<string, string> = {
+    NY: 'NY', 'NEW YORK': 'NY', NYC: 'NY',
+    FL: 'FL', FLORIDA: 'FL', MIAMI: 'FL',
+  };
+  const DMA_NAMES: Record<string, string> = { NY: 'NYC', FL: 'Miami' };
   const dmaCounts: Record<string, number> = {};
+  const offScope: Record<string, number> = {};
   try {
     const { data: dl } = await gdb.from('leads_services').select('state').limit(20000);
-    for (const r of (dl || [])) { const k = String((r as any).state ?? '').trim().toUpperCase(); if (k) dmaCounts[k] = (dmaCounts[k] || 0) + 1; }
+    for (const r of (dl || [])) {
+      const raw = String((r as any).state ?? '').trim().toUpperCase();
+      if (!raw) continue;
+      const code = DMA_CANON[raw];
+      if (code) dmaCounts[code] = (dmaCounts[code] || 0) + 1;
+      else offScope[raw] = (offScope[raw] || 0) + 1;
+    }
   } catch (_e) {}
   // CATEGORY (service type) facet, scoped to the current DMA + location.
   const categoryCounts: Record<string, number> = {};
@@ -172,7 +203,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   } catch (_e) {}
 
   const dmas: Record<string, string> = {};
-  for (const [code] of Object.entries(dmaCounts).sort((a, b) => b[1] - a[1])) dmas[code] = DMA_NAMES[code] || code;
+  for (const [code] of Object.entries(dmaCounts).sort((a, b) => b[1] - a[1])) dmas[code] = DMA_NAMES[code];
 
   // LOCATION LIST, scoped to the selected DMA and NORMALISED. The raw column holds
   // "Astoria", "ASTORIA", "Astoria " and " Brooklyn" as four different values, so the
@@ -278,7 +309,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     served_by: 'shared',
     qa: { open_bugs: openBugs.length, findings: findings || [], recent_runs: qaRuns || [] },
     agents,
-    crawls: { by_source: bySource, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
+    crawls: { count_errors: countErrors, off_scope_states: offScope, by_source: bySource, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
     product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings, bookings_all, bookings_completed, bookings_paid },
     counter, creatorsBySource, creatorsUnattributed, engine, download,
     filter: {

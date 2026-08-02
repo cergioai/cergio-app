@@ -118,6 +118,21 @@ export function OpsStatusScreen() {
         {(city || location || hours || category) && <button onClick={() => { setCity(''); setLocation(''); setHours(0); setCategory(''); }} className="text-[12px] font-bold text-gd">clear</button>}
         <span className="text-[11px] text-b3">every count + CSV below is scoped to this city and location</span>
       </div>
+      {/* SPEC-235 — a zero that came from a failed query must say so. "Services total 0"
+          beside "NYC 12,034" gave no way to tell which number was lying. */}
+      {!!(d?.crawls?.count_errors || []).length && (
+        <div className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-[12px] text-red-600 font-bold">
+          count query failed — these zeros are NOT real: {(d.crawls.count_errors || []).join(' · ')}
+        </div>
+      )}
+      {!!Object.keys(d?.crawls?.off_scope_states || {}).length && (
+        <div className="mt-2 rounded-xl bg-bg5 px-3 py-2 text-[12px] text-b3">
+          <b>Off-target rows</b> (outside Phase 1, not offered as a city):{' '}
+          {Object.entries(d.crawls.off_scope_states).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')}
+        </div>
+      )}
+      <div className="hidden">
+      </div>
       {busy && <div className="mt-4 text-b3">Loading…</div>}
       {d && (!d.counter || !d.creatorsBySource) && (
         <div className="mt-4 rounded-xl border border-red-300 bg-red-50 p-3 text-[12px] text-red-700">

@@ -6343,7 +6343,12 @@ test('the-headline-live-counts-obey-the-filters-and-dmas-come-from-the-data', 'S
   assert(!(/cities: \{ NY: 'NYC', FL: 'Miami' \}/.test(c)),
     'the DMA list is hardcoded to two — a third DMA would be crawled and never appear in the filter, hiding its rows');
   assert(!(!/const dmaCounts/.test(c) && /cities: dmas/.test(c)), 'DMAs are not derived from the data');
-  assert(!(!/DMA_NAMES\[code\] \|\| code/.test(c)), 'an unrecognised DMA code is dropped instead of shown');
+  // SPEC-235 superseded the original rule here. An out-of-scope state must NOT be offered
+  // as a city — that implies we crawl there — but it must still be VISIBLE. So the test
+  // changed from "show it in the filter" to "report it as off-target". The intent is
+  // unchanged: nothing disappears silently.
+  assert(!(!/offScope\[raw\] = \(offScope\[raw\] \|\| 0\) \+ 1/.test(c)),
+    'an unrecognised state is dropped instead of reported as an off-target row');
 });
 
 test('the-ops-console-tab-is-named-services-and-carries-category-and-row-size', 'SPEC-232 (founder, 2026-08-02): "No services tab (relabel live counts).. no download per 100 500 etc.. no categories". The first tab was called LIVE counts, which named the mechanism instead of the thing — it holds services, so it says Services. Category (service_type) and row size were both missing: how many rows a CSV contains is a separate question from which rows match it, and asking for the newest 500 personal trainers in Brooklyn was impossible. This gate also pins the exports that this file depends on, because a regex meant to remove ONE entry from SOURCES deleted the whole declaration and the console died with "SOURCES is not defined" — no counts, no filters, no DMAs, everything gone at once.', '#232', () => {
@@ -6403,6 +6408,23 @@ test('the-loop-runs-per-subagent-and-stops-after-two-attempts', 'SPEC-234 (found
   assert(!(!ops), 'the ops console has no owning subagent, so it can regress with nobody accountable');
   assert(!(!ops.gates.includes('#233')), 'the ops subagent does not guard the creator-source and sponsored-merge rules it was created for');
 });
+
+test('dma-list-is-canonical-and-a-zero-count-can-never-be-silent', 'SPEC-235 (founder, 2026-08-02): "New York needs to be NYC.. why do we have connecticut and CO.. we are only doing miami and new york city to start". The raw state column is DIRTY — NY, NEW YORK, NJ, NEW JERSEY, CT, CO all appear — so deriving the city list straight from it printed the same DMA twice under two spellings and offered Colorado as a place we crawl. Values are canonicalised first, only the AUTHORISED Phase-1 DMAs are offered, and anything else is reported as an OFF-TARGET row, which is a data-quality finding rather than a filter option. The filter also has to match every spelling of a DMA: filtering on NY alone missed every row stored as NEW YORK, so applying a filter DROPPED the count and the filter looked broken when the data was dirty. And the founder saw "Services total 0" beside "NYC services 12,034" with no way to tell which number was lying — a failed count now carries its error to the screen instead of rendering as a confident zero.', '#235', () => {
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const c = stripComments(ops);
+  assert(!(!/DMA_CANON/.test(c)), 'state values are not canonicalised, so one DMA appears twice under two spellings');
+  assert(!(/CT: |CO: |'Connecticut'|'Colorado'/.test((c.match(/DMA_NAMES[^;]*;/) || [''])[0])),
+    'an out-of-scope state is offered as a city — that implies we crawl there');
+  assert(!(!/offScope/.test(c)), 'out-of-scope rows are silently dropped instead of reported as a data-quality finding');
+  assert(!(!/out\.in\('state', spellings/.test(c)),
+    'the DMA filter matches one spelling only, so applying it would drop every row stored under another spelling');
+  assert(!(!/countErrors/.test(c)), 'a failed count renders as a confident zero with no way to tell it apart from a real zero');
+  assert(!(!/error: svcErr/.test(c)), 'the services count discards its error');
+  const ui = stripComments(readFile('src/screens/OpsStatusScreen.jsx'));
+  assert(!(!/count_errors/.test(ui)), 'the screen never shows that a zero came from a failed query');
+  assert(!(!/off_scope_states/.test(ui)), 'off-target rows are invisible on the console');
+});
+
 
 
 
