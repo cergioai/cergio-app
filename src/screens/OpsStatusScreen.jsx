@@ -170,6 +170,12 @@ export function OpsStatusScreen() {
             <div className="text-meta-sm font-bold text-black mb-1">Supply engine — last run {(d.engine.started_at || '').slice(0, 16)}</div>
             <div className="text-meta-sm text-b3">live sources: {(d.engine.meta.live_sources || []).join(', ')}</div>
             {(d.engine.meta.disabled_sources || []).length > 0 && <div className="text-meta-sm text-red-600 font-bold">auto-disabled: {(d.engine.meta.disabled_sources || []).join(', ')}</div>}
+            {/* SPEC-239 — a founder-PAUSED source must never read as broken or auto-disabled.
+                The reason travels with the payload (crawls.source_states) so this line and
+                the Crawls tab tell the same story. */}
+            {Object.entries(d.crawls?.source_states || {}).filter(([, v]) => v.state === 'paused').map(([s2, v]) => (
+              <div key={s2} className="text-meta-sm text-amber-700 font-bold">{s2} PAUSED — <span className="font-normal text-b3">{v.reason}</span></div>
+            ))}
             <div className="mt-2 text-meta-sm"><b>bugs found:</b> {(d.engine.meta.bugs_found || ['none']).join(' · ')}</div>
             <div className="text-meta-sm text-gd"><b>fixes applied:</b> {(d.engine.meta.fixes_applied || ['none']).join(' · ')}</div>
             <div className="mt-2 text-[12px]">
@@ -292,8 +298,18 @@ export function OpsStatusScreen() {
         <div className="mt-4 grid sm:grid-cols-2 gap-4">
           <div className="rounded-xl border border-bg5 p-3">
             <div className="text-meta-sm font-bold text-black mb-2">Rows by source</div>
-            {Object.entries(d.crawls.by_source).sort((a,b)=>b[1]-a[1]).map(([s,n]) => (
-              <div key={s} className="flex justify-between text-meta-sm py-0.5"><span className="text-b3">{s}</span><span className="font-bold text-black">{n.toLocaleString()}</span></div>))}
+            {Object.entries(d.crawls.by_source).sort((a,b)=>b[1]-a[1]).map(([s,n]) => {
+              const st = (d.crawls.source_states || {})[s];
+              return (
+                <div key={s} className="py-0.5">
+                  <div className="flex justify-between text-meta-sm">
+                    <span className="text-b3">{s}{st ? <b className="ml-1 uppercase text-amber-700">{st.state}</b> : null}</span>
+                    <span className="font-bold text-black">{n.toLocaleString()}</span>
+                  </div>
+                  {st?.reason ? <div className="text-[10px] text-b3">{st.reason}</div> : null}
+                </div>
+              );
+            })}
           </div>
           <div className="rounded-xl border border-bg5 p-3">
             <div className="text-meta-sm font-bold text-black mb-2">Job queue (source/status)</div>
