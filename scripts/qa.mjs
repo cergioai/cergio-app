@@ -5924,6 +5924,21 @@ test('the-old-autonomous-ops-are-retired', 'SPEC-198 (founder, 2026-08-02): "sus
   assert(!(/drop function/i.test(sql)), 'functions must be UNSCHEDULED, not dropped — re-enabling must stay one line');
 });
 
+test('creators-are-a-real-class-that-can-actually-be-written', 'SPEC-202 (found 2026-08-02): leads_influencers held ZERO rows while ig_services had produced 262 service rows. Cause: fulfill-crawl writes is_business on every creator row and the growth schema had no such column, so EVERY creator upsert failed 42703 — and the catch beside it swallowed the error entirely, so nothing anywhere said why. A best-effort write that never reports is not best-effort, it is invisible. Second cause: the seeder only ever created kind:services jobs, so there has never been a creator crawl queue at all and creators only arrived as a side effect of the dual-class ig_services source.', '#202', () => {
+  const mig = readFile(fs.readdirSync(path.join(REPO_ROOT, 'supabase/migrations'))
+    .filter((f) => /growth_schema_reference/.test(f)).map((f) => `supabase/migrations/${f}`)[0]);
+  const inf = mig.slice(mig.indexOf('leads_influencers'));
+  assert(!(!/is_business/.test(inf)), 'leads_influencers has no is_business column, yet fulfill-crawl writes it — every creator row fails 42703');
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  assert(!(/catch \(_e\) \{ \/\* creator half is best-effort \*\/ \}/.test(f)), 'the creator write still swallows its error — that is how 262 rows produced 0 creators in silence');
+  assert(!(!/_lastCreatorError/.test(code)), 'creator write failures are not recorded anywhere');
+  const d = readFile('scripts/growth-dedupe-queue.mjs');
+  assert(!(!/CREATOR_FLOOR/.test(d)), 'no creator floor — creators would remain a by-product of a services crawl');
+  assert(!(!/ig-creator-marketplace/.test(d)), 'the first-party creator path is not reported, so its blocked state stays invisible');
+});
+
+
 
 
 

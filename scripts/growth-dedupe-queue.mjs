@@ -73,6 +73,11 @@ await q(`
     add column if not exists delivered_count int default 0
 `);
 await q(`
+  alter table public.leads_influencers
+    add column if not exists is_business boolean,
+    add column if not exists phone text
+`);
+await q(`
   alter table public.leads_services
     add column if not exists zip text,
     add column if not exists yelp_url text,
@@ -201,4 +206,40 @@ if (above.length && below.length) {
         updated_at = now()
       where status = 'new' and source in (${list}) returning 1`);
   console.log(`  throttled ${Array.isArray(th) ? th.length : '?'} job(s) for: ${above.join(', ')}`);
+}
+
+// SPEC-202b — CREATOR FLOOR. Founder: "add 100 crawls from each of the creator sources."
+//
+// Two things had to be true first, and neither was:
+//   1. leads_influencers had no `is_business` column, so EVERY creator upsert failed
+//      42703 and the catch swallowed it — 262 ig_services rows produced 0 creators.
+//   2. the seeder only ever created kind:'services' jobs. There has never been a creator
+//      crawl queue. `ig_services` is dual-class (it writes a service row AND a creator
+//      row per person), so creators only ever arrived as a side effect.
+const CREATOR_FLOOR = Number(process.env.CREATOR_FLOOR || 100);
+const creators = await q(`select discovered_via, count(*)::int as n from leads_influencers group by discovered_via`);
+const cmap = Object.fromEntries((creators || []).map((r) => [r.discovered_via, r.n]));
+const scraperN = cmap['ig-scraper-user-search'] || 0;
+const marketN = cmap['ig-creator-marketplace'] || 0;
+
+console.log(`\ncreators — floor ${CREATOR_FLOOR} each`);
+console.log(`  ig-scraper-user-search   ${String(scraperN).padStart(5)}  ${scraperN < CREATOR_FLOOR ? 'BELOW FLOOR — seeding' : 'ok'}`);
+console.log(`  ig-creator-marketplace   ${String(marketN).padStart(5)}  BLOCKED: needs IG_USER_ID + IG_MARKETPLACE_TOKEN (Meta permission pending) — founder action, not a code gate`);
+
+if (scraperN < CREATOR_FLOOR) {
+  // ig_services is the only creator path we can actually run today. Seed a focused set
+  // of jobs so creators reach the floor instead of arriving as a by-product.
+  const CITIES = [['New York','NY'],['Manhattan','NY'],['Brooklyn','NY'],['Miami','FL'],['Miami Beach','FL'],['Wynwood','FL']];
+  const TYPES = ['photographer','personal trainer','hair stylist','barber','dog trainer','life coach','tutor','home organizer'];
+  const rows = [];
+  for (const [city, state] of CITIES) for (const t of TYPES) {
+    rows.push({ kind: 'services', city, state, service_type: t, source: 'ig_services', status: 'new', target_count: 60 });
+  }
+  const r = await fetch(`${url}/rest/v1/crawl_requests?on_conflict=city,service_type,source`, {
+    method: 'POST',
+    headers: { apikey: process.env.GROWTH_SERVICE_ROLE_KEY || '', Authorization: `Bearer ${process.env.GROWTH_SERVICE_ROLE_KEY || ''}`,
+               'Content-Type': 'application/json', Prefer: 'return=minimal,resolution=ignore-duplicates' },
+    body: JSON.stringify(rows),
+  });
+  console.log(`  seeded ${rows.length} ig_services job(s) -> HTTP ${r.status}`);
 }
