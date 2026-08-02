@@ -6002,7 +6002,7 @@ test('one-parser-for-the-growth-connection-and-one-authorised-scope', 'SPEC-204 
   assert(!(/const CITIES = \[/.test(seed)), 'the seeder restates the city list — the scope module is meant to be the only copy');
 });
 
-test('miami-and-nyc-fill-to-quota-before-anywhere-else-and-a-target-stops-itself', 'SPEC-205 (founder, 2026-08-02): "spec calls for miami and nyc to be filled first up to quota before moving to the next 9 cities from top 10... activate the crawls just for the creator sources to get 100 of each then pause alongside the rest to audit." Three things had to be true. (1) The phase-2 step fired whenever phase-1 had no jobs QUEUED — but an empty queue is not a met quota, it usually means the seeder has not run, so capacity leaked to other geographies while Miami and NYC were nowhere near full. It now measures actual leads per phase-1 metro. (2) No per-city quota exists anywhere in the spec, so PHASE1_CITY_QUOTA has NO DEFAULT: unset means phase 2 stays locked, because a default invented by me would silently authorise a national crawl. (3) "100 then pause" must not depend on someone watching a dashboard and flipping a switch at the right moment — that is how a $1 tranche became $108 — so the creator target is checked before any job is claimed and stops the source itself.', '#205', () => {
+test('miami-and-nyc-fill-to-quota-before-anywhere-else-and-a-target-stops-itself', 'SPEC-205 (founder, 2026-08-02): "spec calls for miami and nyc to be filled first up to quota before moving to the next 9 cities from top 10... activate the crawls just for the creator sources to get 100 of each then pause alongside the rest to audit." Three things had to be true. (1) The phase-2 step fired whenever phase-1 had no jobs QUEUED — but an empty queue is not a met quota, it usually means the seeder has not run, so capacity leaked to other geographies while Miami and NYC were nowhere near full. It now measures actual leads per phase-1 metro. (2) PHASE1_CITY_QUOTA has NO DEFAULT: unset means phase 2 stays locked, because a default invented by me would silently authorise a national crawl. (At the time no quota existed in the spec; the founder later SET it as a per-DMA formula — SPEC-240, gate #240 — which changes the VALUE, never this no-default rule.) (3) "100 then pause" must not depend on someone watching a dashboard and flipping a switch at the right moment — that is how a $1 tranche became $108 — so the creator target is checked before any job is claimed and stops the source itself.', '#205', () => {
   const f = readFile('supabase/functions/fulfill-crawl/index.ts');
   const code = stripComments(f);
   assert(!(!/CRAWLS_ONLY/.test(code)), 'no source allowlist — activating creators would resume all seven unaudited sources with it');
@@ -6037,11 +6037,18 @@ test('a-source-below-the-contactability-bar-is-parked-not-retried', 'SPEC-208 (f
   assert(!(!/is_business: !!it\?\.isBusinessAccount/.test(f)), 'business accounts are no longer stored as creators — founder decided KEEP, because the creator pivot targets providers who already have an audience');
 });
 
-test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (2026-08-02): whether we were crawling, and which sources, lived only in Supabase edge secrets — invisible in git, unreviewable, and unreadable from the sandbox, so the honest answer to "are we crawling right now?" was always "I cannot see". That is unacceptable for the one setting that decides whether money leaves the account. The state is now a committed file, the change is a diff, and CI is the only writer. PHASE1_CITY_QUOTA is deliberately EMPTY: no per-city quota exists in the spec, and empty keeps phase 2 locked to Miami and NYC. A number invented here would silently authorise a national crawl.', '#207', () => {
+test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (2026-08-02): whether we were crawling, and which sources, lived only in Supabase edge secrets — invisible in git, unreviewable, and unreadable from the sandbox, so the honest answer to "are we crawling right now?" was always "I cannot see". That is unacceptable for the one setting that decides whether money leaves the account. The state is now a committed file, the change is a diff, and CI is the only writer. PHASE1_CITY_QUOTA was deliberately EMPTY while no quota existed in the spec; the founder then SET it as a formula (2026-08-02, SPEC-240): NYC 50,000 services with Miami scaled by relative DMA size → the committed map {"NY":50000,"FL":11700}. This file must carry EXACTLY that founder value — any other number here was invented, and an extra DMA key would silently authorise crawling a metro the founder never opened.', '#207', () => {
   const raw = readFile('growth-controls.json');
   const cfg = JSON.parse(raw);
   assert(!(cfg.CRAWLS_SUSPENDED === undefined), 'no global crawl stop in the controls file');
-  assert(!(cfg.PHASE1_CITY_QUOTA !== ''), `PHASE1_CITY_QUOTA is set to "${cfg.PHASE1_CITY_QUOTA}" — the spec names no per-city quota, so any value here was invented and unlocks crawling outside Miami and NYC`);
+  {
+    let qm = null;
+    try { qm = JSON.parse(cfg.PHASE1_CITY_QUOTA); } catch (_e) { qm = null; }
+    assert(!(!qm || typeof qm !== 'object'), `PHASE1_CITY_QUOTA is "${cfg.PHASE1_CITY_QUOTA}" — not the founder formula map; both consumers fail closed and Phase 1 quota gating is dead`);
+    assert(!(qm.NY !== 50000), `NY quota is ${qm && qm.NY} — the founder set 50,000 for NYC verbatim; any other number is invented`);
+    assert(!(qm.FL !== 11700), `FL quota is ${qm && qm.FL} — the formula gives Miami 50,000 × 1,756,920/7,494,510 ≈ 23.4% → 11,700 rounded to the nearest 100`);
+    assert(!(Object.keys(qm).sort().join(',') !== 'FL,NY'), `quota map holds keys [${Object.keys(qm)}] — an extra DMA here silently authorises crawling a metro the founder never opened (Phase 2 quotas stay OUT until Phase 1 is full)`);
+  }
   assert(!(String(cfg.CRAWLS_SUSPENDED) === 'false' && !String(cfg.CRAWLS_ONLY || '').trim()), 'crawling is ON with an EMPTY allowlist — that resumes all seven unaudited sources, which is the opposite of "creator sources only"');
   if (String(cfg.CRAWLS_SUSPENDED) === 'false') {
     assert(!(!String(cfg.CREATOR_TARGET || '').trim()), 'crawling is ON with no creator target — nothing would stop it at 100');
@@ -6404,6 +6411,28 @@ test('yelp-is-paused-by-founder-order-not-deleted-and-the-dashboard-says-so', 'S
   const fleet = readFile('agents/fleet.json');
   assert(!(/third paid vendor/.test(fleet)), 'fleet.json still lists yelp as a DEFECT — the crawl-sources subagent will keep hunting a founder decision as a bug');
   assert(!(!/just pause as a source/.test(fleet)), "the crawl-sources brief does not record the pause order — the next agent re-diagnoses yelp's silence from scratch and proposes deleting it");
+});
+
+test('the-phase1-quota-is-a-per-dma-formula-and-both-consumers-fail-closed', 'SPEC-240 (founder, 2026-08-02, verbatim: "50k services for nyc (with 5% of that as creators).. adjusting each city based on relative size of dma (eg: if miami is 10% of new it should be 5k services and 250 creators.."). The quota lives on the DMA, not the location — Brooklyn and Queens fill ONE NYC bucket of 50,000, they do not each get 50,000, so both consumers must group locations into DMA buckets before comparing to the map. The map itself ({"NY":50000,"FL":11700}) is parsed FAIL-CLOSED everywhere: empty, unparseable, a bare number (the pre-formula shape), or a non-positive value keeps Phase 2 locked, and a DMA missing from the map is a DMA whose quota is UNKNOWN, never unbounded. fulfill-crawl cannot import _growth-scope.mjs (Deno vs node), so the DMA→locations grouping exists twice as literals — and two city lists that disagree is this project\'s own Part-6 defect (the untested copy is always the one reporting to the founder), so this gate WELDS them: the quoted location lists must be byte-identical. And the 9th metro is SET — Boston (founder, 2026-08-02) — so PHASE2 must carry it: a Phase-2 list that quietly stays at eight re-opens a question the founder already answered.', '#240', () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(fc);
+  assert(!(!/P1_DMA/.test(code)), 'fulfill-crawl has no DMA grouping — a per-DMA quota is being compared against per-location counts, so NYC would need 6×50,000');
+  assert(!(!/JSON\.parse\(Deno\.env\.get\('PHASE1_CITY_QUOTA'\)/.test(code)), 'fulfill-crawl does not parse the quota as the founder formula map — the committed value would read as NaN and quota gating would be dead');
+  assert(!(/Number\(Deno\.env\.get\('PHASE1_CITY_QUOTA'\)/.test(code)), 'fulfill-crawl still parses the quota as a bare number — the pre-formula shape; the founder map would coerce to NaN');
+  assert(!(!/\.in\('city', locs\)/.test(code)), 'the quota count is not summed across a DMA\'s locations — it is not measuring DMA fill');
+  const scope = readFile('scripts/_growth-scope.mjs');
+  const scopeCode = stripComments(scope);
+  assert(!(!/parseQuotaMap/.test(scopeCode)), 'the scope module has no fail-closed quota parser');
+  assert(!(/Number\(process\.env\.PHASE1_CITY_QUOTA/.test(scopeCode)), 'the scope module still coerces the quota to a bare number — the founder map would read as NaN');
+  assert(!(!/'Boston', 'MA'/.test(scope.replace(/\[|\]/g, ''))), 'PHASE2 does not carry Boston — the founder chose the 9th metro on 2026-08-02; leaving it out re-opens a settled decision');
+  // THE WELD. Extract the quoted location names from each grouping literal and compare
+  // byte-for-byte. RAW text on both sides — the lists live in string literals.
+  const a = (fc.match(/const P1_DMA[\s\S]*?\n    \};/) || [''])[0];
+  const b = (scope.match(/export const DMA_LOCATIONS = \{[\s\S]*?\n\};/) || [''])[0];
+  assert(!(!a), 'the P1_DMA literal could not be found in fulfill-crawl');
+  assert(!(!b), 'the DMA_LOCATIONS literal could not be found in _growth-scope.mjs');
+  const names = (s) => (s.match(/'[^']+'/g) || []).join(',');
+  assert(!(names(a) !== names(b)), `the two DMA→locations lists have DRIFTED apart:\n  fulfill-crawl: ${names(a)}\n  _growth-scope: ${names(b)}\nTwo city lists was already this project's two-sources-of-truth defect once — one of them is now lying to the founder`);
 });
 
 test('the-headline-live-counts-obey-the-filters-and-dmas-come-from-the-data', 'SPEC-231 (founder, 2026-08-02): "the filter isnt holding.. clicking 4 wks doesnt change the counts". The four LIVE-counter numbers — the ones actually read on that page — were hardcoded queries built straight off the table, bypassing the city, location and time helpers entirely. So every filter appeared broken while the data behind it was fine, which is the worst kind of defect: it destroys trust in a correct system. Separately the DMA list was hardcoded to two, so a third DMA could be crawled and never appear in the filter, leaving its rows invisible on the one screen meant to prove what we have. DMAs are derived from the data, known codes get their proper name, and an unknown code is shown by its code rather than dropped.', '#231', () => {
