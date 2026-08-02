@@ -184,7 +184,7 @@ export function DataExportScreen() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-bg5 overflow-auto">
+          <div className="mt-4 rounded-xl border border-bg5 overflow-x-auto -mx-4 sm:mx-0">
             {/* Say what the filter really holds. A silent cap reads as a small market —
                 the same shape as the audit that reported 0 rows for every source. */}
             <div className="px-3 py-2 text-meta-sm font-bold text-black">
@@ -193,11 +193,11 @@ export function DataExportScreen() {
                 <span className="text-red-600"> of {data.filteredTotal.toLocaleString()} matching (capped at {data.rowCap.toLocaleString()} — narrow the filters or use “Download every source”)</span>
               )}
             </div>
-            <table className="w-full text-[12px]">
+            <table className="w-full text-[12px] table-fixed">
               <thead className="bg-bg5 text-b3"><tr>{cols.map(c => <th key={c} className="text-left px-2 py-1 font-bold">{c}</th>)}</tr></thead>
               <tbody>
                 {rows.slice(0, 200).map((r, i) => (
-                  <tr key={i} className="border-t border-bg5">{cols.map(c => <td key={c} className="px-2 py-1 text-black truncate max-w-[180px]">{String(r[c] ?? '')}</td>)}</tr>
+                  <tr key={i} className="border-t border-bg5">{cols.map(c => <td key={c} className="px-2 py-1 text-black align-top break-words max-w-[220px]">{String(r[c] ?? '')}</td>)}</tr>
                 ))}
               </tbody>
             </table>
