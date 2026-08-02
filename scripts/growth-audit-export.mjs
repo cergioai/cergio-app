@@ -8,7 +8,8 @@
 // spec is that a lead without a phone or an email is useless.
 import fs from 'node:fs';
 
-const URL_G = (process.env.GROWTH_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+import { growthBase } from './_growth-env.mjs';
+const URL_G = growthBase();
 const KEY = (process.env.GROWTH_SERVICE_ROLE_KEY || '').trim();
 if (!URL_G || !KEY) { console.error('growth credentials missing'); process.exit(1); }
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}` };

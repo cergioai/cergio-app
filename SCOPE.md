@@ -7,6 +7,11 @@
 - `.github/growth-audit-fire/`
 - `SCOPE.md`
 - `agent-runs/`
+- `scripts/_growth-env.mjs`
+- `scripts/_growth-scope.mjs`
+- `scripts/growth-audit-export.mjs`
+- `scripts/seed-growth-queue.mjs`
+- `scripts/growth-dedupe-queue.mjs`
 - `supabase/functions/leads-dashboard/index.ts`
 - `src/screens/DataExportScreen.jsx`
 

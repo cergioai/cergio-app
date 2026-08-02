@@ -16,31 +16,16 @@
 // SPEC-148: accept ANY form of the project URL. Measured: the secret was
 // 'https://<ref>.supabase.co/rest/v1' (48 chars), so calls became
 // '…/rest/v1/rest/v1/' -> 404. Reduce to scheme://host and discard the rest.
-const URL_G = (() => {
-  const raw = (process.env.GROWTH_SUPABASE_URL || '').trim();
-  try { return new URL(raw).origin; } catch { return raw.replace(/\/+$/, ''); }
-})();
+import { growthBase } from './_growth-env.mjs';
+import { CITIES, TYPES } from './_growth-scope.mjs';
+const URL_G = growthBase();
 const KEY = process.env.GROWTH_SERVICE_ROLE_KEY;
 if (!URL_G || !KEY) { console.error('GROWTH_SUPABASE_URL / GROWTH_SERVICE_ROLE_KEY not set'); process.exit(1); }
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };
 
 // Phase 1 only — Miami + NYC, per the frozen spec. No other DMA is seeded.
-const CITIES = [
-  ['New York', 'NY'], ['Manhattan', 'NY'], ['Brooklyn', 'NY'], ['Queens', 'NY'],
-  ['Bronx', 'NY'], ['Staten Island', 'NY'],
-  ['Miami', 'FL'], ['Miami Beach', 'FL'], ['Brickell', 'FL'], ['Wynwood', 'FL'],
-  ['Coral Gables', 'FL'], ['Doral', 'FL'],
-];
-// Blocked categories deliberately absent (no massage/tattoo/makeup/personal chef,
-// no medical/peptide/med-spa, no SHAFT).
-const TYPES = [
-  'dog trainer', 'pet sitter', 'personal trainer', 'nutritionist', 'tutor',
-  'housekeeper', 'plumber', 'electrician', 'handyman', 'contractor', 'babysitter',
-  'driver', 'personal assistant', 'life coach', 'photographer', 'home organizer',
-  'barber', 'mover', 'house cleaning', 'landscaping', 'locksmith',
-  'appliance repair', 'dog walker', 'hair stylist', 'window cleaning',
-  'pressure washing', 'junk removal', 'painter',
-];
+
+
 // SPEC-168 — ALL SOURCES SEEDED. SPEC-167 parked seven of these after they
 // produced 0 rows in 8h, on the reasoning that they were structurally dead. That
 // was wrong twice over: (a) the API keys are all present — none reported
