@@ -126,6 +126,21 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     const { count: sponsored } = await svcQ().eq('data_source', 'google_sponsored');
     if (sponsored) bySource['google_lsa'] = (bySource['google_lsa'] || 0) + sponsored;
   }
+  // SPEC-239 — yelp is PAUSED by founder order, and the dashboard must SAY so on the
+  // yelp row. Founder, 2026-08-02, verbatim: "ignore yelp as a source", then clarified
+  // "don't delete yelp.. just pause as a source". Paused means KEPT: the source stays in
+  // the code, the rota and this screen, and its rows are kept — it is simply out of
+  // CRAWLS_ONLY until the founder re-activates it. Without this annotation an idle yelp
+  // is indistinguishable from a broken yelp, its silence reads as a defect (the fleet
+  // brief literally listed it as one), and a "defective" source is how real leads get
+  // deleted as cleanup. The reason is data on the payload, not a tooltip in the UI, so
+  // every consumer of this payload sees the same truth.
+  const sourceStates: Record<string, { state: string; reason: string }> = {
+    yelp: {
+      state: 'paused',
+      reason: "paused by founder order, 2026-08-02 — \"don't delete yelp.. just pause as a source\". Source and rows KEPT; out of CRAWLS_ONLY until the founder re-activates it.",
+    },
+  };
   const { data: jobs } = await gdb.from('crawl_requests').select('source, status, city, service_type, delivered_count, updated_at').order('updated_at', { ascending: false }).limit(200);
   const jobStats: Record<string, number> = {};
   for (const j of (jobs || [])) { const k = `${j.source || 'osm'}/${j.status}`; jobStats[k] = (jobStats[k] ?? 0) + 1; }
@@ -309,7 +324,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     served_by: 'shared',
     qa: { open_bugs: openBugs.length, findings: findings || [], recent_runs: qaRuns || [] },
     agents,
-    crawls: { count_errors: countErrors, off_scope_states: offScope, by_source: bySource, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
+    crawls: { count_errors: countErrors, off_scope_states: offScope, by_source: bySource, source_states: sourceStates, job_stats: jobStats, services_total: svcTotal ?? 0, creators_total: creTotal ?? 0, services_new_24h: svcNew24 ?? 0, recent_jobs: (jobs || []).slice(0, 40) },
     product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings, bookings_all, bookings_completed, bookings_paid },
     counter, creatorsBySource, creatorsUnattributed, engine, download,
     filter: {
