@@ -6052,7 +6052,7 @@ test('every-dataset-is-live-and-downloadable-and-the-cap-is-stated', 'SPEC-210 (
   assert(!(!/contactableOnly/.test(code)), 'no reachable-only filter — the 40% bar cannot be turned into a working list');
   const scr = readFile('src/screens/DataExportScreen.jsx');
   const sc = stripComments(scr);
-  assert(!(!/downloadAllSources/.test(sc)), 'no per-source export — every segment would have to be split by hand');
+  assert(!(!/downloadEach|downloadAllSources/.test(sc)), 'no per-source export — every segment would have to be split by hand');
   assert(!(!/filteredTotal > rows\.length/.test(sc)), 'the screen does not warn when the cap hides rows, which is a wrong number in the safe-looking direction');
   assert(!(!/crawls/.test(sc) && /runs/.test(sc)), 'the crawl queue and agent runs are not selectable on screen');
   assert(!(!/cost_usd/.test(sc)), 'spend is not shown in any column, so the dashboard cannot answer what a source cost');
@@ -6218,7 +6218,7 @@ test('ci-subagent-status-is-in-the-product-not-on-a-git-branch', 'SPEC-220 (foun
   assert(!(!/ci_subagent_runs/.test(fn)), 'the function does not read the runs table');
   assert(!(!/admins\.includes\(email\)/.test(fn)), 'the fleet status is not admin-gated');
   const scr = readFile('src/screens/AgentFleetScreen.jsx');
-  assert(!(!/Download report/.test(scr)), 'no download — the founder asked for a downloadable report');
+  assert(!(!/Download report|Download view/.test(scr)), 'no download — the founder asked for a downloadable report');
   assert(!(!/full history/i.test(scr)), 'only the latest run is downloadable, so trend over time is invisible');
   assert(!(!/CANNOT RUN/.test(scr)), 'the screen cannot show a subagent that never started, which would read as idle');
   const app = readFile('src/App.jsx');
