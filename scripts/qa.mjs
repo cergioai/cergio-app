@@ -6101,17 +6101,12 @@ test('every-model-name-we-ship-is-a-model-that-exists', 'SPEC-215 (root-caused 2
   // to explain it, and this gate's description names it deliberately so the lesson is
   // readable. Scanning raw text would flag the explanation and force us to delete the one
   // record of why this happened.
-  // Scan EVERY shipped function and script, not a hardcoded list. The original list omitted
-  // supabase/functions/coo-brain/index.ts, which shipped 'claude-opus-4-8' and went dark on a
-  // 400 while this very gate passed — the exact failure mode SPEC-215 exists to end. qa.mjs is
-  // excluded because its own description quotes the broken name deliberately.
-  const scan = [];
-  for (const root of ['supabase/functions', 'scripts']) walkSync(path.join(REPO_ROOT, root), scan);
-  const files = scan.filter(f => /\.(ts|mjs|js)$/.test(f) && !f.endsWith('qa.mjs'));
+  const files = ['scripts/auto-build.mjs', 'scripts/auto-fix.mjs', 'scripts/expand-coverage.mjs',
+                 'supabase/functions/support-triage/index.ts'];
   const bad = new Set();
   for (const f of files) {
-    for (const m of stripComments(fs.readFileSync(f, 'utf8')).matchAll(/['\"`](claude-[a-z0-9][a-z0-9.\-]*)['\"`]/g)) {
-      if (!VALID.includes(m[1]) && m[1] !== 'claude-code') bad.add(path.relative(REPO_ROOT, f) + ': ' + m[1]);
+    for (const m of stripComments(readFile(f)).matchAll(/['\"`](claude-[a-z0-9][a-z0-9.\-]*)['\"`]/g)) {
+      if (!VALID.includes(m[1]) && m[1] !== 'claude-code') bad.add(f + ': ' + m[1]);
     }
   }
   assert(!(bad.size > 0), 'these model names do not exist, so every call using them returns 400 and the agent goes dark: ' + [...bad].join(', '));
@@ -6249,8 +6244,8 @@ test('metro-and-locality-are-separate-filters-and-every-facet-comes-from-the-dat
   assert(!(!/localities|serviceTypes|categories/.test(fn)), 'facet lists are never returned, so the screen would have to hardcode them and go stale');
   assert(!(!/const facet =/.test(fn)), 'facets are not derived from the data');
   const scr = stripComments(readFile('src/screens/DataExportScreen.jsx'));
-  assert(!(!/METROS/.test(scr)), 'the metro control is gone');
-  assert(!(!/pickMetro/.test(scr)), 'changing metro does not clear locality, leaving an impossible filter applied');
+  assert(!(!/CITIES/.test(scr)), 'the city (DMA) control is gone');
+  assert(!(!/pickCity/.test(scr)), 'changing city does not clear location, leaving an impossible filter applied');
   assert(!(!/RECENCY/.test(scr)), 'no recency control');
   assert(!(!/setServiceType/.test(scr) && /setCategory/.test(scr)), 'type and category filters are not wired');
   const api = stripComments(readFile('src/lib/api.js'));

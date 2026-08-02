@@ -28,9 +28,14 @@ const STATUSES = {
   crawls: ['new', 'crawling', 'delivered', 'failed', 'parked'],
   runs: [],
 };
-// METRO is `state`; LOCALITY is `city`. Two columns, two controls. One control trying to
-// mean both is why the Miami filter appeared to vanish.
-const METROS = [{ id: '', label: 'All' }, { id: 'NY', label: 'NYC' }, { id: 'FL', label: 'Miami' }];
+// SPEC-226 (founder, 2026-08-02): "cities are DMA's only.. what you have under cities is
+// locations.. which should be a sub filter of city, alongside service type or category".
+//
+// CITY = the DMA (NYC, Miami). LOCATION = the neighbourhood inside it (Manhattan,
+// Brooklyn, Wynwood). They are different database columns — `state` and `city` — which is
+// why one control trying to mean both made Miami appear to vanish. The column named
+// `city` holds LOCATIONS, not cities; that mismatch is the whole confusion.
+const CITIES = [{ id: '', label: 'All' }, { id: 'NY', label: 'NYC' }, { id: 'FL', label: 'Miami' }];
 const RECENCY = [
   { id: '0-10000', label: 'All' },
   { id: '24-10000', label: 'Last 24h' },
@@ -95,9 +100,8 @@ export function DataExportScreen() {
   // DEFECT 1. Every filter below the class is scoped TO that class. Carrying them across
   // sent nonsense to the server and returned an empty view that read as broken data.
   const pickAudience = (id) => { setAudience(id); setSource(''); setStatus(''); setReachableOnly(false); setLocality(''); setServiceType(''); setCategory(''); };
-  // Neighbourhoods of NYC are not choices once the metro is Miami, so changing metro
-  // clears the locality rather than leaving an impossible filter applied.
-  const pickMetro = (id) => { setCity(id); setLocality(''); };
+  // Changing city clears the location: Brooklyn is not a choice once the city is Miami.
+  const pickCity = (id) => { setCity(id); setLocality(''); };
   const clearAll = () => { setCity(''); setLocality(''); setSource(''); setStatus(''); setServiceType(''); setCategory(''); setReachableOnly(false); setRecency('0-10000'); };
 
   const load = useCallback(async () => {
@@ -154,9 +158,9 @@ export function DataExportScreen() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div>
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Metro</div>
+          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">City (DMA)</div>
           <div className="flex gap-1.5">
-            {METROS.map((c) => <Pill key={c.id} on={city === c.id} onClick={() => pickMetro(c.id)}>{c.label}</Pill>)}
+            {CITIES.map((c) => <Pill key={c.id} on={city === c.id} onClick={() => pickCity(c.id)}>{c.label}</Pill>)}
           </div>
         </div>
         <div>
