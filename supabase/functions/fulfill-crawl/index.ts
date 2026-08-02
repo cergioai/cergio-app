@@ -500,7 +500,7 @@ const gdb = growthDb();
           // same data class (local pros with a published phone), best proven cost per
           // lead on the board, and it satisfies SPEC-192 because Google Maps carries a
           // phone for nearly every place.
-          const r = await fulfillGmapsApify(db, job);
+          const r = await fulfillGmapsApify(db, job, 'google_lsa');
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, delivered_count: saved,
@@ -518,13 +518,13 @@ const gdb = growthDb();
           // a supplement. Provenance stays 'google_sponsored' so the founder's
           // dashboard row is the one that fills.
           // SPEC-193: retired off SerpAPI onto the Apify extractor (see google_lsa).
-          const lsa = await fulfillGmapsApify(db, job);
+          const lsa = await fulfillGmapsApify(db, job, 'google_sponsored');
           let r = lsa;
-          if (lsa.saved === 0) {
-            const alt = await fulfillGoogleSponsored(db, job);
-            if (alt.saved > 0) r = alt;
-            else r = { ...lsa, note: `no LSA + no ads[] (${lsa.note || 'lsa empty'})` };
-          }
+          // SPEC-236 — the SerpAPI fallback is REMOVED. google_sponsored was deprecated in
+          // SPEC-222, and this was the last path on which a paid SerpAPI call could still
+          // leave the account while VENDOR_OF_SOURCE told the spend gate it was Apify. A
+          // meter that names the wrong vendor is a meter that cannot enforce a budget.
+          if (lsa.saved === 0) r = { ...lsa, note: `no LSA results (${lsa.note || 'lsa empty'})` };
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
             status: 'delivered', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, delivered_count: saved,
@@ -1742,89 +1742,10 @@ async function fulfillYelp(db: any, job: any): Promise<{ saved: number; found: n
 }
 
 // ── Google Sponsored + local pack via SerpAPI. Reuses inUS/normPhone/cleanText/
-// classifyEntity/scrapeEmail/scrapePhone. Free-tier friendly: ONE search per job.
-async function fulfillGoogleSponsored(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
-  const KEY = Deno.env.get('SERPAPI_KEY');
-  const rawType = (job.service_type || '').toLowerCase().trim();
-  const city = (job.city || '').trim();
-  const state = (job.state || '').trim();
-  const query = `${rawType || 'service'} in ${[city, state].filter(Boolean).join(', ')} [google_sponsored]`;
-  if (!KEY) return { saved: 0, found: 0, query, note: 'pending SERPAPI_KEY' };
-  if (!city) return { saved: 0, found: 0, query };
-  if (osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
-
-  const stateName = US_STATES[state.toUpperCase()] || state;
-  const location = [city, stateName, 'United States'].filter(Boolean).join(', ');
-  const url = `https://serpapi.com/search.json?engine=google`
-    + `&q=${encodeURIComponent(rawType + ' ' + city)}`
-    + `&location=${encodeURIComponent(location)}&google_domain=google.com&gl=us&hl=en&num=20`
-    + `&api_key=${KEY}`;
-  let j: any;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return { saved: 0, found: 0, query, note: `serpapi http ${res.status}` };
-    j = await res.json();
-  } catch (e) { return { saved: 0, found: 0, query, note: `serpapi fetch ${String(e).slice(0,60)}` }; }
-  if (j?.error) return { saved: 0, found: 0, query, note: `serpapi ${String(j.error).slice(0,80)}` };
-
-  let saved = 0, found = 0, fetches = 0;
-  const seen = new Set<string>();
-  const persist = async (row: Record<string, unknown>) => {
-    await bufUpsert(db, row); const error = null;
-    if (!error) saved++;
-  };
-
-  // A) Sponsored ADS — advertisers. Phone from the ad's OWN landing page (bounded).
-  for (const ad of (j.ads || [])) {
-    found++;
-    const name = cleanText(ad?.title);
-    if (!name) continue;
-    if (osmIsBlocked(name)) continue;
-    const site = ad?.link || ad?.displayed_link || null;
-    const key = `${name.toLowerCase()}|${city.toLowerCase()}`;
-    if (seen.has(key)) continue; seen.add(key);
-    let phone = null, email = null;
-    if (site && fetches < 12) { fetches++; phone = await scrapePhone(site); email = await scrapeEmail(site); }
-    await persist({
-      id: `gsp:${city}:${(name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,60)}`,
-      name, service_type: job.service_type || null,
-      phone, phone_origin: phone ? 'google_sponsored_site' : null,
-      website_url: site, owner_email: email,
-      instagram: null, has_instagram: false,
-      address: null, city, state: state || null, zip: null,
-      lat: null, lon: null,                       // ads carry no coords — outreach lead, not a map pin
-      data_source: 'google_sponsored', fetched_at: new Date().toISOString(),
-      outreach_status: 'new',
-      outreach_notes: `google_sponsored | ${classifyEntity(name)} | ${(ad?.displayed_link||'')}`.slice(0,240),
-    });
-  }
-
-  // B) LOCAL PACK — map results with a real phone + coords. Tagged google_local.
-  const places = j?.local_results?.places || j?.local_results || [];
-  for (const pl of (Array.isArray(places) ? places : [])) {
-    found++;
-    const name = cleanText(pl?.title);
-    if (!name) continue;
-    if (osmIsBlocked(`${name} ${pl?.type||''}`)) continue;
-    const lat = pl?.gps_coordinates?.latitude ?? null;
-    const lon = pl?.gps_coordinates?.longitude ?? null;
-    if (lat != null && lon != null && !inUS(Number(lat), Number(lon))) continue; // geo guard when coords exist
-    const key = `${name.toLowerCase()}|${city.toLowerCase()}`;
-    if (seen.has(key)) continue; seen.add(key);
-    await persist({
-      id: `glo:${pl?.place_id || (name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,60)}`,
-      name, service_type: job.service_type || null,
-      phone: normPhone(pl?.phone || ''), phone_origin: pl?.phone ? 'google_local' : null,
-      website_url: pl?.links?.website || null, owner_email: null,
-      instagram: null, has_instagram: false,
-      address: pl?.address || null, city, state: state || null, zip: null,
-      lat, lon, data_source: 'google_local', fetched_at: new Date().toISOString(),
-      outreach_status: 'new',
-      outreach_notes: `google_local | ${classifyEntity(name)} | ${(pl?.type||'')}`.slice(0,240),
-    });
-  }
-  return { saved, found, query };
-}
+// SPEC-236 — fulfillGoogleSponsored (SerpAPI) DELETED. google_sponsored was deprecated in
+// SPEC-222 and nothing calls this any more. Leaving it in place would keep a live
+// serpapi.com URL in a file whose vendor map says every paid source is Apify — the exact
+// contradiction that made the founder ask "why does the spec still say Serp for LSA".
 
 // City -> Google CID (data_cid) for the Local Services engine. NYC from SerpAPI
 // docs; others resolved at runtime via google_maps and cached in-process.
@@ -1891,63 +1812,12 @@ async function resolveCid(KEY: string, city: string, state: string): Promise<str
 // Google Local Services Ads — the sponsored service pros (phone + badge).
 // `provenance` lets the google_sponsored source reuse this PROVEN fetcher while
 // keeping its own data_source tag (SPEC-105) — the founder's "Sponsored" spec IS
-// Local Services Ads. Defaults to 'google_lsa' so existing callers are unchanged.
-async function fulfillGoogleLSA(db: any, job: any, provenance = 'google_lsa'): Promise<{ saved: number; found: number; query: string; note?: string }> {
-  const KEY = Deno.env.get('SERPAPI_KEY');
-  const rawType = (job.service_type || '').toLowerCase().trim();
-  const city = (job.city || '').trim();
-  const state = (job.state || '').trim();
-  const query = `${rawType} [${provenance} ${city}]`;
-  if (!KEY) return { saved: 0, found: 0, query, note: 'pending SERPAPI_KEY' };
-  if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
-  const data_cid = await resolveCid(KEY, city, state);
-  if (!data_cid) {
-    // SPEC-168: this is the ONLY thing google_lsa/google_sponsored ever reported,
-    // and it is a CONFIG gap, not "no ads exist": resolveCid could not map this
-    // city to a Google CID. Say which city, so it is fixable instead of mysterious.
-    _lastSerpError = `no data_cid resolved for ${city}, ${state} — SerpAPI CID lookup returned nothing (config gap, not an empty market)`;
-    return { saved: 0, found: 0, query, note: _lastSerpError };
-  }
-
-  const url = `https://serpapi.com/search.json?engine=google_local_services`
-    + `&q=${encodeURIComponent(rawType)}&data_cid=${data_cid}&hl=en&api_key=${KEY}`;
-  let j: any;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return { saved: 0, found: 0, query, note: `serpapi http ${res.status}` };
-    j = await res.json();
-  } catch (e) { return { saved: 0, found: 0, query, note: `serpapi fetch ${String(e).slice(0,60)}` }; }
-  if (j?.error) return { saved: 0, found: 0, query, note: `serpapi ${String(j.error).slice(0,80)}` };
-
-  const ads = j?.local_ads || [];
-  let saved = 0, found = ads.length;
-  const seen = new Set<string>();
-  for (const a of ads) {
-    const name = cleanText(a?.title);
-    if (!name) continue;
-    if (osmIsBlocked(`${name} ${a?.type||''}`)) continue;
-    const key = `${name.toLowerCase()}|${city.toLowerCase()}`;
-    if (seen.has(key)) continue; seen.add(key);
-    const phone = normPhone(a?.phone || '');
-    const rev = a?.reviews != null ? `${a.rating||''}(${a.reviews}rev)` : '';
-    const yrs = a?.years_in_business != null ? `${a.years_in_business}yr` : '';
-    const row = {
-      id: `glsa:${a?.cid || (name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,60)}:${city.toLowerCase().replace(/[^a-z]/g,'')}`,
-      name, service_type: job.service_type || null,
-      phone, phone_origin: phone ? provenance : null,
-      website_url: a?.link || null, owner_email: null,
-      instagram: null, has_instagram: false,
-      address: a?.service_area || null, city, state: state || null, zip: null,
-      lat: null, lon: null,
-      data_source: provenance, fetched_at: new Date().toISOString(),
-      outreach_status: 'new',
-      outreach_notes: `${provenance} | ${classifyEntity(name)} | ${a?.badge||''} | ${rev} ${yrs} | ${a?.type||''}`.slice(0,240),
-    };
-    await bufUpsert(db, row); const error = null;
-    if (!error) saved++;
-  }
-  return { saved, found, query };
-}
+// SPEC-236 — fulfillGoogleLSA (SerpAPI) DELETED. It was declared and NEVER CALLED: the
+// google_lsa branch has routed to the Apify extractor since SPEC-193. But it still
+// contained a live serpapi.com URL, so anyone grepping this file for "which vendor does
+// LSA use" — including me, while writing the founder's build spec — read SerpAPI and
+// documented it as SerpAPI. Dead code that names a vendor is not harmless: it is a second
+// source of truth that answers questions confidently and wrongly.
 
 // Craigslist city -> subdomain
 const CL_SUBDOMAIN: Record<string, string> = { 'new york': 'newyork', 'miami': 'miami' };
@@ -2405,7 +2275,12 @@ function cityVerifiedSvc(city: string, text: string): boolean {
 
 // ── GOOGLE MAPS via Apify `compass/crawler-google-places` (SPEC-103).
 // The APIFY-FIRST backbone: no quota cap, pay-per-result, includes email+phone.
-async function fulfillGmapsApify(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+// SPEC-236 — `provenance` restored. google_lsa and google_sponsored both route here since
+// SPEC-193, and this function hardcoded data_source:'gmaps_apify', so every LSA job wrote
+// rows labelled gmaps_apify and the LSA row on the founder's dashboard could never fill.
+// The old SerpAPI function carried provenance; deleting it removed the mechanism with the
+// vendor. A source that cannot label its own rows is a source that disappears.
+async function fulfillGmapsApify(db: any, job: any, provenance = 'gmaps_apify'): Promise<{ saved: number; found: number; query: string; note?: string }> {
   if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'gmaps_apify', note: 'pending APIFY_TOKEN' };
   const rawType = (job.service_type || '').toLowerCase().trim();
   const city = (job.city || '').trim();
@@ -2463,7 +2338,7 @@ async function fulfillGmapsApify(db: any, job: any): Promise<{ saved: number; fo
       instagram: igHandle, has_instagram: !!igHandle,
       address: it?.address || null,
       city: it?.city || city, state: it?.state || state || null, zip: it?.postalCode || null,
-      lat, lon, data_source: 'gmaps_apify', fetched_at: new Date().toISOString(),
+      lat, lon, data_source: provenance, fetched_at: new Date().toISOString(),
       outreach_status: 'new',
       outreach_notes: `gmaps_apify | ${classifyEntity(name)} | ${cat}`.slice(0, 240),
     };
