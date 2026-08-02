@@ -15,8 +15,15 @@ import { growthDb, growthEnvPresent } from './growthDb.ts';
 
 // every agent/cron we claim runs — so "is it on?" is answered by DATA, not belief
 export const AGENTS = ['fulfill-crawl','creator-harvest','enrich-influencers','creator-enrich','qa-suite','qa-live-verify','crawl-health-check','coo-execute','cergio-watchdog','cergio-orchestrator','ops-metrics','supply-engine'];
-  // google_sponsored REMOVED (SPEC-222): 34 rows in its whole life, ran on SerpAPI against
-  // the Apify-only rule, and overlapped google_lsa almost entirely. Existing rows kept.
+// SERVICE sources. google_sponsored is deliberately absent (SPEC-222): 34 rows in its
+// whole life, ran on SerpAPI against the Apify-only rule, and overlapped google_lsa almost
+// entirely. Historical rows are kept, so it is still counted where it appears in data —
+// it just is not a source we schedule.
+//
+// I DELETED THIS WHOLE LINE ONCE with a regex meant to remove one entry from it, and the
+// console then crashed with "SOURCES is not defined" — every count, every filter and every
+// DMA gone at once. A regex that matches a line is not a regex that matches an item.
+export const SOURCES = ['gmaps_apify','craigslist','yellowpages_apify','ig_services','yelp','google_local','google_lsa','yellowpages','osm','google_places','openstreetmap'];
 // CREATOR sources — the algorithm decided these (each with its own discovery method):
 export const CREATOR_SOURCES = [
   'modash-vetted-seed',        // founder-vetted Modash handles (seed pool)
@@ -73,10 +80,16 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // showing locations under a City label.
   const city = typeof body.city === 'string' && body.city.trim() ? (body.city as string).trim() : null;          // DMA: 'NY' | 'FL'
   const location = typeof body.location === 'string' && body.location.trim() ? (body.location as string).trim() : null;
+  // Declared HERE, above scope(), which uses it. The first version sat five lines below
+  // and the used-before-declared guard caught it before it shipped — the fifth instance of
+  // this exact shape, and the first one stopped before reaching production.
+  const category = typeof body.category === 'string' && body.category.trim() ? (body.category as string).trim() : null;
+  const rowLimit = Math.min(Number(body.limit || 1000), 25000);
   const scope = (q: any) => {
     let out = q;
     if (city) out = out.eq('state', city);
     if (location) out = out.eq('city', location);
+    if (category) out = out.eq('service_type', category);
     return out;
   };
   // SPEC-229 — time window applies to every count on the console, not just the table.
@@ -142,6 +155,16 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     const { data: dl } = await gdb.from('leads_services').select('state').limit(20000);
     for (const r of (dl || [])) { const k = String((r as any).state ?? '').trim().toUpperCase(); if (k) dmaCounts[k] = (dmaCounts[k] || 0) + 1; }
   } catch (_e) {}
+  // CATEGORY (service type) facet, scoped to the current DMA + location.
+  const categoryCounts: Record<string, number> = {};
+  try {
+    let cq2 = gdb.from('leads_services').select('service_type, state, city').limit(20000);
+    if (city) cq2 = cq2.eq('state', city);
+    if (location) cq2 = cq2.eq('city', location);
+    const { data: ct } = await cq2;
+    for (const r of (ct || [])) { const k = String((r as any).service_type ?? '').trim(); if (k) categoryCounts[k] = (categoryCounts[k] || 0) + 1; }
+  } catch (_e) {}
+
   const dmas: Record<string, string> = {};
   for (const [code] of Object.entries(dmaCounts).sort((a, b) => b[1] - a[1])) dmas[code] = DMA_NAMES[code] || code;
 
@@ -253,7 +276,8 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     product: { profiles: profiles ?? 0, with_avatar: withAvatar, connections, services, requests, bookings, bookings_all, bookings_completed, bookings_paid },
     counter, creatorsBySource, creatorsUnattributed, engine, download,
     filter: {
-      city, location, sinceHours,
+      city, location, sinceHours, category, limit: rowLimit,
+      categories: Object.fromEntries(Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]).slice(0, 200)),
       // SPEC-231 — DMAs come FROM THE DATA. Hardcoding two meant a third DMA would be
       // crawled and never appear in the filter, so its rows would be invisible on the one
       // screen meant to prove what we have. Known codes get their proper name; anything
