@@ -37,13 +37,25 @@ serve(async (req: Request) => {
     // on product (above); leads now come from growth.
     const db = growthDb();
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
-    const audience = body.audience === 'creators' ? 'creators' : 'services';
-    const table = audience === 'creators' ? 'leads_influencers' : 'leads_services';
+    // SPEC-210 — EVERY dataset is downloadable, not just the two lead tables. The
+    // founder asked for "all available on dashboard to download live"; the crawl queue
+    // is where spend and parking actually live (cost_usd sits on crawl_requests), so a
+    // dashboard without it cannot answer what a source cost or why it stopped.
+    const DATASETS: Record<string, { table: string; srcCol: string; emailCol: string; label: string }> = {
+      services:  { table: 'leads_services',     srcCol: 'data_source',     emailCol: 'owner_email', label: 'Service leads' },
+      creators:  { table: 'leads_influencers',  srcCol: 'discovered_via',  emailCol: 'email',       label: 'Creators' },
+      crawls:    { table: 'crawl_requests',     srcCol: 'source',          emailCol: '',            label: 'Crawl queue + spend' },
+      runs:      { table: 'agent_runs',         srcCol: 'agent',           emailCol: '',            label: 'Agent runs' },
+    };
+    const audience = DATASETS[body.audience] ? body.audience : 'services';
+    const DS = DATASETS[audience];
+    const table = DS.table;
+    const isLeadTable = audience === 'services' || audience === 'creators';
     const cityFilter: string | null = body.city || null;   // 'NY' | 'FL' | null
     const sourceFilter: string | null = body.source || null;
     const stateCol = 'state';
     // Creator rows label their origin in discovered_via; service rows use data_source.
-    const srcCol = audience === 'creators' ? 'discovered_via' : 'data_source';
+    const srcCol = DS.srcCol;
 
     const count = async (q: (b: any) => any) => {
       const { count } = await q(db.from(table).select('id', { count: 'exact', head: true }));
@@ -66,42 +78,62 @@ serve(async (req: Request) => {
     bySource['(other/unlabeled)'] = Math.max(0, (await count((b) => b)) - Object.values(bySource).reduce((a, c) => a + c, 0));
 
     // by city (NY / FL / other) and by status
-    const byCity = { NYC: await count((b) => b.eq(stateCol, 'NY')), Miami: await count((b) => b.eq(stateCol, 'FL')) };
-    const statuses = ['new', 'pending_review', 'queued', 'opted_in', 'do_not_contact'];
+    const byCity = isLeadTable
+      ? { NYC: await count((b) => b.eq(stateCol, 'NY')), Miami: await count((b) => b.eq(stateCol, 'FL')) }
+      : {};
+    const statuses = isLeadTable
+      ? ['new', 'pending_review', 'queued', 'opted_in', 'do_not_contact']
+      : ['new', 'crawling', 'delivered', 'failed', 'parked'];
+    const statusCol = isLeadTable ? 'outreach_status' : 'status';
     const byStatus: Record<string, number> = {};
-    await Promise.all(statuses.map(async (st) => { byStatus[st] = await count((b) => b.eq('outreach_status', st)); }));
+    await Promise.all(statuses.map(async (st) => { byStatus[st] = await count((b) => b.eq(statusCol, st)); }));
 
     // growth: rows fetched in last 1/7/14 days
     const since = (d: number) => new Date(Date.now() - d * 864e5).toISOString();
+    const tsCol = isLeadTable ? 'fetched_at' : 'created_at';
     const growth = {
-      last1d: await count((b) => b.gte('fetched_at', since(1))),
-      last7d: await count((b) => b.gte('fetched_at', since(7))),
-      last14d: await count((b) => b.gte('fetched_at', since(14))),
+      last1d: await count((b) => b.gte(tsCol, since(1))),
+      last7d: await count((b) => b.gte(tsCol, since(7))),
+      last14d: await count((b) => b.gte(tsCol, since(14))),
     };
 
     // contactable totals
-    const withPhone = await count((b) => b.not('phone', 'is', null));
-    const withEmail = await count((b) => audience === 'creators' ? b.not('email', 'is', null) : b.not('owner_email', 'is', null));
+    const withPhone = isLeadTable ? await count((b) => b.not('phone', 'is', null)) : 0;
+    const withEmail = isLeadTable ? await count((b) => b.not(emailCol, 'is', null)) : 0;
     const total = await count((b) => b);
 
     // SPEC-192 is a HARD spec: a lead without a phone or an email is not a lead. A
     // platform-wide contactable total hides which source is producing the junk, so it is
     // broken out per source — that is the number that should decide where a dollar goes.
     const contactBySource: Record<string, { total: number; contactable: number; pct: number }> = {};
-    const emailCol = audience === 'creators' ? 'email' : 'owner_email';
-    await Promise.all(sources.map(async (src) => {
+    const emailCol = DS.emailCol;
+    if (isLeadTable) await Promise.all(sources.map(async (src) => {
       const t = await count((b) => b.eq(srcCol, src));
       const c = await count((b) => b.eq(srcCol, src).or(`phone.not.is.null,${emailCol}.not.is.null`));
       contactBySource[src] = { total: t, contactable: c, pct: t ? Math.round((c / t) * 100) : 0 };
     }));
 
     // filtered rows for the table/download
-    let rq = db.from(table).select('*').neq('outreach_status', 'do_not_contact').limit(10000);
+    const ROW_CAP = 10000;
+    let rq = db.from(table).select('*').limit(ROW_CAP);
     if (cityFilter) rq = rq.eq(stateCol, cityFilter);
     if (sourceFilter) rq = rq.eq(srcCol, sourceFilter);
+    if (body.status) rq = rq.eq(statusCol, body.status);
+    // "Contactable only" is the 40% bar made actionable: it exports the rows we can
+    // actually reach, so a download is a working list rather than a row count.
+    if (body.contactableOnly && isLeadTable) rq = rq.or(`phone.not.is.null,${emailCol}.not.is.null`);
     const { data: rows } = await rq;
+    // The TRUE size of this filter, so the screen can say "showing 10,000 of 41,203"
+    // instead of quietly implying the cap is the whole set. A silent cap reads as a
+    // small market.
+    let cq = db.from(table).select('id', { count: 'exact', head: true });
+    if (cityFilter) cq = cq.eq(stateCol, cityFilter);
+    if (sourceFilter) cq = cq.eq(srcCol, sourceFilter);
+    if (body.status) cq = cq.eq(statusCol, body.status);
+    if (body.contactableOnly && isLeadTable) cq = cq.or(`phone.not.is.null,${emailCol}.not.is.null`);
+    const { count: filteredTotal } = await cq;
 
-    return json({ audience, srcCol, total, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, rows: rows || [] });
+    return json({ audience, label: DS.label, srcCol, isLeadTable, total, filteredTotal: filteredTotal ?? 0, rowCap: ROW_CAP, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, rows: rows || [] });
   } catch (e) {
     return json({ error: String(e).slice(0, 300) }, 500);
   }

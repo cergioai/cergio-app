@@ -1,0 +1,53 @@
+{
+  "_what": "The overnight fleet. One agent per feature area, each with owned files, the gates that guard it, and the named defects it is accountable for.",
+  "_why_verification_not_autofix": "Every agent here VERIFIES and REPORTS. None of them edits code unattended. That is deliberate: every serious outage on this project came from an unattended change that passed static checks — a blank homepage, a white /auth, every crawled row discarded. An agent that reports a defect with evidence costs nothing if it is wrong. An agent that edits at 4am and is wrong costs a morning. Fixes are approved in the morning and applied inside a cell.",
+  "agents": [
+    { "id": "payments", "title": "Payment on accept — THE LAUNCH BLOCKER", "priority": 1,
+      "owns": ["src/screens/PayScreen.jsx", "src/lib/payments.js", "supabase/functions/create-payment-intent", "supabase/functions/stripe-webhook"],
+      "gates": ["#47g", "#155b"],
+      "defects": ["bookings_paid has been 0 for the life of the project — no card has ever been charged end to end", "counter-offer price shown vs charged (SPEC-211/212 shipped; needs live proof)"],
+      "green_when": "one real booking reaches paid_at with a Stripe charge id" },
+
+    { "id": "booking-loop", "title": "Request -> accept -> schedule -> complete", "priority": 2,
+      "owns": ["src/screens/RequestScreen.jsx", "src/screens/InboundRequestScreen.jsx", "src/lib/api.js"],
+      "gates": ["#154", "#48", "#47i"],
+      "defects": ["core loop is auth-gated so it has only ever been verified in code, never walked live"],
+      "green_when": "a live walk completes the loop with two real accounts" },
+
+    { "id": "crawl-sources", "title": "The 8 crawl sources", "priority": 3,
+      "owns": ["supabase/functions/fulfill-crawl/index.ts"],
+      "gates": ["#179", "#180", "#181", "#182", "#187", "#205"],
+      "defects": ["google_sponsored still calls SerpAPI while VENDOR_OF_SOURCE claims apify — the spend meter is wrong on this source", "yelp is a third paid vendor, against 'all paid via Apify'"],
+      "green_when": "every paid source routes through Apify, or is parked with the reason recorded" },
+
+    { "id": "creators", "title": "Creators as a first-class class", "priority": 4,
+      "owns": ["scripts/growth-dedupe-queue.mjs", "scripts/_growth-scope.mjs"],
+      "gates": ["#202", "#204", "#208"],
+      "defects": ["ig-creator-marketplace PARKED pending IG_USER_ID + IG_MARKETPLACE_TOKEN (founder/Meta action)", "follower band 5k-500k not enforced on the ig_services creator path"],
+      "green_when": "100 creators from ig-scraper-user-search, then the source stops itself" },
+
+    { "id": "spend-guard", "title": "No dollar without output", "priority": 5,
+      "owns": ["scripts/growth-controls.mjs", "growth-controls.json"],
+      "gates": ["#185", "#189", "#190", "#207"],
+      "defects": ["ledger was blind to 78% of spend once; reconciliation must keep proving itself"],
+      "green_when": "ledger total matches the vendor account total within 5%" },
+
+    { "id": "data-dashboard", "title": "/ops/data — every dataset live + downloadable", "priority": 6,
+      "owns": ["src/screens/DataExportScreen.jsx", "supabase/functions/leads-dashboard/index.ts"],
+      "gates": ["#203", "#210"],
+      "defects": ["screen counts have never been reconciled against a direct REST count"],
+      "green_when": "the screen total equals a direct count for the same filter" },
+
+    { "id": "ci-health", "title": "CI honesty", "priority": 7,
+      "owns": [".github/workflows"],
+      "gates": ["#209"],
+      "defects": ["the e2e Playwright suite has been RED on main since roughly CI #11 and is advisory, so it never blocks a merge", "9 duplicate gate IDs baselined in qa-id-baseline.json"],
+      "green_when": "e2e is green and required, or deleted with the reason recorded — a permanently red advisory check is worse than no check" },
+
+    { "id": "legal-copy", "title": "Securities language", "priority": 8,
+      "owns": ["src/screens"],
+      "gates": ["#170"],
+      "defects": ["/rainmaker/apply carries securities-PARAPHRASE copy that gate #170 is blind to — it bans 5 exact phrasings, not the risk"],
+      "green_when": "legal review clears the copy, or it is de-securitised and the paraphrases are added to the gate" }
+  ]
+}

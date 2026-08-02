@@ -5166,9 +5166,9 @@ export async function opsConsole(opts = {}) {
   return { data: null, error: { ...fb.error, message: `${fbMsg} (admin-crawl-status: ${primaryMsg})` } };
 }
 
-export async function leadsDashboard(audience = 'services', { city = null, source = null } = {}) {
+export async function leadsDashboard(audience = 'services', { city = null, source = null, status = null, contactableOnly = false } = {}) {
   const { data, error } = await supabase.functions.invoke('leads-dashboard', {
-    body: { audience, city, source },
+    body: { audience, city, source, status, contactableOnly },
   });
   if (error) return { data: null, error };
   return { data, error: null };

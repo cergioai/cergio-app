@@ -1,0 +1,2 @@
+fired: 2026-08-02T03:30:27Z
+reason: SPEC-205/206 phase quota + creator-only activation + contactability bar.
