@@ -70,6 +70,7 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-238 | /status2 and /agents2 are dedicated founder URLs, aliases of /ops/status and /ops/agents (never copies) | #238 | — | CODED |
 | S-239 | yelp is PAUSED by founder order, never deleted: out of CRAWLS_ONLY, kept in the rota + dashboards with rows, pause reason surfaced on the yelp row, fleet brief records the order not a defect | #239 | — | CODED |
 | S-240 | PHASE1_CITY_QUOTA is the founder DMA formula ({"NY":50000,"FL":11700}, creators 5%): per-DMA buckets in both consumers, fail-closed map parsing, welded DMA→locations lists, Boston is the 9th metro | #240 | — | CODED |
+| S-241 | growthPause agrees with the cron record: the paused set is EMPTY while the resume migrations schedule all five growth crons; pausing again = set + unschedule + gate in one commit | #119 | — | CODED |
 <!-- REGISTRY:END -->
 
 ## Open drift (found by #186 on its first run)
