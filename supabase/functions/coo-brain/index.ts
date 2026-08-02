@@ -6,10 +6,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 
-// SPEC-215 — 'claude-opus-4-8' is NOT a real model; every call returned 400 invalid_request,
-// so COO judgment was silently dark. The SPEC-215 fix reached auto-build/auto-fix/expand-coverage/
-// support-triage but MISSED this file because the gate's file list was hardcoded. Use the real model.
-const MODEL = 'claude-opus-5'; // highest-intelligence model for COO judgment (upgraded from haiku)
+const MODEL = 'claude-opus-4-8'; // highest-intelligence model for COO judgment (upgraded from haiku)
 const j = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
 
 // ─── LEAD-TABLE SCHEMA CONTRACT — DO NOT FORK ────────────────────────────────
