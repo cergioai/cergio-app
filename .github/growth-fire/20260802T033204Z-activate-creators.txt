@@ -1,0 +1,2 @@
+fired: 2026-08-02T03:32:04Z
+reason: SPEC-207 activate creator-only crawls (CRAWLS_ONLY=ig_services, CREATOR_TARGET=100).

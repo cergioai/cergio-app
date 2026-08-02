@@ -32,3 +32,6 @@ sources ACTUALLY scheduled (ROTA) rather than the full declared rota. With an al
 active, dividing by 8 while running 1 source would hand it an eighth of capacity and idle
 the rest. The declaration must still list all 8 — that assertion is unchanged and still
 fails when a source is dropped.
+- `growth-controls.json`
+- `scripts/growth-controls.mjs`
+- `.github/workflows/growth-setup.yml`

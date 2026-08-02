@@ -6009,6 +6009,25 @@ test('a-source-below-the-contactability-bar-is-parked-not-retried', 'SPEC-206 (f
   assert(!(!/is_business: !!it\?\.isBusinessAccount/.test(f)), 'business accounts are no longer stored as creators — founder decided KEEP, because the creator pivot targets providers who already have an audience');
 });
 
+test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (2026-08-02): whether we were crawling, and which sources, lived only in Supabase edge secrets — invisible in git, unreviewable, and unreadable from the sandbox, so the honest answer to "are we crawling right now?" was always "I cannot see". That is unacceptable for the one setting that decides whether money leaves the account. The state is now a committed file, the change is a diff, and CI is the only writer. PHASE1_CITY_QUOTA is deliberately EMPTY: no per-city quota exists in the spec, and empty keeps phase 2 locked to Miami and NYC. A number invented here would silently authorise a national crawl.', '#207', () => {
+  const raw = readFile('growth-controls.json');
+  const cfg = JSON.parse(raw);
+  assert(!(cfg.CRAWLS_SUSPENDED === undefined), 'no global crawl stop in the controls file');
+  assert(!(cfg.PHASE1_CITY_QUOTA !== ''), `PHASE1_CITY_QUOTA is set to "${cfg.PHASE1_CITY_QUOTA}" — the spec names no per-city quota, so any value here was invented and unlocks crawling outside Miami and NYC`);
+  assert(!(String(cfg.CRAWLS_SUSPENDED) === 'false' && !String(cfg.CRAWLS_ONLY || '').trim()), 'crawling is ON with an EMPTY allowlist — that resumes all seven unaudited sources, which is the opposite of "creator sources only"');
+  if (String(cfg.CRAWLS_SUSPENDED) === 'false') {
+    assert(!(!String(cfg.CREATOR_TARGET || '').trim()), 'crawling is ON with no creator target — nothing would stop it at 100');
+  }
+  assert(!(/ig-creator-marketplace/.test(String(cfg.CRAWLS_ONLY || ''))), 'ig-creator-marketplace is in the allowlist but it is PARKED — it cannot run without IG_USER_ID + IG_MARKETPLACE_TOKEN');
+  const wf = readFile('.github/workflows/growth-setup.yml');
+  assert(!(!/growth-controls\.mjs/.test(wf)), 'nothing pushes the controls to the edge runtime, so the file would be decorative and git would disagree with production');
+  assert(!(!/growth-controls\.json/.test(wf)), 'editing the controls does not trigger the workflow, so a change would sit unapplied');
+  const push = readFile('scripts/growth-controls.mjs');
+  assert(!(!/process\.exit\(1\)/.test(push)), 'the push does not fail loud — a silent failure means git and production disagree, which is worse than having no file');
+  assert(!(!/startsWith\('_'\)/.test(push)), 'documentation keys would be pushed as real secrets');
+});
+
+
 
 
 

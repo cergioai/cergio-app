@@ -1,0 +1,19 @@
+{
+  "_why": "SPEC-207. The crawl on/off state used to live only in Supabase edge secrets — invisible in git, unreviewable, and unanswerable from the sandbox. Whether we were crawling was a question nobody could answer without opening a dashboard. It lives here now: committed, diffable, and reversible with one PR. CI pushes these into the edge-function runtime on every change.",
+  "_founder": "2026-08-02: 'activate the crawls just for the creator sources to get 100 of each then pause alongside the rest to audit.'",
+
+  "CRAWLS_SUSPENDED": "false",
+  "_CRAWLS_SUSPENDED": "Global stop. false = the allowlist below decides. Defaults to SUSPENDED in code, so a typo here fails closed.",
+
+  "CRAWLS_ONLY": "ig_services",
+  "_CRAWLS_ONLY": "ONLY these sources may be claimed. ig_services is the sole creator path that can run — ig-creator-marketplace is PARKED pending IG_USER_ID + IG_MARKETPLACE_TOKEN. The other seven stay suspended until the audit clears them.",
+
+  "CREATOR_TARGET": "100",
+  "_CREATOR_TARGET": "ig_services stops itself at 100 creators from ig-scraper-user-search. Checked before any job is claimed, so it cannot overshoot while nobody is watching.",
+
+  "PHASE1_CITY_QUOTA": "",
+  "_PHASE1_CITY_QUOTA": "EMPTY ON PURPOSE. No per-city quota exists in the spec. Empty = phase 2 locked, so only Miami and NYC are crawled. Set a number to unlock the other top-10 metros — nothing else authorises a national crawl.",
+
+  "CONTACT_BAR_PCT": "40",
+  "_CONTACT_BAR_PCT": "A source under 40% contactable is PARKED, not retried (founder, 2026-08-02)."
+}
