@@ -429,7 +429,7 @@ const gdb = growthDb();
           // reaches here (a race with the seeder), stamp it permanently failed
           // WITHOUT a fetch — no 403, no error flood, no retry.
           await flushBuf(db); await gdb.from('crawl_requests').update({
-            status: 'failed', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
+            status: 'failed', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, notes: YP_DEAD_NOTE, updated_at: new Date().toISOString(),
           }).eq('id', job.id);
           ypQuarantined++;
           return;

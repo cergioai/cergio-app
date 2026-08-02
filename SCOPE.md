@@ -7,6 +7,7 @@
 - `.github/growth-audit-fire/`
 - `SCOPE.md`
 - `agent-runs/`
+- `src/lib/api.js`
 - `qa-id-baseline.json`
 - `scripts/_growth-env.mjs`
 - `scripts/_growth-scope.mjs`
@@ -36,3 +37,7 @@ fails when a source is dropped.
 - `growth-controls.json`
 - `scripts/growth-controls.mjs`
 - `.github/workflows/growth-setup.yml`
+
+SHARED-CHANGE-APPROVED — src/lib/api.js: leadsDashboard gains two optional filter
+arguments (status, contactableOnly) and forwards them in the request body. Additive; every
+existing caller keeps its behaviour because both default to null/false.

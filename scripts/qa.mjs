@@ -6038,6 +6038,32 @@ test('no-two-gates-may-share-an-id', 'SPEC-209 (found 2026-08-02 by colliding wi
   if (fixed.length) console.log(`  (note: ${fixed.join(', ')} no longer collide — remove them from qa-id-baseline.json)`);
 });
 
+test('every-dataset-is-live-and-downloadable-and-the-cap-is-stated', 'SPEC-210 (founder, 2026-08-02): "also need all available on dashboard to download live". The dashboard exposed only the two lead tables, so the crawl queue — which is where cost_usd and the parked status actually live — was invisible, and the question "what did this source cost and why did it stop?" had no answer on screen. It also capped rows at 10,000 and printed only the loaded count, so a filter matching 41,000 rows displayed as 10,000 with no indication anything was missing. That is the same shape as the audit that reported 0 rows for all 8 sources: a number that is wrong in the safe-looking direction. The screen must state the true matching total against the cap, and offer a per-source export so a segment arrives ready to work rather than as one pile to split in a spreadsheet.', '#210', () => {
+  const fn = readFile('supabase/functions/leads-dashboard/index.ts');
+  const code = stripComments(fn);
+  for (const t2 of ['leads_services', 'leads_influencers', 'crawl_requests', 'agent_runs']) {
+    assert(!(!new RegExp(t2).test(code)), `${t2} is not exposed by the dashboard — it cannot be viewed or downloaded`);
+  }
+  assert(!(!/filteredTotal/.test(code)), 'the true matching total is never computed, so a capped result silently reads as the whole set');
+  assert(!(!/rowCap/.test(code)), 'the row cap is not reported to the screen');
+  assert(!(!/contactableOnly/.test(code)), 'no reachable-only filter — the 40% bar cannot be turned into a working list');
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  const sc = stripComments(scr);
+  assert(!(!/downloadAllSources/.test(sc)), 'no per-source export — every segment would have to be split by hand');
+  assert(!(!/filteredTotal > rows\.length/.test(sc)), 'the screen does not warn when the cap hides rows, which is a wrong number in the safe-looking direction');
+  assert(!(!/crawls/.test(sc) && /runs/.test(sc)), 'the crawl queue and agent runs are not selectable on screen');
+  assert(!(!/cost_usd/.test(sc)), 'spend is not shown in any column, so the dashboard cannot answer what a source cost');
+  // Assert on the PAYLOAD, not the file. Grepping for the name matched the function
+  // signature's default parameter, so removing it from the body still passed — a gate
+  // that could not fail, caught by mutating it.
+  const api = stripComments(readFile('src/lib/api.js'));
+  const invoke = (api.match(/invoke\('leads-dashboard',[\s\S]{0,220}?\}\)/) || [''])[0];
+  assert(!(!invoke), 'the leads-dashboard invoke call could not be found');
+  assert(!(!/contactableOnly/.test(invoke)), 'the api layer drops reachable-only from the request body, so the checkbox would silently do nothing');
+  assert(!(!/status/.test(invoke)), 'the api layer drops status from the request body, so the status filter would silently do nothing');
+});
+
+
 
 
 
