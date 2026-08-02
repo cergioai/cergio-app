@@ -126,6 +126,15 @@ serve(async (req: Request) => {
 // would recreate exactly that outage.
 const gdb = growthDb();
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
+  // SPEC-197 — CRAWL SUSPENSION (founder, 2026-08-02): "suspend all crawl work until
+  // we've audited 100 pieces since reset and the entire data output from each of the
+  // sources." This is the hard stop, placed BEFORE any job is claimed or any vendor is
+  // called, so no paid request can leave while the audit is open. Flip CRAWLS_SUSPENDED
+  // to false to resume — nothing else needs changing.
+  const CRAWLS_SUSPENDED = (Deno.env.get('CRAWLS_SUSPENDED') || 'true').toLowerCase() !== 'false';
+  if (CRAWLS_SUSPENDED) {
+    return json({ suspended: true, reason: 'CRAWLS_SUSPENDED — founder audit in progress (SPEC-197)', processed: 0 });
+  }
   const started = Date.now();
   _runDeadline = started + 138_000;  // SPEC-172: hard wall, safely inside the 150s platform limit
   let dbRef: any = null;

@@ -5881,6 +5881,27 @@ test('the-chinese-wall-is-enforced-in-ci', 'SPEC-195/196 (founder diagnosis 2026
   assert(!(!fs.existsSync(path.join(REPO_ROOT, 'SCOPE.md'))), 'SCOPE.md is missing — nothing declares what a change may touch');
 });
 
+test('crawls-are-suspended-until-the-founder-audit-clears', 'SPEC-197 (founder, 2026-08-02, verbatim): "suspend all crawl work until we have audited 100 pieces since reset and the entire data output from each of the sources... I now need to see 100 leads from each crawler and audit them before activating or scaling." The stop must sit BEFORE any job is claimed and before any vendor call, because a guard placed after the claim still spends money. It must default to SUSPENDED, so a missing or misspelled env var fails CLOSED rather than resuming crawling silently. The audit export is read-only and must keep working while suspended, otherwise the audit cannot happen.', '#197', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const code = stripComments(f);
+  assert(!(!/CRAWLS_SUSPENDED/.test(code)), 'no suspension switch — crawling cannot be stopped without a deploy');
+  assert(!(!/\|\| 'true'\)\.toLowerCase\(\) !== 'false'/.test(code)),
+    'the switch does not default to SUSPENDED — a missing env var would silently resume paid crawling');
+  const suspendAt = code.indexOf('CRAWLS_SUSPENDED');
+  const claimAt = code.indexOf("status: 'crawling'");
+  const spendAt = code.indexOf('spendBlockedReason');
+  assert(!(suspendAt < 0 || (claimAt > 0 && suspendAt > claimAt)), 'the suspension check runs AFTER a job is claimed — it must stop before any work or spend');
+  assert(!(spendAt > 0 && suspendAt > spendAt), 'the suspension check runs after the spend gate — it must be the first thing');
+  const wf = readFile('.github/workflows/growth-setup.yml');
+  const live = wf.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert(!(/cron: *'\*\/10/.test(live)), 'the 10-minute crawl schedule is still active while the audit is open');
+  assert(!(!fs.existsSync(path.join(REPO_ROOT, 'scripts/growth-audit-export.mjs'))), 'the audit export is missing — the founder cannot inspect the data he asked for');
+  const ex = readFile('scripts/growth-audit-export.mjs');
+  assert(!(!/limit=100/.test(ex)), 'the export does not produce the 100-lead sample per source that was asked for');
+  assert(!(!/contactable/.test(ex)), 'the export does not report contactability — the one number that decides if a lead is worth anything');
+});
+
+
 
 
 main().catch(e => {

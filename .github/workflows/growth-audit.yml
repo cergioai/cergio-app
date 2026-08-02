@@ -1,0 +1,52 @@
+# SPEC-197 — FOUNDER AUDIT EXPORT. Read-only. Runs while crawling is SUSPENDED.
+#
+# Founder, 2026-08-02: "I now need to see 100 leads from each crawler and audit them
+# before activating or scaling. suspend all crawl work until we've audited 100 pieces
+# since reset and the entire data output from each of the sources."
+#
+# This touches no vendor and spends nothing — it only reads the growth database and
+# publishes CSVs to the growth-status branch for download.
+name: Growth audit export
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ['.github/growth-audit-fire/**']
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Derive the growth key
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_ACCESS_TOKEN: ${{ secrets.GROWTH_ACCESS_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ secrets.GROWTH_SERVICE_ROLE_KEY }}
+        run: node scripts/growth-keys.mjs
+
+      - name: Export per-source samples + full data
+        env:
+          GROWTH_SUPABASE_URL: ${{ secrets.GROWTH_SUPABASE_URL }}
+          GROWTH_SERVICE_ROLE_KEY: ${{ env.GROWTH_SERVICE_ROLE_KEY }}
+        run: node scripts/growth-audit-export.mjs
+
+      - name: Publish to the growth-status branch
+        run: |
+          set -uo pipefail
+          git config user.email "t@cergio.ai"; git config user.name "Cergio Bot"
+          git fetch -q origin growth-status || true
+          git checkout -q -B growth-status origin/growth-status 2>/dev/null || git checkout -q -B growth-status
+          git add -f audit/
+          git -c user.email=t@cergio.ai -c user.name="Cergio Bot" \
+            commit -q -m "audit export $(date -u +%FT%TZ)" || echo "no change"
+          git push -q --force origin HEAD:growth-status
+          echo "published"
