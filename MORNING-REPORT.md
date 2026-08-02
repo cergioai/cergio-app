@@ -1,19 +1,36 @@
-# Morning report — 2026-08-02 04:13 UTC
+# Morning report — 2026-08-02 04:24 UTC
 
 **0 of 8 agents GREEN.** Everything below is sorted worst first.
 
 | agent | verdict | own gates | open defects | green when |
 |---|---|---|---|---|
+| **data-dashboard** | **CANNOT RUN** | 2/2 | 1 | the screen total equals a direct count for the same filter |
 | **payments** | **NEEDS WORK** | 1/2 | 2 | one real booking reaches paid_at with a Stripe charge id |
 | **booking-loop** | **NEEDS WORK** | 2/3 | 1 | a live walk completes the loop with two real accounts |
 | **crawl-sources** | **NEEDS WORK** | 6/6 | 2 | every paid source routes through Apify, or is parked with the reason recorded |
 | **creators** | **NEEDS WORK** | 3/3 | 2 | 100 creators from ig-scraper-user-search, then the source stops itself |
 | **spend-guard** | **NEEDS WORK** | 4/4 | 1 | ledger total matches the vendor account total within 5% |
-| **data-dashboard** | **NEEDS WORK** | 2/2 | 1 | the screen total equals a direct count for the same filter |
 | **ci-health** | **NEEDS WORK** | 1/1 | 2 | e2e is green and required, or deleted with the reason recorded — a permanently red advisory check is worse than no check |
 | **legal-copy** | **NEEDS WORK** | 1/1 | 1 | legal review clears the copy, or it is de-securitised and the paraphrases are added to the gate |
 
+## COULD NOT START — read this before anything else
+
+These agents did not fail; they never began. This is the state that hid the build
+agent for weeks: it was dark on a 400 while every dashboard read green, because
+nothing distinguished "idle" from "unable to start". The API's own words follow.
+
+- **data-dashboard** — ANTHROPIC_API_KEY is not set on this runner — the agent is not idle, it is unable to start
+
+## What the agents found this run
+
+No agent reported a new defect in its own files this run.
 ## What each agent is waiting on
+
+### data-dashboard — /ops/data — every dataset live + downloadable
+
+- screen counts have never been reconciled against a direct REST count
+
+Full report: `reports/data-dashboard.md`
 
 ### payments — Payment on accept — THE LAUNCH BLOCKER
 
@@ -47,12 +64,6 @@ Full report: `reports/creators.md`
 - ledger was blind to 78% of spend once; reconciliation must keep proving itself
 
 Full report: `reports/spend-guard.md`
-
-### data-dashboard — /ops/data — every dataset live + downloadable
-
-- screen counts have never been reconciled against a direct REST count
-
-Full report: `reports/data-dashboard.md`
 
 ### ci-health — CI honesty
 

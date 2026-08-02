@@ -3930,7 +3930,7 @@ test('spec-crack-help-haiku', 'FROZEN: in-app Help → Haiku→Opus→human tria
   // ── (3) THE LADDER: Haiku → Opus → human, in that order ──
   const fn = readFile('supabase/functions/support-triage/index.ts');
   assert(/claude-haiku-4-5-20251001/.test(fn), 'support-triage must call Haiku (claude-haiku-4-5-20251001) for triage');
-  assert(/claude-opus-4-8/.test(fn),           'support-triage must escalate to Opus (claude-opus-4-8)');
+  assert(/claude-opus-5/.test(fn),            'support-triage must escalate to Opus (claude-opus-5)');
   const iHaiku = fn.indexOf("const haiku = await askClaude(HAIKU");
   const iOpus  = fn.indexOf("const opus = await askClaude(OPUS");
   const iHuman = fn.indexOf('routeToHuman(db, ticket');
@@ -6091,6 +6091,49 @@ test('the-overnight-fleet-actually-runs-with-the-mac-off', 'SPEC-213 (founder, 2
   const morning = readFile('scripts/morning-report.mjs');
   assert(!(!/DID NOT RUN/.test(morning)), 'the morning page cannot express an agent that produced nothing');
 });
+
+test('every-model-name-we-ship-is-a-model-that-exists', 'SPEC-215 (root-caused 2026-08-02): the autonomous build agent has been DARK for weeks. Nightly reports blamed a credit balance; after the balance was topped up the error moved to 400 invalid_request, which is the API saying the model does not exist. It did not. "claude-opus-4-8" is not a real model, and it was hardcoded in auto-build, auto-fix, expand-coverage AND the support-triage escalation ladder — so support tickets silently never escalated past Haiku either. WORST OF ALL, A GATE ASSERTED THE BROKEN NAME: it demanded support-triage contain "claude-opus-4-8", so the defect was not merely unguarded, it was ENFORCED. That is the sharpest example yet of the real failure mode here — a check that locks in an invented criterion and then passes forever while the thing it guards is dead. A dead agent and an idle agent look identical from the outside, which is why nothing ever surfaced it.', '#215', () => {
+  const VALID = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001', 'claude-fable-5'];
+  // stripComments, and NOT qa.mjs: the fix's own comments quote the broken name in order
+  // to explain it, and this gate's description names it deliberately so the lesson is
+  // readable. Scanning raw text would flag the explanation and force us to delete the one
+  // record of why this happened.
+  const files = ['scripts/auto-build.mjs', 'scripts/auto-fix.mjs', 'scripts/expand-coverage.mjs',
+                 'supabase/functions/support-triage/index.ts'];
+  const bad = new Set();
+  for (const f of files) {
+    for (const m of stripComments(readFile(f)).matchAll(/['\"`](claude-[a-z0-9][a-z0-9.\-]*)['\"`]/g)) {
+      if (!VALID.includes(m[1]) && m[1] !== 'claude-code') bad.add(f + ': ' + m[1]);
+    }
+  }
+  assert(!(bad.size > 0), 'these model names do not exist, so every call using them returns 400 and the agent goes dark: ' + [...bad].join(', '));
+});
+
+test('a-ci-agent-is-equivalent-to-a-subagent-and-cannot-merge-itself', 'SPEC-216 (founder, 2026-08-02): "can CI but equivalent/identical to subagents?... can not have my mac be a blocker." A subagent is a model call with a brief, a bounded set of files, and a way to act — all three exist on a CI runner, and a runner does not care whether the laptop is open. One thing is deliberately NOT identical: a subagent talks to you and can be stopped mid-thought, this one cannot. So its output is a pull request on its own branch, never a push to main. Every past outage here reached production through an automatic merge; a PR waiting for you cannot. The second requirement is that a dead agent SCREAMS: the build agent was dark for weeks on a 400 while every dashboard read green, because nothing distinguished "idle" from "unable to start". CANNOT RUN must outrank every other state on the morning page and must carry the API response verbatim.', '#216', () => {
+  const w = readFile('scripts/agent-work.mjs');
+  const c = stripComments(w);
+  assert(!(!/api\.anthropic\.com/.test(c)), 'the agent makes no model call — it is a reporter, not an agent');
+  assert(!(!/CANNOT RUN/.test(c)), 'the agent cannot express being unable to start, so a dead agent would read as idle');
+  assert(!(!/if \(!KEY\)/.test(c)), 'a missing API key is not detected up front, so the agent would fail deep inside with a confusing error');
+  // Assert on the BRANCH, not on the file. Grepping for the string passed even after I
+  // deliberately silenced two of the three failure paths, because a third still mentioned
+  // it. A gate that is satisfied by an unrelated occurrence is a gate that cannot fail.
+  const notOk = (c.match(/if \(!r\.ok\)[^\n]*/) || [''])[0];
+  assert(!(!/CANNOT RUN/.test(notOk)), 'an API error does not report CANNOT RUN — that is exactly how the build agent stayed dark on a 400 while every dashboard read green');
+  assert(!(!/r\.status/.test(notOk)), 'the API failure path drops the HTTP status, which is how "Build blocked" told us nothing for weeks');
+  const noKey = (c.match(/if \(!KEY\)[^\n]*/) || [''])[0];
+  assert(!(!/CANNOT RUN/.test(noKey)), 'a missing API key does not report CANNOT RUN, so an agent that never started would read as idle');
+  const m = readFile('scripts/morning-report.mjs');
+  assert(!(!/CANNOT RUN/.test(stripComments(m))), 'the morning page has no CANNOT RUN state');
+  assert(!(!/v === 'CANNOT RUN' \? -1/.test(m)), 'CANNOT RUN does not sort above every other state, so an agent that never started could appear below routine work');
+  const wf = readFile('.github/workflows/night-fleet.yml');
+  assert(!(!/agent-work\.mjs/.test(wf)), 'the workflow never runs the thinking half, so the fleet only reports gate results');
+  assert(!(!/continue-on-error: true/.test(wf)), 'a model outage would fail the job and take the whole report with it');
+  assert(!(/--auto|gh pr merge|auto-merge/i.test(wf)), 'the fleet can merge its own work — every past outage reached production through an automatic merge');
+  assert(!(/push origin main|push .* HEAD:main/.test(wf)), 'the fleet pushes to main directly');
+});
+
+
 
 
 

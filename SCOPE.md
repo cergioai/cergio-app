@@ -47,3 +47,12 @@ existing caller keeps its behaviour because both default to null/false.
 - `.github/workflows/night-fleet.yml`
 - `reports/`
 - `MORNING-REPORT.md`
+- `scripts/agent-work.mjs`
+- `scripts/auto-build.mjs`
+- `scripts/auto-fix.mjs`
+- `scripts/expand-coverage.mjs`
+- `supabase/functions/support-triage/index.ts`
+
+SHARED-CHANGE-APPROVED — scripts/qa.mjs: the support-triage assertion demanded the model
+name 'claude-opus-4-8', which does not exist. The gate was ENFORCING the defect. Changed
+to 'claude-opus-5'.

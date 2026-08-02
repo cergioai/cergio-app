@@ -33,12 +33,22 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - run: npm ci --no-audit --no-fund
-      - name: Run the agent
+      - name: Verify — gates, wall, build
         run: node scripts/agent-report.mjs ${{ matrix.id }}
+
+      # The thinking half. This is what makes a CI agent equivalent to a subagent: a model
+      # call with a brief and a bounded set of files. Never fails the job — an agent that
+      # cannot reach the API must REPORT that loudly, not take the fleet down with it.
+      - name: Work — look for a real defect in its own files
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AGENT_MODEL: claude-opus-5
+        run: node scripts/agent-work.mjs ${{ matrix.id }} || true
       - uses: actions/upload-artifact@v4
         with:
           name: report-${{ matrix.id }}
-          path: reports/${{ matrix.id }}.*
+          path: reports/${{ matrix.id }}*
           retention-days: 14
 
   morning:

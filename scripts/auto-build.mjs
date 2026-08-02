@@ -102,7 +102,11 @@ const env = loadEnv();
 const SUPA_URL = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ANTHROPIC_KEY = env.ANTHROPIC_API_KEY || '';
-const MODEL = env.AUTO_BUILD_MODEL || 'claude-opus-4-8';
+// SPEC-215 — THE MODEL NAME WAS NOT REAL, AND THAT IS WHY THE AGENT WENT DARK.
+// 'claude-opus-4-8' is not a model that exists. Every call returned 400 invalid_request,
+// the build agent produced nothing for weeks, and every dashboard still read green —
+// because a dead agent and an idle agent look identical from the outside.
+const MODEL = env.AUTO_BUILD_MODEL || 'claude-opus-5';
 
 const argv = process.argv.slice(2);
 const args = new Set(argv);

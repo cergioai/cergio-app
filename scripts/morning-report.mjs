@@ -2,12 +2,18 @@
 import fs from 'node:fs';
 const fleet = JSON.parse(fs.readFileSync('agents/fleet.json', 'utf8'));
 const rs = fleet.agents.map((a) => {
-  try { return JSON.parse(fs.readFileSync(`reports/${a.id}.json`, 'utf8')); }
-  catch { return { id: a.id, title: a.title, priority: a.priority, verdict: 'DID NOT RUN', gates: [], defects: a.defects, green_when: a.green_when, at: null }; }
+  let base;
+  try { base = JSON.parse(fs.readFileSync(`reports/${a.id}.json`, 'utf8')); }
+  catch { base = { id: a.id, title: a.title, priority: a.priority, verdict: 'DID NOT RUN', gates: [], defects: a.defects, green_when: a.green_when, at: null }; }
+  // What the agent THOUGHT, as distinct from what the gates measured.
+  try { base.work = JSON.parse(fs.readFileSync(`reports/${a.id}.work.json`, 'utf8')); } catch { base.work = null; }
+  // An agent that could not start is not idle. It must outrank everything else on the page.
+  if (base.work && base.work.state === 'CANNOT RUN') base.verdict = 'CANNOT RUN';
+  return base;
 });
 // Failures first (feedback_never_retype_report_failures_first): an agent that did not run
 // is the most alarming state of all, because its silence reads like success.
-const rank = (v) => (v === 'DID NOT RUN' ? 0 : v === 'NEEDS WORK' ? 1 : 2);
+const rank = (v) => (v === 'CANNOT RUN' ? -1 : v === 'DID NOT RUN' ? 0 : v === 'NEEDS WORK' ? 1 : 2);
 rs.sort((a, b) => rank(a.verdict) - rank(b.verdict) || a.priority - b.priority);
 
 const green = rs.filter((r) => r.verdict === 'GREEN');
@@ -35,6 +41,32 @@ if (notRun.length) {
   say('silence reads like success. Treat each of these as UNKNOWN, not as fine.');
   say();
   for (const r of notRun) say(`- **${r.id}** — ${r.title}`);
+  say();
+}
+
+const cant = rs.filter((r) => r.verdict === 'CANNOT RUN');
+if (cant.length) {
+  say('## COULD NOT START — read this before anything else');
+  say();
+  say('These agents did not fail; they never began. This is the state that hid the build');
+  say('agent for weeks: it was dark on a 400 while every dashboard read green, because');
+  say('nothing distinguished "idle" from "unable to start". The API\'s own words follow.');
+  say();
+  for (const r of cant) say(`- **${r.id}** — ${r.work?.detail || 'no detail'}${r.work?.http ? ` (HTTP ${r.work.http}, model ${r.work.model})` : ''}`);
+  say();
+}
+
+say('## What the agents found this run');
+say();
+const found = rs.filter((r) => r.work && r.work.state === 'FINDING');
+if (!found.length) say('No agent reported a new defect in its own files this run.');
+for (const r of found) {
+  say(`### ${r.id} — confidence ${r.work.confidence}${r.work.needs_founder ? ' · NEEDS YOU' : ''}`);
+  say();
+  say(`**${r.work.finding}**`);
+  say();
+  if (r.work.evidence) say(`Evidence: \`${String(r.work.evidence).slice(0, 300)}\``);
+  if (r.work.fix) { say(); say(`Proposed: ${r.work.fix}`); }
   say();
 }
 
