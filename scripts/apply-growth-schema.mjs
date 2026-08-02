@@ -63,19 +63,25 @@ if (!found) {
   // enrich-influencers READS leads_influencers.bio / external_url / enrich_attempted_at,
   // and the SPEC-132 create omitted them, so the worker 42703'd every run while this
   // verify stayed green. Probe the columns explicitly and report the exact remedy.
+  // SPEC-237: probe every column a WRITER writes, not just the ones a reader reads.
+  // is_business (fulfill-crawl's dual-class creator row) and created_at (creator-
+  // harvest) were both missing from the live table while this probe stayed green —
+  // so every creator write 42703'd and the count sat at 0 with a passing verify.
   const colProbe = await fetch(
-    `${GROWTH_URL}/rest/v1/leads_influencers?select=bio,external_url,enrich_attempted_at&limit=1`,
+    `${GROWTH_URL}/rest/v1/leads_influencers?select=bio,external_url,enrich_attempted_at,is_business,created_at&limit=1`,
     { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } },
   );
   if (colProbe.status >= 400) {
-    console.error('growth leads_influencers is MISSING enrichment columns — enrich-influencers will 42703.');
+    console.error('growth leads_influencers is MISSING writer/reader columns — creator writes will 42703.');
     console.error('Run this ONCE on the GROWTH project SQL editor to close CREATORS_NOT_GROWING:');
-    console.error('  alter table public.leads_influencers add column if not exists bio text,');
-    console.error('    add column if not exists external_url text,');
-    console.error('    add column if not exists enrich_attempted_at timestamptz;');
+    console.error('  alter table public.leads_influencers add column if not exists bio text;');
+    console.error('  alter table public.leads_influencers add column if not exists external_url text;');
+    console.error('  alter table public.leads_influencers add column if not exists enrich_attempted_at timestamptz;');
+    console.error('  alter table public.leads_influencers add column if not exists is_business boolean;');
+    console.error('  alter table public.leads_influencers add column if not exists created_at timestamptz default now();');
     process.exit(1);
   }
-  console.log('growth schema verified — all four tables answer + enrichment columns present.');
+  console.log('growth schema verified — all four tables answer + writer/reader columns present.');
   process.exit(0);
 }
 
