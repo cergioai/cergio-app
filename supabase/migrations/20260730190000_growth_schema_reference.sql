@@ -67,6 +67,16 @@ create table if not exists public.leads_influencers (
 alter table public.leads_influencers add column if not exists bio text;
 alter table public.leads_influencers add column if not exists external_url text;
 alter table public.leads_influencers add column if not exists enrich_attempted_at timestamptz;
+-- SPEC-237 — the SPEC-202 fix healed the REFERENCE, not the TABLE. is_business was
+-- added to the CREATE TABLE above, but the live table already existed, so
+-- `create table if not exists` never ran and no heal guard covered it: every
+-- ig_services creator upsert kept throwing 42703 and creators stayed at 0 — the
+-- exact defect SPEC-202 diagnosed, surviving its own fix. created_at gets the same
+-- guard because creator-harvest writes it and the reference above declares only
+-- fetched_at. A column a writer writes MUST have a heal guard here, or the writer
+-- fails only in production.
+alter table public.leads_influencers add column if not exists is_business boolean;
+alter table public.leads_influencers add column if not exists created_at timestamptz default now();
 create index if not exists leads_influencers_via_idx  on public.leads_influencers (discovered_via);
 create index if not exists leads_influencers_city_idx on public.leads_influencers (city, state);
 
