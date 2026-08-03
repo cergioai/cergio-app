@@ -80,7 +80,8 @@
         "#202",
         "#204",
         "#208",
-        "#237"
+        "#237",
+        "#245"
       ],
       "defects": [
         "follower band 5k-500k not enforced on the ig_services creator path",
