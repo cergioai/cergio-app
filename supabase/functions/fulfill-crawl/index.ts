@@ -2027,7 +2027,10 @@ async function spendBlockedReason(source: string): Promise<string | null> {
   if (vendor === 'free') return null;                        // osm only — genuinely free
   const [spendRes, leadsRes] = await Promise.all([
     growthClient().from('crawl_requests').select('cost_usd').eq('source', source).not('cost_usd', 'is', null),
-    growthClient().from('leads_services').select('id', { count: 'exact', head: true }).eq('data_source', source),
+    // SPEC-251 — count EVERY label the source's rows carry (shared map). Counting only
+    // the rota name read yellowpages_apify as 0 leads beside 859 real rows, so its cost
+    // per lead was infinite and the tranche gate starved a producing source forever.
+    growthClient().from('leads_services').select('id', { count: 'exact', head: true }).in('data_source', AUDIT_CAP_SOURCES[source] || [source]),
   ]);
   const ledgerSpent = (spendRes.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
   // SPEC-189: reconcile with the vendor. Our ledger under-reported by 78% once; if the
