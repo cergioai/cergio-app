@@ -52,13 +52,14 @@ export function RainmakerApplyScreen() {
         <h1 className="text-display-2 font-extrabold text-white leading-tight">
           Become a Connector
         </h1>
-        {/* CERGIO-GUARD (2026-06-03): elegant succinct copy per Tarik —
-            who a Connector is + why it matters. Frames the role around
-            shared prosperity and asset-participation growth rather than
-            a generic "share in the upside." */}
+        {/* CERGIO-GUARD (2026-06-03, de-securitised 2026-08-02 per founder
+            "desecuritize"): who a Connector is + why it matters. Frames the
+            role around shared prosperity and referral earnings — NEVER
+            asset-participation / upside language (Howey risk, Terms §7,
+            gate #170). */}
         <p className="text-body-sm text-white/90 leading-relaxed mt-2 font-medium">
           Creators, influencers, and super-users with strong local networks
-          — driving shared prosperity and asset-participation growth in the
+          — driving shared prosperity and real referral earnings in the
           communities they already shape.
         </p>
       </div>
@@ -111,9 +112,16 @@ export function RainmakerApplyScreen() {
             <span className="font-extrabold text-black"> ${EXAMPLE_TOTAL.toLocaleString()}</span>.
           </p>
           <p className="text-meta text-b3 mt-2 leading-snug">
-            It compounds: when your friends recommend services that get booked,
-            those bookings add to your pool too. Your network does the work — you
-            earn the upside.
+            It adds up: when your friends recommend services that get booked,
+            those bookings add to your referral pool too. Your network does the
+            work — you earn more referral cash.
+          </p>
+          {/* Frozen disclaimer, verbatim from EarningsScreen (Terms §7). Gate
+              #170 asserts this screen carries it — removing it fails qa. */}
+          <p className="text-meta text-b3 mt-2 leading-snug">
+            Referral earnings are cash for real bookings — not a security and
+            not equity. Growth Participation Income is a loyalty-style bonus,
+            not a security.
           </p>
         </div>
 

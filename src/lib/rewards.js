@@ -115,7 +115,7 @@ export const REWARD_COPY = {
   connectorTierOneLine:  `Connectors earn $${REWARDS.perFriendConnector} cash + free services + Growth Participation Income + free spotlights (barter).`,
 
   // Compounding example — use as a single line in marketing/explainer surfaces.
-  compoundingExample:    `Bring ${REWARDS.exampleFriends} friends → $${REWARDS.exampleTotal.toLocaleString()}. Your network does the work; you earn the upside.`,
+  compoundingExample:    `Bring ${REWARDS.exampleFriends} friends → $${REWARDS.exampleTotal.toLocaleString()}. Your network does the work; you earn more referral cash.`,
 
   // Friend-of-friend bonus — second-tier kicker that makes the network
   // compound on its own. Same phrasing everywhere it appears so users

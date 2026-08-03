@@ -5367,6 +5367,15 @@ test('securities-copy-no-howey', 'Rewards/APGI copy must never promise securitie
     /activates\s+if\s+cergio/i,
     /share\s+of\s+Cergio[\u2019'\u2019&a-z;]*\s+growth/i,
     /your\s+share\s+compounds/i,
+    // #170b (2026-08-02, founder verbatim: "desecuritize" \u2014 approving the r150
+    // staged patch). Lesson from 13 consecutive QA runs: a phrase-list gate
+    // guards phrasings, not the RISK \u2014 the Howey exposure migrated into
+    // paraphrase on /rainmaker/apply and /about while the 5 regexes above
+    // stayed green. Ban the spirit:
+    /\bearn\s+the\s+upside\b/i,
+    /\bit\s+compounds\b/i,
+    /asset[-\u2011]participation/i,
+    /scaled\s+to\s+your\s+participation/i,
   ];
   const offenders = [];
   const walk = (dir) => {
@@ -5381,6 +5390,11 @@ test('securities-copy-no-howey', 'Rewards/APGI copy must never promise securitie
   };
   walk('src');
   assert(offenders.length === 0, 'securities-exposure copy found (Howey risk; align to Terms §7 loyalty-bonus framing):\n  ' + offenders.join('\n  '));
+  // #170b PRESENCE half: banning phrases alone lets the disclaimer silently
+  // vanish. /rainmaker/apply must CARRY the Terms §7 loyalty-bonus disclaimer
+  // (r150 decision, founder-approved 2026-08-02) — removing it fails the gate.
+  const rmApply = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/RainmakerApplyScreen.jsx'), 'utf8');
+  assert(/not a security/i.test(rmApply), 'RainmakerApplyScreen lost its "not a security" loyalty-bonus disclaimer — the r150 de-securitise decision requires it on-screen');
 });
 
 test('fulfill-crawl-returns-within-the-platform-limit', 'SPEC-164 (measured live 2026-08-01): Supabase kills an edge request at 150s. fulfill-crawl had no budget of its own, so it was killed MID-JOB — the first live run showed 11 jobs delivered and ZERO leads, because rows sat in _rowBuf and the process died before flushBuf ran, stranding every crawled row and abandoning a job already stamped crawling. The worker must stop taking NEW jobs well before the platform limit, flush, and return: fewer jobs that persist beat more that vanish.', '#169', () => {
@@ -6750,6 +6764,21 @@ test('the-founder-tiered-crawl-lists-are-committed-encoded-and-blocked-free', 'S
     assert(!(!new RegExp(`category: '${legacy}'`).test(ch)), `legacy category "${legacy}" has no niche any more — pending_review rows already tagged with it would be quarantined by the SPEC-86b cleanup`);
   }
   assert(!(!/TIER_BUDGET\[t\]/.test(stripComments(ch))), 'the query walk ignores the tier budget — every tier competes equally and the founder\'s "crawl first" order is decoration');
+test('accept-request-rpc-is-hardened-in-its-final-definition', 'SPEC-247 (night-fleet booking-loop agent finding, founder approved 2026-08-02): accept_request_with_time is SECURITY DEFINER and creates a CONFIRMED booking, but its original definition (20260616020000) verified only that the caller owns the service — nothing about the caller\'s relationship to the request. Any service owner could accept ANY request id and mint a booking + notification for that consumer; and the SPEC-128 duplicate-booking guard lived only in the app, so a direct API caller (or a UI race that slipped the client map) still created duplicates. The wall belongs in the function, where no caller can skip it. This gate replays migration history the #242 way: the LAST migration to define the function must carry (1) the self-accept block, (2) the server-side repeat-accept reuse of the existing active booking, and (3) must NOT reference bookings.request_id — no committed migration creates that column, so the definition would fail to apply. History stays immutable; the final word must be the hardened one.', '#246', () => {
+  const migDir = path.join(REPO_ROOT, 'supabase/migrations');
+  const files = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
+  let last = null;
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(migDir, f), 'utf8');
+    if (/create\s+or\s+replace\s+function\s+public\.accept_request_with_time/i.test(src)) last = { file: f, src };
+  }
+  assert(!!last, 'no migration defines accept_request_with_time — the provider accept flow has no RPC (SPEC-247)');
+  assert(/v_requester\s*=\s*auth\.uid\(\)/.test(last.src) && /cannot accept your own request/.test(last.src),
+    last.file + ': the FINAL definition of accept_request_with_time lost the self-accept block — a requester can mint a booking on their own request (SPEC-247 #1)');
+  assert(/from\s+public\.request_responses/i.test(last.src) && /status\s+not\s+in\s+\('cancelled',\s*'declined',\s*'expired'\)/i.test(last.src),
+    last.file + ': the FINAL definition lost the server-side repeat-accept guard — duplicates are only blocked in the app, which a direct API caller skips (SPEC-247 #2 / SPEC-128)');
+  assert(!/bookings[\s\S]{0,200}?request_id/.test(last.src.replace(/--.*$/gm, '')) || !/insert\s+into\s+public\.bookings[\s\S]{0,400}request_id/i.test(last.src),
+    last.file + ': the FINAL definition references bookings.request_id — no committed migration creates that column, so this migration fails to apply (SPEC-247 #3)');
 });
 
 
