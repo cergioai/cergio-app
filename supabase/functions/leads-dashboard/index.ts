@@ -5,6 +5,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb } from '../_shared/growthDb.ts';
+import { DMAS, DMA_STATE_SPELLINGS, resolveDma } from '../_shared/opsPayload.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -74,7 +75,13 @@ serve(async (req: Request) => {
     // `state` is the metro (NY = NYC, FL = Miami); `city` is the neighbourhood (Manhattan,
     // Brooklyn, Wynwood). Conflating them is what made the Miami filter appear to vanish:
     // one control was trying to mean both.
-    const cityFilter: string | null = body.city || null;      // metro: 'NY' | 'FL' | null
+    // SPEC-244: the metro filter is a Nielsen DMA code ('501' New York, '528'
+    // Miami-Ft. Lauderdale). Legacy 'NY'/'FL' values from older screens resolve to the
+    // DMA they meant. Matching uses the DMA's full spelling set — a single state
+    // equality was the state-as-DMA proxy the founder corrected (it also missed every
+    // row stored under another spelling, the SPEC-235 defect).
+    const dmaFilter: string | null = resolveDma(body.city) || null;
+    const dmaSpellings: string[] | null = dmaFilter ? (DMA_STATE_SPELLINGS[dmaFilter] || null) : null;
     const locality: string | null = body.locality || null;    // 'Brooklyn', 'Wynwood', …
     const typeFilter: string | null = body.serviceType || null;
     const categoryFilter: string | null = body.category || null;
@@ -127,10 +134,14 @@ serve(async (req: Request) => {
     }));
     bySource['(other/unlabeled)'] = Math.max(0, (await count((b) => b)) - Object.values(bySource).reduce((a, c) => a + c, 0));
 
-    // by city (NY / FL / other) and by status
-    const byCity = isLeadTable
-      ? { NYC: await count((b) => b.eq(stateCol, 'NY')), Miami: await count((b) => b.eq(stateCol, 'FL')) }
-      : {};
+    // by DMA (SPEC-244: Nielsen names, full spelling sets — NJ/CT rows inside the New
+    // York DMA count toward it) and by status
+    const byCity: Record<string, number> = {};
+    if (isLeadTable) {
+      for (const [code, d] of Object.entries(DMAS)) {
+        byCity[`${d.name} (DMA ${code})`] = await count((b) => b.in(stateCol, DMA_STATE_SPELLINGS[code] || []));
+      }
+    }
     const statuses = isLeadTable
       ? ['new', 'pending_review', 'queued', 'opted_in', 'do_not_contact']
       : ['new', 'crawling', 'delivered', 'failed', 'parked'];
@@ -170,7 +181,7 @@ serve(async (req: Request) => {
     // choices when the metro is Miami.
     const facet = async (col: string) => {
       let q2 = db.from(table).select(col).limit(20000);
-      if (cityFilter) q2 = q2.eq(stateCol, cityFilter);
+      if (dmaSpellings) q2 = q2.in(stateCol, dmaSpellings);
       const { data } = await q2;
       const set = new Set<string>();
       for (const r of (data || [])) { const v = String((r as any)[col] ?? '').trim(); if (v) set.add(v); }
@@ -186,7 +197,7 @@ serve(async (req: Request) => {
     if (categoryFilter) rq = rq.eq('category', categoryFilter);
     if (sinceHours > 0) rq = rq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
     rq = rq.order(tsCol, { ascending: false });
-    if (cityFilter) rq = rq.eq(stateCol, cityFilter);
+    if (dmaSpellings) rq = rq.in(stateCol, dmaSpellings);
     if (sourceFilter) rq = isPrefixSource(sourceFilter) ? rq.like(srcCol, `${sourceFilter}%`) : rq.eq(srcCol, sourceFilter);
     if (body.status) rq = rq.eq(statusCol, body.status);
     // "Contactable only" is the 40% bar made actionable: it exports the rows we can
@@ -201,7 +212,7 @@ serve(async (req: Request) => {
     if (typeFilter) cq = cq.eq('service_type', typeFilter);
     if (categoryFilter) cq = cq.eq('category', categoryFilter);
     if (sinceHours > 0) cq = cq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
-    if (cityFilter) cq = cq.eq(stateCol, cityFilter);
+    if (dmaSpellings) cq = cq.in(stateCol, dmaSpellings);
     if (sourceFilter) cq = isPrefixSource(sourceFilter) ? cq.like(srcCol, `${sourceFilter}%`) : cq.eq(srcCol, sourceFilter);
     if (body.status) cq = cq.eq(statusCol, body.status);
     if (body.contactableOnly && isLeadTable) cq = cq.or(`phone.not.is.null,${emailCol}.not.is.null`);
