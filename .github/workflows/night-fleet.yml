@@ -105,3 +105,11 @@ jobs:
           git push -f origin night-report
       - uses: actions/upload-artifact@v4
         with: { name: MORNING-REPORT, path: MORNING-REPORT.md, retention-days: 30 }
+      # SPEC-252 (founder: "close and verify back to back no hourly wait"): relaunch
+      # immediately while FW work remains; stops itself on ALL GREEN or a dead API key.
+      - name: Back-to-back relaunch
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/fleet-relaunch.mjs
