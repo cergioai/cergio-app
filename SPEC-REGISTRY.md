@@ -71,6 +71,8 @@ The drift detector (`qa.mjs` #186) fails the build if this file and the gates se
 | S-239 | yelp is PAUSED by founder order, never deleted: out of CRAWLS_ONLY, kept in the rota + dashboards with rows, pause reason surfaced on the yelp row, fleet brief records the order not a defect | #239 | — | CODED |
 | S-240 | PHASE1_CITY_QUOTA is the founder DMA formula ({"NY":50000,"FL":11700}, creators 5%): per-DMA buckets in both consumers, fail-closed map parsing, welded DMA→locations lists, Boston is the 9th metro | #240 | — | CODED |
 | S-241 | growthPause agrees with the cron record: the paused set is EMPTY while the resume migrations schedule all five growth crons; pausing again = set + unschedule + gate in one commit | #119 | — | CODED |
+| S-242 | Every cron job's FINAL schedule resolves its secrets: invoke via cergio_call_edge (Vault), never app.settings GUCs — a schedule that applies cleanly but can never run is a dead agent reading as scheduled | #242 | — | CODED |
+| S-243 | Every services source stops ITSELF at SOURCE_AUDIT_CAP=100 leads (founder: "all sources not just creators.. 100 leads each max to review (except yelp)"): checked before the claim, fail-closed on unreadable counts, multi-name row counting via one shared map, capped state rendered on the founder screen | #243 | — | CODED |
 <!-- REGISTRY:END -->
 
 ## Open drift (found by #186 on its first run)
