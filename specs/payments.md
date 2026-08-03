@@ -32,3 +32,11 @@ list and a spec built from buggy code.)_
 ## Progress log
 
 _(One line per CI-subagent run that changed something. Append, never rewrite.)_
+
+## Founder decisions on record — TESTING PLAN walk, 2026-08-02 (verbatim)
+
+- "enable card payments to pay with stripe ... or enable testing with dummy card with stripe... need to test book ..."
+- "user needs to pay when accepting a counter offer ... so their card is charged automatically... to eliminate the additional 'pay step'... (funds kept until job done.. per spec release)"
+
+FW-8 unblocks the walk (test-mode/dummy card); FW-9 IS this agent's green_when — the
+pay-fix cell (11 files, 377 hidden) is the prepared workspace for it.

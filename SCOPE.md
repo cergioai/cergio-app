@@ -28,3 +28,13 @@ May only GROW. To modify an existing line add `SHARED-CHANGE-APPROVED`.
 qa.mjs changes in this branch are PURELY ADDITIVE (31 insertions, 0 deletions — verified
 with `git diff --numstat`): new banned regexes inside gate #170, a presence assertion
 appended to #170, and the new #243 test appended before main(). No existing line modified.
+
+## Commit 2 — founder TESTING PLAN encoded into the fleet (2026-08-02)
+
+All 15 findings from the founder's live walk (Testing Plan Priorities.xlsx) become
+named FW-* defects on the responsible agents; booking-loop's wall extends to the six
+walked surfaces that previously had NO owner.
+
+- `agents/fleet.json`
+- `specs/booking-loop.md`
+- `specs/payments.md`

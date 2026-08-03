@@ -6764,6 +6764,8 @@ test('the-founder-tiered-crawl-lists-are-committed-encoded-and-blocked-free', 'S
     assert(!(!new RegExp(`category: '${legacy}'`).test(ch)), `legacy category "${legacy}" has no niche any more — pending_review rows already tagged with it would be quarantined by the SPEC-86b cleanup`);
   }
   assert(!(!/TIER_BUDGET\[t\]/.test(stripComments(ch))), 'the query walk ignores the tier budget — every tier competes equally and the founder\'s "crawl first" order is decoration');
+});
+
 test('accept-request-rpc-is-hardened-in-its-final-definition', 'SPEC-247 (night-fleet booking-loop agent finding, founder approved 2026-08-02): accept_request_with_time is SECURITY DEFINER and creates a CONFIRMED booking, but its original definition (20260616020000) verified only that the caller owns the service — nothing about the caller\'s relationship to the request. Any service owner could accept ANY request id and mint a booking + notification for that consumer; and the SPEC-128 duplicate-booking guard lived only in the app, so a direct API caller (or a UI race that slipped the client map) still created duplicates. The wall belongs in the function, where no caller can skip it. This gate replays migration history the #242 way: the LAST migration to define the function must carry (1) the self-accept block, (2) the server-side repeat-accept reuse of the existing active booking, and (3) must NOT reference bookings.request_id — no committed migration creates that column, so the definition would fail to apply. History stays immutable; the final word must be the hardened one.', '#246', () => {
   const migDir = path.join(REPO_ROOT, 'supabase/migrations');
   const files = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
