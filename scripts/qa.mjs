@@ -6054,9 +6054,12 @@ test('the-crawl-on-off-state-is-committed-not-hidden-in-a-secret', 'SPEC-207 (20
     let qm = null;
     try { qm = JSON.parse(cfg.PHASE1_CITY_QUOTA); } catch (_e) { qm = null; }
     assert(!(!qm || typeof qm !== 'object'), `PHASE1_CITY_QUOTA is "${cfg.PHASE1_CITY_QUOTA}" — not the founder formula map; both consumers fail closed and Phase 1 quota gating is dead`);
-    assert(!(qm.NY !== 50000), `NY quota is ${qm && qm.NY} — the founder set 50,000 for NYC verbatim; any other number is invented`);
-    assert(!(qm.FL !== 11700), `FL quota is ${qm && qm.FL} — the formula gives Miami 50,000 × 1,756,920/7,494,510 ≈ 23.4% → 11,700 rounded to the nearest 100`);
-    assert(!(Object.keys(qm).sort().join(',') !== 'FL,NY'), `quota map holds keys [${Object.keys(qm)}] — an extra DMA here silently authorises crawling a metro the founder never opened (Phase 2 quotas stay OUT until Phase 1 is full)`);
+    // SPEC-244 (founder, 2026-08-03): keys are Nielsen DMA codes, never state
+    // abbreviations — "THE DMA is technically held by it's own DMA definition (that's
+    // unrelated to state)". 501 = New York, 528 = Miami-Ft. Lauderdale.
+    assert(!(qm['501'] !== 50000), `New York (DMA 501) quota is ${qm && qm['501']} — the founder set 50,000 for NYC verbatim; any other number is invented`);
+    assert(!(qm['528'] !== 11700), `Miami-Ft. Lauderdale (DMA 528) quota is ${qm && qm['528']} — the formula gives Miami 50,000 × 1,756,920/7,494,510 ≈ 23.4% → 11,700 rounded to the nearest 100`);
+    assert(!(Object.keys(qm).sort().join(',') !== '501,528'), `quota map holds keys [${Object.keys(qm)}] — keys must be exactly the two Phase-1 Nielsen DMA codes; a state key is the state-as-DMA proxy the founder corrected (SPEC-244), and an extra DMA silently authorises crawling a metro the founder never opened`);
   }
   assert(!(String(cfg.CRAWLS_SUSPENDED) === 'false' && !String(cfg.CRAWLS_ONLY || '').trim()), 'crawling is ON with an EMPTY allowlist — that resumes all seven unaudited sources, which is the opposite of "creator sources only"');
   if (String(cfg.CRAWLS_SUSPENDED) === 'false') {
@@ -6638,6 +6641,42 @@ test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 
   assert(!(!/return Number\.isFinite\(n\) \? n : 100;/.test(ops)), 'sourceAuditCap no longer falls back to 100 on an unparseable value — a typo in the controls would silently disable every stop (fail OPEN)');
   const opsStripped = stripComments(ops);
   assert(!(!/state: 'audit-cap met'/.test(opsStripped)), 'the ops payload no longer marks a capped source — an idle source with no visible reason reads as broken, and broken-looking sources invite the next agent to "fix" a founder order');
+});
+
+test('the-dma-is-its-own-definition-not-the-state-column', 'SPEC-244 (founder, 2026-08-03, verbatim: "THE DMA is technically held by it\'s own DMA definition (that\'s unrelated to state)... orlando is also a key DMA in FL... NYC DMA includes Jersey City (state of new jersey)... this is standard DMA ... use a standard DMA definition / boundary"). SPEC-240 keyed the quota map on the state column ("NY"/"FL") as a proxy for the DMA — WRONG per founder: a state is not a DMA. Florida holds Miami-Ft. Lauderdale AND Orlando AND Tampa; the New York DMA reaches into New Jersey (Jersey City, Newark) and Connecticut. Everything DMA-shaped is now keyed on Nielsen DMA codes (501 = New York, 528 = Miami-Ft. Lauderdale; Nielsen 2024-25 Local Television Market Universe Estimates, the same source as the household counts). Membership is decided by LOCATION first (a committed LOCATION→DMA table — one source of truth), then by state spelling; an NJ or CT row inside the New York DMA is IN-target now, never an off-target finding. And the boundary lists must never be invented from memory: locations are added against the Nielsen county list as they appear, with the TODO standing in the code — south NJ belongs to the Philadelphia DMA, so a blanket NJ rule is wrong in both directions.', '#244', () => {
+  // 1) the shared definition exists, keyed by Nielsen code, with the Nielsen source cited
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const dmasBlock = (ops.match(/export const DMAS[\s\S]*?\n\};/) || [''])[0];
+  assert(!(!dmasBlock), 'DMAS is gone from _shared/opsPayload.ts — the one committed DMA definition no longer exists');
+  assert(!(!/'501': \{ name: 'New York', households: 7494510 \}/.test(dmasBlock)), 'DMA 501 (New York, 7,494,510 Nielsen households) is missing or altered — the quota formula and the filter both key on it');
+  assert(!(!/'528': \{ name: 'Miami-Ft\. Lauderdale', households: 1756920 \}/.test(dmasBlock)), 'DMA 528 (Miami-Ft. Lauderdale, 1,756,920 Nielsen households) is missing or altered');
+  assert(!(!/Local Television Market Universe Estimates/.test(ops)), 'the Nielsen boundary/size source is no longer cited — an uncited list is a list someone will "correct" from memory');
+  // 2) founder-named NJ locations are inside the New York DMA, decided by LOCATION first
+  const locBlock = (ops.match(/export const LOCATION_DMA[\s\S]*?\n\};/) || [''])[0];
+  assert(!(!/'Jersey City': '501'/.test(locBlock)), 'Jersey City fell out of the New York DMA — the founder named it verbatim; its rows would read off-target again');
+  assert(!(!/'Newark': '501'/.test(locBlock)), 'Newark fell out of the New York DMA — the founder named it');
+  const memberAt = stripComments(ops).indexOf('LOCATION_DMA[loc] ?? ');
+  assert(!(memberAt < 0), 'DMA membership no longer consults the LOCATION table before the state spelling — membership regressed to state-only, the exact proxy the founder corrected');
+  // 3) NJ/CT spellings map into the New York DMA; the state-as-DMA keys are gone
+  const spellBlock = (ops.match(/export const DMA_STATE_SPELLINGS[\s\S]*?\n\};/) || [''])[0];
+  for (const s of ["'NJ'", "'NEW JERSEY'", "'CT'", "'CONNECTICUT'"]) {
+    assert(!(!spellBlock.includes(s)), `${s} is not in the New York DMA spelling set — those rows would fall back to off-target, and the founder ruled them IN-target`);
+  }
+  assert(!(spellBlock.indexOf("'NJ'") < spellBlock.indexOf("'501'")), 'the spelling table lost its DMA-code keying');
+  // 4) both quota consumers key on DMA codes (the weld in #240 keeps their lists equal)
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const p1 = (fc.match(/const P1_DMA[\s\S]*?\n    \};/) || [''])[0];
+  assert(!(!/'501':/.test(p1)), 'fulfill-crawl P1_DMA is not keyed on DMA 501 — the quota map and the grouping no longer share keys, so every DMA reads "NO QUOTA" and Phase 2 locks forever');
+  assert(!(!/'Jersey City'/.test(p1)), 'Jersey City is missing from fulfill-crawl\'s DMA grouping — the welded lists must both carry it');
+  assert(!(/(^|\n)\s*NY:/.test(p1)), 'fulfill-crawl P1_DMA still carries a state key — the state-as-DMA proxy is back');
+  const scope = readFile('scripts/_growth-scope.mjs');
+  assert(!(!/'501':/.test(scope)), '_growth-scope DMA_LOCATIONS is not keyed on DMA 501');
+  assert(!(/short\.includes\(st\)/.test(stripComments(scope))), 'activeCities still matches cities to DMAs through the state tuple — membership must come from DMA_LOCATIONS, or Jersey City can never join its DMA');
+  // 5) the data explorer matches the DMA spelling set, never one state equality
+  const ld = stripComments(readFile('supabase/functions/leads-dashboard/index.ts'));
+  assert(!(/eq\(stateCol, cityFilter\)/.test(ld) || /eq\(stateCol, 'NY'\)/.test(ld)), 'the data explorer is back to a single state equality for the metro filter — it misses every other spelling AND re-keys the DMA on the state column');
+  assert(!(!/in\(stateCol, dmaSpellings\)/.test(ld)), 'the data explorer no longer filters by the DMA spelling set');
+  assert(!(!/resolveDma/.test(ld)), 'the data explorer no longer resolves legacy NY/FL filter values — older screens would silently return nothing');
 });
 
 

@@ -57,7 +57,8 @@
         "#205",
         "#239",
         "#240",
-        "#243"
+        "#243",
+        "#244"
       ],
       "defects": [
         "google_sponsored still calls SerpAPI while VENDOR_OF_SOURCE claims apify \u2014 the spend meter is wrong on this source",

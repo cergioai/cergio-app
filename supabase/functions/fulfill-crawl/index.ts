@@ -284,11 +284,16 @@ const gdb = growthDb();
     // DMA_LOCATIONS in scripts/_growth-scope.mjs (Deno cannot import it) — gate #240
     // welds the two, because two city lists that disagree is exactly the Part-6
     // two-sources-of-truth defect this project has already paid for.
+    // SPEC-244 — keys are Nielsen DMA codes (501 = New York, 528 = Miami-Ft.
+    // Lauderdale), never state abbreviations: a state is not a DMA (founder,
+    // 2026-08-03). Jersey City and Newark are NJ locations INSIDE the New York DMA —
+    // founder-named; further NJ/CT locations are TODO against the Nielsen county list.
     const P1_DMA: Record<string, string[]> = {
-      NY: ['New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'],
-      FL: ['Miami', 'Miami Beach', 'Brickell', 'Wynwood', 'Coral Gables', 'Doral',
-           'South Beach', 'Coconut Grove', 'Aventura', 'Little Havana', 'Hialeah',
-           'North Miami', 'Kendall', 'Pinecrest'],
+      '501': ['New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island',
+              'Jersey City', 'Newark'],
+      '528': ['Miami', 'Miami Beach', 'Brickell', 'Wynwood', 'Coral Gables', 'Doral',
+              'South Beach', 'Coconut Grove', 'Aventura', 'Little Havana', 'Hialeah',
+              'North Miami', 'Kendall', 'Pinecrest'],
     };
     const P1 = Object.values(P1_DMA).flat();
     let jobs: any[] = [];

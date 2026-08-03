@@ -55,11 +55,26 @@ export const PHASE2 = [
 // behind the phase-2 lock. fulfill-crawl carries the same grouping as a literal (Deno
 // cannot import this module); gate #240 welds the two so they cannot drift — two city
 // lists was already this project's Part-6 defect once.
+//
+// SPEC-244 — KEYED BY NIELSEN DMA, NOT BY STATE (founder, 2026-08-03, verbatim: "THE
+// DMA is technically held by it's own DMA definition (that's unrelated to state)...
+// orlando is also a key DMA in FL... NYC DMA includes Jersey City (state of new
+// jersey)... this is standard DMA ... use a standard DMA definition / boundary").
+// The old keys were the state column ('NY'/'FL') used as a proxy — WRONG per founder:
+// a state is not a DMA (Florida holds Miami-Ft. Lauderdale AND Orlando AND Tampa; the
+// New York DMA reaches into NJ and CT). Keys are now Nielsen DMA codes: 501 = New York,
+// 528 = Miami-Ft. Lauderdale (Nielsen 2024-25 Local Television Market Universe
+// Estimates — the same source as the household counts behind the quota formula).
+// Jersey City and Newark are in the 501 bucket because the founder named them; other
+// NJ/CT locations inside the New York DMA are TODO — add each one against the Nielsen
+// county list when it appears in real data, never from memory (south NJ belongs to the
+// Philadelphia DMA 504, so a blanket NJ rule would be wrong in both directions).
 export const DMA_LOCATIONS = {
-  NY: ['New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'],
-  FL: ['Miami', 'Miami Beach', 'Brickell', 'Wynwood', 'Coral Gables', 'Doral',
-       'South Beach', 'Coconut Grove', 'Aventura', 'Little Havana', 'Hialeah',
-       'North Miami', 'Kendall', 'Pinecrest'],
+  '501': ['New York', 'Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island',
+          'Jersey City', 'Newark'],
+  '528': ['Miami', 'Miami Beach', 'Brickell', 'Wynwood', 'Coral Gables', 'Doral',
+          'South Beach', 'Coconut Grove', 'Aventura', 'Little Havana', 'Hialeah',
+          'North Miami', 'Kendall', 'Pinecrest'],
 };
 
 // FAIL-CLOSED parser: only a JSON object with exclusively positive numeric values
@@ -90,8 +105,10 @@ export function activeCities(countsByCity = {}) {
   // DMA whose quota we do not know — fail closed, never "unbounded".
   const short = Object.keys(DMA_LOCATIONS).filter((dma) => !(PHASE1_DMA_QUOTA[dma] > 0) || dmaTotals[dma] < PHASE1_DMA_QUOTA[dma]);
   if (short.length) {
-    const cities = PHASE1.filter(([, st]) => short.includes(st));
-    return { cities, phase: 1, reason: `${short.map((d) => `${d} ${dmaTotals[d]}/${PHASE1_DMA_QUOTA[d] ?? '?'}`).join(', ')} below DMA quota` };
+    // SPEC-244: membership is by LOCATION → DMA (the committed grouping above), never
+    // by the state column — Jersey City is an NJ location inside the New York DMA.
+    const cities = PHASE1.filter(([c]) => short.some((dma) => (DMA_LOCATIONS[dma] || []).includes(c)));
+    return { cities, phase: 1, reason: `${short.map((d) => `DMA ${d} ${dmaTotals[d]}/${PHASE1_DMA_QUOTA[d] ?? '?'}`).join(', ')} below DMA quota` };
   }
   return { cities: [...PHASE1, ...PHASE2], phase: 2, reason: `every Phase-1 DMA at quota (${Object.entries(dmaTotals).map(([d, n]) => `${d} ${n}/${PHASE1_DMA_QUOTA[d]}`).join(', ')}) — Phase 2 unlocked` };
 }
