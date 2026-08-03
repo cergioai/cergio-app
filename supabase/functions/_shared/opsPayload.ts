@@ -58,6 +58,16 @@ export function sourceAuditCap(raw: string | undefined): number {
   const n = Number(raw ?? '100');
   return Number.isFinite(n) ? n : 100;
 }
+// SPEC-246 (founder, 2026-08-03, verbatim: "No I need 100 FRESH peices of DATA from
+// each to VERIFY they're solid to scale"): the cap counts FRESH rows only — fetched_at
+// at or after the committed AUDIT_FRESH_SINCE line. A source with 2,000 historical rows
+// still owes 100 new ones; the audit verifies the source works NOW. An unparseable
+// value returns null and callers count ALL rows instead — fail closed: that can only
+// pause a source sooner, never spend more.
+export function auditFreshSince(raw: string | undefined): string | null {
+  const t = Date.parse(String(raw ?? ''));
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
 
 // ── SPEC-244 — THE DMA IS ITS OWN DEFINITION, NOT THE STATE COLUMN ──────────────────
 // Founder, 2026-08-03, verbatim: "THE DMA is technically held by it's own DMA
@@ -248,15 +258,23 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // used-before-declared is this repo's four-outage trap.
   {
     const AUDIT_CAP = sourceAuditCap(Deno.env.get('SOURCE_AUDIT_CAP'));
+    const FRESH = auditFreshSince(Deno.env.get('AUDIT_FRESH_SINCE'));
     if (AUDIT_CAP > 0) {
       for (const [src, keys] of Object.entries(AUDIT_CAP_SOURCES)) {
-        const { count: capCount, error: capErr } = await gdb.from('leads_services')
+        let capQ = gdb.from('leads_services')
           .select('id', { count: 'exact', head: true }).in('data_source', keys);
+        if (FRESH) capQ = capQ.gte('fetched_at', FRESH);
+        const { count: capCount, error: capErr } = await capQ;
         if (capErr) { countErrors.push(`audit-cap count ${src}: ${capErr.message}`); continue; }
         if ((capCount ?? 0) >= AUDIT_CAP && !sourceStates[src]) {
           sourceStates[src] = {
             state: 'audit-cap met',
-            reason: `audit cap met — ${capCount} leads of ${AUDIT_CAP} max to review (founder, 2026-08-03: "add all sources not just creators to the crawl at 100 leads each max to review"). Stopped itself; awaiting founder audit of sample-100-${src}.csv (SPEC-243).`,
+            reason: `audit cap met — ${capCount} FRESH leads (since ${FRESH ?? 'ever'}) of ${AUDIT_CAP} max to review (founder, 2026-08-03: "No I need 100 FRESH peices of DATA from each to VERIFY they're solid to scale"). Stopped itself; awaiting founder audit of sample-100-${src}.csv (SPEC-246).`,
+          };
+        } else if (!sourceStates[src]) {
+          sourceStates[src] = {
+            state: 'gathering fresh 100',
+            reason: `${capCount ?? 0} of ${AUDIT_CAP} FRESH leads since ${FRESH ?? 'ever'} (SPEC-246) — crawling until the fresh hundred is in, then it stops itself for audit.`,
           };
         }
       }
