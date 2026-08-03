@@ -6658,6 +6658,19 @@ test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 
   // 100-creators target — the SPEC-230 failure: no automatic rule may remove the last
   // path to a founder-set target.
   assert(!(/(^|\n)\s*ig_services:/.test(mapBlock)), 'ig_services is in AUDIT_CAP_SOURCES — its 262 service rows would cap it out of the rota while its CREATOR half sits at 0, silently closing the last paid path to the 100-creators founder target (SPEC-230 shape)');
+  // SPEC-248 — the contactability bar (SPEC-206) is the THIRD automatic rule found
+  // closing the same creator path in one night: it measures phone/owner_email on the
+  // SERVICE half of a dual-class source (6% for IG, correctly) and parked the queue
+  // fulfill-crawl claims from. ig_services must be EXEMPT and its parked jobs
+  // un-parked every run — this literally re-enacts the SPEC-230 story otherwise.
+  {
+    const gd = readFile('scripts/growth-dedupe-queue.mjs');
+    const barAt = gd.indexOf('THE CONTACTABILITY BAR');
+    assert(!(barAt < 0), 'the contactability bar moved or was renamed — this gate can no longer see it; fix the gate');
+    const barBlock = gd.slice(barAt);
+    assert(!(!/if \(String\(r\.data_source\) === 'ig_services'\)/.test(barBlock)), 'ig_services is no longer exempt from the contactability bar — its 6%-reachable SERVICE half parks the queue and the creator half dies with it (the exact SPEC-230 mechanism, third occurrence)');
+    assert(!(!/status='new'[\s\S]{0,200}source='ig_services'/.test(barBlock)), 'parked ig_services jobs are never un-parked — the exemption stops future parking but the queue stays dead from past runs');
+  }
   // SPEC-246 — the cap counts FRESH rows only (founder verbatim: "No I need 100 FRESH
   // peices of DATA from each to VERIFY they're solid to scale"). Without the freshness
   // line, every source with historical rows pauses instantly and the founder audits
