@@ -12,14 +12,56 @@ export const CITIES = [
 ];
 // Blocked categories deliberately absent (no massage/tattoo/makeup/personal chef,
 // no medical/peptide/med-spa, no SHAFT).
-export const TYPES = [
-  'dog trainer', 'pet sitter', 'personal trainer', 'nutritionist', 'tutor',
-  'housekeeper', 'plumber', 'electrician', 'handyman', 'contractor', 'babysitter',
-  'driver', 'personal assistant', 'life coach', 'photographer', 'home organizer',
-  'barber', 'mover', 'house cleaning', 'landscaping', 'locksmith',
-  'appliance repair', 'dog walker', 'hair stylist', 'window cleaning',
-  'pressure washing', 'junk removal', 'painter',
+//
+// SPEC-245 — THE FOUNDER'S TIERED LIST (2026-08-02, recorded verbatim in
+// specs/CERGIO-CRAWL-LISTS.md — that file is the source of truth; this is its
+// encoding). Tier order IS crawl order: the seeder emits Tier 1 first, so Tier-1 jobs
+// carry the oldest created_at and the FIFO priority queue drains them before Tier 2,
+// and Tier 2 before Tier 3. The founder marked four Tier-3 entries BLOCKED (sports
+// massage, private chef, DJ, makeup artist) — they are deliberately ABSENT here and
+// gate #245 runs every entry against fulfill-crawl's blocklist so a blocked type can
+// never ride in on a list edit. The PHASE 3 list is FORTHCOMING from the founder —
+// do not invent it; these lists are complete until it arrives.
+export const TYPES_T1 = [
+  'personal trainer', 'dog walker', 'dog trainer', 'babysitter', 'house cleaning',
+  'handyman', 'hair stylist', 'photographer', 'tutor', 'mover', 'pet sitter',
+  'home organizer',
 ];
+export const TYPES_T2 = [
+  'nutritionist', 'life coach', 'personal assistant', 'driver', 'housekeeper',
+  'plumber', 'electrician', 'contractor', 'painter', 'landscaping', 'locksmith',
+  'appliance repair', 'window cleaning', 'pressure washing', 'junk removal', 'barber',
+];
+export const TYPES_T3 = [
+  'carpet cleaning', 'upholstery cleaning', 'gutter cleaning', 'roof repair', 'HVAC',
+  'air duct cleaning', 'pest control', 'pool cleaning', 'tile and grout',
+  'drywall repair', 'flooring', 'carpentry', 'furniture assembly', 'tv mounting',
+  'smart home installation', 'car detailing', 'mobile mechanic', 'bike repair',
+  'computer repair', 'phone repair', 'laundry and dry cleaning pickup',
+  'errand runner', 'senior companion', 'night nurse', 'postpartum doula',
+  'newborn care specialist', 'nanny', 'after-school care', 'music teacher',
+  'language tutor', 'test prep tutor', 'swim instructor', 'tennis coach',
+  'golf coach', 'yoga instructor', 'pilates instructor', 'run coach',
+  'physical therapist', 'stretch therapist', 'meal prep', 'bartender for hire',
+  'event server', 'event planner', 'wedding planner', 'florist', 'videographer',
+  'photo booth', 'live musician', 'balloon and decor', 'face painter',
+  'kids entertainer', 'pet groomer', 'mobile vet', 'dog boarding', 'cat sitter',
+  'aquarium maintenance', 'plant care', 'interior designer', 'home stager',
+  'closet designer', 'handywoman', 'junk hauling', 'moving labor',
+  'packing service', 'storage organizer', 'estate cleanout',
+  'pressure wash driveway', 'window tinting', 'solar panel cleaning',
+  'holiday lighting', 'snow removal', 'lawn mowing', 'tree trimming',
+  'irrigation repair', 'fence repair', 'deck staining', 'garage door repair',
+  'locksmith emergency', 'security camera install', 'notary', 'bookkeeper',
+  'tax preparer', 'resume writer', 'career coach', 'business coach',
+  'social media manager', 'web designer', 'brand photographer', 'hair braider',
+  'barber home visit', 'nail technician', 'lash technician', 'brow artist',
+  'spray tan', 'personal stylist', 'tailor and alterations', 'shoe repair',
+  'dry cleaner delivery',
+];
+// TYPES is DERIVED — tier order is the one definition of crawl order. Nothing may
+// restate these lists (Part-6: two copies is a defect on its own).
+export const TYPES = [...TYPES_T1, ...TYPES_T2, ...TYPES_T3];
 
 // ─── PHASE GATING (SPEC-205, founder 2026-08-02) ────────────────────────────────
 // "spec calls for miami and nyc to be filled first up to quota before moving to the
