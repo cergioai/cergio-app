@@ -10,6 +10,8 @@ import { execSync } from 'node:child_process';
 const id = process.argv[2];
 const fleet = JSON.parse(fs.readFileSync('agents/fleet.json', 'utf8'));
 const a = fleet.agents.find((x) => x.id === id);
+// SPEC-251: suspended = transferred to the growth project. Exit quietly, never run.
+if (a && a.suspended) { console.log(`${id}: SUSPENDED — ${String(a.suspended).slice(0, 120)}`); process.exit(0); }
 if (!a) { console.error(`no agent "${id}" in the fleet`); process.exit(1); }
 
 const now = new Date().toISOString();
