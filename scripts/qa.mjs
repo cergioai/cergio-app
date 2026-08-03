@@ -6249,7 +6249,14 @@ test('a-subagent-fix-must-prove-itself-and-can-never-merge-itself', 'SPEC-218 (f
   // it is now the first thing I check when a new gate behaves oddly.
   const prCode = pr.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
   assert(!(!/gh pr create/.test(prCode)), 'a kept fix never becomes a PR, so the work would be invisible');
-  assert(!(/--auto|pr merge/.test(prCode)), 'the subagent can merge its own PR — every past outage here reached production through an automatic merge');
+  // SPEC-250 FLIP (founder, 2026-08-03, verbatim: "need agents to commit any fixes
+  // directly without approval if it's agasint spec.. need to expediate their delivery to
+  // NOW... back to back... they can fix at same speed as you..."). This assert used to
+  // BAN auto-merge (SPEC-218, 2026-08-02); the founder reversed it a day later, so the
+  // gate now REQUIRES auto-merge to be armed — the machine gate (required CI check under
+  // branch protection) replaces the human click, exactly the SPEC-241 gate-flip
+  // procedure: behaviour + gate flipped in ONE commit, old rule kept in this text.
+  assert(!(!/gh pr merge --auto/.test(prCode)), 'a kept fix waits for a human click — founder ordered gate-verified fixes to merge themselves (SPEC-250); arm gh pr merge --auto after pr create');
   assert(!(/HEAD:main|push origin main/.test(prCode)), 'the subagent pushes to main directly');
   assert(!(!/agent\/\$\{id\}/.test(pr)), 'the branch does not carry the agent id, so a bad change is not attributable to one owner');
   const wf = readFile('.github/workflows/night-fleet.yml');

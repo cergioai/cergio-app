@@ -1,22 +1,19 @@
 # SCOPE
 
-Founder, 2026-08-03: "need to expedite my fixes... how can agents execute in parallel."
-One branch, two commits:
+SPEC-250 — founder, 2026-08-03, verbatim: "need agents to commit any fixes directly
+without approval if it's agasint spec.. need to expediate their delivery to NOW... back
+to back... they can fix at same speed as you..."
 
-1. **FW-15 fixed** — response rows in the Jobs inbox carry the compact timestamp.
-2. **Fleet parallelized** — booking-loop's founder-walk load split across three NEW
-   subagents (inbox / profile-ux / ig-verify), matrix 9 → 12, cadence 3h → HOURLY.
-   FW-3 and FW-14 annotated with their live DB-probe verdicts so no agent chases a
-   ghost (FW-3 = consistent data; FW-14 = real historical duplicate rows, twins
-   cancelled, server guard live).
+One commit: agent PRs arm auto-merge (machine gate replaces the human click; required CI
+check under branch protection is still the sole merge authority; needs_founder findings
+still refused), the fleet re-fires on every merge to main (back-to-back), and gate #218
+is FLIPPED per the SPEC-241 procedure — behaviour + gate in one commit, old rule
+preserved in the gate text.
 
-- `src/screens/JobsInboxScreen.jsx`
-- `agents/fleet.json`
+- `scripts/agent-pr.mjs`
 - `.github/workflows/night-fleet.yml`
-- `specs/inbox.md`
-- `specs/profile-ux.md`
-- `specs/ig-verify.md`
-- `specs/booking-loop.md`
+- `agents/fleet.json`
+- `scripts/qa.mjs`
 - `SCOPE.md`
 
 ## Shared files
@@ -26,3 +23,8 @@ May only GROW. To modify an existing line add `SHARED-CHANGE-APPROVED`.
 - `supabase/functions/_shared/**`
 - `supabase/functions/fulfill-crawl/index.ts`
 - `scripts/qa.mjs`
+
+SHARED-CHANGE-APPROVED — qa.mjs gate #218: ONE assert flipped from banning auto-merge to
+requiring it, executing the founder's verbatim 2026-08-03 order. This is the SPEC-241
+gate-flip procedure: the gate encoded a founder decision; the founder reversed it; the
+gate flips WITH the new verbatim quote in the same commit. No other existing line changes.
