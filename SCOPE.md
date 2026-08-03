@@ -1,20 +1,22 @@
 # SCOPE
 
-Founder decisions of 2026-08-02 ("1. ok — 2. desecuritize" on the night-fleet run-1
-findings), shipped as two commits on one branch:
+Founder, 2026-08-03: "need to expedite my fixes... how can agents execute in parallel."
+One branch, two commits:
 
-1. **De-securitise** `/rainmaker/apply` + `/about` (the r150 staged patch, founder-approved
-   verbatim, plus the night-fleet legal-copy agent's /about APGI finding) and teach gate
-   #170 the paraphrases so they can never silently return.
-2. **SPEC-247** — harden `accept_request_with_time` server-side (self-accept block +
-   server-side SPEC-128 idempotency) per the booking-loop agent's finding, with gate #246
-   replaying migration history for the FINAL definition.
+1. **FW-15 fixed** — response rows in the Jobs inbox carry the compact timestamp.
+2. **Fleet parallelized** — booking-loop's founder-walk load split across three NEW
+   subagents (inbox / profile-ux / ig-verify), matrix 9 → 12, cadence 3h → HOURLY.
+   FW-3 and FW-14 annotated with their live DB-probe verdicts so no agent chases a
+   ghost (FW-3 = consistent data; FW-14 = real historical duplicate rows, twins
+   cancelled, server guard live).
 
-- `src/screens/RainmakerApplyScreen.jsx`
-- `src/screens/AboutScreen.jsx`
-- `src/lib/rewards.js`
-- `scripts/qa.mjs`
-- `supabase/migrations/20260803020000_harden_accept_request_with_time.sql`
+- `src/screens/JobsInboxScreen.jsx`
+- `agents/fleet.json`
+- `.github/workflows/night-fleet.yml`
+- `specs/inbox.md`
+- `specs/profile-ux.md`
+- `specs/ig-verify.md`
+- `specs/booking-loop.md`
 - `SCOPE.md`
 
 ## Shared files
@@ -24,17 +26,3 @@ May only GROW. To modify an existing line add `SHARED-CHANGE-APPROVED`.
 - `supabase/functions/_shared/**`
 - `supabase/functions/fulfill-crawl/index.ts`
 - `scripts/qa.mjs`
-
-qa.mjs changes in this branch are PURELY ADDITIVE (31 insertions, 0 deletions — verified
-with `git diff --numstat`): new banned regexes inside gate #170, a presence assertion
-appended to #170, and the new #243 test appended before main(). No existing line modified.
-
-## Commit 2 — founder TESTING PLAN encoded into the fleet (2026-08-02)
-
-All 15 findings from the founder's live walk (Testing Plan Priorities.xlsx) become
-named FW-* defects on the responsible agents; booking-loop's wall extends to the six
-walked surfaces that previously had NO owner.
-
-- `agents/fleet.json`
-- `specs/booking-loop.md`
-- `specs/payments.md`
