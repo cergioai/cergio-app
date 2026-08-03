@@ -56,11 +56,14 @@
         "#187",
         "#205",
         "#239",
-        "#240"
+        "#240",
+        "#243"
       ],
       "defects": [
         "google_sponsored still calls SerpAPI while VENDOR_OF_SOURCE claims apify \u2014 the spend meter is wrong on this source",
-        "NOT-A-DEFECT, standing order: yelp is PAUSED by the founder (2026-08-02, verbatim: 'don't delete yelp.. just pause as a source'). It stays in SOURCES_RR, the seeder and the dashboards with its rows kept, and stays OUT of CRAWLS_ONLY until the founder re-activates it. Do not 'fix' its silence, do not delete it, do not re-enable it \u2014 gate #239 enforces all of this."
+        "fulfillYellowPagesApify writes data_source 'yellowpages' instead of its rota name \u2014 the audit export's sample-100-yellowpages_apify.csv and the spend meter's per-lead count both read 0 beside its real rows (mechanism C). The SPEC-243 cap routes around it via AUDIT_CAP_SOURCES; the label itself is still wrong and needs its own micro-PR (relabel or dual-count, decide with history in view).",
+        "NOT-A-DEFECT, standing order: yelp is PAUSED by the founder (2026-08-02, verbatim: 'don't delete yelp.. just pause as a source'). It stays in SOURCES_RR, the seeder and the dashboards with its rows kept, and stays OUT of CRAWLS_ONLY until the founder re-activates it. Do not 'fix' its silence, do not delete it, do not re-enable it \u2014 gate #239 enforces all of this.",
+        "NOT-A-DEFECT, standing order: a source at SOURCE_AUDIT_CAP=100 leads is meant to be idle (founder, 2026-08-03, verbatim: 'add all sources not just creators to the crawl at 100 leads each max to review (except yelp)'). It stopped ITSELF; the founder audits sample-100-<source>.csv and names cleared sources. Do not 'fix' its silence, do not raise the cap \u2014 gate #243 enforces this."
       ],
       "green_when": "every paid source routes through Apify, or is parked with the reason recorded"
     },
