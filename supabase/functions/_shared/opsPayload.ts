@@ -51,6 +51,51 @@ export function sourceAuditCap(raw: string | undefined): number {
   const n = Number(raw ?? '100');
   return Number.isFinite(n) ? n : 100;
 }
+
+// ── SPEC-244 — THE DMA IS ITS OWN DEFINITION, NOT THE STATE COLUMN ──────────────────
+// Founder, 2026-08-03, verbatim: "THE DMA is technically held by it's own DMA
+// definition (that's unrelated to state)... orlando is also a key DMA in FL... NYC DMA
+// includes Jersey City (state of new jersey)... this is standard DMA ... use a
+// standard DMA definition / boundary".
+// Everything DMA-shaped is keyed on Nielsen DMA codes (Nielsen 2024-25
+// "Local Television Market Universe Estimates" — the same source as the household
+// counts behind the quota formula). A state is not a DMA: Florida holds Miami-Ft. Lauderdale AND Orlando AND
+// Tampa; the New York DMA reaches into NJ and CT. ONE definition, exported from here,
+// consumed by the ops payload, the data explorer and (as a welded literal) fulfill-crawl.
+export const DMAS: Record<string, { name: string; households: number }> = {
+  '501': { name: 'New York', households: 7494510 },
+  '528': { name: 'Miami-Ft. Lauderdale', households: 1756920 },
+};
+// LOCATION → DMA overrides, consulted BEFORE any state-based rule: DMA membership is a
+// property of the place, not the state column. Jersey City and Newark are here because
+// the founder named them. Add further NJ/CT locations against the Nielsen county list
+// when they appear in real data — never from memory (TODO stands until then; south NJ
+// belongs to the Philadelphia DMA 504, so a blanket NJ rule is wrong in both directions).
+export const LOCATION_DMA: Record<string, string> = {
+  'Jersey City': '501',
+  'Newark': '501',
+};
+// Raw `state`-column spellings that map into each DMA, for rows whose location is not
+// in LOCATION_DMA. NJ and CT sit inside the New York DMA per the founder's order — an
+// NJ or CT row is IN-target now, not an off-target finding. TODO: if we ever hold NJ
+// rows from the Philadelphia DMA or CT rows from the Hartford DMA, they must be split
+// by location, not by state — that is the whole point of SPEC-244.
+export const DMA_STATE_SPELLINGS: Record<string, string[]> = {
+  '501': ['NY', 'NEW YORK', 'NYC', 'NJ', 'NEW JERSEY', 'CT', 'CONNECTICUT'],
+  '528': ['FL', 'FLORIDA', 'MIAMI'],
+};
+// Legacy filter values ('NY'/'FL' — the old state-as-DMA keys) still arrive from older
+// screens; they resolve to the DMA they meant. New code sends the code itself.
+export function resolveDma(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const v = String(value).trim();
+  if (DMAS[v]) return v;
+  const up = v.toUpperCase();
+  for (const [code, spellings] of Object.entries(DMA_STATE_SPELLINGS)) {
+    if (spellings.includes(up)) return code;
+  }
+  return null;
+}
 // CREATOR sources — the algorithm decided these (each with its own discovery method):
 // SPEC-233 (founder, 2026-08-02): "we're supposed to have 2 (IG services and the other IG
 // local creator search)". There are TWO, and listing six meant four permanently-zero rows
@@ -113,9 +158,12 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     let out = q;
     // Match EVERY spelling of the chosen DMA. Filtering on 'NY' alone missed every row
     // stored as 'NEW YORK', so the count dropped when a filter was applied and the filter
-    // looked broken rather than the data looking dirty.
+    // looked broken rather than the data looking dirty. SPEC-244: the filter value is a
+    // Nielsen DMA code (legacy 'NY'/'FL' resolve to the code), and its spellings include
+    // the NJ/CT rows that live inside the New York DMA.
     if (city) {
-      const spellings = Object.entries(DMA_CANON).filter(([, v]) => v === city).map(([k]) => k);
+      const dmaCode = resolveDma(city);
+      const spellings = dmaCode ? DMA_STATE_SPELLINGS[dmaCode] : [];
       out = out.in('state', spellings.length ? spellings : [city]);
     }
     if (location) out = out.eq('city', location);
@@ -215,8 +263,10 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
     const { count: total } = await q((b: any) => b);
     const { count: withEmail } = await q((b: any) => b.not('email', 'is', null));
     const { count: withFollowers } = await q((b: any) => b.not('followers', 'is', null));
-    const { count: nyc } = await q((b: any) => b.eq('state', 'NY'));
-    const { count: miami } = await q((b: any) => b.eq('state', 'FL'));
+    // SPEC-244: DMA membership by spelling set, never a single state equality — an NJ
+    // creator inside the New York DMA counts toward NYC.
+    const { count: nyc } = await q((b: any) => b.in('state', DMA_STATE_SPELLINGS['501']));
+    const { count: miami } = await q((b: any) => b.in('state', DMA_STATE_SPELLINGS['528']));
     creatorsBySource[cs] = { total: total ?? 0, withEmail: withEmail ?? 0, withFollowers: withFollowers ?? 0, nyc: nyc ?? 0, miami: miami ?? 0,
                              what: CREATOR_SOURCE_META[cs]?.what || '', where: CREATOR_SOURCE_META[cs]?.where || '' };
   }
@@ -244,28 +294,34 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   //   1. CANONICALISE first: full names and casing collapse to one code.
   //   2. Only the AUTHORISED Phase-1 DMAs are offered. Anything else is an OFF-TARGET row,
   //      which is a data-quality finding, not a filter option.
-  const DMA_CANON: Record<string, string> = {
-    NY: 'NY', 'NEW YORK': 'NY', NYC: 'NY',
-    FL: 'FL', FLORIDA: 'FL', MIAMI: 'FL',
-  };
-  const DMA_NAMES: Record<string, string> = { NY: 'NYC', FL: 'Miami' };
+  // SPEC-244: DMA_CANON is DERIVED from the one shared spelling table — a second
+  // hand-written copy here is how two lists drift. Values are Nielsen DMA codes.
+  const DMA_CANON: Record<string, string> = Object.fromEntries(
+    Object.entries(DMA_STATE_SPELLINGS).flatMap(([code, ss]) => ss.map((s) => [s, code])),
+  );
+  const DMA_NAMES: Record<string, string> = Object.fromEntries(
+    Object.entries(DMAS).map(([code, d]) => [code, d.name]),
+  );
   const dmaCounts: Record<string, number> = {};
   const offScope: Record<string, number> = {};
   try {
-    const { data: dl } = await gdb.from('leads_services').select('state').limit(20000);
+    // Membership is decided by LOCATION first (LOCATION_DMA — Jersey City is an NJ row
+    // inside the New York DMA), then by state spelling. Only a row matching neither is
+    // an off-target finding — keyed on DMA membership, not on the state column.
+    const { data: dl } = await gdb.from('leads_services').select('state, city').limit(20000);
     for (const r of (dl || [])) {
       const raw = String((r as any).state ?? '').trim().toUpperCase();
-      if (!raw) continue;
-      const code = DMA_CANON[raw];
+      const loc = String((r as any).city ?? '').trim();
+      const code = LOCATION_DMA[loc] ?? (raw ? DMA_CANON[raw] : undefined);
       if (code) dmaCounts[code] = (dmaCounts[code] || 0) + 1;
-      else offScope[raw] = (offScope[raw] || 0) + 1;
+      else if (raw) offScope[raw] = (offScope[raw] || 0) + 1;
     }
   } catch (_e) {}
   // CATEGORY (service type) facet, scoped to the current DMA + location.
   const categoryCounts: Record<string, number> = {};
   try {
     let cq2 = gdb.from('leads_services').select('service_type, state, city').limit(20000);
-    if (city) cq2 = cq2.eq('state', city);
+    if (city) { const d = resolveDma(city); cq2 = d ? cq2.in('state', DMA_STATE_SPELLINGS[d]) : cq2.eq('state', city); }
     if (location) cq2 = cq2.eq('city', location);
     const { data: ct } = await cq2;
     for (const r of (ct || [])) { const k = String((r as any).service_type ?? '').trim(); if (k) categoryCounts[k] = (categoryCounts[k] || 0) + 1; }
@@ -282,7 +338,7 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   const locations: Record<string, number> = {};
   try {
     let lq = gdb.from('leads_services').select('city, state').limit(20000);
-    if (city) lq = lq.eq('state', city);
+    if (city) { const d = resolveDma(city); lq = d ? lq.in('state', DMA_STATE_SPELLINGS[d]) : lq.eq('state', city); }
     const { data: cl } = await lq;
     for (const r of (cl || [])) {
       const raw = String((r as any).city ?? '').trim().replace(/\s+/g, ' ');
@@ -301,18 +357,29 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // selecting "4 weeks" changed nothing on the numbers the founder actually reads. A
   // filter that visibly does nothing is worse than no filter: it makes the page look
   // wrong and hides the fact that the data behind it is fine.
-  const dmaCount = async (state: string, table: string, col?: string) => {
-    let q = gdb.from(table).select('id', { count: 'exact', head: true }).eq('state', state);
+  // SPEC-244: the counter is keyed by DMA code and matches every spelling in the DMA
+  // (NJ/CT rows inside the New York DMA count toward it) — a single state equality here
+  // is the state-as-DMA proxy the founder corrected.
+  const dmaCount = async (dmaCode: string, table: string) => {
+    let q = gdb.from(table).select('id', { count: 'exact', head: true }).in('state', DMA_STATE_SPELLINGS[dmaCode] || []);
     if (location) q = q.eq('city', location);
     if (sinceHours > 0) q = q.gte(table === 'leads_services' ? 'fetched_at' : 'created_at', new Date(Date.now() - sinceHours * 36e5).toISOString());
     const { count } = await q;
     return count ?? 0;
   };
-  const nycSvc = await dmaCount('NY', 'leads_services');
-  const miaSvc = await dmaCount('FL', 'leads_services');
-  const nycCre = await dmaCount('NY', 'leads_influencers');
-  const miaCre = await dmaCount('FL', 'leads_influencers');
-  const counter = { nyc_services: nycSvc, nyc_target: 50000, miami_services: miaSvc, miami_target: 20000,
+  const nycSvc = await dmaCount('501', 'leads_services');
+  const miaSvc = await dmaCount('528', 'leads_services');
+  const nycCre = await dmaCount('501', 'leads_influencers');
+  const miaCre = await dmaCount('528', 'leads_influencers');
+  // Targets come from the committed founder quota map (keys are DMA codes, SPEC-240/244).
+  // The literal fallback repeats the founder numbers gate #207 pins — the screen showed
+  // miami_target 20,000 for a while, a number the founder never set.
+  let quotaMap: Record<string, number> = { '501': 50000, '528': 11700 };
+  try {
+    const j = JSON.parse(Deno.env.get('PHASE1_CITY_QUOTA') || '');
+    if (j && typeof j === 'object' && !Array.isArray(j) && Object.keys(j).length) quotaMap = j;
+  } catch (_e) { /* keep the pinned fallback */ }
+  const counter = { nyc_services: nycSvc, nyc_target: quotaMap['501'] ?? 50000, miami_services: miaSvc, miami_target: quotaMap['528'] ?? 11700,
                     nyc_creators: nycCre, miami_creators: miaCre, services_new_24h: svcNew24 ?? 0 };
 
   // latest supply-engine run (bugs found + auto-fixes)
