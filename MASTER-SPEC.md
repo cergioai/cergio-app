@@ -130,6 +130,7 @@ elsewhere, these win.
 | S-242 | Every cron job's FINAL schedule resolves its secrets: invoke via cergio_call_edge (Vault), never app.settings GUCs — a schedule that applies cleanly but can never run is a dead agent reading as scheduled | #242 | — | CODED |
 | S-243 | Every services source stops ITSELF at SOURCE_AUDIT_CAP=100 leads (founder: "all sources not just creators.. 100 leads each max to review (except yelp)"): checked before the claim, fail-closed on unreadable counts, multi-name row counting via one shared map, capped state rendered on the founder screen | #243 | — | CODED |
 | S-244 | The DMA is its own Nielsen definition, never the state column (founder: "that's unrelated to state.. use a standard DMA definition / boundary"): everything DMA-shaped keyed on codes 501/528, LOCATION→DMA decides membership first (Jersey City/Newark → 501), NJ/CT rows in-target, no boundary invented beyond founder-named seeds | #244 | — | CODED |
+| S-245 | The founder's tiered crawl lists are committed (specs/CERGIO-CRAWL-LISTS.md) and encoded: TYPES derived from pinned tier arrays (Tier 1 in exact founder order, seeded first), every entry blocklist-verified, creator NICHE_TIERS with per-run tier budget, TARGET_CATEGORIES derived from niches (SPEC-86b quarantine trap closed), Phase 3 placeholder stands | #245 | — | CODED |
 <!-- REGISTRY:END -->
 
 ---
