@@ -1,6 +1,6 @@
 {
   "_what": "The overnight fleet. One agent per feature area, each with owned files, the gates that guard it, and the named defects it is accountable for.",
-  "_why_verification_not_autofix": "Every agent here VERIFIES and REPORTS. None of them edits code unattended. That is deliberate: every serious outage on this project came from an unattended change that passed static checks — a blank homepage, a white /auth, every crawled row discarded. An agent that reports a defect with evidence costs nothing if it is wrong. An agent that edits at 4am and is wrong costs a morning. Fixes are approved in the morning and applied inside a cell.",
+  "_why_verification_not_autofix": "AMENDED BY SPEC-250 (founder, 2026-08-03, verbatim: 'need agents to commit any fixes directly without approval if it's agasint spec.. need to expediate their delivery to NOW... back to back... they can fix at same speed as you...'). Agents still verify-then-act behind the same three hard checks (full qa suite + production build + scope guard, byte-for-byte revert on failure), and needs_founder findings are still refused — but a KEPT fix now arms auto-merge and lands the moment the required CI check is green. The human click is removed; the machine gate is not. Original 2026-08-02 rationale preserved: every serious outage came from an unattended change that passed static checks — which is why the gate suite, not the model's confidence, remains the sole merge authority.",
   "agents": [
     {
       "id": "payments",

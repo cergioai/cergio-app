@@ -15,7 +15,16 @@ on:
     - cron: '0 * * * *'    # HOURLY (founder 2026-08-03: "need to expedite my fixes") — was every 3h
   workflow_dispatch:
   push:
-    paths: ['agents/fleet.json', 'specs/**', 'scripts/agent-report.mjs', 'scripts/morning-report.mjs']
+    branches: [main]
+    # SPEC-250 (founder 2026-08-03: "expediate their delivery to NOW... back to back"):
+    # every merge to main re-fires the fleet, so a landed fix immediately triggers the
+    # next verification + work pass — back-to-back instead of waiting for the hour.
+    paths: ['agents/fleet.json', 'specs/**', 'scripts/**', 'src/**', 'supabase/**']
+
+# One fleet at a time; later triggers queue instead of stampeding the runner pool.
+concurrency:
+  group: night-fleet
+  cancel-in-progress: false
 
 permissions:
   contents: write
