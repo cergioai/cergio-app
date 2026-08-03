@@ -274,6 +274,21 @@ const CONTACT_BAR_PCT = Number(process.env.CONTACT_BAR_PCT || 40);
   const toPark = [];
   for (const r of rows || []) {
     const pct = r.n ? Math.round((r.reachable / r.n) * 100) : 0;
+    // SPEC-248 — ig_services is EXEMPT from the parking bar. It is DUAL-CLASS: one
+    // crawl writes a service row AND a creator row, and this query measures only the
+    // service half (phone/owner_email on leads_services — IG accounts rarely publish
+    // either there, hence 6%). Parking it here is precisely how creators reached zero
+    // once before: "ig_services auto-disabled for low SERVICE yield without anyone
+    // counting its creator half" (SPEC-230 — no automatic rule may remove the last
+    // path to a founder-set target), and the founder's IG override stands ("didn't
+    // agree.. specifically said to continue running IG (override)", 2026-08-01;
+    // "override the 2 hours window of IG.. need data now", 2026-08-03). The bar still
+    // governs every pure services source. R4 is untouched — a no-contact lead is
+    // still never SAVED (S-192); this only stops the queue being killed.
+    if (String(r.data_source) === 'ig_services') {
+      console.log(`  ${String(r.data_source).padEnd(20)} ${String(r.n).padStart(6)} leads  ${String(pct).padStart(3)}% reachable  EXEMPT (dual-class creator source — SPEC-248)`);
+      continue;
+    }
     const verdict = r.n < 100 ? 'too few to judge' : (pct < CONTACT_BAR_PCT ? 'PARK' : 'keep');
     if (verdict === 'PARK') toPark.push(r.data_source);
     console.log(`  ${String(r.data_source).padEnd(20)} ${String(r.n).padStart(6)} leads  ${String(pct).padStart(3)}% reachable  ${verdict}`);
@@ -285,5 +300,15 @@ const CONTACT_BAR_PCT = Number(process.env.CONTACT_BAR_PCT || 40);
     await q(`update crawl_requests set status='parked', notes=coalesce(notes,'')||' | parked: below ${CONTACT_BAR_PCT}% contactable (SPEC-206)'
               where status in ('new','crawling') and source in (${list})`);
     console.log(`  PARKED ${toPark.length} source(s): ${toPark.join(', ')}`);
+  }
+  // SPEC-248 — HEAL: earlier runs parked ig_services under the service-side bar, so its
+  // queued jobs sit at status='parked' and fulfill-crawl (which claims 'new') can never
+  // reach them — the creator half is dead regardless of any rota or cap fix. Un-park
+  // them once per run; the exemption above stops them being re-parked.
+  {
+    const unparked = await q(`update crawl_requests
+        set status='new', notes=coalesce(notes,'')||' | un-parked: dual-class creator source exempt from the contactability bar (SPEC-248)'
+      where status='parked' and source='ig_services' returning id`);
+    console.log(`  un-parked ${Array.isArray(unparked) ? unparked.length : '?'} ig_services job(s) (SPEC-248 — the creator path stays open)`);
   }
 }
