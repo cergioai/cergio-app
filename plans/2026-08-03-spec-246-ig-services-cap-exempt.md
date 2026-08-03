@@ -1,4 +1,16 @@
-# SPEC-246 — ig_services is exempt from the audit cap (corrects SPEC-243)
+# SPEC-246 — the fresh-100 audit (corrects SPEC-243)
+
+**Founder, 2026-08-03, verbatim:** "No I need 100 FRESH peices of DATA from each to
+VERIFY they're solid to scale" · "override the 2 hours window of IG.. need data now...
+we'll reinstate schedule after we verify data is solid"
+
+Three parts, one feature: (1) the audit cap counts FRESH rows only — fetched_at ≥ the
+committed AUDIT_FRESH_SINCE line — so every source crawls a NEW hundred and then stops,
+instead of pausing instantly on historical rows; (2) ig_services is exempt from the cap
+(below — the original finding); (3) creator-harvest moves to a TEMPORARY 15-minute fast
+lane (migration 20260803030000), reinstate '17 */2 * * *' after founder verification.
+
+## Part 2 as originally found — ig_services exempt from the audit cap
 
 Found by reading the LIVE table an hour after SPEC-243 merged, not by a gate — recorded
 here so the gate that now exists (#243, ig_services assertion) has its story.
