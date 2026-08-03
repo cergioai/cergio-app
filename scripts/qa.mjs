@@ -6618,7 +6618,7 @@ test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 
   }
   // 2) fulfill-crawl: the cap is computed before the claim, from the shared map, fail closed
   const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
-  assert(!(!/import \{ AUDIT_CAP_SOURCES, sourceAuditCap \} from '\.\.\/_shared\/opsPayload\.ts'/.test(fc)), 'fulfill-crawl does not import the shared AUDIT_CAP_SOURCES map — a second copy of the source→data_source mapping is the two-sources-of-truth defect, and the untested copy is the one that reports to the founder');
+  assert(!(!/import \{ AUDIT_CAP_SOURCES, sourceAuditCap, auditFreshSince \} from '\.\.\/_shared\/opsPayload\.ts'/.test(fc)), 'fulfill-crawl does not import the shared AUDIT_CAP_SOURCES map + freshness parser — a second copy of either is the two-sources-of-truth defect, and the untested copy is the one that reports to the founder');
   const capAt = fc.indexOf('const SOURCE_AUDIT_CAP = sourceAuditCap(');
   const rotaAt = fc.indexOf('const ROTA = SOURCES_RR');
   assert(!(capAt < 0), 'fulfill-crawl never reads SOURCE_AUDIT_CAP — the services sources have no per-source stop and would crawl without a ceiling');
@@ -6638,6 +6638,40 @@ test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 
   assert(!(!/yellowpages_apify: \['yellowpages_apify', 'yellowpages'\]/.test(mapBlock)), 'yellowpages_apify no longer counts its "yellowpages"-labelled rows — its real rows read as 0 and its cap can never trigger (mechanism C, the 859-rows-exported-as-zero shape)');
   assert(!(!/google_lsa: \['google_lsa', 'google_sponsored'\]/.test(mapBlock)), 'google_lsa no longer counts its folded google_sponsored rows — the SPEC-233 fold is real leads, and the cap must see what the founder screen sees');
   assert(!(/(^|\n)\s*yelp:/.test(mapBlock)), 'yelp appeared in AUDIT_CAP_SOURCES — yelp is PAUSED by founder order (SPEC-239), not capped; re-activating it is a founder decision, not a map entry');
+  // SPEC-246 — ig_services must NOT be in the cap map. It is DUAL-CLASS and its stop is
+  // CREATOR_TARGET; capping its service half (262 rows at ship time) would drop it from
+  // the rota with creators at 0, closing the last PAID path to the founder's
+  // 100-creators target — the SPEC-230 failure: no automatic rule may remove the last
+  // path to a founder-set target.
+  assert(!(/(^|\n)\s*ig_services:/.test(mapBlock)), 'ig_services is in AUDIT_CAP_SOURCES — its 262 service rows would cap it out of the rota while its CREATOR half sits at 0, silently closing the last paid path to the 100-creators founder target (SPEC-230 shape)');
+  // SPEC-246 — the cap counts FRESH rows only (founder verbatim: "No I need 100 FRESH
+  // peices of DATA from each to VERIFY they're solid to scale"). Without the freshness
+  // line, every source with historical rows pauses instantly and the founder audits
+  // stale data while believing the source works today.
+  assert(!(Number.isNaN(Date.parse(cfg.AUDIT_FRESH_SINCE))), `AUDIT_FRESH_SINCE is "${cfg.AUDIT_FRESH_SINCE}" — not a parseable instant; the cap would fall back to counting ALL rows and every source would pause on stale data`);
+  assert(!(!/gte\('fetched_at', AUDIT_FRESH\)/.test(capBlock)), 'the fulfill-crawl cap count ignores the freshness line — historical rows satisfy the cap and the founder audits data that proves nothing about the source today');
+  assert(!(!/if \(FRESH\) capQ = capQ\.gte\('fetched_at', FRESH\)/.test(ops)), 'the ops payload cap count ignores the freshness line — the screen and the scheduler would disagree about whether a source is capped');
+  assert(!(!/export function auditFreshSince/.test(ops)), 'auditFreshSince is gone — the freshness line has no single parser and the two consumers can drift');
+  // the TEMPORARY fast lane (founder: "override the 2 hours window of IG.. need data
+  // now... we'll reinstate schedule after we verify data is solid"): the FINAL
+  // schedule for creator-harvest must be every 15 minutes until the founder verifies.
+  // Reinstating the 2-hour cadence is pre-authorised — do it with a new migration AND
+  // update this assertion in the same commit.
+  {
+    const migDir2 = path.join(REPO_ROOT, 'supabase/migrations');
+    const files2 = fs.readdirSync(migDir2).filter((f) => f.endsWith('.sql')).sort();
+    let lastHarvest = '';
+    for (const f of files2) {
+      const src2 = fs.readFileSync(path.join(migDir2, f), 'utf8');
+      let i2 = -1;
+      while ((i2 = src2.indexOf('cron.schedule(', i2 + 1)) !== -1) {
+        const w2 = src2.slice(i2, i2 + 900);
+        if (/'cergio_creator_harvest'/.test(w2)) lastHarvest = w2;
+      }
+    }
+    assert(!(!lastHarvest), 'creator-harvest has no final cron schedule');
+    assert(!(!/\*\/15 \* \* \* \*/.test(lastHarvest)), 'creator-harvest is not on the 15-minute fast lane — the founder ordered the 2-hour window overridden until the fresh data is verified (SPEC-246); if he has since verified and reinstated, update this assertion with the new verbatim order');
+  }
   assert(!(!/return Number\.isFinite\(n\) \? n : 100;/.test(ops)), 'sourceAuditCap no longer falls back to 100 on an unparseable value — a typo in the controls would silently disable every stop (fail OPEN)');
   const opsStripped = stripComments(ops);
   assert(!(!/state: 'audit-cap met'/.test(opsStripped)), 'the ops payload no longer marks a capped source — an idle source with no visible reason reads as broken, and broken-looking sources invite the next agent to "fix" a founder order');

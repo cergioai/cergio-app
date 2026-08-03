@@ -23,7 +23,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
-import { AUDIT_CAP_SOURCES, sourceAuditCap } from '../_shared/opsPayload.ts';
+import { AUDIT_CAP_SOURCES, sourceAuditCap, auditFreshSince } from '../_shared/opsPayload.ts';
 
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 // Throughput (TUNABLE). Raised so the full YellowPages matrix drains in hours,
@@ -187,17 +187,25 @@ const gdb = growthDb();
   // audit export. yelp is not here because it is PAUSED (SPEC-239), not capped. Spend
   // rules are unchanged underneath: the $1 tranche ladder and $0.05/lead cap still gate
   // every paid source.
+  // SPEC-246 (founder, 2026-08-03, verbatim: "No I need 100 FRESH peices of DATA from
+  // each to VERIFY they're solid to scale"): only rows fetched since the committed
+  // AUDIT_FRESH_SINCE line count — a source with 2,000 historical rows still owes 100
+  // new ones. Unparseable line = count ALL rows (fail closed: pauses sooner, never
+  // spends more).
   const SOURCE_AUDIT_CAP = sourceAuditCap(Deno.env.get('SOURCE_AUDIT_CAP'));
+  const AUDIT_FRESH = auditFreshSince(Deno.env.get('AUDIT_FRESH_SINCE'));
   const auditCapOut: Record<string, string> = {};
   if (SOURCE_AUDIT_CAP > 0) {
     await Promise.all(Object.entries(AUDIT_CAP_SOURCES).map(async ([src, keys]) => {
       try {
-        const { count, error } = await gdb.from('leads_services')
+        let capQ = gdb.from('leads_services')
           .select('id', { count: 'exact', head: true })
           .in('data_source', keys);
+        if (AUDIT_FRESH) capQ = capQ.gte('fetched_at', AUDIT_FRESH);
+        const { count, error } = await capQ;
         if (error) throw error;
         if ((count ?? 0) >= SOURCE_AUDIT_CAP) {
-          auditCapOut[src] = `audit cap met — ${count} leads of ${SOURCE_AUDIT_CAP} max to review (SPEC-243); paused for founder audit`;
+          auditCapOut[src] = `audit cap met — ${count} FRESH leads (since ${AUDIT_FRESH ?? 'ever'}) of ${SOURCE_AUDIT_CAP} max to review (SPEC-246); paused for founder audit`;
         }
       } catch (e) {
         auditCapOut[src] = `audit count unreadable, refusing to claim (fail closed, SPEC-243): ${serr(e)}`;

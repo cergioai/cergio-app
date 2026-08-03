@@ -1,0 +1,3 @@
+Fire growth-setup after SPEC-246 (ig_services exempt from audit cap): re-run the heal +
+status snapshot so leads_influencers is re-measured live after the 02:17Z
+creator-harvest tick and the rota change. 2026-08-03.

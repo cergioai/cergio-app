@@ -35,13 +35,20 @@ export const SOURCES = ['gmaps_apify','craigslist','yellowpages_apify','ig_servi
 // founder's screen can never disagree about whether a source is capped. yelp is absent
 // on purpose: it is PAUSED by founder order (SPEC-239), not capped — re-activating it is
 // a founder decision that updates gate #239, and it would need a row here then.
+// ig_services is deliberately ABSENT (SPEC-246, corrects SPEC-243): it is DUAL-CLASS —
+// one crawl writes a service row AND a creator row — and its stop is CREATOR_TARGET
+// (100 creators, checked pre-claim since SPEC-205). Its service half already held 262
+// rows when the cap shipped, so capping on the service count would have dropped it
+// from the rota with creators at 0 — closing the last PAID path to the founder's
+// 100-creators target while every dashboard read "audit-cap met". That is the exact
+// SPEC-230 failure shape: no automatic rule may remove the last path to a founder-set
+// target. Its service rows stay auditable (sample-100 exports read newest-first).
 export const AUDIT_CAP_SOURCES: Record<string, string[]> = {
   osm: ['osm'],
   craigslist: ['craigslist'],
   yellowpages_apify: ['yellowpages_apify', 'yellowpages'],
   google_lsa: ['google_lsa', 'google_sponsored'],
   gmaps_apify: ['gmaps_apify'],
-  ig_services: ['ig_services'],
 };
 // The cap itself, read from the committed controls (pushed to the edge runtime by CI).
 // An unparseable value falls back to 100 — the founder's number — never to "no cap":
@@ -50,6 +57,16 @@ export const AUDIT_CAP_SOURCES: Record<string, string[]> = {
 export function sourceAuditCap(raw: string | undefined): number {
   const n = Number(raw ?? '100');
   return Number.isFinite(n) ? n : 100;
+}
+// SPEC-246 (founder, 2026-08-03, verbatim: "No I need 100 FRESH peices of DATA from
+// each to VERIFY they're solid to scale"): the cap counts FRESH rows only — fetched_at
+// at or after the committed AUDIT_FRESH_SINCE line. A source with 2,000 historical rows
+// still owes 100 new ones; the audit verifies the source works NOW. An unparseable
+// value returns null and callers count ALL rows instead — fail closed: that can only
+// pause a source sooner, never spend more.
+export function auditFreshSince(raw: string | undefined): string | null {
+  const t = Date.parse(String(raw ?? ''));
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
 }
 
 // ── SPEC-244 — THE DMA IS ITS OWN DEFINITION, NOT THE STATE COLUMN ──────────────────
@@ -241,15 +258,23 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   // used-before-declared is this repo's four-outage trap.
   {
     const AUDIT_CAP = sourceAuditCap(Deno.env.get('SOURCE_AUDIT_CAP'));
+    const FRESH = auditFreshSince(Deno.env.get('AUDIT_FRESH_SINCE'));
     if (AUDIT_CAP > 0) {
       for (const [src, keys] of Object.entries(AUDIT_CAP_SOURCES)) {
-        const { count: capCount, error: capErr } = await gdb.from('leads_services')
+        let capQ = gdb.from('leads_services')
           .select('id', { count: 'exact', head: true }).in('data_source', keys);
+        if (FRESH) capQ = capQ.gte('fetched_at', FRESH);
+        const { count: capCount, error: capErr } = await capQ;
         if (capErr) { countErrors.push(`audit-cap count ${src}: ${capErr.message}`); continue; }
         if ((capCount ?? 0) >= AUDIT_CAP && !sourceStates[src]) {
           sourceStates[src] = {
             state: 'audit-cap met',
-            reason: `audit cap met — ${capCount} leads of ${AUDIT_CAP} max to review (founder, 2026-08-03: "add all sources not just creators to the crawl at 100 leads each max to review"). Stopped itself; awaiting founder audit of sample-100-${src}.csv (SPEC-243).`,
+            reason: `audit cap met — ${capCount} FRESH leads (since ${FRESH ?? 'ever'}) of ${AUDIT_CAP} max to review (founder, 2026-08-03: "No I need 100 FRESH peices of DATA from each to VERIFY they're solid to scale"). Stopped itself; awaiting founder audit of sample-100-${src}.csv (SPEC-246).`,
+          };
+        } else if (!sourceStates[src]) {
+          sourceStates[src] = {
+            state: 'gathering fresh 100',
+            reason: `${capCount ?? 0} of ${AUDIT_CAP} FRESH leads since ${FRESH ?? 'ever'} (SPEC-246) — crawling until the fresh hundred is in, then it stops itself for audit.`,
           };
         }
       }
