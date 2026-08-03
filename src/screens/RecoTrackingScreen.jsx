@@ -79,7 +79,15 @@ export function RecoTrackingScreen() {
     const firstName = row.recipient.display_name?.split(' ')[0] || '';
     const svc = row.service_type_label || 'a great service';
     const lead = firstName ? `${firstName} — ` : '';
-    return `${lead}${recommenderName ? `${recommenderName} ` : 'A friend '}reco'd you on Cergio as a great ${svc}. Claim your profile + earn from your network: ${inviteUrl}`;
+    // FW-11 (founder walk 2026-08-02, verbatim: "copy link should take to
+    // profile of the service not the recommender"): when the reco points at a
+    // real service, the shared link is THAT service's page. The recommender's
+    // invite link is only the fallback for recos of providers who have no
+    // service listing yet — there is no service page to point to.
+    const link = row.service?.id
+      ? `${window.location.origin}/service/${row.service.id}`
+      : inviteUrl;
+    return `${lead}${recommenderName ? `${recommenderName} ` : 'A friend '}reco'd you on Cergio as a great ${svc}. Claim your profile + earn from your network: ${link}`;
   };
 
   const startEdit = (row) => {
