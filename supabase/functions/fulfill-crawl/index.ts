@@ -23,6 +23,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
+import { AUDIT_CAP_SOURCES, sourceAuditCap } from '../_shared/opsPayload.ts';
 
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 // Throughput (TUNABLE). Raised so the full YellowPages matrix drains in hours,
@@ -170,6 +171,39 @@ const gdb = growthDb();
       return json({ suspended: true, processed: 0, reason: `creator target unreadable, refusing to crawl: ${serr(e)}` }, 200);
     }
   }
+
+  // SPEC-243 — PER-SOURCE AUDIT CAP (founder, 2026-08-03, verbatim: "add all sources
+  // not just creators to the crawl at 100 leads each max to review (except yelp)").
+  // EVERY services source now stops ITSELF the way the creator sources do: at
+  // SOURCE_AUDIT_CAP leads_services rows it drops out of the rota with its reason, so
+  // "100 each then the founder audits" holds while nobody is watching. Checked HERE —
+  // before any job is claimed, before any vendor call — because a guard after the claim
+  // still spends money. Counts use AUDIT_CAP_SOURCES (one shared definition with the ops
+  // payload): every data_source value a source's rows actually carry, since counting
+  // only the rota name reads 0 beside real rows (yellowpages_apify writes 'yellowpages';
+  // google_lsa's history includes folded google_sponsored rows). A source whose count
+  // cannot be read refuses to run — fail CLOSED, refusing costs nothing. A source
+  // already past the cap pauses immediately: its 100-to-review already exists in the
+  // audit export. yelp is not here because it is PAUSED (SPEC-239), not capped. Spend
+  // rules are unchanged underneath: the $1 tranche ladder and $0.05/lead cap still gate
+  // every paid source.
+  const SOURCE_AUDIT_CAP = sourceAuditCap(Deno.env.get('SOURCE_AUDIT_CAP'));
+  const auditCapOut: Record<string, string> = {};
+  if (SOURCE_AUDIT_CAP > 0) {
+    await Promise.all(Object.entries(AUDIT_CAP_SOURCES).map(async ([src, keys]) => {
+      try {
+        const { count, error } = await gdb.from('leads_services')
+          .select('id', { count: 'exact', head: true })
+          .in('data_source', keys);
+        if (error) throw error;
+        if ((count ?? 0) >= SOURCE_AUDIT_CAP) {
+          auditCapOut[src] = `audit cap met — ${count} leads of ${SOURCE_AUDIT_CAP} max to review (SPEC-243); paused for founder audit`;
+        }
+      } catch (e) {
+        auditCapOut[src] = `audit count unreadable, refusing to claim (fail closed, SPEC-243): ${serr(e)}`;
+      }
+    }));
+  }
   const started = Date.now();
   _runDeadline = started + 138_000;  // SPEC-172: hard wall, safely inside the 150s platform limit
   let dbRef: any = null;
@@ -279,10 +313,14 @@ const gdb = growthDb();
       // outside it is never claimed and can never reach a vendor. A met creator target
       // removes ig_services even when other sources run, so "100 then pause" holds in
       // every configuration rather than only the one I happened to test.
+      // SPEC-243: a source at its audit cap (or whose cap count was unreadable) is
+      // filtered out HERE, on the derived list — the SOURCES_RR declaration above stays
+      // complete (gate #181), and the reason each source is out travels in the response.
       const ROTA = SOURCES_RR
         .filter((x) => !ONLY.length || ONLY.includes(x))
-        .filter((x) => !(creatorTargetMet && x === 'ig_services'));
-      if (!ROTA.length) return json({ suspended: true, processed: 0, reason: `no source is currently allowed to run (CRAWLS_ONLY=${ONLY.join(',') || 'unset'}${creatorTargetMet ? ', creator target met' : ''})` });
+        .filter((x) => !(creatorTargetMet && x === 'ig_services'))
+        .filter((x) => !auditCapOut[x]);
+      if (!ROTA.length) return json({ suspended: true, processed: 0, reason: `no source is currently allowed to run (CRAWLS_ONLY=${ONLY.join(',') || 'unset'}${creatorTargetMet ? ', creator target met' : ''}${Object.keys(auditCapOut).length ? '; ' + Object.entries(auditCapOut).map(([s, r]) => `${s}: ${r}`).join(' | ') : ''})`, audit_cap: auditCapOut });
       const share = Math.max(1, Math.floor(perRun / ROTA.length));
       const perSource = await Promise.all(ROTA.map(async (src) => {
         const { data } = await gdb.from('crawl_requests')
@@ -295,7 +333,7 @@ const gdb = growthDb();
       // than filling every worker with osm and only then reaching the others.
       jobs = [];
       for (let i = 0; i < share; i++) for (const list of perSource) if (list[i]) jobs.push(list[i]);
-      console.log(`round-robin: ${ROTA.map((s2, i) => `${s2}=${perSource[i].length}`).join(' ')}`);
+      console.log(`round-robin: ${ROTA.map((s2, i) => `${s2}=${perSource[i].length}`).join(' ')}${Object.keys(auditCapOut).length ? ` | audit-cap out: ${Object.keys(auditCapOut).join(',')}` : ''}`);
 
       // Rows with a source outside the rota (legacy, google_local, null) still get
       // served with whatever capacity is left, so nothing is stranded.
