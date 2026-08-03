@@ -35,7 +35,11 @@ const STATUSES = {
 // Brooklyn, Wynwood). They are different database columns — `state` and `city` — which is
 // why one control trying to mean both made Miami appear to vanish. The column named
 // `city` holds LOCATIONS, not cities; that mismatch is the whole confusion.
-const CITIES = [{ id: '', label: 'All' }, { id: 'NY', label: 'NYC' }, { id: 'FL', label: 'Miami' }];
+// SPEC-244 (founder, 2026-08-03): the City filter carries a Nielsen DMA code, not a
+// state — "THE DMA is technically held by it's own DMA definition (that's unrelated to
+// state)". 501 = New York (includes Jersey City/Newark NJ and CT areas), 528 =
+// Miami-Ft. Lauderdale. The backend also accepts legacy 'NY'/'FL' from older screens.
+const CITIES = [{ id: '', label: 'All' }, { id: '501', label: 'New York (DMA 501)' }, { id: '528', label: 'Miami-Ft. Lauderdale (DMA 528)' }];
 // SPEC-229 (founder, 2026-08-02): "time filter (last 6 hours, 12 hours, 24 hours, 2 days,
 // 3 days, 7 days, 2 weeks, 4 weeks) alongside last 100, 500, 1000, then increments up to
 // 25000 or all".
