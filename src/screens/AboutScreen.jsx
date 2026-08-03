@@ -149,12 +149,14 @@ export function AboutScreen() {
             <p className="text-body font-extrabold text-black leading-tight">
               3. Asset Participation Growth Income (APGI)
             </p>
+            {/* De-securitised 2026-08-02 (founder: "desecuritize") — no
+                participation-scaling or network-value-accrual framing.
+                Loyalty-bonus language only, per Terms §7 + gate #170. */}
             <p className="text-body-sm text-b2 leading-snug mt-0.5">
-              Every dollar earned also builds Asset Participation Growth
-              Income (APGI), scaled to your participation — a loyalty-style
-              bonus, not a security and with no fixed dollar value. It
-              rewards the network you help build beyond a one-off
-              referral bonus.
+              Every dollar earned can also add Asset Participation Growth
+              Income (APGI) — a discretionary loyalty-style bonus, not a
+              security and with no fixed dollar value. It is a thank-you
+              for consistent activity beyond a one-off referral bonus.
             </p>
           </div>
         </div>
