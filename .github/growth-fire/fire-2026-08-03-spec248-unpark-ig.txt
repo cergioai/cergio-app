@@ -1,0 +1,3 @@
+Fire growth-setup after SPEC-248 (ig_services exempt from contactability parking):
+re-run the dedupe/unpark so the ig_services queue flows and creator rows can land.
+2026-08-03.
