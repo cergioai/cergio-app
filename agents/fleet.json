@@ -29,15 +29,9 @@
       "title": "Request -> accept -> schedule -> complete",
       "priority": 2,
       "owns": [
-        "src/lib/api.js",
-        "src/screens/InboundRequestScreen.jsx",
-        "src/screens/JobsInboxScreen.jsx",
-        "src/screens/ManageServicesScreen.jsx",
-        "src/screens/ProfileScreen.jsx",
-        "src/screens/RecoTrackingScreen.jsx",
         "src/screens/RequestScreen.jsx",
-        "src/screens/ServiceDetailScreen.jsx",
-        "src/screens/ServiceListVerifyScreen.jsx"
+        "src/screens/InboundRequestScreen.jsx",
+        "src/lib/api.js"
       ],
       "gates": [
         "#154",
@@ -45,14 +39,12 @@
         "#47i"
       ],
       "defects": [
+        "FW-3 RESOLVED-AS-DATA (2026-08-03, live DB probe): request_responses.responder_id + services.owner_id are CONSISTENT — the 'Babysitter' listing is OWNED by the founder's own 'Tarik Sansal' account, so 'Tarik accepted' was factually correct. Residual UX hardening: the accept line should carry the SERVICE title next to the name so a self-test like this reads clearly. Do NOT change responder writes.",
         "core loop is auth-gated so it has only ever been verified in code, never walked live",
-        "FW-3 (founder walk 2026-08-02, HIGHEST): accept banner names the WRONG PARTY — 'Tarik accepted — book a time' when the provider (Tom) accepted; also 'Tarik Sansal accepted your request' under Responses. JobsInboxScreen renders first(resp.responder) — verify with a two-account walk WHICH responder_id every accept path writes before touching the render",
         "FW-1: no clear place to see my existing requests and their replies (founder verbatim: 'Add place to see existing requests and any replies')",
         "FW-2: intake accepted 'babysitter tonoight' and proceeded without a picked time — no typo nudge, no required time resolution",
-        "FW-4: my own profile doesn't show my name; the provider's profile shows the REQUESTER's name (Tarik Sansal t@cergio)",
         "FW-5: an old request re-fired by itself — tarik.sansal2 saw 'New request · House Cleaner · 28m' the founder never sent now; find what re-notifies old requests",
         "FW-6: default search toggle must be Paid Services for non-connectors (founder verbatim 2026-08-02)",
-        "FW-7: viewing a reply on the service profile must show a BOOK button carrying the COUNTER price — not the generic request CTA (SPEC-211 fixed charged==shown on results; the profile surface still generic)",
         "FW-13: /services/manage renders the wrong form/screens (founder verbatim + URL)",
         "FW-14: duplicated notifications and jobs — the same booking rendered twice ('H confirmed your time — pay to lock it in' at 7m AND 8m); dedupe by booking id, not by event row",
         "FW-15: 'Responses to your requests' rows carry no timestamp",
@@ -200,6 +192,60 @@
         "/rainmaker/apply carries securities-PARAPHRASE copy that gate #170 is blind to — it bans 5 exact phrasings, not the risk"
       ],
       "green_when": "legal review clears the copy, or it is de-securitised and the paraphrases are added to the gate"
+    },
+    {
+      "id": "inbox",
+      "title": "Jobs inbox — one truthful card per event",
+      "priority": 3,
+      "owns": [
+        "src/screens/JobsInboxScreen.jsx"
+      ],
+      "gates": [
+        "#154"
+      ],
+      "defects": [
+        "FW-14 ROOT-CAUSED (2026-08-03, live DB probe): the x6 'pay to lock it in' rows were SIX REAL booking rows — incl. two exact double-tap duplicate pairs from the pre-SPEC-247 bug (server now blocks new ones; the two redundant twins 8dcb435f/b0e62600 were cancelled 2026-08-03). Residual: WATCH for new duplicate pairs (same consumer+service within 2 min, both unpaid) — any new pair means the server guard failed",
+        "FW-15 FIXED IN CODE 2026-08-03 (response rows carry timeAgo) — verify live after deploy, then close",
+        "FW-1: no clear place to see my existing requests and any replies (founder verbatim)"
+      ],
+      "green_when": "every inbox row maps 1:1 to a distinct live DB row, every row carries a timestamp, and the founder can find any request + its replies in one place"
+    },
+    {
+      "id": "profile-ux",
+      "title": "Profiles + service pages say WHO they are",
+      "priority": 3,
+      "owns": [
+        "src/screens/ProfileScreen.jsx",
+        "src/screens/ServiceDetailScreen.jsx"
+      ],
+      "gates": [
+        "#211"
+      ],
+      "defects": [
+        "FW-4: my own profile doesn't show my name; the provider's profile shows the REQUESTER's name (founder walk 2026-08-02; NOTE FW-3 turned out data-consistent — verify with the same DB-probe discipline before changing renders)",
+        "FW-7: viewing a reply on the service profile must show a BOOK button carrying the COUNTER price — not the generic request CTA"
+      ],
+      "green_when": "every profile surface names its owner correctly and a countered price follows the user onto the service page"
+    },
+    {
+      "id": "ig-verify",
+      "title": "IG post verify + listing management",
+      "priority": 4,
+      "owns": [
+        "src/screens/ServiceListVerifyScreen.jsx",
+        "src/screens/RecoTrackingScreen.jsx",
+        "src/screens/ManageServicesScreen.jsx"
+      ],
+      "gates": [
+        "#48"
+      ],
+      "defects": [
+        "FW-10 (founder decision verbatim 2026-08-02): IG post story highlight 'should be mandatory not optional'",
+        "FW-11: 'Copy link' must take to the SERVICE's profile, not the recommender's",
+        "FW-12: provider is never notified when someone submits an IG review/post about them — needs notify + review/approve step",
+        "FW-13: /services/manage renders the wrong form/screens (founder verbatim + URL)"
+      ],
+      "green_when": "the IG verify flow enforces the highlight, links to the service, notifies the provider for approval, and /services/manage shows the intended form"
     }
   ]
 }

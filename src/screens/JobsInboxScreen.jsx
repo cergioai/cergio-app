@@ -940,6 +940,12 @@ export function JobsInboxScreen() {
                           <div className="flex-1 min-w-0">
                             <p className="text-body-sm font-extrabold text-gd leading-snug">
                               {line}
+                              {/* FW-15 (founder walk 2026-08-02): "time stamp
+                                  missing" — every response row carries the same
+                                  compact timeAgo the event feed uses. */}
+                              {(resp.responded_at || resp.created_at) && (
+                                <span className="text-meta-sm text-b3 font-medium"> · {timeAgo(resp.responded_at || resp.created_at)}</span>
+                              )}
                             </p>
                             {resp.service?.title && (
                               <p className="text-meta-sm text-b2 font-medium leading-snug truncate">
