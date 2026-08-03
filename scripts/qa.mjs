@@ -6638,6 +6638,12 @@ test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 
   assert(!(!/yellowpages_apify: \['yellowpages_apify', 'yellowpages'\]/.test(mapBlock)), 'yellowpages_apify no longer counts its "yellowpages"-labelled rows — its real rows read as 0 and its cap can never trigger (mechanism C, the 859-rows-exported-as-zero shape)');
   assert(!(!/google_lsa: \['google_lsa', 'google_sponsored'\]/.test(mapBlock)), 'google_lsa no longer counts its folded google_sponsored rows — the SPEC-233 fold is real leads, and the cap must see what the founder screen sees');
   assert(!(/(^|\n)\s*yelp:/.test(mapBlock)), 'yelp appeared in AUDIT_CAP_SOURCES — yelp is PAUSED by founder order (SPEC-239), not capped; re-activating it is a founder decision, not a map entry');
+  // SPEC-246 — ig_services must NOT be in the cap map. It is DUAL-CLASS and its stop is
+  // CREATOR_TARGET; capping its service half (262 rows at ship time) would drop it from
+  // the rota with creators at 0, closing the last PAID path to the founder's
+  // 100-creators target — the SPEC-230 failure: no automatic rule may remove the last
+  // path to a founder-set target.
+  assert(!(/(^|\n)\s*ig_services:/.test(mapBlock)), 'ig_services is in AUDIT_CAP_SOURCES — its 262 service rows would cap it out of the rota while its CREATOR half sits at 0, silently closing the last paid path to the 100-creators founder target (SPEC-230 shape)');
   assert(!(!/return Number\.isFinite\(n\) \? n : 100;/.test(ops)), 'sourceAuditCap no longer falls back to 100 on an unparseable value — a typo in the controls would silently disable every stop (fail OPEN)');
   const opsStripped = stripComments(ops);
   assert(!(!/state: 'audit-cap met'/.test(opsStripped)), 'the ops payload no longer marks a capped source — an idle source with no visible reason reads as broken, and broken-looking sources invite the next agent to "fix" a founder order');
