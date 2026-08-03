@@ -6582,6 +6582,30 @@ test('no-callable-serpapi-remains-and-every-source-labels-its-own-rows', 'SPEC-2
 
 
 
+
+test('the-final-cron-schedule-must-resolve-its-secrets', 'SPEC-242 (forensic audit run 156, 2026-08-03): creator-harvest was restored to schedule (SPEC-230) and then FAILED every single run — 18:17Z, 20:17Z, 22:17Z on 08-02, 00:17Z on 08-03 — while cron.job read scheduled+active and harvested_today sat at 0 behind the CREATORS_NOT_GROWING flag. The restore migration built its invoke URL from current_setting(\'app.settings.supabase_url\', true), a GUC nobody ever set on this database: current_setting with missing_ok returns NULL, the concatenation swallows it, and net.http_post raises at run time — a schedule that parses, applies cleanly, and can never once succeed. Every working cron goes through public.cergio_call_edge, which reads the edge bearer from Vault. A cron body is a deploy-time promise about run-time secrets, so this gate replays migration history: for every jobname, the LAST migration to schedule it must not reference app.settings GUCs. History stays immutable — the broken restore file remains in the tree — but the final word on each job must be a body that can actually run.', '#242', () => {
+  const migDir = path.join(REPO_ROOT, 'supabase/migrations');
+  const files = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
+  const finalSchedule = {};
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(migDir, f), 'utf8');
+    let i = -1;
+    while ((i = src.indexOf('cron.schedule(', i + 1)) !== -1) {
+      const window = src.slice(i, i + 900);
+      const m = window.match(/'([A-Za-z0-9_-]+)'/);
+      if (m) finalSchedule[m[1]] = { file: f, window };
+    }
+  }
+  const jobs = Object.keys(finalSchedule);
+  assert(jobs.includes('cergio_creator_harvest'), 'creator-harvest must be scheduled by some migration — it is one of only two creator discovery paths (SPEC-230)');
+  for (const j of jobs) {
+    const { file, window } = finalSchedule[j];
+    assert(!/app\.settings\./.test(window), j + ': its final schedule (' + file + ') builds the cron body from app.settings GUCs — current_setting(..., true) returns NULL when unset, net.http_post raises, and the job fails every run while reading scheduled+active. Route through public.cergio_call_edge (Vault bearer) instead (SPEC-242)');
+  }
+  assert(/cergio_call_edge\('creator-harvest'\)/.test(finalSchedule['cergio_creator_harvest'].window), 'creator-harvest final schedule must invoke through public.cergio_call_edge — the only transport whose secrets resolve on this database (SPEC-242)');
+});
+
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
