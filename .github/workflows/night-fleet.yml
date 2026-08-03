@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false        # one agent failing must never silence the other seven
       matrix:
-        id: [payments, booking-loop, crawl-sources, creators, spend-guard, ops-dashboard, data-dashboard, ci-health, legal-copy, inbox, profile-ux, ig-verify]
+        id: [payments, booking-loop, ops-dashboard, data-dashboard, ci-health, legal-copy, inbox, profile-ux, ig-verify]
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }

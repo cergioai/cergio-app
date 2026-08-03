@@ -79,7 +79,8 @@
         "NOT-A-DEFECT, standing order: yelp is PAUSED by the founder (2026-08-02, verbatim: 'don't delete yelp.. just pause as a source'). It stays in SOURCES_RR, the seeder and the dashboards with its rows kept, and stays OUT of CRAWLS_ONLY until the founder re-activates it. Do not 'fix' its silence, do not delete it, do not re-enable it — gate #239 enforces all of this.",
         "NOT-A-DEFECT, standing order: a source at SOURCE_AUDIT_CAP=100 leads is meant to be idle (founder, 2026-08-03, verbatim: 'add all sources not just creators to the crawl at 100 leads each max to review (except yelp)'). It stopped ITSELF; the founder audits sample-100-<source>.csv and names cleared sources. Do not 'fix' its silence, do not raise the cap — gate #243 enforces this."
       ],
-      "green_when": "every paid source routes through Apify, or is parked with the reason recorded"
+      "green_when": "every paid source routes through Apify, or is parked with the reason recorded",
+      "suspended": "2026-08-03 founder verbatim: 'all crawls are off this project.. also all old COO forensick etc have been disabled.. so keep suspended .. other project will execute and feed... just focus on bugs and features' — SUSPENDED on THIS project; briefs + standing orders (incl. yelp 'just pause as a source') stay on record for the growth project to inherit. Do not run, do not fix, do not re-enable here."
     },
     {
       "id": "creators",
@@ -100,7 +101,8 @@
         "follower band 5k-500k not enforced on the ig_services creator path",
         "prove LIVE that the is_business heal landed on the growth table and ig_services creator rows are being written (SPEC-237) — 262 service rows produced 0 creators while the reference healed and the table did not"
       ],
-      "green_when": "100 creators from EACH source — ig-scraper-user-search (eq) and se:web-harvest (PREFIX) — then each source stops itself (SPEC-205/237)"
+      "green_when": "100 creators from EACH source — ig-scraper-user-search (eq) and se:web-harvest (PREFIX) — then each source stops itself (SPEC-205/237)",
+      "suspended": "2026-08-03 founder verbatim: 'all crawls are off this project.. also all old COO forensick etc have been disabled.. so keep suspended .. other project will execute and feed... just focus on bugs and features' — SUSPENDED on THIS project; briefs + standing orders (incl. yelp 'just pause as a source') stay on record for the growth project to inherit. Do not run, do not fix, do not re-enable here."
     },
     {
       "id": "spend-guard",
@@ -119,7 +121,8 @@
       "defects": [
         "ledger was blind to 78% of spend once; reconciliation must keep proving itself"
       ],
-      "green_when": "ledger total matches the vendor account total within 5%"
+      "green_when": "ledger total matches the vendor account total within 5%",
+      "suspended": "2026-08-03 founder verbatim: 'all crawls are off this project.. also all old COO forensick etc have been disabled.. so keep suspended .. other project will execute and feed... just focus on bugs and features' — SUSPENDED on THIS project; briefs + standing orders (incl. yelp 'just pause as a source') stay on record for the growth project to inherit. Do not run, do not fix, do not re-enable here."
     },
     {
       "id": "ops-dashboard",

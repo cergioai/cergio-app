@@ -1,7 +1,10 @@
 // SPEC-213 — the one page to read at breakfast. Failures first, always.
 import fs from 'node:fs';
 const fleet = JSON.parse(fs.readFileSync('agents/fleet.json', 'utf8'));
-const rs = fleet.agents.map((a) => {
+// SPEC-251 (founder 2026-08-03): growth agents are SUSPENDED on this project — the
+// other project executes and feeds. A suspended agent on this page would read as
+// DID NOT RUN, the loudest alarm there is, every single morning. Filter, don't alarm.
+const rs = fleet.agents.filter((a) => !a.suspended).map((a) => {
   let base;
   try { base = JSON.parse(fs.readFileSync(`reports/${a.id}.json`, 'utf8')); }
   catch { base = { id: a.id, title: a.title, priority: a.priority, verdict: 'DID NOT RUN', gates: [], defects: a.defects, green_when: a.green_when, at: null }; }

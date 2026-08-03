@@ -1,18 +1,19 @@
 # SCOPE
 
-SPEC-250 — founder, 2026-08-03, verbatim: "need agents to commit any fixes directly
-without approval if it's agasint spec.. need to expediate their delivery to NOW... back
-to back... they can fix at same speed as you..."
+SPEC-251 — founder, 2026-08-03, verbatim: "all crawls are off this project.. also all old
+COO forensick etc have been disabled.. so keep suspended .. other project will execute
+and feed... just focus on bugs and features."
 
-One commit: agent PRs arm auto-merge (machine gate replaces the human click; required CI
-check under branch protection is still the sole merge authority; needs_founder findings
-still refused), the fleet re-fires on every merge to main (back-to-back), and gate #218
-is FLIPPED per the SPEC-241 procedure — behaviour + gate in one commit, old rule
-preserved in the gate text.
+One commit: crawl-sources / creators / spend-guard marked SUSPENDED in fleet.json (briefs
++ standing orders like the yelp pause stay on record for the growth project), matrix
+12 → 9 app-only agents, morning report + runners skip suspended agents, gate #214
+extended so a suspended agent's absence from the matrix is REQUIRED, not an alarm.
 
-- `scripts/agent-pr.mjs`
-- `.github/workflows/night-fleet.yml`
 - `agents/fleet.json`
+- `.github/workflows/night-fleet.yml`
+- `scripts/morning-report.mjs`
+- `scripts/agent-report.mjs`
+- `scripts/agent-work.mjs`
 - `scripts/qa.mjs`
 - `SCOPE.md`
 
@@ -24,7 +25,7 @@ May only GROW. To modify an existing line add `SHARED-CHANGE-APPROVED`.
 - `supabase/functions/fulfill-crawl/index.ts`
 - `scripts/qa.mjs`
 
-SHARED-CHANGE-APPROVED — qa.mjs gate #218: ONE assert flipped from banning auto-merge to
-requiring it, executing the founder's verbatim 2026-08-03 order. This is the SPEC-241
-gate-flip procedure: the gate encoded a founder decision; the founder reversed it; the
-gate flips WITH the new verbatim quote in the same commit. No other existing line changes.
+SHARED-CHANGE-APPROVED — qa.mjs gate #214: the single every-agent-in-matrix assert is
+wrapped so SUSPENDED agents (with founder words on record) must be ABSENT from the
+matrix while every active agent must still be present. Executes the founder's verbatim
+2026-08-03 stop order; SPEC-241 flip procedure, old rule preserved in the gate text.

@@ -6148,7 +6148,19 @@ test('the-overnight-fleet-actually-runs-with-the-mac-off', 'SPEC-213 (founder, 2
   assert(!(!/if: always\(\)/.test(wf)), 'the aggregator is skipped when an agent fails — that hides DID NOT RUN, the most alarming state there is');
   const fleet = JSON.parse(readFile('agents/fleet.json'));
   const matrix = (wf.match(/id: \[([^\]]+)\]/) || [, ''])[1].split(',').map((x) => x.trim());
-  for (const a of fleet.agents) assert(!(!matrix.includes(a.id)), `agent "${a.id}" is in the fleet but not in the workflow matrix — it would never run, and its silence would read as success`);
+  // SPEC-251 (founder 2026-08-03, verbatim: "all crawls are off this project.. so keep
+  // suspended .. other project will execute and feed... just focus on bugs and features"):
+  // a SUSPENDED agent is deliberately absent from the matrix — its silence IS the order.
+  // Every non-suspended agent must still be in the matrix, and suspension must carry the
+  // founder's words, or a quiet flag could silently bench a working agent.
+  for (const a of fleet.agents) {
+    if (a.suspended) {
+      assert(!(!/founder/i.test(String(a.suspended))), `agent "${a.id}" is suspended without the founder's words on record — a bare flag can silently bench a working agent`);
+      assert(!(matrix.includes(a.id)), `agent "${a.id}" is SUSPENDED but still in the workflow matrix — it would keep running against a founder stop order`);
+      continue;
+    }
+    assert(!(!matrix.includes(a.id)), `agent "${a.id}" is in the fleet but not in the workflow matrix — it would never run, and its silence would read as success`);
+  }
   for (const m of matrix) assert(!(!fleet.agents.some((a) => a.id === m)), `the workflow runs "${m}" but no such agent exists in the fleet`);
   const agent = readFile('scripts/agent-report.mjs');
   assert(!(!/NOT FOUND/.test(agent)), 'the agent does not detect a gate that does not exist — a missing guard would read identically to a passing one');
