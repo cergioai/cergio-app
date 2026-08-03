@@ -6605,6 +6605,41 @@ test('the-final-cron-schedule-must-resolve-its-secrets', 'SPEC-242 (forensic aud
   assert(/cergio_call_edge\('creator-harvest'\)/.test(finalSchedule['cergio_creator_harvest'].window), 'creator-harvest final schedule must invoke through public.cergio_call_edge — the only transport whose secrets resolve on this database (SPEC-242)');
 });
 
+test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 2026-08-03, verbatim: "add all sources not just creators to the crawl at 100 leads each max to review (except yelp)"). The creator sources already stop themselves at CREATOR_TARGET; the services sources had NO per-source stop — activating them under the old controls would have crawled without a ceiling until someone watching a dashboard flipped a switch, which is how a $1 tranche became $108. Now EVERY services source drops out of the rota at SOURCE_AUDIT_CAP leads, checked BEFORE any job is claimed (a guard after the claim still spends money), fail CLOSED on an unreadable count (refusing costs nothing). The count must use EVERY data_source value a source actually writes — fulfillYellowPagesApify writes rows as "yellowpages", not its rota name, and google_lsa history includes folded google_sponsored rows — because counting only the rota name reads 0 beside real rows, and a cap keyed on a name nobody writes is a cap that can never trigger. That mapping lives ONCE, in _shared/opsPayload.ts, shared by the claim gate and the founder screen — two copies would disagree exactly when it matters. And the screen must SAY a capped source stopped itself: an idle source with no visible reason reads as a broken source, and a broken-looking source invites the next agent to "fix" a founder order.', '#243', () => {
+  // 1) the committed controls carry the founder numbers exactly
+  const cfg = JSON.parse(readFile('growth-controls.json').replace(/^\s*\/\/.*$/gm, ''));
+  assert(!(Number(cfg.SOURCE_AUDIT_CAP) !== 100), `SOURCE_AUDIT_CAP is ${cfg.SOURCE_AUDIT_CAP}, not the founder's 100 — "100 leads each max to review" is a founder number, and changing it is a founder decision (update this gate with the new verbatim order, never just edit the config)`);
+  const only = String(cfg.CRAWLS_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
+  for (const s of ['osm', 'craigslist', 'yellowpages_apify', 'google_lsa', 'gmaps_apify', 'ig_services', 'se:web-harvest']) {
+    assert(!(!only.includes(s)), `${s} is missing from CRAWLS_ONLY — the founder ordered ALL sources (minus yelp) into the crawl, and a source outside the allowlist is silently not crawling`);
+  }
+  // 2) fulfill-crawl: the cap is computed before the claim, from the shared map, fail closed
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/import \{ AUDIT_CAP_SOURCES, sourceAuditCap \} from '\.\.\/_shared\/opsPayload\.ts'/.test(fc)), 'fulfill-crawl does not import the shared AUDIT_CAP_SOURCES map — a second copy of the source→data_source mapping is the two-sources-of-truth defect, and the untested copy is the one that reports to the founder');
+  const capAt = fc.indexOf('const SOURCE_AUDIT_CAP = sourceAuditCap(');
+  const rotaAt = fc.indexOf('const ROTA = SOURCES_RR');
+  assert(!(capAt < 0), 'fulfill-crawl never reads SOURCE_AUDIT_CAP — the services sources have no per-source stop and would crawl without a ceiling');
+  assert(!(rotaAt < 0), 'the rota construction is gone or renamed — this gate can no longer see the claim path, fix the gate before shipping');
+  assert(!(capAt > rotaAt), 'the audit-cap check sits AFTER the rota is built — a guard after the point of no return is mechanism D, the claim must see the cap');
+  // scan the SPECIFIC block, not the whole file (the #239 lesson: a gate satisfied by
+  // its own explanatory comment cannot fail)
+  const capBlock = fc.slice(capAt, fc.indexOf('const started = Date.now();', capAt));
+  assert(!(!/\.in\('data_source', keys\)/.test(capBlock)), 'the cap count does not use the multi-name mapping — yellowpages_apify rows are labelled "yellowpages", so an eq() on the rota name reads 0 and that source can never cap');
+  assert(!(!/catch \(e\) \{\s*auditCapOut\[src\] = /.test(capBlock)), 'an unreadable cap count no longer takes the source out of the rota — that fails OPEN, and open is the direction that spends money');
+  assert(!(!/\.filter\(\(x\) => !auditCapOut\[x\]\)/.test(fc)), 'the rota is not filtered by the audit-cap result — the cap is computed and then ignored, a check that cannot act');
+  // 3) one definition, correct multi-name entries, cap fallback fails to 100 not to "no cap"
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const mapAt = ops.indexOf('export const AUDIT_CAP_SOURCES');
+  assert(!(mapAt < 0), 'AUDIT_CAP_SOURCES is gone from _shared/opsPayload.ts — the one shared definition of which sources the cap governs no longer exists');
+  const mapBlock = ops.slice(mapAt, ops.indexOf('};', mapAt));
+  assert(!(!/yellowpages_apify: \['yellowpages_apify', 'yellowpages'\]/.test(mapBlock)), 'yellowpages_apify no longer counts its "yellowpages"-labelled rows — its real rows read as 0 and its cap can never trigger (mechanism C, the 859-rows-exported-as-zero shape)');
+  assert(!(!/google_lsa: \['google_lsa', 'google_sponsored'\]/.test(mapBlock)), 'google_lsa no longer counts its folded google_sponsored rows — the SPEC-233 fold is real leads, and the cap must see what the founder screen sees');
+  assert(!(/(^|\n)\s*yelp:/.test(mapBlock)), 'yelp appeared in AUDIT_CAP_SOURCES — yelp is PAUSED by founder order (SPEC-239), not capped; re-activating it is a founder decision, not a map entry');
+  assert(!(!/return Number\.isFinite\(n\) \? n : 100;/.test(ops)), 'sourceAuditCap no longer falls back to 100 on an unparseable value — a typo in the controls would silently disable every stop (fail OPEN)');
+  const opsStripped = stripComments(ops);
+  assert(!(!/state: 'audit-cap met'/.test(opsStripped)), 'the ops payload no longer marks a capped source — an idle source with no visible reason reads as broken, and broken-looking sources invite the next agent to "fix" a founder order');
+});
+
 
 main().catch(e => {
   console.error(e);
