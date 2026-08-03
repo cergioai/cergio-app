@@ -267,22 +267,43 @@ serve(async (req: Request) => {
         row.fresh = audience === 'creators'
           ? await cnt('target count', (q) => q)
           : await cnt('fresh count', (q) => (FRESH ? q.gte('fetched_at', FRESH) : q));
-        // 2) state — the founder's orders, in precedence order
+        // 2) queue health FIRST (services only) — the state below must not claim a
+        //    source is "crawling" when its queue holds nothing runnable. That lie stood
+        //    on this screen: five sources read "still crawling" with 0 runnable jobs
+        //    and 2,500–13,000 parked (founder: "they're not working.. need them up").
+        if (audience === 'services') {
+          const qcnt = async (label: string, st: string[]): Promise<number | null> => {
+            const { count, error } = await gdb.from('crawl_requests').select('id', { count: 'exact', head: true }).eq('source', src).in('status', st);
+            if (error) { row.errors.push(`${label}: ${error.message}`); return null; }
+            return count ?? 0;
+          };
+          row.queue_new = await qcnt('queue new', ['new', 'crawling']);
+          row.queue_parked = await qcnt('queue parked', ['parked']);
+        }
+        // 3) state — founder orders first, then the honest fresh-100 math. The x/100
+        //    display never exceeds its target (founder: "status of # out of 100
+        //    accurate"): a capped source says 100 of 100 and reports the overshoot —
+        //    the cap is checked before a CLAIM, so one in-flight tick can land more
+        //    rows than the remainder.
+        const shown = row.fresh === null ? null : Math.min(row.fresh, row.fresh_target);
         if (audience === 'services' && src === 'yelp') {
           row.state = 'paused';
           row.state_detail = 'paused by founder order 2026-08-02 ("don\'t delete yelp.. just pause as a source") — rows kept, source idle until re-activated';
-        } else if (audience === 'services' && src === 'ig_services') {
-          row.state = (row.fresh ?? 0) > 0 ? 'crawling (dual-class)' : 'starting (dual-class)';
-          row.state_detail = 'writes a service row AND a creator row per crawl; stops at the 100-creator target, exempt from the service cap (SPEC-246/248)';
         } else if (row.fresh === null) {
           row.state = 'COUNT FAILED';
           row.state_detail = row.errors.join(' | ');
         } else if (row.fresh >= row.fresh_target) {
           row.state = audience === 'creators' ? 'target met — paused for audit' : 'audit-cap met — stopped for audit';
-          row.state_detail = `${row.fresh} of ${row.fresh_target} — download and audit; it stopped itself (SPEC-246)`;
+          row.state_detail = `${shown} of ${row.fresh_target} — download and audit; it stopped itself (SPEC-246)${row.fresh > row.fresh_target ? ` · ${row.fresh} gathered before the stop` : ''}`;
+        } else if (audience === 'services' && row.queue_new === 0) {
+          row.state = 'NO RUNNABLE JOBS';
+          row.state_detail = `${shown} of ${row.fresh_target} fresh but the queue holds nothing runnable (${row.queue_parked ?? '?'} parked) — cannot gather until jobs are un-parked/seeded`;
+        } else if (audience === 'services' && src === 'ig_services') {
+          row.state = (row.fresh ?? 0) > 0 ? 'crawling (dual-class)' : 'starting (dual-class)';
+          row.state_detail = 'writes a service row AND a creator row per crawl; stops at the 100-creator target, exempt from the service cap (SPEC-246/248)';
         } else {
           row.state = audience === 'creators' ? `gathering ${row.fresh_target}` : 'gathering fresh 100';
-          row.state_detail = `${row.fresh} of ${row.fresh_target}${audience === 'services' ? ` FRESH since ${FRESH ?? 'ever'}` : ''} — still crawling`;
+          row.state_detail = `${shown} of ${row.fresh_target}${audience === 'services' ? ` FRESH since ${FRESH ?? 'ever'}` : ''} — crawling (${row.queue_new ?? '?'} runnable jobs)`;
         }
         // 3) filtered counts + contactable drill-down (obey every screen filter)
         const f = (q: any) => {
@@ -303,16 +324,6 @@ serve(async (req: Request) => {
           row.email_pct = nEmail === null ? null : Math.round((nEmail / row.filtered) * 100);
           row.both_pct = nBoth === null ? null : Math.round((nBoth / row.filtered) * 100);
         } else if (row.filtered === 0) { row.phone_pct = 0; row.email_pct = 0; row.both_pct = 0; }
-        // 4) queue health (services only — creators' web-harvest is cron-driven)
-        if (audience === 'services') {
-          const qcnt = async (label: string, st: string[]): Promise<number | null> => {
-            const { count, error } = await gdb.from('crawl_requests').select('id', { count: 'exact', head: true }).eq('source', src).in('status', st);
-            if (error) { row.errors.push(`${label}: ${error.message}`); return null; }
-            return count ?? 0;
-          };
-          row.queue_new = await qcnt('queue new', ['new', 'crawling']);
-          row.queue_parked = await qcnt('queue parked', ['parked']);
-        }
         board.push(row);
       }
     }
