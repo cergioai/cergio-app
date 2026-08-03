@@ -24,6 +24,33 @@ export const AGENTS = ['fulfill-crawl','creator-harvest','enrich-influencers','c
 // console then crashed with "SOURCES is not defined" — every count, every filter and every
 // DMA gone at once. A regex that matches a line is not a regex that matches an item.
 export const SOURCES = ['gmaps_apify','craigslist','yellowpages_apify','ig_services','yelp','google_local','google_lsa','yellowpages','osm','google_places','openstreetmap'];
+// SPEC-243 (founder, 2026-08-03, verbatim: "add all sources not just creators to the
+// crawl at 100 leads each max to review (except yelp)"). The rota sources the per-source
+// audit cap governs, and for each one EVERY data_source value its rows actually carry.
+// Two names for one source is the Part-6 mechanism-C defect — 859 real rows once
+// exported as zero because a count used the wrong name: fulfillYellowPagesApify writes
+// data_source 'yellowpages' (not its rota name), and google_lsa's history includes
+// 'google_sponsored' rows folded in by SPEC-233. ONE definition, used by BOTH the
+// fulfill-crawl claim gate and this payload's source_states, so the scheduler and the
+// founder's screen can never disagree about whether a source is capped. yelp is absent
+// on purpose: it is PAUSED by founder order (SPEC-239), not capped — re-activating it is
+// a founder decision that updates gate #239, and it would need a row here then.
+export const AUDIT_CAP_SOURCES: Record<string, string[]> = {
+  osm: ['osm'],
+  craigslist: ['craigslist'],
+  yellowpages_apify: ['yellowpages_apify', 'yellowpages'],
+  google_lsa: ['google_lsa', 'google_sponsored'],
+  gmaps_apify: ['gmaps_apify'],
+  ig_services: ['ig_services'],
+};
+// The cap itself, read from the committed controls (pushed to the edge runtime by CI).
+// An unparseable value falls back to 100 — the founder's number — never to "no cap":
+// a typo that silently disabled every stop would fail OPEN, and open is the expensive
+// direction here.
+export function sourceAuditCap(raw: string | undefined): number {
+  const n = Number(raw ?? '100');
+  return Number.isFinite(n) ? n : 100;
+}
 // CREATOR sources — the algorithm decided these (each with its own discovery method):
 // SPEC-233 (founder, 2026-08-02): "we're supposed to have 2 (IG services and the other IG
 // local creator search)". There are TWO, and listing six meant four permanently-zero rows
@@ -153,6 +180,33 @@ export async function buildOpsPayload(db: SupabaseClient, body: Record<string, u
   const countErrors: string[] = [];
   if (svcErr) countErrors.push(`services total: ${svcErr.message}`);
   if (creErr) countErrors.push(`creators total: ${creErr.message}`);
+
+  // SPEC-243 — a source that stopped itself at the audit cap must SAY so on its row,
+  // for the same reason yelp's pause travels on the payload: an idle source with no
+  // visible reason reads as a BROKEN source, and a "broken" source invites the next
+  // agent to "fix" a founder order. Same map as the fulfill-crawl claim gate, so the
+  // scheduler and this screen cannot disagree. The count is UNSCOPED on purpose — the
+  // cap is a fact about the source's whole table, and a state that flickered off under
+  // a 6-hour time filter would read as a source coming back to life. A failed count
+  // travels to the screen via countErrors (SPEC-235), never as a silent absence.
+  // NOTE: this block sits BELOW the countErrors declaration by necessity, not style —
+  // used-before-declared is this repo's four-outage trap.
+  {
+    const AUDIT_CAP = sourceAuditCap(Deno.env.get('SOURCE_AUDIT_CAP'));
+    if (AUDIT_CAP > 0) {
+      for (const [src, keys] of Object.entries(AUDIT_CAP_SOURCES)) {
+        const { count: capCount, error: capErr } = await gdb.from('leads_services')
+          .select('id', { count: 'exact', head: true }).in('data_source', keys);
+        if (capErr) { countErrors.push(`audit-cap count ${src}: ${capErr.message}`); continue; }
+        if ((capCount ?? 0) >= AUDIT_CAP && !sourceStates[src]) {
+          sourceStates[src] = {
+            state: 'audit-cap met',
+            reason: `audit cap met — ${capCount} leads of ${AUDIT_CAP} max to review (founder, 2026-08-03: "add all sources not just creators to the crawl at 100 leads each max to review"). Stopped itself; awaiting founder audit of sample-100-${src}.csv (SPEC-243).`,
+          };
+        }
+      }
+    }
+  }
 
   // ── 4. CREATORS per source (discovered_via) + contactability
   const creatorsBySource: Record<string, { total: number; withEmail: number; withFollowers: number; nyc: number; miami: number; what: string; where: string }> = {};
