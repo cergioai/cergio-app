@@ -14,8 +14,15 @@
 // conflict the seeder can ignore. The invariant then lives in the database, where
 // no future caller can forget it.
 const MGMT = 'https://api.supabase.com/v1';
+import fs from 'node:fs';
 import { growthBase } from './_growth-env.mjs';
-import { CITIES, TYPES } from './_growth-scope.mjs';
+import { AUDIT_COUNT_KEYS, CITIES, TYPES } from './_growth-scope.mjs';
+// SPEC-251 — the fresh line comes from the COMMITTED controls file (one definition;
+// unparseable = null = count all rows, which only parks sooner, never spends more).
+const _controls = JSON.parse(fs.readFileSync(new URL('../growth-controls.json', import.meta.url), 'utf8'));
+const FRESH_LINE = (() => { const t = Date.parse(String(_controls.AUDIT_FRESH_SINCE || '')); return Number.isFinite(t) ? new Date(t).toISOString() : null; })();
+const FRESH_COND = FRESH_LINE ? ` and fetched_at >= '${FRESH_LINE}'` : '';
+const keysList = (src) => (AUDIT_COUNT_KEYS[src] || [src]).map((k) => `'${k}'`).join(',');
 // Which of the AUTHORISED types actually attract someone with an audience. This narrows
 // the authorised list; it never adds to it, so a blocked category cannot re-enter here.
 const CREATOR_HEAVY = new Set(['photographer', 'personal trainer', 'hair stylist', 'barber',
@@ -113,12 +120,28 @@ for (const [tbl, cols] of [
 // it condemned sources that are configured and running. Restore them to 'new' and
 // let the evidence — now carried in the notes — decide.
 console.log('un-parking every source parked by SPEC-167…');
+// SPEC-251 — DUPLICATE-SAFE un-park. The blanket update failed with HTTP 400 EVERY RUN
+// (23505 on crawl_requests_open_uniq: re-opening all parked rows re-creates duplicate
+// open triples), so for nights "un-parked ? job(s)" un-parked NOTHING while the spend
+// guard and throttle kept parking more — 30,000+ parked jobs and every paid source's
+// fresh count frozen at 0 (founder, 2026-08-03: "they're not working.. need them up").
+// Now: at most ONE parked row per (city, service_type, source) triple comes back, and
+// only where no open row for that triple already exists — the unique index is satisfied
+// by construction, so the statement can never 400.
 const unparked = await q(`
   update crawl_requests
      set status = 'new',
-         notes  = 'SPEC-168: un-parked — parked on a generic note that hid the real error',
+         notes  = 'SPEC-251: un-parked (duplicate-safe) — the fresh-100 audit cap and the tranche ladder are the guards now',
          updated_at = now()
-   where status = 'parked'
+   where id in (
+     select distinct on (city, service_type, source) id
+       from crawl_requests p
+      where status = 'parked'
+        and not exists (select 1 from crawl_requests o
+                         where o.city = p.city and o.service_type = p.service_type
+                           and o.source = p.source and o.status in ('new','crawling'))
+      order by city, service_type, source, created_at asc
+   )
   returning 1
 `);
 console.log(`un-parked ${Array.isArray(unparked) ? unparked.length : '?'} job(s)`);
@@ -145,7 +168,10 @@ const PROOF_JOBS = 15;   // enough to prove a source works; small enough to be c
 console.log('spend guard — checking paid sources deliver against what they cost…');
 for (const src of PAID_SOURCES) {
   const done = await q(`select count(*)::int as n from crawl_requests where source = '${src}' and status in ('delivered','failed')`);
-  const got  = await q(`select count(*)::int as n from leads_services where data_source = '${src}'`);
+  // SPEC-251 — count EVERY label the source's rows carry (AUDIT_COUNT_KEYS, welded to
+  // the Deno map by gate #251). yellowpages_apify writes rows as 'yellowpages', so this
+  // guard read 0 beside 859 real rows and re-parked the source every single run.
+  const got  = await q(`select count(*)::int as n from leads_services where data_source in (${keysList(src)})`);
   const jobs = done?.[0]?.n ?? 0, leads = got?.[0]?.n ?? 0;
   if (jobs >= PROOF_JOBS && leads === 0) {
     const parked = await q(`
@@ -176,16 +202,23 @@ for (const src of PAID_SOURCES) {
 // about DIVERSITY, not volume — the tranche gate still governs money.
 const LEAD_FLOOR = Number(process.env.LEAD_FLOOR || 100);
 
-console.log(`\nsource balance — floor ${LEAD_FLOOR} leads each`);
-const bySource = await q(`select data_source, count(*)::int as n from leads_services group by data_source order by n desc`);
-const counts = Object.fromEntries((bySource || []).map((r) => [r.data_source, r.n]));
+// SPEC-251 — the floor is measured on FRESH rows (since the committed AUDIT_FRESH_SINCE
+// line), with multi-name counting. Measuring TOTAL rows here is what froze the audit:
+// every producing source read "far ahead" on history and got throttled-parked, while
+// its FRESH count sat at 0 and the founder's fresh-100 could never fill.
+console.log(`\nsource balance — floor ${LEAD_FLOOR} FRESH leads each (since ${FRESH_LINE ?? 'ever'})`);
 const ALL = ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify', 'ig_services'];
-const below = ALL.filter((s) => (counts[s] || 0) < LEAD_FLOOR);
+const counts = {};
+for (const s of ALL) {
+  const r = await q(`select count(*)::int as n from leads_services where data_source in (${keysList(s)})${FRESH_COND}`);
+  counts[s] = r?.[0]?.n ?? 0;
+}
+const below = ALL.filter((s) => (counts[s] || 0) < LEAD_FLOOR && s !== 'yelp');
 const above = ALL.filter((s) => (counts[s] || 0) >= LEAD_FLOOR * 5);
 
 for (const s of ALL) {
   const n = counts[s] || 0;
-  const mark = n < LEAD_FLOOR ? 'BELOW FLOOR — prioritise' : (n >= LEAD_FLOOR * 5 ? 'far ahead — throttle' : 'balanced');
+  const mark = n < LEAD_FLOOR ? (s === 'yelp' ? 'paused (founder order)' : 'BELOW FLOOR — prioritise') : (n >= LEAD_FLOOR * 5 ? 'far ahead — throttle' : 'balanced');
   console.log(`  ${s.padEnd(20)} ${String(n).padStart(6)}  ${mark}`);
 }
 
@@ -195,11 +228,21 @@ for (const s of ALL) {
 // tranche rather than a permanent sentence.
 if (below.length) {
   const list = below.map((s) => `'${s}'`).join(',');
+  // duplicate-safe, like the SPEC-251 un-park above — the naive form 400s on the open
+  // unique index and silently un-parks nothing.
   const un = await q(`
     update crawl_requests set status = 'new',
-        notes = 'SPEC-200: below the ${LEAD_FLOOR}-lead floor — re-queued to balance the dataset',
+        notes = 'SPEC-200: below the ${LEAD_FLOOR}-fresh-lead floor — re-queued to balance the dataset',
         updated_at = now()
-      where status = 'parked' and source in (${list}) returning 1`);
+      where id in (
+        select distinct on (city, service_type, source) id
+          from crawl_requests p
+         where status = 'parked' and source in (${list})
+           and not exists (select 1 from crawl_requests o
+                            where o.city = p.city and o.service_type = p.service_type
+                              and o.source = p.source and o.status in ('new','crawling'))
+         order by city, service_type, source, created_at asc
+      ) returning 1`);
   console.log(`  un-parked ${Array.isArray(un) ? un.length : '?'} job(s) for: ${below.join(', ')}`);
 }
 // THROTTLE a source that is far ahead: park its surplus open jobs so worker capacity
