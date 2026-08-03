@@ -4946,16 +4946,25 @@ test('apify-failures-are-reported', 'SPEC-117: apifyRun discarded every failure 
   assert(/_lastApifyError \|\| [`']no Google Maps results/.test(fc), 'the real reason must land on the job notes');
 });
 
-test('paused-growth-cannot-be-self-healed-back-on', 'SPEC-119: the self-heal backbone must NEVER re-invoke a PAUSED growth agent. SPEC-118 (#121) paused background growth by UNSCHEDULING its crons after DB saturation took the product down (/rest/v1/services 503). But a paused agent reads as `stall`, and cergio-orchestrator (30m, left running) re-runs any can_rerun+enabled stalled agent via cergio_call_edge, and crawl-health-check (2h) re-kicks crawl-seed-osm — either path would silently UNDO the pause and re-saturate the pool within ~30 min. The product outranks growth unconditionally, so every self-heal path must honour the pause, not just the removed cron', '#119', async () => {
+test('paused-growth-cannot-be-self-healed-back-on', 'SPEC-119: the self-heal backbone must NEVER re-invoke a PAUSED growth agent. SPEC-118 (#121) paused background growth by UNSCHEDULING its crons after DB saturation took the product down (/rest/v1/services 503). But a paused agent reads as `stall`, and cergio-orchestrator (30m, left running) re-runs any can_rerun+enabled stalled agent via cergio_call_edge, and crawl-health-check (2h) re-kicks crawl-seed-osm — either path would silently UNDO the pause and re-saturate the pool within ~30 min. The product outranks growth unconditionally, so every self-heal path must honour the pause, not just the removed cron. SPEC-241 (2026-08-02): the MEMBERSHIP flipped — 20260731020000 rescheduled all five growth crons and 20260802170000 restored creator-harvest, but this gate kept PINNING the five names into the set, so the file said PAUSED while the crons said RUNNING: two sources of truth, and the orchestrator refused to revive exactly the agents that were supposed to run. The MECHANISM asserts stay (import + skip + isGrowthPaused); the set must now be EMPTY while those crons stand. The next emergency pause re-adds names here, unschedules the crons, and updates this gate — all in ONE commit.', '#119', async () => {
   const gp = readFile('supabase/functions/_shared/growthPause.ts');
   assert(/PAUSED_GROWTH_AGENTS/.test(gp), 'a single source of truth for paused growth agents must exist');
+  // stripComments: every agent name legitimately appears in the file\'s own history
+  // comment — only the SET LITERAL may not contain them while their crons stand.
+  const gpc = stripComments(gp);
   for (const a of ['supply-engine','fulfill-crawl','crawl-seed-osm','creator-harvest','creator-enrich'])
-    assert(gp.includes(`'${a}'`), `the paused set must include ${a} (the SPEC-118 unscheduled crons)`);
+    assert(!gpc.includes(`'${a}'`), `${a} is in PAUSED_GROWTH_AGENTS while 20260731020000/20260802170000 schedule its cron — the file says PAUSED, the cron says RUNNING, and the orchestrator refuses to revive an agent that is supposed to run. Pausing again means: add it here, unschedule the cron, update this gate — one commit (SPEC-241)`);
   const orch = readFile('supabase/functions/cergio-orchestrator/index.ts');
   assert(/from '\.\.\/_shared\/growthPause\.ts'/.test(orch) && /PAUSED_GROWTH_AGENTS/.test(orch),
     'the orchestrator must import + honour the paused set — otherwise its 30m self-heal re-invokes paused agents and undoes the emergency pause');
   assert(/PAUSED_GROWTH_AGENTS\.has\(a\.agent\)\)\s*continue/.test(orch),
     'the orchestrator heal loop must SKIP (continue) a paused agent before the stall re-run');
+  // BOTH self-heal loops carry the skip. Found by mutation-testing SPEC-241: deleting
+  // ONE of the two skips left this gate green because /.test()/ is satisfied by the
+  // survivor — a gate that cannot fail on half the damage.
+  const skipCount = (orch.match(/PAUSED_GROWTH_AGENTS\.has\(a\.agent\)\)\s*continue/g) || []).length;
+  assert(!(skipCount < 2),
+    'one of the orchestrator\'s two self-heal loops lost its paused-agent skip — that loop would re-invoke a paused agent within ~30 minutes');
   const ch = readFile('supabase/functions/crawl-health-check/index.ts');
   assert(/!isGrowthPaused\('crawl-seed-osm'\)/.test(ch),
     'crawl-health self-heal must not re-kick the paused OSM seeder');
