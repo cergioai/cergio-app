@@ -18,39 +18,123 @@ import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 // BLOCKED (never harvested — MEMORY: mobile_first_positioning + no-values guard):
 // massage, tattoo, makeup, personal chef, plus SHAFT (sex/hate/alcohol/firearms/
 // tobacco/gambling/adult/DJ-nightlife/plastic surgery/drugs). Do NOT re-add them.
-const NICHES: Array<{ q: string; category: string }> = [
-  // Tarik's 14 target categories — INFLUENCERS / content creators (people with an
-  // audience who publish a partner/collab email), NOT bookable service providers.
-  { q: 'parenting influencer',        category: 'parenting' },
-  { q: 'mom influencer',              category: 'parenting' },
-  { q: 'family content creator',      category: 'parenting' },
-  { q: 'fitness influencer',          category: 'fitness' },
-  { q: 'fitness content creator',     category: 'fitness' },
-  { q: 'health influencer',           category: 'health' },
-  { q: 'healthy living creator',      category: 'health' },
-  { q: 'pet influencer',              category: 'pets' },
-  { q: 'dog influencer',              category: 'pets' },
-  { q: 'nutrition influencer',        category: 'nutrition' },
-  { q: 'dietitian content creator',   category: 'nutrition' },
-  { q: 'wedding influencer',          category: 'weddings' },
-  { q: 'bride content creator',       category: 'weddings' },
-  { q: 'home decor influencer',       category: 'home' },
-  { q: 'interior design creator',     category: 'home' },
-  { q: 'real estate influencer',      category: 'real estate' },
-  { q: 'realtor content creator',     category: 'real estate' },
-  { q: 'fashion influencer',          category: 'fashion' },
-  { q: 'style content creator',       category: 'fashion' },
-  { q: 'lifestyle influencer',        category: 'lifestyle' },
-  { q: 'lifestyle blogger',           category: 'lifestyle' },
-  { q: 'beauty influencer',           category: 'beauty' },
-  { q: 'skincare influencer',         category: 'beauty' },
-  { q: 'shopping influencer',         category: 'shopping' },
-  { q: 'fashion haul creator',        category: 'shopping' },
-  { q: 'car influencer',              category: 'auto' },
-  { q: 'auto content creator',        category: 'auto' },
-  { q: 'wellness influencer',         category: 'wellness' },
-  { q: 'self care creator',           category: 'wellness' },
+// SPEC-245 — THE FOUNDER'S TIERED CREATOR CATEGORIES (2026-08-02, recorded verbatim in
+// specs/CERGIO-CRAWL-LISTS.md — the source of truth; this is its encoding).
+// Tier order is crawl priority. Search-based discovery has no queue to "exhaust", so
+// priority is encoded as each run's QUERY BUDGET per tier (see TIER_BUDGET below) with
+// rotation WITHIN each tier for coverage across runs. The founder marked `nightlife`
+// BLOCKED for creators — deliberately absent. The legacy niches (last tier) keep their
+// original category tags because pending_review rows already carry them: dropping a
+// legacy category from the target list would hand those rows to the SPEC-86b
+// quarantine. PHASE 3 list is FORTHCOMING from the founder — do not invent it.
+const NICHE_TIERS: Array<Array<{ q: string; category: string }>> = [
+  [ // Tier 1 — founder order: pets, parenting, fitness, home, beauty, local city life
+    { q: 'pet influencer',              category: 'pets' },
+    { q: 'dog influencer',              category: 'pets' },
+    { q: 'parenting influencer',        category: 'parenting' },
+    { q: 'mom influencer',              category: 'parenting' },
+    { q: 'family content creator',      category: 'parenting' },
+    { q: 'fitness influencer',          category: 'fitness' },
+    { q: 'fitness content creator',     category: 'fitness' },
+    { q: 'home decor influencer',       category: 'home' },
+    { q: 'interior design creator',     category: 'home' },
+    { q: 'beauty influencer',           category: 'beauty' },
+    { q: 'skincare influencer',         category: 'beauty' },
+    { q: 'city life content creator',   category: 'local city life' },
+    { q: 'local lifestyle creator',     category: 'local city life' },
+  ],
+  [ // Tier 2 — food, wellness, style, photography, events, neighbourhood accounts
+    { q: 'food content creator',        category: 'food' },
+    { q: 'local food influencer',       category: 'food' },
+    { q: 'wellness influencer',         category: 'wellness' },
+    { q: 'self care creator',           category: 'wellness' },
+    { q: 'style content creator',       category: 'style' },
+    { q: 'personal style influencer',   category: 'style' },
+    { q: 'photography content creator', category: 'photography' },
+    { q: 'events content creator',      category: 'events' },
+    { q: 'neighbourhood account',       category: 'neighbourhood accounts' },
+    { q: 'neighborhood community account', category: 'neighbourhood accounts' },
+  ],
+  [ // Tier 3 — full ontology, founder order, `nightlife` BLOCKED and absent
+    { q: 'dog breed content creator',   category: 'dog breeds — specific' },
+    { q: 'cat content creator',         category: 'cat owners' },
+    { q: 'small pets creator',          category: 'small pets and exotics' },
+    { q: 'new mum creator',             category: 'new mums' },
+    { q: 'dad content creator',         category: 'dads' },
+    { q: 'toddler activities creator',  category: 'toddler activities' },
+    { q: 'school age parenting creator', category: 'school-age parenting' },
+    { q: 'special needs parenting creator', category: 'special needs parenting' },
+    { q: 'home workout creator',        category: 'home workouts' },
+    { q: 'running content creator',     category: 'running' },
+    { q: 'cycling content creator',     category: 'cycling' },
+    { q: 'yoga content creator',        category: 'yoga' },
+    { q: 'pilates content creator',     category: 'pilates' },
+    { q: 'strength training creator',   category: 'strength training' },
+    { q: 'marathon endurance creator',  category: 'marathon and endurance' },
+    { q: 'meal prep content creator',   category: 'nutrition and meal prep' },
+    { q: 'plant based content creator', category: 'plant-based' },
+    { q: 'supplements content creator', category: 'supplements' },
+    { q: 'mindfulness content creator', category: 'mental health and mindfulness' },
+    { q: 'sleep recovery creator',      category: 'sleep and recovery' },
+    { q: 'home renovation creator',     category: 'home renovation' },
+    { q: 'interiors content creator',   category: 'interiors' },
+    { q: 'small space living creator',  category: 'small space living' },
+    { q: 'first apartment creator',     category: 'rentals and first apartments' },
+    { q: 'decluttering content creator', category: 'organisation and decluttering' },
+    { q: 'cleaning content creator',    category: 'cleaning' },
+    { q: 'DIY repair content creator',  category: 'DIY and repair' },
+    { q: 'plant care content creator',  category: 'gardening and plants' },
+    { q: 'skincare content creator',    category: 'skincare' },
+    { q: 'haircare content creator',    category: 'haircare' },
+    { q: 'natural hair creator',        category: 'natural hair' },
+    { q: 'nail content creator',        category: 'nails' },
+    { q: 'lash and brow creator',       category: 'lashes and brows' },
+    { q: 'mens grooming creator',       category: 'mens grooming' },
+    { q: 'thrift fashion creator',      category: 'fashion and thrift' },
+    { q: 'sustainable living creator',  category: 'sustainable living' },
+    { q: 'budget living creator',       category: 'budget living' },
+    { q: 'local restaurant creator',    category: 'local food and restaurants' },
+    { q: 'coffee content creator',      category: 'coffee' },
+    { q: 'things to do creator',        category: 'events and things to do' },
+    { q: 'neighbourhood guide creator', category: 'neighbourhood guides' },
+    { q: 'moving to the city creator',  category: 'moving to the city' },
+    { q: 'newcomer content creator',    category: 'expat and newcomer' },
+    { q: 'student life creator',        category: 'student life' },
+    { q: 'dating social content creator', category: 'dating and social' },
+    { q: 'wedding influencer',          category: 'weddings' },
+    { q: 'baby shower party creator',   category: 'baby showers and parties' },
+    { q: 'content photography creator', category: 'photography and content' },
+    { q: 'videography content creator', category: 'videography' },
+    { q: 'side hustle creator',         category: 'side hustle and freelance' },
+    { q: 'small business owner creator', category: 'small business owners' },
+    { q: 'real estate influencer',      category: 'real estate' },
+    { q: 'car content creator',         category: 'cars' },
+    { q: 'local weekend travel creator', category: 'travel — local weekends' },
+    { q: 'beach outdoors creator',      category: 'beaches and outdoors' },
+    { q: 'sports fan content creator',  category: 'sports fans' },
+    { q: 'pet rescue adoption creator', category: 'pet rescue and adoption' },
+  ],
+  [ // Legacy niches — kept LAST so existing pending_review rows keep a valid category
+    { q: 'health influencer',           category: 'health' },
+    { q: 'healthy living creator',      category: 'health' },
+    { q: 'nutrition influencer',        category: 'nutrition' },
+    { q: 'dietitian content creator',   category: 'nutrition' },
+    { q: 'bride content creator',       category: 'weddings' },
+    { q: 'realtor content creator',     category: 'real estate' },
+    { q: 'fashion influencer',          category: 'fashion' },
+    { q: 'lifestyle influencer',        category: 'lifestyle' },
+    { q: 'lifestyle blogger',           category: 'lifestyle' },
+    { q: 'shopping influencer',         category: 'shopping' },
+    { q: 'fashion haul creator',        category: 'shopping' },
+    { q: 'car influencer',              category: 'auto' },
+    { q: 'auto content creator',        category: 'auto' },
+  ],
 ];
+// Each run's query budget per tier, in tier order (sums to MAX_QUERIES). Tier 1 gets
+// half of every run — the founder's "crawl first" — while lower tiers keep enough
+// share that coverage still advances across runs.
+const TIER_BUDGET = [24, 12, 8, 4];
+const NICHES: Array<{ q: string; category: string }> = NICHE_TIERS.flat();
 // NYC + Miami dual-metro geo set (SPEC-86 expansion): accumulate BOTH cities
 // toward ~200 each. cityVerified() gates every hit to the creator's own text, so
 // a Miami query that surfaces an LA/Utah handle is dropped — geo stays honest.
@@ -235,8 +319,11 @@ const gdb = growthDb();
     // the 14 target influencer categories — EXCEPT the Modash-vetted seeds, which
     // are protected by discovered_via and kept no matter their legacy category tag.
     // Runs server-side on the cron tick (no Mac); harmless once the pool is clean.
-    const TARGET_CATEGORIES = ['parenting','fitness','health','pets','nutrition',
-      'weddings','home','real estate','fashion','lifestyle','beauty','shopping','auto','wellness'];
+    // SPEC-245 — DERIVED from the niches, never hand-written: the trap here is adding
+    // a niche whose category is missing from this list, at which point this cleanup
+    // quarantines every row that niche harvests, silently, forever. Deriving makes
+    // that impossible — a category is targetable exactly when some niche harvests it.
+    const TARGET_CATEGORIES = [...new Set(NICHES.map((n) => n.category))];
     try {
       const inList = '(' + TARGET_CATEGORIES.map((c) => '"' + c + '"').join(',') + ')';
       const { data: q } = await gdb.from('leads_influencers')
@@ -360,29 +447,35 @@ const gdb = growthDb();
     // genuinely different slice of the niche × city × modifier space (≈ 45 niches ×
     // 20 cities × 10 shapes = 9,000 distinct queries cycled over successive runs).
     const spin = Math.floor(Date.now() / 1200000);   // 20-min run bucket
-    const niches = rotate(NICHES,    (spin * 7)  % NICHES.length);
     const cities = rotate(CITIES,    (spin * 3)  % CITIES.length);
     const mods   = rotate(MODIFIERS, (spin * 2)  % MODIFIERS.length);
 
-    // Build a rotated, de-duplicated query list: walk niche × city × modifier
-    // diagonally so a single run mixes several niches/cities/shapes (max coverage)
-    // rather than exhausting one niche first. Cap at MAX_QUERIES.
+    // SPEC-245 — build the query list TIER BY TIER, each tier rotated within itself and
+    // holding its own share of the run (TIER_BUDGET). Tier order is the founder's crawl
+    // order; rotation within a tier keeps successive runs exploring different slices
+    // instead of re-finding the same handles. The walk is still diagonal across
+    // city × modifier so one run mixes several niches and shapes.
     const queries: Array<{ query: string; niche: { q: string; category: string }; city: string }> = [];
     const qseen = new Set<string>();
-    outer:
-    for (let i = 0; i < niches.length; i++) {
-      const n = niches[i];
-      for (let j = 0; j < cities.length; j++) {
-        const c = cities[(i + j) % cities.length];
-        const mod = mods[(i + j) % mods.length];
-        const query = mod.replace('{c}', c).replace('{n}', n.q);
-        const k = query.toLowerCase();
-        if (qseen.has(k)) continue;
-        qseen.add(k);
-        queries.push({ query, niche: n, city: c });
-        if (queries.length >= MAX_QUERIES) break outer;
+    NICHE_TIERS.forEach((tier, t) => {
+      const tn = rotate(tier, (spin * 7) % Math.max(tier.length, 1));
+      let added = 0;
+      outer:
+      for (let i = 0; i < tn.length; i++) {
+        const n = tn[i];
+        for (let j = 0; j < cities.length; j++) {
+          const c = cities[(i + j) % cities.length];
+          const mod = mods[(i + j) % mods.length];
+          const query = mod.replace('{c}', c).replace('{n}', n.q);
+          const k = query.toLowerCase();
+          if (qseen.has(k)) continue;
+          qseen.add(k);
+          queries.push({ query, niche: n, city: c });
+          added++;
+          if (added >= (TIER_BUDGET[t] ?? 4) || queries.length >= MAX_QUERIES) break outer;
+        }
       }
-    }
+    });
 
     const seen = new Set<string>();
     const rows: Array<Record<string, unknown>> = [];

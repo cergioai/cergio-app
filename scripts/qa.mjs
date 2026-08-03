@@ -6679,6 +6679,45 @@ test('the-dma-is-its-own-definition-not-the-state-column', 'SPEC-244 (founder, 2
   assert(!(!/resolveDma/.test(ld)), 'the data explorer no longer resolves legacy NY/FL filter values — older screens would silently return nothing');
 });
 
+test('the-founder-tiered-crawl-lists-are-committed-encoded-and-blocked-free', 'SPEC-245 (founder, 2026-08-02, uploaded doc): 130 service types in 3 tiers and 70 creator categories in 3 tiers, with per-tier order — "crawl first, in this order". The list is COMMITTED to the repo (specs/CERGIO-CRAWL-LISTS.md) so the subagents read the founder\'s words, not a paraphrase — a paraphrase is what once produced a 6-city list from a 12-city order. Encoding rules this gate holds: (1) Tier 1 is pinned in the founder\'s EXACT order, because tier order is crawl order — the seeder emits it first and FIFO does the rest. (2) TYPES is DERIVED from the tier arrays — a hand-flattened copy is a second source of truth. (3) Every entry must pass fulfill-crawl\'s own blocklist, and the four founder-BLOCKED entries (sports massage, private chef, DJ, makeup artist) plus the blocked creator category (nightlife) must never ride in on a list edit. (4) TARGET_CATEGORIES is DERIVED from the niches: the SPEC-86b cleanup quarantines any pending_review row whose category is outside that list, so a hand-written list plus a new niche equals silent quarantine of everything that niche harvests — and the legacy categories must stay present for the rows that already carry them. (5) The PHASE 3 list is FORTHCOMING from the founder — the placeholder must stand, never an invented list.', '#245', () => {
+  // 1) the committed list, with the Phase-3 placeholder standing
+  const spec = readFile('specs/CERGIO-CRAWL-LISTS.md');
+  assert(!(!/PHASE 3 LIST: FORTHCOMING/.test(spec)), 'the Phase-3 placeholder is gone from specs/CERGIO-CRAWL-LISTS.md — either someone invented the list or deleted the warning that stops the next agent inventing it');
+  assert(!(!/never crawled or surfaced at any tier/.test(spec)), 'the BLOCKED line is gone from the committed list');
+  // 2) tier 1 pinned in the founder's exact order; TYPES derived, never restated
+  const scope = readFile('scripts/_growth-scope.mjs');
+  const t1 = ((scope.match(/export const TYPES_T1 = \[[\s\S]*?\];/) || [''])[0].match(/'[^']+'/g) || []).map((s) => s.slice(1, -1));
+  const FOUNDER_T1 = ['personal trainer', 'dog walker', 'dog trainer', 'babysitter', 'house cleaning', 'handyman', 'hair stylist', 'photographer', 'tutor', 'mover', 'pet sitter', 'home organizer'];
+  assert(!(t1.join('|') !== FOUNDER_T1.join('|')), `TYPES_T1 is [${t1.join(', ')}] — the founder gave twelve types IN ORDER ("crawl first, in this order"); reordering or editing them is a founder decision`);
+  assert(!(!/export const TYPES = \[\.\.\.TYPES_T1, \.\.\.TYPES_T2, \.\.\.TYPES_T3\];/.test(scope)), 'TYPES is no longer derived from the tier arrays — a hand-flattened copy is a second source of truth and the untested copy is the one that seeds jobs');
+  // 3) every service type passes fulfill-crawl's OWN blocklist (one definition of
+  // blocked), and the founder-BLOCKED entries are absent by name
+  const fcRaw = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const reMatch = fcRaw.match(/const OSM_BLOCKED = new RegExp\(\n([\s\S]*?)\n  'i',\n\);/);
+  assert(!(!reMatch), 'OSM_BLOCKED could not be extracted from fulfill-crawl — this gate can no longer verify the lists are blocked-free; fix the gate before shipping');
+  const blockedRe = new RegExp(reMatch[1].split('\n').map((l) => l.trim().replace(/^'/, '').replace(/'\s*\+?\s*$/, '')).join(''), 'i');
+  const allTypes = ((scope.match(/export const TYPES_T[123] = \[[\s\S]*?\];/g) || []).join(',').match(/'[^']+'/g) || []).map((s) => s.slice(1, -1));
+  assert(!(allTypes.length < 100), `only ${allTypes.length} service types extracted — the tier arrays are missing or renamed; the founder list holds 126 crawlable types`);
+  for (const t of allTypes) {
+    assert(!(blockedRe.test(t)), `service type "${t}" matches fulfill-crawl's blocklist — a blocked category is one list edit away from being crawled and surfaced`);
+  }
+  for (const b of ['sports massage', 'private chef', 'makeup artist']) {
+    assert(!(allTypes.includes(b)), `"${b}" is in the service types — the founder marked it BLOCKED at every tier`);
+  }
+  // 4) creator tiers encoded; nightlife absent; TARGET_CATEGORIES derived; legacy kept
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+  assert(!(!/const NICHE_TIERS/.test(ch)), 'NICHE_TIERS is gone — the creator tiers are no longer encoded and the founder order has no code path');
+  for (const c of ['pets', 'parenting', 'fitness', 'home', 'beauty', 'local city life']) {
+    assert(!(!new RegExp(`category: '${c}'`).test(ch)), `Tier-1 creator category "${c}" has no niche — the founder listed it first and nothing harvests it`);
+  }
+  assert(!(/category: 'nightlife'/.test(ch)), 'a nightlife niche is back — the founder BLOCKED nightlife for creators');
+  assert(!(!/const TARGET_CATEGORIES = \[\.\.\.new Set\(NICHES\.map\(\(n\) => n\.category\)\)\];/.test(ch)), 'TARGET_CATEGORIES is hand-written again — the next niche whose category is not on the list gets every row it harvests quarantined by the SPEC-86b cleanup, silently');
+  for (const legacy of ['health', 'nutrition', 'lifestyle', 'shopping', 'auto', 'fashion']) {
+    assert(!(!new RegExp(`category: '${legacy}'`).test(ch)), `legacy category "${legacy}" has no niche any more — pending_review rows already tagged with it would be quarantined by the SPEC-86b cleanup`);
+  }
+  assert(!(!/TIER_BUDGET\[t\]/.test(stripComments(ch))), 'the query walk ignores the tier budget — every tier competes equally and the founder\'s "crawl first" order is decoration');
+});
+
 
 main().catch(e => {
   console.error(e);
