@@ -1,0 +1,2 @@
+Fire growth-setup after SPEC-251: run the duplicate-safe un-park so every source's
+queue comes back runnable and the fresh-100 gathering actually starts. 2026-08-03.
