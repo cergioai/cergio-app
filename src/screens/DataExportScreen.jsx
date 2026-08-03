@@ -145,6 +145,17 @@ export function DataExportScreen() {
     if (!rows.length) { setErr('Nothing to download for this filter.'); return; }
     saveCsv(toCsv(rows), ['Cergio', audience, city, locality, source, serviceType, category, status, reachableOnly ? 'reachable' : '', hours ? hours + 'h' : ''].filter(Boolean).join(' ') + '.csv');
   };
+  // SPEC-249 — a board row's download is THAT source under the CURRENT filters
+  // (city/location/type/time/size), not the whole pile.
+  const downloadSource = async (src) => {
+    const { data: d2, error } = await leadsDashboard(audience, {
+      city: city || null, locality: locality || null, source: src,
+      serviceType: serviceType || null, category: category || null,
+      contactableOnly: reachableOnly, sinceHours: hours, limit: size,
+    });
+    if (error || !d2?.rows?.length) { setErr(error?.message || `Nothing to download for ${src} under these filters.`); return; }
+    saveCsv(toCsv(d2.rows), ['Cergio', audience, src, city, locality, serviceType, category, hours ? hours + 'h' : '', 'last' + size].filter(Boolean).join(' ') + '.csv');
+  };
   const downloadEach = async () => {
     const list = sources.map(([s]) => s).filter((s) => s !== '(other/unlabeled)');
     if (!list.length) { setErr('No sources with rows.'); return; }
@@ -265,6 +276,47 @@ export function DataExportScreen() {
             {isLead && <Stat label="With email" value={n(data.withEmail)} />}
             <Stat label="New 24h" value={n(data.growth?.last1d)} />
           </div>
+
+          {/* SPEC-249 — THE PER-SOURCE AUDIT BOARD (founder, 2026-08-03: "need to see a
+              clear per source status... i don't know what's working and what's not and
+              how to download"). One row per source: absolute STATE (fresh-100 progress —
+              never filtered, or a time filter would read as a source dying), counts that
+              obey EVERY filter above, the contactable drill-down (phone / email / both),
+              queue health, and a download for exactly that source under these filters.
+              A failed count renders as FAILED, never as a confident zero. */}
+          {!!(data.board || []).length && (
+            <div className="mt-4 rounded-xl border border-bg5 divide-y divide-bg5">
+              <div className="px-3 py-2 text-[10px] text-b3 font-bold uppercase tracking-wider">Source status · counts obey the filters above</div>
+              {data.board.map((b) => {
+                const stTone = /FAILED/.test(b.state) ? 'text-red-600'
+                  : /met/.test(b.state) ? 'text-g'
+                  : /paused/.test(b.state) ? 'text-amber-700' : 'text-black';
+                const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
+                return (
+                  <div key={b.source} className="px-3 py-2.5">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-[13px] font-extrabold text-black">{b.source}</span>
+                      <span className={`text-[11px] font-bold uppercase ${stTone}`}>{b.state}</span>
+                      <span className="text-[11px] text-b3 tabular-nums">fresh {b.fresh ?? 'FAILED'}/{b.fresh_target}</span>
+                      <div className="flex-1" />
+                      <span className="text-[13px] font-extrabold text-black tabular-nums">{b.filtered === null ? 'FAILED' : b.filtered.toLocaleString()} rows</span>
+                      <button onClick={() => downloadSource(b.source)}
+                        className="rounded-lg bg-g px-2.5 py-1 text-[11px] font-bold text-white">⬇ CSV</button>
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-3 text-[11px] text-b3 tabular-nums flex-wrap">
+                      <span>☎ {pct(b.phone_pct)}</span>
+                      <span>✉ {pct(b.email_pct)}</span>
+                      <span>both {pct(b.both_pct)}</span>
+                      {b.queue_new !== null && b.queue_new !== undefined && <span>queue {b.queue_new}</span>}
+                      {!!b.queue_parked && <span className="text-red-600">parked {b.queue_parked}</span>}
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-b3">{b.state_detail}</div>
+                    {!!(b.errors || []).length && <div className="mt-0.5 text-[10px] text-red-600">{b.errors.join(' | ')}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {!!sources.length && (
             <div className="mt-4 rounded-xl border border-bg5 divide-y divide-bg5">

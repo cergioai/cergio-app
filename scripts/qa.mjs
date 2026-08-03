@@ -6779,6 +6779,32 @@ test('the-founder-tiered-crawl-lists-are-committed-encoded-and-blocked-free', 'S
   assert(!(!/TIER_BUDGET\[t\]/.test(stripComments(ch))), 'the query walk ignores the tier budget — every tier competes equally and the founder\'s "crawl first" order is decoration');
 });
 
+test('the-per-source-audit-board-answers-what-is-working-with-honest-counts', 'SPEC-249 (founder, 2026-08-03, verbatim: "need to see a clear per source status filetrable by last 100 500 etc and time... filetrable by creators or services and per service type... i can\'t see this right now.. so i don\'t know what\'s working and what\'s not and how to download" + "per city and per location" + "with contactable % (with drill down to (email%) % phone) % both"). One row per source on /ops/data: an ABSOLUTE state (fresh-100 progress against the committed line — deliberately unfiltered, because a state that obeyed the time filter would read as a source dying whenever the founder narrowed the window), counts that obey EVERY screen filter (DMA, location, service type/category, time, row size), the contactable drill-down, queue health, and a per-source download that carries the current filters. And the counts are HONEST: every query error is surfaced verbatim on the row — the ops console swallowed count errors into `?? 0` and the founder stared at "Services total 0" beside a source whose own reason string said 166 rows, which is precisely how trust in a correct system dies.', '#249', () => {
+  const ld = readFile('supabase/functions/leads-dashboard/index.ts');
+  const at = ld.indexOf('THE PER-SOURCE AUDIT BOARD');
+  assert(!(at < 0), 'the audit board is gone from leads-dashboard — the founder is back to guessing what is working');
+  const blk = ld.slice(at, ld.indexOf('return json', at));
+  assert(!(!blk.length), 'the board block could not be delimited — fix the gate before shipping');
+  assert(!(!/if \(error\) \{ row\.errors\.push\(`\$\{label\}: \$\{error\.message\}`\); return null; \}/.test(blk)), 'a failed board count no longer surfaces its verbatim error — it will render as a confident zero, the exact defect this board exists to end');
+  assert(!(!/q\.gte\('fetched_at', FRESH\)/.test(blk)), 'the board state lost the fresh-100 line — it would count historical rows and report sources "done" that have produced nothing today');
+  assert(!(!/if \(dmaSpellings\) out = out\.in\(stateCol, dmaSpellings\)/.test(blk)), 'the board counts ignore the City (DMA) filter — the founder asked per city');
+  assert(!(!/if \(locality\) out = out\.eq\('city', locality\)/.test(blk)), 'the board counts ignore the Location filter — the founder asked per location');
+  assert(!(!/if \(sinceHours > 0\) out = out\.gte\(tsCol/.test(blk)), 'the board counts ignore the Time filter');
+  // pin the COMPUTATIONS, not the field names — the names also live in the type and the
+  // row initialiser, so a gate matching the bare word could never fail (mutation-caught)
+  assert(!(!/row\.phone_pct = nPhone === null \? null : Math\.round/.test(blk)), 'the phone% computation is gone from the contactable drill-down — the founder asked for it verbatim');
+  assert(!(!/row\.email_pct = nEmail === null \? null : Math\.round/.test(blk)), 'the email% computation is gone from the contactable drill-down');
+  assert(!(!/row\.both_pct = nBoth === null \? null : Math\.round/.test(blk)), 'the both% computation is gone from the contactable drill-down');
+  assert(!(!/queue_parked/.test(blk)), 'the board no longer shows parked queue jobs — a parked source is invisible again, and parked is how the creator path silently died three times');
+  assert(!(!/board, rows: rows/.test(ld)), 'the board is computed but never returned — a check that cannot act');
+  const ui = readFile('src/screens/DataExportScreen.jsx');
+  assert(!(!/data\.board/.test(stripComments(ui))), 'the screen never renders the board');
+  assert(!(!/downloadSource/.test(ui)), 'no per-source download on the board rows — "how to download" was the founder\'s question');
+  const dl = (ui.match(/const downloadSource[\s\S]*?\n  \};/) || [''])[0];
+  assert(!(!/sinceHours: hours/.test(dl) || !/locality: locality/.test(dl)), 'the per-source download drops the screen filters — what the founder filters is not what downloads');
+  assert(!(!/'FAILED'/.test(ui)), 'a failed count renders as something other than FAILED on the board — silence returns');
+});
+
 test('accept-request-rpc-is-hardened-in-its-final-definition', 'SPEC-247 (night-fleet booking-loop agent finding, founder approved 2026-08-02): accept_request_with_time is SECURITY DEFINER and creates a CONFIRMED booking, but its original definition (20260616020000) verified only that the caller owns the service — nothing about the caller\'s relationship to the request. Any service owner could accept ANY request id and mint a booking + notification for that consumer; and the SPEC-128 duplicate-booking guard lived only in the app, so a direct API caller (or a UI race that slipped the client map) still created duplicates. The wall belongs in the function, where no caller can skip it. This gate replays migration history the #242 way: the LAST migration to define the function must carry (1) the self-accept block, (2) the server-side repeat-accept reuse of the existing active booking, and (3) must NOT reference bookings.request_id — no committed migration creates that column, so the definition would fail to apply. History stays immutable; the final word must be the hardened one.', '#246', () => {
   const migDir = path.join(REPO_ROOT, 'supabase/migrations');
   const files = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();

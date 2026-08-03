@@ -5,7 +5,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb } from '../_shared/growthDb.ts';
-import { DMAS, DMA_STATE_SPELLINGS, resolveDma } from '../_shared/opsPayload.ts';
+import { AUDIT_CAP_SOURCES, DMAS, DMA_STATE_SPELLINGS, auditFreshSince, resolveDma, sourceAuditCap } from '../_shared/opsPayload.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -218,7 +218,106 @@ serve(async (req: Request) => {
     if (body.contactableOnly && isLeadTable) cq = cq.or(`phone.not.is.null,${emailCol}.not.is.null`);
     const { count: filteredTotal } = await cq;
 
-    return json({ audience, label: DS.label, srcCol, isLeadTable, total, filteredTotal: filteredTotal ?? 0, rowCap: ROW_CAP, localities, serviceTypes, categories, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, rows: rows || [] });
+    // ── SPEC-249 · THE PER-SOURCE AUDIT BOARD ────────────────────────────────────────
+    // Founder, 2026-08-03, verbatim: "need to see a clear per source status filetrable
+    // by last 100 500 etc and time... filetrable by creators or services and per
+    // service type... i can't see this right now.. so i don't know what's working and
+    // what's not and how to download" + "per city and per location" + "with contactable
+    // % (with drill down to (email%) % phone) % both".
+    // One row per source. STATE is absolute (fresh-100 progress vs the committed line —
+    // never affected by filters, or a time filter would read as a source dying). The
+    // COUNTS obey every filter on the screen (DMA, location, type/category, time).
+    // Queries run SEQUENTIALLY and every error is SURFACED on the row verbatim — the
+    // ops console's swallowed `count ?? 0` is how the founder saw confident zeros
+    // beside real data, and this board exists to answer "what's working", so a count
+    // that failed must say FAILED, never 0.
+    type BoardRow = {
+      source: string; state: string; state_detail: string;
+      fresh: number | null; fresh_target: number;
+      filtered: number | null; phone_pct: number | null; email_pct: number | null; both_pct: number | null;
+      queue_new: number | null; queue_parked: number | null; errors: string[];
+    };
+    const board: BoardRow[] = [];
+    // `db` IS the growth client here (SPEC-203) — aliased so gate #166 can tell a
+    // growth read from a product read by name alone.
+    const gdb = db;
+    if (isLeadTable) {
+      const FRESH = auditFreshSince(Deno.env.get('AUDIT_FRESH_SINCE'));
+      const CAP = sourceAuditCap(Deno.env.get('SOURCE_AUDIT_CAP'));
+      const CREATOR_TARGET = Number(Deno.env.get('CREATOR_TARGET') || 100);
+      const boardSources = audience === 'creators'
+        ? CRE_SOURCES
+        : ['osm', 'craigslist', 'yellowpages_apify', 'google_lsa', 'gmaps_apify', 'ig_services', 'yelp'];
+      const phoneCol = 'phone';
+      for (const src of boardSources) {
+        const row: BoardRow = { source: src, state: '', state_detail: '', fresh: null,
+          fresh_target: audience === 'creators' ? CREATOR_TARGET : CAP,
+          filtered: null, phone_pct: null, email_pct: null, both_pct: null,
+          queue_new: null, queue_parked: null, errors: [] };
+        const keys = audience === 'creators' ? [src] : (AUDIT_CAP_SOURCES[src] || [src]);
+        const srcMatch = (q: any) => (isPrefixSource(src) ? q.like(srcCol, `${src}%`) : q.in(srcCol, keys));
+        const cnt = async (label: string, build: (q: any) => any): Promise<number | null> => {
+          const { count, error } = await build(srcMatch(db.from(table).select('id', { count: 'exact', head: true })));
+          if (error) { row.errors.push(`${label}: ${error.message}`); return null; }
+          return count ?? 0;
+        };
+        // 1) absolute fresh progress (creators: absolute total vs CREATOR_TARGET —
+        //    the standing get-100-then-audit order counts every row, and the table
+        //    started tonight at zero anyway)
+        row.fresh = audience === 'creators'
+          ? await cnt('target count', (q) => q)
+          : await cnt('fresh count', (q) => (FRESH ? q.gte('fetched_at', FRESH) : q));
+        // 2) state — the founder's orders, in precedence order
+        if (audience === 'services' && src === 'yelp') {
+          row.state = 'paused';
+          row.state_detail = 'paused by founder order 2026-08-02 ("don\'t delete yelp.. just pause as a source") — rows kept, source idle until re-activated';
+        } else if (audience === 'services' && src === 'ig_services') {
+          row.state = (row.fresh ?? 0) > 0 ? 'crawling (dual-class)' : 'starting (dual-class)';
+          row.state_detail = 'writes a service row AND a creator row per crawl; stops at the 100-creator target, exempt from the service cap (SPEC-246/248)';
+        } else if (row.fresh === null) {
+          row.state = 'COUNT FAILED';
+          row.state_detail = row.errors.join(' | ');
+        } else if (row.fresh >= row.fresh_target) {
+          row.state = audience === 'creators' ? 'target met — paused for audit' : 'audit-cap met — stopped for audit';
+          row.state_detail = `${row.fresh} of ${row.fresh_target} — download and audit; it stopped itself (SPEC-246)`;
+        } else {
+          row.state = audience === 'creators' ? `gathering ${row.fresh_target}` : 'gathering fresh 100';
+          row.state_detail = `${row.fresh} of ${row.fresh_target}${audience === 'services' ? ` FRESH since ${FRESH ?? 'ever'}` : ''} — still crawling`;
+        }
+        // 3) filtered counts + contactable drill-down (obey every screen filter)
+        const f = (q: any) => {
+          let out = q;
+          if (dmaSpellings) out = out.in(stateCol, dmaSpellings);
+          if (locality) out = out.eq('city', locality);
+          if (typeFilter) out = out.eq('service_type', typeFilter);
+          if (categoryFilter) out = out.eq('category', categoryFilter);
+          if (sinceHours > 0) out = out.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
+          return out;
+        };
+        row.filtered = await cnt('filtered count', f);
+        if (row.filtered) {
+          const nPhone = await cnt('phone count', (q) => f(q).not(phoneCol, 'is', null));
+          const nEmail = await cnt('email count', (q) => f(q).not(emailCol, 'is', null));
+          const nBoth = await cnt('both count', (q) => f(q).not(phoneCol, 'is', null).not(emailCol, 'is', null));
+          row.phone_pct = nPhone === null ? null : Math.round((nPhone / row.filtered) * 100);
+          row.email_pct = nEmail === null ? null : Math.round((nEmail / row.filtered) * 100);
+          row.both_pct = nBoth === null ? null : Math.round((nBoth / row.filtered) * 100);
+        } else if (row.filtered === 0) { row.phone_pct = 0; row.email_pct = 0; row.both_pct = 0; }
+        // 4) queue health (services only — creators' web-harvest is cron-driven)
+        if (audience === 'services') {
+          const qcnt = async (label: string, st: string[]): Promise<number | null> => {
+            const { count, error } = await gdb.from('crawl_requests').select('id', { count: 'exact', head: true }).eq('source', src).in('status', st);
+            if (error) { row.errors.push(`${label}: ${error.message}`); return null; }
+            return count ?? 0;
+          };
+          row.queue_new = await qcnt('queue new', ['new', 'crawling']);
+          row.queue_parked = await qcnt('queue parked', ['parked']);
+        }
+        board.push(row);
+      }
+    }
+
+    return json({ audience, label: DS.label, srcCol, isLeadTable, total, filteredTotal: filteredTotal ?? 0, rowCap: ROW_CAP, localities, serviceTypes, categories, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, board, rows: rows || [] });
   } catch (e) {
     return json({ error: String(e).slice(0, 300) }, 500);
   }
