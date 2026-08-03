@@ -1,20 +1,15 @@
 # SCOPE
 
-SPEC-251 — founder, 2026-08-03, verbatim: "all crawls are off this project.. also all old
-COO forensick etc have been disabled.. so keep suspended .. other project will execute
-and feed... just focus on bugs and features."
+Wave 2 of the founder-walk direct fixes (founder 2026-08-03: "I need to check NOW").
+This merge also re-fires the whole 9-agent fleet immediately (push-to-main trigger).
 
-One commit: crawl-sources / creators / spend-guard marked SUSPENDED in fleet.json (briefs
-+ standing orders like the yelp pause stay on record for the growth project), matrix
-12 → 9 app-only agents, morning report + runners skip suspended agents, gate #214
-extended so a suspended agent's absence from the matrix is REQUIRED, not an alarm.
+1. **FW-11 fixed** — Reco tracking "Copy link" now shares the SERVICE's page, not the
+   recommender's invite link (invite link only when the reco has no service listing).
+2. **FW-6 annotated NEEDS-REPRO** — the default is already Paid in code (App.jsx
+   useState(false)); the agent must find what actually flips it live before patching.
 
+- `src/screens/RecoTrackingScreen.jsx`
 - `agents/fleet.json`
-- `.github/workflows/night-fleet.yml`
-- `scripts/morning-report.mjs`
-- `scripts/agent-report.mjs`
-- `scripts/agent-work.mjs`
-- `scripts/qa.mjs`
 - `SCOPE.md`
 
 ## Shared files
@@ -24,8 +19,3 @@ May only GROW. To modify an existing line add `SHARED-CHANGE-APPROVED`.
 - `supabase/functions/_shared/**`
 - `supabase/functions/fulfill-crawl/index.ts`
 - `scripts/qa.mjs`
-
-SHARED-CHANGE-APPROVED — qa.mjs gate #214: the single every-agent-in-matrix assert is
-wrapped so SUSPENDED agents (with founder words on record) must be ABSENT from the
-matrix while every active agent must still be present. Executes the founder's verbatim
-2026-08-03 stop order; SPEC-241 flip procedure, old rule preserved in the gate text.
