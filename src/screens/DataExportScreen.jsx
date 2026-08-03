@@ -288,7 +288,7 @@ export function DataExportScreen() {
             <div className="mt-4 rounded-xl border border-bg5 divide-y divide-bg5">
               <div className="px-3 py-2 text-[10px] text-b3 font-bold uppercase tracking-wider">Source status · counts obey the filters above</div>
               {data.board.map((b) => {
-                const stTone = /FAILED/.test(b.state) ? 'text-red-600'
+                const stTone = /FAILED|NO RUNNABLE/.test(b.state) ? 'text-red-600'
                   : /met/.test(b.state) ? 'text-g'
                   : /paused/.test(b.state) ? 'text-amber-700' : 'text-black';
                 const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
@@ -297,7 +297,9 @@ export function DataExportScreen() {
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <span className="text-[13px] font-extrabold text-black">{b.source}</span>
                       <span className={`text-[11px] font-bold uppercase ${stTone}`}>{b.state}</span>
-                      <span className="text-[11px] text-b3 tabular-nums">fresh {b.fresh ?? 'FAILED'}/{b.fresh_target}</span>
+                      {/* never display more than the target — "status of # out of 100
+                          accurate" (founder); the overshoot lives in state_detail */}
+                      <span className="text-[11px] text-b3 tabular-nums">fresh {b.fresh === null || b.fresh === undefined ? 'FAILED' : Math.min(b.fresh, b.fresh_target)}/{b.fresh_target}</span>
                       <div className="flex-1" />
                       <span className="text-[13px] font-extrabold text-black tabular-nums">{b.filtered === null ? 'FAILED' : b.filtered.toLocaleString()} rows</span>
                       <button onClick={() => downloadSource(b.source)}
