@@ -119,6 +119,21 @@ export const DMA_LOCATIONS = {
           'North Miami', 'Kendall', 'Pinecrest'],
 };
 
+// SPEC-251 — every data_source value a source's rows actually carry, for NODE scripts.
+// This is the SAME mapping as AUDIT_CAP_SOURCES in supabase/functions/_shared/
+// opsPayload.ts (Deno cannot be imported here and vice versa), and gate #251 WELDS the
+// two literals byte-for-byte — two copies that drift is the Part-6 defect. Why it
+// exists: fulfillYellowPagesApify writes rows as 'yellowpages', so every guard that
+// counted `data_source = 'yellowpages_apify'` read 0 beside 859 real rows — the spend
+// guard then parked the source EVERY RUN for "zero output" it had actually produced.
+export const AUDIT_COUNT_KEYS = {
+  osm: ['osm'],
+  craigslist: ['craigslist'],
+  yellowpages_apify: ['yellowpages_apify', 'yellowpages'],
+  google_lsa: ['google_lsa', 'google_sponsored'],
+  gmaps_apify: ['gmaps_apify'],
+};
+
 // FAIL-CLOSED parser: only a JSON object with exclusively positive numeric values
 // counts as a quota. Empty, unparseable, a bare number, an array, a zero — all mean
 // "no quota set" and Phase 2 stays locked. A value invented or mangled in transit must

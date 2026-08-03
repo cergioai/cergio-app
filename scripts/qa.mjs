@@ -6812,6 +6812,40 @@ test('the-per-source-audit-board-answers-what-is-working-with-honest-counts', 'S
   assert(!(!/'FAILED'/.test(ui)), 'a failed count renders as something other than FAILED on the board — silence returns');
 });
 
+test('the-fresh-100-queues-actually-run-and-the-board-cannot-say-crawling-when-nothing-can', 'SPEC-251 (renumbered — the fleet consumed SPEC-250 for agent auto-merge; founder, 2026-08-03, verbatim: "they\'re not working.. need them up ... and status of # our of 100 accurate"). The board\'s first live read told the whole story: five sources at "0 of 100 FRESH — still crawling" with ZERO runnable jobs and 2,500–13,000 PARKED each. Three mechanisms, all now closed. (1) The blanket SPEC-168 un-park failed with HTTP 400 EVERY RUN — re-opening all parked rows violates the open-jobs unique index — so "un-parked ?" un-parked nothing for nights while the spend guard and throttle kept parking more; un-parks are now DUPLICATE-SAFE (one row per open triple, only where no open row exists). (2) The spend guard and the tranche gate counted leads under the rota name only, so yellowpages_apify read 0 beside 859 real rows and was re-parked every cycle for output it had produced — both now count through the shared multi-name map, welded Node-side (AUDIT_COUNT_KEYS) to Deno-side (AUDIT_CAP_SOURCES) because two drifting copies is the Part-6 defect. (3) The balance floor measured TOTAL rows, so producing sources read "far ahead" on history and were throttle-parked while their FRESH count sat at 0 — it now measures fresh rows since the committed line. And the board is honest about both directions: x/100 never displays past 100 (overshoot goes to the detail — the cap gates CLAIMS, one in-flight tick can land more than the remainder), and a source with nothing runnable says NO RUNNABLE JOBS, never "crawling".', '#251', () => {
+  // 1) the Node/Deno multi-name maps are WELDED (the #240 technique)
+  const scope = readFile('scripts/_growth-scope.mjs');
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const a = (scope.match(/export const AUDIT_COUNT_KEYS = \{[\s\S]*?\n\};/) || [''])[0];
+  const b = (ops.match(/export const AUDIT_CAP_SOURCES[\s\S]*?\n\};/) || [''])[0];
+  assert(!(!a), 'AUDIT_COUNT_KEYS is gone from _growth-scope.mjs — the Node scripts are back to single-name counting');
+  assert(!(!b), 'AUDIT_CAP_SOURCES is gone from opsPayload.ts');
+  const names = (s) => (s.match(/'[^']+'/g) || []).join(',');
+  assert(!(names(a) !== names(b)), `the Node and Deno multi-name maps have DRIFTED:\n  node: ${names(a)}\n  deno: ${names(b)}\nThe untested copy is the one deciding which source gets parked`);
+  // 2) growth-dedupe: dup-safe un-parks, multi-name spend guard, fresh-based floor
+  const gd = readFile('scripts/growth-dedupe-queue.mjs');
+  // RAW text, not stripComments(): the SQL lives inside template literals and the
+  // comment-stripper blanks template literals too (the Part-6 trap) — a stripped scan
+  // counts 0 of everything and the gate could never fail (mutation-caught, twice now).
+  const unparks = (gd.match(/set status = 'new'/g) || []).length;
+  const dupSafe = (gd.match(/distinct on \(city, service_type, source\)/g) || []).length;
+  assert(!(dupSafe < unparks), `${unparks} un-park statement(s) but only ${dupSafe} are duplicate-safe — the naive form 400s on the open unique index and silently un-parks NOTHING, which is how 30,000 jobs sat parked`);
+  assert(!(!/data_source in \(\$\{keysList\(src\)\}\)/.test(gd)), 'the spend guard is back to single-name lead counting — yellowpages_apify reads 0 beside its real rows and gets parked every run');
+  assert(!(!/\$\{FRESH_COND\}/.test(gd)), 'the balance floor no longer measures FRESH rows — history reads as "far ahead" and producing sources get throttle-parked with fresh at 0');
+  assert(!(!/AUDIT_FRESH_SINCE/.test(gd)), 'the fresh line is not read from the committed controls');
+  // 3) fulfill-crawl tranche gate counts multi-name
+  const fc = stripComments(readFile('supabase/functions/fulfill-crawl/index.ts'));
+  assert(!(!/\.in\('data_source', AUDIT_CAP_SOURCES\[source\] \|\| \[source\]\)/.test(fc)), 'the tranche gate counts leads under the rota name only — a mislabelled source has infinite cost-per-lead and is starved forever');
+  // 4) board honesty: capped display + no-runnable state, computed AFTER queue counts
+  const ld = readFile('supabase/functions/leads-dashboard/index.ts');
+  const blk2 = ld.slice(ld.indexOf('THE PER-SOURCE AUDIT BOARD'), ld.indexOf('return json', ld.indexOf('THE PER-SOURCE AUDIT BOARD')));
+  assert(!(!/Math\.min\(row\.fresh, row\.fresh_target\)/.test(blk2)), 'the x/100 display can exceed 100 again — the founder called that inaccurate, verbatim');
+  assert(!(!/row\.state = 'NO RUNNABLE JOBS'/.test(blk2)), 'a source with zero runnable jobs no longer says NO RUNNABLE JOBS — "still crawling" beside a dead queue is the lie this gate exists to kill');
+  assert(!(blk2.indexOf('row.queue_new = await') > blk2.indexOf("row.state = 'NO RUNNABLE JOBS'")), 'the queue is counted AFTER the state is decided — the no-runnable state would read stale/undefined queue values');
+  const ui2 = readFile('src/screens/DataExportScreen.jsx');
+  assert(!(!/Math\.min\(b\.fresh, b\.fresh_target\)/.test(ui2)), 'the screen renders the raw fresh count in the x/100 chip — 166/100 again');
+});
+
 test('accept-request-rpc-is-hardened-in-its-final-definition', 'SPEC-247 (night-fleet booking-loop agent finding, founder approved 2026-08-02): accept_request_with_time is SECURITY DEFINER and creates a CONFIRMED booking, but its original definition (20260616020000) verified only that the caller owns the service — nothing about the caller\'s relationship to the request. Any service owner could accept ANY request id and mint a booking + notification for that consumer; and the SPEC-128 duplicate-booking guard lived only in the app, so a direct API caller (or a UI race that slipped the client map) still created duplicates. The wall belongs in the function, where no caller can skip it. This gate replays migration history the #242 way: the LAST migration to define the function must carry (1) the self-accept block, (2) the server-side repeat-accept reuse of the existing active booking, and (3) must NOT reference bookings.request_id — no committed migration creates that column, so the definition would fail to apply. History stays immutable; the final word must be the hardened one.', '#246', () => {
   const migDir = path.join(REPO_ROOT, 'supabase/migrations');
   const files = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
