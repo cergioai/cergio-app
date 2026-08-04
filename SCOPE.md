@@ -1,9 +1,11 @@
 # SCOPE
 
-Fleet kick after credit top-up (founder 2026-08-04): one progress-log line in
-specs/inbox.md so the merge fires the fleet NOW instead of waiting for the hourly cron.
+SPEC-253 (transport half) — founder, 2026-08-04: "switch subagents run under the monthly
+plan here .. so it's economical". Agent thinking prefers CLAUDE_CODE_OAUTH_TOKEN (Max
+plan, zero credits) with the API key as automatic fallback.
 
-- `specs/inbox.md`
+- `scripts/agent-work.mjs`
+- `.github/workflows/night-fleet.yml`
 - `SCOPE.md`
 
 ## Shared files

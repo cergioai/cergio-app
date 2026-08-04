@@ -87,8 +87,32 @@ Do not propose refactors, style changes, or improvements. Only real defects with
 FILES:
 ${context}`;
 
+// SPEC-253 (founder, 2026-08-04: "switch subagents run under the monthly plan here..
+// so it's economical"). When CLAUDE_CODE_OAUTH_TOKEN is present (a `claude setup-token`
+// from the founder's Max subscription, added as a repo secret), the thinking half runs
+// through the Claude Code CLI and bills the SUBSCRIPTION — zero API credits. The raw
+// API-key path stays as the automatic fallback, so a missing/expired token can never
+// stop the fleet; it just costs credits again until fixed.
+function askViaSubscription(prompt, wantModel) {
+  const tok = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  if (!tok) return null;
+  try {
+    const alias = /opus/i.test(wantModel) ? 'opus' : /haiku/i.test(wantModel) ? 'haiku' : 'sonnet';
+    const out = execSync(`claude -p --model ${alias} --output-format text`, {
+      input: prompt, encoding: 'utf8', timeout: 240000,
+      env: { ...process.env, ANTHROPIC_API_KEY: '' },
+    });
+    return String(out || '');
+  } catch (e) {
+    console.log(`${id}: subscription transport failed (${String(e.message).slice(0, 120)}) — falling back to API key`);
+    return null;
+  }
+}
+
 let r, body;
-try {
+const subScan = askViaSubscription(brief, MODEL);
+if (subScan !== null) { r = { ok: true }; body = JSON.stringify({ content: [{ text: subScan }] }); }
+else try {
   r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -158,7 +182,11 @@ Rules: change the minimum. Do not reformat. Do not rename. Do not touch anything
 the defect. Add a comment above the change explaining WHY, naming what went wrong.`;
 
 let fixed = null;
-try {
+const subFix = askViaSubscription(askFix, FIX_MODEL);
+if (subFix !== null) {
+  try { fixed = JSON.parse(subFix.slice(subFix.indexOf('{'), subFix.lastIndexOf('}') + 1)); } catch (e) { out({ state: 'FINDING', acted: false, why_not: `subscription fix unreadable: ${String(e).slice(0, 120)}`, ...finding }); process.exit(0); }
+}
+else try {
   const r2 = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
