@@ -1,14 +1,11 @@
 # SCOPE
 
-SPEC-252 — founder, 2026-08-03, verbatim: "close and verify back to back no hourly wait.."
+Scoreboard fix: my 2026-08-03 fleet split used startswith('FW-1') which also matched
+FW-10..FW-15, leaving stale duplicate defect copies in booking-loop while inbox/ig-verify
+hold the annotated ones — the founder's green board undercounted (3 instead of 6).
+Dedupe only; no behaviour change.
 
-The fleet relaunches itself the moment a run finishes while FW work remains
-(workflow_dispatch self-chain — GitHub's sanctioned cascade path). Stops itself on
-ALL GREEN or when every agent CANNOT RUN (dead key). Concurrency group bounds it to
-one running + one queued.
-
-- `scripts/fleet-relaunch.mjs`
-- `.github/workflows/night-fleet.yml`
+- `agents/fleet.json`
 - `SCOPE.md`
 
 ## Shared files
