@@ -1,11 +1,9 @@
 # SCOPE
 
-Scoreboard fix: my 2026-08-03 fleet split used startswith('FW-1') which also matched
-FW-10..FW-15, leaving stale duplicate defect copies in booking-loop while inbox/ig-verify
-hold the annotated ones — the founder's green board undercounted (3 instead of 6).
-Dedupe only; no behaviour change.
+Fleet kick after credit top-up (founder 2026-08-04): one progress-log line in
+specs/inbox.md so the merge fires the fleet NOW instead of waiting for the hourly cron.
 
-- `agents/fleet.json`
+- `specs/inbox.md`
 - `SCOPE.md`
 
 ## Shared files

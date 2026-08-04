@@ -29,3 +29,5 @@ every inbox row maps 1:1 to a distinct live DB row, every row carries a timestam
 ## Progress log
 
 _(One line per CI-subagent run that changed something. Append, never rewrite.)_
+
+- 2026-08-04 14:55Z — Anthropic credits RESTORED by founder; this commit exists to fire the fleet immediately (push trigger) instead of waiting for the hourly cron.
