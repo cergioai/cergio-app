@@ -1,7 +1,7 @@
 # SCOPE
 
-Fleet kick after credit top-up (founder 2026-08-04): one progress-log line in
-specs/inbox.md so the merge fires the fleet NOW instead of waiting for the hourly cron.
+Fleet kick: founder added CLAUDE_CODE_OAUTH_TOKEN — fire the first subscription-billed
+run now (SPEC-253).
 
 - `specs/inbox.md`
 - `SCOPE.md`
