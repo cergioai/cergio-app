@@ -41,16 +41,9 @@
       "defects": [
         "FW-3 RESOLVED-AS-DATA (2026-08-03, live DB probe): request_responses.responder_id + services.owner_id are CONSISTENT — the 'Babysitter' listing is OWNED by the founder's own 'Tarik Sansal' account, so 'Tarik accepted' was factually correct. Residual UX hardening: the accept line should carry the SERVICE title next to the name so a self-test like this reads clearly. Do NOT change responder writes.",
         "core loop is auth-gated so it has only ever been verified in code, never walked live",
-        "FW-1: no clear place to see my existing requests and their replies (founder verbatim: 'Add place to see existing requests and any replies')",
         "FW-2: intake accepted 'babysitter tonoight' and proceeded without a picked time — no typo nudge, no required time resolution",
         "FW-5: an old request re-fired by itself — tarik.sansal2 saw 'New request · House Cleaner · 28m' the founder never sent now; find what re-notifies old requests",
-        "FW-6 NEEDS LIVE REPRO FIRST (2026-08-03): the state default is ALREADY Paid — App.jsx L170 `useState(false)` and only the manual toggle sets free=true. Founder saw free-mode on a non-connector (info@cergio.ai) — find what ACTUALLY flips it (EnableFreeOffersPopupScreen? persisted session state? request-card badge copy?) with a live walk BEFORE changing any default. FW-3 discipline: probe, then patch.",
-        "FW-13: /services/manage renders the wrong form/screens (founder verbatim + URL)",
-        "FW-14: duplicated notifications and jobs — the same booking rendered twice ('H confirmed your time — pay to lock it in' at 7m AND 8m); dedupe by booking id, not by event row",
-        "FW-15: 'Responses to your requests' rows carry no timestamp",
-        "FW-10 (founder decision verbatim 2026-08-02): IG post story highlight 'should be mandatory not optional'",
-        "FW-11: 'Copy link' must take to the SERVICE's profile, not the recommender's",
-        "FW-12: provider is never notified when someone submits an IG review/post about them — tarik.sansal2 got nothing when t@cergio submitted; needs notify + review/approve step"
+        "FW-6 NEEDS LIVE REPRO FIRST (2026-08-03): the state default is ALREADY Paid — App.jsx L170 `useState(false)` and only the manual toggle sets free=true. Founder saw free-mode on a non-connector (info@cergio.ai) — find what ACTUALLY flips it (EnableFreeOffersPopupScreen? persisted session state? request-card badge copy?) with a live walk BEFORE changing any default. FW-3 discipline: probe, then patch."
       ],
       "green_when": "a live walk completes the loop with two real accounts"
     },
