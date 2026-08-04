@@ -49,10 +49,16 @@ jobs:
       # The thinking half. This is what makes a CI agent equivalent to a subagent: a model
       # call with a brief and a bounded set of files. Never fails the job — an agent that
       # cannot reach the API must REPORT that loudly, not take the fleet down with it.
+      - name: Install Claude Code CLI (subscription transport, SPEC-253)
+        continue-on-error: true
+        run: npm install -g @anthropic-ai/claude-code
       - name: Work — look for a real defect in its own files
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # SPEC-253: when this secret exists (claude setup-token from the founder's Max
+          # plan), agent thinking bills the SUBSCRIPTION, not API credits. Fallback = API key.
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           AGENT_SCAN_MODEL: claude-haiku-4-5-20251001
           AGENT_FIX_MODEL: claude-opus-5
           AGENT_CTX_CAP: '80000'
