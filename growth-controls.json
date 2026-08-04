@@ -20,6 +20,12 @@
   "AUDIT_FRESH_SINCE": "2026-08-03T00:00:00Z",
   "_AUDIT_FRESH_SINCE": "SPEC-246 — the FRESHNESS line for the audit cap: only leads fetched at or after this instant count toward SOURCE_AUDIT_CAP. Set to the day of the founder's order (2026-08-03, 'No I need 100 FRESH peices of DATA from each to VERIFY they're solid to scale'). Moving this forward re-opens every source for a new 100 — that is a founder decision, made by editing this committed value, never by code drift. Unparseable = fail CLOSED in both consumers: the cap falls back to counting ALL rows (which can only pause sources sooner, never spend more).",
 
+  "SPEND_INCREMENT_USD": "0.50",
+  "_SPEND_INCREMENT_USD": "SPEC-253 (founder, 2026-08-03, verbatim: 'been charging Apify WITHOUT any delivery... MUST institute a strict pay per delivery with 0.5 increments to stop and verify we're getting leads (contactable)... we've already wasted over $100... this cannot continue... especially once we press GO on SCALE, we can quickly run up thousands with ZERO OUTPUT... just increased the plan by another $10 to test.. but can't spin wheels or spend on no delivery'). Every paid source spends in $0.50 steps measured from SPEND_CHECKPOINT_AT; a source that has spent its current step STOPS until that spend produced contactable leads at or under the $0.05/lead ceiling (fresh since the checkpoint, counted through the multi-name map so no label mismatch starves a producer); delivery unlocks the next $0.50; no delivery = blocked at no more than $0.50 of new money. Worst case across all six Apify sources = $3 with zero output — the thousands-with-zero-output scale run cannot happen.",
+
+  "SPEND_CHECKPOINT_AT": "2026-08-03T20:30:00Z",
+  "_SPEND_CHECKPOINT_AT": "SPEC-253 — the line pay-per-delivery measures from. The >$100 historical waste stays on the ledger and in the spend report but no longer decides the next $0.50: the founder funded a fresh $10 test ('just increased the plan by another $10 to test'), so spend and delivery are both counted from this instant. Moving this is a founder decision, made by editing this committed value — never by code drift. Unparseable = fail CLOSED: spend is counted from ALL history, which can only block sooner, never spend more.",
+
   "CONTACT_BAR_PCT": "40",
   "_CONTACT_BAR_PCT": "A source under 40% contactable is PARKED, not retried (founder, 2026-08-02)."
 }

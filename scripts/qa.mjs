@@ -5572,8 +5572,12 @@ test('paid-sources-cannot-spend-without-delivering', 'SPEC-183/184 (2026-08-01, 
 
 test('no-paid-source-may-spend-a-dollar-without-output', 'SPEC-185 (Tarik, binding, after $108.17 of Apify spend produced ZERO leads): "we can never spend another $1 without output". A paid source gets a $1 tranche and may not spend the next dollar until that dollar has produced leads at or under the cost-per-lead ceiling; the allowance only steps up on PROVEN yield, so volume rises gradually and only where output is real. The check must run BEFORE the paid call — a guard that runs afterwards is a report, not a control — and it must use the REAL dollars read back from the vendor, because a budget rule built on estimates is guesswork.', '#185', () => {
   const f = readFile('supabase/functions/fulfill-crawl/index.ts');
-  assert(!(!/SPEND_TRANCHES/.test(f)), 'no tranche ladder — spend is unbounded');
-  assert(!(!/const SPEND_TRANCHES = \[1,/.test(f)), 'the ladder must START at $1');
+  // SPEC-253 (founder, 2026-08-03: "MUST institute a strict pay per delivery with 0.5
+  // increments") TIGHTENED this gate's mechanism: the $1 tranche ladder became $0.50
+  // pay-per-delivery steps. The invariant held here is unchanged and STRICTER — no paid
+  // source spends the next step without proven output, and the first step halved.
+  assert(!(!/const SPEND_INC = /.test(f)), 'no spend step — spend is unbounded');
+  assert(!(!f.includes('? v : 0.5')), 'the first unproven step is not $0.50 — bigger than the founder\'s 0.5 increment means more money burned before the first delivery check');
   assert(!(!/MAX_COST_PER_LEAD/.test(f)), 'no cost-per-lead ceiling — a source could "earn" its next tranche at any price');
   assert(!(!/async function spendBlockedReason/.test(f)), 'no spend gate');
   assert(!(!/usageTotalUsd/.test(f)), 'cost is not read back from the vendor — a dollar budget on estimates is guesswork');
@@ -5712,8 +5716,12 @@ test('the-spend-gate-must-see-the-REAL-spend', 'SPEC-189 (measured 2026-08-01): 
   // The URL lives in a template literal, and stripComments() blanks those — assert this
   // one against the RAW file. Third time this trap has bitten; it is now a habit.
   assert(!(!/users\/me\/usage\/monthly/.test(f)), 'the account-level usage endpoint is not queried');
-  assert(!(!/const shortfall = Math\.max\(0, vendorTotal - ledgerAll\)/.test(code)), 'the ledger-vs-vendor shortfall is not computed');
-  assert(!(!/const spent = ledgerSpent \+ shortfall \* share/.test(code)), 'the gate does not add the unattributed vendor spend — it would under-count again');
+  // SPEC-253 TIGHTENED the reconciliation: instead of prorating the account-level
+  // shortfall, the gate reads the ACTOR's own run costs since the checkpoint and takes
+  // the larger of (ledger, vendor) — same invariant, sharper meter, and the account
+  // total remains the fail-closed fallback when the actor read errors.
+  assert(!(!/apifyActorSpendSinceUsd/.test(code)), 'no actor-level vendor read — the gate trusts our own ledger, which under-reported by 78%');
+  assert(!(!/const spent = Math\.max\(ledgerSince, vendorSince\)/.test(code)), 'the gate no longer takes the LARGER of ledger and vendor spend — under-counting is the one failure mode that costs money, and it is back');
   assert(!(!/status: 'failed', cost_usd/.test(code)), 'a FAILED job records no cost, yet an aborted vendor run still bills');
 });
 
@@ -6875,6 +6883,41 @@ test('accept-request-rpc-is-hardened-in-its-final-definition', 'SPEC-247 (night-
     last.file + ': the FINAL definition references bookings.request_id — no committed migration creates that column, so this migration fails to apply (SPEC-247 #3)');
 });
 
+test('pay-per-delivery-fifty-cent-increments-no-spend-without-contactable-output', 'SPEC-253 (founder, 2026-08-03, verbatim: "been charging Apify WITHOUT any delivery... MUST institute a strict pay per delivery with 0.5 increments to stop and verify we\'re getting leads (contactable)... we\'ve already wasted over $100... this cannot continue... especially once we press GO on SCALE, we can quickly run up thousands with ZERO OUTPUT... just increased the plan by another $10 to test.. but can\'t spin wheels or spend on no delivery"). The dollar-tranche ladder let a source burn a full $1 before its first delivery check and stepped up in ever-bigger bites; it is replaced with strict pay-per-delivery: every paid source spends in $0.50 steps measured from a COMMITTED checkpoint (the founder\'s fresh-$10 line — the >$100 historical waste stays on the report but no longer decides the next $0.50), a step unlocks ONLY when the spend since the checkpoint produced fresh contactable leads (leads_services rows — contactable by construction, SPEC-192) at or under the $0.05/lead ceiling, actor-level Apify spend is charged fail-closed (the shared compass actor bills each of its three sources in full — blocks sooner, never spends more), and a $5/source hard ceiling stops even a broken meter. Worst case across all six Apify sources = $3 with zero output; the thousands-with-zero-output scale run cannot happen. Assertions scan RAW file text: the money strings live inside template literals, which stripComments() blanks — a stripped scan could never fail.', '#253', () => {
+  // 1) the committed controls carry the $0.50 increment and a real checkpoint
+  const gc = readFile('growth-controls.json');
+  assert(!(!gc.includes('"SPEND_INCREMENT_USD": "0.50"')),
+    'SPEND_INCREMENT_USD is not the committed "0.50" — the founder ordered 0.5 increments; a bigger step is more money burned before the next delivery check, a missing key is the worker running on its fallback with no committed knob to turn it down');
+  const ckpt = (gc.match(/"SPEND_CHECKPOINT_AT": "([^"]+)"/) || [])[1];
+  const ckptMs = Date.parse(ckpt || '');
+  assert(!(!Number.isFinite(ckptMs) || ckptMs < Date.parse('2026-08-03T00:00:00Z')),
+    `SPEND_CHECKPOINT_AT ("${ckpt}") is missing, unparseable, or before the founder's fresh-$10 order of 2026-08-03 — the >$100 already wasted would count against the next $0.50 and every paid source starts permanently blocked, spending $0 and delivering $0 forever`);
+  // 2) the old dollar ladder must stay dead
+  const fcRaw = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(/SPEND_TRANCHES = \[1, 2, 5/.test(fcRaw)),
+    'the old $1/$2/$5 tranche ladder is back in fulfill-crawl — the exact spend shape that charged Apify $100+ with zero delivery is reopened, and at the $25/$50 rungs a scale run burns thousands before any delivery check');
+  // 3) the worker reads the committed knobs and fails CLOSED on both
+  assert(!(!fcRaw.includes("Deno.env.get('SPEND_INCREMENT_USD')")),
+    'fulfill-crawl no longer reads SPEND_INCREMENT_USD — the committed $0.50 step is decoration and the worker spends on whatever number is hard-coded');
+  assert(!(!fcRaw.includes('? v : 0.5')),
+    'the increment fallback is not $0.50 — with the secret missing or garbled, the worker would grant a bigger first step of unproven spend per source instead of failing closed at fifty cents');
+  assert(!(!fcRaw.includes("Deno.env.get('SPEND_CHECKPOINT_AT')")),
+    'fulfill-crawl no longer reads SPEND_CHECKPOINT_AT — spend and delivery are measured from nothing in particular, and the founder cannot move the pay-per-delivery line by editing the committed value');
+  assert(!(!fcRaw.includes('MAX_NEW_SPEND_USD = 5')),
+    'the $5/source hard ceiling is gone or changed — a source with a broken meter (the exact SPEC-189 failure) has no upper bound on new money since the checkpoint');
+  assert(!(!fcRaw.includes('apifyActorSpendSinceUsd(APIFY_ACTOR_OF_SOURCE[source]')),
+    'the gate no longer asks Apify what the actor actually spent — it trusts our own ledger, which once under-reported by 78%, and the invisible 78% is money out the door with no brake');
+  assert(!(!fcRaw.includes('(Math.floor(spent / SPEND_INC) + 1) * SPEND_INC')),
+    'the allowance no longer steps one $0.50 increment past proven spend — either delivery stops unlocking money (starving working sources into paid re-crawls elsewhere) or the step function got bigger than the founder\'s 0.5');
+  // 4) inside spendBlockedReason: FRESH leads only, counted through the multi-name map
+  const at = fcRaw.indexOf('async function spendBlockedReason');
+  assert(!(at < 0), 'spendBlockedReason is gone from fulfill-crawl — no paid source has ANY spend gate and the next scale run bills unbounded');
+  const region = fcRaw.slice(at, fcRaw.indexOf('async function', at + 10));
+  assert(!(!region.includes(".gte('fetched_at'")),
+    'the delivery count in spendBlockedReason lost its fetched_at freshness filter — historical leads from before the checkpoint would "unlock" new $0.50 steps for a source that is delivering nothing NOW, which is precisely paying without delivery');
+  assert(!(!region.includes(".in('data_source', AUDIT_CAP_SOURCES[source] || [source])")),
+    'the delivery count is back to single-name matching — a source whose rows carry another label (yellowpages_apify writes "yellowpages") reads 0 delivered, is blocked at $0.50 forever, and the crawl quietly routes spend to worse sources (the SPEC-251 defect)');
+});
 
 main().catch(e => {
   console.error(e);

@@ -1979,10 +1979,24 @@ const APIFY_ACTOR_OF_SOURCE: Record<string, string> = {
   gmaps_apify:       'compass~google-maps-extractor',
   ig_services:       'apify~instagram-scraper',
 };
-// Tranches in dollars. A source starts at $1 and only advances a step once the
-// spend so far has produced leads at or under the cost-per-lead ceiling.
-const SPEND_TRANCHES = [1, 2, 5, 10, 25, 50];
+// SPEC-253 — PAY PER DELIVERY. Founder, 2026-08-03, verbatim: "been charging Apify
+// WITHOUT any delivery... MUST institute a strict pay per delivery with 0.5 increments
+// to stop and verify we're getting leads (contactable)... we've already wasted over
+// $100... this cannot continue... especially once we press GO on SCALE, we can quickly
+// run up thousands with ZERO OUTPUT... just increased the plan by another $10 to
+// test.. but can't spin wheels or spend on no delivery".
+// The dollar-tranche ladder is replaced: every paid source spends in $0.50 steps
+// measured from SPEND_CHECKPOINT_AT (the founder's fresh-$10 line — the >$100
+// historical waste stays on the report but no longer decides the next $0.50). A null
+// checkpoint (secret missing or unparseable) fails CLOSED: spend is counted from ALL
+// history, which can only block sooner, never spend more. MAX_NEW_SPEND_USD is a hard
+// ceiling per source since the checkpoint — the audit cap of 100 fresh leads stops a
+// WORKING source at roughly $0.20 anyway, so $5 is never reached by a healthy source;
+// only a broken meter could approach it, and $5 is where it stops regardless.
 const MAX_COST_PER_LEAD = 0.05;   // $0.05/lead ceiling — osm is free, this must earn its place
+const SPEND_INC = (() => { const v = Number(Deno.env.get('SPEND_INCREMENT_USD')); return Number.isFinite(v) && v > 0 ? v : 0.5; })();
+const SPEND_CHECKPOINT = (() => { const t = Date.parse(Deno.env.get('SPEND_CHECKPOINT_AT') ?? ''); return Number.isFinite(t) ? new Date(t).toISOString() : null; })();
+const MAX_NEW_SPEND_USD = 5;
 
 async function apifyLastRunCostUsd(actor: string, token: string): Promise<number> {
   try {
@@ -2022,42 +2036,76 @@ async function apifyAccountSpendUsd(): Promise<number> {
   } catch { return _vendorSpendCache?.usd ?? 0; }
 }
 
+// SPEC-253: what has THIS actor spent since the checkpoint? Sums usageTotalUsd over the
+// actor's most recent runs (100 is far more than any source fires in a checkpoint
+// window). On any error, return the cached value or — if there is none — fall back to
+// apifyAccountSpendUsd(): the whole account's monthly total is >= any one actor's slice,
+// so OVER-counting is the only failure mode, and over-counting blocks sooner, which
+// costs nothing.
+const _actorSpendCache: Record<string, { at: number; usd: number }> = {};
+async function apifyActorSpendSinceUsd(actor: string, sinceIso: string | null): Promise<number> {
+  const TOKEN = Deno.env.get('APIFY_TOKEN');
+  if (!actor || !TOKEN) return 0;
+  const hit = _actorSpendCache[actor];
+  if (hit && Date.now() - hit.at < 60_000) return hit.usd;
+  try {
+    const r = await fetch(`https://api.apify.com/v2/acts/${actor}/runs?token=${TOKEN}&limit=100&desc=true`,
+      { signal: AbortSignal.timeout(Math.min(8000, msLeft(8000))) });
+    if (!r.ok) return hit?.usd ?? await apifyAccountSpendUsd();
+    const j = await r.json();
+    const items: any[] = Array.isArray(j?.data?.items) ? j.data.items : [];
+    const sinceMs = sinceIso === null ? null : Date.parse(sinceIso);
+    const usd = items.reduce((a: number, run: any) => {
+      // null checkpoint = fail closed: count ALL runs returned (blocks sooner, never spends more)
+      const startedMs = Date.parse(String(run?.startedAt ?? ''));
+      const counts = sinceMs === null || (Number.isFinite(startedMs) && startedMs >= sinceMs);
+      return a + (counts ? (Number(run?.usageTotalUsd ?? 0) || 0) : 0);
+    }, 0);
+    _actorSpendCache[actor] = { at: Date.now(), usd };
+    return usd;
+  } catch { return hit?.usd ?? await apifyAccountSpendUsd(); }
+}
+
 async function spendBlockedReason(source: string): Promise<string | null> {
   const vendor = VENDOR_OF_SOURCE[source] || 'free';
   if (vendor === 'free') return null;                        // osm only — genuinely free
+  // SPEC-253: ledger spend SINCE THE CHECKPOINT. crawl_requests.updated_at is written
+  // in the same update as cost_usd when a job finishes, so it is the committed
+  // timestamp closest to when the money actually moved.
+  let ledgerQ = growthClient().from('crawl_requests').select('cost_usd').eq('source', source).not('cost_usd', 'is', null);
+  if (SPEND_CHECKPOINT) ledgerQ = ledgerQ.gte('updated_at', SPEND_CHECKPOINT);
   const [spendRes, leadsRes] = await Promise.all([
-    growthClient().from('crawl_requests').select('cost_usd').eq('source', source).not('cost_usd', 'is', null),
+    ledgerQ,
     // SPEC-251 — count EVERY label the source's rows carry (shared map). Counting only
     // the rota name read yellowpages_apify as 0 leads beside 859 real rows, so its cost
-    // per lead was infinite and the tranche gate starved a producing source forever.
-    growthClient().from('leads_services').select('id', { count: 'exact', head: true }).in('data_source', AUDIT_CAP_SOURCES[source] || [source]),
+    // per lead was infinite and the gate starved a producing source forever.
+    // SPEC-253 — only FRESH leads (since the checkpoint) unlock new money. Every row
+    // counted here is contactable BY CONSTRUCTION: bufUpsert rejects any row failing
+    // hasContact (SPEC-192), so "contactable leads" = leads_services rows.
+    growthClient().from('leads_services').select('id', { count: 'exact', head: true })
+      .in('data_source', AUDIT_CAP_SOURCES[source] || [source])
+      .gte('fetched_at', SPEND_CHECKPOINT ?? '1970-01-01T00:00:00Z'),
   ]);
-  const ledgerSpent = (spendRes.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
-  // SPEC-189: reconcile with the vendor. Our ledger under-reported by 78% once; if the
-  // account total exceeds what all apify sources have recorded between them, attribute
-  // the shortfall proportionally rather than pretending it does not exist.
-  const vendorTotal = await apifyAccountSpendUsd();
-  const allApify = await growthClient().from('crawl_requests').select('cost_usd')
-    .in('source', Object.keys(APIFY_ACTOR_OF_SOURCE)).not('cost_usd', 'is', null);
-  const ledgerAll = (allApify.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
-  const shortfall = Math.max(0, vendorTotal - ledgerAll);
-  const share = ledgerAll > 0 ? ledgerSpent / ledgerAll : 1 / Object.keys(APIFY_ACTOR_OF_SOURCE).length;
-  const spent = ledgerSpent + shortfall * share;
+  const ledgerSince = (spendRes.data || []).reduce((a: number, r: any) => a + (Number(r.cost_usd) || 0), 0);
+  // SPEC-253: the vendor's own meter since the checkpoint. For the shared compass
+  // actor this charges the FULL actor spend against EACH of gmaps_apify / google_lsa /
+  // google_sponsored — deliberate fail-closed over-attribution: it can only block a
+  // source sooner, it can never spend more. yelp has no Apify actor, so its
+  // vendorSince is 0 and the ledger alone governs it.
+  const vendorSince = await apifyActorSpendSinceUsd(APIFY_ACTOR_OF_SOURCE[source] ?? '', SPEND_CHECKPOINT);
+  const spent = Math.max(ledgerSince, vendorSince);
   const leads = leadsRes.count ?? 0;
-  // Allowance = the first tranche the proven yield justifies.
-  let allowance = SPEND_TRANCHES[0];
+  // PAY PER DELIVERY: delivery at or under the ceiling unlocks exactly the NEXT $0.50
+  // step (hard-capped at MAX_NEW_SPEND_USD); no delivery = blocked at one increment.
+  let allowance = SPEND_INC;
   if (leads > 0) {
-    const costPerLead = spent / leads;
-    if (costPerLead <= MAX_COST_PER_LEAD) {
-      for (const t of SPEND_TRANCHES) { if (spent >= t * 0.9) allowance = t; }
-      const next = SPEND_TRANCHES.find((t) => t > allowance);
-      if (next) allowance = next;                            // earned the next step
-    }
+    const cpl = spent / leads;
+    if (cpl <= MAX_COST_PER_LEAD) allowance = Math.min(MAX_NEW_SPEND_USD, (Math.floor(spent / SPEND_INC) + 1) * SPEND_INC);
   }
-  if (spent < allowance) return null;                        // inside budget
+  if (spent < allowance) return null;                        // inside the earned step
   return leads === 0
-    ? `SPEND GATE: ${source} has spent $${spent.toFixed(2)} for 0 leads. Blocked at the $${allowance} tranche until it produces output.`
-    : `SPEND GATE: ${source} spent $${spent.toFixed(2)} for ${leads} leads ($${(spent / leads).toFixed(4)}/lead) — above the $${MAX_COST_PER_LEAD}/lead ceiling. Blocked at $${allowance}.`;
+    ? `PAY-PER-DELIVERY: ${source} spent $${spent.toFixed(2)} since the checkpoint for 0 contactable leads. Blocked at $${allowance.toFixed(2)} — not one more cent until it delivers.`
+    : `PAY-PER-DELIVERY: ${source} spent $${spent.toFixed(2)} for ${leads} contactable leads ($${(spent / leads).toFixed(4)}/lead) — above the $${MAX_COST_PER_LEAD}/lead ceiling. Blocked at $${allowance.toFixed(2)}.`;
 }
 
 async function apifyRun(actor: string, input: unknown, maxItems: number): Promise<any[]> {
