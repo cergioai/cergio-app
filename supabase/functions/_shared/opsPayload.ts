@@ -140,6 +140,38 @@ export const CREATOR_SOURCE_META: Record<string, { what: string; where: string }
   'se:web-harvest':         { what: 'FREE keyless web search for local on-values creators; contact taken from their own link-in-bio. Stamped per run day, so it must be matched by PREFIX', where: 'DuckDuckGo HTML (no key, no Mac)' },
 };
 
+// SPEC-257 — THE CREATOR HALF SEARCHES CREATOR CATEGORIES, NOT SERVICE TYPES.
+// Founder, 2026-08-05, verbatim: "the services IG creators has 'junk removal' .. which
+// wasn't part of the spec... the creators web crawling spec should have included multi
+// step... (search top 25 micro to mid influencers (per each of the indicated
+// cateogries), crawl names and emails and IG handles (visible from site ..) 3-get tel
+// and email from website and or IG or other..."
+// The dual-class ig_services crawl built its one Apify search from the JOB's
+// service_type, so creators arrived tagged "junk removal" — a services-rota term the
+// founder never listed for creators. This is the committed creator list the creator
+// half searches instead: Tier 1 + Tier 2 from specs/CERGIO-CRAWL-LISTS.md (SPEC-245),
+// in founder order. Tier 3 follows the same shape and is appended when the founder
+// clears it — do not invent it early. creator-harvest/index.ts keeps its own
+// NICHE_TIERS table (it needs several query phrasings per category and per-tier run
+// budgets); gate #257 WELDS the two files' slug sets so they cannot drift.
+export const CREATOR_CAT_CAP = 25;   // founder: "top 25 ... per each of the indicated cateogries"
+export const CREATOR_CATEGORIES: Array<{ slug: string; igQuery: string }> = [
+  // Tier 1 — founder order: pets, parenting, fitness, home, beauty, local city life
+  { slug: 'pets',                   igQuery: 'pet influencer' },
+  { slug: 'parenting',              igQuery: 'parenting influencer' },
+  { slug: 'fitness',                igQuery: 'fitness influencer' },
+  { slug: 'home',                   igQuery: 'home decor influencer' },
+  { slug: 'beauty',                 igQuery: 'beauty influencer' },
+  { slug: 'local city life',        igQuery: 'city life influencer' },
+  // Tier 2 — food, wellness, style, photography, events, neighbourhood accounts
+  { slug: 'food',                   igQuery: 'food influencer' },
+  { slug: 'wellness',               igQuery: 'wellness influencer' },
+  { slug: 'style',                  igQuery: 'style influencer' },
+  { slug: 'photography',            igQuery: 'photography influencer' },
+  { slug: 'events',                 igQuery: 'events influencer' },
+  { slug: 'neighbourhood accounts', igQuery: 'neighborhood account' },
+];
+
 // creator-harvest writes one discovered_via PER RUN DAY (e.g. se:web-harvest-2026-07-28).
 // Counting by equality on the algorithm name matched 0 rows even with thousands
 // present — so every count here is a PREFIX match that folds the daily runs back
