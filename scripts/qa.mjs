@@ -7066,7 +7066,7 @@ test('creators-come-from-creator-categories-not-the-services-rota', 'SPEC-257 (f
     'the micro-to-mid band (~10k–500k) or its KEPT-never-dropped rule is gone — either the band silently becomes a drop filter (deleting data the founder said to keep) or nobody knows what "micro to mid" means at audit time');
 });
 
-test('ops-data-primary-view-is-a-straight-clickable-results-list', 'SPEC-258 (founder, 2026-08-05, verbatim: "redesign the dashboard so it\'s very easy to view and click.. straight simple list of results (that changes dynamicaly with filter)"). /ops/data fetched the filtered rows on every filter change and then BURIED them: two diagnostic panels (the SPEC-249 audit board and the by-source panel) sat above dense 7–10-field card grids. The redesign inverts it. The PRIMARY view is a single-column zebra list — one phone-friendly tappable row per lead (name/handle · type-or-category · city · ☎ · ✉ · source chip · relative time) rendered straight from data.rows, so it re-renders with every existing filter. Clicking a row opens its BEST link in a new tab through one committed fallback chain (website_url → external_url → IG profile → yelp_url → cl_post_url); a row with no link is a plain <div> with NO ↗ affordance, because a dead-looking click reads as a broken dashboard. The diagnostics are secondary: both panels live behind ONE default-collapsed "Source status" toggle, unchanged inside (gates #249/#251 keep their own pins). The row-count selector still feeds the fetch limit, and the empty state stays the honest one — "No rows for this filter." plus verbatim errors, never a confident zero.', '#258', () => {
+test('ops-data-primary-view-is-a-straight-clickable-results-list', 'SPEC-258 (founder, 2026-08-05, verbatim: "redesign the dashboard so it\'s very easy to view and click.. straight simple list of results (that changes dynamicaly with filter)"). /ops/data fetched the filtered rows on every filter change and then BURIED them: two diagnostic panels (the SPEC-249 audit board and the by-source panel) sat above dense 7–10-field card grids. The redesign inverts it. The PRIMARY view is a single-column zebra list — one phone-friendly tappable row per lead (name/handle · type-or-category · city · ☎ · ✉ · source chip · relative time) rendered straight from data.rows, so it re-renders with every existing filter. Clicking a row opens its BEST link in a new tab through one committed fallback chain (website_url → external_url → IG profile → yelp_url → cl_post_url); a row with no link is a plain <div> with NO ↗ affordance, because a dead-looking click reads as a broken dashboard. The diagnostics are secondary: both panels live behind ONE default-collapsed "Source status" toggle, unchanged inside (gates #249/#251 keep their own pins). The row-count selector still feeds the fetch limit, and the empty state stays the honest one — "No rows for this filter." plus verbatim errors, never a confident zero. AMENDED by SPEC-260 (founder, 2026-08-05): the board-hierarchy pins (showBoard default-false, board inside the toggle, list outside it) are SUPERSEDED — the board data is now the primary scan table and the list renders on demand; see the section-4 comment. Every other pin here stands.', '#258', () => {
   const scr = readFile('src/screens/DataExportScreen.jsx');
   // 1) the primary list exists: LeadRow, mapped over data.rows, with the stable marker
   assert(!(!scr.includes('function LeadRow(')),
@@ -7096,16 +7096,41 @@ test('ops-data-primary-view-is-a-straight-clickable-results-list', 'SPEC-258 (fo
     'the linkless branch is no longer a plain <div> — a linkless row rendered as a link is a click that goes nowhere, the exact broken feel the redesign exists to end');
   assert(!(!scr.includes('{link && <span className="text-[13px] font-bold text-g">↗</span>}')),
     'the ↗ affordance is no longer conditional on link — either every row promises a click it cannot honour, or no row shows it is clickable');
-  // 4) the diagnostics are BEHIND a default-collapsed toggle; the list is NOT
-  assert(!(!scr.includes('const [showBoard, setShowBoard] = useState(false)')),
-    'showBoard no longer defaults to false — the audit board opens expanded and the results are buried under diagnostics again, verbatim what the founder asked to end');
-  const tAt = scr.indexOf('{showBoard && (');
-  const bAt = scr.indexOf('data.board.map');
-  assert(!(tAt < 0 || bAt < tAt),
-    'the SPEC-249 board render is not inside the {showBoard && ( toggle — it renders unconditionally above/beside the list, so the primary view is diagnostics again');
+  // 4) SUPERSEDED BY SPEC-260 (founder, 2026-08-05, verbatim: "creators have junk
+  //    removal.. need to see a list of results accross SOURCES like in the table shared
+  //    above.. to quickly scan sources.. (ahead of actual results.. i don't need to see
+  //    results unless i download them or ask to load them on the screen).. redesign the
+  //    filters so they're far easier to view more intuitive less bulky..").
+  //    The #258 pins here demanded: board behind a default-collapsed showBoard toggle,
+  //    LeadRow list outside it. SPEC-260 inverts that hierarchy — the per-source SCAN
+  //    TABLE (the board data) is the PRIMARY always-visible view, and the LeadRow list
+  //    renders only after an explicit "Load results" click. Amended in place, never
+  //    silently weakened: the replacement pins are strictly the new founder order.
+  // 4a) the scan table is PRIMARY: SourceRow rows with the data-source-row marker,
+  //     rendered from data.board with no toggle state gating them
+  assert(!(!scr.includes('function SourceRow(')),
+    'SourceRow is gone — the screen has no per-source scan row and the founder cannot "quickly scan sources" ahead of results');
+  assert(!(!scr.includes('data-source-row')),
+    'the data-source-row marker is gone — scan-table rows are no longer identifiable as the primary per-source table');
+  assert(!(!scr.includes('data.board.map((b) => <SourceRow')),
+    'the board data no longer renders into SourceRow — the scan table the founder asked to see FIRST does not exist');
+  assert(!(/\{showBoard && \(/.test(scr)),
+    'a showBoard toggle is back around the board — SPEC-260 made the scan table ALWAYS visible; re-collapsing it re-buries the per-source view the founder ordered ahead of results');
+  // 4b) the LeadRow list renders ONLY behind the load-results state, which defaults off
+  assert(!(!scr.includes('const [showResults, setShowResults] = useState(false)')),
+    'showResults no longer defaults to false — the results list renders on load, verbatim what the founder said he does NOT need ("i don\'t need to see results unless i download them or ask to load them on the screen")');
+  const resAt = scr.indexOf('{showResults && (');
   const listAt = scr.indexOf('<LeadRow');
-  assert(!(listAt < 0 || listAt > tAt),
-    'the results list sits INSIDE the collapsed toggle — the founder opens the screen and sees no results until he finds a toggle, the inverse of the order');
+  assert(!(resAt < 0 || listAt < resAt),
+    'the LeadRow list is not inside the {showResults && ( gate — results render without being asked for, the inverse of the SPEC-260 order');
+  const boardAt = scr.indexOf('data.board.map');
+  assert(!(boardAt < 0 || boardAt > resAt),
+    'the scan table does not sit AHEAD of the results gate — sources are not scannable before results load, and "ahead of actual results" is the verbatim order');
+  // pin the BUTTON JSX, not the phrase — "Load results" also lives in comments and a
+  // raw-text scan would pass on the comment alone (mutation-caught: the first cut of
+  // this assert survived the button being renamed)
+  assert(!(!scr.includes('Load results ({n(')),
+    'the "Load results" button is gone — with the list defaulted off there is no way to ask for results on screen at all');
   // 5) the row-count selector feeds the fetch, so "last 100/500/1000" changes the list.
   //    Pin the LOAD callback region specifically: `limit: size,` also lives in
   //    downloadSource, so a whole-file includes() could never fail (mutation-caught —
@@ -7149,6 +7174,62 @@ test('creator-target-counts-only-new-spec-category-rows', 'SPEC-259 (founder, 20
     'creator-harvest lost its like(se:web-harvest%) prefix target count — SPEC-237: its tag is stamped per run day, an eq() (or a missing count) reads 0 beside real rows and the source either never stops or never runs');
   assert(!(/CREATOR_CATEGORIES|\.in\('category'/.test(chRegion)),
     'creator-harvest\'s target count gained a category filter — SPEC-259 named ONLY the ig_services count; filtering this one too undercounts a source whose rows carry their own category values, and closing a creator path the order never named is the SPEC-230 failure shape');
+});
+
+test('ops-data-hides-legacy-creator-rows-and-keeps-the-filters-compact', 'SPEC-260 (founder, 2026-08-05, verbatim: "creators have junk removal.. need to see a list of results accross SOURCES like in the table shared above.. to quickly scan sources.. (ahead of actual results.. i don\'t need to see results unless i download them or ask to load them on the screen).. redesign the filters so they\'re far easier to view more intuitive less bulky.."). The scan-table/results-on-demand inversion is pinned in the amended gate #258; this gate pins the other two halves. LEGACY ROWS OUT: SPEC-259 stopped the OLD deviation creator rows (category = a services term like "junk removal") from COUNTING, but they still DISPLAYED in the Creators view — the founder\'s literal first words. The screen keeps a CREATOR_SLUGS copy of the 12 committed category slugs (JSX cannot import a Deno module) WELDED here to CREATOR_CATEGORIES in opsPayload.ts, and default-excludes non-slug rows CLIENT-SIDE — leads-dashboard only understands one eq() category param, no NOT-IN — from the visible rows AND every CSV path (what you see is what downloads), unless a category is explicitly picked (an explicit ask is never second-guessed) or the honestly-labeled "show legacy" checkbox (default OFF) is ticked. Rows stay in the DB — display only, data is data. FILTERS COMPACT: a segmented Services|Creators class toggle replaces the pill wall, and the bulky controls (status/reachable/time/size/legacy) collapse behind one default-closed "More filters" disclosure — with the TIME and SIZE controls INSIDE it, so gate #229\'s controls still exist without re-bulking the bar. Asserts scan RAW text: the pinned expressions sit beside JSX template literals, which stripComments() blanks.', '#260', () => {
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  // 1) the weld: the screen\'s 12 slugs must equal CREATOR_CATEGORIES (the #257 technique)
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const opsSlugs = (((ops.match(/export const CREATOR_CATEGORIES[\s\S]*?\n\];/) || [''])[0]).match(/slug: '([^']+)'/g) || []).map((s) => s.slice(7, -1));
+  const scrSlugs = (((scr.match(/const CREATOR_SLUGS = \[[\s\S]*?\];/) || [''])[0]).match(/'([^']+)'/g) || []).map((s) => s.slice(1, -1));
+  assert(!(!opsSlugs.length || scrSlugs.join('|') !== opsSlugs.join('|')),
+    `the screen's CREATOR_SLUGS and opsPayload's CREATOR_CATEGORIES have DRIFTED:\n  screen:     ${scrSlugs.join('|')}\n  opsPayload: ${opsSlugs.join('|')}\nTwo lists for one founder spec — the screen would hide (or show) different rows than the crawler counts, and "junk removal" creators reappear through the gap`);
+  // 2) the default view excludes legacy rows — the committed expressions, verbatim
+  assert(!(!scr.includes("const isNewSpecCreator = (r) => CREATOR_SLUGS.includes(String(r.category || '').trim())")),
+    'isNewSpecCreator is gone (or loosened) — nothing decides which creator rows are new-spec, so the display filter has no predicate and legacy "junk removal" rows are back on screen');
+  assert(!(!scr.includes("const excludeLegacy = audience === 'creators' && !showLegacy && !category")),
+    'excludeLegacy lost one of its three conditions — either legacy rows hide outside the Creators view, or the opt-in stops working, or explicitly picking a legacy category shows an empty screen and reads as broken data');
+  assert(!(!scr.includes('excludeLegacy ? allRows.filter(isNewSpecCreator) : allRows')),
+    'the visible rows are no longer the legacy-filtered set — the founder opens Creators and sees "junk removal" again, his literal first words in this order');
+  // 3) the opt-in exists, defaults OFF, and is labeled honestly
+  assert(!(!scr.includes('const [showLegacy, setShowLegacy] = useState(false)')),
+    'showLegacy no longer defaults to false — legacy rows render by default and the exclusion is decoration');
+  assert(!(!scr.includes('Show legacy rows from the pre-category run')),
+    'the honest legacy label is gone — an unlabeled toggle hides WHAT these rows are, and the founder must know they are the pre-category deviation, not more results');
+  // 4) every CSV path applies the same exclusion — what you see is what downloads
+  assert(!(!scr.includes('saveCsv(toCsv(rows)')),
+    'the Download view CSV no longer reads the visible `rows` set — the screen hides legacy rows but the download ships them, a silent disagreement between eye and file');
+  const dlRegion = (scr.match(/const downloadSource =[\s\S]*?\n  \};/) || [''])[0];
+  assert(!(!dlRegion.includes('excludeLegacy ? d2.rows.filter(isNewSpecCreator) : d2.rows')),
+    'the per-source CSV no longer applies the legacy exclusion to its own fetch — the scan-table download ships "junk removal" creators the screen refuses to show');
+  const deRegion = (scr.match(/const downloadEach =[\s\S]*?\n  \};/) || [''])[0];
+  assert(!(!deRegion.includes('excludeLegacy ? d2.rows.filter(isNewSpecCreator) : d2.rows')),
+    'the download-each-source CSV no longer applies the legacy exclusion — one bulk click re-exports every legacy row the view hides');
+  // 5) the segmented class toggle exists (Services | Creators), with the marker
+  assert(!(!scr.includes('data-class-toggle')),
+    'the segmented class toggle marker is gone — the Services|Creators switch fell back to the pill wall the founder called bulky');
+  assert(!(!scr.includes('AUDIENCES.slice(0, 2).map')),
+    'the segmented control no longer renders the Services|Creators pair — the primary class switch is gone (crawls/runs stay as secondary pills, gate #210)');
+  // 6) the More-filters disclosure exists, defaults CLOSED, and actually holds the bulk
+  assert(!(!scr.includes('const [moreOpen, setMoreOpen] = useState(false)')),
+    'moreOpen no longer defaults to false — the "less bulky" bar opens pre-expanded, which is the old wall of controls with an extra button');
+  // pin the BUTTON JSX, not the phrase — "More filters" also lives in comments and a
+  // raw-text scan would pass on the comment alone
+  assert(!(!scr.includes("More filters {moreOpen ? '▴' : '▾'}")),
+    'the More filters disclosure button is gone — either the bulky controls are always visible again, or they are unreachable');
+  const moreAt = scr.indexOf('{moreOpen && (');
+  const moreRegion = scr.slice(moreAt, scr.indexOf('{busy &&'));
+  assert(!(moreAt < 0 || !moreRegion.includes('TIMES.map') || !moreRegion.includes('SIZES.map')),
+    'the TIME/SIZE controls are not inside the More-filters disclosure — the bulk is back on the bar (or the #229 controls are gone entirely)');
+  assert(!(!moreRegion.includes('Reachable only') || !moreRegion.includes('setStatus(e.target.value)')),
+    'the reachable-only pill or the status select left the More-filters disclosure — either back on the bar (bulk) or removed (a filter the founder had is gone)');
+  assert(!(!moreRegion.includes('setShowLegacy(e.target.checked)')),
+    'the show-legacy checkbox is not inside the More-filters disclosure — the legacy opt-in is either promoted to the compact bar or unreachable');
+  // 7) removable chips keep the collapsed state honest about what is applied
+  assert(!(!scr.includes('function Chip(')),
+    'the Chip component is gone — with the controls collapsed, nothing shows which non-default filters are active, so the compact bar hides state instead of summarising it');
+  assert(!(!scr.includes('chips.map((c) => <Chip')),
+    'active filters no longer render as removable chips — a hidden active filter is the SPEC-223 "looks like broken data" defect returning through the disclosure');
 });
 
 main().catch(e => {
