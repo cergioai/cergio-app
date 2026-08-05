@@ -110,6 +110,17 @@ async function bufUpsert(_db: any, row: Record<string, unknown>): Promise<void> 
   if (_rowBuf.length >= 500) await flushBuf(db);
 }
 
+// SPEC-256 — need snapshots for need-bounded buys. Declared HERE, above serve, because
+// serve's pre-claim blocks assign them (the TDZ rule: declare above first use — gate
+// #219's four outages all had the shape "identifier used above its declaration").
+// The audit-cap block writes each source's FRESH count; the creator block writes the
+// creator count; remainingNeed()/boundedBuy() (defined with the SPEC-253 money block)
+// read them so every paid run buys only what is still owed.
+const _freshBySource: Record<string, number> = {};
+let _auditCapForNeed = 0;
+let _creatorFreshForNeed = 0;
+let _creatorTargetForNeed = 0;
+
 serve(async (req: Request) => {
 
 // ── SPEC-132: GROWTH TABLES LIVE IN THE GROWTH PROJECT ─────────────────────
@@ -159,6 +170,10 @@ const gdb = growthDb();
         .select('id', { count: 'exact', head: true })
         .eq('discovered_via', 'ig-scraper-user-search');
       creatorTargetMet = (count ?? 0) >= CREATOR_TARGET;
+      // SPEC-256: snapshot for need-bounded buys — ig_services sizes its paid search
+      // to the creators still OWED, not the blind IG_MAX cap.
+      _creatorTargetForNeed = CREATOR_TARGET;
+      _creatorFreshForNeed = count ?? 0;
       if (creatorTargetMet && ONLY.length === 1 && ONLY[0] === 'ig_services') {
         return json({
           suspended: true, processed: 0,
@@ -196,6 +211,10 @@ const gdb = growthDb();
   const SOURCE_AUDIT_CAP = sourceAuditCap(Deno.env.get('SOURCE_AUDIT_CAP'));
   const AUDIT_FRESH = auditFreshSince(Deno.env.get('AUDIT_FRESH_SINCE'));
   const auditCapOut: Record<string, string> = {};
+  // SPEC-256: reset the need snapshot each tick so a warm isolate never sizes a buy
+  // from last tick's counts; the fresh counts below overwrite per source.
+  _auditCapForNeed = SOURCE_AUDIT_CAP;
+  for (const k of Object.keys(_freshBySource)) delete _freshBySource[k];
   if (SOURCE_AUDIT_CAP > 0) {
     await Promise.all(Object.entries(AUDIT_CAP_SOURCES).map(async ([src, keys]) => {
       try {
@@ -205,6 +224,9 @@ const gdb = growthDb();
         if (AUDIT_FRESH) capQ = capQ.gte('fetched_at', AUDIT_FRESH);
         const { count, error } = await capQ;
         if (error) throw error;
+        // SPEC-256: snapshot for need-bounded buys — each paid fulfiller sizes its run
+        // to (cap − fresh) × 1.5 instead of its blind env cap.
+        _freshBySource[src] = count ?? 0;
         if ((count ?? 0) >= SOURCE_AUDIT_CAP) {
           auditCapOut[src] = `audit cap met — ${count} FRESH leads (since ${AUDIT_FRESH ?? 'ever'}) of ${SOURCE_AUDIT_CAP} max to review (SPEC-246); paused for founder audit`;
         }
@@ -2015,6 +2037,52 @@ const SPEND_INC = (() => { const v = Number(Deno.env.get('SPEND_INCREMENT_USD'))
 const SPEND_CHECKPOINT = (() => { const t = Date.parse(Deno.env.get('SPEND_CHECKPOINT_AT') ?? ''); return Number.isFinite(t) ? new Date(t).toISOString() : null; })();
 const MAX_NEW_SPEND_USD = 5;
 
+// SPEC-256 — THE TOTAL SPEND LOCK. Founder, 2026-08-05, verbatim: "added another
+// $10... apify has now burnt through 195 with marginable delivery ... (including
+// $~15 since we last implemented the tight hard deliver against spend controls...)...
+// there's leakage that drains budget once we scale... need this tightly locked..
+// there cannot be spending without delivery".
+// SPEC-253 gates each SOURCE; nothing gated the ACCOUNT. If per-source math is ever
+// wrong (shared actors, label drift, a broken meter), the month total still grows.
+// This is the backstop: new spend = (vendor month meter − committed baseline); at
+// the committed ceiling, EVERY paid source refuses to run.
+// The NaN handling is deliberately ASYMMETRIC in effect but identical in value:
+// both fall to 0. A NaN CEILING → 0 means no new money is allowed — fail closed.
+// A NaN BASELINE must ALSO be 0, never Infinity: baseline 0 makes the whole month
+// meter read as "new" spend, so the overshoot reads huge and the lock FIRES. An
+// Infinity baseline would make new spend permanently negative and the lock could
+// never fire — that is the open direction, and open is the expensive direction.
+const MONTH_BASELINE = (() => { const v = Number(Deno.env.get('APIFY_MONTH_BASELINE_USD')); return Number.isFinite(v) && v >= 0 ? v : 0; })();
+const MONTH_CEILING  = (() => { const v = Number(Deno.env.get('APIFY_MONTH_CEILING_USD'));  return Number.isFinite(v) && v >= 0 ? v : 0; })();
+
+// SPEC-256 — NEED-BOUNDED BUYS. Every paid actor is pay-per-result: EVERY row it
+// returns bills, needed or not. The fixed env caps (CL 250, YP 60, GMAPS 60, IG 200)
+// are need-BLIND: craigslist would buy up to 250 rows/job while the source's whole
+// remaining audit need might be 80. This is the ONE helper every paid call site uses
+// (a per-site copy is the drift shape this repo keeps paying for): buy at most
+// need × 1.5 (margin for dedupe + no-contact discards), never more than the existing
+// cap (env caps stay the upper bound), never fewer than 10 (a smaller run is not
+// worth the actor's startup and delivers nothing meaningful to audit).
+function boundedBuy(need: number, cap: number): number {
+  return Math.max(10, Math.min(cap, Math.ceil(need * 1.5)));
+}
+// The audit-cap pre-claim block (serve scope) already counts each source's FRESH rows;
+// the module-level snapshots (declared ABOVE serve — TDZ rule, gate #219 shape) carry
+// those counts to the module-level fulfillers so a buy can be sized to what is still
+// OWED. ig_services is governed by CREATOR_TARGET, not the audit cap (SPEC-246), so
+// its need is snapshotted from the creator count. A source with no snapshot (cap
+// disabled, count not taken this tick) reads need = Infinity, which boundedBuy clamps
+// to the existing cap — exactly today's behaviour, and the SPEC-253 money gates still
+// stand underneath.
+function remainingNeed(source: string): number {
+  if (source === 'ig_services') {
+    return _creatorTargetForNeed > 0 ? Math.max(0, _creatorTargetForNeed - _creatorFreshForNeed) : Infinity;
+  }
+  const fresh = _freshBySource[source];
+  if (fresh === undefined || _auditCapForNeed <= 0) return Infinity;
+  return Math.max(0, _auditCapForNeed - fresh);
+}
+
 async function apifyLastRunCostUsd(actor: string, token: string): Promise<number> {
   try {
     const r = await fetch(`https://api.apify.com/v2/acts/${actor}/runs?token=${token}&limit=1&desc=true`,
@@ -2083,9 +2151,39 @@ async function apifyActorSpendSinceUsd(actor: string, sinceIso: string | null): 
   } catch { return hit?.usd ?? await apifyAccountSpendUsd(); }
 }
 
+// SPEC-256 — IN-TICK METER FRESHNESS. The two caches above hold for 60s, but one tick
+// processes ~5 jobs: jobs 2..5 were claiming against the meter AS IT WAS BEFORE job 1
+// spent. Called right after EVERY paid apifyRun returns (success or error — an errored
+// run may still have billed partial usage), so the next job's gate re-reads the
+// vendor's truth instead of a snapshot taken before the money moved.
+export function bustSpendCaches(): void {
+  _vendorSpendCache = null;
+  for (const k of Object.keys(_actorSpendCache)) delete _actorSpendCache[k];
+}
+
+// SPEC-256 — the account-month lock itself. Null = under the ceiling; otherwise the
+// reason every paid source is stopped. Uses the vendor's OWN month meter
+// (apifyAccountSpendUsd) — the one number that cannot under-count the way our ledger
+// did in SPEC-189. Checked FIRST in spendBlockedReason, before any per-source math,
+// for every non-free vendor: yelp too, because a locked account is a founder-level
+// stop, not an Apify-only bookkeeping detail.
+async function apifyMonthLockReason(): Promise<string | null> {
+  const meter = await apifyAccountSpendUsd();
+  const newSpend = Math.max(0, meter - MONTH_BASELINE);
+  if (newSpend < MONTH_CEILING) return null;
+  return `MONTH LOCK: account spent $${newSpend.toFixed(2)} new this month (baseline $${MONTH_BASELINE.toFixed(2)}, meter $${meter.toFixed(2)}) — ceiling $${MONTH_CEILING.toFixed(2)} reached; every paid source stopped (SPEC-256).`;
+}
+
 async function spendBlockedReason(source: string): Promise<string | null> {
   const vendor = VENDOR_OF_SOURCE[source] || 'free';
   if (vendor === 'free') return null;                        // osm only — genuinely free
+  // SPEC-256: the account-month ceiling comes FIRST — before the ledger read, before
+  // the actor meter, before any per-source arithmetic. When the whole account has
+  // spent its ceiling of new money, there is nothing a per-source calculation could
+  // say that makes one more paid run acceptable ("there cannot be spending without
+  // delivery" — and past the ceiling there cannot be spending at all).
+  const monthLock = await apifyMonthLockReason();
+  if (monthLock) return monthLock;
   // SPEC-253: ledger spend SINCE THE CHECKPOINT. crawl_requests.updated_at is written
   // in the same update as cost_usd when a job finishes, so it is the committed
   // timestamp closest to when the money actually moved.
@@ -2163,7 +2261,14 @@ async function apifyRun(actor: string, input: unknown, maxItems: number): Promis
       ? `apify ${actor} TIMED OUT after ${actorTimeoutSecs}s — Apify was told to kill the run at the same moment, so it is not still billing (SPEC-183). Actor too slow for run-sync at maxItems=${maxItems}.`
       : `apify ${actor} threw: ${String(e).slice(0, 160)}`;
     return [];
-  } finally { clearTimeout(to); }
+  } finally {
+    clearTimeout(to);
+    // SPEC-256: this run may have just spent money (even the error paths — a timed-out
+    // or failed run can still bill partial usage). Bust the 60s spend caches HERE, at
+    // the single choke point every paid call goes through, so the NEXT job in this
+    // tick gates against the vendor's current meter, not a pre-spend snapshot.
+    bustSpendCaches();
+  }
 }
 async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
   if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'craigslist', note: 'pending APIFY_TOKEN' };
@@ -2203,7 +2308,11 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
   // $1.40/1,000 = $0.0014/result: 350 × $0.0014 = $0.49, so a single run can never
   // blow through one $0.50 pay-per-delivery step (SPEC-253) even if the env knob is
   // cranked back up to the old 1000.
-  const MAXITEMS = Math.min(Number(Deno.env.get('CL_MAX_ITEMS') || '250'), 350);
+  // SPEC-256: the env cap is need-BLIND — pay-per-result bills every returned row, so
+  // buying 250 rows against a remaining audit need of 80 pays for 170 rows nobody
+  // ordered. boundedBuy sizes the run to what is still OWED (×1.5 dedupe/no-contact
+  // margin), with the env cap as the unchanged upper bound.
+  const MAXITEMS = boundedBuy(remainingNeed('craigslist'), Math.min(Number(Deno.env.get('CL_MAX_ITEMS') || '250'), 350));
   // SPEC-178: Craigslist matches the search as an EXACT PHRASE. "gmat tutor" matches
   // zero posts in every services subcat; "tutor" matches hundreds. Query the head
   // noun and let our own keyword + blocked-category gates do the narrowing.
@@ -2316,7 +2425,9 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   // input is searchTerms[] + locations[] + maxResults (NOT trudax's search/location/
   // maxItems) — the SPEC-179 lesson re-applied: a wrong input key returns an empty
   // dataset that reads as an empty market.
-  const YP_MAX_ITEMS = Math.min(Number(Deno.env.get('YP_MAX_ITEMS') || '60'), 100);
+  // SPEC-256: need-bounded — solidcode bills per result, so the run buys only what the
+  // audit still owes (×1.5 margin), never the blind env cap when the need is smaller.
+  const YP_MAX_ITEMS = boundedBuy(remainingNeed('yellowpages_apify'), Math.min(Number(Deno.env.get('YP_MAX_ITEMS') || '60'), 100));
   const items = await apifyRun('solidcode~yellowpages-scraper',
     // SPEC-170b: YellowPages indexes by METRO — "Wynwood, FL" matches nothing.
     { searchTerms: [rawType], locations: [`${metroOf(city)}, ${METRO_STATE[metroOf(city)] || state}`], maxResults: YP_MAX_ITEMS }, YP_MAX_ITEMS);
@@ -2377,7 +2488,10 @@ async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; fo
   const state = (job.state || '').trim();
   const query = `${rawType} ${city} [ig_services]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
-  const want = Number(Deno.env.get('IG_MAX') || '200');   // MAX: apify instagram-scraper user search
+  // SPEC-256: need-bounded — ig_services is governed by CREATOR_TARGET (SPEC-246), so
+  // its need is the creator target remaining, not the audit cap. A 200-profile buy
+  // against 3 remaining creators pays for 197 profiles nobody ordered.
+  const want = boundedBuy(remainingNeed('ig_services'), Number(Deno.env.get('IG_MAX') || '200'));   // MAX: apify instagram-scraper user search
   const items = await apifyRun('apify~instagram-scraper',
     { search: `${rawType} ${city}`, searchType: 'user', searchLimit: want, resultsType: 'details', resultsLimit: want }, want);
   let found = items.length, saved = 0;
@@ -2475,7 +2589,11 @@ async function fulfillGmapsApify(db: any, job: any, provenance = 'gmaps_apify'):
   // scrapeContacts is OFF: Google Maps already gives phone for nearly every place,
   // and the website-crawl add-on is what pushes the run past the wall (and bills
   // extra). We take phone-first leads now rather than nothing forever.
-  const want = Math.min(Number(job.target_count || 0) || Number(Deno.env.get('GMAPS_MAX') || '60'), 120);
+  // SPEC-256: need-bounded — the compass extractor bills per place, and this one
+  // function serves gmaps_apify AND google_lsa (provenance), so the need is looked up
+  // under the label the rows will actually carry. The env/job cap stays the upper bound.
+  const want = boundedBuy(remainingNeed(provenance === 'google_sponsored' ? 'google_lsa' : provenance),
+    Math.min(Number(job.target_count || 0) || Number(Deno.env.get('GMAPS_MAX') || '60'), 120));
   const items = await apifyRun('compass~google-maps-extractor', {
     // Docs: "Adding a location directly to the search can limit you to 120 results
     // per search term" — so the city goes in locationQuery, never in the term.
