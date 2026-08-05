@@ -24,6 +24,9 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
 import { AUDIT_CAP_SOURCES, sourceAuditCap, auditFreshSince } from '../_shared/opsPayload.ts';
+// SPEC-257: separate import from the same module ON PURPOSE — gate #243 pins the exact
+// text of the line above, so the creator-category symbols ride on their own line.
+import { CREATOR_CATEGORIES, CREATOR_CAT_CAP } from '../_shared/opsPayload.ts';
 
 const FROM_EMAIL = 'Cergio <notify@cergio.ai>';
 // Throughput (TUNABLE). Raised so the full YellowPages matrix drains in hours,
@@ -2479,8 +2482,11 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
     ? (_lastFlushError || ypApifyErr || `no YellowPages results (raw items returned: ${found})`) : undefined };
 }
 
-// ── IG-FOR-SERVICES: apify~instagram-scraper user search. Writes BOTH a service row
-// (with the IG handle attached) AND a creator row (dual class), never fabricating.
+// ── IG-FOR-SERVICES: apify~instagram-scraper user search. DUAL-CLASS (SPEC-230), but
+// since SPEC-257 the two halves run SEPARATE searches: the SERVICE half searches the
+// job's service_type (rows into leads_services, unchanged); the CREATOR half searches
+// CREATOR_CATEGORIES (specs/CERGIO-CRAWL-LISTS.md Tiers 1+2) — never the services
+// rota. Neither half fabricates.
 async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
   if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'ig_services', note: 'pending APIFY_TOKEN' };
   const rawType = (job.service_type || '').toLowerCase().trim();
@@ -2525,31 +2531,74 @@ async function fulfillIgServices(db: any, job: any): Promise<{ saved: number; fo
     };
     await bufUpsert(db, svc); const e1 = null;
     if (!e1) saved++;
-    // CREATOR row — same person as a creator (dual class), fill-only
-    try {
-      // SPEC-188: this is a MODULE-LEVEL function; `gdb` is created INSIDE serve(), so it
-      // was never in scope here. Identical to the SPEC-166 failure that silently discarded
-      // every crawled row. growthClient() resolves at module scope.
-      await growthClient().from('leads_influencers').upsert({
-        id: `igs:${handle}`, ig_handle: handle, display_name: name,
-        category: job.service_type || null, followers, email,
-        // SPEC-206b — BUSINESS ACCOUNTS ARE KEPT (founder, 2026-08-02: "2. keep").
-        // FROZEN_SPEC 750 had creator-harvest DROP business accounts, because that path
-        // was hunting individual creators and brand accounts were noise. This path is the
-        // creator PIVOT: we mine our own services pool for providers who already have an
-        // audience, and there a business account is the target, not the noise. So the flag
-        // is STORED and filterable rather than used to discard the row at ingest.
-        city, state: state || null, is_business: !!it?.isBusinessAccount,
-        external_url: ext, discovered_via: 'ig-scraper-user-search',
-        outreach_status: 'pending_review',
-      }, { onConflict: 'id' });
-    } catch (e) {
-      // SPEC-202: this used to swallow the error entirely. It hid a 42703 on a column
-      // that did not exist, so 262 ig_services rows produced ZERO creators and nothing
-      // anywhere said why. A best-effort write that never reports is not best-effort,
-      // it is invisible. Record it once — the job note then carries the real reason.
-      if (!_lastCreatorError) _lastCreatorError = `creator row rejected: ${serr(e)}`;
+    // CREATOR row: no longer written from THIS loop. SPEC-257 (founder, 2026-08-05):
+    // a creator minted from a service_type search is how 'junk removal' creators
+    // happened — "which wasn't part of the spec". The creator half runs below with
+    // its OWN category search; this loop is services-only now.
+  }
+  // ── SPEC-257 — THE CREATOR HALF: creator-category search, never service_type.
+  // Founder, 2026-08-05, verbatim: "the services IG creators has 'junk removal' ..
+  // which wasn't part of the spec... (search top 25 micro to mid influencers (per each
+  // of the indicated cateogries), crawl names and emails and IG handles (visible from
+  // site ..) 3-get tel and email from website and or IG or other...".
+  // Category rotation: first category in tier order (CREATOR_CATEGORIES — the committed
+  // Tier 1+2 list, SPEC-245) still under CREATOR_CAT_CAP (25) creator rows gets this
+  // job's search; a category at 25 is skipped — "top 25 per category" before moving on.
+  // The buy is sized to BOTH remaining needs (SPEC-256 shape): this category's open
+  // slots AND the overall CREATOR_TARGET remainder — never past the 25 cap.
+  // Fail CLOSED: an unreadable per-category count SKIPS the paid creator search —
+  // refusing costs nothing; searching past an unreadable cap is how money leaks.
+  // Rows keep discovered_via='ig-scraper-user-search' EXACTLY — CREATOR_TARGET (#171)
+  // and every dashboard counts eq() on it — and carry the category SLUG in `category`.
+  // Micro-to-mid banding (~10k–500k, growth-controls _CREATOR_PIPELINE) is NOT a drop
+  // filter: followers is STORED and the audit filters on it. Data is data.
+  try {
+    let cat: { slug: string; igQuery: string } | null = null;
+    let catHave = 0;
+    for (const c of CREATOR_CATEGORIES) {
+      const { count, error } = await growthClient()
+        .from('leads_influencers')
+        .select('id', { count: 'exact', head: true })
+        .eq('discovered_via', 'ig-scraper-user-search')
+        .eq('category', c.slug);
+      if (error) throw error;
+      if ((count ?? 0) < CREATOR_CAT_CAP) { cat = c; catHave = count ?? 0; break; }
     }
+    if (cat) {
+      const creWant = boundedBuy(Math.min(remainingNeed('ig_services'), CREATOR_CAT_CAP - catHave), CREATOR_CAT_CAP);
+      const creItems = await apifyRun('apify~instagram-scraper',
+        { search: `${cat.igQuery} ${city}`, searchType: 'user', searchLimit: creWant, resultsType: 'details', resultsLimit: creWant }, creWant);
+      const creSeen = new Set<string>();
+      for (const it of creItems) {
+        const handle = String(it?.username || '').toLowerCase().trim();
+        if (!handle || creSeen.has(handle)) continue; creSeen.add(handle);
+        const cname = cleanText(it?.fullName || it?.username);
+        if (!cname) continue;
+        const bio = String(it?.biography || '');
+        if (osmIsBlocked(`${cname} ${bio} ${it?.businessCategoryName || ''}`)) continue;
+        // geo: the city must appear in the creator's own text (no fabrication)
+        if (!cityVerifiedSvc(city, `${bio} ${cname} ${handle} ${it?.businessCategoryName || ''}`)) continue;
+        const followers = typeof it?.followersCount === 'number' ? it.followersCount : null;
+        const em = bio.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+        // SPEC-188: this is a MODULE-LEVEL function; `gdb` is created INSIDE serve(), so
+        // it was never in scope here. growthClient() resolves at module scope.
+        await growthClient().from('leads_influencers').upsert({
+          id: `igs:${handle}`, ig_handle: handle, display_name: cname,
+          category: cat.slug, followers, email: em ? em[0].toLowerCase() : null,
+          // SPEC-206b — BUSINESS ACCOUNTS ARE KEPT (founder, 2026-08-02: "2. keep").
+          // The flag is STORED and filterable, never used to discard the row at ingest.
+          city, state: state || null, is_business: !!it?.isBusinessAccount,
+          external_url: it?.externalUrl || null, discovered_via: 'ig-scraper-user-search',
+          outreach_status: 'pending_review',
+        }, { onConflict: 'id' });
+      }
+    }
+  } catch (e) {
+    // SPEC-202: this used to swallow the error entirely. It hid a 42703 on a column
+    // that did not exist, so 262 ig_services rows produced ZERO creators and nothing
+    // anywhere said why. A best-effort write that never reports is not best-effort,
+    // it is invisible. Record it once — the job note then carries the real reason.
+    if (!_lastCreatorError) _lastCreatorError = `creator half: ${serr(e)}`;
   }
   return { saved, found, query };
 }
