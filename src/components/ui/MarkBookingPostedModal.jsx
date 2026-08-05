@@ -5,7 +5,7 @@
 // and the provider can reply / escalate (module 2). markBookingPosted +
 // createReview in lib/api do the writes.
 import { useState, useEffect } from 'react';
-import { markBookingPosted, createReview, getMyEarningsSummary, recommendService, getMyCcStatus } from '../../lib/api';
+import { markBookingPosted, createReview, getMyEarningsSummary, recommendService, getMyCcStatus, notifyBookingReviewed } from '../../lib/api';
 import { buildInviteUrl } from '../../lib/referral';
 import { CcGateModal } from './CcGateModal';
 
@@ -55,6 +55,16 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
   // recommendation so it shows on profiles.
   const isPaid = !booking?.is_free_for_rainmaker;
   const hasUrl = /^https?:\/\//i.test(url.trim());
+  // FW-10 (Tarik 2026-08-01, verbatim): "post story highlight should be
+  // mandatory not optional". The Story-Highlight step used to be a purely
+  // instructional list item — nothing enforced it, so links died after 24h.
+  // Whenever an IG post is part of this submission (free barter always; paid
+  // once a link is pasted — the post itself stays optional-when-paid per
+  // FROZEN SPEC-53), the user must explicitly confirm they saved the Story to
+  // a Highlight before the submit button unlocks.
+  const [highlightSaved, setHighlightSaved] = useState(false);
+  const willPost = !lowRating && (!isPaid || hasUrl);
+  const highlightBlocked = willPost && !highlightSaved;
 
   // The connector's UNIQUE referral link (Tarik 2026-06-15): every signup
   // through it credits them (7% up to $250). `?s=` ties the click to THIS
@@ -76,6 +86,12 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
     // IG post is REQUIRED for free/barter (the barter obligation) but OPTIONAL
     // when the user paid (SPEC-54).
     if (!lowRating && !isPaid && !hasUrl) { setErr('Paste the public link to your Instagram post.'); return; }
+    // FW-10 (Tarik 2026-08-01): "post story highlight should be mandatory not
+    // optional" — a post cannot be submitted until the Highlight save is confirmed.
+    if (!lowRating && (!isPaid || hasUrl) && !highlightSaved) {
+      setErr('Save your Story to a "Spotlights" Highlight first, then confirm it below — it keeps your link working past 24h.');
+      return;
+    }
     // CERGIO-GUARD (2026-06-19, Tarik): publishing a spotlight post requires a
     // verified card (identity / anti-spam). Only blocks the POST itself; a
     // held <4★ rating (no publish) and paid no-post recommendations pass. Test
@@ -92,6 +108,10 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
     if (lowRating) {
       // Below 4★ → the IG post is HELD. The provider is notified to review the
       // rating and can reply / escalate (module 2). No markBookingPosted.
+      // FW-12 (Tarik 2026-08-01): "need a notification to review and approve" —
+      // this branch previously claimed the provider was notified but fired
+      // nothing. notify-request 'reviewed' emails + writes the in-app row.
+      notifyBookingReviewed(booking.id);
       setBusy(false);
       onPosted?.({ heldForLowRating: true });
       onClose?.();
@@ -108,6 +128,15 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
     if (hasUrl) {
       const { error } = await markBookingPosted(booking.id, { postUrl: url });
       if (error) { setBusy(false); setErr(error.message || 'Could not save.'); return; }
+    } else {
+      // FW-12 (Tarik 2026-08-01, verbatim): "tarik.sansal2@gmail.com didn't get
+      // notified that t@cergio submitted IG review and post.. need a
+      // notification to review and approve". Paid submit without a post link
+      // skips markBookingPosted (SPEC-53), so its 'posted' notify never fired
+      // and the owner heard NOTHING (recommendService's notifyUser call is a
+      // silent no-op — bare profile-id where { email, phone } is expected).
+      // notify-request 'reviewed' notifies the service owner to review it.
+      notifyBookingReviewed(booking.id);
     }
     setBusy(false);
     onPosted?.();
@@ -228,7 +257,7 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
               <ol className="text-meta text-b2 leading-snug flex flex-col gap-1.5 pl-4 list-decimal">
                 <li><span className="font-extrabold text-black">Copy your link</span> above.</li>
                 <li>Open Instagram → add this service to your <span className="font-extrabold text-black">Story</span> → tap the <span className="font-extrabold text-black">Link sticker</span> → paste.</li>
-                <li>Save the Story to a <span className="font-extrabold text-black">“Spotlights” Highlight</span> so the link keeps working past 24h.</li>
+                <li>Save the Story to a <span className="font-extrabold text-black">“Spotlights” Highlight</span> so the link keeps working past 24h. <span className="font-extrabold text-black">Required.</span></li>
               </ol>
               <a href="https://instagram.com" target="_blank" rel="noreferrer"
                  className="block text-center bg-black text-white rounded-[14px] py-2.5 text-body-sm font-extrabold active:scale-[.98] transition-all">
@@ -262,16 +291,39 @@ export function MarkBookingPostedModal({ booking, connectorId, onClose, onPosted
                   className="w-full bg-bg5 rounded-[12px] px-4 py-3 text-body-sm text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
                 />
               </div>
+
+              {/* FW-10 (Tarik 2026-08-01, verbatim): "post story highlight should
+                  be mandatory not optional". Mandatory confirmation of the
+                  Highlight save — the submit button stays disabled until checked
+                  whenever a post is being submitted. */}
+              {willPost && (
+                <label className={`flex items-start gap-2.5 rounded-[12px] px-3.5 py-3 border cursor-pointer transition-colors
+                  ${highlightSaved ? 'bg-gl border-g/30' : 'bg-bg5 border-bdr'}`}>
+                  <input
+                    type="checkbox"
+                    checked={highlightSaved}
+                    onChange={e => setHighlightSaved(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-[#4AA901]"
+                  />
+                  <span className="text-meta text-b2 leading-snug">
+                    <span className="font-extrabold text-black">I saved the Story to my “Spotlights” Highlight</span> — required,
+                    so the link keeps working past 24h.
+                  </span>
+                </label>
+              )}
             </>
           )}
 
           {err && <p className="text-meta text-danger font-extrabold">{err}</p>}
 
+          {/* FW-10 (Tarik 2026-08-01): "post story highlight should be mandatory
+              not optional" — the continue action is disabled (existing gray
+              disabled language) until the Highlight step is confirmed. */}
           <button
             type="submit"
-            disabled={busy || !stars}
+            disabled={busy || !stars || highlightBlocked}
             className={`w-full rounded-[24px] py-3.5 text-[15px] font-extrabold transition-all
-              ${stars && !busy
+              ${stars && !busy && !highlightBlocked
                 ? 'bg-g text-white hover:opacity-90 active:scale-[.97]'
                 : 'bg-bg5 text-b3 cursor-not-allowed'}`}
           >

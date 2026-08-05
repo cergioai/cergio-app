@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   listProviderBookings,
   listConsumerBookings,
@@ -217,7 +217,12 @@ const TABS = ['Overview', 'Requests', 'Sent', 'Upcoming', 'Past'];
 export function JobsInboxScreen() {
   const navigate = useNavigate();
   const { showToast, auth, payForBooking, handleBook } = useOutletContext();
-  const [activeTab, setActiveTab] = useState('Overview');
+  // FW-1 (founder verbatim: "Add place to see existing requests and any
+  // replies") — /inbox?tab=Requests lands directly on the requests+replies
+  // view so Home can link straight to it.
+  const [searchParams] = useSearchParams();
+  const initialTab = ['Overview', 'Requests', 'Sent', 'Upcoming', 'Past'].includes(searchParams.get('tab')) ? searchParams.get('tab') : 'Overview';
+  const [activeTab, setActiveTab] = useState(initialTab);
   // Action-feed filter (SPEC-50): all | money | free.
   const [actionFilter, setActionFilter] = useState('all');
   const [real, setReal] = useState(null);
@@ -735,7 +740,17 @@ export function JobsInboxScreen() {
               : `${resp.service?.title || r.service_type || 'Offer'} accepted`,
             sub: `${first(resp.responder)} accepted — book a time`,
             actionLabel: 'Book', onAction: () => setActiveTab('Requests'),
-            onView: viewSvc(resp.service?.id),
+            // FW-7 (founder verbatim): "When viewing a reply to book, and
+            // seeing profile of the service, need to showcase the booking
+            // button with the price (from the counter).. not the generic
+            // request to book on profile" — carry the reply's offer context
+            // so the PDP CTA books at the offered/countered price (same
+            // price SEEN = price CHARGED discipline as SPEC-211).
+            onView: resp.service?.id
+              ? () => navigate(`/service/${resp.service.id}`, {
+                  state: { offerCents: resp.offered_price_cents ?? null, requestId: r.id, responseId: resp.id },
+                })
+              : viewSvc(null),
             ts: resp.responded_at || resp.created_at,
           })));
 

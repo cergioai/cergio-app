@@ -393,6 +393,7 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     officialPriceCents: cents,
     counterPriceCents:  counterCents,
     counterStatus:      responseDetail?.status || null,
+    responseId:         responseDetail?.responseId || null,
     responderFirstName: responseDetail?.responderFirstName || null,
     name:        svc.title || 'Untitled',
     category:    svc.category || 'Service',
@@ -615,6 +616,9 @@ export function ResultsScreen() {
           offeredPriceCents: row.offered_price_cents,
           responderFirstName: firstName,
           responderName,
+          // FW-7: the response row id — carried into the PDP navigation
+          // state so its CTA books THIS reply at the price shown.
+          responseId: row.id,
         };
       }
       setConfirmedServiceIds(ids);
@@ -1318,7 +1322,17 @@ export function ResultsScreen() {
           key={p.id}
           provider={p}
           onBook={handleBook}
-          onOpen={(prov) => navigate(`/service/${prov.id}`, { state: { provider: prov } })}
+          onOpen={(prov) => navigate(`/service/${prov.id}`, {
+            // FW-7 (founder verbatim): "When viewing a reply to book, and
+            // seeing profile of the service, need to showcase the booking
+            // button with the price (from the counter).. not the generic
+            // request to book on profile". A reply card (responseId set)
+            // carries its effectivePriceCents (SPEC-211: the price SEEN is
+            // the price CHARGED) so the PDP CTA reads "Book · $X".
+            state: prov.responseId
+              ? { provider: prov, offerCents: prov.priceCents, requestId, responseId: prov.responseId }
+              : { provider: prov },
+          })}
           onSave={() => showToast('Saved ♥')}
         />
       ))}

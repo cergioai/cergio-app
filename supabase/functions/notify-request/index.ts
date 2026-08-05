@@ -288,7 +288,11 @@ async function handleResponse(supaAdmin: any, body: any, appBase: string) {
 // ── event: booking — barter-loop lifecycle (2026-06-12) ─────────────────────
 // Tarik's flow board: booking accepted → consumer hears it; Connector
 // posts IG → provider reviews; provider accepts/flags → Connector hears
-// it. action: 'accepted' | 'posted' | 'post_confirmed' | 'post_flagged'.
+// it. action: 'accepted' | 'posted' | 'reviewed' | 'post_confirmed' | 'post_flagged'.
+// FW-12 (Tarik 2026-08-01): 'reviewed' — the consumer submitted their IG
+// review WITHOUT a post going through markBookingPosted (paid no-link path,
+// held <4★ path). "tarik.sansal2@gmail.com didn't get notified that t@cergio
+// submitted IG review and post.. need a notification to review and approve."
 async function handleBooking(supaAdmin: any, body: any, appBase: string) {
   const bookingId = body?.bookingId;
   const action    = body?.action;
@@ -351,6 +355,25 @@ async function handleBooking(supaAdmin: any, body: any, appBase: string) {
       link,
       text: `${bodyLine}\n${b.post_url || ''}\n\n${link}`,
       sms: `Cergio: ${consumerName} posted the IG spotlight for ${svcTitle}. Review: ${link}`,
+    };
+  } else if (action === 'reviewed') {
+    // FW-12 (Tarik 2026-08-01, verbatim): "tarik.sansal2@gmail.com didn't get
+    // notified that t@cergio submitted IG review and post.. need a notification
+    // to review and approve". Notify the SERVICE OWNER (provider) that a review
+    // was submitted so they can review + approve it in their Inbox. Same
+    // pattern as 'posted' (service role writes the in-app row + emails/SMS).
+    recipientId = b.provider?.id || null;
+    kind = 'review_submitted';
+    bodyLine = `${consumerName} posted an IG review of ${svcTitle} — review it.`;
+    msg = {
+      subject: `${consumerName} reviewed ${svcTitle} — review and approve it`,
+      heading: 'New review to approve',
+      lead: `<strong>${escapeHtml(consumerName)}</strong> posted an IG review of <strong>${escapeHtml(svcTitle)}</strong>. Review and approve it in your Inbox.`,
+      detail: null,
+      cta: 'Review it →',
+      link,
+      text: `${bodyLine}\n\n${link}`,
+      sms: `Cergio: ${consumerName} posted an IG review of ${svcTitle}. Review it: ${link}`,
     };
   } else if (action === 'post_confirmed') {
     recipientId = b.consumer?.id || null;

@@ -2069,6 +2069,8 @@ export async function recommendService(serviceId, { review = '' } = {}) {
   // recommended/rated — the notify-user edge fn already has a
   // `service_recommended` template, but recommendService never fired it (so the
   // provider got no email/SMS, only the in-app dot). Best-effort, never blocks.
+  // FW-12 NOTE: silent no-op — recipient is a bare id; notify-user needs
+  // {email,phone}. Booking review paths now use notify-request 'reviewed'.
   if (!error && data?.id) {
     try {
       const { data: svc } = await supabase
@@ -4237,7 +4239,7 @@ export async function listMyOpenSearchRequests({ limit = 20 } = {}) {
 // the Connector cannot order other free services.
 
 /** Fire-and-forget barter notification via the notify-request edge fn.
- *  action: 'accepted' | 'posted' | 'post_confirmed' | 'post_flagged'. */
+ *  action: 'accepted' | 'posted' | 'reviewed' | 'post_confirmed' | 'post_flagged'. */
 function fireBookingNotify(bookingId, action) {
   const app_url = typeof window !== 'undefined' ? window.location.origin : undefined;
   supabase.functions
@@ -4252,6 +4254,19 @@ function fireBookingNotify(bookingId, action) {
  *  consumer hears about the confirm (email + in-app). */
 export function notifyBookingAccepted(bookingId) {
   fireBookingNotify(bookingId, 'accepted');
+}
+
+/** FW-12 (Tarik 2026-08-01): "tarik.sansal2@gmail.com didn't get notified that
+ *  t@cergio submitted IG review and post.. need a notification to review and
+ *  approve". Fired by MarkBookingPostedModal on the submit branches that never
+ *  reach markBookingPosted (paid submit without a post link; held <4★ review) —
+ *  those paths previously notified NO ONE: recommendService's notifyUser call
+ *  passes a bare profile-id where notify-user expects { email, phone }, so it
+ *  silently sends nothing. notify-request 'reviewed' writes the in-app
+ *  notifications row with the service role AND emails/SMSes the service owner
+ *  (same pattern as 'posted'). */
+export function notifyBookingReviewed(bookingId) {
+  fireBookingNotify(bookingId, 'reviewed');
 }
 
 /** CERGIO-GUARD (2026-06-12): optimistic paid marker — PaymentSheet

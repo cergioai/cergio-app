@@ -1452,6 +1452,28 @@ export function HomeScreen() {
               its own visual space without crowding the search box. The sub-label
               leads with whichever side of the marketplace the user is already in,
               because each side wants the OTHER side's free offer. */}
+          {/* FW-1 (founder verbatim 2026-08-02: "Add place to see existing
+              requests and any replies") — a persistent, named entry under the
+              search box straight to Jobs → Requests ("Responses to your
+              requests"). The surface existed but was only reachable behind
+              the generic Inbox nav label; signed-in users get a direct door. */}
+          {auth?.isSignedIn && (
+            <div className="px-5 mt-3">
+              <button
+                type="button"
+                onClick={() => navigate('/inbox?tab=Requests')}
+                className="w-full flex items-center justify-center gap-2 group"
+              >
+                <span className="text-body-sm font-extrabold text-black group-hover:text-gd transition-colors">
+                  Your requests &amp; replies
+                </span>
+                <svg width="7" height="12" viewBox="0 0 11 18" fill="none" className="flex-shrink-0 text-black/40">
+                  <path d="M2 2 L9 9 L2 16" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <div className="px-5 mt-4">
             <button
               type="button"
