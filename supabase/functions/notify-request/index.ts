@@ -129,6 +129,62 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
     return json({ sent: 0, note: 'no recipients after self-notify guard', selfNotifyBlocked });
   }
 
+  // ── FW-5: SERVER-SIDE SEND-ONCE GUARD ────────────────────────────────────
+  // FW-5 (founder verbatim, 2026-08-05): "don't remember this request that I'm
+  // seeing on tarik.sansal2 ... fired an old request by itself" — an OLD
+  // request re-announced itself as 'New request · House Cleaner · 28m' to a
+  // provider. The exact re-trigger is unknown (logs unavailable), so instead
+  // of hunting it we make re-announcement impossible at the LAST gate before
+  // an email/SMS leaves the building (same posture as the SPEC-78 self-notify
+  // guard above): each (request_id, provider_id) pair is announced AT MOST
+  // ONCE, ever, no matter who calls this function or how many times.
+  //
+  // Mechanics: insert-first into request_notify_ledger (migration
+  // 20260805100000) with ON CONFLICT DO NOTHING + RETURNING — upsert with
+  // ignoreDuplicates compiles to exactly that, and only the rows actually
+  // INSERTED come back. Atomic: under concurrent calls, Postgres lets exactly
+  // one caller win each pair; the loser gets no row back and skips the send.
+  // No read-then-write race.
+  //
+  // Fail-open ONLY on ledger ERRORS (missing table, outage) — a conflict is
+  // not an error, it is the guard working. A broken guard must not silence
+  // all notifications, so on error we log LOUDLY and send unguarded.
+  // FW-5: providerIds narrows again below via the send-once ledger — the send
+  // loop keeps iterating the FILTERED providerIds (launch-05 discipline).
+  let alreadyNotified = 0;
+  // wonSet: recipients this call is allowed to contact. Defaults to everyone
+  // (fail-open); the ledger claim below narrows it to first-time recipients.
+  let wonSet = new Set(providerIds.map((pid: string) => String(pid)));
+  try {
+    const { data: claimed, error: ledgerErr } = await supaAdmin
+      .from('request_notify_ledger')
+      .upsert(
+        providerIds.map((pid: string) => ({ request_id: requestId, provider_id: pid })),
+        { onConflict: 'request_id,provider_id', ignoreDuplicates: true },
+      )
+      .select('provider_id');
+    if (ledgerErr) {
+      // eslint-disable-next-line no-console
+      console.error('[notify-request] FW-5 LEDGER ERROR — send-once guard bypassed (fail-open), sending unguarded:', ledgerErr.message);
+    } else {
+      wonSet = new Set((claimed ?? []).map((r: any) => String(r.provider_id)));
+      alreadyNotified = providerIds.length - wonSet.size;
+      if (alreadyNotified > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(`[notify-request] FW-5 send-once guard: skipped ${alreadyNotified} already-notified recipient(s) for request ${requestId}`);
+      }
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[notify-request] FW-5 LEDGER THREW — send-once guard bypassed (fail-open), sending unguarded:', String(e).slice(0, 200));
+  }
+  if (wonSet.size === 0) {
+    return json({
+      event: 'created', sent: 0, selfNotifyBlocked, alreadyNotified,
+      note: 'all recipients already notified for this request (FW-5 send-once guard)',
+    });
+  }
+
   // ── SPEC-126: WRITE THE IN-APP NOTIFICATION ROWS HERE ────────────────────
   // handleCreated only ever sent email/SMS — it never inserted the in-app
   // 'new_request' rows. Those were written by the CLIENT, which RLS forbids
@@ -146,7 +202,8 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
       .eq('kind', 'new_request')
       .filter('data->>request_id', 'eq', String(requestId));
     const have = new Set((already || []).map((r: any) => r.profile_id));
-    const fresh = providerIds.filter((pid: string) => !have.has(pid));
+    // FW-5: only first-time recipients (wonSet) get a new in-app row.
+    const fresh = providerIds.filter((pid: string) => wonSet.has(String(pid)) && !have.has(pid));
     if (fresh.length) {
       const deepLink = `${appBase}/results?req=${requestId}`;
       await supaAdmin.from('notifications').insert(fresh.map((pid: string) => ({
@@ -181,7 +238,10 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
     `\nAccept, counter, or decline: ${link}\n`;
 
   const results: any[] = [];
+  // FW-5: email/SMS go ONLY to recipients whose ledger claim succeeded above —
+  // the loop iterates the launch-05-filtered providerIds and skips non-winners.
   for (const pid of providerIds) {
+    if (!wonSet.has(String(pid))) continue; // FW-5 send-once skip
     const r = await sendToProfile(supaAdmin, pid, {
       subject,
       heading:  'New request near you',
@@ -198,6 +258,7 @@ async function handleCreated(supaAdmin: any, body: any, appBase: string) {
     event: 'created',
     sent: results.filter(r => r.email === 'sent').length,
     selfNotifyBlocked, // > 0 means a caller tried to notify the requester — SPEC-78
+    alreadyNotified,   // > 0 means the FW-5 send-once guard skipped repeat sends
     results,
   });
 }

@@ -154,6 +154,48 @@ const TIME_RANGE_RE  = /\b(?:from\s+)?(\d{1,2})(?::\d{2})?\s*(?:am|pm)?\s*(?:-|�
 // Single specific time: "3pm", "11:30am".
 const SINGLE_TIME_RE = /\b(\d{1,2})(?::\d{2})?\s*(am|pm)\b/i;
 
+// ─── FW-2 · the time question must be ANSWERED, not just shown ──────────────
+// FW-2 (founder verbatim, 2026-08-05): typed "babysitter tonoight", and the
+// request proceeded without a picked time — "When do you need this? A date,
+// time window, or just 'flexible' works." was shown but not enforced.
+//
+// Mechanism: the chat-parse edge fn's awaiting-field fallback ("THE SPINE MUST
+// NOT LOOP", chat-parse/index.ts ~line 113) echoes ANY ≤80-char reply back as
+// parsed.when once `what` is captured — so whatever the user typed next (or a
+// re-typed query with a typo'd time like "tonoight") silently satisfied the
+// when gate, phase flipped to 'ready', and HomeScreen's fan-out effect wrote
+// the request with no real time resolution.
+//
+// Enforcement lives HERE, at the one client gate every intake turn flows
+// through: a `when` value only counts as an ANSWER when it carries a
+// recognizable time signal. Valid answers include explicit values (days,
+// dates, "3-5pm", "this weekend", "evening") AND "asap"/"now"/"today"/
+// "tonight" AND the "flexible" family — those are all legitimate; we never
+// force a calendar date. Anything else is dropped, so the SAME existing
+// question copy ("When do you need this? A date, time window, or just
+// \"flexible\" works.") re-asks and phase stays 'chat' — submit stays blocked
+// until the question has an answer.
+//
+// NOTE (out of scope, intentional): no typo-correction here. "tonoight" is
+// NOT rewritten to "tonight" — the guard only enforces that the gate cannot
+// be satisfied by a non-answer. Typo tolerance is a separate feature.
+const WHEN_FLEX_RE   = /\b(flexible|flex|any\s*time|anytime|whenever|any\s+day|open)\b/i;
+const WHEN_ASAP_RE   = /\b(asap|a\.s\.a\.p\.?|now|right\s+away|immediately|urgent(?:ly)?|emergency)\b/i;
+// Numeric dates ("8/15", "12-08-2026") and relative offsets ("in 2 hours").
+const WHEN_NUMDATE_RE  = /\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/;
+const WHEN_RELATIVE_RE = /\b(?:in\s+\d+\s*(?:min(?:ute)?s?|hours?|hrs?|days?|weeks?)|weekend)\b/i;
+
+export function isValidWhenAnswer(v) {
+  if (!v) return false;
+  const s = String(v);
+  return (
+    DAY_RE.test(s) || QUICK_WHEN.test(s) || MONTH_RE.test(s) ||
+    TIME_RANGE_RE.test(s) || SINGLE_TIME_RE.test(s) || TIME_OF_DAY_RE.test(s) ||
+    WHEN_ASAP_RE.test(s) || WHEN_FLEX_RE.test(s) ||
+    WHEN_NUMDATE_RE.test(s) || WHEN_RELATIVE_RE.test(s)
+  );
+}
+
 function naiveParse(text, state = {}) {
   const l = text.toLowerCase();
 
@@ -628,11 +670,27 @@ export function useChat({ wantFree = false } = {}) {
       fields.when = null;
     }
 
+    // FW-2: a `when` that carries no time signal at all is NOT an answer to
+    // the time question — it's the chat-parse awaiting-field fallback echoing
+    // a non-answer (or a typo'd time like "tonoight"). Drop it so the SAME
+    // existing when-question copy re-asks below and phase cannot reach
+    // 'ready' (submit blocked) until the user gives an explicit value or
+    // "asap"/"flexible". See the FW-2 block comment above isValidWhenAnswer.
+    if (fields.when && !isValidWhenAnswer(fields.when)) {
+      // eslint-disable-next-line no-console
+      console.warn('[useChat] when "%s" carries no time signal — dropped, re-asking (FW-2)', fields.when);
+      fields.when = null;
+    }
+
     const merged = {
       what:           fields.what          ?? prevState.what          ?? whatFromTaxonomy ?? null,
       // A1i: a leaked address must not survive in prevState either — a stale
       // "when: 134 Henry St" would otherwise ride every subsequent turn.
-      when:           fields.when          ?? (isAddressNotATime(prevState.when) ? null : prevState.when) ?? null,
+      // FW-2: same for a signal-less when — a previously-swallowed non-answer
+      // must not keep satisfying the gate turn after turn.
+      when:           fields.when
+                        ?? ((isAddressNotATime(prevState.when) || !isValidWhenAnswer(prevState.when)) ? null : prevState.when)
+                        ?? null,
       where:          fields.where         ?? prevState.where         ?? null,
       budget:         fields.budget        ?? prevState.budget        ?? null,
       details:        fields.details       ?? prevState.details       ?? null,

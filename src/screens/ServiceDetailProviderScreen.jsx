@@ -48,20 +48,38 @@ export function ServiceDetailProviderScreen() {
     showToast('Cover updated ✓');
   };
 
-  /** Inline single-field editor via window.prompt — no extra screens.
-   *  Persists via updateService(). The svc state updates optimistically
-   *  so the row's subtitle reflects the new value without a refresh.
+  /** FW-13: inline single-field editor — tap the row → it becomes an
+   *  in-place input with Save / Cancel. Replaces the window.prompt()
+   *  version per the founder's recorded no-browser-popup rule (Tarik):
+   *  "cancel request should be in line (not a pop up from browser)".
+   *  Same visual language as HomeScreen's InlineLocationEditor and the
+   *  JobsInbox inline counter input (bg-bg5 input, underlined Save/Cancel,
+   *  Enter saves, Escape cancels). Persists via the SAME updateService()
+   *  call as before; svc updates optimistically so the row's subtitle
+   *  reflects the new value without a refresh.
    *  CERGIO-GUARD: replaces three 'coming soon' toast dead-ends. */
-  const editServiceField = async (column, current, label) => {
+  const [editingField, setEditingField] = useState(null); // 'location_text' | 'description' | null
+  const [editDraft, setEditDraft] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  const startEditField = (column, current) => {
     if (!svc?.real) { showToast('Demo service — sign up to edit your own.'); return; }
-    const next = typeof window !== 'undefined' ? window.prompt(label, current || '') : null;
-    if (next == null) return;                 // user cancelled
-    const trimmed = next.trim();
-    if (trimmed === (current || '')) return;  // no change
+    setEditDraft(current || '');
+    setEditingField(column);
+  };
+
+  const saveEditField = async (column) => {
+    if (editSaving) return;
+    const current = column === 'location_text' ? svc.location : svc[column];
+    const trimmed = editDraft.trim();
+    if (trimmed === (current || '')) { setEditingField(null); return; }  // no change
+    setEditSaving(true);
     const { error } = await updateService(svc.id, { [column]: trimmed || null });
+    setEditSaving(false);
     if (error) { showToast(`Couldn't save: ${error.message}`); return; }
     const localKey = column === 'location_text' ? 'location' : column;
     setSvc(s => ({ ...s, [localKey]: trimmed || null }));
+    setEditingField(null);
     showToast('Saved ✓');
   };
 
@@ -230,33 +248,91 @@ export function ServiceDetailProviderScreen() {
             sub: `${svc.offerings?.length ?? 1} item${(svc.offerings?.length ?? 1) === 1 ? '' : 's'} · tap to manage` },
           { label: 'Service area',
             sub: svc.location || 'Tap to set the city / address you serve',
-            run: () => editServiceField('location_text', svc.location, 'Service area (city, address, or both)') },
+            edit: { column: 'location_text', current: svc.location,
+                    placeholder: 'Service area (city, address, or both)' } },
           { label: 'Description',
             sub: svc.description || 'Tap to add a description',
-            run: () => editServiceField('description', svc.description, 'How would you describe this service?') },
+            edit: { column: 'description', current: svc.description,
+                    placeholder: 'How would you describe this service?', multiline: true } },
           { label: 'Photos & videos',
             sub: svc.coverUrl ? 'Cover uploaded · tap to change' : 'Add a cover photo',
             run: () => { if (!svc.real) { showToast('Demo service — sign up to upload your own photo.'); return; } fileInputRef.current?.click(); } },
           { label: 'Availability defaults',to: '/calendar/availability',
             sub: 'Auto-accept bookings on weekdays' },
-        ].map((row, i, arr) => (
-          <button
-            key={row.label}
-            onClick={() => {
-              if (row.to) return navigate(row.to);
-              if (row.run) return row.run();
-              if (row.toast) return showToast(row.toast);
-            }}
-            className={`w-full flex items-center justify-between px-4 py-4 text-left
-                        ${i < arr.length - 1 ? 'border-b border-bdr' : ''}`}
-          >
-            <div className="flex-1 pr-3">
-              <p className="text-body font-extrabold text-black">{row.label}</p>
-              <p className="text-meta text-b3 mt-0.5">{row.sub}</p>
-            </div>
-            <span className="text-b3 text-lg">›</span>
-          </button>
-        ))}
+        ].map((row, i, arr) => {
+          const borderCls = i < arr.length - 1 ? 'border-b border-bdr' : '';
+          // FW-13: editable rows expand IN PLACE into an input + Save/Cancel.
+          // Founder rule (recorded): "cancel request should be in line (not
+          // a pop up from browser)" — never window.prompt/window.confirm.
+          if (row.edit && editingField === row.edit.column) {
+            return (
+              <div key={row.label} className={`px-4 py-4 ${borderCls}`}>
+                <p className="text-body font-extrabold text-black mb-2">{row.label}</p>
+                {row.edit.multiline ? (
+                  <textarea
+                    autoFocus
+                    rows={3}
+                    value={editDraft}
+                    onChange={e => setEditDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Escape') setEditingField(null); }}
+                    placeholder={row.edit.placeholder}
+                    className="w-full bg-bg5 rounded-[10px] px-3 py-1.5 text-meta text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30 resize-none"
+                  />
+                ) : (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editDraft}
+                    onChange={e => setEditDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Escape') { setEditingField(null); return; }
+                      if (e.key === 'Enter') saveEditField(row.edit.column);
+                    }}
+                    placeholder={row.edit.placeholder}
+                    className="w-full bg-bg5 rounded-[10px] px-3 py-1.5 text-meta text-black placeholder-b3 outline-none focus:ring-2 focus:ring-g/30"
+                  />
+                )}
+                <div className="flex items-center gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => saveEditField(row.edit.column)}
+                    disabled={editSaving}
+                    className={`text-meta-sm font-extrabold underline underline-offset-2 px-1
+                      ${editSaving ? 'text-b3 cursor-not-allowed' : 'text-g'}`}
+                  >
+                    {editSaving ? '…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingField(null)}
+                    disabled={editSaving}
+                    className="text-meta-sm font-normal text-b3 underline underline-offset-2 px-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <button
+              key={row.label}
+              onClick={() => {
+                if (row.to) return navigate(row.to);
+                if (row.edit) return startEditField(row.edit.column, row.edit.current);
+                if (row.run) return row.run();
+                if (row.toast) return showToast(row.toast);
+              }}
+              className={`w-full flex items-center justify-between px-4 py-4 text-left ${borderCls}`}
+            >
+              <div className="flex-1 pr-3">
+                <p className="text-body font-extrabold text-black">{row.label}</p>
+                <p className="text-meta text-b3 mt-0.5">{row.sub}</p>
+              </div>
+              <span className="text-b3 text-lg">›</span>
+            </button>
+          );
+        })}
       </div>
 
       <p className="px-5 text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-3">
