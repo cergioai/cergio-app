@@ -43,8 +43,8 @@ local is?"
 | source | what it is | status |
 |---|---|---|
 | **osm** | OpenStreetMap / Overpass | free, live |
-| **craigslist** | Apify craigslist scraper | live |
-| **yellowpages_apify** | Apify (trudax actor) | live |
+| **craigslist** | Apify craigslist scraper (solidcode, pay-per-result $1.40/1,000 — SPEC-255; ex-memo23, $0.104/fresh-lead) | live |
+| **yellowpages_apify** | Apify (solidcode actor, pay-per-result $0.80/1,000 — SPEC-254; ex-trudax, died 403/400) | live |
 | **yelp** | Yelp Fusion API | live, paid |
 | **google_lsa** | Google **Local Services Ads** — the verified-provider ad units at the very top of a service search, with a phone number | live, **KEPT** |
 | **gmaps_apify** | Apify Google Places extractor | live |

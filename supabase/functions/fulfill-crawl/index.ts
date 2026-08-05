@@ -180,7 +180,8 @@ const gdb = growthDb();
   // before any job is claimed, before any vendor call — because a guard after the claim
   // still spends money. Counts use AUDIT_CAP_SOURCES (one shared definition with the ops
   // payload): every data_source value a source's rows actually carry, since counting
-  // only the rota name reads 0 beside real rows (yellowpages_apify writes 'yellowpages';
+  // only the rota name reads 0 beside real rows (yellowpages_apify wrote 'yellowpages'
+  // until SPEC-254 — the alias keeps that history counting;
   // google_lsa's history includes folded google_sponsored rows). A source whose count
   // cannot be read refuses to run — fail CLOSED, refusing costs nothing. A source
   // already past the cap pauses immediately: its 100-to-review already exists in the
@@ -529,7 +530,8 @@ const gdb = growthDb();
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'yellowpages_apify') {
-          // ── YellowPages via Apify (trudax) — structured business listings ──
+          // ── YellowPages via Apify (solidcode, SPEC-254; ex-trudax) — structured
+          //    business listings, pay-per-result ──
           const r = await fulfillYellowPagesApify(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
@@ -560,8 +562,8 @@ const gdb = growthDb();
             updated_at: new Date().toISOString(),
           }).eq('id', job.id);
         } else if (source === 'craigslist') {
-          // ── Craigslist via Apify actor (memo23/craigslist-scraper). Capped
-          //    maxItems (cost), deduped by phone/email/name, first-name parsed.
+          // ── Craigslist via Apify actor (solidcode, SPEC-255; ex-memo23). Pay-per-
+          //    result, capped maxResults (cost), deduped by phone/email, first-name parsed.
           const r = await fulfillCraigslist(db, job);
           saved = r.saved; found = r.found; query = r.query;
           await flushBuf(db); await gdb.from('crawl_requests').update({
@@ -1895,8 +1897,17 @@ async function resolveCid(KEY: string, city: string, state: string): Promise<str
 // documented it as SerpAPI. Dead code that names a vendor is not harmless: it is a second
 // source of truth that answers questions confidently and wrongly.
 
-// Craigslist city -> subdomain
-const CL_SUBDOMAIN: Record<string, string> = { 'new york': 'newyork', 'miami': 'miami' };
+// Craigslist city -> subdomain. This doubles as the REGION map for the SPEC-255
+// solidcode~craigslist-scraper (its `region` input IS the craigslist subdomain):
+// every borough/neighbourhood normalises through metroOf() first, so the 12 active
+// cities resolve as NYC boroughs → 'newyork' and the Miami neighbourhoods → 'miami'.
+// Jersey City and Newark (NJ locations inside the New York DMA, SPEC-244) are listed
+// explicitly because METRO_OF does not fold them — founder-named cities may not
+// silently return 'no craigslist subdomain'.
+const CL_SUBDOMAIN: Record<string, string> = {
+  'new york': 'newyork', 'miami': 'miami',
+  'jersey city': 'newyork', 'newark': 'newyork',   // SPEC-255
+};
 // Pull a likely first name from a Craigslist title/body ("Handyman - Jose", "Jessica\'s cleaning").
 const NOT_A_NAME = /^(New|The|Best|Call|Text|Free|Now|Nyc|Miami|Cheap|Fast|Pro|Professional|Licensed|Insured|Affordable|Reliable|Quality|Expert|Experienced|Premium|Local|Certified|Trusted|Available|Special|Standard|Deep|Move|Apartment|Home|House|Housekeeping|Cleaning|Cleaner|Tutor|Tutoring|Math|Maths|Algebra|Geometry|Calculus|Statistics|Stats|Physics|Chemistry|Biology|Science|English|Spanish|French|Reading|Writing|Harvard|Yale|Princeton|Columbia|Ivy|Grad|Undergrad|Mba|Phd|Psat|Sat|Act|Gmat|Gre|Dog|Cat|Pet|Walking|Boarding|Sitting|Plumber|Plumbing|Electrician|Handyman|Barber|Photographer|Mover|Moving|Service|Services|Repair|Install|Emergency|Same|Day|Hour|Year|Years|Nyc|Manhattan|Brooklyn|Queens|Bronx|West|East|North|South|Upper|Lower)$/i;
 function parseFirstName(text: string): string | null {
@@ -1972,10 +1983,16 @@ const RETIRED_TO_APIFY = new Set(['google_lsa', 'google_sponsored']);
 const EST_COST_PER_CALL_USD: Record<string, number> = { serpapi: 0.005, yelp: 0.008 };
 
 const APIFY_ACTOR_OF_SOURCE: Record<string, string> = {
-  craigslist:        'memo23~craigslist-scraper',
+  // SPEC-255: memo23 replaced — $0.104/fresh-lead, 2x the $0.05 ceiling; solidcode is
+  // pay-per-result at $1.40/1,000. This map also feeds the SPEC-253 actor-level money
+  // meter (apifyActorSpendSinceUsd), so the swap keeps the meter on the actor that is
+  // actually billing.
+  craigslist:        'solidcode~craigslist-scraper',
   google_lsa:        'compass~google-maps-extractor',   // SPEC-193
   google_sponsored:  'compass~google-maps-extractor',   // SPEC-193
-  yellowpages_apify: 'trudax~yellow-pages-us-scraper',
+  // SPEC-254: trudax replaced — HTTP 403 (monthly limit) then 400, $0.66 for 0 leads;
+  // solidcode is pay-per-result at $0.80/1,000.
+  yellowpages_apify: 'solidcode~yellowpages-scraper',
   gmaps_apify:       'compass~google-maps-extractor',
   ig_services:       'apify~instagram-scraper',
 };
@@ -2167,21 +2184,35 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     'driver':'lbs','personal assistant':'lbs',
   };
   const subcat = CL_SUBCAT[rawType] || 'bbb';
-  // (the single-URL clUrl was dead since the SUBCATS sweep landed — removed, SPEC-178)
-  // VOLUME (SPEC-101): 40 -> 250 per job, and sweep EVERY relevant services
-  // subcategory in one run instead of a single URL. Craigslist has ~8 service
-  // subcats; one URL was leaving ~90% of the inventory on the table.
-  const MAXITEMS = Number(Deno.env.get('CL_MAX_ITEMS') || '1000');   // MAX: Apify sets no per-run ceiling; 1000 = a full CL subcat page-set
-  const SUBCATS = Array.from(new Set([subcat, 'sks', 'hss', 'lbs', 'crs', 'lss', 'pas', 'cps']));
-  // SPEC-178: Craigslist matches ?query= as an EXACT PHRASE. "gmat tutor" matches
+  // SPEC-255 (founder, 2026-08-04, verbatim: "let's find an alternative for
+  // yellowpages... and also one for craigslist that's cheaper... run the rest in the
+  // meantime... so i see 100 pieces of data per source"): the memo23 actor measured
+  // $0.104 per fresh contactable lead — 2x the $0.05/lead ceiling — and pay-per-
+  // delivery correctly blocked it at $0.50 ($2.09 dead spend since the old line).
+  // Replaced with solidcode~craigslist-scraper: PAY-PER-RESULT at $1.40/1,000
+  // ($0.0014/result — zero delivery = zero actor charge, the SPEC-253 billing shape).
+  // Its input is region + ONE category select LABEL + searchTerm + maxResults; the
+  // per-URL subcat sweep (SPEC-101/178) died with its actor. CL_SUBCAT's codes stay
+  // (they encode WHICH craigslist services shelf a service lives on — gate #187) and
+  // are translated to the labels the new actor's category select takes.
+  const CL_CAT_LABEL: Record<string, string> = {
+    sks: 'skilled trade services', hss: 'household services', pas: 'pet services',
+    lss: 'lessons & tutoring', kid: 'childcare', bts: 'beauty services',
+    crs: 'creative services', lbs: 'labor / hauling / moving', bbb: 'services',
+  };
+  // $1.40/1,000 = $0.0014/result: 350 × $0.0014 = $0.49, so a single run can never
+  // blow through one $0.50 pay-per-delivery step (SPEC-253) even if the env knob is
+  // cranked back up to the old 1000.
+  const MAXITEMS = Math.min(Number(Deno.env.get('CL_MAX_ITEMS') || '250'), 350);
+  // SPEC-178: Craigslist matches the search as an EXACT PHRASE. "gmat tutor" matches
   // zero posts in every services subcat; "tutor" matches hundreds. Query the head
   // noun and let our own keyword + blocked-category gates do the narrowing.
   const clQuery = rawType.split(' ').filter(Boolean).pop() || rawType;
-  const startUrls = SUBCATS.map((sc) => `https://${sub}.craigslist.org/search/${sc}?query=${encodeURIComponent(clQuery)}`);
-  // maxItems is PER START URL in this actor (default 1000) — 8 urls x 1000 would
-  // abort run-sync and cost a fortune. `includeEmails` is not an input field at all.
-  const items = await apifyRun('memo23~craigslist-scraper',
-    { startUrls, maxItems: Math.max(20, Math.floor(MAXITEMS / SUBCATS.length)) }, MAXITEMS);
+  // includeDetails:true makes the actor open each post's detail page — that is where
+  // phoneNumbers[]/emails[] come from. Without it every row is contactless and
+  // bufUpsert (SPEC-192) drops the whole run as uncontactable.
+  const items = await apifyRun('solidcode~craigslist-scraper',
+    { region: sub, category: CL_CAT_LABEL[subcat] || 'services', searchTerm: clQuery, maxResults: MAXITEMS, includeDetails: true }, MAXITEMS);
   let found = items.length, saved = 0;
   const seen = new Set<string>();
   // Reject FOR-SALE items (cars/products) + spammy ALL-CAPS/price posts.
@@ -2196,19 +2227,20 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     `\\b(?:${CAR_MAKE})\\b|\\b(?:for sale|mileage|sedan|suv|coupe|vin|obo)\\b`
     + `|\\b\\d{2,3}[,.]?\\d{3}\\s*miles\\b|\\b\\d{2,3}k\\s*miles\\b|\\bpick-?up truck\\b`, 'i');
   const kw = rawType.split(' ').filter(Boolean).pop() || rawType;  // SPEC-178: head noun, not the modifier // core service keyword must appear
-  let placeholders = 0;
   for (const it of items) {
-    // SPEC-178: an EMPTY craigslist search does not return an empty dataset — this
-    // actor pushes 10 rows labelled NO_RESULTS per URL. 8 URLs = 80 items, so
-    // apifyRun saw a non-empty array and recorded NO error, our filters dropped
-    // every placeholder, and the job reported "no Craigslist results" forever.
-    if (it?.label === 'NO_RESULTS' || it?.causes) { placeholders++; continue; }
+    // SPEC-178's NO_RESULTS placeholder guard is SUPERSEDED by SPEC-255: that quirk
+    // belonged to the memo23 actor and died with it — solidcode returns a genuinely
+    // empty dataset for an empty search, which apifyRun already records ("returned 0
+    // items"). The invariant that survives is READ WHAT THIS ACTOR EMITS: title,
+    // description, phoneNumbers[], emails[] (relay excluded), url/postId, isDeleted.
+    // SPEC-255: a deleted post is an unreachable lead — never ingest it.
+    if (it?.isDeleted) continue;
     const name = cleanText(it?.title || it?.name);
     if (!name) continue;
-    // SPEC-178: this actor emits the body as `post`. It emits no description/body, so
-    // desc was ALWAYS '' — the on-topic gate degraded to title-only and the body-phone
-    // fallback below was unreachable code.
-    const desc = (it?.post || it?.description || it?.body || '').toString();
+    // SPEC-178 (lesson kept, field updated for SPEC-255): the old actor emitted the
+    // body as `post` while we read description/body and got '' forever. solidcode
+    // emits `description` — read it first, keep the old keys as fallbacks.
+    const desc = (it?.description || it?.post || it?.body || '').toString();
     const hay = `${name} ${desc}`;
     if (osmIsBlocked(hay)) continue;
     if (FORSALE.test(name)) continue;
@@ -2239,9 +2271,10 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     const lon = it?.mapCoordinates?.longitude ?? it?.longitude ?? it?.lon ?? null;
     if (lat != null && lon != null && !inUS(Number(lat), Number(lon))) continue;
     const first = parseFirstName(`${name} ${desc}`);
-    const clPostId = postUrl
+    // SPEC-255: solidcode emits postId directly; the URL parse stays as a fallback.
+    const clPostId = String(it?.postId || '') || (postUrl
       ? (postUrl.match(/([A-Za-z0-9]{8,})(?:\.html)?\/?$/)?.[1] || postUrl.replace(/[^A-Za-z0-9]/g, '').slice(-40))
-      : '';
+      : '');
     const idbase = (phone ? phone.replace(/\D/g, '') : (email || clPostId)).slice(0, 60);
     if (!idbase) continue;   // never upsert a colliding `cl:<city>` id
     const row = {
@@ -2259,9 +2292,7 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
     await bufUpsert(db, row); const error = null;
     if (!error) saved++;
   }
-  found -= placeholders;   // placeholders are diagnostics, not listings
-  return { saved, found, query, note: (saved === 0 && placeholders > 0)
-    ? `craigslist: 0 real listings — ${placeholders} NO_RESULTS placeholders for "${clQuery}" (search too narrow or wrong subcat)` : undefined };
+  return { saved, found, query };
 }
 
 async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
@@ -2271,43 +2302,62 @@ async function fulfillYellowPagesApify(db: any, job: any): Promise<{ saved: numb
   const state = (job.state || '').trim();
   const query = `${rawType} [yellowpages ${city}]`;
   if (!city || osmIsBlocked(rawType)) return { saved: 0, found: 0, query };
-  // SPEC-179: cryptosignals~yellow-pages-us-scraper is DEPRECATED on Apify
-  // (isDeprecated:true since 2026-07-29) and FAILED 169 of its last 299 public runs.
-  // trudax is the maintained equivalent and its input key is `search`, NOT `keyword` —
-  // a wrong key returns an empty dataset that reads as an empty market. 1000 results
-  // also cannot finish inside run-sync: the SPEC-117 mistake, never applied here.
+  // SPEC-179: cryptosignals~yellow-pages-us-scraper was DEPRECATED on Apify and the
+  // trudax replacement's input key was `search`, NOT `keyword` — a wrong key returns
+  // an empty dataset that reads as an empty market. 1000 results also cannot finish
+  // inside run-sync: the SPEC-117 mistake, never applied here.
+  // SPEC-254 (founder, 2026-08-04, verbatim: "let's find an alternative for
+  // yellowpages... and also one for craigslist that's cheaper... run the rest in the
+  // meantime... so i see 100 pieces of data per source"): the trudax actor died in
+  // production too — HTTP 403 (monthly limit exceeded), then HTTP 400 on every call;
+  // $0.66 charged since the SPEND_CHECKPOINT for 0 leads, blocked by pay-per-delivery.
+  // Replaced with solidcode~yellowpages-scraper: PAY-PER-RESULT at $0.80/1,000, so
+  // zero delivery = zero actor charge — the exact billing shape SPEC-253 wants. Its
+  // input is searchTerms[] + locations[] + maxResults (NOT trudax's search/location/
+  // maxItems) — the SPEC-179 lesson re-applied: a wrong input key returns an empty
+  // dataset that reads as an empty market.
   const YP_MAX_ITEMS = Math.min(Number(Deno.env.get('YP_MAX_ITEMS') || '60'), 100);
-  const items = await apifyRun('trudax~yellow-pages-us-scraper',
+  const items = await apifyRun('solidcode~yellowpages-scraper',
     // SPEC-170b: YellowPages indexes by METRO — "Wynwood, FL" matches nothing.
-    { search: rawType, location: `${metroOf(city)}, ${METRO_STATE[metroOf(city)] || state}`, maxItems: YP_MAX_ITEMS }, YP_MAX_ITEMS);
+    { searchTerms: [rawType], locations: [`${metroOf(city)}, ${METRO_STATE[metroOf(city)] || state}`], maxResults: YP_MAX_ITEMS }, YP_MAX_ITEMS);
   // Capture NOW: _lastApifyError is module-level and 6 pool workers share it.
   const ypApifyErr = _lastApifyError;
   let found = items.length, saved = 0, ypFetches = 0;
   const seen = new Set<string>();
   for (const it of items) {
-    const name = cleanText(it?.businessName || it?.name || it?.title);
+    // SPEC-254: solidcode emits `name` (flat), `phone`, `email`, `website`,
+    // `addressFormatted` + a structured `address` object, `primaryCategory` +
+    // `categories[]`, `profileUrl` — read what THIS actor emits (the SPEC-178 lesson).
+    const name = cleanText(it?.name || it?.businessName || it?.title);
     if (!name) continue;
-    if (osmIsBlocked(`${name} ${(it?.categories||it?.category||'')}`)) continue;
-    const phone = normPhone((Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : (it?.phone || it?.phoneNumber || '')) || '');
+    const catsArr = Array.isArray(it?.categories) ? it.categories : (it?.categories ? [it.categories] : []);
+    if (osmIsBlocked(`${name} ${it?.primaryCategory || ''} ${catsArr.join(' ')}`)) continue;
+    const phone = normPhone((it?.phone || (Array.isArray(it?.phoneNumbers) ? it.phoneNumbers[0] : '') || ''));
     let email = ((it?.email || (Array.isArray(it?.emails) ? it.emails[0] : '')) || '').toLowerCase() || null;
-    const site = it?.website || it?.url || null;
+    const site = it?.website || null;
     if (!email && site && ypFetches < 15) { ypFetches++; email = await scrapeEmail(site); } // direct email from the biz's own site
     if (!phone && !email) continue;
     const dkey = phone ? `p:${phone}` : `e:${email}`;
     if (seen.has(dkey)) continue; seen.add(dkey);
-    const addr = it?.address || [it?.street, it?.city, it?.state, it?.zip].filter(Boolean).join(', ') || null;
-    const cats = Array.isArray(it?.categories) ? it.categories.join(', ') : (it?.category || it?.categories || '');
+    const addr = it?.addressFormatted
+      || [it?.address?.street, it?.address?.city, it?.address?.state, it?.address?.postalCode].filter(Boolean).join(', ') || null;
+    const cats = [it?.primaryCategory, ...catsArr].filter(Boolean).join(', ');
     const first = parseFirstName(name);
     const idbase = phone ? phone.replace(/\D/g, '') : (email || name.toLowerCase().replace(/[^a-z0-9]+/g,'-')).slice(0,50);
     const row = {
       id: `yp:${idbase}:${city.toLowerCase().replace(/[^a-z]/g, '')}`,
       name, service_type: job.service_type || null,
       phone, phone_origin: phone ? 'yellowpages' : null,
-      website_url: it?.website || it?.url || null, owner_email: email,
+      website_url: it?.website || it?.profileUrl || null, owner_email: email,
       instagram: null, has_instagram: false,
-      address: addr, city, state: state || null, zip: it?.zip || null,
+      address: addr, city, state: state || null, zip: it?.address?.postalCode || null,
       lat: it?.latitude ?? null, lon: it?.longitude ?? null,
-      data_source: 'yellowpages', fetched_at: new Date().toISOString(),
+      // SPEC-254: rows now carry the ROTA name. The old mapper wrote legacy
+      // 'yellowpages', which is why every counter had to go through the two-name
+      // alias (AUDIT_CAP_SOURCES) or read 0 beside real rows — the SPEC-251
+      // starvation shape. The alias still counts BOTH labels, so history keeps
+      // counting while new rows stop needing the translation.
+      data_source: 'yellowpages_apify', fetched_at: new Date().toISOString(),
       outreach_status: 'new',
       outreach_notes: `yellowpages | ${classifyEntity(name)} | ${first ? 'name:' + first + ' | ' : ''}${String(cats).slice(0, 70)}`.slice(0, 240),
     };
