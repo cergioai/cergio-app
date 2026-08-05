@@ -164,6 +164,22 @@ export function ServiceDetailScreen() {
   // Prefer state passed from ResultsScreen (fast path). Cold-deep-link
   // fallback re-fetches the row + its recommenders.
   const seeded = location.state?.provider || null;
+  // FW-7 (founder verbatim): "When viewing a reply to book, and seeing
+  // profile of the service, need to showcase the booking button with the
+  // price (from the counter).. not the generic request to book on profile".
+  // When the visit comes from a reply/counter card (Jobs inbox Overview row
+  // or a /results reply card), the navigation state carries the offer: the
+  // primary CTA becomes "Book · $X" wired to the SAME preConfirmed handleBook
+  // the reply card uses (SPEC-47b — provider already said yes by offering),
+  // at the SAME price the card showed (SPEC-211: price SEEN = price CHARGED).
+  // Direct visits (no state) keep the existing generic request CTA.
+  const replyOffer = location.state?.responseId != null
+    ? {
+        offerCents: location.state.offerCents ?? null,
+        requestId:  location.state.requestId ?? null,
+        responseId: location.state.responseId,
+      }
+    : null;
   const [provider, setProvider] = useState(seeded);
   const [recommenders, setRecommenders] = useState(
     location.state?.provider?.recommendersRaw || []
@@ -988,6 +1004,23 @@ export function ServiceDetailScreen() {
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-cream border-t border-bdr px-5 pt-3 pb-5 z-10">
         <button
           onClick={() => {
+            // FW-7: arrived from a reply/counter card — book straight off that
+            // reply at its offered/countered price via the SAME preConfirmed
+            // handleBook the reply card uses (see comment at replyOffer).
+            if (replyOffer) {
+              handleBook({
+                id:           provider.id,
+                ownerId:      provider.ownerId,
+                name:         ownerProfile?.display_name || provider.name,
+                title:        provider.name,
+                offeringId:   null,
+                price:        Math.round((replyOffer.offerCents || 0) / 100),
+                priceCents:   replyOffer.offerCents || 0,
+                isFree:       !replyOffer.offerCents,
+                preConfirmed: true,
+              });
+              return;
+            }
             // SPEC-135: with a live quote, the CTA ACCEPTS it — routing to the
             // request where the offer sits — instead of opening a fresh request.
             if (liveOffer?.request_id) { navigate(`/results?req=${liveOffer.request_id}`); return; }
@@ -1002,7 +1035,13 @@ export function ServiceDetailScreen() {
               the viewer an offer or counter-offer, the CTA must say so — asking
               someone to "Request ($35)" a service they have a live quote on is
               the wrong action and reads as if nothing happened. */}
-          {liveOffer
+          {/* FW-7: reply context wins — the button shows the reply's price
+              (or the free-barter label), matching the card the user tapped. */}
+          {replyOffer
+            ? (replyOffer.offerCents
+                ? `Book · $${Math.round(replyOffer.offerCents / 100)}`
+                : 'Book a free time →')
+            : liveOffer
             ? (liveOffer.status === 'countered'
                 ? `Accept counter-offer ($${Math.round((liveOffer.offered_price_cents || 0) / 100)})`
                 : `Accept & book ($${Math.round((liveOffer.offered_price_cents || 0) / 100)})`)

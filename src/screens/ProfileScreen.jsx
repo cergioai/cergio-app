@@ -168,8 +168,15 @@ export function ProfileScreen() {
 
   const isSignedIn  = !!auth?.isSignedIn;
   const u           = auth?.user;
+  // FW-4 (founder): "Looking at your own profile doesn't show your name."
+  // Auth user_metadata.display_name is UNSET for accounts whose name lives
+  // only in the profiles row, so this screen fell through to the email
+  // local-part (e.g. "t") or 'Guest' even though profiles.display_name is
+  // correct. Source order is now: profiles.display_name → auth metadata →
+  // email local-part. profileName is loaded below alongside headline.
   // CERGIO-GUARD: no mock fallback name — signed-out shows a neutral label.
-  const displayName = u?.user_metadata?.display_name || u?.email?.split('@')[0] || 'Guest';
+  const [profileName, setProfileName] = useState('');
+  const displayName = profileName || u?.user_metadata?.display_name || u?.email?.split('@')[0] || 'Guest';
   const initials    = (displayName[0] || '?').toUpperCase();
   const firstName   = displayName.split(/[\s@.]/)[0];
 
@@ -207,7 +214,7 @@ export function ProfileScreen() {
     if (!isSignedIn) {
       setIg(null); setTt(null); setSpotlightPrices(null);
       setHasService(false); setServiceCount(0);
-      setHeadline(''); setFollowerCount(0);
+      setHeadline(''); setFollowerCount(0); setProfileName(''); // FW-4
       setStats({ invited: 0, joined: 0, booked: 0, recommended: 0, listedServices: 0 });
       setEarningsTotalCents(0);
       return;
@@ -239,11 +246,12 @@ export function ProfileScreen() {
     if (supabaseReady && u?.id) {
       supabase
         .from('profiles')
-        .select('headline, follower_count')
+        .select('display_name, headline, follower_count') // FW-4: display_name too
         .eq('id', u.id)
         .maybeSingle()
         .then(({ data, error }) => {
           if (error) return;
+          if (data?.display_name) setProfileName(data.display_name); // FW-4
           if (data?.headline) setHeadline(data.headline);
           if (data?.follower_count != null) setFollowerCount(data.follower_count);
         });
