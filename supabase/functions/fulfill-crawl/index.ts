@@ -168,10 +168,19 @@ const gdb = growthDb();
   let creatorTargetMet = false;
   if (CREATOR_TARGET > 0 && (ONLY.length === 0 || ONLY.includes('ig_services'))) {
     try {
+      // SPEC-259 (founder, 2026-08-05: "share 100 new resuls from the creator new spec
+      // run... to complete the evaluation....") — the target counts ONLY NEW-SPEC rows:
+      // since SPEC-257, rows from the creator-category search carry a CREATOR_CATEGORIES
+      // slug in `category`, while the OLD deviation rows carry services-rota terms
+      // ("junk removal"). Counting the old rows would stop this crawl ~67 short of the
+      // 100 new-spec rows the founder must evaluate. Old rows are KEPT, just not
+      // counted — data is data. This count also feeds the SPEC-256 need snapshot, so
+      // buys are sized to the new-spec remainder, which is exactly what is owed.
       const { count } = await growthClient()
         .from('leads_influencers')
         .select('id', { count: 'exact', head: true })
-        .eq('discovered_via', 'ig-scraper-user-search');
+        .eq('discovered_via', 'ig-scraper-user-search')
+        .in('category', CREATOR_CATEGORIES.map((c) => c.slug));
       creatorTargetMet = (count ?? 0) >= CREATOR_TARGET;
       // SPEC-256: snapshot for need-bounded buys — ig_services sizes its paid search
       // to the creators still OWED, not the blind IG_MAX cap.
@@ -180,7 +189,7 @@ const gdb = growthDb();
       if (creatorTargetMet && ONLY.length === 1 && ONLY[0] === 'ig_services') {
         return json({
           suspended: true, processed: 0,
-          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search. Paused for audit (SPEC-205). ig_services is the only creator source (SPEC-221).`,
+          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search (new-spec category rows only, SPEC-259). Paused for audit (SPEC-205). ig_services is the only creator source (SPEC-221).`,
         });
       }
     } catch (e) {
