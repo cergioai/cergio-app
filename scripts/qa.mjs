@@ -6958,6 +6958,56 @@ test('craigslist-runs-the-cheaper-actor-and-the-checkpoint-moves-past-the-dead-s
     `SPEND_CHECKPOINT_AT ("${ckpt}") is missing, unparseable, or before the founder's 2026-08-04 replacement order — the dead actors' spend ($0.66 YP + $2.09 CL since the old line) would count against the replacements' first $0.50 and both start permanently blocked, delivering the founder 0 of his 100 pieces of data per source`);
 });
 
+test('month-lock-need-bounded-buys-no-spending-without-delivery', 'SPEC-256 (founder, 2026-08-05, verbatim: "added another $10... apify has now burnt through 195 with marginable delivery ... (including $~15 since we last implemented the tight hard deliver against spend controls...)... there\'s leakage that drains budget once we scale... need this tightly locked.. there cannot be spending without delivery"). Three measured leaks survived SPEC-253\'s per-source steps: (1) no ACCOUNT ceiling — if per-source math is ever wrong (shared actors, label drift, broken meter) the month total still grows; (2) need-BLIND buys — pay-per-result actors bill EVERY returned row, and craigslist bought up to 250 rows/job while a source\'s whole remaining audit need might be 80; (3) a stale in-tick meter — the 60s spend caches let jobs 2..5 of a tick gate against the meter as it was BEFORE job 1 spent. The lock: a committed month baseline ($195, the console reading at order time) + ceiling ($10, the founder\'s new money) enforced FIRST in spendBlockedReason for every non-free vendor; ONE boundedBuy(need, cap) helper sizing every paid run to (remaining need × 1.5) under the existing env caps; and bustSpendCaches() at apifyRun\'s single choke point so every job re-reads the vendor truth. Fail CLOSED end to end: unparseable ceiling or baseline → 0 → all paid crawling stops. Asserts scan RAW text: the money strings live inside template literals, which stripComments() blanks.', '#256', () => {
+  // 1) the committed controls carry the founder's baseline and ceiling
+  const gc = readFile('growth-controls.json');
+  assert(!(!gc.includes('"APIFY_MONTH_BASELINE_USD": "195"')),
+    'APIFY_MONTH_BASELINE_USD is not the committed "195" — the founder\'s console reading at order time; a wrong baseline either counts the historical $195 as new (every paid source permanently locked, $0 spent, 0 delivered) or hides real new spend under a padded number (the ceiling never fires and the leak the founder named keeps draining)');
+  assert(!(!gc.includes('"APIFY_MONTH_CEILING_USD": "10"')),
+    'APIFY_MONTH_CEILING_USD is not the committed "10" — the founder funded exactly $10 of new money ("added another $10"); a bigger or missing ceiling lets the account month total grow past the money actually put in, which at scale is the thousands-with-zero-output run');
+  const fcRaw = readFile('supabase/functions/fulfill-crawl/index.ts');
+  // 2) the month lock exists and fires BEFORE any per-source math, for every paid vendor
+  assert(!(!fcRaw.includes('async function apifyMonthLockReason')),
+    'apifyMonthLockReason is gone from fulfill-crawl — nothing in code caps the ACCOUNT month total, so any error in per-source math (shared actors, label drift, a broken meter) spends unbounded new money');
+  const sbAt = fcRaw.indexOf('async function spendBlockedReason');
+  assert(!(sbAt < 0), 'spendBlockedReason is gone — no paid source has ANY spend gate (this is gate #253 territory, re-asserted here because the month lock lives inside it)');
+  const sbRegion = fcRaw.slice(sbAt, fcRaw.indexOf('async function', sbAt + 10));
+  const lockAt = sbRegion.indexOf('apifyMonthLockReason()');
+  const perSourceAt = sbRegion.indexOf("from('crawl_requests')");
+  assert(!(lockAt < 0),
+    'spendBlockedReason never calls apifyMonthLockReason — the month ceiling is decoration; a wrong per-source calculation still reaches the vendor and the account total grows past the founder\'s $10');
+  assert(!(perSourceAt < 0 || lockAt > perSourceAt),
+    'the month lock is checked AFTER the per-source ledger math instead of FIRST — with the account over its ceiling, the per-source arithmetic can still answer "allowed" (fresh checkpoint, healthy cost-per-lead) and one more paid run fires on an account the founder already declared out of money');
+  // 3) the lock message a human reads on the board
+  assert(!(!fcRaw.includes('MONTH LOCK:')),
+    'the "MONTH LOCK:" message text is gone — when every paid source stops at once, the board notes must say WHY in the founder\'s own terms (baseline, meter, ceiling), or the stop reads as seven simultaneous mystery outages and gets "fixed" by re-enabling spend');
+  // 4) ONE boundedBuy helper, used at every paid call site — a per-site copy is the
+  //    drift shape this repo keeps paying for
+  assert(!((fcRaw.match(/function boundedBuy\(/g) || []).length !== 1),
+    'boundedBuy is not defined exactly once — zero copies means every paid run is back to blind env caps (buying 250 rows against a need of 80 pays for 170 rows nobody ordered); two copies means the next fix lands in one and the other keeps overbuying');
+  assert(!((fcRaw.match(/boundedBuy\(remainingNeed\(/g) || []).length < 4),
+    'fewer than 4 paid call sites go through boundedBuy(remainingNeed(...)) — craigslist, yellowpages, ig_services and the gmaps/lsa extractor each bill per returned row, and any site left on its fixed cap keeps buying rows past its remaining need on every single job');
+  const bbAt = fcRaw.indexOf('function boundedBuy(');
+  assert(!(!fcRaw.slice(bbAt, bbAt + 400).includes('Math.ceil(need * 1.5)')),
+    'boundedBuy lost the need × 1.5 sizing — without the margin the run under-buys (dedupe + no-contact discards eat the batch and the source pays actor startup again and again); without the need term at all it is the blind cap wearing a helper\'s name');
+  // 5) the in-tick meter goes fresh after every paid run
+  assert(!(!fcRaw.includes('function bustSpendCaches')),
+    'bustSpendCaches is gone — the 60s spend caches make jobs 2..5 of a tick claim against the meter as it was before job 1 spent, so one tick can overshoot every ceiling by up to 4 uncounted paid runs');
+  const bscAt = fcRaw.indexOf('function bustSpendCaches');
+  assert(!(!fcRaw.slice(bscAt, bscAt + 300).includes('_vendorSpendCache = null')),
+    'bustSpendCaches no longer clears _vendorSpendCache — the month lock reads the account meter through that cache, so a "busted" cache that keeps the vendor snapshot lets the tick keep spending against pre-spend truth');
+  const arAt = fcRaw.indexOf('async function apifyRun');
+  const arRegion = fcRaw.slice(arAt, fcRaw.indexOf('async function fulfillCraigslist'));
+  assert(!(arAt < 0 || !arRegion.includes('bustSpendCaches();')),
+    'apifyRun no longer invokes bustSpendCaches() on its way out — the single choke point every paid call goes through stopped busting the caches, and the next job in the tick gates against a stale meter (success AND error paths must bust: a timed-out run can still bill partial usage)');
+  // 6) the old need-blind craigslist buy must stay dead
+  assert(!(/const MAXITEMS = Math\.min\(Number\(Deno\.env\.get\('CL_MAX_ITEMS'\) \|\| '250'\), 350\);/.test(fcRaw)),
+    'the raw need-blind craigslist cap is back — MAXITEMS flows straight from CL_MAX_ITEMS || 250 into the pay-per-result actor without boundedBuy, which is the measured leak: up to 250 billed rows per job while the source\'s whole remaining audit need may be 80');
+  const clRegion = fcRaw.slice(fcRaw.indexOf('async function fulfillCraigslist'), fcRaw.indexOf('async function fulfillYellowPagesApify'));
+  assert(!(!/const MAXITEMS = boundedBuy\(remainingNeed\('craigslist'\)/.test(clRegion)),
+    'craigslist\'s MAXITEMS no longer goes through boundedBuy(remainingNeed(\'craigslist\')...) — the env cap flows raw into apifyRun and every craigslist job buys to the cap regardless of what the audit still owes');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
