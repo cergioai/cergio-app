@@ -1,17 +1,20 @@
 # SCOPE
 
-FW final code batch (founder 2026-08-05: "need all bugs closed now to check"):
+Redesign handoff PR 1 — schema + avatars (founder 2026-08-05, brief:
+`design_handoff_profile_booking/KICKOFF.md`). Three idempotent migrations copied
+verbatim from the handoff bundle, `avatar_url` added to the person-rendering
+selects per the bundle's PATCHES.md §1, one shared `Avatar` primitive.
+**No screen layout changes in this PR.** One deliberate deferral: the
+ServiceDetailScreen recommenders select (the "What people say" rows) keeps its
+exact literal because qa gate #159 pins it; its `avatar_url` lands with the
+PR 4 PDP rebuild, which revisits that gate anyway.
 
-- FW-2 fixed — intake time-question enforced (asap/flexible valid; same copy re-asks)
-- FW-5 fixed — server-side send-once notify ledger (new migration 20260805100000)
-- FW-13 fixed — inline field editing replaces window.prompt per the founder's recorded
-  no-browser-popup rule (CrossPostScreen popup noted as follow-up)
-
-- `src/hooks/useChat.js`
-- `src/screens/ServiceDetailProviderScreen.jsx`
-- `supabase/functions/notify-request/index.ts`
-- `supabase/migrations/20260805100000_fw5_request_notify_ledger.sql`
-- `agents/fleet.json`
+- `supabase/migrations/20260805120000_profile_avatars.sql`
+- `supabase/migrations/20260805121000_request_attachments.sql`
+- `supabase/migrations/20260805122000_service_pricing_flags.sql`
+- `src/components/ui/Avatar.jsx`
+- `src/screens/PublicProfileScreen.jsx`
+- `src/screens/ServiceDetailScreen.jsx`
 - `SCOPE.md`
 
 ## Shared files
