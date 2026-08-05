@@ -52,13 +52,6 @@ const TIMES = [
   { h: 48, label: '2d' }, { h: 72, label: '3d' }, { h: 168, label: '7d' }, { h: 336, label: '2w' }, { h: 672, label: '4w' },
 ];
 const SIZES = [100, 500, 1000, 5000, 10000, 25000];
-const COLS = {
-  services: ['name', 'service_type', 'phone', 'owner_email', 'city', 'data_source', 'outreach_status'],
-  creators: ['ig_handle', 'display_name', 'category', 'followers', 'email', 'city', 'is_business', 'discovered_via'],
-  crawls: ['source', 'city', 'service_type', 'status', 'target_count', 'delivered_count', 'cost_usd', 'updated_at'],
-  runs: ['agent', 'status', 'rows_written', 'last_error', 'created_at'],
-};
-const NOTE_COL = { services: 'outreach_notes', crawls: 'notes' };
 
 function toCsv(rows) {
   if (!rows || !rows.length) return '';
@@ -73,6 +66,68 @@ function saveCsv(csv, filename) {
   a.download = filename; document.body.appendChild(a); a.click(); a.remove();
 }
 const n = (v) => (v == null ? '—' : Number(v).toLocaleString());
+
+// ── SPEC-258 — THE PRIMARY VIEW IS THE RESULTS (founder, 2026-08-05: "redesign the
+// dashboard so it's very easy to view and click.. straight simple list of results
+// (that changes dynamicaly with filter)"). The rows already re-fetch on every filter;
+// they were just buried under two diagnostic panels as dense field-grid cards. One
+// simple tappable row per lead now; the diagnostics collapse behind a toggle below.
+
+// A row's best link, first available. Services rows carry website_url / instagram /
+// listing urls; creator rows carry external_url / ig_handle. No link = not clickable.
+function bestLink(r) {
+  const ig = r.instagram || r.ig_handle;
+  return r.website_url || r.external_url
+    || (ig ? `https://instagram.com/${String(ig).replace(/^@/, '')}` : null)
+    || r.yelp_url || r.cl_post_url || null;
+}
+// Relative time, because "2h ago" answers "is this fresh?" faster than an ISO stamp.
+function timeAgo(ts) {
+  if (!ts) return null;
+  const s = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (!Number.isFinite(s)) return null;
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+// One lead per row, phone-friendly: big touch target, single column, zebra. The whole
+// row is the tap — a row WITH a link is an <a> to it in a new tab (↗ affordance); a
+// row without one is a plain <div>, because a dead-looking click reads as broken.
+function LeadRow({ r, audience }) {
+  const link = bestLink(r);
+  const name = r.name || r.display_name || (r.ig_handle ? `@${r.ig_handle}` : '') || r.agent || r.source || '—';
+  const kind = r.service_type || r.category || null;
+  const src = r.data_source || r.discovered_via || (audience === 'runs' ? null : r.source);
+  const status = audience === 'crawls' || audience === 'runs' ? r.status : null;
+  const when = timeAgo(r.fetched_at || r.created_at || r.updated_at);
+  const email = r.owner_email || r.email;
+  const body = (
+    <>
+      <div className="flex items-baseline gap-2 min-w-0">
+        <span className="text-[15px] font-extrabold text-black truncate">{name}</span>
+        {kind && <span className="text-[13px] font-bold text-b2 truncate">{kind}</span>}
+        {r.city && <span className="text-[13px] text-b3 truncate">{r.city}</span>}
+        <div className="flex-1" />
+        {link && <span className="text-[13px] font-bold text-g">↗</span>}
+      </div>
+      <div className="mt-1 flex items-baseline gap-x-3 gap-y-1 text-[12px] text-b3 flex-wrap">
+        {r.phone && <span className="tabular-nums">☎ {r.phone}</span>}
+        {email && <span className="truncate max-w-[16rem]">✉ {email}</span>}
+        {audience === 'creators' && r.followers != null && <span className="tabular-nums">{Number(r.followers).toLocaleString()} followers</span>}
+        {audience === 'crawls' && r.cost_usd != null && <span className="tabular-nums">${r.cost_usd}</span>}
+        {audience === 'runs' && r.rows_written != null && <span className="tabular-nums">{Number(r.rows_written).toLocaleString()} rows</span>}
+        {status && <span className="font-bold">{status}</span>}
+        {audience === 'runs' && r.last_error && <span className="text-red-600 truncate max-w-[18rem]">{String(r.last_error)}</span>}
+        {src && <span className="rounded-full bg-bg5 px-2 py-0.5 font-bold text-b2">{src}</span>}
+        {when && <span>{when}</span>}
+      </div>
+    </>
+  );
+  const cls = 'block w-full px-3 py-3 odd:bg-white even:bg-bg4';
+  return link
+    ? <a data-lead-row href={link} target="_blank" rel="noopener noreferrer" className={`${cls} hover:bg-gl`}>{body}</a>
+    : <div data-lead-row className={cls}>{body}</div>;
+}
 
 // tabular-nums so digits line up in a column and 21,552 beside 15,796 stays readable.
 function Stat({ label, value, tone }) {
@@ -107,6 +162,9 @@ export function DataExportScreen() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [bulk, setBulk] = useState(null);
+  // SPEC-258 — the diagnostics (audit board + by-source) are secondary now, collapsed
+  // by default so the FIRST thing under the filters is the list of results.
+  const [showBoard, setShowBoard] = useState(false);
 
   // DEFECT 1. Every filter below the class is scoped TO that class. Carrying them across
   // sent nonsense to the server and returned an empty view that read as broken data.
@@ -136,8 +194,6 @@ export function DataExportScreen() {
     [data],
   );
   const rows = data?.rows || [];
-  const cols = COLS[audience] || Object.keys(rows[0] || {}).slice(0, 8);
-  const noteCol = NOTE_COL[audience];
   const isLead = data?.isLeadTable;
   const filtered = !!(city || locality || source || status || serviceType || category || reachableOnly || hours > 0);
 
@@ -277,6 +333,31 @@ export function DataExportScreen() {
             <Stat label="New 24h" value={n(data.growth?.last1d)} />
           </div>
 
+          {/* SPEC-258 — THE RESULTS, FIRST. A straight simple list, one row per lead,
+              re-rendered on every filter change by the existing fetch effect. Render is
+              capped at 1,000 rows (25k DOM rows freezes the phone this list is for);
+              the honest note below says so and the download always has everything. */}
+          <div className="mt-5 text-[13px] font-bold text-black tabular-nums">
+            {rows.length.toLocaleString()} rows
+            {data.filteredTotal > rows.length && <span className="text-red-600"> of {data.filteredTotal.toLocaleString()} (capped)</span>}
+          </div>
+          {!!rows.length && (
+            <div className="mt-2 rounded-xl border border-bg5 divide-y divide-bg5 overflow-hidden">
+              {rows.slice(0, 1000).map((r, i) => <LeadRow key={r.id ?? i} r={r} audience={audience} />)}
+            </div>
+          )}
+          {rows.length > 1000 && <div className="mt-2 text-[11px] text-b3">Showing 1,000 — the download has all {rows.length.toLocaleString()}.</div>}
+          {!rows.length && !busy && <div className="mt-2 rounded-xl border border-bg5 px-3 py-4 text-[13px] text-b3">No rows for this filter.</div>}
+
+          {/* SPEC-258 — diagnostics are SECONDARY: the SPEC-249 audit board and the
+              by-source panel live behind one default-collapsed toggle. Nothing inside
+              them changed. */}
+          <button onClick={() => setShowBoard((v) => !v)}
+            className="mt-5 rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-b3">
+            Source status {showBoard ? '▴' : '▾'}
+          </button>
+          {showBoard && (
+            <>
           {/* SPEC-249 — THE PER-SOURCE AUDIT BOARD (founder, 2026-08-03: "need to see a
               clear per source status... i don't know what's working and what's not and
               how to download"). One row per source: absolute STATE (fresh-100 progress —
@@ -337,33 +418,8 @@ export function DataExportScreen() {
               })}
             </div>
           )}
-
-          <div className="mt-5 text-[13px] font-bold text-black tabular-nums">
-            {rows.length.toLocaleString()} rows
-            {data.filteredTotal > rows.length && <span className="text-red-600"> of {data.filteredTotal.toLocaleString()} (capped)</span>}
-          </div>
-
-          {/* CARDS. Any 7-10 column table clips its last column on a narrow screen; a card
-              wraps and stays legible at every width. */}
-          <div className="mt-2 space-y-2">
-            {rows.slice(0, 100).map((r, i) => (
-              <div key={i} className="rounded-xl border border-bg5 p-3">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2.5">
-                  {cols.map((c) => (
-                    <div key={c} className="min-w-0">
-                      <div className="text-[10px] text-b3 font-bold uppercase tracking-wider leading-tight">{c.replace(/_/g, ' ')}</div>
-                      <div className="text-[13px] text-black break-words leading-snug">{String(r[c] ?? '—')}</div>
-                    </div>
-                  ))}
-                </div>
-                {noteCol && r[noteCol] && (
-                  <div className="mt-2.5 pt-2.5 border-t border-bg5 text-[11px] text-b3 break-words leading-snug">{String(r[noteCol])}</div>
-                )}
-              </div>
-            ))}
-            {rows.length > 100 && <div className="text-[11px] text-b3">Showing 100 — the download has all {rows.length.toLocaleString()}.</div>}
-            {!rows.length && !busy && <div className="rounded-xl border border-bg5 px-3 py-4 text-[13px] text-b3">No rows for this filter.</div>}
-          </div>
+            </>
+          )}
         </>
       )}
     </div>
