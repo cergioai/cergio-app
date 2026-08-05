@@ -11,11 +11,32 @@
 //      under the current city was still offered and could only ever return empty.
 //   3. Counts sat in a tight grid with proportional digits, so 21552 and 15796 ran into
 //      each other and could not be read at a glance.
+//
+// SPEC-260 — SOURCES FIRST, RESULTS ON DEMAND (founder, 2026-08-05, verbatim: "creators
+// have junk removal.. need to see a list of results accross SOURCES like in the table
+// shared above.. to quickly scan sources.. (ahead of actual results.. i don't need to
+// see results unless i download them or ask to load them on the screen).. redesign the
+// filters so they're far easier to view more intuitive less bulky.."). Three changes:
+//   1. The per-source SCAN TABLE (the SPEC-249 board data) is the PRIMARY, always-visible
+//      view — SPEC-258's collapsed "Source status" toggle is superseded; the board data
+//      IS the table now. One compact SourceRow per source, per-source CSV on the row.
+//   2. The LeadRow list renders ONLY after an explicit "Load results" click. This is
+//      RENDER-deferred, not fetch-deferred: the server computes
+//      `limit = Math.min(Number(body.limit || 1000), 25000)`, so a limit of 0 is falsy
+//      and silently becomes 1000 — "fetch nothing" is not a request it understands — and
+//      the CSV must download WITHOUT the list on screen, which needs the rows
+//      client-side anyway. The fetch keeps `limit: size` (gate #258's pin) untouched.
+//   3. Legacy creator rows — the pre-SPEC-257 deviation rows whose category is a
+//      services term like "junk removal" — are excluded from the Creators view by
+//      default. Kept in the DB by founder order (data is data); hidden on screen, with
+//      an honest opt-in under More filters. Every CSV path applies the same exclusion.
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { leadsDashboard } from '../lib/api';
 
 // Four DIFFERENT CLASSES of data, not four filters on one pile: different tables,
 // different origin columns (data_source vs discovered_via vs source), different fields.
+// SPEC-260: Services | Creators are the segmented primary pair; the crawl queue and
+// agent runs stay selectable (gate #210) as quiet secondary pills.
 const AUDIENCES = [
   { id: 'services', label: 'Services' },
   { id: 'creators', label: 'Creators' },
@@ -39,7 +60,12 @@ const STATUSES = {
 // state — "THE DMA is technically held by it's own DMA definition (that's unrelated to
 // state)". 501 = New York (includes Jersey City/Newark NJ and CT areas), 528 =
 // Miami-Ft. Lauderdale. The backend also accepts legacy 'NY'/'FL' from older screens.
-const CITIES = [{ id: '', label: 'All' }, { id: '501', label: 'New York (DMA 501)' }, { id: '528', label: 'Miami-Ft. Lauderdale (DMA 528)' }];
+// SPEC-260: short pill labels (the full DMA name lives in the tooltip) — compact filters.
+const CITIES = [
+  { id: '', label: 'All', title: 'All DMAs' },
+  { id: '501', label: 'NYC', title: 'New York (DMA 501)' },
+  { id: '528', label: 'Miami', title: 'Miami-Ft. Lauderdale (DMA 528)' },
+];
 // SPEC-229 (founder, 2026-08-02): "time filter (last 6 hours, 12 hours, 24 hours, 2 days,
 // 3 days, 7 days, 2 weeks, 4 weeks) alongside last 100, 500, 1000, then increments up to
 // 25000 or all".
@@ -52,6 +78,17 @@ const TIMES = [
   { h: 48, label: '2d' }, { h: 72, label: '3d' }, { h: 168, label: '7d' }, { h: 336, label: '2w' }, { h: 672, label: '4w' },
 ];
 const SIZES = [100, 500, 1000, 5000, 10000, 25000];
+
+// SPEC-260 — the 12 committed creator category slugs, WELDED by gate #260 to
+// CREATOR_CATEGORIES in supabase/functions/_shared/opsPayload.ts (this JSX cannot import
+// a Deno module, so this copy exists and the gate keeps the two lists identical). A
+// creator row is NEW-SPEC iff its category is one of these; anything else is a
+// pre-category legacy row ("junk removal" creators — the exact founder complaint).
+const CREATOR_SLUGS = [
+  'pets', 'parenting', 'fitness', 'home', 'beauty', 'local city life',
+  'food', 'wellness', 'style', 'photography', 'events', 'neighbourhood accounts',
+];
+const isNewSpecCreator = (r) => CREATOR_SLUGS.includes(String(r.category || '').trim());
 
 function toCsv(rows) {
   if (!rows || !rows.length) return '';
@@ -67,11 +104,8 @@ function saveCsv(csv, filename) {
 }
 const n = (v) => (v == null ? '—' : Number(v).toLocaleString());
 
-// ── SPEC-258 — THE PRIMARY VIEW IS THE RESULTS (founder, 2026-08-05: "redesign the
-// dashboard so it's very easy to view and click.. straight simple list of results
-// (that changes dynamicaly with filter)"). The rows already re-fetch on every filter;
-// they were just buried under two diagnostic panels as dense field-grid cards. One
-// simple tappable row per lead now; the diagnostics collapse behind a toggle below.
+// ── SPEC-258 — the results list itself is unchanged (LeadRow, bestLink chain, new-tab
+// links); SPEC-260 only moves WHEN it renders (behind "Load results").
 
 // A row's best link, first available. Services rows carry website_url / instagram /
 // listing urls; creator rows carry external_url / ig_handle. No link = not clickable.
@@ -129,6 +163,34 @@ function LeadRow({ r, audience }) {
     : <div data-lead-row className={cls}>{body}</div>;
 }
 
+// SPEC-260 — ONE COMPACT SCANNABLE ROW PER SOURCE (the founder's "table shared above").
+// Everything the SPEC-249 board computed, on one line: name · fresh x/target (never
+// displayed past the target — the #251 rule; overshoot lives in state_detail, shown as
+// the tooltip) · state (failures in danger red) · rows under the CURRENT filters ·
+// ☎/✉/both % · queue health · a CSV for exactly this source under these filters.
+// A failed count says FAILED, never a confident 0.
+function SourceRow({ b, onCsv }) {
+  const tone = /FAILED|NO RUNNABLE/.test(b.state) ? 'text-danger'
+    : /met/.test(b.state) ? 'text-g'
+    : /paused/.test(b.state) ? 'text-warnText' : 'text-b2';
+  const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
+  return (
+    <div data-source-row className="px-3 py-2 odd:bg-white even:bg-bg4" title={b.state_detail}>
+      <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
+        <span className="w-40 truncate text-[13px] font-extrabold text-black">{b.source}</span>
+        <span className="text-[11px] text-b3 tabular-nums">fresh {b.fresh === null || b.fresh === undefined ? 'FAILED' : Math.min(b.fresh, b.fresh_target)}/{b.fresh_target}</span>
+        <span className={`text-[11px] font-bold uppercase ${tone}`}>{b.state}</span>
+        <div className="flex-1" />
+        <span className="text-[13px] font-extrabold text-black tabular-nums">{b.filtered === null ? 'FAILED' : b.filtered.toLocaleString()} rows</span>
+        <span className="text-[11px] text-b3 tabular-nums">☎ {pct(b.phone_pct)} · ✉ {pct(b.email_pct)} · both {pct(b.both_pct)}</span>
+        {b.queue_new !== null && b.queue_new !== undefined && <span className="text-[11px] text-b3 tabular-nums">q {b.queue_new}{b.queue_parked ? <span className="text-danger"> +{b.queue_parked} parked</span> : ''}</span>}
+        <button onClick={onCsv} className="rounded-lg bg-g px-2.5 py-1 text-[11px] font-bold text-white">⬇ CSV</button>
+      </div>
+      {!!(b.errors || []).length && <div className="mt-0.5 text-[10px] text-danger">{b.errors.join(' | ')}</div>}
+    </div>
+  );
+}
+
 // tabular-nums so digits line up in a column and 21,552 beside 15,796 stays readable.
 function Stat({ label, value, tone }) {
   return (
@@ -138,12 +200,22 @@ function Stat({ label, value, tone }) {
     </div>
   );
 }
-function Pill({ on, onClick, children }) {
+function Pill({ on, onClick, title, children }) {
   return (
-    <button onClick={onClick}
+    <button onClick={onClick} title={title}
       className={`rounded-full px-3.5 py-1.5 text-[13px] font-bold ${on ? 'bg-black text-white' : 'bg-bg5 text-b3'}`}>
       {children}
     </button>
+  );
+}
+// SPEC-260 — a removable chip for one active non-default filter, so the compact bar
+// still SHOWS what is applied without a wall of always-visible controls.
+function Chip({ onClear, children }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-gl px-2.5 py-1 text-[12px] font-bold text-gd2">
+      {children}
+      <button onClick={onClear} aria-label="remove filter" className="text-[13px] font-extrabold leading-none text-gd2">×</button>
+    </span>
   );
 }
 
@@ -162,16 +234,22 @@ export function DataExportScreen() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [bulk, setBulk] = useState(null);
-  // SPEC-258 — the diagnostics (audit board + by-source) are secondary now, collapsed
-  // by default so the FIRST thing under the filters is the list of results.
-  const [showBoard, setShowBoard] = useState(false);
+  // SPEC-260 — results render ON DEMAND: the list appears only after "Load results".
+  const [showResults, setShowResults] = useState(false);
+  // SPEC-260 — the bulky controls (status/reachable/time/size/legacy) collapse behind
+  // one "More filters" disclosure, closed by default.
+  const [moreOpen, setMoreOpen] = useState(false);
+  // SPEC-260 — legacy pre-category creator rows are hidden by default; this opts in.
+  const [showLegacy, setShowLegacy] = useState(false);
 
   // DEFECT 1. Every filter below the class is scoped TO that class. Carrying them across
   // sent nonsense to the server and returned an empty view that read as broken data.
-  const pickAudience = (id) => { setAudience(id); setSource(''); setStatus(''); setReachableOnly(false); setLocality(''); setServiceType(''); setCategory(''); };
+  // SPEC-260: the legacy opt-in and the loaded list are class-scoped too — switching
+  // class returns to the scan-table-first default.
+  const pickAudience = (id) => { setAudience(id); setSource(''); setStatus(''); setReachableOnly(false); setLocality(''); setServiceType(''); setCategory(''); setShowLegacy(false); setShowResults(false); };
   // Changing city clears the location: Brooklyn is not a choice once the city is Miami.
   const pickCity = (id) => { setCity(id); setLocality(''); };
-  const clearAll = () => { setCity(''); setLocality(''); setSource(''); setStatus(''); setServiceType(''); setCategory(''); setReachableOnly(false); setHours(0); setSize(1000); };
+  const clearAll = () => { setCity(''); setLocality(''); setSource(''); setStatus(''); setServiceType(''); setCategory(''); setReachableOnly(false); setHours(0); setSize(1000); setShowLegacy(false); };
 
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
@@ -193,24 +271,35 @@ export function DataExportScreen() {
     () => Object.entries(data?.bySource || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]),
     [data],
   );
-  const rows = data?.rows || [];
+  // SPEC-260 — LEGACY CREATOR ROWS OUT OF THE DEFAULT VIEW. leads-dashboard only
+  // understands a single eq() category param (no NOT-IN), so the exclusion is
+  // client-side, applied to the visible rows AND every CSV path below. An explicitly
+  // picked category is an explicit ask, so it is never second-guessed. Rows stay in
+  // the DB — this is display only (founder: data is data).
+  const allRows = data?.rows || [];
+  const excludeLegacy = audience === 'creators' && !showLegacy && !category;
+  const rows = excludeLegacy ? allRows.filter(isNewSpecCreator) : allRows;
+  const legacyHidden = allRows.length - rows.length;
   const isLead = data?.isLeadTable;
-  const filtered = !!(city || locality || source || status || serviceType || category || reachableOnly || hours > 0);
+  const filtered = !!(city || locality || source || status || serviceType || category || reachableOnly || hours > 0 || showLegacy);
 
   const download = () => {
+    // `rows` is the VISIBLE set — the CSV obeys the legacy exclusion by construction.
     if (!rows.length) { setErr('Nothing to download for this filter.'); return; }
     saveCsv(toCsv(rows), ['Cergio', audience, city, locality, source, serviceType, category, status, reachableOnly ? 'reachable' : '', hours ? hours + 'h' : ''].filter(Boolean).join(' ') + '.csv');
   };
-  // SPEC-249 — a board row's download is THAT source under the CURRENT filters
-  // (city/location/type/time/size), not the whole pile.
+  // SPEC-249 — a source row's download is THAT source under the CURRENT filters
+  // (city/location/type/time/size), not the whole pile. SPEC-260: same legacy exclusion
+  // as the screen — what you see is what downloads.
   const downloadSource = async (src) => {
     const { data: d2, error } = await leadsDashboard(audience, {
       city: city || null, locality: locality || null, source: src,
       serviceType: serviceType || null, category: category || null,
       contactableOnly: reachableOnly, sinceHours: hours, limit: size,
     });
-    if (error || !d2?.rows?.length) { setErr(error?.message || `Nothing to download for ${src} under these filters.`); return; }
-    saveCsv(toCsv(d2.rows), ['Cergio', audience, src, city, locality, serviceType, category, hours ? hours + 'h' : '', 'last' + size].filter(Boolean).join(' ') + '.csv');
+    const srcRows = d2?.rows ? (excludeLegacy ? d2.rows.filter(isNewSpecCreator) : d2.rows) : [];
+    if (error || !srcRows.length) { setErr(error?.message || `Nothing to download for ${src} under these filters.`); return; }
+    saveCsv(toCsv(srcRows), ['Cergio', audience, src, city, locality, serviceType, category, hours ? hours + 'h' : '', 'last' + size].filter(Boolean).join(' ') + '.csv');
   };
   const downloadEach = async () => {
     const list = sources.map(([s]) => s).filter((s) => s !== '(other/unlabeled)');
@@ -218,97 +307,127 @@ export function DataExportScreen() {
     setBulk({ done: 0, total: list.length });
     for (let i = 0; i < list.length; i++) {
       const { data: d2, error } = await leadsDashboard(audience, { city: city || null, source: list[i], status: status || null, contactableOnly: reachableOnly });
-      if (!error && d2?.rows?.length) saveCsv(toCsv(d2.rows), `Cergio ${audience} ${list[i]}.csv`);
+      const eachRows = !error && d2?.rows ? (excludeLegacy ? d2.rows.filter(isNewSpecCreator) : d2.rows) : [];
+      if (eachRows.length) saveCsv(toCsv(eachRows), `Cergio ${audience} ${list[i]}.csv`);
       setBulk({ done: i + 1, total: list.length });
     }
     setTimeout(() => setBulk(null), 2000);
   };
+
+  // SPEC-260 — every active non-default filter as a removable chip: the compact bar
+  // stays honest about what is applied even with the bulky controls collapsed.
+  const chips = [];
+  if (city) chips.push({ k: 'city', label: CITIES.find((c) => c.id === city)?.label || city, clear: () => pickCity('') });
+  if (locality) chips.push({ k: 'loc', label: locality, clear: () => setLocality('') });
+  if (source) chips.push({ k: 'src', label: source, clear: () => setSource('') });
+  if (serviceType) chips.push({ k: 'type', label: serviceType, clear: () => setServiceType('') });
+  if (category) chips.push({ k: 'cat', label: category, clear: () => setCategory('') });
+  if (status) chips.push({ k: 'status', label: status, clear: () => setStatus('') });
+  if (reachableOnly) chips.push({ k: 'reach', label: 'reachable only', clear: () => setReachableOnly(false) });
+  if (hours > 0) chips.push({ k: 'time', label: TIMES.find((t) => t.h === hours)?.label || `${hours}h`, clear: () => setHours(0) });
+  if (size !== 1000) chips.push({ k: 'size', label: `last ${size.toLocaleString()}`, clear: () => setSize(1000) });
+  if (audience === 'creators' && showLegacy) chips.push({ k: 'legacy', label: 'legacy rows shown', clear: () => setShowLegacy(false) });
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-extrabold text-black">Data</h1>
       <p className="text-[13px] text-b3 mt-1">Live from the growth database. What you filter is what downloads.</p>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        {AUDIENCES.map((a) => <Pill key={a.id} on={audience === a.id} onClick={() => pickAudience(a.id)}>{a.label}</Pill>)}
+      {/* SPEC-260 — segmented Services | Creators class toggle; crawl queue and agent
+          runs stay reachable as quiet pills (#210). */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <div data-class-toggle className="inline-flex rounded-xl bg-bg5 p-1">
+          {AUDIENCES.slice(0, 2).map((a) => (
+            <button key={a.id} onClick={() => pickAudience(a.id)}
+              className={`rounded-lg px-4 py-1.5 text-[13px] font-bold ${audience === a.id ? 'bg-white text-black shadow-card' : 'text-b3'}`}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1" />
+        {AUDIENCES.slice(2).map((a) => <Pill key={a.id} on={audience === a.id} onClick={() => pickAudience(a.id)}>{a.label}</Pill>)}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div>
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">City (DMA)</div>
-          <div className="flex gap-1.5">
-            {CITIES.map((c) => <Pill key={c.id} on={city === c.id} onClick={() => pickCity(c.id)}>{c.label}</Pill>)}
-          </div>
+      {/* ONE compact filter row: city pills · locality (only once a city is picked) ·
+          source · type/category. Everything bulkier lives behind More filters. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="flex gap-1.5">
+          {CITIES.map((c) => <Pill key={c.id} on={city === c.id} title={c.title} onClick={() => pickCity(c.id)}>{c.label}</Pill>)}
         </div>
-        <div>
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Source</div>
-          <select value={source} onChange={(e) => setSource(e.target.value)}
-            className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
-            <option value="">All sources</option>
-            {sources.map(([s, v]) => <option key={s} value={s}>{s} ({v.toLocaleString()})</option>)}
+        {!!city && !!(data?.localities || []).length && (
+          <select value={locality} onChange={(e) => setLocality(e.target.value)}
+            className="rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+            <option value="">All locations</option>
+            {data.localities.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
-        </div>
-        <div>
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Status</div>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={!STATUSES[audience]?.length}
-            className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black disabled:opacity-40">
-            <option value="">All statuses</option>
-            {(STATUSES[audience] || []).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        {!!(data?.localities || []).length && (
-          <div>
-            <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Location</div>
-            <select value={locality} onChange={(e) => setLocality(e.target.value)}
-              className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
-              <option value="">All locations</option>
-              {data.localities.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
         )}
+        <select value={source} onChange={(e) => setSource(e.target.value)}
+          className="max-w-[16rem] rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+          <option value="">All sources</option>
+          {sources.map(([s, v]) => {
+            const pc = data?.contactBySource?.[s]?.pct;
+            return <option key={s} value={s}>{s} ({v.toLocaleString()}{pc != null ? ` · ${pc}% reachable` : ''})</option>;
+          })}
+        </select>
         {!!(data?.serviceTypes || []).length && (
-          <div>
-            <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Service type</div>
-            <select value={serviceType} onChange={(e) => setServiceType(e.target.value)}
-              className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
-              <option value="">All types</option>
-              {data.serviceTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
+          <select value={serviceType} onChange={(e) => setServiceType(e.target.value)}
+            className="max-w-[13rem] rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+            <option value="">All types</option>
+            {data.serviceTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
         )}
         {!!(data?.categories || []).length && (
-          <div>
-            <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Category</div>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}
-              className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
-              <option value="">All categories</option>
-              {data.categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-        )}
-        <div className="sm:col-span-2">
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">Time</div>
-          <div className="flex flex-wrap gap-1.5">
-            {TIMES.map((t) => <Pill key={t.h} on={hours === t.h} onClick={() => setHours(t.h)}>{t.label}</Pill>)}
-          </div>
-        </div>
-        <div>
-          <div className="text-[10px] text-b3 font-bold uppercase tracking-wider mb-1.5">How many (newest first)</div>
-          <select value={size} onChange={(e) => setSize(Number(e.target.value))}
-            className="w-full rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
-            {SIZES.map((v) => <option key={v} value={v}>Last {v.toLocaleString()}</option>)}
+          <select value={category} onChange={(e) => setCategory(e.target.value)}
+            className="max-w-[13rem] rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+            <option value="">All categories</option>
+            {data.categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-        </div>
+        )}
+        <button onClick={() => setMoreOpen((v) => !v)}
+          className="rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-b2">
+          More filters {moreOpen ? '▴' : '▾'}
+        </button>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2 items-center">
-        {isLead && <Pill on={reachableOnly} onClick={() => setReachableOnly((v) => !v)}>Reachable only</Pill>}
-        {filtered && (
-          <button onClick={clearAll} className="text-[13px] font-bold text-b3 underline">Clear</button>
-        )}
+      {moreOpen && (
+        <div className="mt-2 rounded-xl border border-bg5 bg-bg4 p-3 grid gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] text-b3 font-bold uppercase tracking-wider">Status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={!STATUSES[audience]?.length}
+              className="rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black disabled:opacity-40">
+              <option value="">All statuses</option>
+              {(STATUSES[audience] || []).map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {isLead && <Pill on={reachableOnly} onClick={() => setReachableOnly((v) => !v)}>Reachable only</Pill>}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-b3 font-bold uppercase tracking-wider mr-1">Time</span>
+            {TIMES.map((t) => <Pill key={t.h} on={hours === t.h} onClick={() => setHours(t.h)}>{t.label}</Pill>)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] text-b3 font-bold uppercase tracking-wider">How many (newest first)</span>
+            <select value={size} onChange={(e) => setSize(Number(e.target.value))}
+              className="rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-black">
+              {SIZES.map((v) => <option key={v} value={v}>Last {v.toLocaleString()}</option>)}
+            </select>
+          </div>
+          {audience === 'creators' && (
+            <label className="flex items-start gap-2 text-[13px] font-bold text-b2">
+              <input type="checkbox" checked={showLegacy} onChange={(e) => setShowLegacy(e.target.checked)} className="mt-0.5" />
+              <span>Show legacy rows from the pre-category run <span className="font-normal text-b3">(category is a services term like "junk removal" — kept in the database, hidden by default)</span></span>
+            </label>
+          )}
+        </div>
+      )}
+
+      {!!chips.length && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {chips.map((c) => <Chip key={c.k} onClear={c.clear}>{c.label}</Chip>)}
+          {filtered && <button onClick={clearAll} className="text-[13px] font-bold text-b3 underline">Clear</button>}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2 items-center">
         <div className="flex-1" />
         <button onClick={load} className="rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-b3">↻</button>
         <button onClick={download} className="rounded-xl bg-g px-4 py-2 text-[13px] font-bold text-white">Download view</button>
@@ -333,91 +452,47 @@ export function DataExportScreen() {
             <Stat label="New 24h" value={n(data.growth?.last1d)} />
           </div>
 
-          {/* SPEC-258 — THE RESULTS, FIRST. A straight simple list, one row per lead,
-              re-rendered on every filter change by the existing fetch effect. Render is
-              capped at 1,000 rows (25k DOM rows freezes the phone this list is for);
-              the honest note below says so and the download always has everything. */}
-          <div className="mt-5 text-[13px] font-bold text-black tabular-nums">
-            {rows.length.toLocaleString()} rows
-            {data.filteredTotal > rows.length && <span className="text-red-600"> of {data.filteredTotal.toLocaleString()} (capped)</span>}
-          </div>
-          {!!rows.length && (
-            <div className="mt-2 rounded-xl border border-bg5 divide-y divide-bg5 overflow-hidden">
-              {rows.slice(0, 1000).map((r, i) => <LeadRow key={r.id ?? i} r={r} audience={audience} />)}
-            </div>
-          )}
-          {rows.length > 1000 && <div className="mt-2 text-[11px] text-b3">Showing 1,000 — the download has all {rows.length.toLocaleString()}.</div>}
-          {!rows.length && !busy && <div className="mt-2 rounded-xl border border-bg5 px-3 py-4 text-[13px] text-b3">No rows for this filter.</div>}
-
-          {/* SPEC-258 — diagnostics are SECONDARY: the SPEC-249 audit board and the
-              by-source panel live behind one default-collapsed toggle. Nothing inside
-              them changed. */}
-          <button onClick={() => setShowBoard((v) => !v)}
-            className="mt-5 rounded-xl bg-bg5 px-3 py-2 text-[13px] font-bold text-b3">
-            Source status {showBoard ? '▴' : '▾'}
-          </button>
-          {showBoard && (
-            <>
-          {/* SPEC-249 — THE PER-SOURCE AUDIT BOARD (founder, 2026-08-03: "need to see a
-              clear per source status... i don't know what's working and what's not and
-              how to download"). One row per source: absolute STATE (fresh-100 progress —
-              never filtered, or a time filter would read as a source dying), counts that
-              obey EVERY filter above, the contactable drill-down (phone / email / both),
-              queue health, and a download for exactly that source under these filters.
-              A failed count renders as FAILED, never as a confident zero. */}
+          {/* SPEC-260 — THE SCAN TABLE, FIRST AND ALWAYS. One compact row per source
+              from the SPEC-249 board data — "to quickly scan sources.. (ahead of actual
+              results". Counts obey every filter above; per-source CSV on the row. */}
           {!!(data.board || []).length && (
-            <div className="mt-4 rounded-xl border border-bg5 divide-y divide-bg5">
-              <div className="px-3 py-2 text-[10px] text-b3 font-bold uppercase tracking-wider">Source status · counts obey the filters above</div>
-              {data.board.map((b) => {
-                const stTone = /FAILED|NO RUNNABLE/.test(b.state) ? 'text-red-600'
-                  : /met/.test(b.state) ? 'text-g'
-                  : /paused/.test(b.state) ? 'text-amber-700' : 'text-black';
-                const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
-                return (
-                  <div key={b.source} className="px-3 py-2.5">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-[13px] font-extrabold text-black">{b.source}</span>
-                      <span className={`text-[11px] font-bold uppercase ${stTone}`}>{b.state}</span>
-                      {/* never display more than the target — "status of # out of 100
-                          accurate" (founder); the overshoot lives in state_detail */}
-                      <span className="text-[11px] text-b3 tabular-nums">fresh {b.fresh === null || b.fresh === undefined ? 'FAILED' : Math.min(b.fresh, b.fresh_target)}/{b.fresh_target}</span>
-                      <div className="flex-1" />
-                      <span className="text-[13px] font-extrabold text-black tabular-nums">{b.filtered === null ? 'FAILED' : b.filtered.toLocaleString()} rows</span>
-                      <button onClick={() => downloadSource(b.source)}
-                        className="rounded-lg bg-g px-2.5 py-1 text-[11px] font-bold text-white">⬇ CSV</button>
-                    </div>
-                    <div className="mt-1 flex items-baseline gap-3 text-[11px] text-b3 tabular-nums flex-wrap">
-                      <span>☎ {pct(b.phone_pct)}</span>
-                      <span>✉ {pct(b.email_pct)}</span>
-                      <span>both {pct(b.both_pct)}</span>
-                      {b.queue_new !== null && b.queue_new !== undefined && <span>queue {b.queue_new}</span>}
-                      {!!b.queue_parked && <span className="text-red-600">parked {b.queue_parked}</span>}
-                    </div>
-                    <div className="mt-0.5 text-[10px] text-b3">{b.state_detail}</div>
-                    {!!(b.errors || []).length && <div className="mt-0.5 text-[10px] text-red-600">{b.errors.join(' | ')}</div>}
-                  </div>
-                );
-              })}
+            <div className="mt-5 rounded-xl border border-bg5 divide-y divide-bg5 overflow-hidden">
+              <div className="px-3 py-2 text-[10px] text-b3 font-bold uppercase tracking-wider">Sources · counts obey the filters above</div>
+              {data.board.map((b) => <SourceRow key={b.source} b={b} onCsv={() => downloadSource(b.source)} />)}
             </div>
           )}
 
-          {!!sources.length && (
-            <div className="mt-4 rounded-xl border border-bg5 divide-y divide-bg5">
-              <div className="px-3 py-2 text-[10px] text-b3 font-bold uppercase tracking-wider">By source · tap to filter</div>
-              {sources.map(([s, v]) => {
-                const c = data.contactBySource?.[s];
-                const tone = !c ? 'text-b3' : c.pct >= 80 ? 'text-g' : c.pct >= 40 ? 'text-black' : 'text-red-600';
-                return (
-                  <button key={s} onClick={() => setSource(source === s ? '' : s)}
-                    className={`w-full flex items-baseline gap-3 px-3 py-2.5 text-left ${source === s ? 'bg-bg5' : ''}`}>
-                    <span className="flex-1 text-[13px] font-bold text-black truncate">{s}</span>
-                    {c && <span className={`text-[11px] font-bold tabular-nums ${tone}`}>{c.pct}%</span>}
-                    <span className="w-20 text-right text-[13px] font-extrabold text-black tabular-nums">{v.toLocaleString()}</span>
-                  </button>
-                );
-              })}
-            </div>
+          {/* SPEC-260 — RESULTS ON DEMAND: "i don't need to see results unless i
+              download them or ask to load them on the screen". The rows are already
+              fetched (render-deferred — see the header comment for why); this button
+              only reveals them. The CSV buttons above never need the list on screen. */}
+          {!showResults && (
+            <button onClick={() => setShowResults(true)}
+              className="mt-5 w-full rounded-xl bg-black px-4 py-3 text-[14px] font-extrabold text-white">
+              Load results ({n(excludeLegacy ? rows.length : data.filteredTotal)})
+            </button>
           )}
+          {showResults && (
+            <>
+              {/* SPEC-258 — the straight simple list, unchanged inside. Render is capped
+                  at 1,000 rows (25k DOM rows freezes the phone this list is for); the
+                  honest note below says so and the download always has everything. */}
+              <div className="mt-5 flex items-baseline gap-2 flex-wrap">
+                <div className="text-[13px] font-bold text-black tabular-nums">
+                  {rows.length.toLocaleString()} rows
+                  {excludeLegacy && legacyHidden > 0 && <span className="font-normal text-b3"> · {legacyHidden.toLocaleString()} legacy hidden</span>}
+                  {data.filteredTotal > rows.length + legacyHidden && <span className="text-danger"> of {data.filteredTotal.toLocaleString()} (capped)</span>}
+                </div>
+                <div className="flex-1" />
+                <button onClick={() => setShowResults(false)} className="text-[13px] font-bold text-b3 underline">Hide results ▴</button>
+              </div>
+              {!!rows.length && (
+                <div className="mt-2 rounded-xl border border-bg5 divide-y divide-bg5 overflow-hidden">
+                  {rows.slice(0, 1000).map((r, i) => <LeadRow key={r.id ?? i} r={r} audience={audience} />)}
+                </div>
+              )}
+              {rows.length > 1000 && <div className="mt-2 text-[11px] text-b3">Showing 1,000 — the download has all {rows.length.toLocaleString()}.</div>}
+              {!rows.length && !busy && <div className="mt-2 rounded-xl border border-bg5 px-3 py-4 text-[13px] text-b3">No rows for this filter.</div>}
             </>
           )}
         </>
