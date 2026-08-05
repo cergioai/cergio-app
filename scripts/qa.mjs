@@ -5464,7 +5464,10 @@ test('non-osm-sources-query-at-metro-level', 'SPEC-170/170b (root-caused 2026-08
   }
   assert(!(!/CL_SUBDOMAIN\[metroOf\(city\)/.test(f)), 'craigslist still looks up the raw city — boroughs have no subdomain');
   assert(!(!/METRO_OF\[city\.toLowerCase\(\)\.trim\(\)\] \|\| city/.test(f)), 'resolveCid does not normalise to metro');
-  assert(!(!/location: `\$\{metroOf\(city\)\}/.test(f)), 'yellowpages still queries the raw neighbourhood');
+  // SPEC-254 superseded the shape, not the invariant: the solidcode replacement takes
+  // locations[] (plural, array) where trudax took location — the metro normalisation
+  // must survive the actor swap or "Wynwood, FL" matches nothing again.
+  assert(!(!/locations: \[`\$\{metroOf\(city\)\}/.test(f)), 'yellowpages still queries the raw neighbourhood');
   assert(!(/catch \(_e\) \{ \/\* ignore \*\/ \}/.test(f)), 'the CID resolver still swallows its own errors — a bad key looks identical to an empty market');
 });
 
@@ -5508,21 +5511,23 @@ test('growth-rows-only-use-columns-that-exist', 'SPEC-177 (root cause of the ent
   assert(!(!/_lastFlushError \|\|/.test(fc)), 'a write failure never reaches the job notes — it would be reported as "no results"');
 });
 
-test('craigslist-reads-what-the-actor-emits', 'SPEC-178 (root-caused 2026-08-01): craigslist produced ZERO leads for its whole life while _lastApifyError stayed null — proof the actor returned items and our own code rejected all of them. Three defects. (1) memo23/craigslist-scraper pushes 10 rows labelled NO_RESULTS per EMPTY search, and we queried the full service_type phrase ("gmat tutor") which Craigslist matches as an EXACT PHRASE and never hits — so 8 URLs returned 80 placeholders, apifyRun saw a non-empty array and recorded no error, and every placeholder was filtered out. (2) the actor emits the post body as `post`; we read description/body, which it never emits, so desc was ALWAYS empty and the on-topic gate degraded to title-only. (3) maxItems is PER START URL in this actor, so 8x1000 would abort run-sync. A source is not dead until its own output is read correctly.', '#178', () => {
+test('craigslist-reads-what-the-actor-emits', 'SPEC-178 (root-caused 2026-08-01): craigslist produced ZERO leads for its whole life while _lastApifyError stayed null — proof the actor returned items and our own code rejected all of them, because we read fields the actor never emitted and queried phrases Craigslist exact-matches to nothing. SUPERSEDED IN SHAPE by SPEC-255 (founder, 2026-08-04: "one for craigslist that\'s cheaper"): memo23 ($0.104/fresh-lead, 2x the $0.05 ceiling) is replaced by solidcode~craigslist-scraper, and every memo23-specific pin (NO_RESULTS placeholder rows, the `post` body field, per-start-URL maxItems) died WITH its actor. The invariant is unchanged and permanent: READ WHAT THE CURRENT ACTOR EMITS. solidcode emits the body as `description`, contacts as phoneNumbers[]/emails[] arrays, takes ONE searchTerm (still exact-phrase matched by Craigslist — the head-noun broadening survives), and bounds cost with maxResults. A source is not dead until its own output is read correctly.', '#178', () => {
   const f = readFile('supabase/functions/fulfill-crawl/index.ts');
   const clRaw = f.slice(f.indexOf('async function fulfillCraigslist'), f.indexOf('async function fulfillYellowPagesApify'));
   const cl = clRaw;
-  // Grep CODE, not the comments that explain the fix — both `includeEmails` and the
-  // raw-query pattern are named in the guard comments above them.
+  // Grep CODE, not the comments that explain the fix — the superseded field names and
+  // the raw-query pattern are all named in the guard comments above them.
   const clCode = stripComments(clRaw);
   assert(!(cl.length < 500), 'fulfillCraigslist not found — this gate is grading nothing');
-  assert(!(!/NO_RESULTS/.test(cl)), 'no NO_RESULTS guard — empty-search placeholders are counted as listings, so a dead query looks like a filtered one');
-  assert(!(!/found -= placeholders/.test(cl)), 'placeholder rows still inflate raw_found — the zero-yield note would lie again');
-  assert(!(!/const desc = \(it\?\.post/.test(cl)), 'craigslist reads description/body first again; the actor emits `post`, so desc is always empty');
+  // SPEC-255: the NO_RESULTS/placeholder asserts are superseded, not weakened — that
+  // machinery guarded a memo23 emission quirk; solidcode returns a genuinely empty
+  // dataset for an empty search, which apifyRun already records as its own error.
+  assert(!(!/const desc = \(it\?\.description/.test(clCode)), 'craigslist does not read `description` first — solidcode emits the body there, so the on-topic gate degrades to title-only (the exact SPEC-178 defect, new field name)');
   assert(!(!/const clQuery = rawType\.split/.test(cl)), 'no broadened query — the full multi-word service_type is exact-phrase matched and returns 0');
-  assert(!(/\?query=\$\{encodeURIComponent\(rawType\)\}/.test(clCode)), 'a start URL still queries the raw multi-word service_type');
-  assert(!(!/maxItems:/.test(cl)), 'maxItems not passed in the actor INPUT — it defaults to 1000 PER start URL and aborts run-sync');
-  assert(!(/includeEmails/.test(clCode)), 'includeEmails is not an input field of this actor');
+  assert(!(/searchTerm: rawType\b/.test(clCode)), 'the actor is searched with the raw multi-word service_type — Craigslist exact-phrase matches it to zero posts');
+  assert(!(!/searchTerm: clQuery/.test(clCode)), 'the broadened head-noun query is not what the actor is actually given');
+  assert(!(!/maxResults:/.test(clCode)), 'maxResults not passed in the actor INPUT — an unbounded pay-per-result run bills for every row it can find');
+  assert(!(!/includeDetails: true/.test(clCode)), 'includeDetails is off — phoneNumbers[]/emails[] come from the detail pages, so every row is contactless and bufUpsert (SPEC-192) drops the whole run');
 });
 
 test('every-source-gets-scheduled-every-run', 'SPEC-174 (measured 2026-08-01): osm had produced 1,067 leads while yelp, google_sponsored, gmaps_apify and ig_services still read "no finished job yet" hours later. They were not failing and not blocked — the claim query was pure FIFO on created_at and the oldest ~3,600 queued rows are all osm, so those four were NEVER PICKED. A source the scheduler never runs cannot be diagnosed and its zero is not evidence. Every source must get an equal, interleaved slice of every run.', '#181', () => {
@@ -5686,15 +5691,19 @@ test('craigslist-filters-keep-real-service-posts', 'SPEC-187 (measured against 4
   assert(!(!/\(needed\|wanted\)/.test(code)), 'demand-side posts ("IT Specialist Needed") are ingested as providers again');
 });
 
-test('yellowpages-uses-a-live-actor-with-the-right-input-key', 'SPEC-179 (verified against Apify 2026-08-01): yellowpages_apify produced 0 leads for its whole life while every job was stamped delivered with the benign note "no YellowPages results". The actor cryptosignals~yellow-pages-us-scraper is DEPRECATED (isDeprecated:true since 2026-07-29) and FAILED 169 of its last 299 public runs; we also asked it for 1000 results inside a run-sync window that aborts at 140s — the exact SPEC-117 mistake, already fixed for gmaps and never applied here. trudax is the maintained equivalent and its input key is `search`, not `keyword`: a wrong input key returns an empty dataset and reads as an empty market. And because _lastApifyError is module-level and 6 pool workers share it, the reason must be captured into a LOCAL immediately after the call or a sibling run nulls it first.', '#179', () => {
+test('yellowpages-uses-a-live-actor-with-the-right-input-key', 'SPEC-179 (verified against Apify 2026-08-01): yellowpages_apify produced 0 leads for its whole life while every job was stamped delivered with the benign note "no YellowPages results" — the cryptosignals actor was DEPRECATED (169/299 public runs failed) and the input key was wrong, so an empty dataset read as an empty market. SUPERSEDED IN SHAPE by SPEC-254 (founder, 2026-08-04: "let\'s find an alternative for yellowpages"): the trudax replacement died in production too — HTTP 403 (monthly limit exceeded) then HTTP 400 on every call, $0.66 charged since the checkpoint for 0 leads, blocked by pay-per-delivery — and is replaced by solidcode~yellowpages-scraper (PAY-PER-RESULT, $0.80/1,000: zero delivery = zero actor charge). The invariants are unchanged and permanent: call a LIVE actor with ITS OWN input keys (solidcode takes searchTerms[]/locations[]/maxResults, not trudax\'s search/location/maxItems — a wrong key still returns an empty dataset that reads as an empty market), bound the per-run target inside the run-sync wall, and capture _lastApifyError into a LOCAL immediately because 6 pool workers share that global.', '#179', () => {
   const f = readFile('supabase/functions/fulfill-crawl/index.ts');
   const i = f.indexOf('async function fulfillYellowPagesApify');
   assert(!(i < 0), 'fulfillYellowPagesApify is gone while yellowpages_apify is still seeded');
   const yp = stripComments(f.slice(i, f.indexOf('\nasync function ', i + 10)));
   assert(!(/cryptosignals~yellow-pages-us-scraper/.test(yp)), 'the DEPRECATED cryptosignals actor is back — 169/299 public runs failed');
-  assert(!(!/apifyRun\('trudax~yellow-pages-us-scraper'/.test(yp)), 'yellowpages must call the maintained trudax actor');
-  assert(!(!/\bsearch:/.test(yp)), 'trudax takes `search`; a wrong input key returns an empty dataset that looks like an empty market');
-  assert(!(/maxItems: *\d{3,}/.test(yp)), 'the per-run target is unbounded again — run-sync aborts, exactly how gmaps died in SPEC-117');
+  // SPEC-254 supersession: the actor pin moves trudax → solidcode (trudax: 403
+  // monthly-limit then 400, $0.66 for 0 leads), and the input-key pin moves
+  // `search:` → `searchTerms:` because the pin must always name the CURRENT actor's
+  // own input schema — pinning the old one would make this gate enforce the outage.
+  assert(!(!/apifyRun\('solidcode~yellowpages-scraper'/.test(yp)), 'yellowpages must call the solidcode replacement actor (SPEC-254) — trudax is 403/400-dead and every call is money for nothing');
+  assert(!(!/\bsearchTerms:/.test(yp)), 'solidcode takes `searchTerms`; a wrong input key returns an empty dataset that looks like an empty market');
+  assert(!(/max(Items|Results): *\d{3,}/.test(yp)), 'the per-run target is unbounded again — run-sync aborts, exactly how gmaps died in SPEC-117');
   assert(!(!/const ypApifyErr = _lastApifyError;/.test(yp)), 'the apify reason must be captured into a local — 6 pool workers share that global');
   assert(!(!/osmIsBlocked/.test(yp)), 'the blocked-category gate is gone');
 });
@@ -6917,6 +6926,36 @@ test('pay-per-delivery-fifty-cent-increments-no-spend-without-contactable-output
     'the delivery count in spendBlockedReason lost its fetched_at freshness filter — historical leads from before the checkpoint would "unlock" new $0.50 steps for a source that is delivering nothing NOW, which is precisely paying without delivery');
   assert(!(!region.includes(".in('data_source', AUDIT_CAP_SOURCES[source] || [source])")),
     'the delivery count is back to single-name matching — a source whose rows carry another label (yellowpages_apify writes "yellowpages") reads 0 delivered, is blocked at $0.50 forever, and the crawl quietly routes spend to worse sources (the SPEC-251 defect)');
+});
+
+test('yellowpages-runs-the-pay-per-result-replacement-actor', 'SPEC-254 (founder, 2026-08-04, verbatim: "let\'s find an alternative for yellowpages... and also one for craigslist that\'s cheaper... run the rest in the meantime... so i see 100 pieces of data per source"). Measured death of the trudax actor: HTTP 403 (monthly rental limit exceeded), then HTTP 400 on every call — $0.66 charged since the SPEND_CHECKPOINT for 0 leads, correctly blocked by pay-per-delivery (SPEC-253) at $0.50. A rental actor whose OWNER hits a limit takes our source down with it; the replacement solidcode~yellowpages-scraper is PAY-PER-RESULT at $0.80/1,000, so zero delivery = zero actor charge — the billing shape SPEC-253 exists to enforce. Three things must hold at once: APIFY_ACTOR_OF_SOURCE maps yellowpages_apify to the new actor (that map feeds the SPEC-253 actor-level money meter, so a stale entry makes the spend gate read a dead actor and go blind to the live one); the fulfiller builds the NEW actor\'s own input (searchTerms[]+locations[] — a wrong input key returns an empty dataset that reads as an empty market, the SPEC-179 lesson); and the mapper writes data_source under the ROTA name yellowpages_apify — the legacy \'yellowpages\' label is what forced every counter through the two-name alias (AUDIT_CAP_SOURCES still counts both, so history keeps counting) and starved the source in SPEC-251. Asserts scan RAW text where a term lives inside a template literal, because stripComments() blanks those.', '#254', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(/trudax~yellow-pages-us-scraper/.test(f)), 'the dead trudax actor id is still somewhere in fulfill-crawl — any call path reaching it gets 403/400 and bills nothing but delivers nothing, and a second source of truth for "which actor" answers wrongly');
+  assert(!(!/yellowpages_apify: 'solidcode~yellowpages-scraper'/.test(f)), 'APIFY_ACTOR_OF_SOURCE does not map yellowpages_apify to the solidcode replacement — the SPEC-253 money meter reads the wrong actor and the pay-per-delivery gate goes blind to what the live actor spends');
+  const i = f.indexOf('async function fulfillYellowPagesApify');
+  assert(!(i < 0), 'fulfillYellowPagesApify is gone while yellowpages_apify is still seeded');
+  const ypRaw = f.slice(i, f.indexOf('\nasync function ', i + 10));
+  assert(!(!/apifyRun\('solidcode~yellowpages-scraper'/.test(ypRaw)), 'the YP fulfiller does not call the replacement actor — the source stays dead on the 403/400 actor while the founder waits for his 100 pieces of data');
+  assert(!(!/searchTerms: \[rawType\]/.test(ypRaw)), 'the input is not solidcode\'s searchTerms[] — a wrong input key returns an empty dataset that reads as an empty market (the SPEC-179 defect, reopened on the new actor)');
+  assert(!(!/locations: \[`\$\{metroOf\(city\)\}/.test(ypRaw)), 'the input is not solidcode\'s locations[] at metro level — either the key is wrong (empty dataset) or the neighbourhood is queried raw ("Wynwood, FL" matches nothing, SPEC-170b)');
+  assert(!(!/data_source: 'yellowpages_apify'/.test(ypRaw)), 'the mapper still writes the legacy \'yellowpages\' label — every counter must translate two names forever and a missed translation reads a producing source as 0 (the SPEC-251 starvation shape)');
+});
+
+test('craigslist-runs-the-cheaper-actor-and-the-checkpoint-moves-past-the-dead-spend', 'SPEC-255 (founder, 2026-08-04, verbatim: "let\'s find an alternative for yellowpages... and also one for craigslist that\'s cheaper... run the rest in the meantime... so i see 100 pieces of data per source"). Measured: memo23~craigslist-scraper cost $0.104 per fresh contactable lead — 2x the $0.05/lead ceiling — and pay-per-delivery correctly blocked it at $0.50, with $2.09 of dead craigslist spend on the meter since the old checkpoint (beside $0.66 dead yellowpages spend, SPEC-254). The replacement solidcode~craigslist-scraper is PAY-PER-RESULT at $1.40/1,000 ($0.0014/result — under the ceiling even if only 1 row in 35 is contactable). Four things must hold at once: APIFY_ACTOR_OF_SOURCE maps craigslist to the new actor (the SPEC-253 money meter reads this map); the old memo23 id appears NOWHERE in fulfill-crawl (a stale id is a second source of truth that answers "which actor" wrongly — the SPEC-236 lesson); the mapper reads the contacts the NEW actor emits (phoneNumbers[]/emails[] arrays, relay excluded by the actor) and skips isDeleted posts (a deleted post is an unreachable lead — paying to ingest it is paying for nothing); and SPEND_CHECKPOINT_AT moves to the replacement order (2026-08-04T16:30Z) so the dead actors\' $2.75 since the old line does not eat the replacements\' first $0.50 — the founder ordered these RUN, and a gate that blocks the fix for the old actor\'s waste enforces the outage. Gate #253 still holds (the value parses, after 2026-08-03); the dead spend stays on the ledger and the report.', '#255', () => {
+  const f = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(/memo23~craigslist-scraper/.test(f)), 'the old memo23 actor id is still somewhere in fulfill-crawl — $0.104/fresh-lead, double the founder\'s ceiling, and a stale id is a second source of truth that answers "which actor" wrongly');
+  assert(!(!/craigslist:\s+'solidcode~craigslist-scraper'/.test(f)), 'APIFY_ACTOR_OF_SOURCE does not map craigslist to the solidcode replacement — the SPEC-253 money meter reads the wrong actor and the pay-per-delivery gate goes blind to what the live actor spends');
+  const cl = f.slice(f.indexOf('async function fulfillCraigslist'), f.indexOf('async function fulfillYellowPagesApify'));
+  assert(!(cl.length < 500), 'fulfillCraigslist not found — this gate is grading nothing');
+  assert(!(!/apifyRun\('solidcode~craigslist-scraper'/.test(cl)), 'the CL fulfiller does not call the replacement actor — the source stays blocked at $0.50 on the expensive one');
+  assert(!(!/if \(it\?\.isDeleted\) continue;/.test(cl)), 'deleted posts are ingested — solidcode flags them with isDeleted; a deleted post is an unreachable lead and SPEC-192 forbids paying for unreachable leads');
+  assert(!(!/Array\.isArray\(it\?\.phoneNumbers\)/.test(cl)), 'the mapper does not read the phoneNumbers[] array the actor emits — phones vanish and bufUpsert drops rows that actually had a contact');
+  assert(!(!/Array\.isArray\(it\?\.emails\)/.test(cl)), 'the mapper does not read the emails[] array the actor emits — emails vanish and contactable posts are thrown away');
+  const gc = readFile('growth-controls.json');
+  const ckpt = (gc.match(/"SPEND_CHECKPOINT_AT": "([^"]+)"/) || [])[1];
+  const ckptMs = Date.parse(ckpt || '');
+  assert(!(!Number.isFinite(ckptMs) || ckptMs < Date.parse('2026-08-04T00:00:00Z')),
+    `SPEND_CHECKPOINT_AT ("${ckpt}") is missing, unparseable, or before the founder's 2026-08-04 replacement order — the dead actors' spend ($0.66 YP + $2.09 CL since the old line) would count against the replacements' first $0.50 and both start permanently blocked, delivering the founder 0 of his 100 pieces of data per source`);
 });
 
 main().catch(e => {
