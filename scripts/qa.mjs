@@ -7008,6 +7008,64 @@ test('month-lock-need-bounded-buys-no-spending-without-delivery', 'SPEC-256 (fou
     'craigslist\'s MAXITEMS no longer goes through boundedBuy(remainingNeed(\'craigslist\')...) — the env cap flows raw into apifyRun and every craigslist job buys to the cap regardless of what the audit still owes');
 });
 
+test('creators-come-from-creator-categories-not-the-services-rota', 'SPEC-257 (founder, 2026-08-05, verbatim: "the services IG creators has \'junk removal\' .. which wasn\'t part of the spec... the creators web crawling spec should have included multi step... (search top 25 micro to mid influencers (per each of the indicated cateogries), crawl names and emails and IG handles (visible from site ..) 3-get tel and email from website and or IG or other..."). The dual-class ig_services crawl built its ONE Apify IG search from the JOB\'s service_type and minted a creator row per hit — so creators arrived tagged "junk removal", a services-rota term the founder never listed for creators. The split: the SERVICE half keeps the service_type search (SPEC-230 — ig_services legitimately follows the services rota for leads_services); the CREATOR half runs its OWN search over CREATOR_CATEGORIES — the committed Tier 1+2 creator list (specs/CERGIO-CRAWL-LISTS.md, SPEC-245) in founder order — capped at 25 creator rows PER CATEGORY before moving to the next in tier order, rows carrying the category SLUG in `category` and keeping discovered_via=\'ig-scraper-user-search\' EXACTLY because CREATOR_TARGET and every dashboard counts eq() on it. creator-harvest keeps its own multi-phrase NICHE_TIERS, WELDED here by slug set (the #251 names() technique) — two drifting category lists is how one path quietly searches things the founder never listed. The 3-step pipeline (search 25/category → names/emails/handles → tel+email enrich) is recorded verbatim in growth-controls, with micro-to-mid banding (~10k–500k) as a MARK, never a drop. Asserts scan RAW text: the queries live inside template literals, which stripComments() blanks.', '#257', () => {
+  const FOUNDER_CATS = 'pets|parenting|fitness|home|beauty|local city life|food|wellness|style|photography|events|neighbourhood accounts';
+  // 1) the shared table exists, in founder order, with the 25 cap
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const catBlock = (ops.match(/export const CREATOR_CATEGORIES[\s\S]*?\n\];/) || [''])[0];
+  assert(!(!catBlock), 'CREATOR_CATEGORIES is gone from opsPayload.ts — the creator half has no committed category list and the next "junk removal" creator is one refactor away');
+  const slugs = (catBlock.match(/slug: '([^']+)'/g) || []).map((s) => s.slice(7, -1));
+  assert(!(slugs.join('|') !== FOUNDER_CATS),
+    `CREATOR_CATEGORIES slugs are not the founder's Tier 1+2 list in founder order:\n  got:  ${slugs.join('|')}\n  want: ${FOUNDER_CATS}\nThis list IS the spec (specs/CERGIO-CRAWL-LISTS.md) — a missing/reordered/renamed slug silently changes what the founder's money searches`);
+  assert(!(!ops.includes('export const CREATOR_CAT_CAP = 25;')),
+    'CREATOR_CAT_CAP is not the committed 25 — the founder said "top 25 ... per each of the indicated cateogries"; a bigger cap overbuys one category while the rest sit at 0, a missing const means every call site grows its own number');
+  // 2) the weld: creator-harvest's Tier 1+2 category slugs must be the SAME set in the
+  //    same order (dedupe of its multi-phrase rows) — the #251 names() technique
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+  const t12 = ch.slice(ch.indexOf('const NICHE_TIERS'), ch.indexOf('[ // Tier 3'));
+  assert(!(!t12 || ch.indexOf('const NICHE_TIERS') < 0 || ch.indexOf('[ // Tier 3') < 0),
+    'creator-harvest\'s NICHE_TIERS (or its Tier 3 marker) is gone — the weld cannot compare the two category lists, and the untested copy is the one deciding what gets searched');
+  const chCats = [];
+  for (const m of t12.matchAll(/category: '([^']+)'/g)) if (!chCats.includes(m[1])) chCats.push(m[1]);
+  assert(!(chCats.join('|') !== slugs.join('|')),
+    `the two creator-category lists have DRIFTED:\n  creator-harvest: ${chCats.join('|')}\n  opsPayload:      ${slugs.join('|')}\nTwo lists for one founder spec means one source searches categories the founder never listed`);
+  // 3) fulfill-crawl: the creator half queries from CREATOR_CATEGORIES, never service_type
+  const fcRaw = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!/import \{[^}]*CREATOR_CATEGORIES[^}]*\} from '\.\.\/_shared\/opsPayload\.ts'/.test(fcRaw)),
+    'fulfill-crawl no longer imports CREATOR_CATEGORIES from the shared table — a local copy (or none) is the drift shape this gate welds against');
+  const igAt = fcRaw.indexOf('async function fulfillIgServices');
+  const creAt = fcRaw.indexOf('SPEC-257 — THE CREATOR HALF');
+  const creEnd = fcRaw.indexOf('function cityVerifiedSvc');
+  assert(!(igAt < 0 || creAt < igAt || creEnd < creAt),
+    'the SPEC-257 creator half is gone from fulfillIgServices (or moved outside it) — creators are back to arriving only as a side effect of whatever the services rota searched');
+  const svcRegion = fcRaw.slice(igAt, creAt);
+  const creRegion = fcRaw.slice(creAt, creEnd);
+  assert(!(!svcRegion.includes('search: `${rawType} ${city}`')),
+    'the SERVICE half lost its service_type search — SPEC-257 splits the dual class, it does NOT remove the service half (SPEC-230: ig_services legitimately follows the services rota for leads_services)');
+  assert(!(!creRegion.includes('search: `${cat.igQuery} ${city}`')),
+    'the creator apifyRun input no longer searches `${cat.igQuery} ${city}` — the creator half is not querying the committed categories, which is the exact founder deviation this spec exists to close');
+  assert(!(/\brawType\b|job\.service_type/.test(creRegion)),
+    'the creator half references the job\'s service_type variable — a creator-path query built from the services rota is "junk removal" creators again, verbatim what the founder flagged');
+  assert(!(!creRegion.includes("boundedBuy(Math.min(remainingNeed('ig_services'), CREATOR_CAT_CAP - catHave), CREATOR_CAT_CAP)")),
+    'the creator buy is no longer sized to min(creator-target remainder, this category\'s open slots) under the 25 cap — a pay-per-result search past the category cap bills rows nobody ordered (the SPEC-256 leak, creator edition)');
+  assert(!(!creRegion.includes(".eq('category', c.slug)") || !creRegion.includes('< CREATOR_CAT_CAP')),
+    'the per-category count/skip is gone — without counting rows per category and skipping full ones, one category absorbs the whole CREATOR_TARGET and the founder\'s "per each of the indicated cateogries" never happens');
+  assert(!(!creRegion.includes('category: cat.slug')),
+    'creator rows no longer carry the category slug — the audit cannot say which category a creator came from, and the per-category 25-cap count reads 0 forever (every category re-crawls unbounded)');
+  assert(!(!creRegion.includes("discovered_via: 'ig-scraper-user-search'")),
+    'creator rows no longer carry discovered_via=ig-scraper-user-search EXACTLY — CREATOR_TARGET (fulfill-crawl), supply-engine, the dashboard and the audit export all count eq() on that literal, so the self-stop goes blind and ig_services crawls past 100 while nobody is watching');
+  assert(!(!fcRaw.includes(".eq('discovered_via', 'ig-scraper-user-search')")),
+    'the eq() creator-target count is gone from fulfill-crawl — the 100-then-audit stop (SPEC-205) has nothing to read');
+  // 4) the founder's 3-step pipeline is recorded verbatim in the committed controls
+  const gc = readFile('growth-controls.json');
+  assert(!(!gc.includes('"_CREATOR_PIPELINE"')),
+    'the _CREATOR_PIPELINE doc key is gone from growth-controls.json — the founder\'s multi-step creator spec lives nowhere committed and the next agent re-derives (or re-deviates) it');
+  assert(!(!gc.includes('top 25 micro to mid influencers (per each of the indicated cateogries)')),
+    'the founder\'s verbatim 3-step order is no longer recorded — paraphrase drifts, verbatim does not');
+  assert(!(!gc.includes('10,000–500,000') || !gc.includes('KEPT, never dropped')),
+    'the micro-to-mid band (~10k–500k) or its KEPT-never-dropped rule is gone — either the band silently becomes a drop filter (deleting data the founder said to keep) or nobody knows what "micro to mid" means at audit time');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
