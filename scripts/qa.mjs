@@ -7066,6 +7066,91 @@ test('creators-come-from-creator-categories-not-the-services-rota', 'SPEC-257 (f
     'the micro-to-mid band (~10k–500k) or its KEPT-never-dropped rule is gone — either the band silently becomes a drop filter (deleting data the founder said to keep) or nobody knows what "micro to mid" means at audit time');
 });
 
+test('ops-data-primary-view-is-a-straight-clickable-results-list', 'SPEC-258 (founder, 2026-08-05, verbatim: "redesign the dashboard so it\'s very easy to view and click.. straight simple list of results (that changes dynamicaly with filter)"). /ops/data fetched the filtered rows on every filter change and then BURIED them: two diagnostic panels (the SPEC-249 audit board and the by-source panel) sat above dense 7–10-field card grids. The redesign inverts it. The PRIMARY view is a single-column zebra list — one phone-friendly tappable row per lead (name/handle · type-or-category · city · ☎ · ✉ · source chip · relative time) rendered straight from data.rows, so it re-renders with every existing filter. Clicking a row opens its BEST link in a new tab through one committed fallback chain (website_url → external_url → IG profile → yelp_url → cl_post_url); a row with no link is a plain <div> with NO ↗ affordance, because a dead-looking click reads as a broken dashboard. The diagnostics are secondary: both panels live behind ONE default-collapsed "Source status" toggle, unchanged inside (gates #249/#251 keep their own pins). The row-count selector still feeds the fetch limit, and the empty state stays the honest one — "No rows for this filter." plus verbatim errors, never a confident zero.', '#258', () => {
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  // 1) the primary list exists: LeadRow, mapped over data.rows, with the stable marker
+  assert(!(!scr.includes('function LeadRow(')),
+    'LeadRow is gone — the screen has no single-row result component and the founder is back to dense field-grids');
+  assert(!(!scr.includes('rows.slice(0, 1000).map((r, i) => <LeadRow')),
+    'the screen no longer maps data.rows into LeadRow — the "straight simple list of results" does not render, so the filters change nothing visible');
+  assert(!((scr.match(/data-lead-row/g) || []).length < 2),
+    'the data-lead-row marker is not on BOTH row branches — the linked and linkless rows must both be identifiable as result rows, or one branch silently stops being part of the list');
+  // 2) the click contract: best-link fallback chain, in the committed order
+  const blAt = scr.indexOf('function bestLink');
+  const blEnd = scr.indexOf('function timeAgo');
+  const bl = scr.slice(blAt, blEnd);
+  assert(!(blAt < 0 || blEnd < blAt),
+    'bestLink (or timeAgo after it) is gone — rows have no link chain and every row is dead to the "easy to click" order');
+  assert(!(!bl.includes('r.website_url || r.external_url')),
+    'the link chain no longer starts website_url → external_url — the row\'s best destination (the business\'s own site) lost first place');
+  assert(!(!bl.includes('instagram.com/')),
+    'the IG-profile fallback is gone from bestLink — a creator row with only a handle has no destination at all');
+  assert(!(!bl.includes('r.yelp_url || r.cl_post_url || null')),
+    'the listing-url tail (yelp_url → cl_post_url → null) is gone — rows with only a listing link go dead, and a missing || null means the chain can return undefined instead of "no link"');
+  assert(!(bl.indexOf('r.website_url') > bl.indexOf('instagram.com/')),
+    'the chain order flipped — an IG profile outranks the business\'s own website, which is the worse destination whenever both exist');
+  // 3) linked rows open a NEW TAB; linkless rows are a <div> with no affordance
+  assert(!(!scr.includes('? <a data-lead-row href={link} target="_blank" rel="noopener noreferrer"')),
+    'a linked row is no longer an <a> to its best link in a new tab — clicking either does nothing or navigates the founder AWAY from the filtered dashboard he just built');
+  assert(!(!scr.includes(': <div data-lead-row')),
+    'the linkless branch is no longer a plain <div> — a linkless row rendered as a link is a click that goes nowhere, the exact broken feel the redesign exists to end');
+  assert(!(!scr.includes('{link && <span className="text-[13px] font-bold text-g">↗</span>}')),
+    'the ↗ affordance is no longer conditional on link — either every row promises a click it cannot honour, or no row shows it is clickable');
+  // 4) the diagnostics are BEHIND a default-collapsed toggle; the list is NOT
+  assert(!(!scr.includes('const [showBoard, setShowBoard] = useState(false)')),
+    'showBoard no longer defaults to false — the audit board opens expanded and the results are buried under diagnostics again, verbatim what the founder asked to end');
+  const tAt = scr.indexOf('{showBoard && (');
+  const bAt = scr.indexOf('data.board.map');
+  assert(!(tAt < 0 || bAt < tAt),
+    'the SPEC-249 board render is not inside the {showBoard && ( toggle — it renders unconditionally above/beside the list, so the primary view is diagnostics again');
+  const listAt = scr.indexOf('<LeadRow');
+  assert(!(listAt < 0 || listAt > tAt),
+    'the results list sits INSIDE the collapsed toggle — the founder opens the screen and sees no results until he finds a toggle, the inverse of the order');
+  // 5) the row-count selector feeds the fetch, so "last 100/500/1000" changes the list.
+  //    Pin the LOAD callback region specifically: `limit: size,` also lives in
+  //    downloadSource, so a whole-file includes() could never fail (mutation-caught —
+  //    the first cut of this assert survived limit: 1000 in load()).
+  const loadRegion = scr.slice(scr.indexOf('const load = useCallback'), scr.indexOf('useEffect(() => { load(); }'));
+  assert(!(!loadRegion.includes('limit: size,')),
+    'the load call no longer passes limit: size — the How-many selector is decoration and every filter change fetches the same fixed count');
+  assert(!(!scr.includes('setSize(Number(e.target.value))')),
+    'the size selector no longer sets the size state — picking Last 100 changes nothing');
+  // 6) the empty state stays honest
+  assert(!(!scr.includes('No rows for this filter.')),
+    'the honest empty state is gone — an empty list with no message reads as a broken screen, and a made-up message would be a confident zero');
+  assert(!(!scr.includes('text-red-600">{err}')),
+    'the verbatim error surface is gone — a failed count would render as silence, the confident-zero defect this dashboard family exists to end');
+});
+
+test('creator-target-counts-only-new-spec-category-rows', 'SPEC-259 (founder, 2026-08-05, verbatim: "share 100 new resuls from the creator new spec run... to complete the evaluation...."). CREATOR_TARGET=100 stops ig_services by counting leads_influencers eq(discovered_via, ig-scraper-user-search) — ALL of them. But since SPEC-257 only NEW-SPEC rows (from the creator-category search) carry a CREATOR_CATEGORIES slug in `category`; the OLD deviation rows carry services-rota terms ("junk removal"). With ~67 old rows already in the table, an unfiltered count stops the crawl ~67 short of the 100 new-spec rows the founder must evaluate. The fix: the ONE ig creator-target count chains .in(category, CREATOR_CATEGORIES slugs) after the eq(), so only new-spec rows count toward the target AND toward the SPEC-256 need snapshot that sizes the buys (the founder is owed 100 new-spec rows, so the need is the new-spec remainder). Old rows are KEPT, never deleted — data is data — they just do not count. creator-harvest is a DIFFERENT source with its own like(se:web-harvest%) prefix count and its rows carry their own category values; it stays untouched, because "fixing" it too would be the SPEC-230 shape (closing a creator path the order never named). The per-category 25-cap counts already filter eq(category, slug) — gate #257 pins those.', '#259', () => {
+  const fcRaw = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const tAt = fcRaw.indexOf('const CREATOR_TARGET');
+  const tEnd = fcRaw.indexOf('SPEC-243', tAt);
+  const tRegion = fcRaw.slice(tAt, tEnd);
+  assert(!(tAt < 0 || tEnd < tAt), 'the CREATOR_TARGET block is gone from fulfill-crawl (or SPEC-243 no longer follows it) — the 100-then-pause self-stop has nothing to read and this gate cannot delimit it');
+  // 1) the target count carries BOTH filters, CHAINED on the same query
+  assert(!(!/\.eq\('discovered_via', 'ig-scraper-user-search'\)\s*\.in\('category', CREATOR_CATEGORIES\.map\(\(c\) => c\.slug\)\)/.test(tRegion)),
+    'the ig creator-target count is not the chained eq(discovered_via) + in(category, CREATOR_CATEGORIES slugs) form — old deviation rows ("junk removal" creators) count toward the 100 again and the crawl stops short of the new-spec rows the founder is evaluating');
+  assert(!(!tRegion.includes('creatorTargetMet = (count ?? 0) >= CREATOR_TARGET')),
+    'the filtered count no longer decides creatorTargetMet — the self-stop reads some other number and the new-spec filter is decoration');
+  assert(!(!tRegion.includes('_creatorFreshForNeed = count ?? 0')),
+    'the SPEC-256 need snapshot no longer reads the same filtered count — the buys would be sized to the OLD total (need ~0) and ig_services never buys the new-spec rows it still owes');
+  // 2) the committed doc records the rule and the founder verbatim
+  const gc = readFile('growth-controls.json');
+  assert(!(!gc.includes('share 100 new resuls from the creator new spec run... to complete the evaluation')),
+    'the founder\'s verbatim order is gone from _CREATOR_TARGET — paraphrase drifts, verbatim does not; the next agent "simplifies" the count back to unfiltered');
+  assert(!(!gc.includes('KEPT in the table but NOT counted')),
+    'the kept-but-not-counted rule is gone from _CREATOR_TARGET — the next reading of "only new-spec rows count" is one delete statement away from destroying the old rows, and data is data');
+  // 3) creator-harvest is UNTOUCHED: its own prefix count, no category filter
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+  const chAt = ch.indexOf('const { count: harvested');
+  const chRegion = ch.slice(chAt, chAt + 400);
+  assert(!(chAt < 0 || !chRegion.includes(".like('discovered_via', 'se:web-harvest%')")),
+    'creator-harvest lost its like(se:web-harvest%) prefix target count — SPEC-237: its tag is stamped per run day, an eq() (or a missing count) reads 0 beside real rows and the source either never stops or never runs');
+  assert(!(/CREATOR_CATEGORIES|\.in\('category'/.test(chRegion)),
+    'creator-harvest\'s target count gained a category filter — SPEC-259 named ONLY the ig_services count; filtering this one too undercounts a source whose rows carry their own category values, and closing a creator path the order never named is the SPEC-230 failure shape');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
