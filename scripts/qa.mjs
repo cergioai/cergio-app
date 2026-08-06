@@ -7232,6 +7232,56 @@ test('ops-data-hides-legacy-creator-rows-and-keeps-the-filters-compact', 'SPEC-2
     'active filters no longer render as removable chips — a hidden active filter is the SPEC-223 "looks like broken data" defect returning through the disclosure');
 });
 
+test('the-dashboard-number-and-the-csv-are-the-same-query', 'SPEC-261 — THE TRUST WELD (founder defect report, 2026-08-05, verbatim: "IG scraper download had 1 record.. shoed 100 in download with 10% phone.. how can we trust the dashboard"). MEASURED root cause: leads-dashboard\'s board/filteredTotal are SERVER-side counts over the full filtered set, while the CSV path is `rows` — a ROW_CAP-limited page (newest-first, and NULL timestamps sort FIRST in Postgres desc, so null-ts rows hijack the page) that the screen then filtered CLIENT-side (the SPEC-260 legacy exclusion). Count-population ≠ rows-population: the board said 100, the CSV had 1. The weld: (a) a categoriesIn body param applies the SAME .in(category) filter to BOTH the rows query and the count query — one query, two projections; (b) nullsFirst:false so the newest-N page is actually the newest N; (c) the creators board row for ig-scraper-user-search counts the NEW-SPEC population only (category ∈ the 12 CREATOR_CATEGORIES slugs — SPEC-259\'s definition of the creator hundred), with ☎/✉/both % over that same population; (d) a rowsMatchCount honesty bit the screen checks; (e) every CSV path warns in BOTH numbers when it delivers fewer rows than the count promised, and every filename carries its row count. Asserts scan RAW text: the pinned terms live inside/beside template literals, which stripComments() blanks (the Part-6 trap).', '#261', () => {
+  const ld = readFile('supabase/functions/leads-dashboard/index.ts');
+  // 1) categoriesIn applied to BOTH the rows query and the count query
+  assert(!(!ld.includes("else if (categoriesIn) rq = rq.in('category', categoriesIn)")),
+    'the ROWS query no longer applies categoriesIn — the CSV population diverges from the counted population and the board says 100 while the download has 1, the founder defect verbatim');
+  assert(!(!ld.includes("else if (categoriesIn) cq = cq.in('category', categoriesIn)")),
+    'the COUNT query no longer applies categoriesIn — the screen counts the full set while the rows are the filtered set, so the displayed number can never match the CSV and the dashboard is untrustable by construction');
+  // 2) null timestamps can never hijack the newest-first page
+  assert(!(!ld.includes('rq.order(tsCol, { ascending: false, nullsFirst: false })')),
+    'the rows order lost nullsFirst:false — NULL timestamps sort FIRST in Postgres desc, so undated rows hijack the ROW_CAP page and the "newest 100" CSV is not the newest 100');
+  // 3) the creators ig board row counts the NEW-SPEC population only, % included
+  const bAt = ld.indexOf('THE PER-SOURCE AUDIT BOARD');
+  const blk = ld.slice(bAt, ld.indexOf('return json', bAt));
+  assert(!(bAt < 0 || !blk.includes("const newSpecIg = audience === 'creators' && src === 'ig-scraper-user-search'")),
+    'the new-spec condition is gone from the board — either every creator source gets the category filter (se:web-harvest undercounts) or none does (legacy rows inflate the ig row), and either way the board number stops matching what the crawler stops on');
+  assert(!(!blk.includes("base.in('category', CREATOR_CATEGORIES.map((c) => c.slug))")),
+    'the creators board row for ig-scraper-user-search no longer filters to the 12 CREATOR_CATEGORIES slugs — legacy pre-category rows count toward the creator hundred again, the board disagrees with SPEC-259\'s definition, and the founder audits a number the download contradicts');
+  assert(!(!/import \{[^}]*CREATOR_CATEGORIES[^}]*\} from '\.\.\/_shared\/opsPayload\.ts'/.test(ld)),
+    'leads-dashboard no longer imports CREATOR_CATEGORIES from the shared table — a local slug copy is the two-sources-of-truth drift, and the untested copy is the one the founder\'s board counts with');
+  // 4) the honesty bit compares rows against min(count, cap) and is returned
+  assert(!(!ld.includes('const rowsMatchCount = (rows || []).length >= Math.min(filteredTotal ?? 0, ROW_CAP)')),
+    'rowsMatchCount is gone or no longer compares delivered rows against min(filteredTotal, ROW_CAP) — the screen has no way to detect a count/rows divergence, and the next population split renders as a confident number beside a contradicting CSV');
+  assert(!(!ld.includes('rowsMatchCount, board')),
+    'rowsMatchCount is computed but never returned in the payload — a check that cannot act');
+  // 5) the screen passes categoriesIn server-side in ALL fetch paths (load/view,
+  //    downloadSource, downloadEach), and the api layer forwards it
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  const nCat = (scr.match(/categoriesIn: [^,\n]* \? CREATOR_SLUGS : null/g) || []).length;
+  assert(!(nCat < 3),
+    `only ${nCat} of the 3 fetch paths (load, downloadSource, downloadEach) pass categoriesIn: CREATOR_SLUGS under the exclude-legacy condition — any path left client-side-only re-opens the count-population ≠ rows-population split that produced "100 in download" with 1 record`);
+  const api = readFile('src/lib/api.js');
+  const invoke = (api.match(/invoke\('leads-dashboard',[\s\S]{0,900}?\n  \}\)/) || [''])[0];
+  assert(!(!invoke.includes('categoriesIn')),
+    'the api layer drops categoriesIn from the request body — the screen believes the exclusion is server-side while the server never sees it: the same silent divergence wearing a fixed-looking screen');
+  // 6) the mismatch warning exists and fires on the rows<count comparison, everywhere
+  assert(!(!scr.includes('mismatch, do not trust this export')),
+    'the CSV mismatch warning text is gone — a short CSV saves silently again and the founder finds out from the file, which is exactly how trust in the dashboard died');
+  assert(!(!scr.includes('if (!(got < expect)) return null')),
+    'csvMismatch no longer compares delivered rows against the promised min(count, cap) — the warning can never fire and every export claims whatever the screen said');
+  assert(!(!scr.includes('const csvMismatch = (got, total, cap)')),
+    'the csvMismatch helper is gone — no CSV path can compare what it delivers against what the count promised, and every short export saves silently');
+  assert(!((scr.match(/csvMismatch\(/g) || []).length < 3),
+    'fewer than 3 CSV paths run the csvMismatch check (download + downloadSource + downloadEach) — the path without it saves fewer rows than the count promised, silently');
+  assert(!(!scr.includes('data.rowsMatchCount === false')),
+    'the screen never checks the server\'s rowsMatchCount honesty bit — a diverged visible list renders with no warning, a confident number beside rows that contradict it');
+  // 7) every CSV filename carries its own row count — the receipt travels with the file
+  assert(!((scr.match(/ rows\)\.csv/g) || []).length < 3),
+    'fewer than 3 CSV filenames carry their row count — "(N rows)" in the name is the receipt the export is audited against, and without it a 1-row file can sit on disk claiming to be the founder\'s hundred');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
