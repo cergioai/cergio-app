@@ -48,6 +48,10 @@ export default {
         // crd  = legacy alias kept pointing to soft.
         cr:    '#FAF4EE',
         cream: '#FAF4EE',
+        // paper = the PDP page bg from the redesign handoff (README "Design
+        // tokens": #FFFBF3, "Figma's paper"). Warmer white than card, cooler
+        // than cream. Added 2026-08-06 (redesign PR 4).
+        paper: '#FFFBF3',
         card:  '#FCFCFC',
         soft:  '#F4F4F2',
         crd:   '#F4F4F2',

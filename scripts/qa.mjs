@@ -5249,7 +5249,10 @@ test('claim-founding-spot-lands-somewhere-real', 'SPEC-152 (Tarik live): "I clic
 test('reco-rows-link-out-to-instagram', 'SPEC-154 (Tarik live): "when service clicks to see instagram post by connector they\'re sent to the reco on cergio which doesn\'t include instagram link". Every link on a "What people say" row pointed at /u/:id, and the profiles SELECT did not even fetch instagram_handle — so a provider could read the Cergio quote and the reach numbers beside it but had no route to the actual account to verify either.', '#159', () => {
   const d = readFile('src/screens/ServiceDetailScreen.jsx');
   assert(!(!d), 'ServiceDetailScreen.jsx missing');
-  assert(!(!/select\('id, display_name, cc_verified_at, instagram_handle'\)/.test(d)), 'recommender profiles are fetched without instagram_handle — nothing to link to');
+  // AMENDED 2026-08-06 (redesign PR 4 — the PR-1 deferral lands): the pinned
+  // literal grows avatar_url so the reco rows render the real face. The
+  // SPEC-154 core (instagram_handle fetched + carried + linked out) stands.
+  assert(!(!/select\('id, display_name, cc_verified_at, instagram_handle, avatar_url'\)/.test(d)), 'recommender profiles are fetched without instagram_handle + avatar_url — nothing to link to / no face to render');
   assert(!(!/ig: +profMap\[r\.recommender_id\]\?\.instagram_handle/.test(d)), 'handle is fetched but never carried onto the reco row');
   assert(!(!/https:\/\/instagram\.com\/\$\{String\(r\.ig\)/.test(d)), 'no outbound Instagram link on the reco row');
   return true;
@@ -7365,6 +7368,47 @@ test('profile-ia-v2', 'SPEC-49h / S-262 (founder redesign handoff 2026-08-05, de
   //    (SPEC-12 — the prototype's three dots are a placeholder, not data).
   assert(!/pager|dots/i.test(stripCommentsAndStrings(code)),
     'no pager-dot affordance may render for the single cover image — a fake "more to scroll" hint is fake data (SPEC-12)');
+});
+
+test('pdp-v2-viewer-priced', 'SPEC-49i / S-263 (founder redesign handoff 2026-08-05, design_handoff_profile_booking: Service PDP.dc.html + PATCHES.md §3/§4). The PDP is rebuilt to the design\'s THREE price states, and all three resolve in ONE module — src/lib/servicePricing.js: (1) viewer-gated FREE — services.free_for_connectors AND the viewer\'s own cc_verified_at; everyone else sees the price and can still request it free; (2) service-wide discount — services.discount_pct applies one rate to EVERY offering, never a per-offering rate (the DB constraint + column comment say so); (3) plain price. "Leave a go-to review" is REMOVED from the PDP (reviews are post-booking only — the composer lives in the rate+post flow). The migrated file carries zero raw hex (STYLE_MIGRATION done-check). What stands is pinned by the existing gates: #38 wiring, #134 live-offer CTA, #136 targeted quote, #53 no recommend modal, #49g streams + real story ruler, #159 IG links (amended in place: the pinned select literal grew avatar_url — the PR-1 deferral this PR was always meant to close).', '#263', async () => {
+  const pdp = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/ServiceDetailScreen.jsx'), 'utf8');
+  const code = stripComments(pdp);
+  const spPath = path.join(REPO_ROOT, 'src/lib/servicePricing.js');
+
+  // 1. The pricing module exists and encodes the two founder rules.
+  assert(fs.existsSync(spPath), 'src/lib/servicePricing.js must exist — PATCHES §3');
+  const sp = fs.readFileSync(spPath, 'utf8');
+  assert(/export function priceForViewer/.test(sp) && /free_for_connectors && viewerIsConnector/.test(sp),
+    'priceForViewer must gate FREE on the service flag AND the viewer (a creator sees free, everyone else the price) — PATCHES §3');
+  assert(/service\?\.discount_pct/.test(sp) && !/offering\?\.discount/.test(sp) && !/offering\.discount/.test(sp),
+    'the discount must read from the SERVICE (discount_pct), never a per-offering rate — service-wide by decree');
+
+  // 2. The PDP resolves every price through it, feeds it the real inputs,
+  //    and no longer reads a per-offering discount.
+  assert(/from '\.\.\/lib\/servicePricing'/.test(pdp) && /priceForViewer\(serviceFlags, o, viewerIsConnector\)/.test(code),
+    'every offering card must price via priceForViewer(serviceFlags, o, viewerIsConnector) — the real flags and the real viewer, not a stub');
+  assert(/free_for_connectors, discount_pct/.test(pdp),
+    'the services select must fetch free_for_connectors + discount_pct (the PR 1 columns)');
+  assert(/setViewerIsConnector\(!!prof\?\.cc_verified_at\)/.test(code),
+    'the viewer flag must come from the viewer\'s OWN profile cc_verified_at (the ResultsScreen pattern — one source of truth)');
+  assert(!/discount_percent/.test(code),
+    'no per-offering discount reads may survive — the discount is service-wide (discount_pct)');
+
+  // 3. Reviews are post-booking only: no PDP review entry point.
+  assert(!/Leave a go-to review/.test(stripCommentsAndStrings(code)) && !/Leave a go-to review/.test(code.replace(/\/\/[^\n]*/g, '')),
+    'the "Leave a go-to review" button is removed from the PDP — the composer lives in the post-booking rate+post flow (PATCHES §4)');
+
+  // 4. STYLE_MIGRATION done-check: a migrated screen has no raw hex left.
+  assert(!/(?:bg|text|border|ring|from|via|to|fill|stroke)-\[#/.test(code),
+    'ServiceDetailScreen is a MIGRATED screen — no raw-hex utility classes allowed (STYLE_MIGRATION done-check)');
+  assert(!/#[0-9A-Fa-f]{6}\b/.test(stripCommentsAndStrings(code)),
+    'ServiceDetailScreen is a MIGRATED screen — no raw hex literals allowed (STYLE_MIGRATION done-check)');
+
+  // 5. The kit renders it: real avatars via the shared Avatar primitive.
+  for (const p of ['Avatar', 'FacetBadge', 'Card', 'SectionTitle']) {
+    assert(!(!new RegExp(`from '\\.\\./components/ui/${p}'`).test(pdp)),
+      `ServiceDetailScreen must render via the kit primitive ${p}`);
+  }
 });
 
 main().catch(e => {

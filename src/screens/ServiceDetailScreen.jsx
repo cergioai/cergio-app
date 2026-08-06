@@ -1,24 +1,31 @@
-// CERGIO-GUARD (2026-05-29): Consumer PDP — the "Jennifer Leighton"
-// view in the Figma reference. Before this screen existed, tapping a
-// ProviderCard jumped straight to /booking with no intermediate detail.
-// That skipped the trust step entirely — no provider bio, no avatar
-// stack of who recommended them, no offerings breakdown.
+// CERGIO-GUARD (2026-05-29, PDP v2 2026-08-06): Consumer PDP — the service
+// page you click through to from a profile.
 //
 // Route: /service/:serviceId
 //   Preferred entry: ResultsScreen passes the full provider object +
 //   recommenders array via location.state so we render instantly without
-//   a re-fetch. If the user lands here cold (deep link, refresh), we
-//   fall back to listServices({ provider_type: null }) and look up the
-//   service by id — slower but works.
+//   a re-fetch. Cold deep links fall back to fetching by id.
 //
-// Layout (matches the design):
-//   • Header: back + share
-//   • Cover image (or gradient fallback)
-//   • Title row: provider name + category + price
-//   • Recommended-by avatar stack with names + count
-//   • Recommender blurbs (italic quote per row)
-//   • About the provider — bio prose
-//   • Book CTA — fixed-bottom, same handleBook flow as ProviderCard
+// REDESIGN HANDOFF PR 4 (founder 2026-08-05, `design_handoff_profile_booking/
+// Service PDP.dc.html` + PATCHES.md §3 — SPEC-49i). Markup rebuilt to the
+// design's three price states; every pinned behavior kept:
+//   • Standard — price + duration per offering.
+//   • Free — "Free for Local Creators" headline under the name; offerings
+//     read free with a check in place of the price. GATED ON THE VIEWER
+//     (viewer's cc_verified_at): a creator sees free, everyone else sees the
+//     price — and can still request it free (the provider decides).
+//   • Discounted — price stays, struck-through original beside it, green
+//     "N% off" pill. THE DISCOUNT IS SERVICE-WIDE (services.discount_pct,
+//     one rate for every offering) — src/lib/servicePricing.js is the ONE
+//     place the three states resolve.
+// "Leave a go-to review" is REMOVED (PATCHES §4): it was a nav shortcut to
+// /inbox; the actual composer lives in the post-booking rate+post flow
+// (MarkBookingPostedModal), so nothing became unreachable.
+// What STANDS: recommendersRaw fast path + cold fallback (#38), liveOffer
+// CTA (#134/SPEC-135), FW-7 reply-offer booking, targeted custom quote
+// (#136), no standalone recommend modal (SPEC-53), reputational streams +
+// real story-ruler (SPEC-49g), SPEC-154 outbound IG links on reco rows,
+// per-record SEO meta (SPEC-61).
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'react-router-dom';
@@ -26,27 +33,17 @@ import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestQuoteSheet } from '../components/ui/RequestQuoteSheet';
 import { getInboxPartyCounts, getMyNetworkIds, getMutualConnections } from '../lib/api';
+import { priceForViewer, money } from '../lib/servicePricing';
+import { Avatar } from '../components/ui/Avatar';
+import { FacetBadge } from '../components/ui/FacetBadge';
+import { Card } from '../components/ui/Card';
+import { SectionTitle } from '../components/ui/SectionTitle';
+import { SeeAllLink } from '../components/ui/SeeAllLink';
 import { TrustStream, SocialReachLine, ConnectorChip, MutualBadge, mutualNamesText } from '../components/ui/reputation';
 
-function initialsOf(name) {
-  if (!name) return '?';
-  return name.split(' ').map(s => s[0] || '').slice(0, 2).join('').toUpperCase();
-}
-
-// Stacked avatar circles — up to maxVisible faces, then a "+N" chip.
-// Brand-friendly gradient pool reused across the app.
-const AV_GRADS = [
-  'bg-gradient-to-br from-[#8A6FD6] to-[#4F3DB0]',
-  'bg-gradient-to-br from-[#F5A65E] to-[#C76A18]',
-  'bg-gradient-to-br from-[#EE5586] to-[#A52454]',
-  'bg-gradient-to-br from-[#5BC404] to-[#2F6E00]',
-  'bg-gradient-to-br from-[#4478AA] to-[#2A5070]',
-];
-
-// CERGIO-GUARD (2026-05-30): every avatar in this stack is a Link to
-// the recommender's public profile (/u/{id}). Tarik's spec:
-// "make all the avatars profiles etc on the profile of services
-// (recommenders avatars)" clickable.
+// Stacked avatar circles — up to maxVisible faces, then a "+N" chip. Kept as
+// the shared stack primitive (#38); rebuilt on the kit Avatar (initials on
+// mint for null avatar_url — no gradient hexes).
 function AvatarStack({ recommenders, maxVisible = 4 }) {
   if (!recommenders?.length) return null;
   const visible = recommenders.slice(0, maxVisible);
@@ -54,9 +51,8 @@ function AvatarStack({ recommenders, maxVisible = 4 }) {
   return (
     <div className="flex items-center">
       {visible.map((r, i) => {
-        const cls = `w-9 h-9 rounded-full border-2 border-white text-white text-meta font-extrabold
-                     ${AV_GRADS[i % AV_GRADS.length]} ${i > 0 ? '-ml-2.5' : ''}
-                     flex items-center justify-center shadow-sm`;
+        const inner = <Avatar url={r.avatar_url} name={r.name} size={36} />;
+        const cls = `rounded-full ring-2 ring-white ${i > 0 ? '-ml-2.5' : ''}`;
         if (r.id) {
           return (
             <Link
@@ -66,29 +62,26 @@ function AvatarStack({ recommenders, maxVisible = 4 }) {
               className={cls}
               onClick={(e) => e.stopPropagation()}
             >
-              {initialsOf(r.name)}
+              {inner}
             </Link>
           );
         }
-        return (
-          <div key={i} className={cls}>{initialsOf(r.name)}</div>
-        );
+        return <span key={i} className={cls}>{inner}</span>;
       })}
       {overflow > 0 && (
-        <div className="w-9 h-9 rounded-full border-2 border-white bg-gl text-gd text-meta-sm font-extrabold
-                        -ml-2.5 flex items-center justify-center shadow-sm">
+        <span className="w-9 h-9 rounded-full ring-2 ring-white bg-gl text-gd text-meta-sm font-extrabold
+                         -ml-2.5 inline-flex items-center justify-center">
           +{overflow}
-        </div>
+        </span>
       )}
     </div>
   );
 }
 
-// CERGIO-GUARD (2026-05-31 — Phase 3b): review row matching the
-// Jennifer Leighton mockup. Reviewer avatar + name + Connector chip
-// (when verified) + comment with "show more" toggle + time ago
-// pinned right. Avatar + name link to the reviewer's public profile.
-function ReviewCard({ review, avatarColor, fmtAgo }) {
+// Review card — the design's 213px horizontal card (Card r=12): 40px real
+// avatar, name, Local Creator shield when verified, comment with "show more",
+// quiet time-ago.
+function ReviewCard({ review, fmtAgo }) {
   const [expanded, setExpanded] = useState(false);
   const comment = review.comment || '';
   const longThreshold = 140;
@@ -97,60 +90,40 @@ function ReviewCard({ review, avatarColor, fmtAgo }) {
     ? comment.slice(0, longThreshold).trimEnd() + '…'
     : comment;
   const reviewer = review.reviewer;
-  const initials = reviewer?.name
-    ? reviewer.name.split(' ').map(s => s[0] || '').slice(0, 2).join('').toUpperCase()
-    : '?';
-  const avatarCls = `w-9 h-9 rounded-full text-white text-meta font-extrabold flex-shrink-0
-                     flex items-center justify-center ${avatarColor}`;
   return (
-    <div className="bg-white border border-line rounded-[14px] p-3.5">
-      <div className="flex items-start justify-between gap-3 mb-1.5">
-        <div className="flex items-center gap-2.5 min-w-0">
+    <Card r={12} className="w-[213px] flex-shrink-0 snap-start p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2.5 min-w-0">
+        {reviewer?.id ? (
+          <Link to={`/u/${reviewer.id}`} aria-label={`View ${reviewer.name}`} className="shrink-0">
+            <Avatar url={reviewer.avatar_url} name={reviewer.name} size={40} />
+          </Link>
+        ) : (
+          <Avatar name={reviewer?.name} size={40} />
+        )}
+        <div className="min-w-0 flex flex-col gap-0.5">
           {reviewer?.id ? (
-            <Link to={`/u/${reviewer.id}`} aria-label={`View ${reviewer.name}`} className={avatarCls}>
-              {initials}
+            <Link to={`/u/${reviewer.id}`} className="text-body font-semibold text-black hover:underline truncate block">
+              {reviewer?.name || 'A customer'}
             </Link>
           ) : (
-            <div className={avatarCls}>{initials}</div>
+            <p className="text-body font-semibold text-black truncate">{reviewer?.name || 'A customer'}</p>
           )}
-          <div className="min-w-0">
-            {reviewer?.id ? (
-              <Link to={`/u/${reviewer.id}`} className="text-body-sm font-extrabold text-black hover:underline truncate block">
-                {reviewer?.name || 'A customer'}
-              </Link>
-            ) : (
-              <p className="text-body-sm font-extrabold text-black truncate">
-                {reviewer?.name || 'A customer'}
-              </p>
-            )}
-            {reviewer?.is_connector && (
-              <p className="text-meta-sm text-gd font-extrabold inline-flex items-center gap-1 mt-0.5">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4">
-                  <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-                </svg>
-                Connector
-              </p>
-            )}
-          </div>
+          {reviewer?.is_connector && <FacetBadge kind="creator" />}
         </div>
-        <p className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-1">
-          {fmtAgo(review.booked_at)}
-        </p>
       </div>
-      {visible && (
-        <p className="text-body-sm text-b2 leading-snug mt-1">
-          {visible}
-          {isLong && (
-            <button
-              onClick={() => setExpanded(e => !e)}
-              className="ml-1 text-meta-sm font-extrabold text-gd hover:underline"
-            >
-              {expanded ? 'show less' : 'show more'}
-            </button>
-          )}
-        </p>
-      )}
-    </div>
+      <p className="text-body text-b3 leading-snug">
+        {visible}
+        {isLong && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="ml-1 font-semibold text-black hover:underline"
+          >
+            {expanded ? 'show less' : 'show more'}
+          </button>
+        )}
+      </p>
+      <p className="text-meta-sm text-b3 font-medium tracking-[.02em]">{fmtAgo(review.booked_at)}</p>
+    </Card>
   );
 }
 
@@ -158,7 +131,7 @@ export function ServiceDetailScreen() {
   const navigate = useNavigate();
   const { serviceId } = useParams();
   const location = useLocation();
-  const { handleBook, showToast, defaultAddress, auth } = useOutletContext();
+  const { handleBook, showToast, defaultAddress } = useOutletContext();
   const [requestSheetOpen, setRequestSheetOpen] = useState(false);
 
   // Prefer state passed from ResultsScreen (fast path). Cold-deep-link
@@ -167,12 +140,10 @@ export function ServiceDetailScreen() {
   // FW-7 (founder verbatim): "When viewing a reply to book, and seeing
   // profile of the service, need to showcase the booking button with the
   // price (from the counter).. not the generic request to book on profile".
-  // When the visit comes from a reply/counter card (Jobs inbox Overview row
-  // or a /results reply card), the navigation state carries the offer: the
-  // primary CTA becomes "Book · $X" wired to the SAME preConfirmed handleBook
-  // the reply card uses (SPEC-47b — provider already said yes by offering),
-  // at the SAME price the card showed (SPEC-211: price SEEN = price CHARGED).
-  // Direct visits (no state) keep the existing generic request CTA.
+  // When the visit comes from a reply/counter card, the navigation state
+  // carries the offer: the primary CTA becomes "Book · $X" wired to the SAME
+  // preConfirmed handleBook the reply card uses (SPEC-47b), at the SAME price
+  // the card showed (SPEC-211: price SEEN = price CHARGED).
   const replyOffer = location.state?.responseId != null
     ? {
         offerCents: location.state.offerCents ?? null,
@@ -184,9 +155,7 @@ export function ServiceDetailScreen() {
   const [recommenders, setRecommenders] = useState(
     location.state?.provider?.recommendersRaw || []
   );
-  // Multi-offering support — Figma PDP shows selectable cards
-  // (Apartment Clean / Linen Clean, etc.). Each card carries its own
-  // price + description. We render ALL offerings, not just the default.
+  // Multi-offering support — each card carries its own price + description.
   const [offerings, setOfferings] = useState(
     location.state?.provider?.offerings ||
     (location.state?.provider?.offeringId
@@ -198,9 +167,7 @@ export function ServiceDetailScreen() {
         }]
       : [])
   );
-  // Provider profile (the human behind the service). Owner_id → profiles
-  // join. Renders the avatar + name + role pill + Connector badge at
-  // the top of the PDP like the Jennifer Leighton reference.
+  // Provider profile (the human behind the service).
   const [ownerProfile, setOwnerProfile] = useState(null);
   // SPEC-135: a live offer/counter this provider already sent to the VIEWER.
   // Drives the bottom CTA — "Accept counter-offer ($X)" instead of "Request ($Y)".
@@ -209,14 +176,31 @@ export function ServiceDetailScreen() {
     location.state?.provider?.offeringId || null
   );
   const [loading, setLoading] = useState(!seeded);
-  // CERGIO-GUARD (2026-05-31 — Phase 3b): reviews rendered as
-  // their own section below About-the-provider per the Jennifer
-  // Leighton mockup. Reviews come from bookings → reviews join
-  // (reviews.rater_id = reviewer; reviews.booking_id → service_id).
+  // Reviews come from bookings → reviews join (rater_id = reviewer).
   const [reviews, setReviews] = useState([]);
-  // Reputational streams (SPEC-49g): the provider's headline trust signal + the
-  // social reach of everyone who reco's them. Same source as profiles/previews.
+  const [showAllReviews, setShowAllReviews] = useState(false);
+  // Reputational streams (SPEC-49g).
   const [ownerCounts, setOwnerCounts] = useState(null);
+  // PDP v2 (PATCHES §3): the service-level pricing flags + the VIEWER's own
+  // Local-Creator status — the two inputs priceForViewer gates on. The viewer
+  // flag reads the viewer's OWN profile row (cc_verified_at), the same
+  // pattern ResultsScreen already uses — one source of truth, not a second.
+  const [serviceFlags, setServiceFlags] = useState({ free_for_connectors: false, discount_pct: null });
+  const [viewerIsConnector, setViewerIsConnector] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!supabaseReady) return;
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u?.user?.id;
+      if (!uid || cancelled) return;
+      const { data: prof } = await supabase
+        .from('profiles').select('cc_verified_at').eq('id', uid).maybeSingle();
+      if (!cancelled) setViewerIsConnector(!!prof?.cc_verified_at);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // SPEC-135: does this provider have an outstanding quote for me on any of my
   // open requests? If so the primary action is to ACCEPT it, not to request again.
@@ -248,11 +232,9 @@ export function ServiceDetailScreen() {
   const [ownerMutuals, setOwnerMutuals] = useState(null); // { count, names[] }
   const [recommenderCounts, setRecommenderCounts] = useState({});
   // recommenderId → { count, names[] } — friends-in-common between the VIEWER
-  // and each recommender (the SAME signal the profile uses, not raw network
-  // membership). Surfaces "1 mutual friend in common — Jane" on each row.
+  // and each recommender (the SAME signal the profile uses).
   const [recommenderMutuals, setRecommenderMutuals] = useState({});
-  // The actual provider type (e.g. "Hair Stylist") — replaces the vague category
-  // ("Beauty"). Seeded from state if present, else hydrated from the row.
+  // The actual provider type (e.g. "Hair Stylist") — never the vague category.
   const [serviceType, setServiceType] = useState(
     location.state?.provider?.taxonomy_provider_type || location.state?.provider?.category || null
   );
@@ -261,15 +243,15 @@ export function ServiceDetailScreen() {
     if (!supabaseReady || !serviceId) return;
     let cancelled = false;
     (async () => {
-      // Always fetch the full offerings list — the location.state may
-      // only carry the default offering's data, but the PDP needs the
-      // whole catalog.
-      if (!seeded || !offerings?.length || offerings.length === 1) {
+      // Always fetch the service row: even on the seeded fast path the pricing
+      // flags (free_for_connectors / discount_pct — PR 1 migrations) and the
+      // full offerings catalog are needed, and location.state carries neither.
+      {
         const { data: svc } = await supabase
           .from('services')
           .select(`
             id, title, category, taxonomy_provider_type, description, location_text, photo_class,
-            cover_url, owner_id, rating_count,
+            cover_url, owner_id, rating_count, free_for_connectors, discount_pct,
             offerings ( id, name, description, kind, price_cents, duration_minutes, is_default )
           `)
           .eq('id', serviceId)
@@ -279,7 +261,11 @@ export function ServiceDetailScreen() {
         const offs = svc.offerings || [];
         const def  = offs.find(o => o.is_default) || offs[0];
         // Real provider type (not the vague category) for the identity line.
-        if (!cancelled) setServiceType(svc.taxonomy_provider_type || svc.category || null);
+        setServiceType(svc.taxonomy_provider_type || svc.category || null);
+        setServiceFlags({
+          free_for_connectors: !!svc.free_for_connectors,
+          discount_pct: svc.discount_pct ?? null,
+        });
         if (!seeded) {
           setProvider({
             id:         svc.id,
@@ -292,13 +278,14 @@ export function ServiceDetailScreen() {
             price:      Math.round((def?.price_cents ?? 0) / 100),
             coverUrl:   svc.cover_url || null,
             photoClass: svc.photo_class || 'fv-jamie',
+            location_text: svc.location_text || null,
           });
         }
         if (offs.length) {
           setOfferings(offs);
           if (!selectedOfferingId) setSelectedOfferingId(def?.id || null);
         }
-        // Owner profile lookup — for the provider info block.
+        // Owner profile lookup — for the provider identity block.
         if (svc.owner_id) {
           const { data: prof } = await supabase
             .from('profiles')
@@ -307,14 +294,8 @@ export function ServiceDetailScreen() {
             .maybeSingle();
           if (!cancelled) setOwnerProfile(prof || null);
         }
-      } else if (provider?.ownerId && !ownerProfile) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('id, display_name, bio, cc_verified_at, avatar_url, instagram_handle, tiktok_handle')
-          .eq('id', provider.ownerId)
-          .maybeSingle();
-        if (!cancelled) setOwnerProfile(prof || null);
       }
+      if (cancelled) return;
 
       // Hydrate recommenders. CERGIO-GUARD (2026-05-29): recommendations
       // uses `sent_at`, not `created_at`.
@@ -327,12 +308,11 @@ export function ServiceDetailScreen() {
       if (recs?.length) {
         const ids = [...new Set(recs.map(r => r.recommender_id).filter(Boolean))];
         // Recommender profiles + viewer network (mutuals) + social reach in one
-        // pass (SPEC-49g): every "what people say" row carries the recommender's
-        // mutual badge + Connector badge + IG/network counts.
+        // pass (SPEC-49g). instagram_handle (SPEC-154): without it the reco row
+        // has no route to the actual post. avatar_url (2026-08-06, PR 4 —
+        // closing the PR 1 deferral): the rows now render the real face.
         const [{ data: profs }, netRes, { data: rc }] = await Promise.all([
-          // instagram_handle (2026-08-01, SPEC-154): without it the reco row has
-          // no route to the actual post — see the guard on the IG link below.
-          supabase.from('profiles').select('id, display_name, cc_verified_at, instagram_handle').in('id', ids),
+          supabase.from('profiles').select('id, display_name, cc_verified_at, instagram_handle, avatar_url').in('id', ids),
           getMyNetworkIds(),
           getInboxPartyCounts(ids),
         ]);
@@ -347,6 +327,7 @@ export function ServiceDetailScreen() {
           created_at:   r.sent_at,
           is_connector: !!profMap[r.recommender_id]?.cc_verified_at,
           ig:           profMap[r.recommender_id]?.instagram_handle || null,
+          avatar_url:   profMap[r.recommender_id]?.avatar_url || null,
           isMutual:     netSet.has(r.recommender_id),
         })));
         // Friends-in-common with the viewer for the displayed recommenders
@@ -366,9 +347,7 @@ export function ServiceDetailScreen() {
         setRecommenderMutuals({});
       }
 
-      // CERGIO-GUARD (2026-05-31 — Phase 3b): hydrate review rows.
-      // reviews ← bookings (consumer + service) join. Reviewer profile
-      // resolved via rater_id. Mirrors PublicProfileScreen's logic.
+      // Hydrate review rows: reviews ← bookings join, reviewer via rater_id.
       const { data: bkgs } = await supabase
         .from('bookings')
         .select('id, service_id, created_at')
@@ -397,7 +376,7 @@ export function ServiceDetailScreen() {
           comment: (r.comment || '').trim(),
           booked_at: bk?.created_at || r.created_at,
           reviewer: reviewer
-            ? { id: reviewer.id, name: reviewer.display_name, is_connector: !!reviewer.cc_verified_at }
+            ? { id: reviewer.id, name: reviewer.display_name, avatar_url: reviewer.avatar_url || null, is_connector: !!reviewer.cc_verified_at }
             : null,
         };
       }).filter(r => r.comment); // only render rows with a comment
@@ -408,8 +387,7 @@ export function ServiceDetailScreen() {
     return () => { cancelled = true; };
   }, [seeded, serviceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Provider's headline trust stream (SPEC-49g) — network on Cergio · recos
-  // received · mutuals with the viewer. Same source as profiles/previews.
+  // Provider's headline trust stream (SPEC-49g).
   useEffect(() => {
     const oid = ownerProfile?.id || provider?.ownerId || null;
     if (!oid) { setOwnerCounts(null); setOwnerMutuals(null); return; }
@@ -417,23 +395,16 @@ export function ServiceDetailScreen() {
     getInboxPartyCounts([oid]).then(({ data }) => {
       if (!cancelled) setOwnerCounts((data || {})[oid] || null);
     });
-    // Mutual friends WITH THE VIEWER — named, so the provider's trust reads
-    // "you and your friend Jane" not just a count (SPEC-49g).
+    // Mutual friends WITH THE VIEWER — named (SPEC-49g).
     getMutualConnections(oid).then(({ data: m }) => {
       if (!cancelled) setOwnerMutuals({ count: m?.count || 0, names: (m?.sample || []).map(x => x.name).filter(Boolean) });
     });
     return () => { cancelled = true; };
   }, [ownerProfile?.id, provider?.ownerId]);
 
-  // Bucketed reco summary — Jennifer Leighton mockup format:
-  //   "Reco'd by 4 friends and 30 Connectors, including Jennifer Connery"
-  // - total     = total recommenders (headline number, used in
-  //               friend/Connector-less fallback)
-  // - friends   = !is_connector
-  // - experts   = is_connector (rendered as "Connector(s)" in copy)
-  // - lead name = first friend (preferred) or first Connector
-  // Returns a structured object so the render can style the numbers as
-  // underlined chips per the mockup.
+  // Bucketed reco summary — drives the green go-to line:
+  //   "Go-to service for 15 users, 4 friends and 30 Local Creators,
+  //    including Jennifer Connery"
   const recoSummary = useMemo(() => {
     const total = recommenders.length;
     if (total === 0) return null;
@@ -449,23 +420,18 @@ export function ServiceDetailScreen() {
     };
   }, [recommenders]);
 
-  // Free-for-GOATs detection — any offering at $0 means this service is
-  // a Connector-perk listing and we surface the green pill alongside
-  // the Housekeeper badge.
+  // Legacy free-barter detection — a $0 offering is a Connector-perk listing
+  // even before the service-level flag existed (pre-PR-1 rows).
   const hasFreeOffering = useMemo(
     () => (offerings || []).some(o => (o.price_cents ?? 0) === 0),
     [offerings]
   );
 
-  // CERGIO-GUARD (2026-05-30): for any FREE offering on this service,
-  // we render the "comparable paid price" struck through next to a
-  // big FREE label — Tarik: "for free for connectors... show the
-  // official price but crossed out and show free instead". Reference
-  // price priority:
-  //   1. Highest-priced sibling paid offering on the SAME service
-  //      (this captures "the same provider's normal rate").
-  //   2. Category-based fallback (median market rate per provider
-  //      type) when this service only lists the free perk.
+  // CERGIO-GUARD (2026-05-30): for any FREE offering, render the comparable
+  // paid price struck through next to the free label — Tarik: "for free for
+  // connectors... show the official price but crossed out and show free
+  // instead". Priority: highest paid sibling on the SAME service, else a
+  // category fallback.
   const COMPARABLE_FALLBACK_CENTS = {
     Cleaning:           16000,
     Driving:             8000,
@@ -478,9 +444,7 @@ export function ServiceDetailScreen() {
     Handyman:           12000,
     'Personal Trainer': 10000,
     Hairstylist:         9000,
-    'Massage Therapist':12000,
     Photography:        25000,
-    'Personal Chef':    15000,
     'Dog Walker':        4000,
     Gardener:            8500,
     Mover:              15000,
@@ -492,10 +456,9 @@ export function ServiceDetailScreen() {
     }
     const key = provider?.taxonomy_provider_type || provider?.category || '';
     return COMPARABLE_FALLBACK_CENTS[key] || null;
-  }, [offerings, provider]);
+  }, [offerings, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // SEO (SPEC-61): per-record meta for the service PDP — title/description from
-  // the listing + owner, cover as the share image. Hook before the early return.
+  // SEO (SPEC-61): per-record meta for the service PDP.
   useDocumentMeta({
     title: provider ? `${ownerProfile?.display_name || provider.name || provider.category || 'Service'}` : 'Service',
     description: ownerProfile?.bio
@@ -507,31 +470,33 @@ export function ServiceDetailScreen() {
 
   if (loading || !provider) {
     return (
-      <div className="flex-1 flex flex-col bg-cream items-center justify-center pb-24">
+      <div className="flex-1 flex flex-col bg-paper items-center justify-center pb-24">
         <p className="text-body text-b3 font-medium">Loading service…</p>
       </div>
     );
   }
 
-  const coverFallback = 'bg-gradient-to-br from-[#e8dcc8] via-[#b89870] to-[#604030]';
   const firstName = (ownerProfile?.display_name || provider.name).split(' ')[0];
   // Real hero images only — drives the story ruler (no fake multi-page hint).
   const heroImages = [provider.coverUrl].filter(Boolean);
   // The provider type to show (e.g. "Hair Stylist"), never the vague category.
   const displayType = serviceType || provider.taxonomy_provider_type || provider.category;
   const selectedOffering = (offerings || []).find(o => o.id === selectedOfferingId) || offerings?.[0] || null;
+  const selectedPricing = selectedOffering ? priceForViewer(serviceFlags, selectedOffering, viewerIsConnector) : null;
   const selectedPrice = selectedOffering ? Math.round((selectedOffering.price_cents ?? 0) / 100) : provider.price;
+  // The perk headline shows for the service-level flag OR a legacy $0 offering.
+  const perkActive = serviceFlags.free_for_connectors || hasFreeOffering;
+  const discountPct = Number(serviceFlags.discount_pct) || 0;
+
+  const heroBtn = 'w-8 h-8 rounded-full bg-white text-b2 shadow-card flex items-center justify-center';
 
   return (
-    <div className="flex-1 flex flex-col bg-cream overflow-y-auto pb-32">
-      {/* Hero cover — Jennifer Leighton mockup, pixel pass:
-          CERGIO-GUARD (2026-05-30 v3): 280 → 360 to match the mockup
-          aspect, story-progress ruler moved from TOP → BOTTOM (5
-          segments, not 7), volume icon moved BOTTOM-LEFT, top-right
-          now carries the three-control row (heart / Connector badge /
-          share) in matching dark-translucent circles. Caption text
-          sits just above the ruler. */}
-      <div className={`relative h-[360px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : coverFallback}`}>
+    <div className="flex-1 flex flex-col bg-paper overflow-y-auto pb-32">
+      {/* Hero — the design's 395px cover: white control circles (back /
+          heart / pin / share), mute bottom-left, story ruler only when there
+          is actually more than one image (SPEC-12/49g — never a fake "more
+          to scroll" hint). */}
+      <div className={`relative h-[395px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : 'bg-b2'}`}>
         {provider.coverUrl && (
           <img
             src={provider.coverUrl}
@@ -541,60 +506,53 @@ export function ServiceDetailScreen() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         )}
-        {/* lighter scrim — mockup is brighter than v2 */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/35" />
+        <div className="absolute inset-x-0 top-0 h-[103px] bg-gradient-to-b from-black/10 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-[100px] bg-gradient-to-t from-black/40 to-transparent" />
 
-        {/* Back arrow (top-left) — back to previous screen */}
-        <button
-          onClick={() => navigate(-1)}
-          aria-label="Back"
-          className="absolute top-4 left-3 w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm
-                     text-white flex items-center justify-center"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {/* Back (top-left) */}
+        <button onClick={() => navigate(-1)} aria-label="Back" className={`absolute top-4 left-4 ${heroBtn}`}>
+          <svg width="8" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
 
-        {/* Top-right control trio: heart, Connector badge, share */}
-        <div className="absolute top-4 right-3 flex items-center gap-2">
-          <button
-            aria-label="Save"
-            className="w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm text-white flex items-center justify-center"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {/* Top-right control trio: heart · pin · share (white circles) */}
+        <div className="absolute top-4 right-4 flex items-center gap-2.5">
+          <button aria-label="Save" className={heroBtn}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
           </button>
-          <button
-            aria-label="Connector badge"
-            className="w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm text-white flex items-center justify-center"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
-            </svg>
-          </button>
+          {provider.location_text && (
+            <button
+              aria-label="Location"
+              onClick={() => showToast(`Serves ${provider.location_text}`)}
+              className={heroBtn}
+            >
+              <svg width="13" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+              </svg>
+            </button>
+          )}
           <button
             aria-label="Share"
             onClick={() => {
               if (typeof navigator !== 'undefined' && navigator.share) {
                 navigator.share({ title: provider.name, url: window.location.href }).catch(() => {});
+              } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href).then(() => showToast('Link copied')).catch(() => {});
               }
             }}
-            className="w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm text-white flex items-center justify-center"
+            className={heroBtn}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="13" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
             </svg>
           </button>
         </div>
 
-        {/* Volume (bottom-left) — decorative story-engine shell */}
-        <button
-          aria-label="Mute"
-          className="absolute bottom-7 left-3 w-9 h-9 rounded-full bg-black/45 backdrop-blur-sm
-                     text-white flex items-center justify-center"
-        >
+        {/* Volume (bottom-left) — story-engine shell */}
+        <button aria-label="Mute" className="absolute bottom-7 left-4 w-[30px] h-[30px] rounded-full bg-black/70 text-white flex items-center justify-center">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M11 5L6 9H2v6h4l5 4V5z"/>
             <line x1="23" y1="9" x2="17" y2="15"/>
@@ -602,253 +560,172 @@ export function ServiceDetailScreen() {
           </svg>
         </button>
 
-        {/* Story-progress ruler — ONE segment per ACTUAL image (SPEC-49g /
-            no-fake-data SPEC-12). A single cover image used to show a fake
-            5-segment ruler implying more to scroll; now it reflects reality and
-            collapses entirely for a single image. */}
+        {/* Story-progress ruler — ONE segment per ACTUAL image. */}
         {heroImages.length > 1 && (
-          <div className="absolute bottom-2 left-4 right-4 flex items-center gap-1.5">
+          <div className="absolute bottom-3 left-5 right-5 flex items-center gap-1">
             {heroImages.map((_, i) => (
               <div
                 key={i}
-                className={`flex-1 h-[2.5px] rounded-full ${i === 0 ? 'bg-white' : 'bg-white/55'}`}
+                className={`flex-1 h-[3px] rounded-full ${i === 0 ? 'bg-white' : 'bg-white/40'}`}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Big name + badges row — matches Jennifer Leighton mockup.
-          CERGIO-GUARD (2026-05-30): the provider's name is a Link to
-          their public profile (/u/{ownerId}) so users can audit who
-          they're booking from. */}
-      <div className="px-5 pt-5">
-        {provider.ownerId ? (
-          <Link
-            to={`/u/${provider.ownerId}`}
-            className="text-display-2 font-extrabold text-black leading-[1.05] hover:underline"
-          >
-            {ownerProfile?.display_name || provider.name}
-          </Link>
-        ) : (
-          <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">
-            {ownerProfile?.display_name || provider.name}
-          </h1>
-        )}
-        {/* CERGIO-GUARD (2026-05-30): explicit justify-start so the
-            badges row stays anchored left even when only one badge
-            renders (Tarik: "left allign free for connector"). */}
-        <div className="flex items-center justify-start gap-3 mt-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-              <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-              <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            </svg>
-            {displayType}
-          </span>
-          {ownerProfile?.cc_verified_at && <ConnectorChip />}
-          {hasFreeOffering && (
-            <span className="inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
-                <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-              </svg>
-              Free for Connectors
-            </span>
+      {/* Identity — name (Link to the owner's profile), full facet list,
+          perk headline when the service is free for Local Creators. */}
+      <div className="px-5 pt-7 flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          {provider.ownerId ? (
+            <Link
+              to={`/u/${provider.ownerId}`}
+              className="text-[26px] leading-[1.3] font-semibold text-black hover:underline"
+            >
+              {ownerProfile?.display_name || provider.name}
+            </Link>
+          ) : (
+            <h1 className="text-[26px] leading-[1.3] font-semibold text-black">
+              {ownerProfile?.display_name || provider.name}
+            </h1>
+          )}
+          <div className="flex items-center justify-start gap-2.5 flex-wrap">
+            {ownerProfile?.cc_verified_at && <FacetBadge kind="creator" />}
+            {displayType && <FacetBadge>{displayType}</FacetBadge>}
+          </div>
+          {perkActive && (
+            <div className="flex flex-col gap-0.5 mt-1.5">
+              <span className="inline-flex items-center gap-1.5 text-gd">
+                <svg width="15" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="shrink-0">
+                  <path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" />
+                </svg>
+                <span className="text-[15px] leading-snug font-bold">Free for Local Creators</span>
+              </span>
+              <span className="text-meta text-b3">
+                {viewerIsConnector
+                  ? 'You qualify — offerings below show free.'
+                  : `Local Creators see it free. You can still request it free — ${firstName} accepts or declines.`}
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Reputational stream — the headline trust signal (mutuals · on-Cergio ·
-            recos), big and bold so it POPS (SPEC-49g: the key differentiator).
-            Real numbers only — collapses when the provider has no signal yet. */}
-        <TrustStream counts={ownerCounts} recoKind="received" className="mt-3" />
-        {/* Provider's IG reach (network already shown in the TrustStream above —
-            don't double it). */}
-        <SocialReachLine counts={ownerCounts} includeNetwork={false} className="mt-2 !text-body-sm !text-b2" />
-        {/* Named mutuals with the viewer — "1 mutual friend in common — Jane". */}
+        {/* Reputational stream — the headline trust signal (SPEC-49g). Real
+            numbers only; collapses silently. */}
+        <TrustStream counts={ownerCounts} recoKind="received" />
+        <SocialReachLine counts={ownerCounts} includeNetwork={false} className="!mt-0 !text-body-sm !text-b2" />
         {ownerMutuals && ownerMutuals.count > 0 && (
-          <p className="text-meta-sm text-gd font-extrabold mt-1.5">{mutualNamesText(ownerMutuals.names, ownerMutuals.count)}</p>
+          <p className="text-meta-sm text-gd font-extrabold">{mutualNamesText(ownerMutuals.names, ownerMutuals.count)}</p>
         )}
-        {/* Bio / headline — RIGHT under the identity, not buried below the CTA
-            (Tarik 2026-06-25: "where's the headline / BIO"). */}
-        {ownerProfile?.bio && (
-          <p className="text-body-sm text-b2 leading-relaxed mt-3">{ownerProfile.bio}</p>
-        )}
-        {ownerProfile?.instagram_handle && (
-          <a href={`https://instagram.com/${String(ownerProfile.instagram_handle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
-            className="inline-block text-meta-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 mt-2">See Instagram</a>
-        )}
+
+        {/* Go-to line — green trust sentence + the lead recommender's real
+            avatar (46px), the whole row one unmistakable Link (2026-05-30 v3:
+            nested links did not read as tappable). */}
+        {recoSummary && (() => {
+          const leadId = recoSummary.leadAvatar?.id || null;
+          const inner = (
+            <div className="flex items-center justify-between gap-3 py-3">
+              <p className="flex-1 text-meta font-semibold text-g leading-snug">
+                Go-to service for {recoSummary.total} {recoSummary.total === 1 ? 'user' : 'users'}
+                {recoSummary.friends > 0 && <>, {recoSummary.friends} {recoSummary.friends === 1 ? 'friend' : 'friends'}</>}
+                {recoSummary.experts > 0 && <> and {recoSummary.experts} Local {recoSummary.experts === 1 ? 'Creator' : 'Creators'}</>}
+                {recoSummary.leadName && <>, including {recoSummary.leadName}</>}
+              </p>
+              <Avatar url={recoSummary.leadAvatar?.avatar_url} name={recoSummary.leadName} size={46} />
+            </div>
+          );
+          return (
+            <div className="border-t border-b border-bdr">
+              {leadId ? (
+                <Link
+                  to={`/u/${leadId}`}
+                  aria-label={`View ${recoSummary.leadName || 'recommender'}'s profile`}
+                  className="block hover:bg-gl/40 active:bg-gl/60 transition-colors"
+                >
+                  {inner}
+                </Link>
+              ) : inner}
+            </div>
+          );
+        })()}
       </div>
 
-      {/* Recommend button REMOVED (Tarik 2026-06-17, SPEC-54): a recommendation
-          can only be made AFTER booking & completing the service — it happens in
-          the rate + post flow (MarkBookingPostedModal), not from the service
-          page. The only no-booking reco is the invite-reco that onboards a new
-          provider (RecommendServiceFormScreen). */}
-
-      {/* Reco line — "Reco'd by N friends and E Connectors, including
-          {LeadName}" with single lead-recommender avatar pinned right.
-          CERGIO-GUARD (2026-05-30 v3): the ENTIRE row is a single Link
-          to the lead recommender's public profile. Earlier shipped a
-          nested-Link version (one Link for the avatar + another for the
-          lead name + spans for the counts) — Tarik still reported
-          "not clickable", so the visual nesting wasn't reading as
-          tappable. One outer Link + hover background change is
-          unmistakable. Bucket counts stay underlined to hint at the
-          (future) "all recommenders" sheet. */}
-      {recoSummary && (() => {
-        const leadId = recoSummary.leadAvatar?.id || null;
-        const inner = (
-          <div className="flex items-center gap-3">
-            <p className="flex-1 text-body-sm text-b2 leading-snug">
-              Reco&apos;d by{' '}
-              {recoSummary.friends > 0 && (
-                <span className="text-gd font-extrabold underline">
-                  {recoSummary.friends} {recoSummary.friends === 1 ? 'friend' : 'friends'}
-                </span>
-              )}
-              {recoSummary.friends > 0 && recoSummary.experts > 0 && <> and </>}
-              {recoSummary.experts > 0 && (
-                <span className="text-gd font-extrabold underline">
-                  {recoSummary.experts} {recoSummary.experts === 1 ? 'Connector' : 'Connectors'}
-                </span>
-              )}
-              {recoSummary.friends === 0 && recoSummary.experts === 0 && (
-                <span className="text-gd font-extrabold underline">
-                  {recoSummary.total} {recoSummary.total === 1 ? 'person' : 'people'}
-                </span>
-              )}
-              {recoSummary.leadName && (
-                <>, including <span className="text-gd font-extrabold underline">{recoSummary.leadName}</span></>
-              )}
-              {leadId && (
-                <span className="text-b3 text-meta font-medium"> ›</span>
-              )}
-            </p>
-            {recoSummary.leadAvatar && (
-              <div className={`w-12 h-12 rounded-full text-white text-body font-extrabold
-                               flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm
-                               ${AV_GRADS[0]}`}>
-                {initialsOf(recoSummary.leadAvatar.name)}
-              </div>
-            )}
-          </div>
-        );
-        if (leadId) {
-          return (
-            <Link
-              to={`/u/${leadId}`}
-              aria-label={`View ${recoSummary.leadName || 'recommender'}'s profile`}
-              className="block mx-5 mt-4 pt-4 px-3 pb-3 -mx-2 rounded-[14px] border-t border-line
-                         hover:bg-gl/40 active:bg-gl/60 transition-colors"
-            >
-              {inner}
-            </Link>
-          );
-        }
-        return (
-          <div className="mx-5 mt-4 pt-4 border-t border-line">
-            {inner}
-          </div>
-        );
-      })()}
-
-      {/* Book section title — uses owner's first name like "Book Jennifer".
-          CERGIO-GUARD (2026-05-30): heading 20 → 22, divider switched
-          from bdr → line (cream-tinted hairline) per the mockup. */}
-      <div className="px-5 pt-6 pb-3 border-t border-line mt-6">
-        <h2 className="text-heading-1 font-extrabold text-black leading-tight">
-          Book {firstName}
-        </h2>
-        <p className="text-meta text-b3 font-medium mt-1.5 flex items-center gap-1">
-          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-b3 text-b3 text-[9px] font-extrabold">i</span>
-          Select a service offering below to book
+      {/* Book {First} — offering picker. Info sub reflects the price state. */}
+      <div className="px-5 pt-6 pb-4">
+        <SectionTitle size="pdp">Book {firstName}</SectionTitle>
+        <p className="text-meta text-b3 font-medium mt-2 flex items-center gap-1.5">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-b3 text-b3 text-caps font-extrabold">i</span>
+          {perkActive && viewerIsConnector
+            ? 'Free on every offering while your Local Creator status is active'
+            : discountPct > 0
+            ? `${discountPct}% off applies across the whole service`
+            : 'Select a service offering below to book'}
         </p>
       </div>
 
-      {/* Offering cards — HORIZONTAL scroll per mockup. White bg with
-          ultra-thin `border-line` outline; selected card gains a 1.5px
-          green ring (no shadow, no fill swap) — keeps the surface
-          weight consistent. Price formatted as
-          "$150/session • 120 mins" (price in vivid green, duration in
-          b3), per the Cut and Color mockup card. Discount surfaces as
-          a vivid green pill at the bottom-left of the card. */}
+      {/* Offering cards — 260px horizontal scroll. The THREE price states
+          resolve in ONE place (priceForViewer, PATCHES §3): viewer-gated
+          free, service-wide discount, plain. Legacy $0 offerings read free
+          with the comparable price struck through (founder 2026-05-30). */}
       <div className="pl-5 -mr-2 overflow-x-auto overflow-y-hidden">
-        <div className="flex gap-3 pr-5 snap-x snap-mandatory">
+        <div className="flex gap-3 pr-5 snap-x snap-mandatory items-stretch">
           {(offerings || []).map((o) => {
             const isSel = o.id === selectedOfferingId;
-            const priceDollars = Math.round((o.price_cents ?? 0) / 100);
-            const isFree = (o.price_cents ?? 0) === 0;
-            const unitLabel =
-              o.kind === 'hourly' ? 'hour'
-              : (o.duration_minutes ? `${o.duration_minutes} mins` : 'session');
-            const discountPct = typeof o.discount_percent === 'number'
-              ? Math.round(o.discount_percent)
-              : null;
+            const legacyFree = (o.price_cents ?? 0) === 0;
+            const pricing = priceForViewer(serviceFlags, o, viewerIsConnector);
+            const isFree = pricing.free || legacyFree;
+            const unit = o.kind === 'hourly' ? 'hour' : 'session';
             return (
-              <button
+              <Card
                 key={o.id}
-                type="button"
+                r={18}
+                selected={isSel}
+                className="snap-start text-left w-[260px] flex-shrink-0 p-5 cursor-pointer transition-all"
                 onClick={() => setSelectedOfferingId(o.id)}
-                className={`snap-start text-left rounded-[16px] p-4 flex-shrink-0
-                            w-[78%] min-h-[150px] transition-all border
-                            ${isSel
-                              ? 'border-g/70 bg-gl/40'
-                              : 'border-line bg-white'}`}
               >
-                <p className="text-heading-2 font-extrabold text-black leading-tight">
-                  {o.name || 'Service offering'}
-                </p>
-                {isFree ? (
-                  // CERGIO-GUARD (2026-05-30 v2): show the comparable
-                  // paid price struck through next to a big FREE label
-                  // — Tarik: "for free for connectors... show the
-                  // official price but crossed out and show free
-                  // instead". Reference price comes from the
-                  // comparablePaidCents memo above (max sibling paid
-                  // offering on this service, or category fallback).
-                  // Layout is left-anchored (justify-start +
-                  // self-start) so it lines up under the offering
-                  // name.
-                  <div className="mt-1.5 flex items-center justify-start gap-2 self-start text-left flex-wrap">
-                    {comparablePaidCents != null && (
-                      <span className="text-body-lg text-b3 font-medium line-through">
-                        ${Math.round(comparablePaidCents / 100)}
-                      </span>
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-body-lg font-semibold text-b2 leading-snug">
+                    {o.name || 'Service offering'}
+                  </p>
+                  <p className="flex items-center gap-1.5 flex-wrap leading-snug">
+                    {isFree ? (
+                      <>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-g">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                        <span className="text-body text-g font-medium">Free for Local Creators</span>
+                        {legacyFree && comparablePaidCents != null && (
+                          <span className="text-body-sm text-b3 font-medium line-through">{money(comparablePaidCents)}</span>
+                        )}
+                        {pricing.free && !legacyFree && (
+                          <span className="text-body-sm text-b3 font-medium line-through">{money(o.price_cents)}</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-body text-g font-medium">{pricing.label}/{unit}</span>
+                        {pricing.wasLabel && (
+                          <span className="text-body-sm text-b3 font-medium line-through">{pricing.wasLabel}</span>
+                        )}
+                      </>
                     )}
-                    <span className="text-heading-2 text-g font-extrabold leading-none">FREE</span>
-                    <span className="inline-flex items-center gap-1 text-meta-sm text-gd font-extrabold">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
-                        <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-                      </svg>
-                      for Connectors
-                    </span>
-                  </div>
-                ) : (
-                  <p className="mt-1.5 leading-tight">
-                    <span className="text-body-lg text-g font-extrabold">
-                      ${priceDollars}/{o.kind === 'hourly' ? 'hour' : 'session'}
-                    </span>
                     {o.duration_minutes && o.kind !== 'hourly' && (
-                      <span className="text-body-sm text-b3 font-medium"> · {o.duration_minutes} mins</span>
+                      <span className="text-body text-b3 font-medium">{o.duration_minutes} mins</span>
                     )}
                   </p>
-                )}
+                </div>
                 {o.description && (
-                  <p className="text-meta text-b3 leading-snug mt-2">{o.description}</p>
+                  <p className="text-body text-b2 leading-snug mt-3">{o.description}</p>
                 )}
-                {discountPct && discountPct > 0 && (
-                  <span className="inline-flex items-center gap-1 mt-3 bg-g text-white rounded-pill px-2.5 py-0.5 text-meta-sm font-extrabold">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                {pricing.pill && !isFree && (
+                  <span className="inline-flex items-center gap-1 mt-3.5 bg-g text-white rounded-pill px-2.5 py-1 text-meta font-semibold">
+                    <svg width="10" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                     </svg>
-                    {discountPct}% off
+                    {pricing.pill}
                   </span>
                 )}
-                {/* Unit hint absorbed into the price line above; kept */}
-                {(!o.duration_minutes && !isFree) && (
-                  <p className="text-meta-sm text-b3 mt-1.5">{unitLabel}</p>
-                )}
-              </button>
+              </Card>
             );
           })}
           {(!offerings || offerings.length === 0) && (
@@ -859,34 +736,35 @@ export function ServiceDetailScreen() {
         </div>
       </div>
 
-      {/* "Don't see what you need?" cream callout.
-          CERGIO-GUARD (2026-06-19, Tarik): "Submit a request" now opens the
-          homepage-style FREE-FORM (chat) entry — not the structured quote sheet.
-          The user describes their need in plain language like on Home. We carry
-          the provider's name as a starting hint so the free-form is pre-seeded. */}
-      <div className="mx-5 mt-5 bg-gl rounded-[14px] p-3.5 text-center">
-        <p className="text-meta text-b2 font-medium leading-snug">
-          Don&apos;t see what you need?{' '}
-          <button
-            onClick={() => navigate('/home', {
-              state: { prefill: `I need ${displayType || 'a service'} from ${firstName}: `, providerId: provider.ownerId || null },
-            })}
-            className="text-gd font-extrabold underline"
-          >
-            Submit a request for a custom quote.
-          </button>
-        </p>
+      {/* Custom-quote mint panel — targeted to THIS provider (SPEC-136/137). */}
+      <div className="mx-5 mt-4">
+        <button
+          onClick={() => navigate('/home', {
+            state: { prefill: `I need ${displayType || 'a service'} from ${firstName}: `, providerId: provider.ownerId || null },
+          })}
+          className="w-full bg-gl rounded-[10px] px-3 py-4 text-center text-body text-g font-medium hover:bg-gl/70 transition-colors"
+        >
+          Don&apos;t see what you need? Submit a request for a custom quote.
+        </button>
       </div>
 
-      {/* "About {firstName}" moved UP into the identity block (bio + See
-          Instagram now sit directly under the name, not buried below the CTA)
-          — Tarik 2026-06-25. The separate section is removed (dedupe). */}
+      {/* About the provider — bio + See Instagram. */}
+      {(ownerProfile?.bio || provider.bio || ownerProfile?.instagram_handle) && (
+        <div className="px-5 pt-8 flex flex-col gap-4">
+          <SectionTitle size="pdp">About the provider</SectionTitle>
+          {(ownerProfile?.bio || provider.bio) && (
+            <p className="text-body text-b2 leading-snug">{ownerProfile?.bio || provider.bio}</p>
+          )}
+          {ownerProfile?.instagram_handle && (
+            <a href={`https://instagram.com/${String(ownerProfile.instagram_handle).replace(/^@/, '')}`} target="_blank" rel="noreferrer"
+              className="inline-block text-body-sm text-gd font-extrabold underline underline-offset-2 hover:opacity-80 -mt-1">See Instagram</a>
+          )}
+          <div className="h-px bg-bdr" />
+        </div>
+      )}
 
-      {/* CERGIO-GUARD (2026-05-31 — Phase 3b): "★ N go-to reviews"
-          section per Jennifer Leighton mockup. Real review rows
-          fetched via bookings → reviews join above. Each card shows
-          reviewer avatar (Link to /u/{id}), name + Connector chip,
-          "show more" toggle when the comment is long, time ago. */}
+      {/* Go-to reviews — the design's 213px horizontal cards. Real rows from
+          the bookings → reviews join; real reviewer avatars. */}
       {reviews.length > 0 && (() => {
         const fmtAgo = (iso) => {
           if (!iso) return '';
@@ -897,58 +775,54 @@ export function ServiceDetailScreen() {
           if (sec < 86400 * 365)   return `${Math.floor(sec / (86400 * 30))}mo ago`;
           return `${Math.floor(sec / (86400 * 365))}y ago`;
         };
+        const shown = showAllReviews ? reviews : reviews.slice(0, 5);
         return (
-          <div className="mx-5 mt-7">
-            <h2 className="text-heading-1 font-extrabold text-black flex items-center gap-2">
-              <span className="text-g">★</span>
-              {reviews.length} go-to {reviews.length === 1 ? 'review' : 'reviews'}
-            </h2>
-            <div className="mt-4 flex flex-col gap-3">
-              {reviews.slice(0, 5).map((r, i) => (
-                <ReviewCard key={r.id} review={r} avatarColor={AV_GRADS[i % AV_GRADS.length]} fmtAgo={fmtAgo} />
-              ))}
+          <div className="pt-8">
+            <div className="px-5 flex items-center gap-2">
+              <span className="text-g text-body-lg" aria-hidden="true">★</span>
+              <SectionTitle size="pdp">{reviews.length} go-to {reviews.length === 1 ? 'review' : 'reviews'}</SectionTitle>
             </div>
-            {/* "Leave a go-to review" outline pill — white background,
-                thin black border, sits ABOVE the sticky Request CTA per
-                the mockup. Tap navigates to the booking history so the
-                user can pick a completed booking to review (review
-                creation is gated on a real booking). */}
-            <button
-              onClick={() => navigate('/inbox')}
-              className="mt-4 w-full bg-white border border-b2 text-black rounded-[24px] py-3 text-body font-extrabold
-                         hover:bg-bg5/30 active:scale-[.99] transition-all"
-            >
-              Leave a go-to review
-            </button>
+            <div className="pl-5 mt-4 -mr-2 overflow-x-auto overflow-y-hidden">
+              <div className="flex gap-3 pr-5 snap-x items-stretch">
+                {shown.map((r) => (
+                  <ReviewCard key={r.id} review={r} fmtAgo={fmtAgo} />
+                ))}
+              </div>
+            </div>
+            {reviews.length > 5 && (
+              <div className="px-5 mt-3">
+                <SeeAllLink
+                  label={showAllReviews ? 'Show fewer' : 'See all go-to reviews'}
+                  onClick={() => setShowAllReviews(v => !v)}
+                />
+              </div>
+            )}
+            {/* "Leave a go-to review" REMOVED (redesign PR 4, PATCHES §4):
+                reviews are post-booking only — the composer lives in the
+                rate+post flow after bookings.completed_at, not on the PDP. */}
           </div>
         );
       })()}
 
-      {/* Recommender blurbs — kept but moved BELOW About so the headline
-          area stays clean per mockup. Hidden if no recommenders. */}
+      {/* What people say — the recommendation rows (SPEC-49g badges + reach,
+          SPEC-154 outbound IG links). Real recommender avatars via the kit. */}
       {recommenders.length > 0 && (
-        <div className="mx-5 mt-8">
-          <h2 className="text-heading-1 font-extrabold text-black mb-4">What people say</h2>
-          {/* Airbnb-clean review rows: no boxes, generous spacing, readable body
-              text. Avatar + name/badges, the named mutual + social reach, then
-              the quote at full body size. */}
-          <div className="flex flex-col gap-6">
-            {recommenders.slice(0, 3).map((r, i) => {
-              const avatarCls = `w-10 h-10 rounded-full text-white text-body-sm font-extrabold flex-shrink-0
-                                 flex items-center justify-center ${AV_GRADS[i % AV_GRADS.length]}`;
+        <div className="px-5 pt-8">
+          <SectionTitle size="pdp">What people say</SectionTitle>
+          <div className="flex flex-col gap-6 mt-4">
+            {recommenders.slice(0, 3).map((r) => {
               const rc = r.id ? recommenderCounts[r.id] : null;
               const rm = r.id ? recommenderMutuals[r.id] : null;
               return (
                 <div key={r.id} className="flex gap-3">
                   {r.id ? (
-                    <Link to={`/u/${r.id}`} aria-label={`View ${r.name || 'profile'}`} className={avatarCls}>
-                      {initialsOf(r.name)}
+                    <Link to={`/u/${r.id}`} aria-label={`View ${r.name || 'profile'}`} className="shrink-0">
+                      <Avatar url={r.avatar_url} name={r.name} size={40} />
                     </Link>
                   ) : (
-                    <div className={avatarCls}>{initialsOf(r.name)}</div>
+                    <Avatar name={r.name} size={40} />
                   )}
                   <div className="flex-1 min-w-0">
-                    {/* Name + trust badges (SPEC-49g): mutual-with-you + solid Connector. */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {r.id ? (
                         <Link to={`/u/${r.id}`} className="text-body font-extrabold text-black hover:underline">
@@ -960,24 +834,14 @@ export function ServiceDetailScreen() {
                       {(r.isMutual || (rm && rm.count > 0)) && <MutualBadge />}
                       {r.is_connector && <ConnectorChip />}
                     </div>
-                    {/* Friends-in-common with the viewer — NAMED ("1 mutual friend
-                        in common — Jane"). Same signal as the profile. */}
                     {rm && rm.count > 0 && (
                       <p className="text-meta-sm text-gd font-extrabold mt-0.5">{mutualNamesText(rm.names, rm.count)}</p>
                     )}
-                    {/* Recommender's social reach — IG / Cergio network. */}
                     <SocialReachLine counts={rc} />
                     <p className="text-body-lg text-b2 leading-relaxed mt-2">{r.message}</p>
-                    {/* CERGIO-GUARD (2026-08-01, SPEC-154, Tarik live): "when service
-                        clicks to see instagram post by connector they're sent to the
-                        reco on cergio which doesn't include instagram link". Every
-                        link on this row pointed at /u/:id, so a provider evaluating a
-                        Connector could read the Cergio quote but never reach the
-                        actual Instagram post or account — the reach numbers next to it
-                        were unverifiable. The profiles SELECT didn't even fetch
-                        instagram_handle, so there was nothing to render. Opens in a new
-                        tab so the Cergio page stays put and coming back is one tab
-                        switch, not a re-navigation. */}
+                    {/* SPEC-154 (Tarik live): the row must link OUT to the
+                        recommender's actual Instagram — the reach numbers
+                        beside the quote are unverifiable without it. */}
                     {r.ig && (
                       <a
                         href={`https://instagram.com/${String(r.ig).replace(/^@/, '')}`}
@@ -999,14 +863,25 @@ export function ServiceDetailScreen() {
         </div>
       )}
 
-      {/* Fixed-bottom CTA — "Request {OfferingName} ($X)" per mockup,
-          with "You won't be charged yet" microcopy. */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-cream border-t border-bdr px-5 pt-3 pb-5 z-10">
+      {/* Sticky request bar — selected offering + its viewer-priced label,
+          then the CTA. Reply/counter context wins (FW-7), then a live offer
+          (SPEC-135), then the plain request. */}
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white shadow-up px-5 pt-3.5 pb-6 z-10 flex flex-col gap-2">
+        {selectedOffering && !replyOffer && !liveOffer && (
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-body font-semibold text-black truncate">{selectedOffering.name || provider.name}</span>
+            <span className="text-body-sm text-g font-medium whitespace-nowrap">
+              {selectedPricing?.free || (selectedOffering.price_cents ?? 0) === 0
+                ? 'Free for Local Creators'
+                : `${selectedPricing?.label ?? money(selectedOffering.price_cents)}${selectedPricing?.wasLabel ? ` (was ${selectedPricing.wasLabel})` : ''}`}
+            </span>
+          </div>
+        )}
         <button
           onClick={() => {
             // FW-7: arrived from a reply/counter card — book straight off that
             // reply at its offered/countered price via the SAME preConfirmed
-            // handleBook the reply card uses (see comment at replyOffer).
+            // handleBook the reply card uses.
             if (replyOffer) {
               handleBook({
                 id:           provider.id,
@@ -1028,15 +903,11 @@ export function ServiceDetailScreen() {
               ? { ...provider, offeringId: selectedOffering.id, priceCents: selectedOffering.price_cents, price: selectedPrice }
               : provider);
           }}
-          className="w-full bg-g text-white rounded-[24px] py-4 text-heading-2 font-extrabold
-                     hover:opacity-90 active:scale-[.98] transition-all"
+          className="w-full h-[50px] bg-g text-white rounded-[10px] text-[15px] font-bold
+                     hover:bg-gd active:scale-[.98] transition-all"
         >
-          {/* SPEC-135 (founder 2026-07-31): when this provider has already sent
-              the viewer an offer or counter-offer, the CTA must say so — asking
-              someone to "Request ($35)" a service they have a live quote on is
-              the wrong action and reads as if nothing happened. */}
-          {/* FW-7: reply context wins — the button shows the reply's price
-              (or the free-barter label), matching the card the user tapped. */}
+          {/* SPEC-135: a live offer/counter changes the action; FW-7 reply
+              context wins over everything. */}
           {replyOffer
             ? (replyOffer.offerCents
                 ? `Book · $${Math.round(replyOffer.offerCents / 100)}`
@@ -1045,15 +916,13 @@ export function ServiceDetailScreen() {
             ? (liveOffer.status === 'countered'
                 ? `Accept counter-offer ($${Math.round((liveOffer.offered_price_cents || 0) / 100)})`
                 : `Accept & book ($${Math.round((liveOffer.offered_price_cents || 0) / 100)})`)
-            : `Request ${selectedOffering?.name || provider.name} ($${selectedPrice})`}
+            : `Request ${firstName}`}
         </button>
-        <p className="text-center text-meta-sm text-b3 font-medium mt-2">You won&apos;t be charged yet</p>
+        <p className="text-center text-meta-sm text-b3 font-medium">You won&apos;t be charged yet</p>
       </div>
 
-      {/* CERGIO-GUARD (2026-05-30): the request modal. Mounted at the
-          PDP root so its scrim covers the entire screen + the fixed
-          Book CTA. Opens when the "Submit a request" callout link is
-          tapped. */}
+      {/* Request modal — mounted at the PDP root so its scrim covers the
+          fixed CTA. */}
       {requestSheetOpen && (
         <RequestQuoteSheet
           service={{
