@@ -1952,12 +1952,23 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
   assert(fs.existsSync(blockPath), 'ProfileSignalBlock.jsx must exist');
   const block = fs.readFileSync(blockPath, 'utf8');
   assert(/formatKeyCounts/.test(block), 'ProfileSignalBlock must use the shared formatKeyCounts');
-  assert(/<ProfileSignalBlock/.test(prof), 'PublicProfileScreen must mount ProfileSignalBlock');
+  // AMENDED 2026-08-06 (SPEC-49h, founder redesign handoff 2026-08-05
+  // "Profile IA v2"): the profile no longer mounts ProfileSignalBlock — the
+  // v2 header renders the SAME counts inline ("N followers on Cergio incl
+  // {named mutuals} · N recos made"), still fed by getInboxPartyCounts. The
+  // block file is RETAINED (existence pinned above): it encodes the frozen
+  // /inbound-style identity wording that TrustLine (PR 2) folds, and its
+  // internals stay pinned below so the wording cannot drift while unmounted.
+  assert(/followers on Cergio/.test(stripComments(prof)),
+    'The v2 header must render the followers-on-Cergio counts line inline — SPEC-49h');
   assert(/getInboxPartyCounts/.test(prof), 'PublicProfileScreen must load counts via getInboxPartyCounts');
 
-  // 2. Viewer priority — serviceMode drives which facet leads (SPEC-48c).
-  assert(/serviceMode/.test(prof) && /serviceMode/.test(block),
-    'Profile must pass serviceMode so the leading facet flips by viewer (consumer→service, provider→connector)');
+  // 2. Viewer priority — serviceMode drives which facet leads (SPEC-48c) on
+  //    the SIGNAL BLOCK (the /inbound identity card). AMENDED 2026-08-06
+  //    (SPEC-49h): the v2 profile has ONE founder-fixed element order for all
+  //    viewers, so the profile itself no longer passes serviceMode.
+  assert(/serviceMode/.test(block),
+    'ProfileSignalBlock must keep serviceMode (the /inbound identity card still flips by viewer)');
 
   // 3. People-who-love is recommendations RECEIVED, not the bookings-review
   //    table (Tarik 2026-06-16).
@@ -1984,16 +1995,21 @@ test('spec-49-unified-profile', 'FROZEN: Unified profile leads with viewer-prior
     'ProfileSignalBlock must render the granular reach + strength lines (IG followers / network on Cergio) — SPEC-49e.');
   assert(/See Instagram/.test(block) && /mutual friends with/.test(block),
     'ProfileSignalBlock must include the inline See Instagram link + the "no mutual friends with {name}" sentence — SPEC-49e.');
-  // The bio + IG handle + name are folded INTO the block (no separate About
-  // section / View Instagram link on the profile).
-  assert(/bio=\{profile\?\.bio\}/.test(prof) && /igHandle=\{igHandle\}/.test(prof),
-    'PublicProfileScreen must pass bio + igHandle into ProfileSignalBlock (About + View Instagram folded in) — SPEC-49e.');
+  // AMENDED 2026-08-06 (SPEC-49h): on the v2 profile the bio ("creator line")
+  // and the IG handle + follower-count row render INLINE in the header
+  // (elements 4–5 of the founder's order), not via ProfileSignalBlock props.
+  assert(/profile\?\.bio/.test(prof) && /instagram\.com\//.test(prof) && /instagram_followers/.test(prof),
+    'PublicProfileScreen must render the creator line (bio) + the IG handle · follower-count row inline — SPEC-49h.');
 
-  // 8. SPEC-49f: consolidated "Recommendations received" section on the full
-  //    profile. NO "services received/used" section (services consumed are not
-  //    shown on a profile — Tarik 2026-06-18).
-  assert(/Recommendations received/.test(prof),
-    'PublicProfileScreen must render the "Recommendations received" section — SPEC-49f.');
+  // 8. AMENDED 2026-08-06 (SPEC-49h, supersedes the SPEC-49f layout): the
+  //    standalone "Recommendations received" section is GONE — the lead reco
+  //    quote (dated) sits ON the service card, and each service facet block
+  //    carries the NAMED "recos received incl …" line. NO "services
+  //    received/used" section (unchanged — Tarik 2026-06-18).
+  assert(!/Recommendations received/.test(stripComments(prof)),
+    'The standalone "Recommendations received" section is superseded — lead quotes live on the service cards (SPEC-49h).');
+  assert(/recosReceivedLine\(svcRecoSummary/.test(prof),
+    'Each service facet block must carry the NAMED "recos received incl …" line (recosReceivedLine) — SPEC-49h.');
   assert(!/servicesReceived/.test(prof),
     'PublicProfileScreen must NOT render a services-received/used section — SPEC-49f (services consumed are not shown).');
 
@@ -2032,23 +2048,32 @@ test('spec-49g-reputational-streams', 'FROZEN: reputational streams everywhere �
   assert((block.match(/\{reachEl\}/g) || []).length >= 2,
     'ProfileSignalBlock must render the reach line on BOTH facets — SPEC-49g.');
 
-  // 3. Profile reuses the SHARED byline on both the service tile + Go-To cards.
+  // 3. AMENDED 2026-08-06 (SPEC-49h): the trust-first byline survives the v2
+  //    redesign — recoByline drives the recommended-service rows, and the
+  //    per-service facet blocks carry the NAMED recos-received line.
   assert(/from '\.\.\/components\/ui\/reputation'/.test(prof),
     'PublicProfileScreen must import the shared reputation primitives — SPEC-49g.');
-  assert(/recoByline\(recoSummary\)/.test(prof) && /recoByline\(goToSummary/.test(prof),
-    'recoByline must drive BOTH the service tile and the Go-To card bylines — SPEC-49g.');
+  assert(/recoByline\(goToSummary/.test(prof) && /recosReceivedLine\(/.test(prof),
+    'recoByline must drive the recommended-service rows + recosReceivedLine the per-service lines — SPEC-49g/49h.');
 
-  // 4. Recommender rows carry social reach via SocialReachLine + recommenderCounts.
-  assert(/<SocialReachLine/.test(prof) && /getInboxPartyCounts\(recIds\)/.test(prof) && /recommenderCounts/.test(prof),
-    'Profile recommender rows must load + render social counts (SocialReachLine + recommenderCounts) — SPEC-49g.');
+  // 4. AMENDED 2026-08-06 (SPEC-49h): the consolidated recommender rows are
+  //    gone (lead quotes sit on the service cards), so the social-reach render
+  //    moved to the recommended-service rows (owner counts). recommenderCounts
+  //    died with the rows it fed.
+  assert(/<SocialReachLine/.test(prof) && /goToOwnerCounts\[r\.owner\.id\]/.test(prof),
+    'Recommended-service rows must render the owner\'s social counts (SocialReachLine + goToOwnerCounts) — SPEC-49g/49h.');
 
   // 5. Go-To cards carry provider Connector badge + social reach + per-service summary.
   assert(/goToOwnerCounts/.test(prof) && /goToSummary/.test(prof),
     'Go-To cards must load owner social counts + per-service reco summary — SPEC-49g.');
 
-  // 6. De-dup: RecoRow renders ONCE (consolidated section only).
-  assert((prof.match(/<RecoRow\b/g) || []).length === 1,
-    'RecoRow must render exactly once (consolidated section only — inline per-service list de-duped) — SPEC-49g.');
+  // 6. AMENDED 2026-08-06 (SPEC-49h): RecoRow is fully superseded — the ONLY
+  //    testimonial surface is the dated lead quote on each service card
+  //    (QuoteBubble). Zero RecoRow mounts, and every quote carries a date.
+  assert((stripComments(prof).match(/<RecoRow\b/g) || []).length === 0,
+    'RecoRow is superseded by the dated on-card lead quote — it must not render (SPEC-49h).');
+  assert(/<QuoteBubble/.test(prof) && /date=\{`Reco'd \$\{fmtRecoDate\(/.test(prof),
+    'The service-card lead quote must render via QuoteBubble WITH a date (every reco carries a date) — SPEC-49h.');
 
   // 7. PDP carries the SAME reputational streams (apply-across-the-app): a
   //    popping TrustStream on the provider identity, the real provider type (not
@@ -7280,6 +7305,66 @@ test('the-dashboard-number-and-the-csv-are-the-same-query', 'SPEC-261 — THE TR
   // 7) every CSV filename carries its own row count — the receipt travels with the file
   assert(!((scr.match(/ rows\)\.csv/g) || []).length < 3),
     'fewer than 3 CSV filenames carry their row count — "(N rows)" in the name is the receipt the export is audited against, and without it a 1-row file can sit on disk claiming to be the founder\'s hundred');
+});
+
+test('profile-ia-v2', 'SPEC-49h / S-262 (founder redesign handoff 2026-08-05, design_handoff_profile_booking: Profile IA v2.dc.html + README "Profile element order (v2)"). /u/:profileId is rebuilt to the founder\'s v2 element order — the ONE screen where the IA changes (STYLE_MIGRATION: "the one exception already agreed"). Three profile shapes = ONE component with empty sections omitted, never three components. This gate pins the ORDER (name → badges → followers-named → IG row → creator line → per-service facets → IG Spotlights → Services cards → Services Recommended by), the kit primitives doing the rendering, Share-as-copy-link, the dated lead quotes, the "Go-Tos"→"Services Recommended by" rename, and the STYLE_MIGRATION done-check (no raw-hex utility classes left in the migrated file).', '#262', async () => {
+  const prof = fs.readFileSync(path.join(REPO_ROOT, 'src/screens/PublicProfileScreen.jsx'), 'utf8');
+  const code = stripComments(prof);
+
+  // 1. The v2 element order, pinned by source position of render markers that
+  //    each occur exactly once in the JSX (data layer uses none of them).
+  const ORDER = [
+    'text-[26px]',                       // 1 · name
+    'kind="creator"',                    // 2 · Local Creator badge
+    'followers on Cergio',               // 3 · followers (named) · recos made
+    '<IgGlyph',                          // 4 · IG handle · follower count (the
+                                         //     href template literal is blanked
+                                         //     by stripComments — pin the glyph)
+    'recosReceivedLine(svcRecoSummary',  // 6 · per-service facet blocks
+    'IG Spotlights',                     // 7 · spotlights heading
+    ';s Services',                       // 8 · {First}'s Services
+    'Services Recommended by',           // 9 · renamed from "Go-Tos"
+  ];
+  let last = -1;
+  for (const m of ORDER) {
+    const at = code.indexOf(m);
+    assert(!(at < 0), `v2 order marker missing from PublicProfileScreen: "${m}" — the founder's element order broke`);
+    assert(!(at < last), `v2 order marker out of order: "${m}" appears before its predecessor — the founder's element order broke`);
+    last = at;
+  }
+  // 5 · creator line renders the bio inline, creators only.
+  assert(/isConnector && \(profile\?\.headline \|\| profile\?\.bio\)/.test(code),
+    'the creator line (headline/bio) must render inline, creators only — v2 element 5');
+
+  // 2. The kit primitives do the rendering (redesign PR 2 exists to be used).
+  for (const p of ['Avatar', 'FacetBadge', 'QuoteBubble', 'Card', 'SectionTitle', 'SeeAllLink']) {
+    assert(!(!new RegExp(`from '\\.\\./components/ui/${p}'`).test(prof)),
+      `PublicProfileScreen must render via the kit primitive ${p} (src/components/ui/${p}.jsx)`);
+  }
+
+  // 3. Share stays, as a copy-link (v2: Request/Message/Recommend removed;
+  //    Request lives on the per-service PDP). Tested on RAW source — the URL
+  //    lives in a template literal, which stripComments blanks.
+  assert(/navigator\.clipboard\.writeText/.test(code) && /\/u\/\$\{profileId\}/.test(prof),
+    'Share must copy the profile link (navigator.clipboard + /u/:id) — v2 keeps Share as a copy-link');
+
+  // 4. Every recommendation carries a date (v2 "Changed this round"). RAW
+  //    source — the date string is a template literal.
+  assert(/Reco'd \$\{fmtRecoDate\(/.test(prof),
+    'every rendered reco must carry its date ("Reco\'d {date}") — v2 rule: every recommendation carries a date');
+
+  // 5. STYLE_MIGRATION done-check: a migrated screen has NO raw hex left —
+  //    every color is a token. (The arbitrary-value escape hatch bg-[#…] /
+  //    text-[#…] / from-[#…] etc. is the regression vector.)
+  assert(!/(?:bg|text|border|ring|from|via|to|fill|stroke)-\[#/.test(code),
+    'PublicProfileScreen is a MIGRATED screen — no raw-hex utility classes allowed (STYLE_MIGRATION done-check)');
+  assert(!/#[0-9A-Fa-f]{6}\b/.test(stripCommentsAndStrings(code)),
+    'PublicProfileScreen is a MIGRATED screen — no raw hex literals allowed (STYLE_MIGRATION done-check)');
+
+  // 6. No fake multi-image pager: one cover image must not render pager dots
+  //    (SPEC-12 — the prototype's three dots are a placeholder, not data).
+  assert(!/pager|dots/i.test(stripCommentsAndStrings(code)),
+    'no pager-dot affordance may render for the single cover image — a fake "more to scroll" hint is fake data (SPEC-12)');
 });
 
 main().catch(e => {

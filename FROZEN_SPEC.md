@@ -282,6 +282,12 @@ qa.mjs #48 enforces this.
 
 qa.mjs #49 enforces this.
 
+**SPEC-49h · Profile IA v2 (FROZEN 2026-08-05, founder redesign handoff `design_handoff_profile_booking` — Profile IA v2.dc.html + README "Profile element order (v2)"). SUPERSEDES the LAYOUT pins of 49/49b/49e/49f/49g on `/u/:profileId` only.**
+- **One founder-fixed element order for every viewer:** 1 Name · 2 Local Creator badge (+ one FacetBadge per service facet) · 3 Followers on Cergio (mutuals NAMED) · recos made · 4 IG handle · follower count · 5 Creator line (creators only) · 6 per-service facet block (title + NAMED "recos received incl …" + blurb) · 7 IG Spotlights (received / made, honest counts) · 8 {First}'s Services cards (facet + reco count, cover, offering title + price, **dated** lead reco quote) · 9 **Services Recommended by {First}** (renamed from "Go-Tos"). Sections with no data don't render; the three profile shapes are ONE component.
+- **Superseded on the profile:** the `ProfileSignalBlock` mount (the component file is RETAINED with its wording pins — it encodes the frozen `/inbound`-style identity wording that `TrustLine` folds — but no screen mounts it), the `serviceMode` facet flip, the standalone "Recommendations received" section + `RecoRow` (the lead reco quote now sits ON the service card it praises, via `QuoteBubble`, always dated), and the header Follow-only top bar (Share joins as a copy-link; Request/Message/Recommend are gone — Request lives on the per-service PDP; **Follow stays**, it was not in the design's removals).
+- **What STANDS from the 49 family:** the data sources (`getInboxPartyCounts`, `getMutualConnections`, `getMyNetworkIds`, `getConnectorSpotlights`) and trust math; recos-made count may exceed the displayed rows (SPEC-49d); NO services-consumed section; mutuals NAMED everywhere; spotlight tiles are real post links (SPEC-49e); `/u/:id/services` after 3 services (SPEC-49c); trust-first `recoByline` + owner `SocialReachLine` on the recommended-service rows (SPEC-49g); no fake data (SPEC-12 — one cover image renders no pager dots).
+- Rendering is the PR-2 UI kit (`Avatar`, `FacetBadge`, `QuoteBubble`, `Card`, `SectionTitle`, `SeeAllLink`); the migrated file carries zero raw hex (STYLE_MIGRATION done-check). qa.mjs #262 pins the order + rename + dated quotes; the amended #49 gates pin what stands.
+
 ---
 
 ## UI / BEHAVIOR — INBOX (ACTION-FIRST)
