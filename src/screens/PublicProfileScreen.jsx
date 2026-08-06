@@ -1,226 +1,103 @@
-// CERGIO-GUARD (2026-05-30): Public profile view for any Cergio user.
+// CERGIO-GUARD (2026-05-30, IA v2 2026-08-06): Public profile view for any
+// Cergio user.
 //
 // Route: /u/:profileId
 //
-// Wired from every avatar in the app — PDP recommender stack/lead, the
-// Activity-feed GoatShareCard (owner + recommender pill avatars), the
-// ResultsScreen ProviderCard friend stack. The view is modeled on
-// Tarik's 7 attached mockups (Jennifer Leighton + Jacob Flores empty
-// state) and is read-only — owners edit via /profile.
+// REDESIGN HANDOFF PR 3 (founder 2026-08-05, `design_handoff_profile_booking/
+// Profile IA v2.dc.html` + README "Profile element order (v2)" — SPEC-49h).
+// This is the ONE screen where the IA changes (STYLE_MIGRATION: "the one
+// exception already agreed"). The three profile shapes (Local Creator with
+// services / service-provider-only / Local-Creator-only) are THIS one
+// component with empty sections omitted — never three components.
 //
-// Sections (all from real DB rows; empty sections collapse silently —
-// never fake-data, per feedback_no_fake_feeds):
-//   • Header — close button, large avatar, big name, role badge,
-//     Connector badge when cc_verified_at NOT NULL
-//   • About — bio prose (with "No bio yet" empty state)
-//   • Social — IG handle + follower count, falls back to plain "Instagram"
-//     when not connected
-//   • {Name}'s Services — services they own (top 1–N, opens PDP on tap)
-//   • People who love {Name} — review rows from bookings on those services
-//   • {Name}'s Go-Tos — services this profile has recommended (recommendations
-//     authored by them, joined to services + service owners)
+// Element order (v2, founder's IA doc — sections with no data don't render):
+//   1. Name
+//   2. Local Creator badge (+ one FacetBadge per service facet)
+//   3. Followers on Cergio (named mutuals) · recos made
+//   4. IG handle · follower count
+//   5. Creator line (creators only)
+//   6. Service facet + recos received (named) + blurb — one per service
+//   7. IG Spotlights (received / made)
+//   8. {First}'s Services — facet, reco count, cover, title, price,
+//      lead reco quote + DATE (every reco carries a date)
+//   9. Services Recommended by {First} (renamed from "Go-Tos")
 //
-// Every nested avatar that points at another user is itself a Link
-// to /u/{their-id}, so the graph is fully navigable.
+// The DATA layer is unchanged from the SPEC-49 build (same selects, same
+// summaries, same trust math). What stands from the 49 family: recos-made
+// count may exceed the displayed list (SPEC-49d), no services-consumed
+// section, mutuals are NAMED, no fake data (SPEC-12), spotlight tiles are
+// real post links (SPEC-49e), /u/:id/services after 3 services (SPEC-49c).
+// Share (copy-link) joins the top bar; Follow stays (it wasn't in the
+// design's removals — Request/Message/Recommend were).
 
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, isConnectorProfile, getMyNetworkIds, getConnectorSpotlights, getMutualConnections } from '../lib/api';
-import { ProfileSignalBlock } from '../components/ui/ProfileSignalBlock';
+import { followProfile, unfollowProfile, amIFollowing, respondToRequest, getInboxPartyCounts, getMyNetworkIds, getConnectorSpotlights, getMutualConnections } from '../lib/api';
+import { Avatar } from '../components/ui/Avatar';
+import { FacetBadge } from '../components/ui/FacetBadge';
+import { QuoteBubble } from '../components/ui/QuoteBubble';
+import { Card } from '../components/ui/Card';
+import { SectionTitle } from '../components/ui/SectionTitle';
+import { SeeAllLink } from '../components/ui/SeeAllLink';
 import { IgPostTile } from '../components/ui/IgPostTile';
-import { recoByline, SocialReachLine } from '../components/ui/reputation';
+import { recoByline, SocialReachLine, firstNameOf } from '../components/ui/reputation';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
-function initialsOf(name) {
-  if (!name) return '?';
-  return name.split(' ').map(s => s[0] || '').slice(0, 2).join('').toUpperCase();
-}
-
-// Brand-friendly gradient pool — same set as ServiceDetailScreen so the
-// avatar colors stay consistent across the app.
-const AV_GRADS = [
-  'bg-gradient-to-br from-[#8A6FD6] to-[#4F3DB0]',
-  'bg-gradient-to-br from-[#F5A65E] to-[#C76A18]',
-  'bg-gradient-to-br from-[#EE5586] to-[#A52454]',
-  'bg-gradient-to-br from-[#5BC404] to-[#2F6E00]',
-  'bg-gradient-to-br from-[#4478AA] to-[#2A5070]',
-];
-const PHOTO_GRADIENTS = {
-  'fv-jamie': 'from-[#e8dcc8] via-[#b89870] to-[#604030]',
-  'fv-john':  'from-[#cad8e8] via-[#7088b0] to-[#2e4060]',
-  'fv-steve': 'from-[#d8e8ca] via-[#88b070] to-[#406030]',
-};
-
-function gradFor(id, fallback = 0) {
-  if (!id) return AV_GRADS[fallback];
-  // Stable hash → consistent color per profile id.
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-  return AV_GRADS[Math.abs(h) % AV_GRADS.length];
-}
-
-// Small circular avatar that's also a link to that user's public profile.
-// `clickable` defaults to true; pass false to render a non-link circle
-// (e.g. when the avatar belongs to the page's own subject and tapping
-// would be a no-op).
-function AvatarLink({ id, name, size = 40, className = '', clickable = true }) {
-  const cls = `${gradFor(id)} rounded-full text-white font-extrabold
-               flex items-center justify-center flex-shrink-0 ${className}`;
-  const style = { width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.32)) };
-  const body  = initialsOf(name);
-  if (!clickable || !id) {
-    return <span className={cls} style={style}>{body}</span>;
-  }
-  return (
-    <Link to={`/u/${id}`} className={cls} style={style} aria-label={`View ${name || 'profile'}`}>
-      {body}
-    </Link>
-  );
-}
-
-function ConnectorBadge() {
-  return (
-    <span className="inline-flex items-center gap-2 bg-gl border border-g/30 rounded-pill px-3.5 py-1.5 text-body-sm text-gd font-extrabold">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.2" aria-hidden="true">
-        <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-      </svg>
-      Verified Connector
-    </span>
-  );
-}
-
-function RoleBadge({ label }) {
-  if (!label) return null;
-  return (
-    <span className="inline-flex items-center gap-1.5 text-body-sm text-gd font-extrabold">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-        <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-        <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-      </svg>
-      {label}
-    </span>
-  );
-}
-
-function fmtMonthYear(iso) {
+// "Reco'd 14 Mar 2024" — every recommendation carries a date (v2 rule).
+function fmtRecoDate(iso) {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch { return ''; }
 }
 
-// Reputational-stream primitives are SHARED across the app (SPEC-49g) so every
-// surface reads identically — see components/ui/reputation.jsx.
+// "Jane, Sam + 3 friends" — the named-mutuals fragment (first names first,
+// remainder as a count). Empty string when there's nothing real to say.
+function namedIncl(names, count) {
+  const first = (names || []).map(firstNameOf).filter(Boolean);
+  const n = Number(count) || first.length;
+  if (!n) return '';
+  if (!first.length) return `${n} ${n === 1 ? 'friend' : 'friends'}`;
+  const shown = first.slice(0, 2);
+  const extra = n - shown.length;
+  if (extra > 0) return `${shown.join(', ')} + ${extra} ${extra === 1 ? 'friend' : 'friends'}`;
+  return shown.join(' and ');
+}
 
-// One service-card row (used in the "Their Services" + "Their Go-Tos"
-// sections). Cover image or photo-class gradient fallback. Tap → PDP.
-export function ServiceTile({ svc, recoSummary, onOpen }) {
-  const grad = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
-  const price = svc.price_cents != null ? Math.round(svc.price_cents / 100) : null;
+// "17 recos received incl Jane, Sam + 3 friends (and 2 Local Creators)" —
+// the per-service trust line (v2 element 6). Names the VIEWER's mutuals
+// first; null when the service has no recos (section line collapses).
+function recosReceivedLine(summary) {
+  if (!summary || !summary.total) return null;
+  let line = `${summary.total} ${summary.total === 1 ? 'reco' : 'recos'} received`;
+  const mutuals = Number(summary.mutuals) || 0;
+  if (mutuals > 0) {
+    line += mutuals === 1 && summary.mutualNames?.[0]
+      ? ` incl your friend ${summary.mutualNames[0]}`
+      : ` incl ${namedIncl(summary.mutualNames, mutuals)}`;
+  }
+  const conns = Number(summary.connectors) || 0;
+  if (conns > 0) line += ` (and ${conns} Local ${conns === 1 ? 'Creator' : 'Creators'})`;
+  return line;
+}
+
+function IgGlyph({ size = 20 }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full text-left bg-white border border-line rounded-[16px] overflow-hidden hover:border-g/40 cg-tap"
-    >
-      <div className={`relative h-[160px] bg-gradient-to-br ${grad}`}>
-        {svc.cover_url && (
-          <img
-            src={svc.cover_url}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        )}
-        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-                         w-10 h-10 rounded-full bg-white/85 flex items-center justify-center text-base pl-0.5">
-          ▶
-        </span>
-      </div>
-      <div className="p-3.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-body-lg font-extrabold text-black truncate">{svc.title || 'Service'}</p>
-          {price != null && (
-            <p className="text-body-lg font-extrabold text-black">
-              {price === 0 ? 'Free' : `$${price}`}
-            </p>
-          )}
-        </div>
-        {svc.category && (
-          <p className="inline-flex items-center gap-1 text-meta text-gd font-extrabold mt-0.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-              <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-              <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            </svg>
-            {svc.taxonomy_provider_type || svc.category}
-          </p>
-        )}
-        {svc.description && (
-          <p className="text-body-sm text-b3 leading-relaxed mt-1.5 line-clamp-2">{svc.description}</p>
-        )}
-        {recoSummary && recoSummary.total > 0 && (
-          <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
-              <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-            </svg>
-            <p className="text-meta-sm text-gd font-extrabold leading-none">
-              {recoByline(recoSummary)}
-            </p>
-          </div>
-        )}
-      </div>
-    </button>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="shrink-0">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
 
-// One recommendation-RECEIVED row, shown beneath the service it praises
-// (SPEC-49c). Leads with the recommender (linked) + trust badges: "In your
-// network" when the VIEWER knows them (mutual), and "Connector" when they're
-// a verified Connector. Their note sits in a soft bubble below.
-// Airbnb-style review row (design-spec "Review / recommendation row"): no card,
-// no bubble. 48px author avatar, name + date on one line, trust line, then the
-// review text at body-lg. Rows separated by gap-6 by the parent.
-function RecoRow({ r, counts, showService }) {
+function ShareIcon() {
   return (
-    <div className="flex gap-3">
-      <AvatarLink id={r.recommender?.id} name={r.recommender?.name} size={48} clickable={!!r.recommender?.id} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-body font-extrabold text-black truncate">
-            {r.recommender?.name || 'A friend'}
-          </p>
-          <p className="text-meta text-b3 font-medium whitespace-nowrap shrink-0">
-            {fmtMonthYear(r.sent_at)}
-          </p>
-        </div>
-        {/* Trust line (SPEC-49g): mutual + Connector + reach. */}
-        <div className="flex items-center gap-2 flex-wrap mt-0.5">
-          {r.isMutual && (
-            <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
-              </svg>
-              In your network
-            </span>
-          )}
-          {r.recommender?.is_connector && (
-            <span className="inline-flex items-center gap-1 bg-g text-white text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
-              Connector
-            </span>
-          )}
-          <SocialReachLine counts={counts} className="!mt-0" />
-        </div>
-        {showService && r.serviceTitle && (
-          <p className="text-meta-sm text-b3 font-semibold mt-1">on {r.serviceTitle}</p>
-        )}
-        {r.message && (
-          <p className="text-body-lg text-b2 leading-relaxed mt-2">{r.message}</p>
-        )}
-      </div>
-    </div>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+      <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+    </svg>
   );
 }
 
@@ -236,74 +113,61 @@ export function PublicProfileScreen() {
   const outlet = useOutletContext() || {};
   const auth = outlet.auth;
   const viewerId = auth?.user?.id || null;
-  // Viewer priority (SPEC-49/48c): consumer mode (false) → service facet leads;
-  // provider mode (true) → connector facet leads. Same rule as request previews.
-  const serviceMode = !!outlet.serviceMode;
   const showToast = outlet.showToast || ((m) => { /* eslint-disable-next-line no-console */ console.log('[toast]', m); });
 
   const [profile, setProfile] = useState(null);
   // Follow state — null = unknown, true/false = known.
   const [following, setFollowing] = useState(null);
   const [followPending, setFollowPending] = useState(false);
+  // Share copy-link feedback (v2: Share stays, as a copy-link).
+  const [copied, setCopied] = useState(false);
   // Request-context bar state (when ?reqId= is set).
   const [reqCtx, setReqCtx] = useState(null);
   const [respondingInline, setRespondingInline] = useState(null); // null | 'pending' | 'done'
   const [counterOpenInline, setCounterOpenInline] = useState(false);
   const [counterDraftInline, setCounterDraftInline] = useState('');
-  // Party-signal counts for the lead block — SAME source as the request
-  // previews (getInboxPartyCounts → formatKeyCounts) so a profile is judged
-  // with identical data + ordering (SPEC-49).
+  // Party-signal counts — SAME source as the request previews
+  // (getInboxPartyCounts) so a profile is judged with identical data (SPEC-49).
   const [counts, setCounts] = useState(null);
-  // Names of the viewer's mutual friends with this profile — so the mutuals line
-  // NAMES them ("1 mutual friend in common — Jane") instead of a bare count.
+  // Names of the viewer's mutual friends with this profile — the followers
+  // line NAMES them ("incl Jane, Sam + 3 friends") instead of a bare count.
   const [mutualNames, setMutualNames] = useState([]);
-  // Recommendations RECEIVED on this profile's services — "People who love
-  // {name}" (Tarik 2026-06-16: recos received, not the bookings-review table).
+  // Recommendations RECEIVED on this profile's services (flat aggregate —
+  // feeds the empty state; the lead quotes render per service).
   const [recosReceived, setRecosReceived] = useState([]);
   // svcId → [{ id, recommender, isMutual, message, sent_at }] — recommendations
-  // GROUPED per service (SPEC-49c): each service shows its own recommenders,
-  // mutuals-with-viewer + Connectors first. Top-3 inline, "see all" expands.
+  // grouped per service, mutuals-with-viewer first. The FIRST row is the
+  // service card's lead quote (v2: "the lead reco quote now sits on the
+  // service it praises").
   const [recosByService, setRecosByService] = useState({});
   const [services, setServices] = useState([]);
   // Spotlights this profile has POSTED on IG/TikTok (their Connector track
-  // record — free barters with a confirmed post). Same source as the interim
-  // /inbound screen (getConnectorSpotlights), rendered as small post tiles.
+  // record — free barters with a confirmed post). Real post links only.
   const [spotlights, setSpotlights] = useState([]);
+  // Honest counts for the "7 IG Spotlights · 5 received / 2 made" heading:
+  // made = posted free-barter bookings they were the consumer on;
+  // received = posted free-barter bookings on services they own.
+  const [spotCounts, setSpotCounts] = useState({ made: 0, received: 0 });
   // svcId → { total, friends, connectors, mutuals, mutualNames[], viewerRecommended }
   const [svcRecoSummary, setSvcRecoSummary] = useState({});
-  // recommenderId → { igFollowers, ttFollowers, networkCount, ... } — social reach
-  // shown next to each recommender on the "who loves {name}" rows (SPEC-49g).
-  const [recommenderCounts, setRecommenderCounts] = useState({});
-  // Go-To serviceId → reco summary across ALL recommenders (trust byline on each
-  // recommended-service card: "Reco'd by you and your friend Jason" — SPEC-49g).
+  // Go-To serviceId → reco summary across ALL recommenders (trust byline on
+  // each recommended-service card — SPEC-49g).
   const [goToSummary, setGoToSummary] = useState({});
   // Go-To ownerId → social counts (IG/network) — reputational reach on the
   // recommended-service card (SPEC-49g).
   const [goToOwnerCounts, setGoToOwnerCounts] = useState({});
-  // Reviews on services this profile owns: { id, stars, comment, reviewer:{id,name}, booked_at }
-  const [reviews, setReviews] = useState([]);
   // Recommendations this profile has authored, joined to services + owners.
   const [recoServices, setRecoServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // Per-service recommendation expansion (SPEC-49c): each service shows its
-  // top-3 recommenders; tapping "See all" adds that service id to the set to
-  // reveal the rest in place. Services themselves cap at 3 inline — the rest
-  // live on the dedicated /u/:id/services page ("View all services").
-  const [openRecoSvcs, setOpenRecoSvcs] = useState(() => new Set());
-  const toggleRecoSvc = (id) => setOpenRecoSvcs(prev => {
-    const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  });
-  // Go-Tos (recommendations MADE) still expand in place.
+  // Services Recommended by — two rows inline, "See all N" expands in place.
   const [showAllGoTos, setShowAllGoTos] = useState(false);
   const INLINE_SERVICES = 3;
+  const INLINE_GOTOS = 2;
 
   // CERGIO-GUARD (2026-06-03): probe whether the signed-in viewer
-  // already follows this profile. Used to gate the Follow / Following
-  // button.
+  // already follows this profile.
   useEffect(() => {
     if (!auth?.isSignedIn || !profileId) { setFollowing(null); return; }
     let cancelled = false;
@@ -312,7 +176,6 @@ export function PublicProfileScreen() {
     });
     return () => { cancelled = true; };
   }, [auth?.isSignedIn, profileId]);
-
 
   // Lead party-signal counts (mutual · network · recos · IG/TikTok · connector).
   useEffect(() => {
@@ -324,7 +187,7 @@ export function PublicProfileScreen() {
     return () => { cancelled = true; };
   }, [profileId]);
 
-  // Mutual-friend NAMES (sample) with this profile — for the named mutuals line.
+  // Mutual-friend NAMES (sample) with this profile — for the named followers line.
   useEffect(() => {
     if (!profileId) { setMutualNames([]); return; }
     let cancelled = false;
@@ -335,7 +198,7 @@ export function PublicProfileScreen() {
   }, [profileId]);
 
   // Spotlights this profile has posted (Connector track record) — same source
-  // as the interim /inbound accept screen (Tarik 2026-06-18).
+  // as the interim /inbound accept screen (Tarik 2026-06-18, SPEC-49e).
   useEffect(() => {
     if (!profileId) { setSpotlights([]); return; }
     let cancelled = false;
@@ -349,7 +212,7 @@ export function PublicProfileScreen() {
   // bar is RETIRED — the canonical response surface is now /inbound/:reqId
   // (RequestFromConnectorScreen, SPEC-48). The Inbox no longer links here with
   // ?reqId, so we never hydrate reqCtx; the bar below can never render. Kept
-  // the dead branch only to avoid touching the large render tree.
+  // the dead branch only to avoid touching the response logic.
   useEffect(() => { setReqCtx(null); }, [reqId]);
 
   useEffect(() => {
@@ -360,15 +223,10 @@ export function PublicProfileScreen() {
       setNotFound(false);
 
       // Profile + Connector flag + IG/TikTok handles.
-      // CERGIO-GUARD (2026-05-30): SELECT trimmed to columns that
-      // actually exist on profiles. avatar_url was rejected by
-      // PostgREST (column doesn't exist), which silently nulled the
-      // whole row → "blank profile page" bug Tarik hit. Now we only
-      // ask for what's verified across api.js.
-      // UPDATE (2026-08-05): avatar_url EXISTS as of migration
-      // 20260805120000_profile_avatars.sql — that migration must be run
-      // against the DB before this select ships, or the guard above
-      // fires again.
+      // CERGIO-GUARD (2026-05-30): SELECT trimmed to columns that actually
+      // exist on profiles — a rejected column silently nulls the whole row
+      // ("blank profile page" bug). avatar_url EXISTS as of migration
+      // 20260805120000_profile_avatars.sql (applied 2026-08-06, PR 1).
       const { data: prof, error: profErr } = await supabase
         .from('profiles')
         .select('id, display_name, headline, bio, cc_verified_at, avatar_url, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, follower_count')
@@ -383,15 +241,22 @@ export function PublicProfileScreen() {
       setProfile(prof);
 
       // Viewer's network ids (both directions) — flags mutuals on BOTH the
-      // per-service recos AND the Go-Tos (recommended services). Computed once
-      // so a curator with no services of their own still gets mutual flags on
-      // their recommendations (Tarik 2026-06-18). Signed-out → empty set.
+      // per-service recos AND the recommended services. Signed-out → empty set.
       const netRes = await getMyNetworkIds();
       if (cancelled) return;
       const netSet = new Set(netRes?.data || []);
 
-      // Services they own (for the "Their Services" + "People who love"
-      // and to derive role).
+      // Spotlights MADE count (honest heading number — the tile fetch above is
+      // capped at 6, so count separately).
+      const { count: spotMadeCount } = await supabase
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('consumer_id', profileId)
+        .eq('is_free_for_rainmaker', true)
+        .not('post_url', 'is', null);
+      let spotReceivedCount = 0;
+
+      // Services they own.
       const { data: svcs } = await supabase
         .from('services')
         .select(`
@@ -405,13 +270,24 @@ export function PublicProfileScreen() {
       if (cancelled) return;
       const svcRows = (svcs || []).map(s => {
         const def = (s.offerings || []).find(o => o.is_default) || s.offerings?.[0];
-        return { ...s, price_cents: def?.price_cents ?? null };
+        return { ...s, price_cents: def?.price_cents ?? null, offering_name: def?.name || null };
       });
       setServices(svcRows);
 
-      // For each service: count reco buckets (friends vs Connectors).
+      // For each service: reco summary (named mutuals, Connectors) + the
+      // grouped rows whose first entry is the card's lead quote.
       if (svcRows.length) {
         const svcIds = svcRows.map(s => s.id);
+
+        // Spotlights RECEIVED on their services (posted free barters).
+        const { count: rcvCount } = await supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .in('service_id', svcIds)
+          .eq('is_free_for_rainmaker', true)
+          .not('post_url', 'is', null);
+        spotReceivedCount = rcvCount || 0;
+
         const { data: ownerRecs } = await supabase
           .from('recommendations')
           .select('id, service_id, recommender_id, message, sent_at')
@@ -425,14 +301,9 @@ export function PublicProfileScreen() {
         const profMap = Object.fromEntries((recProfs || []).map(p => [p.id, p]));
         const svcTitleMap = Object.fromEntries(svcRows.map(s => [s.id, s.title]));
 
-        // netSet (computed above) flags which recommenders the VIEWER already
-        // knows ("mutuals with the viewer") — the trust signal on recommended
-        // services (SPEC-49c).
-
         // Group recommendations RECEIVED per service. Within each service,
         // surface mutuals-with-viewer first, then Connectors, then everyone
-        // else (recRows already sorted by sent_at desc, so recency holds
-        // within each rank — Array.sort is stable).
+        // else (recRows already sorted by sent_at desc — Array.sort is stable).
         const byService = {};
         const summary = {};
         for (const r of recRows) {
@@ -451,7 +322,7 @@ export function PublicProfileScreen() {
             sent_at: r.sent_at,
             serviceTitle: svcTitleMap[k] || '',
             isMutual,
-            recommender: rp ? { id: rp.id, name: rp.display_name, is_connector: isConnector } : null,
+            recommender: rp ? { id: rp.id, name: rp.display_name, avatar_url: rp.avatar_url || null, is_connector: isConnector } : null,
           });
         }
         for (const k of Object.keys(byService)) {
@@ -459,15 +330,14 @@ export function PublicProfileScreen() {
             const rank = (x) => (x.isMutual ? 0 : x.recommender?.is_connector ? 1 : 2);
             return rank(a) - rank(b);
           });
-          // Lead name for the count-fallback byline ("…including Jane"): prefer a
-          // Connector, else the first recommender.
+          // Lead name for the count-fallback byline ("…including Jane").
           const arr = byService[k];
           const lead = arr.find(x => x.recommender?.is_connector) || arr[0];
           if (summary[k]) summary[k].leadName = lead?.recommender?.name || null;
         }
         if (!cancelled) { setSvcRecoSummary(summary); setRecosByService(byService); }
 
-        // Flat aggregate kept as a stable data handle + curator fallback.
+        // Flat aggregate — stable data handle + the empty-state signal.
         const shapedReceived = recRows.map(r => {
           const rp = profMap[r.recommender_id];
           return {
@@ -480,65 +350,14 @@ export function PublicProfileScreen() {
           };
         });
         if (!cancelled) setRecosReceived(shapedReceived);
-
-        // Recommender social reach (SPEC-49g): "Users who love {name}" rows show
-        // each recommender's IG/network — same source as the request previews.
-        if (recIds.length) {
-          const { data: rcCounts } = await getInboxPartyCounts(recIds);
-          if (!cancelled) setRecommenderCounts(rcCounts || {});
-        } else if (!cancelled) {
-          setRecommenderCounts({});
-        }
-
-        // Reviews for those services — go reviews → bookings join.
-        // Schema (verified against api.js): reviews(id, booking_id,
-        // rater_id, rated_id, stars, comment, created_at);
-        // bookings(id, service_id, consumer_id, created_at). The
-        // reviewer is reviews.rater_id directly (not booking.consumer_id),
-        // so we read it from reviews and skip the booking-side hop.
-        const { data: bkgs } = await supabase
-          .from('bookings')
-          .select('id, service_id, created_at')
-          .in('service_id', svcIds);
-        const bkgMap = Object.fromEntries((bkgs || []).map(b => [b.id, b]));
-        const bkgIds = (bkgs || []).map(b => b.id);
-        const { data: revs, error: revsErr } = bkgIds.length
-          ? await supabase
-              .from('reviews')
-              .select('id, booking_id, rater_id, stars, comment, created_at')
-              .in('booking_id', bkgIds)
-              .order('created_at', { ascending: false })
-              .limit(8)
-          : { data: [], error: null };
-        if (revsErr) {
-          // eslint-disable-next-line no-console
-          console.warn('[PublicProfile] reviews fetch error:', revsErr);
-        }
-        const raterIds = [...new Set((revs || []).map(r => r.rater_id).filter(Boolean))];
-        const { data: revProfs } = raterIds.length
-          ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', raterIds)
-          : { data: [] };
-        const revProfMap = Object.fromEntries((revProfs || []).map(p => [p.id, p]));
-        const shaped = (revs || []).map(r => {
-          const bk = bkgMap[r.booking_id];
-          const reviewer = revProfMap[r.rater_id] || null;
-          return {
-            id: r.id,
-            stars: r.stars,
-            comment: r.comment || '',
-            booked_at: bk?.created_at || r.created_at,
-            reviewer: reviewer ? { id: reviewer.id, name: reviewer.display_name } : null,
-          };
-        }).filter(r => r.comment); // only show rows with a comment
-        if (!cancelled) setReviews(shaped);
       } else {
-        setReviews([]);
         setSvcRecoSummary({});
         setRecosReceived([]);
         setRecosByService({});
       }
+      if (!cancelled) setSpotCounts({ made: spotMadeCount || 0, received: spotReceivedCount });
 
-      // Their Go-Tos — services this profile has recommended.
+      // Services Recommended by {name} — recommendations they authored.
       const { data: myRecs } = await supabase
         .from('recommendations')
         .select('id, service_id, message, sent_at')
@@ -559,16 +378,14 @@ export function PublicProfileScreen() {
         : { data: [] };
       const recoSvcMap = Object.fromEntries((recoSvcs || []).map(s => [s.id, s]));
 
-      // Owner profiles for the recommended services (so the tile sub-line
-      // can say "by {OwnerName}, {role}") and so we can show their avatar
-      // as a clickable link.
+      // Owner profiles for the recommended services (identity + avatar).
       const ownerIds = [...new Set((recoSvcs || []).map(s => s.owner_id).filter(Boolean))];
       const { data: ownerProfs } = ownerIds.length
         ? await supabase.from('profiles').select('id, display_name, cc_verified_at, avatar_url').in('id', ownerIds)
         : { data: [] };
       const ownerProfMap = Object.fromEntries((ownerProfs || []).map(p => [p.id, p]));
 
-      // Owner social reach for the Go-To cards (SPEC-49g) — same source as previews.
+      // Owner social reach for the recommended cards (SPEC-49g).
       if (ownerIds.length) {
         const { data: ocounts } = await getInboxPartyCounts(ownerIds);
         if (!cancelled) setGoToOwnerCounts(ocounts || {});
@@ -587,8 +404,7 @@ export function PublicProfileScreen() {
             sent_at: r.sent_at,
             message: r.message || '',
             // Mutual = the VIEWER is connected to the recommended provider
-            // (owner in the viewer's network). Surfaces an "In your network"
-            // badge on the Go-To card (Tarik 2026-06-18).
+            // (owner in the viewer's network) — Tarik 2026-06-18.
             isMutual: !!(owner && netSet.has(owner.id)),
             service: {
               id: s.id,
@@ -602,16 +418,14 @@ export function PublicProfileScreen() {
               price_cents: def?.price_cents ?? null,
               owner_id: s.owner_id,
             },
-            owner: owner ? { id: owner.id, name: owner.display_name, is_connector: !!owner.cc_verified_at } : null,
+            owner: owner ? { id: owner.id, name: owner.display_name, avatar_url: owner.avatar_url || null, is_connector: !!owner.cc_verified_at } : null,
           };
         })
         .filter(Boolean);
       if (!cancelled) setRecoServices(shapedRecos);
 
-      // Go-To trust byline (SPEC-49g): for each recommended service, how many
-      // people reco it — naming the viewer's own connections first ("you and
-      // your friend Jason"). Counts ALL recommenders on that service, then flags
-      // which are in the viewer's network / are the viewer themselves.
+      // Trust byline data (SPEC-49g): for each recommended service, how many
+      // people reco it — naming the viewer's own connections first.
       if (recoSvcIds.length) {
         const { data: goToRecs } = await supabase
           .from('recommendations')
@@ -637,7 +451,6 @@ export function PublicProfileScreen() {
           const nm = rp?.display_name;
           if (nm) { if (isConnector && !gSummary[k]._leadC) gSummary[k]._leadC = nm; if (!gSummary[k]._leadA) gSummary[k]._leadA = nm; }
         }
-        // Lead name for the count-fallback byline ("…including Jane").
         for (const k of Object.keys(gSummary)) gSummary[k].leadName = gSummary[k]._leadC || gSummary[k]._leadA;
         if (!cancelled) setGoToSummary(gSummary);
       } else if (!cancelled) {
@@ -649,12 +462,9 @@ export function PublicProfileScreen() {
     return () => { cancelled = true; };
   }, [profileId, viewerId]);
 
-  // Role for the badge row — pulled from the first listed service's
-  // taxonomy_provider_type (e.g. "Housekeeper"). Falls back to null
-  // when the profile has no services (purely a Connector who shares
-  // others' services — no role badge needed).
-  const role = useMemo(() => {
-    return services?.[0]?.taxonomy_provider_type || services?.[0]?.category || null;
+  // Distinct service facets for the badge row — one FacetBadge per role.
+  const facets = useMemo(() => {
+    return [...new Set(services.map(s => s.taxonomy_provider_type || s.category).filter(Boolean))];
   }, [services]);
 
   const igHandle = profile?.instagram_handle || null;
@@ -668,12 +478,9 @@ export function PublicProfileScreen() {
     path: profileId ? `/u/${profileId}` : undefined,
   });
 
-  // Skeleton shell — keeps the close button + cream background visible
-  // even while data is in-flight or missing, so the user always has a
-  // way out and is never staring at a blank scroll area. CERGIO-GUARD
-  // (2026-05-30): added after Tarik hit a "blank page" on a freshly-
-  // visited /u/{id} link — root cause was a 400 on the profile SELECT
-  // that crashed the inner state without ever revealing the X.
+  // Skeleton shell — keeps the close button + cream background visible even
+  // while data is in-flight, so the user always has a way out (2026-05-30
+  // blank-page guard).
   if (loading) {
     return (
       <div className="flex-1 flex flex-col bg-cream pb-24">
@@ -720,299 +527,339 @@ export function PublicProfileScreen() {
   const name = profile?.display_name || 'Cergio user';
   const firstName = name.split(' ')[0];
   const isConnector = !!profile?.cc_verified_at;
+  const netCount = Number(counts?.networkCount) || 0;
+  const recosMade = Number(counts?.recosMade) || 0;
+  const mutualCount = Number(counts?.mutualCount) || 0;
+  const igFollowers = Number(profile?.instagram_followers) || 0;
+  const spotTotal = Math.max(spotCounts.made, spotlights.length) + spotCounts.received;
+  const spotMadeShown = Math.max(spotCounts.made, spotlights.length);
+
+  const onShare = async () => {
+    const url = `${window.location.origin}/u/${profileId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      showToast('Link copied');
+      setTimeout(() => setCopied(false), 2400);
+    } catch {
+      showToast(url);
+    }
+  };
 
   return (
     <>
     <div className={`flex-1 flex flex-col bg-cream overflow-y-auto ${reqCtx && respondingInline !== 'done' ? 'pb-36' : 'pb-24'}`}>
-      {/* Top bar — close (×) + Follow button (right-aligned).
-          CERGIO-GUARD (2026-06-03): Follow is the canonical way the
-          viewer adds someone to their graph. Following a service
-          provider OR a Connector counts as "friend equivalent" in
-          downstream feed/recommendation filters per Tarik. Own
-          profile + signed-out viewers see no Follow button. */}
-      <div className="px-5 pt-7 flex items-center justify-between">
+      {/* Sticky top bar — × close left; Share (copy-link) + Follow right.
+          v2: Request/Message/Recommend are gone (Request lives on the
+          per-service PDP); Share stays as a copy-link. Follow is retained —
+          it's the canonical add-to-graph behavior (2026-06-03) and was not
+          in the design's removals. */}
+      <div className="sticky top-0 z-10 bg-cream px-5 pt-4 pb-2.5 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
           aria-label="Close"
-          className="w-9 h-9 rounded-full bg-white border border-bdr text-black text-body-lg flex items-center justify-center shadow-sm"
+          className="w-9 h-9 rounded-full bg-white border-2 border-bdr text-b2 text-body-lg flex items-center justify-center"
         >
           ×
         </button>
-        {auth?.isSignedIn && profileId !== auth?.user?.id && following !== null && (
+        <div className="flex items-center gap-2">
+          {auth?.isSignedIn && profileId !== auth?.user?.id && following !== null && (
+            <button
+              type="button"
+              disabled={followPending}
+              onClick={async () => {
+                if (followPending) return;
+                setFollowPending(true);
+                if (following) {
+                  const { error } = await unfollowProfile(profileId);
+                  if (error) showToast('Could not unfollow — try again.');
+                  else { setFollowing(false); showToast(`Unfollowed ${firstName}`); }
+                } else {
+                  const { error } = await followProfile(profileId);
+                  if (error) showToast('Could not follow — try again.');
+                  else { setFollowing(true); showToast(`Now following ${firstName}`); }
+                }
+                setFollowPending(false);
+              }}
+              className={`rounded-pill px-3.5 py-2 text-meta font-extrabold transition-colors disabled:opacity-60
+                          ${following
+                            ? 'bg-white border border-line text-b2 hover:border-g/40'
+                            : 'bg-g text-white cg-cta'}`}
+            >
+              {followPending ? '…' : following ? 'Following' : 'Follow'}
+            </button>
+          )}
           <button
             type="button"
-            disabled={followPending}
-            onClick={async () => {
-              if (followPending) return;
-              setFollowPending(true);
-              if (following) {
-                const { error } = await unfollowProfile(profileId);
-                if (error) showToast('Could not unfollow — try again.');
-                else { setFollowing(false); showToast(`Unfollowed ${(profile?.display_name || 'them').split(' ')[0]}`); }
-              } else {
-                const { error } = await followProfile(profileId);
-                if (error) showToast('Could not follow — try again.');
-                else { setFollowing(true); showToast(`Now following ${(profile?.display_name || 'them').split(' ')[0]}`); }
-              }
-              setFollowPending(false);
-            }}
-            className={`rounded-pill px-4 py-1.5 text-meta font-extrabold transition-colors disabled:opacity-60
-                        ${following
-                          ? 'bg-white border border-bdr text-b2 hover:border-g/40'
-                          : 'bg-g text-white cg-cta'}`}
+            onClick={onShare}
+            className="bg-white border border-line rounded-pill px-3.5 py-2 text-meta font-extrabold text-b2 inline-flex items-center gap-1.5 hover:border-g hover:text-gd"
           >
-            {followPending ? '…' : following ? 'Following' : 'Follow'}
+            <ShareIcon />
+            {copied ? 'Link copied' : 'Share'}
           </button>
-        )}
-      </div>
-
-      {/* Header — avatar + big name + role/Connector badge row.
-          CERGIO-GUARD (2026-05-30 v2): avatar 64 → 72 + name 26 → 28
-          to match the heavier hierarchy on the mockup. Badges drop a
-          row below name so the line doesn't crowd. */}
-      {/* Brand hero band — soft mint→cream gradient behind the avatar + name
-          for a premium, on-brand header (design-spec gl token). Layout
-          unchanged (Tarik 2026-06-18 brand re-skin). */}
-      <div className="px-5 pt-5 pb-2 bg-gradient-to-b from-gl/60 to-transparent">
-        <div className="flex items-center gap-4">
-          <AvatarLink id={profile?.id} name={name} size={72} clickable={false} className="ring-4 ring-white shadow-md" />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-display-2 font-extrabold text-black leading-[1.05]">{name}</h1>
-            {/* Headline moved into the signal block below the Connector badge
-                (Tarik 2026-06-17, matches the /inbound layout) — no longer here
-                to avoid duplication. */}
-          </div>
         </div>
-        {/* QUARANTINED (2026-06-16, SPEC-49): the standalone RoleBadge +
-            ConnectorBadge row is replaced by the viewer-prioritized signal
-            block below, which carries the Connector pill + role + the same
-            reach/reputation data as the request previews. */}
       </div>
 
-      {/* Lead signal block — connector + service facets, ordered by viewer
-          mode (consumer → service first; provider → connector first). */}
-      {/* Lead identity block — replicates the interim /inbound accept screen
-          EXACTLY (Tarik 2026-06-18, SPEC-49e): Connector badge → headline →
-          "319 IG followers" → "5 network · 5 reco's made" → See Instagram →
-          bio → "Plumber (0 recos received)" → mutuals line. The standalone
-          "View Instagram" link + "About" section are folded INTO this block. */}
-      <ProfileSignalBlock
-        counts={counts}
-        role={role}
-        isService={services.length > 0}
-        isConnector={counts?.isConnector ?? isConnector}
-        serviceMode={serviceMode}
-        headline={profile?.headline}
-        bio={profile?.bio}
-        igHandle={igHandle}
-        name={name}
-        mutualNames={mutualNames}
-      />
+      <div className="px-5 pt-2 flex flex-col gap-8">
 
-      {/* Spotlights on Cergio — the Connector's track record of posts they've
-          made for other services (real IG/TikTok post links, small tiles ~70%,
-          matching the interim /inbound screen — Tarik 2026-06-18). Gated on real
-          data; collapses silently when none. */}
-      {spotlights.length > 0 && (
-        <div className="mx-5 mt-8 border-t border-line pt-8">
-          <h2 className="text-heading-1 font-extrabold text-black">Spotlights on Cergio</h2>
-          <p className="text-body-sm text-b3 font-medium mt-1">
-            Services {firstName} has spotlighted on Instagram
-          </p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {spotlights.slice(0, 9).map(s => (
-              <div key={s.id} className="w-[76px]">
-                <IgPostTile url={s.post_url} aspect="4 / 5" label={`Spotlight: ${s.title}`} />
+        {/* 1–5 · Identity: name, badges, followers (named) · recos made,
+            IG handle · follower count, creator line. */}
+        <div className="flex flex-col gap-3.5">
+          <div className="flex items-center gap-5">
+            <Avatar url={profile?.avatar_url} name={name} size={50} />
+            <div className="flex-1 min-w-0 flex flex-col gap-1">
+              <h1 className="text-[26px] leading-[1.3] font-bold text-black">{name}</h1>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                {isConnector && <FacetBadge kind="creator" />}
+                {facets.map(f => <FacetBadge key={f}>{f}</FacetBadge>)}
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* {firstName}'s Services — up to 3 service tiles inline, each carrying its
-          own reco byline (SPEC-49g: "Reco'd by you and your friend Jason"). The
-          full per-recommender testimonials (with mutual/Connector badges + social
-          reach) live ONCE in the consolidated "Recommendations received" section
-          below — the inline per-service reco list was a duplicate and is removed
-          (Tarik 2026-06-25: "remove the upper ones"). More than 3 services → the
-          rest live on /u/:id/services. A pure Connector/curator skips this block. */}
-      {services.length > 0 && (
-        <div className="mx-5 mt-8 border-t border-line pt-8">
-          <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Services</h2>
-          <div className="mt-4 flex flex-col gap-5">
-            {services.slice(0, INLINE_SERVICES).map(svc => (
-              <ServiceTile
-                key={svc.id}
-                svc={svc}
-                recoSummary={svcRecoSummary[svc.id]}
-                onOpen={() => navigate(`/service/${svc.id}`)}
-              />
-            ))}
-          </div>
-          {services.length > INLINE_SERVICES && (
-            <button
-              type="button"
-              onClick={() => navigate(`/u/${profileId}/services`)}
-              className="mt-6 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
-            >
-              View all {firstName}&apos;s services ({services.length}) →
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Recommendations received — consolidated testimonials across all of
-          {firstName}'s services (SPEC-49 "People who love {name}" = recos
-          RECEIVED). Header + individual reco rows (Tarik 2026-06-18). Real rows
-          only; collapses when none. */}
-      {recosReceived.length > 0 && (
-        <div className="mx-5 mt-8 border-t border-line pt-8">
-          <h2 className="text-heading-1 font-extrabold text-black">
-            Recommendations received <span className="text-b3 font-medium">· {recosReceived.length}</span>
-          </h2>
-          <p className="text-body-sm text-b3 font-medium mt-1">People who love {firstName}</p>
-          <div className="mt-5 flex flex-col gap-6">
-            {recosReceived.slice(0, 8).map(r => (
-              <RecoRow
-                key={r.id}
-                r={r}
-                counts={r.recommender?.id ? recommenderCounts[r.recommender.id] : null}
-                showService={services.length > 1}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* {firstName}'s Go-Tos — services they've recommended.
-          CERGIO-GUARD (2026-05-30 v2): card layout rebuilt to match
-          the Jennifer Leighton mockup. Dropped the redundant
-          "Reco'd by {firstName}" row inside each card — we're already
-          on their profile, so every entry here is implicitly by them.
-          Card now is: owner avatar (linked) + owner name (linked) +
-          role badge; Reco'd date pinned top-right; comment bubble
-          below with the profile-owner's avatar inside (matches the
-          tiny "reviewer" avatar on the mockup's gray quote box). */}
-      {recoServices.length > 0 && (
-        <div className="mx-5 mt-8 border-t border-line pt-8">
-          <h2 className="text-heading-1 font-extrabold text-black">{firstName}&apos;s Recommendations</h2>
-          <p className="text-body-sm text-b3 font-medium mt-1">Services {firstName} recommends</p>
-          <div className="mt-5 flex flex-col gap-3">
-            {(showAllGoTos ? recoServices : recoServices.slice(0, 6)).map(r => (
-              <div
-                key={r.id}
-                onClick={() => navigate(`/service/${r.service.id}`)}
-                className="cursor-pointer bg-white border border-line rounded-[16px] p-5 cg-tap"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {/* Owner avatar — stop propagation so it opens the owner's profile, not the service */}
-                    <span onClick={e => { e.stopPropagation(); if (r.owner?.id) navigate(`/u/${r.owner.id}`); }}>
-                      <AvatarLink id={r.owner?.id} name={r.owner?.name} size={44} clickable={false} />
-                    </span>
-                    <div className="min-w-0">
-                      <span
-                        role="link"
-                        tabIndex={0}
-                        onClick={e => { e.stopPropagation(); if (r.owner?.id) navigate(`/u/${r.owner.id}`); }}
-                        onKeyDown={e => { if (e.key === 'Enter' && r.owner?.id) { e.stopPropagation(); navigate(`/u/${r.owner.id}`); } }}
-                        className="text-body-lg font-extrabold text-black hover:underline truncate block cursor-pointer"
-                      >
-                        {r.owner?.name || r.service?.title || 'A provider'}
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                        <span className="inline-flex items-center gap-1 text-meta text-gd font-extrabold">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
-                            <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
-                            <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                          </svg>
-                          {r.service?.taxonomy_provider_type || r.service?.category || 'Service'}
-                        </span>
-                        {/* Connector badge — recommended provider is a verified Connector. */}
-                        {r.owner?.is_connector && (
-                          <span className="inline-flex items-center gap-1 bg-g text-white text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">
-                            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v5c0 5 4 9.7 8 11 4-1.3 8-6 8-11V7l-8-5z" /></svg>
-                            Connector
-                          </span>
-                        )}
-                      </div>
-                      {/* Reputational reach — provider's IG / Cergio network (SPEC-49g). */}
-                      <SocialReachLine counts={r.owner?.id ? goToOwnerCounts[r.owner.id] : null} />
-                      {/* Reputational stream — who reco's this service, viewer's
-                          connections named first ("you and your friend Jason"). */}
-                      {(() => {
-                        const byline = recoByline(goToSummary[r.service?.id]);
-                        return byline ? (
-                          <p className="inline-flex items-center gap-1 text-meta-sm text-gd font-extrabold mt-1">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
-                              <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
-                            </svg>
-                            {byline}
-                          </p>
-                        ) : r.isMutual ? (
-                          <span className="inline-flex items-center gap-0.5 text-meta-sm text-gd font-extrabold mt-0.5">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                              <path d="M16 11a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h8v-2.5c0-.9.3-1.7.9-2.4A12 12 0 0 0 8 13zm8 0c-.4 0-.9 0-1.4.1a4.3 4.3 0 0 1 1.4 3.1V19h7v-2.5c0-2.3-4.7-3.5-7-3.5z"/>
-                            </svg>
-                            In your network
-                          </span>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
-                  <p className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-1">
-                    {fmtMonthYear(r.sent_at) ? `Reco'd ${fmtMonthYear(r.sent_at)}` : ''}
-                  </p>
-                </div>
-                {r.message && (
-                  <div className="w-full mt-3 flex items-start gap-2.5">
-                    <AvatarLink
-                      id={profile?.id}
-                      name={name}
-                      size={28}
-                      clickable={false}
-                      className="ring-2 ring-white"
-                    />
-                    <p className="flex-1 text-body text-b2 leading-relaxed">{r.message}</p>
-                  </div>
+          <div className="flex flex-col gap-1.5">
+            {(netCount > 0 || recosMade > 0) && (
+              <p className="text-body text-b3">
+                {netCount > 0 && (
+                  <>
+                    <span className="font-extrabold text-black">{netCount}</span>
+                    {' '}followers on Cergio
+                    {mutualCount > 0 && namedIncl(mutualNames, mutualCount) && (
+                      <> incl <span className="font-bold text-gd">{namedIncl(mutualNames, mutualCount)}</span></>
+                    )}
+                  </>
                 )}
-              </div>
-            ))}
+                {netCount > 0 && recosMade > 0 && ' · '}
+                {recosMade > 0 && (
+                  <><span className="font-extrabold text-black">{recosMade}</span> recos made</>
+                )}
+              </p>
+            )}
+            {igHandle && (
+              <a
+                href={`https://instagram.com/${String(igHandle).replace(/^@/, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-gd"
+              >
+                <IgGlyph />
+                <span className="text-body text-b2">{String(igHandle).replace(/^@/, '')}</span>
+                <span className="flex-1" />
+                {igFollowers > 0 && (
+                  <span className="text-body text-b2 whitespace-nowrap">{igFollowers.toLocaleString()} followers</span>
+                )}
+              </a>
+            )}
+            {isConnector && (profile?.headline || profile?.bio) && (
+              <p className="text-body text-b3 mt-0.5">{profile?.headline || profile?.bio}</p>
+            )}
           </div>
-          {recoServices.length > 6 && (
-            <button
-              type="button"
-              onClick={() => setShowAllGoTos(v => !v)}
-              className="mt-3 inline-flex items-center gap-1 text-body-sm text-gd font-extrabold hover:underline"
-            >
-              {showAllGoTos
-                ? 'Show less'
-                : `See all of ${firstName}'s recommendations (${recoServices.length}) →`}
-            </button>
-          )}
         </div>
-      )}
 
-      {/* Empty state — no services + no recos authored. Surfaces gently
-          rather than rendering a blank scroll area. */}
-      {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && spotlights.length === 0 && (
-        <div className="px-5 mt-8 mb-8">
-          <div className="bg-white border border-line rounded-[16px] p-5 text-center">
+        {/* 6 · Per-service facet blocks: title + "recos received incl …"
+            (named) + blurb — one per service. */}
+        {services.length > 0 && (
+          <div className="flex flex-col gap-5">
+            {services.map(svc => {
+              const line = recosReceivedLine(svcRecoSummary[svc.id]);
+              return (
+                <div key={svc.id} className="flex flex-col gap-1">
+                  <SectionTitle>{svc.taxonomy_provider_type || svc.category || svc.title}</SectionTitle>
+                  {line && <p className="text-body-sm font-semibold text-gd">{line}</p>}
+                  {svc.description && <p className="text-body text-b3">{svc.description}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 7 · IG Spotlights (received / made) — honest counts; the tiles are
+            the posted track record (real post links, SPEC-49e). */}
+        {(spotTotal > 0) && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-baseline gap-2">
+              <SectionTitle>{spotTotal} IG Spotlights</SectionTitle>
+              <span className="text-body text-b3">
+                {[
+                  spotCounts.received > 0 ? `${spotCounts.received} received` : null,
+                  spotMadeShown > 0 ? `${spotMadeShown} made` : null,
+                ].filter(Boolean).join(' / ')}
+              </span>
+            </div>
+            {spotlights.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {spotlights.slice(0, 9).map(s => (
+                  <div key={s.id} className="w-[76px]">
+                    <IgPostTile url={s.post_url} aspect="4 / 5" label={`Spotlight: ${s.title}`} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 8 · {First}'s Services — facet + reco count, cover, offering title +
+            price, lead reco quote + DATE. No pager dots: one cover image is one
+            image (no fake multi-page hint — SPEC-12/49g). */}
+        {services.length > 0 && (
+          <section className="flex flex-col gap-3.5">
+            <SectionTitle>{firstName}&apos;s Services</SectionTitle>
+            {services.slice(0, INLINE_SERVICES).map(svc => {
+              const summary = svcRecoSummary[svc.id];
+              const lead = (recosByService[svc.id] || [])[0];
+              const price = svc.price_cents != null ? Math.round(svc.price_cents / 100) : null;
+              return (
+                <Card
+                  key={svc.id}
+                  r={18}
+                  className="overflow-hidden cursor-pointer cg-tap"
+                  onClick={() => navigate(`/service/${svc.id}`)}
+                >
+                  <div className="px-4 pt-4 pb-3 flex items-baseline gap-2">
+                    <span className="text-body-lg font-bold text-black">
+                      {svc.taxonomy_provider_type || svc.category || svc.title}
+                    </span>
+                    {summary?.total > 0 && (
+                      <span className="text-meta font-semibold text-gd">
+                        {summary.total} {summary.total === 1 ? 'reco' : 'recos'} received
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative h-[199px] bg-bdr">
+                    {svc.cover_url && (
+                      <img
+                        src={svc.cover_url}
+                        alt=""
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
+                    <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+                                     w-[51px] h-[51px] rounded-full bg-black/25 flex items-center justify-center text-white text-body-lg pl-1">
+                      ▶
+                    </span>
+                  </div>
+                  <div className="px-4 pt-3.5 pb-5 flex flex-col gap-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-body-lg font-semibold text-b2 truncate">{svc.offering_name || svc.title}</span>
+                      {price != null && (
+                        <span className="text-heading-2 font-semibold text-b2">{price === 0 ? 'Free' : `$${price}`}</span>
+                      )}
+                    </div>
+                    {lead?.message && (
+                      <QuoteBubble
+                        author={lead.recommender?.name}
+                        avatarUrl={lead.recommender?.avatar_url}
+                        date={`Reco'd ${fmtRecoDate(lead.sent_at)}`}
+                      >
+                        <span className="font-bold text-black">{lead.recommender?.name || 'A friend'}</span>
+                        {lead.isMutual && <span className="font-semibold text-gd"> your friend</span>}
+                        {' said '}&ldquo;{lead.message}&rdquo;
+                      </QuoteBubble>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+            {services.length > INLINE_SERVICES && (
+              <SeeAllLink
+                label={`View all ${firstName}'s services`}
+                count={services.length}
+                to={`/u/${profileId}/services`}
+              />
+            )}
+          </section>
+        )}
+
+        {/* 9 · Services Recommended by {First} (renamed from "Go-Tos").
+            Trust-first byline (recoByline names the viewer's connections
+            first) + owner reach + the dated reco. SPEC-49d stands: recos-made
+            COUNT above may exceed these rows (unclaimed providers are counted,
+            never displayed). */}
+        {recoServices.length > 0 && (
+          <section className="flex flex-col gap-3.5 pb-2">
+            <SectionTitle sub={`${recoServices.length} ${recoServices.length === 1 ? 'service' : 'services'}`}>
+              Services Recommended by {firstName}
+            </SectionTitle>
+            <div className="flex flex-col gap-3.5">
+              {(showAllGoTos ? recoServices : recoServices.slice(0, INLINE_GOTOS)).map(r => (
+                <Card
+                  key={r.id}
+                  r={8}
+                  className="p-4 cursor-pointer cg-tap"
+                  onClick={() => navigate(`/service/${r.service.id}`)}
+                >
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {r.owner?.id ? (
+                        <Link
+                          to={`/u/${r.owner.id}`}
+                          onClick={e => e.stopPropagation()}
+                          aria-label={`View ${r.owner.name || 'profile'}`}
+                          className="shrink-0"
+                        >
+                          <Avatar url={r.owner.avatar_url} name={r.owner.name} size={50} />
+                        </Link>
+                      ) : (
+                        <Avatar name={r.service?.title} size={50} />
+                      )}
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="text-body text-black leading-tight truncate">
+                          {r.owner?.name || r.service?.title || 'A provider'}
+                        </span>
+                        <FacetBadge>{r.service?.taxonomy_provider_type || r.service?.category || 'Service'}</FacetBadge>
+                        {(() => {
+                          const byline = recoByline(goToSummary[r.service?.id]);
+                          return byline ? (
+                            <p className="text-meta font-semibold text-gd">{byline}</p>
+                          ) : r.isMutual ? (
+                            <p className="text-meta font-semibold text-gd">In your network</p>
+                          ) : null;
+                        })()}
+                        <SocialReachLine counts={r.owner?.id ? goToOwnerCounts[r.owner.id] : null} className="!mt-0" />
+                      </div>
+                    </div>
+                    <span className="text-meta-sm text-b3 font-medium whitespace-nowrap pt-0.5">
+                      {fmtRecoDate(r.sent_at) ? `Reco'd ${fmtRecoDate(r.sent_at)}` : ''}
+                    </span>
+                  </div>
+                  {r.message && (
+                    <div className="mt-2.5 bg-soft rounded-[10px] p-4 flex items-start gap-2.5">
+                      <Avatar url={profile?.avatar_url} name={name} size={30} />
+                      <p className="text-body text-b2 leading-snug">{r.message}</p>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+            {recoServices.length > INLINE_GOTOS && (
+              <SeeAllLink
+                label={showAllGoTos ? 'Show fewer' : `See all ${recoServices.length}`}
+                onClick={() => setShowAllGoTos(v => !v)}
+              />
+            )}
+          </section>
+        )}
+
+        {/* Empty state — no services + no recos authored. Surfaces gently
+            rather than rendering a blank scroll area. */}
+        {services.length === 0 && recoServices.length === 0 && recosReceived.length === 0 && spotlights.length === 0 && (
+          <Card r={12} className="p-5 text-center">
             <p className="text-body-lg font-extrabold text-black">{firstName} hasn&apos;t shared any go-tos yet.</p>
             <p className="text-body-sm text-b3 font-medium mt-1.5 leading-relaxed">
               Their recommendations + listed services will appear here.
             </p>
-          </div>
-        </div>
-      )}
+          </Card>
+        )}
+      </div>
     </div>
 
     {/* CERGIO-GUARD (2026-06-13): Sticky request-context bar — shown when
-        this profile was opened from the Inbox via ?reqId=. Lets the provider
-        Accept / Counter / Decline without bouncing back to the Inbox. */}
+        this profile was opened from the Inbox via ?reqId=. QUARANTINED
+        (2026-06-14): reqCtx is never hydrated, so this never renders; kept
+        to preserve the response logic. */}
     {reqCtx && respondingInline !== 'done' && (
-      <div className="fixed bottom-0 inset-x-0 bg-white border-t-2 border-g/20 px-5 pt-3 pb-6 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-        {/* Request summary */}
+      <div className="fixed bottom-0 inset-x-0 bg-white border-t-2 border-g/20 px-5 pt-3 pb-6 z-20 shadow-up">
         <p className="text-meta text-b3 font-medium mb-1">
           {firstName} needs a{' '}
           <span className="font-extrabold text-black">{reqCtx.service_type}</span>
@@ -1021,7 +868,6 @@ export function PublicProfileScreen() {
 
         {respondingInline === null && (
           <div className="flex gap-2 mt-2">
-            {/* Accept */}
             <button
               type="button"
               onClick={async () => {
@@ -1047,7 +893,6 @@ export function PublicProfileScreen() {
             >
               Accept
             </button>
-            {/* Counter */}
             <button
               type="button"
               onClick={() => { setCounterOpenInline(v => !v); setCounterDraftInline(''); }}
@@ -1055,7 +900,6 @@ export function PublicProfileScreen() {
             >
               Counter
             </button>
-            {/* Decline */}
             <button
               type="button"
               onClick={async () => {

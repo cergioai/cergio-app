@@ -7,7 +7,78 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase, supabaseReady } from '../lib/supabase';
-import { ServiceTile } from './PublicProfileScreen';
+import { recoByline } from '../components/ui/reputation';
+
+// Moved VERBATIM from PublicProfileScreen (redesign handoff PR 3, 2026-08-06):
+// the profile now renders the v2 service cards; this page was ServiceTile's
+// only other consumer, so the tile + its gradient fallbacks live here until
+// this screen's own kit migration (STYLE_MIGRATION group 5).
+const PHOTO_GRADIENTS = {
+  'fv-jamie': 'from-[#e8dcc8] via-[#b89870] to-[#604030]',
+  'fv-john':  'from-[#cad8e8] via-[#7088b0] to-[#2e4060]',
+  'fv-steve': 'from-[#d8e8ca] via-[#88b070] to-[#406030]',
+};
+
+// One service-card row. Cover image or photo-class gradient fallback. Tap → PDP.
+function ServiceTile({ svc, recoSummary, onOpen }) {
+  const grad = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+  const price = svc.price_cents != null ? Math.round(svc.price_cents / 100) : null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full text-left bg-white border border-line rounded-[16px] overflow-hidden hover:border-g/40 cg-tap"
+    >
+      <div className={`relative h-[160px] bg-gradient-to-br ${grad}`}>
+        {svc.cover_url && (
+          <img
+            src={svc.cover_url}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
+        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+                         w-10 h-10 rounded-full bg-white/85 flex items-center justify-center text-base pl-0.5">
+          ▶
+        </span>
+      </div>
+      <div className="p-3.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-body-lg font-extrabold text-black truncate">{svc.title || 'Service'}</p>
+          {price != null && (
+            <p className="text-body-lg font-extrabold text-black">
+              {price === 0 ? 'Free' : `$${price}`}
+            </p>
+          )}
+        </div>
+        {svc.category && (
+          <p className="inline-flex items-center gap-1 text-meta text-gd font-extrabold mt-0.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#3FA821" aria-hidden="true">
+              <path d="M12 2l2.4 2.6 3.5-.5.6 3.5 3 1.8-1.6 3.2 1.6 3.2-3 1.8-.6 3.5-3.5-.5L12 22l-2.4-2.6-3.5.5-.6-3.5-3-1.8L4.1 11l-1.6-3.2 3-1.8.6-3.5 3.5.5L12 2z"/>
+              <path d="M9.5 12.2l1.7 1.7 3.4-3.4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            </svg>
+            {svc.taxonomy_provider_type || svc.category}
+          </p>
+        )}
+        {svc.description && (
+          <p className="text-body-sm text-b3 leading-relaxed mt-1.5 line-clamp-2">{svc.description}</p>
+        )}
+        {recoSummary && recoSummary.total > 0 && (
+          <div className="mt-2.5 inline-flex items-center gap-1.5 bg-gl rounded-pill px-3 py-1">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3FA821" strokeWidth="2.4" aria-hidden="true">
+              <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" strokeLinejoin="round"/>
+            </svg>
+            <p className="text-meta-sm text-gd font-extrabold leading-none">
+              {recoByline(recoSummary)}
+            </p>
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
 
 export function PublicProfileServicesScreen() {
   const navigate = useNavigate();
