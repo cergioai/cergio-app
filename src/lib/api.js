@@ -5198,6 +5198,7 @@ export async function leadsDashboard(audience = 'services', f = {}) {
       status: f.status ?? null,
       serviceType: f.serviceType ?? null,
       category: f.category ?? null,
+      categoriesIn: f.categoriesIn ?? null,  // SPEC-261 — server-side set filter (trust weld)
       contactableOnly: !!f.contactableOnly,
       sinceHours: f.sinceHours ?? 0,
       limit: f.limit ?? 10000,
