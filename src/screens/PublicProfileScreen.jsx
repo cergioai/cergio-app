@@ -365,9 +365,13 @@ export function PublicProfileScreen() {
       // PostgREST (column doesn't exist), which silently nulled the
       // whole row → "blank profile page" bug Tarik hit. Now we only
       // ask for what's verified across api.js.
+      // UPDATE (2026-08-05): avatar_url EXISTS as of migration
+      // 20260805120000_profile_avatars.sql — that migration must be run
+      // against the DB before this select ships, or the guard above
+      // fires again.
       const { data: prof, error: profErr } = await supabase
         .from('profiles')
-        .select('id, display_name, headline, bio, cc_verified_at, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, follower_count')
+        .select('id, display_name, headline, bio, cc_verified_at, avatar_url, instagram_handle, instagram_followers, tiktok_handle, tiktok_followers, follower_count')
         .eq('id', profileId)
         .maybeSingle();
       if (cancelled) return;
@@ -416,7 +420,7 @@ export function PublicProfileScreen() {
         const recRows = ownerRecs || [];
         const recIds = [...new Set(recRows.map(r => r.recommender_id).filter(Boolean))];
         const { data: recProfs } = recIds.length
-          ? await supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', recIds)
+          ? await supabase.from('profiles').select('id, display_name, cc_verified_at, avatar_url').in('id', recIds)
           : { data: [] };
         const profMap = Object.fromEntries((recProfs || []).map(p => [p.id, p]));
         const svcTitleMap = Object.fromEntries(svcRows.map(s => [s.id, s.title]));
@@ -512,7 +516,7 @@ export function PublicProfileScreen() {
         }
         const raterIds = [...new Set((revs || []).map(r => r.rater_id).filter(Boolean))];
         const { data: revProfs } = raterIds.length
-          ? await supabase.from('profiles').select('id, display_name').in('id', raterIds)
+          ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', raterIds)
           : { data: [] };
         const revProfMap = Object.fromEntries((revProfs || []).map(p => [p.id, p]));
         const shaped = (revs || []).map(r => {
@@ -560,7 +564,7 @@ export function PublicProfileScreen() {
       // as a clickable link.
       const ownerIds = [...new Set((recoSvcs || []).map(s => s.owner_id).filter(Boolean))];
       const { data: ownerProfs } = ownerIds.length
-        ? await supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', ownerIds)
+        ? await supabase.from('profiles').select('id, display_name, cc_verified_at, avatar_url').in('id', ownerIds)
         : { data: [] };
       const ownerProfMap = Object.fromEntries((ownerProfs || []).map(p => [p.id, p]));
 

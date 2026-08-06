@@ -302,7 +302,7 @@ export function ServiceDetailScreen() {
         if (svc.owner_id) {
           const { data: prof } = await supabase
             .from('profiles')
-            .select('id, display_name, bio, cc_verified_at, instagram_handle, tiktok_handle')
+            .select('id, display_name, bio, cc_verified_at, avatar_url, instagram_handle, tiktok_handle')
             .eq('id', svc.owner_id)
             .maybeSingle();
           if (!cancelled) setOwnerProfile(prof || null);
@@ -310,7 +310,7 @@ export function ServiceDetailScreen() {
       } else if (provider?.ownerId && !ownerProfile) {
         const { data: prof } = await supabase
           .from('profiles')
-          .select('id, display_name, bio, cc_verified_at, instagram_handle, tiktok_handle')
+          .select('id, display_name, bio, cc_verified_at, avatar_url, instagram_handle, tiktok_handle')
           .eq('id', provider.ownerId)
           .maybeSingle();
         if (!cancelled) setOwnerProfile(prof || null);
@@ -385,7 +385,7 @@ export function ServiceDetailScreen() {
         : { data: [] };
       const raterIds = [...new Set((revs || []).map(r => r.rater_id).filter(Boolean))];
       const { data: raterProfs } = raterIds.length
-        ? await supabase.from('profiles').select('id, display_name, cc_verified_at').in('id', raterIds)
+        ? await supabase.from('profiles').select('id, display_name, cc_verified_at, avatar_url').in('id', raterIds)
         : { data: [] };
       const raterMap = Object.fromEntries((raterProfs || []).map(p => [p.id, p]));
       const shapedReviews = (revs || []).map(r => {
