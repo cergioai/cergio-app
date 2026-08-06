@@ -7282,6 +7282,17 @@ test('the-dashboard-number-and-the-csv-are-the-same-query', 'SPEC-261 — THE TR
     'fewer than 3 CSV filenames carry their row count — "(N rows)" in the name is the receipt the export is audited against, and without it a 1-row file can sit on disk claiming to be the founder\'s hundred');
 });
 
+test('inbox-match-uses-the-fanout-bridge-union', 'FW-16 (founder live repro 2026-08-05): a Driver request notified the provider (in-app row written) but never appeared in his inbox — listInboundRequests matched request.service_type only against the taxonomy set and request.category only against the category set; a NULL-category request could never match via the provider category leg. The filter must compare BOTH request columns against the bridge-expanded UNION of both sets (SPEC-127: the inbox must use the SAME bridge as the fan-out).', '#262', () => {
+  const api = readFile('src/lib/api.js');
+  const i = api.indexOf('export async function listInboundRequests');
+  assert(!(i < 0), 'listInboundRequests is gone — the provider inbox has no request feed');
+  const src = api.slice(i, i + 4200);
+  assert(!(!/const myMatchSet = \[\.\.\.new Set\(\[\.\.\.myTypes, \.\.\.myCategories\]\)\]/.test(src)), 'the inbox no longer unions taxonomy+category allow-sets (FW-16)');
+  assert(!(!/service_type\.in\.\(\$\{myMatchSet/.test(src)), 'request.service_type is not checked against the UNION set (FW-16/SPEC-127)');
+  assert(!(!/category\.in\.\(\$\{myMatchSet/.test(src)), 'request.category is not checked against the UNION set (FW-16)');
+});
+
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
