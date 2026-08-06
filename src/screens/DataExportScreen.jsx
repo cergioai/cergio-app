@@ -103,6 +103,17 @@ function saveCsv(csv, filename) {
   a.download = filename; document.body.appendChild(a); a.click(); a.remove();
 }
 const n = (v) => (v == null ? '—' : Number(v).toLocaleString());
+// SPEC-261 — THE TRUST WELD (founder defect report, 2026-08-05, verbatim: "IG scraper
+// download had 1 record.. shoed 100 in download with 10% phone.. how can we trust the
+// dashboard"). Every CSV path compares what it actually delivers against what the
+// count promised — min(filteredTotal, rowCap). A shortfall is SAID, in both numbers,
+// never silently saved: a file that quietly contradicts the number on screen is how
+// trust in a dashboard dies.
+const csvMismatch = (got, total, cap) => {
+  const expect = Math.min(Number(total ?? 0), Number(cap ?? got));
+  if (!(got < expect)) return null;
+  return `CSV has ${got.toLocaleString()} rows; the count says ${expect.toLocaleString()} — mismatch, do not trust this export`;
+};
 
 // ── SPEC-258 — the results list itself is unchanged (LeadRow, bestLink chain, new-tab
 // links); SPEC-260 only moves WHEN it renders (behind "Load results").
@@ -256,13 +267,18 @@ export function DataExportScreen() {
     const { data: d, error } = await leadsDashboard(audience, {
       city: city || null, locality: locality || null, source: source || null, status: status || null,
       serviceType: serviceType || null, category: category || null,
+      // SPEC-261 — the legacy exclusion is SERVER-side now: the count query and the
+      // rows query must be the SAME query, or the board says 100 while the CSV has 1
+      // (the founder defect, verbatim). Condition stated inline: `excludeLegacy` is
+      // declared below this callback and naming it here would be the TDZ shape.
+      categoriesIn: audience === 'creators' && !showLegacy && !category ? CREATOR_SLUGS : null,
       contactableOnly: reachableOnly, sinceHours: hours, limit: size,
     });
     setBusy(false);
     if (error) { setErr(error.message || 'Load failed'); setData(null); return; }
     if (d?.error) { setErr(d.error); setData(null); return; }
     setData(d);
-  }, [audience, city, locality, source, status, serviceType, category, reachableOnly, hours, size]);
+  }, [audience, city, locality, source, status, serviceType, category, reachableOnly, hours, size, showLegacy]);
   useEffect(() => { load(); }, [load]);
 
   // DEFECT 2. Only offer sources that actually have rows. An option that can only ever
@@ -271,11 +287,14 @@ export function DataExportScreen() {
     () => Object.entries(data?.bySource || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]),
     [data],
   );
-  // SPEC-260 — LEGACY CREATOR ROWS OUT OF THE DEFAULT VIEW. leads-dashboard only
-  // understands a single eq() category param (no NOT-IN), so the exclusion is
-  // client-side, applied to the visible rows AND every CSV path below. An explicitly
-  // picked category is an explicit ask, so it is never second-guessed. Rows stay in
-  // the DB — this is display only (founder: data is data).
+  // SPEC-260 — LEGACY CREATOR ROWS OUT OF THE DEFAULT VIEW. An explicitly picked
+  // category is an explicit ask, so it is never second-guessed. Rows stay in the DB —
+  // this is display only (founder: data is data).
+  // SPEC-261 — the exclusion moved SERVER-side (categoriesIn on every fetch above and
+  // below): a client-side filter over a ROW_CAP page made the rows a DIFFERENT
+  // population than the server counts — board said 100, CSV had 1 (founder: "how can
+  // we trust the dashboard"). The client filter below stays as a belt-and-braces no-op
+  // guarding a stale CREATOR_SLUGS copy.
   const allRows = data?.rows || [];
   const excludeLegacy = audience === 'creators' && !showLegacy && !category;
   const rows = excludeLegacy ? allRows.filter(isNewSpecCreator) : allRows;
@@ -286,7 +305,12 @@ export function DataExportScreen() {
   const download = () => {
     // `rows` is the VISIBLE set — the CSV obeys the legacy exclusion by construction.
     if (!rows.length) { setErr('Nothing to download for this filter.'); return; }
-    saveCsv(toCsv(rows), ['Cergio', audience, city, locality, source, serviceType, category, status, reachableOnly ? 'reachable' : '', hours ? hours + 'h' : ''].filter(Boolean).join(' ') + '.csv');
+    // SPEC-261 — the export never claims more than it delivers: a shortfall against
+    // the promised count is named in both numbers, and the filename carries the row
+    // count as its own receipt.
+    const warn = csvMismatch(rows.length, data?.filteredTotal, data?.rowCap);
+    if (warn) setErr(warn);
+    saveCsv(toCsv(rows), ['Cergio', audience, city, locality, source, serviceType, category, status, reachableOnly ? 'reachable' : '', hours ? hours + 'h' : ''].filter(Boolean).join(' ') + ` (${rows.length} rows).csv`);
   };
   // SPEC-249 — a source row's download is THAT source under the CURRENT filters
   // (city/location/type/time/size), not the whole pile. SPEC-260: same legacy exclusion
@@ -295,20 +319,32 @@ export function DataExportScreen() {
     const { data: d2, error } = await leadsDashboard(audience, {
       city: city || null, locality: locality || null, source: src,
       serviceType: serviceType || null, category: category || null,
+      // SPEC-261 — server-side legacy exclusion: same query for the count and the rows.
+      categoriesIn: excludeLegacy ? CREATOR_SLUGS : null,
       contactableOnly: reachableOnly, sinceHours: hours, limit: size,
     });
+    // Belt and braces: the server already excluded legacy rows via categoriesIn; this
+    // client filter is a cheap no-op that guards a stale CREATOR_SLUGS copy.
     const srcRows = d2?.rows ? (excludeLegacy ? d2.rows.filter(isNewSpecCreator) : d2.rows) : [];
     if (error || !srcRows.length) { setErr(error?.message || `Nothing to download for ${src} under these filters.`); return; }
-    saveCsv(toCsv(srcRows), ['Cergio', audience, src, city, locality, serviceType, category, hours ? hours + 'h' : '', 'last' + size].filter(Boolean).join(' ') + '.csv');
+    const warn = csvMismatch(srcRows.length, d2?.filteredTotal, d2?.rowCap);
+    if (warn) setErr(warn);
+    saveCsv(toCsv(srcRows), ['Cergio', audience, src, city, locality, serviceType, category, hours ? hours + 'h' : '', 'last' + size].filter(Boolean).join(' ') + ` (${srcRows.length} rows).csv`);
   };
   const downloadEach = async () => {
     const list = sources.map(([s]) => s).filter((s) => s !== '(other/unlabeled)');
     if (!list.length) { setErr('No sources with rows.'); return; }
     setBulk({ done: 0, total: list.length });
     for (let i = 0; i < list.length; i++) {
-      const { data: d2, error } = await leadsDashboard(audience, { city: city || null, source: list[i], status: status || null, contactableOnly: reachableOnly });
+      // SPEC-261 — categoriesIn: the legacy exclusion rides server-side here too, so
+      // this bulk path counts and fetches the same population as every other path.
+      const { data: d2, error } = await leadsDashboard(audience, { city: city || null, source: list[i], status: status || null, contactableOnly: reachableOnly, categoriesIn: excludeLegacy ? CREATOR_SLUGS : null });
       const eachRows = !error && d2?.rows ? (excludeLegacy ? d2.rows.filter(isNewSpecCreator) : d2.rows) : [];
-      if (eachRows.length) saveCsv(toCsv(eachRows), `Cergio ${audience} ${list[i]}.csv`);
+      if (eachRows.length) {
+        const warn = csvMismatch(eachRows.length, d2?.filteredTotal, d2?.rowCap);
+        if (warn) setErr(warn);
+        saveCsv(toCsv(eachRows), `Cergio ${audience} ${list[i]} (${eachRows.length} rows).csv`);
+      }
       setBulk({ done: i + 1, total: list.length });
     }
     setTimeout(() => setBulk(null), 2000);
@@ -439,6 +475,14 @@ export function DataExportScreen() {
 
       {busy && <div className="mt-4 text-[13px] text-b3">Loading…</div>}
       {err && <div className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-[13px] text-red-600">{err}</div>}
+      {/* SPEC-261 — the server's honesty bit. False means the rows page does NOT
+          deliver everything the count promises: the populations diverged, and the
+          founder must see that BEFORE trusting any number or download on this screen. */}
+      {data && data.rowsMatchCount === false && (
+        <div className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-[13px] text-red-600">
+          Rows loaded: {allRows.length.toLocaleString()}; the count says {Math.min(Number(data.filteredTotal ?? 0), Number(data.rowCap ?? 0)).toLocaleString()} — mismatch, do not trust this view or its downloads.
+        </div>
+      )}
 
       {data && (
         <>

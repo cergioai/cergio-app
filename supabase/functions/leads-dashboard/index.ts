@@ -5,7 +5,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb } from '../_shared/growthDb.ts';
-import { AUDIT_CAP_SOURCES, DMAS, DMA_STATE_SPELLINGS, auditFreshSince, resolveDma, sourceAuditCap } from '../_shared/opsPayload.ts';
+import { AUDIT_CAP_SOURCES, CREATOR_CATEGORIES, DMAS, DMA_STATE_SPELLINGS, auditFreshSince, resolveDma, sourceAuditCap } from '../_shared/opsPayload.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -85,6 +85,16 @@ serve(async (req: Request) => {
     const locality: string | null = body.locality || null;    // 'Brooklyn', 'Wynwood', …
     const typeFilter: string | null = body.serviceType || null;
     const categoryFilter: string | null = body.category || null;
+    // SPEC-261 — THE TRUST WELD (founder defect report, 2026-08-05, verbatim: "IG
+    // scraper download had 1 record.. shoed 100 in download with 10% phone.. how can we
+    // trust the dashboard"). The counts and the rows were DIFFERENT populations: the
+    // screen excluded legacy creator rows CLIENT-side from a ROW_CAP page while the
+    // server counted the full filtered set — count-population ≠ rows-population, board
+    // said 100, CSV had 1. categoriesIn moves that set filter SERVER-side so the rows
+    // query and the count query are the SAME query. A single explicit `category` is
+    // more specific and wins when both are sent.
+    const categoriesIn: string[] | null = Array.isArray(body.categoriesIn) && body.categoriesIn.length
+      ? body.categoriesIn.map((x: unknown) => String(x)) : null;
     const sinceHours = Number(body.sinceHours || 0);
     // The cap was 10,000 while the screen now offers 25,000. A control that silently returns
     // less than it promises is the same defect as the capped row count that read as a small
@@ -195,8 +205,12 @@ serve(async (req: Request) => {
     if (locality) rq = rq.eq('city', locality);
     if (typeFilter) rq = rq.eq('service_type', typeFilter);
     if (categoryFilter) rq = rq.eq('category', categoryFilter);
+    else if (categoriesIn) rq = rq.in('category', categoriesIn);
     if (sinceHours > 0) rq = rq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
-    rq = rq.order(tsCol, { ascending: false });
+    // SPEC-261 — nullsFirst:false. NULL timestamps sort FIRST in Postgres descending
+    // order, so without it null-ts rows hijack the "newest N" page and the CSV of the
+    // newest 100 is actually the undated junk.
+    rq = rq.order(tsCol, { ascending: false, nullsFirst: false });
     if (dmaSpellings) rq = rq.in(stateCol, dmaSpellings);
     if (sourceFilter) rq = isPrefixSource(sourceFilter) ? rq.like(srcCol, `${sourceFilter}%`) : rq.eq(srcCol, sourceFilter);
     if (body.status) rq = rq.eq(statusCol, body.status);
@@ -211,6 +225,7 @@ serve(async (req: Request) => {
     if (locality) cq = cq.eq('city', locality);
     if (typeFilter) cq = cq.eq('service_type', typeFilter);
     if (categoryFilter) cq = cq.eq('category', categoryFilter);
+    else if (categoriesIn) cq = cq.in('category', categoriesIn);
     if (sinceHours > 0) cq = cq.gte(tsCol, new Date(Date.now() - sinceHours * 36e5).toISOString());
     if (dmaSpellings) cq = cq.in(stateCol, dmaSpellings);
     if (sourceFilter) cq = isPrefixSource(sourceFilter) ? cq.like(srcCol, `${sourceFilter}%`) : cq.eq(srcCol, sourceFilter);
@@ -255,7 +270,21 @@ serve(async (req: Request) => {
           filtered: null, phone_pct: null, email_pct: null, both_pct: null,
           queue_new: null, queue_parked: null, errors: [] };
         const keys = audience === 'creators' ? [src] : (AUDIT_CAP_SOURCES[src] || [src]);
-        const srcMatch = (q: any) => (isPrefixSource(src) ? q.like(srcCol, `${src}%`) : q.in(srcCol, keys));
+        // SPEC-261 — the creators board row for ig-scraper-user-search counts the
+        // NEW-SPEC population only: category ∈ the 12 CREATOR_CATEGORIES slugs, which
+        // is SPEC-259's definition of the creator hundred. Counting ALL rows for the
+        // source included legacy pre-category rows ("junk removal" creators) and is how
+        // the board said 100 while the download had 1 (founder, 2026-08-05, verbatim:
+        // "IG scraper download had 1 record.. shoed 100 in download with 10% phone..
+        // how can we trust the dashboard"). Every count below — fresh, filtered AND the
+        // ☎/✉/both % — flows through srcMatch, so they all compute over this SAME
+        // population. se:web-harvest is unchanged: its rows are category-driven by
+        // construction.
+        const newSpecIg = audience === 'creators' && src === 'ig-scraper-user-search';
+        const srcMatch = (q: any) => {
+          const base = isPrefixSource(src) ? q.like(srcCol, `${src}%`) : q.in(srcCol, keys);
+          return newSpecIg ? base.in('category', CREATOR_CATEGORIES.map((c) => c.slug)) : base;
+        };
         const cnt = async (label: string, build: (q: any) => any): Promise<number | null> => {
           const { count, error } = await build(srcMatch(db.from(table).select('id', { count: 'exact', head: true })));
           if (error) { row.errors.push(`${label}: ${error.message}`); return null; }
@@ -328,7 +357,12 @@ serve(async (req: Request) => {
       }
     }
 
-    return json({ audience, label: DS.label, srcCol, isLeadTable, total, filteredTotal: filteredTotal ?? 0, rowCap: ROW_CAP, localities, serviceTypes, categories, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, board, rows: rows || [] });
+    // SPEC-261 — the honesty bit. True iff the rows page actually delivers everything
+    // the count promises (up to the cap). The screen checks it: a count-population that
+    // diverges from the rows-population must SAY so, never render a confident number
+    // beside a CSV that contradicts it.
+    const rowsMatchCount = (rows || []).length >= Math.min(filteredTotal ?? 0, ROW_CAP);
+    return json({ audience, label: DS.label, srcCol, isLeadTable, total, filteredTotal: filteredTotal ?? 0, rowCap: ROW_CAP, localities, serviceTypes, categories, withPhone, withEmail, bySource, contactBySource, byCity, byStatus, growth, rowsMatchCount, board, rows: rows || [] });
   } catch (e) {
     return json({ error: String(e).slice(0, 300) }, 500);
   }
