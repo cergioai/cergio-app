@@ -77,6 +77,12 @@ alter table public.leads_influencers add column if not exists enrich_attempted_a
 -- fails only in production.
 alter table public.leads_influencers add column if not exists is_business boolean;
 alter table public.leads_influencers add column if not exists created_at timestamptz default now();
+-- SPEC-263: site-enrich stamps site_enriched_at on BOTH lead tables on every crawl
+-- attempt. This file is the ONE schema applied to the live growth project
+-- (apply-growth-schema.mjs), so the guard must live here or the writer fails only
+-- in production — the exact 42703-swallowed shape SPEC-202/237 already paid for.
+alter table public.leads_influencers add column if not exists site_enriched_at timestamptz;
+alter table public.leads_services    add column if not exists site_enriched_at timestamptz;
 create index if not exists leads_influencers_via_idx  on public.leads_influencers (discovered_via);
 create index if not exists leads_influencers_city_idx on public.leads_influencers (city, state);
 
