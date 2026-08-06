@@ -1,20 +1,26 @@
 # SCOPE
 
-Redesign handoff PR 1 — schema + avatars (founder 2026-08-05, brief:
-`design_handoff_profile_booking/KICKOFF.md`). Three idempotent migrations copied
-verbatim from the handoff bundle, `avatar_url` added to the person-rendering
-selects per the bundle's PATCHES.md §1, one shared `Avatar` primitive.
-**No screen layout changes in this PR.** One deliberate deferral: the
-ServiceDetailScreen recommenders select (the "What people say" rows) keeps its
-exact literal because qa gate #159 pins it; its `avatar_url` lands with the
-PR 4 PDP rebuild, which revisits that gate anyway.
+Redesign handoff PR 2 — the UI kit (founder 2026-08-05, brief:
+`design_handoff_profile_booking/KICKOFF.md` "PR 2", visual spec
+`Cergio UI Kit.dc.html`, rules `STYLE_MIGRATION.md`). Ten new primitives in
+`src/components/ui/` (the eleventh, `Avatar`, landed in PR 1). `TrustLine`
+folds the existing `reputation.jsx` primitives (TrustStream, mutualNamesText)
+rather than competing with them. **Components only — nothing imports them yet,
+so after this PR nothing in the app looks different.** `RequestBox` does no
+parsing and no network; chat-parse wiring is PR 5. One token added:
+`gdis` (#C6D9B4, the kit's disabled-CTA fill) in `tailwind.config.js`.
 
-- `supabase/migrations/20260805120000_profile_avatars.sql`
-- `supabase/migrations/20260805121000_request_attachments.sql`
-- `supabase/migrations/20260805122000_service_pricing_flags.sql`
-- `src/components/ui/Avatar.jsx`
-- `src/screens/PublicProfileScreen.jsx`
-- `src/screens/ServiceDetailScreen.jsx`
+- `src/components/ui/FacetBadge.jsx`
+- `src/components/ui/TrustLine.jsx`
+- `src/components/ui/SectionTitle.jsx`
+- `src/components/ui/Card.jsx`
+- `src/components/ui/QuoteBubble.jsx`
+- `src/components/ui/PerkPanel.jsx`
+- `src/components/ui/Button.jsx`
+- `src/components/ui/Pill.jsx`
+- `src/components/ui/SeeAllLink.jsx`
+- `src/components/ui/RequestBox.jsx`
+- `tailwind.config.js`
 - `SCOPE.md`
 
 ## Shared files
