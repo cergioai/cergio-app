@@ -22,6 +22,11 @@ export default {
         gd2: '#2C5D21',
         gm:  '#77C000',
         gl:  '#F3FFEA',
+        // gdis = disabled CTA fill. Source: redesign handoff bundle
+        // (design_handoff_profile_booking/Cergio UI Kit.dc.html, Button card,
+        // 2026-08-05) — the desaturated green the kit specifies for disabled
+        // buttons. Used ONLY by components/ui/Button.jsx.
+        gdis: '#C6D9B4',
 
         // ── Salmon family — RETIRED ──────────────────────────────────────
         // Mockup uses green + neutrals only. Tokens kept defined and aliased
