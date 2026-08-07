@@ -295,6 +295,9 @@ const gdb = growthDb();
   const started = Date.now();
   let stage = 'init';
   const dbg = { raw_results: 0, queries_with_results: 0, first_urls: [] as string[] };
+  // SPEC-268 — per-engine {tried,got} for THIS run; written to agent_runs.meta.engines
+  // so "which search transport works from the edge" is a measured fact on every tick.
+  const engineTally: Record<string, { tried: number; got: number }> = {};
   let dbRef: any = null;   // hoisted so the catch can log an agent_runs error row
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -589,7 +592,7 @@ const gdb = growthDb();
       const niche = item.niche;
       const city  = item.city;
       stage = 'search';
-      const results = await ddgSearch(query);
+      const results = await ddgSearch(query, engineTally);
       dbg.raw_results += results.length;
       if (results.length) { dbg.queries_with_results++; if (dbg.first_urls.length < 5) dbg.first_urls.push(...results.slice(0, 2).map(r => r.url)); }
 
@@ -778,7 +781,7 @@ const gdb = growthDb();
       status: harvestStatus, error: upsertError,
       // skips explains WHY a run wrote nothing new so the watchdog can tell a
       // dedupe no-op (known_handle high) from a discovery miss (no_handle high).
-      meta: { tag, queries: queries.length, candidates: rows.length, site_fetches: siteFetches, skips, spin },
+      meta: { tag, queries: queries.length, candidates: rows.length, site_fetches: siteFetches, skips, spin, engines: engineTally },
     });
 
     return json({
@@ -792,7 +795,7 @@ const gdb = growthDb();
       // legacy keys the earlier dashboards/scripts read — kept, same meanings.
       queries: queries.length, site_fetches: siteFetches,
       candidates_with_contact: rows.length, upserted: inserted, upsert_error: upsertError,
-      creators_sendable_total: sendable ?? null, skips, dbg,
+      creators_sendable_total: sendable ?? null, skips, dbg, engines: engineTally,
       ms: Date.now() - started,
       sample: uniqueRows.slice(0, 8).map(r => ({ h: r.ig_handle, c: r.email || r.phone, f: r.followers })),
     });
@@ -863,38 +866,110 @@ function serr(e: unknown): string {
   return parts.join(' ').trim().slice(0, 900);
 }
 
-// ---- DuckDuckGo keyless HTML search ----
-async function ddgSearch(query: string): Promise<Array<{ url: string; title: string; snippet: string }>> {
-  const endpoints = [
-    `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
-  ];
-  for (const ep of endpoints) {
-    const html = await fetchText(ep, 8000);
-    if (!html) continue;
-    const out: Array<{ url: string; title: string; snippet: string }> = [];
-    // html endpoint: result blocks with result__a (link+title) and result__snippet.
-    const re = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>)?/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html)) && out.length < 12) {
-      const url = decodeDdg(m[1]);
-      if (!url) continue;
-      out.push({ url, title: stripTags(m[2] || ''), snippet: stripTags(m[3] || '') });
-    }
-    // lite endpoint fallback: plain anchors + adjacent text.
-    if (!out.length) {
-      const re2 = /<a[^>]*href="(https?:\/\/[^"]+|\/l\/\?[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-      let m2: RegExpExecArray | null;
-      while ((m2 = re2.exec(html)) && out.length < 12) {
-        const url = decodeDdg(m2[1]);
-        if (!url || /duckduckgo\.com/i.test(url)) continue;
-        out.push({ url, title: stripTags(m2[2] || ''), snippet: '' });
-      }
-    }
+// ---- Keyless web search — TRANSPORT LADDER (SPEC-268) ----
+// MEASURED 2026-08-07 via the SPEC-267 runs surface: every run built 52 queries and
+// got raw_results=0 with EVERY skip counter 0 and site_fetches 0 — BOTH DuckDuckGo
+// endpoints return nothing to the Supabase egress IP, while the SAME query from a
+// residential browser returns 10 organic results. An IP-class bot-wall, not an
+// extraction defect (extraction never ran; site-enrich fetches arbitrary sites from
+// this egress fine). DDG stays FIRST — best parser when unwalled, and gate #264b
+// pins the lite fallback — then the ladder falls through to Bing HTML and Mojeek:
+// independent indexes, keyless, $0 (the founder's order is verbatim "not paid! IG").
+// Per-engine telemetry lands in agent_runs.meta.engines EVERY run, so which
+// transport works from the edge is MEASURED from now on, never guessed again.
+const ENGINE_COOLDOWN_MS = 600000;    // fetch-FAILED engines sit out 10 min (warm-worker scoped)
+const _engineDeadUntil: Record<string, number> = {};
+type SearchHit = { url: string; title: string; snippet: string };
+type SearchEngine = { name: string; build: (q: string) => string; parse: (html: string) => SearchHit[] };
+const SEARCH_ENGINES: SearchEngine[] = [
+  { name: 'ddg-html', build: (q) => `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, parse: parseDdgHtml },
+  { name: 'ddg-lite', build: (q) => `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`, parse: parseDdgLite },
+  { name: 'bing',     build: (q) => `https://www.bing.com/search?q=${encodeURIComponent(q)}`,       parse: parseBing },
+  { name: 'mojeek',   build: (q) => `https://www.mojeek.com/search?q=${encodeURIComponent(q)}`,     parse: parseMojeek },
+];
+async function ddgSearch(query: string, tally?: Record<string, { tried: number; got: number }>): Promise<SearchHit[]> {
+  for (const eng of SEARCH_ENGINES) {
+    // COOLDOWN is for FETCH failures only (timeout / HTTP error) — a dead engine
+    // costs one 8s timeout per 10-min window instead of 8s × every query × every
+    // run. 0 PARSED results is a soft miss (thin query, changed markup) and never
+    // benches an engine: benching on soft misses would silently shrink the ladder
+    // to whichever engine answered last.
+    if ((_engineDeadUntil[eng.name] || 0) > Date.now()) continue;
+    let t = tally?.[eng.name];
+    if (tally && !t) t = tally[eng.name] = { tried: 0, got: 0 };
+    if (t) t.tried++;
+    const html = await fetchText(eng.build(query), 8000);
+    if (!html) { _engineDeadUntil[eng.name] = Date.now() + ENGINE_COOLDOWN_MS; continue; }
+    const out = eng.parse(html).slice(0, 12);
+    if (t) t.got += out.length;
     if (out.length) return out;
   }
   return [];
 }
+// html endpoint: result blocks with result__a (link+title) and result__snippet.
+function parseDdgHtml(html: string): SearchHit[] {
+  const out: SearchHit[] = [];
+  const re = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>)?/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && out.length < 12) {
+    const url = decodeDdg(m[1]);
+    if (!url) continue;
+    out.push({ url, title: stripTags(m[2] || ''), snippet: stripTags(m[3] || '') });
+  }
+  return out;
+}
+// lite endpoint: plain anchors + adjacent text.
+function parseDdgLite(html: string): SearchHit[] {
+  const out: SearchHit[] = [];
+  const re2 = /<a[^>]*href="(https?:\/\/[^"]+|\/l\/\?[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m2: RegExpExecArray | null;
+  while ((m2 = re2.exec(html)) && out.length < 12) {
+    const url = decodeDdg(m2[1]);
+    if (!url || /duckduckgo\.com/i.test(url)) continue;
+    out.push({ url, title: stripTags(m2[2] || ''), snippet: '' });
+  }
+  return out;
+}
+// Bing wraps organic hrefs in /ck/a redirects whose u= param is 'a1' + base64url of
+// the real URL. Decode it or every downstream isIG/igHandle/external_url reads
+// bing.com and the engine "works" while harvesting nothing — a wall with extra steps.
+function decodeBing(href: string): string | null {
+  try {
+    if (/bing\.com\/ck\/a/i.test(href) || href.startsWith('/ck/a')) {
+      const u = new URL(href.startsWith('http') ? href : 'https://www.bing.com' + href);
+      const p = u.searchParams.get('u') || '';
+      if (p.startsWith('a1')) {
+        const b64 = p.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+        const dec = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+        if (/^https?:\/\//i.test(dec)) return dec;
+      }
+      return null;
+    }
+    return /^https?:\/\//i.test(href) ? href : null;
+  } catch { return null; }
+}
+function parseBing(html: string): SearchHit[] {
+  const out: SearchHit[] = [];
+  const re = /<li class="b_algo"[\s\S]*?<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<p[^>]*>([\s\S]*?)<\/p>)?/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && out.length < 12) {
+    const url = decodeBing(m[1].replace(/&amp;/g, '&'));
+    if (!url || /(^|\.)bing\.com$|(^|\.)microsoft\.com$/i.test(searchHost(url))) continue;
+    out.push({ url, title: stripTags(m[2] || ''), snippet: stripTags(m[3] || '') });
+  }
+  return out;
+}
+function parseMojeek(html: string): SearchHit[] {
+  const out: SearchHit[] = [];
+  const re = /<h2>\s*<a[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>[\s\S]*?(?:<p[^>]*class="s"[^>]*>([\s\S]*?)<\/p>)?/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && out.length < 12) {
+    if (/mojeek\.com/i.test(m[1])) continue;
+    out.push({ url: m[1], title: stripTags(m[2] || ''), snippet: stripTags(m[3] || '') });
+  }
+  return out;
+}
+function searchHost(u: string): string { try { return new URL(u).hostname; } catch { return ''; } }
 
 function decodeDdg(href: string): string | null {
   try {
