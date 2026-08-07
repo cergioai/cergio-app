@@ -40,9 +40,17 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb } from '../_shared/growthDb.ts';
 
-const BATCH = 12;                 // candidates per run (oldest first)
+// SPEC-265 — the founder's "100X SPEED via parallel crawlers", free lane. The old
+// run was strictly sequential: 12 candidates × up to ~25s of 5s-capped fetches
+// inside a 45s budget = ~12 sites per 15-min tick. A pool of POOL_SIZE workers
+// drains a bigger batch inside a ~120s budget (the edge wall clock allows ~150s),
+// so one slow site now costs ONE worker 5s, never the whole run. The per-request
+// cap is deliberately UNCHANGED — parallelism must never be bought by letting a
+// single socket hang longer.
+const BATCH = 60;                 // candidates per run (oldest first) — was 12 pre-SPEC-265
+const POOL_SIZE = 6;              // concurrent site crawls (SPEC-265 fan-out)
 const FETCH_TIMEOUT_MS = 5000;    // per-request cap — one dead site costs 5s, never the run
-const RUN_BUDGET_MS = 45000;      // total crawl budget — stop picking candidates past this
+const RUN_BUDGET_MS = 120000;     // total crawl budget — stop picking candidates past this (~120s of the ~150s edge wall)
 const UA = 'CergioBot/1.0 (+https://cergio.ai)';
 
 function json(b: unknown, s = 200) {
@@ -259,10 +267,13 @@ serve(async (req: Request) => {
   let scanned = 0, enriched_email = 0, enriched_phone = 0, skipped_junk = 0;
   const stamp = new Date().toISOString();
 
-  for (const c of cands) {
-    // run budget: stop PICKING candidates once spent — un-attempted rows keep
-    // site_enriched_at null and lead the next run's oldest-first queue.
-    if (Date.now() - started > RUN_BUDGET_MS) break;
+  // SPEC-265 — worker pool. The cursor advances in a SYNCHRONOUS statement, so each
+  // candidate is picked exactly ONCE (no double-claim under the single-threaded event
+  // loop); the budget guard is the SAME line the sequential loop enforced: stop
+  // PICKING candidates once spent — un-attempted rows keep site_enriched_at null and
+  // lead the next run's oldest-first queue.
+  let cursor = 0;
+  const enrichOne = async (c: Cand): Promise<void> => {
     const found = await crawlSite(c.url);
     scanned++;
     skipped_junk += found.junk;
@@ -297,7 +308,14 @@ serve(async (req: Request) => {
         await gdb.from('leads_services').update({ site_enriched_at: stamp }).eq('id', c.id);
       }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: POOL_SIZE }, async () => {
+    while (cursor < cands.length) {
+      if (Date.now() - started > RUN_BUDGET_MS) break;
+      const c = cands[cursor++];   // synchronous pick — a candidate is claimed exactly once
+      await enrichOne(c);
+    }
+  }));
 
   const out = { status: 'ok', scanned, enriched_email, enriched_phone, skipped_junk, elapsed_ms: Date.now() - started };
   try {
