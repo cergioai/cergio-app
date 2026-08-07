@@ -7634,8 +7634,8 @@ test('spec265-free-parallel-multiplier', 'SPEC-265 (founder order, 2026-08-07: 1
     'the creator-harvest query pool is gone — HARVEST_POOL exists but the driver is sequential, so the 120s deadline buys ~15 queries instead of 48 and the multiplier quietly halves twice');
   assert(!(!ch.includes('const item = queries[qCursor++];')),
     'the creator-harvest pool no longer claims queries via a synchronous cursor increment — two workers can run the SAME query, every handle it finds dedupes against itself, and the run reports known_handle skips instead of new creators');
-  assert(!(!ch.includes('fetchText(ep, 8000)')),
-    'the DDG search fetch lost its 8s cap — one bot-walled endpoint holds a pool slot for the platform default and the parallel harvest degrades to slower-than-sequential');
+  assert(!(!ch.includes('fetchText(eng.build(query), 8000)')),
+    'the search-engine fetch lost its 8s cap (amended in place by SPEC-268 — the ladder replaced the two-endpoint loop, the cap must not move) — one bot-walled engine holds a pool slot for the platform default and the parallel harvest degrades to slower-than-sequential');
   assert(!(!ch.includes('Math.floor(Date.now() / 420000)')),
     'the spin bucket is no longer 7 minutes — with two lanes ticking ~every 7.5 min, a 20-min bucket hands consecutive runs the SAME rotation slice, and the second run\'s whole budget is spent re-finding handles the first just wrote (known_handle skips, not creators)');
 
@@ -7698,6 +7698,33 @@ test('agent-runs-tab-reads-the-database-agents-log-to', 'SPEC-267 (measured 2026
     'the runs audience no longer orders by started_at — agent_runs has no created_at column, so every rows load 42703s and the tab renders an error (or worse, a silent empty) beside 98 real runs a day');
   assert(!(!/runs:\s+\{ table: 'agent_runs',\s+srcCol: 'agent'/.test(f)),
     'the runs dataset no longer maps agent_runs by agent — the per-agent filter dies and the founder cannot isolate creator-harvest\'s runs from the 110 fulfill-crawl rows a day around them');
+});
+
+test('search-transport-ladder-with-per-engine-telemetry', 'SPEC-268 (MEASURED 2026-08-07 via the SPEC-267 runs surface, the first thing it caught): every creator-harvest run built 52 queries and logged raw_results=0 with EVERY skip counter at 0 and site_fetches 0 — both DuckDuckGo endpoints return nothing to the Supabase egress IP while the SAME query from the founder\'s residential browser returns 10 organic results. An IP-class bot-wall, not an extraction defect (extraction never ran) and not endpoint death (the browser reaches it). The fix is a TRANSPORT LADDER, all keyless and $0 (founder, verbatim: "not paid! IG"): ddg-html → ddg-lite → bing → mojeek, first engine with ≥1 parsed result wins, result shape unchanged so every downstream gate (extraction, geo, dedupe, caps) is untouched. Bing\'s /ck/a redirect hrefs are DECODED to real URLs (base64url u= param, a1 prefix) — undecoded, every result reads bing.com and the engine "works" while harvesting nothing. Engines whose FETCH fails (timeout/HTTP error — never merely 0 parsed results) sit out a 10-min cooldown so a dead engine costs one 8s timeout per window, not 8s × 52 queries × every run. And every run writes meta.engines {tried,got} per engine, so which transport works from the edge is a MEASURED fact on every tick — the guess this spec replaces can never come back.', '#268', () => {
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+  // ladder order: ddg html first, lite second (#264b pins the literals), then bing, then mojeek
+  const order = ['https://html.duckduckgo.com/html/?q=', 'https://lite.duckduckgo.com/lite/?q=', 'https://www.bing.com/search?q=', 'https://www.mojeek.com/search?q='];
+  let last = -1;
+  for (const ep of order) {
+    const at = ch.indexOf(ep);
+    assert(!(at < 0), `the ${ep} rung is missing from the search ladder — the ladder is shorter than the spec and the next single-engine wall zeroes the source again with no fallback and no telemetry to say so`);
+    assert(!(at < last), `the search ladder is out of order around ${ep} — DDG must stay first (best parser when unwalled, #264b\'s pins) and the fallbacks must be reachable behind it, or the measured-good engine is shadowed by a walled one`);
+    last = at;
+  }
+  assert(!(!/for \(const eng of SEARCH_ENGINES\)/.test(ch)),
+    'ddgSearch no longer walks the SEARCH_ENGINES ladder — the endpoint literals exist but only one is ever tried, which is the pre-SPEC-268 single-wall shape wearing new clothes');
+  assert(!(!ch.includes("if (p.startsWith('a1'))")),
+    'the bing /ck/a redirect decode is gone — every bing result URL reads bing.com, isIG/igHandle/external_url all miss, and the engine reports got>0 while harvesting nothing: a wall with extra steps');
+  assert(!(!/if \(!html\) \{ _engineDeadUntil\[eng\.name\] = Date\.now\(\) \+ ENGINE_COOLDOWN_MS; continue; \}/.test(ch)),
+    'the fetch-fail cooldown is gone — a dead engine eats an 8s timeout on EVERY query of EVERY run (52 × 8s > the whole 120s deadline) and the ladder makes the harvest slower than the wall it fixes');
+  assert(!(!/0 PARSED results is a soft miss|never\s+benches an engine/i.test(ch) || /out\.length === 0[^]{0,80}_engineDeadUntil/.test(ch)),
+    'an engine is benched for returning 0 parsed results — thin queries and markup drift would silently shrink the ladder to whichever engine answered last, and coverage decays with no error anywhere');
+  assert(!(!/engines: engineTally/.test(ch)),
+    'the per-engine tally is no longer written to the run meta — which transport works from the edge goes back to being a guess, which is the exact blindness that cost tonight\'s six zero-ticks');
+  assert(!((ch.match(/engines: engineTally/g) || []).length < 2),
+    'the engines tally is missing from the meta or the response payload — the agent_runs surface (SPEC-267) and the invoke response must BOTH carry it, or one diagnostic path answers and the other shrugs');
+  assert(!(!ch.includes('const results = await ddgSearch(query, engineTally);')),
+    'the query loop no longer passes the tally into the search — engines run untallied, meta.engines is forever {}, and the telemetry gate above is satisfied by a dead object');
 });
 
 main().catch(e => {
