@@ -154,6 +154,17 @@ export const CREATOR_SOURCE_META: Record<string, { what: string; where: string }
 // clears it — do not invent it early. creator-harvest/index.ts keeps its own
 // NICHE_TIERS table (it needs several query phrasings per category and per-tier run
 // budgets); gate #257 WELDS the two files' slug sets so they cannot drift.
+// SPEC-271 (founder, 2026-08-07: "Rename Crawls something brief intuitive (Yelp,
+// Google Sponsored, YP etc"): DISPLAY labels only — every data_source/discovered_via
+// VALUE stays exactly as written in rows and counted by every gate; renaming values
+// is the label-mismatch defect (#243's multi-name maps) this project already paid for.
+export const SOURCE_LABELS: Record<string, string> = {
+  osm: 'OpenStreetMap', craigslist: 'Craigslist', yellowpages_apify: 'YP',
+  yelp: 'Yelp', google_lsa: 'Google Sponsored', google_sponsored: 'Sponsored (legacy)',
+  gmaps_apify: 'Google Maps', ig_services: 'IG Services',
+  'ig-scraper-user-search': 'IG Creators', 'se:web-harvest': 'Web Creators',
+};
+
 export const CREATOR_CAT_CAP = 25;   // founder: "top 25 ... per each of the indicated cateogries"
 export const CREATOR_CATEGORIES: Array<{ slug: string; igQuery: string }> = [
   // Tier 1 — founder order: pets, parenting, fitness, home, beauty, local city life
