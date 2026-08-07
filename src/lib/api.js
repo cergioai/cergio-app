@@ -614,7 +614,7 @@ export async function listServices({
       supabase
         .from('services')
         .select(`
-          id, title, category, description, location_text, photo_class,
+          id, title, headline, category, description, location_text, photo_class,
           cover_url, rating_avg, rating_count, bookings_count, owner_id,
           created_at, taxonomy_category, taxonomy_provider_type,
           taxonomy_offering_id, status, service_area_geojson
@@ -699,6 +699,9 @@ export async function listServices({
     if (filtered.length) {
       const recoMap = await fetchRecommendersByServiceId(filtered.map(s => s.id));
       filtered = filtered.map(s => ({ ...s, recommenders: recoMap[s.id] || [] }));
+      // FW-23: owner display names so cards can say "by Tom Cruise".
+      const nameMap = await fetchOwnerDisplayNames(filtered.map(s => s.owner_id));
+      filtered = filtered.map(s => ({ ...s, owner_display_name: nameMap[s.owner_id] || null }));
     }
     return { data: filtered, error: null };
   }
@@ -709,7 +712,7 @@ export async function listServices({
   let q = supabase
     .from('services')
     .select(`
-      id, title, category, description, location_text, photo_class, cover_url,
+      id, title, headline, category, description, location_text, photo_class, cover_url,
       rating_avg, rating_count, bookings_count, owner_id, created_at,
       taxonomy_category, taxonomy_provider_type, taxonomy_offering_id,
       offerings ( id, name, kind, price_cents, duration_minutes, is_default, taxonomy_offering_id )
@@ -749,6 +752,9 @@ export async function listServices({
   if (res.data && res.data.length > 0) {
     const recoMap = await fetchRecommendersByServiceId(res.data.map(s => s.id));
     res.data = res.data.map(s => ({ ...s, recommenders: recoMap[s.id] || [] }));
+    // FW-23: owner display names so cards can say "by Tom Cruise".
+    const nameMap = await fetchOwnerDisplayNames(res.data.map(s => s.owner_id));
+    res.data = res.data.map(s => ({ ...s, owner_display_name: nameMap[s.owner_id] || null }));
   }
   return res;
 }
@@ -3149,6 +3155,18 @@ export async function listRequestAttachments(requestId) {
   return { data: rows.map(r => ({ ...r, signed_url: urlByPath[r.storage_path] || null })), error: null };
 }
 
+/** FW-23: display names for a set of owner ids ("by Tom Cruise" lines).
+ *  One query, keyed map back; empty input costs nothing. */
+async function fetchOwnerDisplayNames(ownerIds) {
+  const ids = Array.from(new Set((ownerIds || []).filter(Boolean)));
+  if (!ids.length || !supabaseReady) return {};
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, display_name')
+    .in('id', ids);
+  return Object.fromEntries((data || []).filter(p => p.display_name).map(p => [p.id, p.display_name]));
+}
+
 /** FW-18: ordered gallery rows for a service (photos + videos). Public read —
  *  the PDP shows the gallery to signed-out viewers; the bucket is public so
  *  no signing round-trip is needed. */
@@ -3164,11 +3182,54 @@ export async function listServiceMedia(serviceId) {
 
 export async function getServiceOfferings(serviceId) {
   if (!supabaseReady || !serviceId) return { data: [], error: null };
+  // FW-22 SHARED-CHANGE-APPROVED: this selected `price` — a column the
+  // offerings table has NEVER had (it is price_cents) — so every call
+  // 42703'd, the error was swallowed, and "Edit Offerings" showed
+  // "No offerings yet" for every real service.
   return await supabase
     .from('offerings')
-    .select('id, name, description, kind, price, duration_minutes')
+    .select('id, name, description, kind, price_cents, duration_minutes, is_default')
     .eq('service_id', serviceId)
     .order('created_at', { ascending: true });
+}
+
+/** FW-22: edit one offering in place (name/description/price_cents/
+ *  duration_minutes). RLS enforces ownership via the service join. */
+export async function updateOffering(offeringId, patch) {
+  if (!supabaseReady || !offeringId) return { data: null, error: { message: 'offeringId required' } };
+  return await supabase
+    .from('offerings')
+    .update(patch)
+    .eq('id', offeringId)
+    .select()
+    .maybeSingle();
+}
+
+/** FW-22: add an offering to an EXISTING service (manage mode — the new-
+ *  listing flow keeps writing through createService's draft path). */
+export async function addOffering(serviceId, { name, description, kind, price_cents, duration_minutes }) {
+  if (!supabaseReady || !serviceId) return { data: null, error: { message: 'serviceId required' } };
+  return await supabase
+    .from('offerings')
+    .insert({
+      service_id:       serviceId,
+      name:             name || (kind === 'hourly' ? 'Hourly rate' : 'Session'),
+      description:      description || null,
+      kind:             kind || 'session',
+      price_cents:      price_cents ?? 0,
+      duration_minutes: kind === 'session' ? (duration_minutes || null) : null,
+      currency:         'USD',
+      is_default:       false,
+    })
+    .select()
+    .single();
+}
+
+/** FW-22: remove an offering. RLS enforces ownership. */
+export async function deleteOffering(offeringId) {
+  if (!supabaseReady || !offeringId) return { error: { message: 'offeringId required' } };
+  const { error } = await supabase.from('offerings').delete().eq('id', offeringId);
+  return { error };
 }
 
 /** Create a Stripe SetupIntent for the signed-in user (creates Customer if

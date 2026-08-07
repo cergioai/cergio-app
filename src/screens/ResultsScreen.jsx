@@ -397,6 +397,11 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     responseId:         responseDetail?.responseId || null,
     responderFirstName: responseDetail?.responderFirstName || null,
     name:        svc.title || 'Untitled',
+    // FW-23: Airbnb-style one-liner. When set, cards + PDP lead with it,
+    // the service-in-location title becomes a badge, and "by {owner}" renders.
+    headline:     svc.headline || null,
+    serviceTitle: svc.title || null,
+    ownerName:    svc.owner_display_name || null,
     category:    svc.category || 'Service',
     // Real provider type (e.g. "Hair Stylist") for the card subtitle — not the
     // vague category ("Beauty"). Falls back to category when absent (SPEC-49g).
