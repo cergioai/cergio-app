@@ -74,8 +74,16 @@ if (q.status !== 200 || !q.body?.ok) {
   console.log(`queries mode -> HTTP ${q.status}: ${q.raw}`);
   process.exit(q.status === 200 ? 0 : 1);
 }
-const queries = Array.isArray(q.body.queries) ? q.body.queries : [];
-console.log(`worker handed ${queries.length} queries (spin ${q.body.spin})`);
+let queries = Array.isArray(q.body.queries) ? q.body.queries : [];
+// SPEC-271 — matrix lanes: each lane rotates the shared slice to its OWN disjoint
+// window, so 8 fresh runner IPs spend their ~2 served queries on 16 DIFFERENT
+// searches instead of the same head. Ingest dedupes any overlap regardless.
+const LANE = Number(process.env.LANE || 0), LANES = Number(process.env.LANES || 1);
+if (LANES > 1 && queries.length) {
+  const off = (LANE * Math.ceil(queries.length / LANES)) % queries.length;
+  queries = queries.slice(off).concat(queries.slice(0, off));
+}
+console.log(`worker handed ${queries.length} queries (spin ${q.body.spin}, lane ${LANE}/${LANES})`);
 if (!queries.length) { console.log('nothing to search this tick'); process.exit(0); }
 
 // 2) search from the runner — the leg the edge cannot do

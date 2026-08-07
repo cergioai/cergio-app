@@ -6692,7 +6692,7 @@ test('the-final-cron-schedule-must-resolve-its-secrets', 'SPEC-242 (forensic aud
 test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 2026-08-03, verbatim: "add all sources not just creators to the crawl at 100 leads each max to review (except yelp)"). The creator sources already stop themselves at CREATOR_TARGET; the services sources had NO per-source stop — activating them under the old controls would have crawled without a ceiling until someone watching a dashboard flipped a switch, which is how a $1 tranche became $108. Now EVERY services source drops out of the rota at SOURCE_AUDIT_CAP leads, checked BEFORE any job is claimed (a guard after the claim still spends money), fail CLOSED on an unreadable count (refusing costs nothing). The count must use EVERY data_source value a source actually writes — fulfillYellowPagesApify writes rows as "yellowpages", not its rota name, and google_lsa history includes folded google_sponsored rows — because counting only the rota name reads 0 beside real rows, and a cap keyed on a name nobody writes is a cap that can never trigger. That mapping lives ONCE, in _shared/opsPayload.ts, shared by the claim gate and the founder screen — two copies would disagree exactly when it matters. And the screen must SAY a capped source stopped itself: an idle source with no visible reason reads as a broken source, and a broken-looking source invites the next agent to "fix" a founder order.', '#243', () => {
   // 1) the committed controls carry the founder numbers exactly
   const cfg = JSON.parse(readFile('growth-controls.json').replace(/^\s*\/\/.*$/gm, ''));
-  assert(!(Number(cfg.SOURCE_AUDIT_CAP) !== 100), `SOURCE_AUDIT_CAP is ${cfg.SOURCE_AUDIT_CAP}, not the founder's 100 — "100 leads each max to review" is a founder number, and changing it is a founder decision (update this gate with the new verbatim order, never just edit the config)`);
+  assert(!(Number(cfg.SOURCE_AUDIT_CAP) !== 2000), `SOURCE_AUDIT_CAP is ${cfg.SOURCE_AUDIT_CAP}, not the founder's 2000 — AMENDED IN PLACE by SPEC-271 (founder, 2026-08-07, verbatim: "rotating around key categories to scale to 2000 services between NYC and Miami"); the 100-audit phase (SPEC-243/246) is over, and the NEXT change is likewise a founder decision (update this gate with the new verbatim order, never just edit the config)`);
   const only = String(cfg.CRAWLS_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   // AMENDED IN PLACE by SPEC-270 (founder, 2026-08-07, verbatim: "for creators and IG
   // services only for now... keep the other cralwers parked"): the all-sources phase
@@ -6700,8 +6700,8 @@ test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 
   // rota, dashboards and code; OUT of the allowlist), and a parked source sneaking back
   // into CRAWLS_ONLY is a founder decision taken by config drift (the #239 rule,
   // generalised). The cap MECHANICS below stand untouched for the day they re-open.
-  for (const s of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify']) {
-    assert(!(only.includes(s)), `${s} is in CRAWLS_ONLY while the SPEC-270 park order stands — re-opening a parked source is a founder decision, not config drift`);
+  for (const s of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_sponsored', 'gmaps_apify']) {
+    assert(!(only.includes(s)), `${s} is in CRAWLS_ONLY while the SPEC-270 park order stands (google_lsa re-opened by SPEC-271 — founder: "add Google Sponsored (LSA)") — re-opening a parked source is a founder decision, not config drift`);
   }
   for (const s of ['ig_services', 'se:web-harvest']) {
     assert(!(!only.includes(s)), `${s} is missing from CRAWLS_ONLY — the founder ordered creators AND IG services scaled to 250 contactable, and a missing source silently closes half that order (SPEC-230 shape)`);
@@ -7857,8 +7857,8 @@ test('booking-freeform-box-and-attachments', 'PR 5 (redesign handoff, Booking Fl
 test('creators-and-ig-only-250-contactable-rotated-categories-followers', 'SPEC-270 (founder, 2026-08-07, verbatim: "use the same strategy used for IG services to scale contactable %% for creators but add other categories to get to 100 contactable leads accross all categories (we only see pets and nyc)... also add #of followers like for IG services crawl... scale creators and IG services to 250 contactable (whatever the # total nubmer is..) .. for creators and IG services only for now... keep the other cralwers parked... conserve tokens ... but deliver gradually to download..."). Four welded parts. (1) PARK: CRAWLS_ONLY narrows to exactly the two creator sources — the services sources are parked, not deleted (the #239 shape; the amended #243 pins both directions). (2) 250 CONTACTABLE, NOT 250 ROWS: both self-stops chain or(email.not.is.null,phone.not.is.null) after their pinned population filters, so uncontactable rows are kept but never satisfy the stop and the total row count floats — the founder\'s parenthetical, verbatim. (3) ROTATION: MEASURED on relay run #1 — a fresh runner IP is served only the FIRST ~2 queries before DDG walls it, and the slice always led with the same head, so every tick harvested pets×NYC ("we only see pets and nyc"). The built slice now rotates IN PLACE by spin, so the served window walks the whole category×metro space across ticks. (4) FOLLOWERS: site-enrich parses a follower count off the creator\'s own pages ("123K followers" → integer, no match → null, never fabricated — SPEC-86) and fills it on the same fill-only write. Money: ig_services stays under every #253-#256 control; se:web-harvest and site-enrich stay $0.', '#270b', () => {
   const cfg = JSON.parse(readFile('growth-controls.json').replace(/^\s*\/\/.*$/gm, ''));
   const only = String(cfg.CRAWLS_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean).sort();
-  assert(!(only.join(',') !== 'ig_services,se:web-harvest'),
-    `CRAWLS_ONLY is [${only.join(',')}] not exactly the two creator sources — either a parked crawler is back (config drift spending attention the founder parked) or half the 250-contactable order is closed`);
+  assert(!(only.join(',') !== 'google_lsa,ig_services,se:web-harvest'),
+    `CRAWLS_ONLY is [${only.join(',')}] not exactly the two creator sources + google_lsa (SPEC-271 amendment: founder re-opened Google Sponsored/LSA 2026-08-07) — either a parked crawler is back (config drift spending attention the founder parked) or half the 250-contactable order is closed`);
   assert(!(Number(cfg.CREATOR_TARGET) !== 250),
     `CREATOR_TARGET is ${cfg.CREATOR_TARGET}, not the founder\'s 250 — "scale creators and IG services to 250 contactable" is a founder number; changing it is a founder decision (update this gate with the new verbatim order)`);
   const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
@@ -7933,6 +7933,30 @@ test('style-migration-long-tail-done', 'PR 6 (redesign handoff STYLE_MIGRATION.m
   assert(!(!/from '\.\.\/components\/ui\/Avatar'/.test(rfc)), 'RequestFromConnectorScreen no longer uses the kit Avatar (PR 6)');
   const rd = readFile('src/screens/RequestDetailScreen.jsx');
   assert(!(!/from '\.\.\/components\/ui\/Avatar'/.test(rd)), 'RequestDetailScreen no longer uses the kit Avatar (PR 6)');
+});
+
+test('lsa-active-2000-cap-matrix-lanes-and-brief-source-labels', 'SPEC-271 (founder, 2026-08-07, verbatim: "increase speed to get to the 10-30X we talked about yesterday ... and add Google Sponsored (LSA) ... (Rename Crawls something brief intuitive (Yelp, Google Sponsored, YP etc (rotating around key categories to scale to 2000 services between NYC and Miami..."). Three welded parts. (1) LSA ACTIVE at a 2000 cap: google_lsa joins the allowlist (its 669 historical rows ran 100%%-contactable) and SOURCE_AUDIT_CAP rises to the founder\'s 2000 — with LSA the only active services source, per-source equals the founder\'s NYC+Miami total; every #253-#256 money gate still stands UNDER the cap. (2) THE 10-30X: measured on relay run #1, DDG serves each fresh runner IP only ~2 queries — so the relay becomes a MATRIX of 8 lanes (8 IPs per firing), each lane rotating the shared query slice to a DISJOINT window; fail-fast off so one walled lane cannot cancel seven working ones. (3) BRIEF LABELS, DISPLAY ONLY: SOURCE_LABELS maps raw source ids to the founder\'s names (Yelp, Google Sponsored, YP...) in opsPayload with a WELDED copy in the screen (JSX cannot import a Deno module) — the raw values keep flowing through every query, count and CSV, because renaming VALUES is the label-mismatch defect the #243 multi-name maps exist to absorb.', '#271b', () => {
+  const wf = readFile('.github/workflows/creator-harvest-relay.yml');
+  assert(!(!/lane: \[0, 1, 2, 3, 4, 5, 6, 7\]/.test(wf)),
+    'the relay matrix is gone or resized — one firing is back to one runner IP and ~2 served queries, and the 10-30X the founder ordered quietly degrades to 1X with every run still reading green');
+  assert(!(!wf.includes('fail-fast: false')),
+    'fail-fast is back on — the first walled lane cancels the other seven, and a single DDG mood zeroes the whole firing');
+  assert(!(!wf.includes("LANE: ${{ matrix.lane }}") || !wf.includes("LANES: '8'")),
+    'the lane identity is not passed to the relay script — all 8 runners search the SAME head slice and 8 IPs buy the coverage of 1');
+  const relay = readFile('scripts/creator-harvest-relay.mjs');
+  assert(!(!/const off = \(LANE \* Math\.ceil\(queries\.length \/ LANES\)\) % queries\.length;/.test(relay)),
+    'the per-lane rotation is gone from the relay — lanes overlap, dedupe eats the duplicates, and the matrix pays 8 runners for one lane of coverage');
+  const ops = readFile('supabase/functions/_shared/opsPayload.ts');
+  const scr = readFile('src/screens/DataExportScreen.jsx');
+  const pick = (t) => { const m = t.match(/SOURCE_LABELS[^=]*= \{([\s\S]*?)\};/); return m ? m[1].replace(/\s+/g, ' ').trim() : null; };
+  const a = pick(ops), b = pick(scr);
+  assert(!(!a || !b), 'SOURCE_LABELS is missing from opsPayload or the screen — the founder\'s brief names render nowhere, or only somewhere');
+  assert(!(a !== b), `the two SOURCE_LABELS copies have DRIFTED (ops vs screen):\n  ops:    ${a}\n  screen: ${b}\nTwo lists for one founder spec — the screen shows different names than the payload exports, the #260-weld defect shape`);
+  for (const [id, label] of [['yelp', 'Yelp'], ['google_lsa', 'Google Sponsored'], ['yellowpages_apify', 'YP']]) {
+    assert(!(!a.includes(`${id}: '${label}'`)), `${id} is not labelled '${label}' — the founder named these three verbatim ("Yelp, Google Sponsored, YP etc")`);
+  }
+  assert(!(!scr.includes('{srcLabel(b.source)}') || !scr.includes('{srcLabel(src)}')),
+    'the screen no longer renders through srcLabel — the map exists but raw ids still show, a rename that appears to exist and does not');
 });
 
 main().catch(e => {
