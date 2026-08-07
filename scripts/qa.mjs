@@ -7422,6 +7422,180 @@ test('inbox-match-uses-the-fanout-bridge-union', 'FW-16 (founder live repro 2026
 });
 
 
+test('site-enrich-free-website-contact-harvest', 'SPEC-263 (founder, 2026-08-06, verbatim: "figure out a solution to capture more contact details for IG... my search showed some had websites with emails and or phones.. it may need a 3 step crawl or alternative straetgy.. worst case we scale the numbers to 5000 to get 500 contactable ... per city .. but creators always ahve an email somewhere as they want to attract partners and advertising..."). MEASURED (audit 2026-08-06T04:28Z): ig_services 276 rows, 218 with external_url (websites/linktrees), only 29 emails, 0 phones — 10.5% contactable. The contacts exist ONE FREE HOP away on pages whose addresses we already bought; before anyone scales a paid buy to 5,000 rows to net 500 contactables, this worker walks the hop for $0: 3-step crawl (landing page → linktree fan-out to up to 3 real sites → up to 2 contact-shaped same-origin pages), plain fetch only, 5s per request, ~45s per run. FILL-ONLY write-back (a contact another path found is never overwritten), MANDATORY junk filter (a wixpress/noreply address written to a lead row poisons outreach worse than an empty one), and site_enriched_at stamped on EVERY attempt so no dead site is ever crawled in a loop. Asserts scan RAW text — URLs, hosts and messages live in template literals and strings, which stripComments() blanks.', '#263b', () => {
+  // 1) the worker exists and takes the cron/service-role bearer only — an open
+  //    endpoint lets anyone burn the run budget and write to the founder's lead rows
+  const fn = readFile('supabase/functions/site-enrich/index.ts');
+  assert(!(!fn.includes("Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')")),
+    'site-enrich no longer reads the service-role key — either auth is gone (anyone on the internet can trigger writes into the lead tables the founder\'s outreach runs from) or the function was gutted');
+  assert(!(!fn.includes("if (!auth || auth !== svc) return json({ error: 'Unauthorized' }, 401)")),
+    'site-enrich lost its service-role bearer check — an unauthenticated caller can drive writes into leads_influencers/leads_services and poison the outreach lists with data nobody vetted');
+  // 2) growth tables via gdb ONLY (gate #166: growth on the product client is the
+  //    2026-07-30 outage — crawl traffic saturating the pool the founder signs in on)
+  assert(!(!fn.includes('const gdb = growthDb()')),
+    'site-enrich no longer builds its client from growthDb() — lead reads/writes would fall to the product database, which is the exact pool-saturation outage that locked the founder out on 2026-07-30');
+  assert(!(!/gdb\s*\n?\s*\.from\('leads_influencers'\)/.test(fn) || !/gdb\s*\n?\s*\.from\('leads_services'\)/.test(fn)),
+    'site-enrich reads a lead table through something other than gdb — gate #166 exists because growth work on the product client took the app down; a regression here is that outage again');
+  // 3) FILL-ONLY, both halves: the CANDIDATE queries only select rows with no contact
+  //    at all, and the UPDATE re-checks null so a contact that landed between select
+  //    and write is never overwritten — an overwritten verified email is a lost lead
+  assert(!(!/\.is\('email', null\)\s*\n\s*\.is\('phone', null\)\s*\n\s*\.not\('external_url', 'is', null\)\s*\n\s*\.is\('site_enriched_at', null\)/.test(fn)),
+    'the leads_influencers candidate filter lost its email-null + phone-null + external_url-present + never-attempted chain — the worker would re-crawl already-contactable or already-attempted rows, burning the 45s budget on rows that add nothing while 189 contactless websites wait');
+  assert(!(!/\.eq\('data_source', 'ig_services'\)\s*\n\s*\.is\('phone', null\)\s*\n\s*\.is\('owner_email', null\)\s*\n\s*\.not\('website_url', 'is', null\)\s*\n\s*\.is\('site_enriched_at', null\)/.test(fn)),
+    'the leads_services candidate filter lost its ig_services + phone-null + owner_email-null + website-present + never-attempted chain — either non-IG rows leak into a spec scoped to the IG measurement, or contactable rows are re-crawled and the free budget is spent enriching nothing');
+  assert(!(!/\.is\('email', null\)\.is\('phone', null\)[^]{0,80}?\.select\('id'\)/.test(fn)),
+    'the leads_influencers UPDATE lost its fill-only null re-check — a verified email written by creator-enrich between select and write gets OVERWRITTEN by whatever this crawl scraped, which replaces a known-good outreach address with a guess');
+  assert(!(!/\.is\('owner_email', null\)\.is\('phone', null\)[^]{0,80}?\.select\('id'\)/.test(fn)),
+    'the leads_services UPDATE lost its fill-only null re-check — a phone the paid crawl already delivered gets overwritten by a regex hit off a webpage, destroying data that was PAID for');
+  assert(!(!fn.includes('if (found.email) patch.email = found.email')),
+    'the influencer patch no longer builds only-missing fields conditionally — writing email: null/undefined unconditionally either nulls real contacts or throws, and either way outreach loses addresses');
+  assert(!(!fn.includes('if (found.email) patch.owner_email = found.email')),
+    'the services patch no longer builds owner_email conditionally — an unconditional write clobbers or nulls the column outreach-send reads, and the founder\'s contactable % drops instead of rising');
+  // 4) JUNK FILTER mandatory — a junk email on a lead row is WORSE than none: it
+  //    bounces, hits spam traps, and marks a lead "contactable" that is not
+  assert(!(!fn.includes("'wixpress.com'") && !fn.includes('wixpress.com')),
+    'the junk-email domain list lost wixpress.com — Wix platform plumbing addresses get written to lead rows, the row reads "contactable", outreach mails a server, and the founder\'s 500-contactable target fills with bounces');
+  assert(!(!fn.includes("'noreply'")),
+    'the junk local-part list lost noreply — no-reply mailboxes count as harvested emails, the contactable %% climbs on addresses nobody reads, and the number the founder scales spend against is a lie');
+  assert(!(!fn.includes('function isJunkEmail')),
+    'the isJunkEmail filter is gone entirely — every asset filename and platform address a page embeds gets written to lead rows, and a poisoned outreach list costs more to clean than the harvest saved');
+  assert(!(!/if \(isJunkEmail\(cand\)\) \{ junk\+\+; continue; \}/.test(fn)),
+    'scanHtml no longer rejects junk emails before accepting one — the filter exists but nothing calls it on the accept path, so the first icon@2x.png "email" on a page wins and is mailed');
+  // 5) the free crawl is BOUNDED: 5s per request, ~45s per run — an unbounded fetch
+  //    against a dead site wedges the */15 cron and the whole enrichment lane stalls
+  assert(!(!fn.includes('FETCH_TIMEOUT_MS = 5000;')),
+    'the per-request timeout is no longer 5s — one unresponsive site holds a socket for the platform default, the run budget drains on a single candidate, and 12 candidates/run collapses to 1');
+  assert(!(!fn.includes('AbortSignal.timeout(FETCH_TIMEOUT_MS)')),
+    'fetchPage no longer aborts via AbortSignal.timeout — the 5s constant is decoration, a hung site wedges the run, and the cron delivers 0 scanned rows forever while looking scheduled');
+  assert(!(!fn.includes('RUN_BUDGET_MS = 45000;')),
+    'the ~45s total run budget is gone — a batch of slow sites runs the edge function into its wall-clock kill, the stamp never lands, and the same slow sites are picked again every 15 minutes: an infinite loop that enriches nothing');
+  assert(!(!/if \(Date\.now\(\) - started > RUN_BUDGET_MS\) break;/.test(fn)),
+    'candidate picking no longer stops when the budget is spent — the budget constant exists but nothing enforces it, which is a gate that appears to exist and does not (the falsest kind of green)');
+  // 6) the ATTEMPT is stamped no matter the outcome — an unstamped failed site is
+  //    picked again every run, and 12 dead linktrees would permanently occupy the batch
+  assert(!(!fn.includes('const patch: Record<string, string> = { site_enriched_at: stamp }')),
+    'the write patch no longer carries site_enriched_at unconditionally — only successful finds get stamped, every no-contact site is retried each run, and the batch fills with known-dead pages while un-attempted rows starve');
+  assert(!((fn.match(/\.update\(\{ site_enriched_at: stamp \}\)/g) || []).length < 2),
+    'the failure-path stamp (fill-only guard matched 0 rows / write error) is gone from one of the two tables — those rows re-enter the candidate pool forever and the free lane silently stops draining forward');
+  // 7) the migration exists: both columns healed idempotently + the cron scheduled —
+  //    a worker with no column 42703s invisibly (SPEC-202\'s exact shape), and a worker
+  //    with no cron never runs at all
+  const mig = readFile('supabase/migrations/20260806050000_spec263_site_enrich.sql');
+  assert(!(!mig.includes('alter table public.leads_influencers add column if not exists site_enriched_at timestamptz')),
+    'the migration no longer adds leads_influencers.site_enriched_at — every influencer update 42703s, the catch-less error surfaces as zero enrichment, and the founder reads "the free harvest found nothing" when it never ran');
+  assert(!(!mig.includes('alter table public.leads_services    add column if not exists site_enriched_at timestamptz') && !mig.includes('alter table public.leads_services add column if not exists site_enriched_at timestamptz')),
+    'the migration no longer adds leads_services.site_enriched_at — the services half of every run fails 42703 and the ig_services rows the founder measured (218-of-276 with websites) stay uncontactable');
+  assert(!(!/select cron\.schedule\('cergio_site_enrich', '\*\/15 \* \* \* \*',\s*\n\s*\$\$ select public\.cergio_call_edge\('site-enrich'\); \$\$\)/.test(mig)),
+    'the cergio_site_enrich cron is not scheduled every 15 minutes through cergio_call_edge — either the worker never fires (0 free contacts, and the "worst case" becomes scaling PAID buys 10x) or it fires through a GUC-built URL that can never resolve (gate #242\'s schedule-that-parses-and-never-runs)');
+  assert(!(!mig.includes("select cron.unschedule('cergio_site_enrich')\nwhere exists (select 1 from cron.job where jobname = 'cergio_site_enrich')")),
+    'the unschedule-first exists-guard is gone — re-applying the migration double-schedules the job, two concurrent runs race the same candidates, and the fill-only guard is the only thing standing between that race and overwritten contacts');
+  // 8) the LIVE growth schema gets the column too: apply-growth-schema.mjs applies
+  //    ONLY the reference file to the growth project, so a guard that lives only in
+  //    the product migration heals the wrong database (SPEC-237\'s exact lesson)
+  const ref = readFile('supabase/migrations/20260730190000_growth_schema_reference.sql');
+  assert(!((ref.match(/add column if not exists site_enriched_at timestamptz/g) || []).length < 2),
+    'the growth schema reference no longer heals site_enriched_at on BOTH lead tables — the product DB gets the column, the GROWTH DB (where every lead row actually lives) does not, and the worker fails 42703 only in production: the SPEC-202/237 defect, a third time');
+});
+
+test('creator-harvest-v2-free-spec-shaped-crawl', 'SPEC-264 (founder, 2026-08-06, verbatim, BOTH orders): "I\'m showing 0 progress on creators.. . use same solution for IG services for IG creators (by running seaches direct based on spec (top 25 micro and mid parenting, pets, etc influncers in nyc miami etc..)... augment the IG services solution with more emails and phones by carawling their websites (email is easily visible there in most).. also crawl the # of followers so we rank..... use same stategy for creators... run creators now .. it\'s a free staregy.. need to see initial 100 to tweak..." and, overriding any paid path: "NO... for creators we\'re doing the same IG FREE web crawling staretgy we\'re using for IG services... (it\'s working!)....correct and upgrade with above and ship get 100 from each — not paid! IG ..". MEASURED defect that zeroed v1: the CREATOR_TARGET self-stop counted like(se:web-harvest%) over ALL TIME — the table holds ~4,211 June/July rows under the daily tags (opsPayload: "CREATORS TOTAL was 4,211"; gate #220: "0 rows beside a real total of 4,211"), 4,211 >= 100, so EVERY invocation returned { paused: true } before any search while the board\'s FRESH count read 0/100 — the founder\'s "0 progress", verbatim. v2 windows the self-stop and the per-(category × metro) 25-caps by the SAME committed AUDIT_FRESH_SINCE instant (SPEC-246), runs the founder\'s spec-shaped queries from the SPEC-257 CREATOR_CATEGORIES table, extracts every handle in a result block plus followers (K/M), dedupes case-insensitively against rows OTHER sources already hold, stores external_url so the */15 site-enrich cron finishes contacts, and keeps the lite.duckduckgo.com fallback endpoint so one bot-wall cannot zero the source. Asserts scan RAW text: queries, counts and hosts live inside template literals, which stripComments() blanks.', '#264b', () => {
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+
+  // 1) SPEC-SHAPED QUERIES — both variants, from the committed category table.
+  assert(!(!ch.includes('top ${cat.igQuery}s in ${metro} instagram')),
+    'the "top ..." query variant is gone — the founder\'s "top 25 micro and mid ... influncers in nyc miami" search shape is not what this source sends, and the harvest drifts back to whatever phrasing zeroed for weeks');
+  assert(!(!ch.includes('micro ${cat.igQuery} ${metro} instagram')),
+    'the "micro ..." query variant is gone — half of "top 25 micro and mid" stops being searched and the micro tier the founder named never surfaces');
+  assert(!(!/import \{ CREATOR_CATEGORIES, CREATOR_CAT_CAP, auditFreshSince \} from '\.\.\/_shared\/opsPayload\.ts'/.test(ch)),
+    'creator-harvest no longer imports CREATOR_CATEGORIES/CREATOR_CAT_CAP/auditFreshSince from the shared table — a local copy is the SPEC-257 drift shape: one refactor and this source searches categories the founder never listed');
+
+  // 2) PER-(CATEGORY × METRO) 25-CAP — counted fresh, chained, and acted on.
+  assert(!(!/\.like\('discovered_via', 'se:web-harvest%'\)\s*\n\s*\.eq\('category', cat\.slug\)\s*\n\s*\.eq\('city', metro\)\s*\n\s*\.gte\('fetched_at', HARVEST_FRESH\)/.test(ch)),
+    'the per-(category × metro) kept-row count lost its chained like-prefix + category + city + FRESH form — either legacy rows saturate every pair on day one (the exact defect that zeroed v1) or one category absorbs the whole run and "top 25 per category per city" never happens');
+  assert(!(!/>= CREATOR_CAT_CAP\) continue;/.test(ch)),
+    'a full (category × metro) pair is no longer skipped at CREATOR_CAT_CAP — the founder said top 25 per category; without the skip one bucket overfills while the rest sit at 0');
+
+  // 3) THE MEASURED DEFECT STAYS FIXED — the self-stop counts FRESH rows.
+  {
+    const at = ch.indexOf('const { count: harvested');
+    const region = ch.slice(at, at + 400);
+    assert(!(at < 0 || !region.includes(".gte('fetched_at', HARVEST_FRESH)")),
+      'the CREATOR_TARGET self-stop lost its FRESH window — 4,211 all-time se:web-harvest rows >= 100 and every invocation returns { paused: true } before any search: the exact measured defect SPEC-264 exists to fix, back verbatim');
+  }
+  assert(!(!ch.includes("auditFreshSince(Deno.env.get('AUDIT_FRESH_SINCE')) ?? '1970-01-01T00:00:00Z'")),
+    'HARVEST_FRESH no longer parses the committed AUDIT_FRESH_SINCE instant fail-closed — an unparseable value must fall to epoch (counts everything, stops sooner), never crash or silently count nothing');
+
+  // 4) EXTRACTION — every handle in a block, IG path segments rejected, IG bounds.
+  assert(!(!/function allIgHandles/.test(ch) && !/function allAtHandles/.test(ch)),
+    'the multi-handle extractors are gone — a "top 25" listicle block names 25 creators and a single-handle take yields 1: the founder waits 25x longer for the same hundred');
+  assert(!(!/allIgHandles\(blockText\)/.test(ch) || !/allAtHandles\(blockText\)/.test(ch)),
+    'the extract loop no longer mines instagram.com links AND @handles from the result block — one of the two founder-named handle sources is dropped and found-per-query collapses');
+  assert(!(!ch.includes("['p', 'reel', 'reels', 'explore', 'stories', 'tv', 'accounts'].includes(h)")),
+    'instagram path segments are no longer rejected as handles — instagram.com/reel/... rows land as creator "@reel", a fabricated account the founder would try to contact');
+  // BOTH extractors carry the bound — mutation-testing found a single-copy pin
+  // satisfied by the other extractor while igHandle ran unguarded.
+  assert(!((ch.match(/h\.length < 2 \|\| h\.length > 30/g) || []).length < 2),
+    'the 2..30 handle length guard (IG\'s own bounds) is missing from igHandle or allAtHandles — the unguarded extractor writes parse noise to a NOT NULL identity column');
+
+  // 5) FOLLOWERS — parsed K/M to an integer, never guessed ("so we rank").
+  assert(!(!/function parseFollowers/.test(ch) || !/followers\)?\//.test(ch) && !/\s*followers/.test(ch)),
+    'parseFollowers is gone — the founder ordered "also crawl the # of followers so we rank" and without the parser every row ranks blind');
+  assert(!(!/\? 1_000 : /.test(ch) || !/\? 1_000_000 : 1;/.test(ch)),
+    'the K/M suffix multipliers are gone from parseFollowers — "123K followers" would store 123, and ranking by followers sorts a 123,000-follower creator below a 500-follower one');
+  assert(!(!ch.includes('followers: first ? blockFollowers : null')),
+    'the parsed follower count is no longer written on the block\'s primary row (or is fanned out to every handle in the block, which attributes one creator\'s audience to strangers — fabrication)');
+
+  // 6) ROWS — external_url + fetched_at stored so the enrich lane can finish.
+  assert(!(!ch.includes('external_url: ext,')),
+    'harvested rows no longer store external_url — the */15 site-enrich cron has no address to crawl and every contactless row stays uncontactable forever (the founder: "email is easily visible there in most")');
+  assert(!(!/fetched_at: new Date\(\)\.toISOString\(\)/.test(ch)),
+    'harvested rows no longer write fetched_at — every FRESH count (self-stop, 25-caps, the board, the audit cap) reads this column, and rows without it are invisible to all of them');
+
+  // 7) DEDUPE — case-insensitive against rows OTHER sources already hold.
+  // pin the DEDUPE template specifically — the SPEC-86c med-spa orExpr also says
+  // ig_handle.ilike., and a bare-substring pin was satisfied by it while the
+  // dedupe ran eq() (mutation-testing found this).
+  assert(!(!ch.includes('`ig_handle.ilike.${h.replace(')),
+    'the existing-row handle dedupe lost its ilike (case-insensitive equality) template — the same creator under a different id scheme (ig-scraper-user-search, modash seeds) becomes a second row and the founder\'s 100 double-counts');
+  assert(!(!ch.includes('existing.has(String(r.ig_handle).toLowerCase())')),
+    'the dedupe result is never applied to the insert batch — the check exists but every duplicate still lands, which is a gate that appears to exist and does not');
+
+  // 8) SEARCH RESILIENCE — the second endpoint stays, one bot-wall cannot zero us.
+  assert(!(!ch.includes('https://html.duckduckgo.com/html/?q=')),
+    'the primary keyless search endpoint is gone — the FREE strategy ("not paid! IG ..") has no search to run');
+  assert(!(!ch.includes('https://lite.duckduckgo.com/lite/?q=')),
+    'the lite.duckduckgo.com fallback endpoint is gone — one bot-wall on the html endpoint zeroes the whole source again, with no second path and no visible reason');
+
+  // 9) TAG CONVENTION — per-day prefix stays byte-compatible with every count.
+  assert(!(!ch.includes('`se:web-harvest-${')),
+    'the per-run-day discovered_via tag is gone — every like(se:web-harvest%) count (self-stop, caps, board, CSV) is keyed to this prefix, and a renamed tag reads 0 beside real rows (SPEC-220, again)');
+
+  // 10) INLINE SITE FETCH — the site-enrich shape: 5s cap, junk filter welded.
+  assert(!(!ch.includes('fetchText(r.url, 5000)')),
+    'the inline site fetch lost its 5s timeout — one dead site holds the socket for the 6s default per result and the 50s run budget dies on a handful of results');
+  {
+    const se = readFile('supabase/functions/site-enrich/index.ts');
+    const badDomain = (ch.match(/const BAD_EMAIL_DOMAIN = \/([^\n]*)\//) || [,''])[1];
+    for (const tok of ['wixpress', 'sentry', 'example\\.com', 'godaddy', 'cloudflare']) {
+      assert(!(!badDomain.includes(tok) || !se.includes(tok.replace('\\.', '.'))),
+        `the junk-email domain "${tok}" is missing from creator-harvest\'s BAD_EMAIL_DOMAIN or from site-enrich\'s list — the two FREE lanes write to the SAME lead rows, and the lane missing the filter writes platform plumbing the other lane exists to reject`);
+    }
+    const badLocal = (ch.match(/const BAD_EMAIL_LOCAL = \/([^\n]*)\//) || [,''])[1];
+    for (const tok of ['noreply', 'no-reply', 'donotreply']) {
+      assert(!(!badLocal.includes(tok)),
+        `the junk local-part "${tok}" is missing from creator-harvest\'s BAD_EMAIL_LOCAL — no-reply mailboxes count as harvested emails and the contactable %% the founder scales against is a lie (the #263b weld, harvest side)`);
+    }
+  }
+
+  // 11) THE MIGRATION RE-ASSERTS THE CRON — belt and braces on the dead-schedule
+  //     candidate (board snapshots: agent_runs [] beside a correct-looking final
+  //     schedule). #242 already forbids app.settings bodies; #243 pins */15 last.
+  const mig = readFile('supabase/migrations/20260806070000_spec264_harvest_v2.sql');
+  assert(!(!mig.includes("select cron.unschedule('cergio_creator_harvest')\nwhere exists (select 1 from cron.job where jobname = 'cergio_creator_harvest')")),
+    'the unschedule-first exists-guard is gone from the SPEC-264 migration — re-applying double-schedules the job and two concurrent runs race the same queries and dedupe window');
+  assert(!(!/select cron\.schedule\('cergio_creator_harvest', '\*\/15 \* \* \* \*',\s*\n\s*\$\$ select public\.cergio_call_edge\('creator-harvest'\); \$\$\)/.test(mig)),
+    'the SPEC-264 migration no longer re-asserts the */15 schedule through cergio_call_edge — if the live schedule is the dead one, nothing revives it and "run creators now" stays a request');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
