@@ -306,6 +306,19 @@ const gdb = growthDb();
     if (!auth || auth !== serviceKey) return json({ error: 'Unauthorized' }, 401);
     const db = createClient(supabaseUrl, serviceKey);
 
+    // ── SPEC-269 — CI SEARCH RELAY MODES. MEASURED chain: from the edge egress
+    // ALL FOUR keyless engines wall (meta.engines, live), while search-probe #1
+    // showed ddg-html SERVES GitHub runner IPs (HTTP 200, 10 result__a blocks).
+    // Same code, same query — only the IP decides. So the SEARCH leg may run in
+    // CI: 'queries' returns the run's built slice (after every kill-switch and
+    // cap below), 'ingest' runs the UNMODIFIED extraction/gates/dedupe/upsert
+    // pipeline over results the relay posts back. Extraction truth stays HERE,
+    // single-copy (the #204 lesson) — CI carries transport, never judgment.
+    // Auth above runs FIRST: both modes are service-bearer-only, like the cron.
+    const reqBody = req.method === 'POST' ? await req.json().catch(() => ({} as any)) : ({} as any);
+    const MODE: 'crawl' | 'queries' | 'ingest' =
+      reqBody?.mode === 'queries' ? 'queries' : reqBody?.mode === 'ingest' ? 'ingest' : 'crawl';
+
     // ── SPEC-237: THE ACTIVATION CONTRACT, ENFORCED HERE — founder, 2026-08-02:
     // "activate the crawls just for the creator sources to get 100 of each then
     // pause alongside the rest to audit."
@@ -574,6 +587,41 @@ const gdb = growthDb();
       }
     });
 
+    // ── SPEC-269: 'queries' mode returns the built slice and stops — no search,
+    // no lead writes. Everything ABOVE (committed kill-switch, fresh self-stop,
+    // per-(category×metro) caps, quarantine/promote housekeeping) already ran, so
+    // the relay can only ever be handed queries a crawl run would have run itself.
+    if (MODE === 'queries') {
+      await logAgentRun(db, 'creator-harvest', {
+        started, raw_found: 0, rows_written: 0, status: 'ok',
+        meta: { mode: 'queries', queries: queries.length, spin },
+      });
+      return json({ ok: true, mode: 'queries', queries, spin, ms: Date.now() - started });
+    }
+    // ── SPEC-269: 'ingest' mode swaps the work list for the relay's POSTED items,
+    // validated hard: city must be a CITY_STATE key and the category a targetable
+    // one (an unknown city would geo-verify against nothing and an off-target
+    // category is quarantine bait — drop both at the door), results bounded to
+    // 12/query and items to MAX_QUERIES. Every downstream gate re-runs unchanged.
+    type RelayItem = { query: string; niche: { q: string; category: string }; city: string; results?: SearchHit[] };
+    const workItems: RelayItem[] = MODE === 'ingest'
+      ? (Array.isArray(reqBody.items) ? reqBody.items : [])
+          .filter((it: any) => it && typeof it.query === 'string'
+            && it.niche && typeof it.niche.q === 'string' && typeof it.niche.category === 'string'
+            && typeof it.city === 'string' && CITY_STATE[it.city] !== undefined
+            && TARGET_CATEGORIES.includes(it.niche.category))
+          .slice(0, MAX_QUERIES)
+          .map((it: any): RelayItem => ({
+            query: String(it.query).slice(0, 200),
+            niche: { q: String(it.niche.q).slice(0, 80), category: String(it.niche.category) },
+            city: String(it.city),
+            results: (Array.isArray(it.results) ? it.results : [])
+              .filter((r: any) => r && typeof r.url === 'string' && /^https?:\/\//i.test(r.url))
+              .slice(0, 12)
+              .map((r: any): SearchHit => ({ url: String(r.url).slice(0, 600), title: String(r.title || '').slice(0, 300), snippet: String(r.snippet || '').slice(0, 1200) })),
+          }))
+      : queries;
+
     const seen = new Set<string>();
     const rows: Array<Record<string, unknown>> = [];
     let siteFetches = 0;
@@ -587,12 +635,16 @@ const gdb = growthDb();
     // check-then-act on shared state (seen.has→add, the siteFetches cap) sits in a
     // synchronous block, so concurrent processors cannot double-take a handle or
     // overrun the fetch cap under the single-threaded event loop.
-    const processQuery = async (item: { query: string; niche: { q: string; category: string }; city: string }): Promise<void> => {
+    const processQuery = async (item: RelayItem): Promise<void> => {
       const query = item.query;
       const niche = item.niche;
       const city  = item.city;
       stage = 'search';
-      const results = await ddgSearch(query, engineTally);
+      // SPEC-269: ingest items carry the relay's results — searched from a runner
+      // IP the engines actually serve. Crawl mode searches the ladder itself.
+      const results = MODE === 'ingest' && Array.isArray(item.results)
+        ? item.results
+        : await ddgSearch(query, engineTally);
       dbg.raw_results += results.length;
       if (results.length) { dbg.queries_with_results++; if (dbg.first_urls.length < 5) dbg.first_urls.push(...results.slice(0, 2).map(r => r.url)); }
 
@@ -696,9 +748,9 @@ const gdb = growthDb();
     };
     let qCursor = 0;
     await Promise.all(Array.from({ length: HARVEST_POOL }, async () => {
-      while (qCursor < queries.length) {
+      while (qCursor < workItems.length) {
         if (Date.now() - started > DEADLINE_MS) break;
-        const item = queries[qCursor++];   // synchronous pick — a query is claimed exactly once
+        const item = workItems[qCursor++];   // synchronous pick — a query is claimed exactly once
         await processQuery(item);
       }
     }));
@@ -781,19 +833,19 @@ const gdb = growthDb();
       status: harvestStatus, error: upsertError,
       // skips explains WHY a run wrote nothing new so the watchdog can tell a
       // dedupe no-op (known_handle high) from a discovery miss (no_handle high).
-      meta: { tag, queries: queries.length, candidates: rows.length, site_fetches: siteFetches, skips, spin, engines: engineTally },
+      meta: { tag, mode: MODE, queries: workItems.length, candidates: rows.length, site_fetches: siteFetches, skips, spin, engines: engineTally },
     });
 
     return json({
-      ok: true, tag,
+      ok: true, tag, mode: MODE,
       // SPEC-264 diagnosable shape: what was asked, what was found, what landed,
       // how reachable it is, and whether site-enrich has follow-up work.
-      queried: queries.length, found: rows.length, inserted,
+      queried: workItems.length, found: rows.length, inserted,
       with_contact: uniqueRows.filter((r) => r.email || r.phone).length,
       with_site: uniqueRows.filter((r) => r.external_url).length,
       elapsed_ms: Date.now() - started,
       // legacy keys the earlier dashboards/scripts read — kept, same meanings.
-      queries: queries.length, site_fetches: siteFetches,
+      queries: workItems.length, site_fetches: siteFetches,
       candidates_with_contact: rows.length, upserted: inserted, upsert_error: upsertError,
       creators_sendable_total: sendable ?? null, skips, dbg, engines: engineTally,
       ms: Date.now() - started,

@@ -1,0 +1,32 @@
+# SPEC-269 — the CI search relay lane for the FREE creator crawl.
+#
+# WHY THIS EXISTS (measured, 2026-08-07): every keyless search engine walls the
+# Supabase edge egress IP (agent_runs.meta.engines: 0 results across ddg-html,
+# ddg-lite, bing, mojeek on every tick), while ddg-html SERVES GitHub runner IPs
+# (search-probe #1: HTTP 200, 10 organic results). Same code, same query — only
+# the IP decides. So the SEARCH leg runs here and the results are handed to the
+# creator-harvest edge function, where the kill-switch, self-stop, caps and every
+# extraction/quality gate live UNCHANGED (single source of truth — the #204 rule).
+#
+# GitHub cron is best-effort (delays are normal); the edge cron lanes keep
+# ticking on their own, so this lane ADDS the working transport, it replaces
+# nothing. $0, keyless. PAID IG STAYS FORBIDDEN.
+name: creator-harvest-relay
+permissions: {}
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Relay — queries from the worker, search from the runner, ingest back
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/creator-harvest-relay.mjs
