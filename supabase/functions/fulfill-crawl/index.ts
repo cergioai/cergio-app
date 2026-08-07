@@ -600,7 +600,12 @@ const gdb = growthDb();
           //    result, capped maxResults (cost), deduped by phone/email, first-name parsed.
           const r = await fulfillCraigslist(db, job);
           saved = r.saved; found = r.found; query = r.query;
-          await flushBuf(db); await gdb.from('crawl_requests').update({
+          // SPEC-266: a deferred job was never sent to the vendor — hand it BACK
+          // (status 'new', the orphan-reclaim shape) instead of consuming it as
+          // delivered-0. No cost_usd is written: nothing was spent.
+          await flushBuf(db); await gdb.from('crawl_requests').update(r.defer
+            ? { status: 'new', notes: r.note, updated_at: new Date().toISOString() }
+            : {
             status: 'delivered', cost_usd: _lastApifyCostUsd + _lastNonApifyCostUsd, delivered_count: saved,
             notes: r.note || (saved === 0 ? (_lastFlushError || _lastApifyError || `no Craigslist results (raw items returned: ${r.found ?? 0})`) : 'craigslist'),
             updated_at: new Date().toISOString(),
@@ -2282,7 +2287,14 @@ async function apifyRun(actor: string, input: unknown, maxItems: number): Promis
     bustSpendCaches();
   }
 }
-async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string }> {
+// SPEC-266 — craigslist needs a REAL window: solidcode opens every post's detail page
+// (includeDetails is where phoneNumbers[]/emails[] come from), and a run whose
+// actorTimeoutSecs collapsed to the tick's scraps (measured: 43s) is killed mid-crawl,
+// stamped delivered-0, and CONSUMED — the source starves one job at a time while
+// craigslist sits at 20/100. Below this floor we never call the vendor (zero spend)
+// and hand the job back for a tick where an earlier claim slot gives it the window.
+const CL_MIN_BUDGET_MS = 75000;
+async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; found: number; query: string; note?: string; defer?: boolean }> {
   if (!Deno.env.get('APIFY_TOKEN')) return { saved: 0, found: 0, query: 'craigslist', note: 'pending APIFY_TOKEN' };
   const rawType = (job.service_type || '').toLowerCase().trim();
   const city = (job.city || '').trim();
@@ -2290,6 +2302,13 @@ async function fulfillCraigslist(db: any, job: any): Promise<{ saved: number; fo
   const sub = CL_SUBDOMAIN[metroOf(city).toLowerCase()];  // SPEC-170b: boroughs have no CL subdomain
   const query = `${rawType} [craigslist ${city}]`;
   if (!sub || osmIsBlocked(rawType)) return { saved: 0, found: 0, query, note: sub ? 'blocked' : 'no craigslist subdomain' };
+  // SPEC-266 — the floor check sits BEFORE any vendor call: a guard after the call
+  // is a report, not a control (the SPEC-185 rule, applied to wall-clock instead of
+  // dollars). defer=true means the caller hands the job back un-consumed.
+  if (msLeft(140000) < CL_MIN_BUDGET_MS) {
+    return { saved: 0, found: 0, query, defer: true,
+      note: `deferred: ${Math.round(msLeft(140000) / 1000)}s left this tick is under the ${CL_MIN_BUDGET_MS / 1000}s craigslist floor — no vendor call made, job retries next tick (SPEC-266)` };
+  }
   // Map the service to the RIGHT Craigslist services subcategory (bbb was a
   // for-sale/spam-polluted catch-all). sss=for-sale is NEVER used.
   const CL_SUBCAT: Record<string, string> = {
