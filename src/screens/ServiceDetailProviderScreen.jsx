@@ -161,6 +161,7 @@ export function ServiceDetailProviderScreen() {
           setSvc({
             id: data.id,
             title: data.title,
+            headline: data.headline || null, // FW-23
             sub:   data.category,
             description: data.description,
             photoClass: data.photo_class,
@@ -362,6 +363,12 @@ export function ServiceDetailProviderScreen() {
       </p>
       <div className="mx-5 bg-white border border-bdr rounded-[16px] mb-5 overflow-hidden">
         {[
+          // FW-23 (founder): Airbnb-style one-liner — leads the public page;
+          // the auto "Babysitter in New York" title becomes a badge there.
+          { label: 'Headline',
+            sub: svc.headline || 'One line that leads your public page (like Airbnb)',
+            edit: { column: 'headline', current: svc.headline,
+                    placeholder: 'e.g. Gentle evening sitter your kids will ask for again' } },
           { label: 'Offerings & pricing',
             // Pass the service id so ServiceListMoreOfferingsScreen can load
             // this service's real offerings, not the in-memory listingDraft.

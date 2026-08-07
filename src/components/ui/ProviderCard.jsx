@@ -72,6 +72,10 @@ function FriendAvatars({ friends, recommenders }) {
 
 export function ProviderCard({ provider, onBook, onSave, onOpen }) {
   const { name, category, taxonomy_provider_type, bio, price, recos, connectors, friends, savings, pick, photoClass, coverUrl,
+          // FW-23: Airbnb-style headline + attribution. When headline is set
+          // the card leads with it, the service-in-location title becomes a
+          // green badge, and "by {ownerName}" credits the provider.
+          headline = null, serviceTitle = null, ownerName = null,
           friendCount = 0, connectorCount = 0, leadFriendName = null,
           // CERGIO-GUARD (2026-05-30): full recommender objects (id+name)
           // — used to render the FriendAvatars as Links to /u/{id}.
@@ -209,11 +213,26 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
             ... its duplicated". The photo overlay stays — it's more
             visible and reads as a Featured badge over the cover. */}
 
-        {/* ROW 1 — Name · Recos */}
-        <div className="flex justify-between items-baseline mb-1">
-          <span className="text-heading-2 font-extrabold text-black">{name}</span>
-          <span className="text-body-sm font-extrabold text-black">{recos} Recos</span>
+        {/* ROW 1 — Headline (FW-23) or name · Recos */}
+        <div className="flex justify-between items-baseline mb-1 gap-3">
+          <span className="text-heading-2 font-extrabold text-black leading-snug">{headline || name}</span>
+          <span className="text-body-sm font-extrabold text-black shrink-0">{recos} Recos</span>
         </div>
+        {/* FW-23: the auto title ("Babysitter in New York") survives as a
+            formatted badge under the headline; "by Tom Cruise" credits the
+            human. Neither renders when the data isn't there. */}
+        {(headline && serviceTitle) || ownerName ? (
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            {headline && serviceTitle && (
+              <span className="bg-gl text-gd text-meta-sm font-extrabold rounded-pill px-2.5 py-0.5">
+                {serviceTitle}
+              </span>
+            )}
+            {ownerName && (
+              <span className="text-meta-sm text-b3 font-medium">by {ownerName}</span>
+            )}
+          </div>
+        ) : null}
 
         {/* ROW 2 — Provider type · Price. Show the REAL provider type
             (e.g. "Hair Stylist"), not the vague category ("Beauty") — SPEC-49g.

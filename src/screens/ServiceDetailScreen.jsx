@@ -267,7 +267,7 @@ export function ServiceDetailScreen() {
         const { data: svc } = await supabase
           .from('services')
           .select(`
-            id, title, category, taxonomy_provider_type, description, location_text, photo_class,
+            id, title, headline, category, taxonomy_provider_type, description, location_text, photo_class,
             cover_url, owner_id, rating_count, free_for_connectors, discount_pct,
             offerings ( id, name, description, kind, price_cents, duration_minutes, is_default )
           `)
@@ -290,6 +290,8 @@ export function ServiceDetailScreen() {
             offeringId: def?.id || null,
             priceCents: def?.price_cents ?? 0,
             name:       svc.title || 'Service',
+            headline:     svc.headline || null,   // FW-23
+            serviceTitle: svc.title || null,      // FW-23: the badge line
             category:   svc.category || 'Service',
             bio:        svc.description || '',
             price:      Math.round((def?.price_cents ?? 0) / 100),
@@ -626,7 +628,16 @@ export function ServiceDetailScreen() {
           perk headline when the service is free for Local Creators. */}
       <div className="px-5 pt-7 flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          {provider.ownerId ? (
+          {/* FW-23 (founder): the Airbnb-style headline LEADS when the
+              provider wrote one; the auto "Babysitter in New York" title
+              survives as a formatted badge below and the human gets an
+              explicit "by {name}" credit. Without a headline the block
+              renders exactly as before. */}
+          {provider.headline ? (
+            <h1 className="text-[26px] leading-[1.3] font-semibold text-black">
+              {provider.headline}
+            </h1>
+          ) : provider.ownerId ? (
             <Link
               to={`/u/${provider.ownerId}`}
               className="text-[26px] leading-[1.3] font-semibold text-black hover:underline"
@@ -640,8 +651,22 @@ export function ServiceDetailScreen() {
           )}
           <div className="flex items-center justify-start gap-2.5 flex-wrap">
             {ownerProfile?.cc_verified_at && <FacetBadge kind="creator" />}
+            {provider.headline && (provider.serviceTitle || provider.name) && (
+              <FacetBadge>{provider.serviceTitle || provider.name}</FacetBadge>
+            )}
             {displayType && <FacetBadge>{displayType}</FacetBadge>}
           </div>
+          {provider.headline && (ownerProfile?.display_name || provider.ownerName) && (
+            provider.ownerId ? (
+              <Link to={`/u/${provider.ownerId}`} className="text-body text-b3 font-medium hover:underline">
+                by <span className="font-extrabold text-black">{ownerProfile?.display_name || provider.ownerName}</span>
+              </Link>
+            ) : (
+              <p className="text-body text-b3 font-medium">
+                by <span className="font-extrabold text-black">{ownerProfile?.display_name || provider.ownerName}</span>
+              </p>
+            )
+          )}
           {perkActive && (
             <div className="flex flex-col gap-0.5 mt-1.5">
               <span className="inline-flex items-center gap-1.5 text-gd">
