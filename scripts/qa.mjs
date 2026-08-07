@@ -7632,7 +7632,7 @@ test('spec265-free-parallel-multiplier', 'SPEC-265 (founder order, 2026-08-07: 1
     'MAX_SITEFETCH is no longer 120 — the bigger budget with the old 60-fetch cap leaves workers idle after the cap trips, and contactless rows that needed one 5s fetch ship to site-enrich\'s backlog instead');
   assert(!(!/await Promise\.all\(Array\.from\(\{ length: HARVEST_POOL \}/.test(ch)),
     'the creator-harvest query pool is gone — HARVEST_POOL exists but the driver is sequential, so the 120s deadline buys ~15 queries instead of 48 and the multiplier quietly halves twice');
-  assert(!(!ch.includes('const item = queries[qCursor++];')),
+  assert(!(!ch.includes('const item = workItems[qCursor++];')),
     'the creator-harvest pool no longer claims queries via a synchronous cursor increment — two workers can run the SAME query, every handle it finds dedupes against itself, and the run reports known_handle skips instead of new creators');
   assert(!(!ch.includes('fetchText(eng.build(query), 8000)')),
     'the search-engine fetch lost its 8s cap (amended in place by SPEC-268 — the ladder replaced the two-endpoint loop, the cap must not move) — one bot-walled engine holds a pool slot for the platform default and the parallel harvest degrades to slower-than-sequential');
@@ -7723,8 +7723,43 @@ test('search-transport-ladder-with-per-engine-telemetry', 'SPEC-268 (MEASURED 20
     'the per-engine tally is no longer written to the run meta — which transport works from the edge goes back to being a guess, which is the exact blindness that cost tonight\'s six zero-ticks');
   assert(!((ch.match(/engines: engineTally/g) || []).length < 2),
     'the engines tally is missing from the meta or the response payload — the agent_runs surface (SPEC-267) and the invoke response must BOTH carry it, or one diagnostic path answers and the other shrugs');
-  assert(!(!ch.includes('const results = await ddgSearch(query, engineTally);')),
+  assert(!(!ch.includes(': await ddgSearch(query, engineTally);')),
     'the query loop no longer passes the tally into the search — engines run untallied, meta.engines is forever {}, and the telemetry gate above is satisfied by a dead object');
+});
+
+test('ci-search-relay-transport-only-single-truth-pipeline', 'SPEC-269 (the measured chain: SPEC-268 telemetry shows ALL FOUR keyless engines walling the Supabase edge egress on every tick, while search-probe run #1 shows ddg-html SERVING a GitHub runner IP — HTTP 200, 10 result__a blocks. Same code, same query; only the IP decides). The SEARCH leg therefore runs in CI and everything else stays put: creator-harvest gains {mode:queries} (build the slice AFTER the committed kill-switch, fresh self-stop and per-(category×metro) caps, return it, write nothing) and {mode:ingest} (run the UNMODIFIED extraction/geo/dedupe/upsert pipeline over posted results). The #204 rule is the spine of this design: extraction lives in ONE place — the relay script carries transport, never judgment — because the copy nobody tested is always the one that ends up reporting to the founder. Ingest is validated at the door (city must be a CITY_STATE key, category targetable, results ≤12/query, items ≤MAX_QUERIES) and every downstream quality gate re-runs regardless, so a stale or hostile payload can produce nothing a crawl run could not. Service-bearer auth runs BEFORE mode dispatch — the relay modes are exactly as private as the cron. $0, keyless; PAID IG STAYS FORBIDDEN.', '#269', () => {
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+  const authAt = ch.indexOf('if (!auth || auth !== serviceKey) return json({ error: \'Unauthorized\' }, 401);');
+  const modeAt = ch.indexOf("reqBody?.mode === 'queries'");
+  assert(!(authAt < 0 || modeAt < 0), 'the auth check or the mode dispatch is gone from creator-harvest — either anyone can drive the relay modes or the relay has no modes to drive');
+  assert(!(modeAt < authAt),
+    'the mode dispatch sits BEFORE the service-bearer check — an unauthenticated caller can pull the query slice or push fabricated results into the ingest pipeline, and the lead tables the founder mails from become writable from the open internet');
+  assert(!(!ch.includes("return json({ ok: true, mode: 'queries', queries, spin")),
+    'queries mode no longer returns the built slice and stops — either it searches anyway (burning the walled edge IP for nothing) or the relay has no way to learn what to search');
+  assert(!(!ch.includes('CITY_STATE[it.city] !== undefined')),
+    'ingest no longer requires a known CITY_STATE city — rows arrive with cities that geo-verify against nothing and state=null, the exact Utah-for-Miami class SPEC-86 exists to kill');
+  assert(!(!ch.includes('TARGET_CATEGORIES.includes(it.niche.category)')),
+    'ingest no longer requires a targetable category — off-target rows land and the SPEC-86b cleanup quarantines them next tick: a lane that fills a bucket the janitor empties, forever');
+  assert(!(!/results: \(Array\.isArray\(it\.results\) \? it\.results : \[\]\)[\s\S]{0,400}?\.slice\(0, 12\)/.test(ch)),
+    'ingest results are no longer bounded to 12 per query — one oversized payload holds the 120s deadline hostage and the pool drains one item instead of fifty');
+  assert(!(!ch.includes('.slice(0, MAX_QUERIES)')),
+    'ingest items are no longer bounded to MAX_QUERIES — an oversized relay payload runs past the deadline every time and the tick ends mid-batch with the tail never processed');
+  assert(!(!/const results = MODE === 'ingest' && Array\.isArray\(item\.results\)\s*\n\s*\? item\.results\s*\n\s*: await ddgSearch\(query, engineTally\);/.test(ch)),
+    'processQuery no longer branches between injected relay results and the ladder — either ingest re-searches the walled engines (the relay becomes decoration) or crawl mode lost its own search: both zero a lane');
+  const relay = readFile('scripts/creator-harvest-relay.mjs');
+  assert(!(!relay.includes('https://html.duckduckgo.com/html/?q=')),
+    'the relay no longer searches ddg-html — the ONE engine measured to serve runner IPs; whatever replaced it is a guess this project has already paid for twice tonight');
+  assert(!(!relay.includes("mode: 'queries'") || !relay.includes("mode: 'ingest'")),
+    'the relay lost one of its two calls (queries/ingest) — it either searches nothing or delivers nothing, while the workflow around it reads green every 15 minutes');
+  assert(!(!relay.includes('SUPABASE_SERVICE_ROLE_KEY')),
+    'the relay no longer authenticates with the service bearer — every call 401s and the lane reads green in CI while relaying nothing (the SPEC-150 empty-bearer shape)');
+  assert(!(!/await sleep\(300 \+ Math\.floor\(Math\.random\(\) \* 400\)\);/.test(relay)),
+    'the inter-query jitter is gone from the relay — a burst of 50 back-to-back queries from one runner IP is how the EDGE IP earned its wall; burning the runner IP too leaves no free transport at all');
+  const wf = readFile('.github/workflows/creator-harvest-relay.yml');
+  assert(!(!/cron: '\*\/15 \* \* \* \*'/.test(wf)),
+    'the relay workflow lost its 15-minute schedule — the lane only runs when someone clicks, which is the exact watching-a-dashboard dependency the SPEC-237 self-stop was built to remove');
+  assert(!(!wf.includes('run: node scripts/creator-harvest-relay.mjs') || !wf.includes('SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}')),
+    'the relay workflow no longer runs the relay script with the service bearer — the schedule fires a runner that does nothing, and silence reads as success (the SPEC-214 rule, inverted)');
 });
 
 main().catch(e => {
