@@ -189,10 +189,16 @@ const MODIFIERS = [
 ]
 
 const MAX_QUERIES   = 48;   // high-volume discovery — target 1000+ new/day across continuous runs
-const MAX_SITEFETCH = 60;   // bounded external fetches for email mining
-// SPEC-264: ~50s run budget — the */15 cron must never stack invocations, and an
-// unfinished slice simply continues next tick (the query rotation advances anyway).
-const DEADLINE_MS   = 50000;
+const MAX_SITEFETCH = 120;  // bounded external fetches for email mining (was 60 — SPEC-265 budget grew)
+// SPEC-265 — the founder's "100X SPEED via parallel crawlers", free lane. The v2 run
+// was strictly sequential: ~6-10 of its 48 queries fit inside 50s. A pool of
+// HARVEST_POOL concurrent query processors inside a ~120s budget (edge wall allows
+// ~150s) completes the WHOLE 48-query slice. Pool kept deliberately MODEST — DDG
+// bot-walls are the measured risk of this source, and a burst from one egress IP is
+// how you earn one; the lite.duckduckgo.com fallback stays the second chance.
+// Cron cadence never stacks runs: 120s « the lane stagger (see the SPEC-265 migration).
+const HARVEST_POOL  = 4;
+const DEADLINE_MS   = 120000;
 // SPEC-264 — the founder's "nyc miami" is METRO-level. Spelled 'New York'/'Miami'
 // (never 'NYC') because CITY_STATE, CITY_ALIASES and the .eq('city') cap counts
 // all key on these spellings — a 'NYC' literal would write state=null rows and
@@ -489,7 +495,12 @@ const gdb = growthDb();
     // AND modifier phrasings by DIFFERENT co-prime offsets, so each run explores a
     // genuinely different slice of the niche × city × modifier space (≈ 45 niches ×
     // 20 cities × 10 shapes = 9,000 distinct queries cycled over successive runs).
-    const spin = Math.floor(Date.now() / 1200000);   // 20-min run bucket
+    // SPEC-265: 7-min bucket (was 20) — with the second cron lane the worker ticks
+    // ~every 7.5 min, and a bucket longer than the tick spacing would hand two
+    // consecutive runs the SAME rotation slice: the second run re-searches what the
+    // first just deduped and its budget is spent on known_handle skips. 7 min < the
+    // tightest lane gap, so every tick explores a genuinely different slice.
+    const spin = Math.floor(Date.now() / 420000);   // 7-min run bucket
     const cities = rotate(CITIES,    (spin * 3)  % CITIES.length);
     const mods   = rotate(MODIFIERS, (spin * 2)  % MODIFIERS.length);
 
@@ -566,8 +577,14 @@ const gdb = growthDb();
     // Skip-reason tally so the watchdog can see WHY a run found nothing new.
     const skips = { known_handle: 0, no_handle: 0, no_contact_no_link: 0, blocked: 0, suppressed: 0, non_creator: 0, geo_unverified: 0, business: 0 };
 
-    for (const item of queries) {
-      if (Date.now() - started > DEADLINE_MS) break;
+    // SPEC-265 — worker pool over the query list (was a sequential for..of). The
+    // per-query body is UNCHANGED; only the driver fans out. Defined INSIDE the
+    // handler on purpose: it closes over handler-scoped db/gdb/seen/rows (SPEC-166
+    // class — a module-level helper must never close over handler consts). Every
+    // check-then-act on shared state (seen.has→add, the siteFetches cap) sits in a
+    // synchronous block, so concurrent processors cannot double-take a handle or
+    // overrun the fetch cap under the single-threaded event loop.
+    const processQuery = async (item: { query: string; niche: { q: string; category: string }; city: string }): Promise<void> => {
       const query = item.query;
       const niche = item.niche;
       const city  = item.city;
@@ -673,7 +690,15 @@ const gdb = growthDb();
           });
         }
       }
-    }
+    };
+    let qCursor = 0;
+    await Promise.all(Array.from({ length: HARVEST_POOL }, async () => {
+      while (qCursor < queries.length) {
+        if (Date.now() - started > DEADLINE_MS) break;
+        const item = queries[qCursor++];   // synchronous pick — a query is claimed exactly once
+        await processQuery(item);
+      }
+    }));
 
     // Dedupe by PRIMARY KEY before upserting. Two distinct handles can collapse
     // to the SAME id after stripping non-alphanumerics + slicing to 60 chars,
