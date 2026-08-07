@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import { getService, unlistService, relistService, deleteService, updateService } from '../lib/api';
 import { uploadAndPersistServiceCover } from '../lib/storage';
+import { supabase } from '../lib/supabase';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -87,8 +88,29 @@ export function ServiceDetailProviderScreen() {
     let cancelled = false;
 
     if (UUID_RE.test(id)) {
-      getService(id).then(({ data, error }) => {
+      getService(id).then(async ({ data, error }) => {
         if (cancelled) return;
+        // FW-17 CERGIO-GUARD (founder live repro 2026-08-06): this is the
+        // provider EDIT surface, but it used to render for ANY service
+        // uuid — signed in as t@cergio, opening a service owned by
+        // another account showed that account's listing wrapped in full
+        // edit chrome (RLS silently blocks the writes, so every "Saved ✓"
+        // saved nothing — a lying surface, same family as the Jamie mock
+        // above). Ownership is now checked against the LIVE session
+        // (supabase.auth.getUser(), not the outlet auth prop, so a
+        // hydration race can never misjudge the real owner): non-owners
+        // and signed-out viewers are replace-redirected to the public
+        // /service/:id view of the same service. Legacy rows with a NULL
+        // owner_id render as before — we only guard when ownership is
+        // actually recorded.
+        if (data?.owner_id) {
+          const { data: userRes } = await supabase.auth.getUser();
+          if (cancelled) return;
+          if (!userRes?.user || userRes.user.id !== data.owner_id) {
+            navigate(`/service/${id}`, { replace: true });
+            return;
+          }
+        }
         setLoading(false);
         if (error || !data) {
           // CERGIO-GUARD: previously fell back to MANAGED_SERVICES.listed[0]

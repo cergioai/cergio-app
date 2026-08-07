@@ -7421,6 +7421,14 @@ test('inbox-match-uses-the-fanout-bridge-union', 'FW-16 (founder live repro 2026
   assert(!(!/category\.in\.\(\$\{myMatchSet/.test(src)), 'request.category is not checked against the UNION set (FW-16)');
 });
 
+test('provider-detail-owner-guard', 'FW-17 (founder live repro 2026-08-06): /services/:id is the provider EDIT surface but rendered ANY service uuid — signed in as t@cergio it showed ANOTHER account\'s cleaner service in full edit chrome (RLS no-ops the writes, so edits silently save nothing). The screen must resolve the LIVE session (supabase.auth.getUser, immune to outlet-auth hydration races) and replace-redirect non-owners and signed-out viewers to the public /service/:id view whenever the row records an owner_id.', '#265', () => {
+  const src = readFile('src/screens/ServiceDetailProviderScreen.jsx');
+  assert(!(!/supabase\.auth\.getUser\(\)/.test(src)), 'provider detail no longer resolves the live session before rendering edit chrome (FW-17)');
+  assert(!(!/userRes\.user\.id !== data\.owner_id/.test(src)), 'provider detail no longer compares the viewer to services.owner_id (FW-17)');
+  assert(!(!/navigate\(`\/service\/\$\{id\}`, \{ replace: true \}\)/.test(src)), 'a non-owner is no longer redirected to the public /service/:id view (FW-17)');
+  assert(!(!/data\?\.owner_id/.test(src)), 'the NULL-owner_id legacy carve-out is gone — guard must only fire when ownership is recorded (FW-17)');
+});
+
 
 test('site-enrich-free-website-contact-harvest', 'SPEC-263 (founder, 2026-08-06, verbatim: "figure out a solution to capture more contact details for IG... my search showed some had websites with emails and or phones.. it may need a 3 step crawl or alternative straetgy.. worst case we scale the numbers to 5000 to get 500 contactable ... per city .. but creators always ahve an email somewhere as they want to attract partners and advertising..."). MEASURED (audit 2026-08-06T04:28Z): ig_services 276 rows, 218 with external_url (websites/linktrees), only 29 emails, 0 phones — 10.5% contactable. The contacts exist ONE FREE HOP away on pages whose addresses we already bought; before anyone scales a paid buy to 5,000 rows to net 500 contactables, this worker walks the hop for $0: 3-step crawl (landing page → linktree fan-out to up to 3 real sites → up to 2 contact-shaped same-origin pages), plain fetch only, 5s per request, ~45s per run. FILL-ONLY write-back (a contact another path found is never overwritten), MANDATORY junk filter (a wixpress/noreply address written to a lead row poisons outreach worse than an empty one), and site_enriched_at stamped on EVERY attempt so no dead site is ever crawled in a loop. Asserts scan RAW text — URLs, hosts and messages live in template literals and strings, which stripComments() blanks.', '#263b', () => {
   // 1) the worker exists and takes the cron/service-role bearer only — an open
