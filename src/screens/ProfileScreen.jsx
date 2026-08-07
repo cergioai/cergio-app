@@ -32,6 +32,7 @@ import { useProviderReady } from '../hooks/useProviderReady';
 import { InstagramConnectModal } from '../components/ui/InstagramConnectModal';
 import { TikTokConnectModal } from '../components/ui/TikTokConnectModal';
 import { EditProfileModal } from '../components/ui/EditProfileModal';
+import { Avatar } from '../components/ui/Avatar';
 import { REWARDS, REWARD_COPY } from '../lib/rewards';
 
 function fmtFollowers(n) {
@@ -200,6 +201,8 @@ export function ProfileScreen() {
   // surface where viewers are deciding whether to engage).
   const [headline, setHeadline] = useState('');
   const [followerCount, setFollowerCount] = useState(0);
+  // FW-19: real profile photo in the hero (Avatar falls back to initials).
+  const [avatarUrl, setAvatarUrl] = useState(null);
   // CERGIO-GUARD (2026-06-05): per-section counts + global stats strip
   // per Tarik: "for each header need to include related #'s (earnings,
   // friend invites, reco's etc.) and global above by name (followers,
@@ -246,7 +249,7 @@ export function ProfileScreen() {
     if (supabaseReady && u?.id) {
       supabase
         .from('profiles')
-        .select('display_name, headline, follower_count') // FW-4: display_name too
+        .select('display_name, headline, follower_count, avatar_url') // FW-4: display_name; FW-19: avatar_url
         .eq('id', u.id)
         .maybeSingle()
         .then(({ data, error }) => {
@@ -254,6 +257,7 @@ export function ProfileScreen() {
           if (data?.display_name) setProfileName(data.display_name); // FW-4
           if (data?.headline) setHeadline(data.headline);
           if (data?.follower_count != null) setFollowerCount(data.follower_count);
+          if (data?.avatar_url) setAvatarUrl(data.avatar_url); // FW-19
         });
     }
   }, [isSignedIn, u?.id]);
@@ -343,9 +347,10 @@ export function ProfileScreen() {
             )}
           </div>
         </div>
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-g to-gd flex items-center justify-center text-white text-body-lg font-extrabold flex-shrink-0 overflow-hidden ring-2 ring-white shadow-sm">
-          {initials}
-        </div>
+        {/* FW-19: real photo when uploaded; Avatar's initials fallback otherwise. */}
+        <span className="flex-shrink-0 ring-2 ring-white shadow-sm rounded-full">
+          <Avatar url={avatarUrl} name={displayName} size={48} />
+        </span>
       </div>
 
       {/* ── Switch view CTA — primary action, kept at top ──────────────── */}
@@ -677,7 +682,10 @@ export function ProfileScreen() {
         <EditProfileModal
           user={auth?.user}
           onClose={() => setShowEditProfile(false)}
-          onSaved={() => showToast('Profile updated ✓')}
+          onSaved={(p) => {
+            if (p?.avatarUrl) { setAvatarUrl(p.avatarUrl); showToast('Photo updated ✓'); return; } // FW-19
+            showToast('Profile updated ✓');
+          }}
         />
       )}
 

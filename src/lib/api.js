@@ -83,7 +83,7 @@ export async function createService(draft) {
     location_text: draft.location || null,
     lat:          draft.lat ?? null,
     lng:          draft.lng ?? null,
-    photo_class:  draft.photoClass || 'fv-jamie',
+    photo_class:  draft.photoClass || null, // FW-20 SHARED-CHANGE-APPROVED: never record a fake-person placeholder class
     status:       'listed',
     // CERGIO-GUARD (2026-05-30): provider-drawn coverage polygon
     // (GeoJSON Polygon). Nullable — when null, consumer search falls
@@ -3131,6 +3131,37 @@ export async function setSpotlightRequestStatus(id, status) {
 /** Fetch offerings for an existing service by ID. Used by
  *  ServiceListMoreOfferingsScreen when editing an already-published
  *  service (instead of reading from the in-memory listingDraft). */
+/** PR 5 (PATCHES §2): a request's attachments, with SIGNED urls — the
+ *  request-media bucket is private (RLS: requester + responding providers).
+ *  Returns rows in sort_order, each with a `signed_url` good for an hour. */
+export async function listRequestAttachments(requestId) {
+  if (!supabaseReady || !requestId) return { data: [], error: null };
+  const { data: rows, error } = await supabase
+    .from('request_attachments')
+    .select('id, request_id, storage_path, kind, sort_order')
+    .eq('request_id', requestId)
+    .order('sort_order', { ascending: true });
+  if (error || !rows?.length) return { data: [], error };
+  const { data: signed } = await supabase.storage
+    .from('request-media')
+    .createSignedUrls(rows.map(r => r.storage_path), 60 * 60);
+  const urlByPath = Object.fromEntries((signed || []).filter(s => s.signedUrl).map(s => [s.path, s.signedUrl]));
+  return { data: rows.map(r => ({ ...r, signed_url: urlByPath[r.storage_path] || null })), error: null };
+}
+
+/** FW-18: ordered gallery rows for a service (photos + videos). Public read —
+ *  the PDP shows the gallery to signed-out viewers; the bucket is public so
+ *  no signing round-trip is needed. */
+export async function listServiceMedia(serviceId) {
+  if (!supabaseReady || !serviceId) return { data: [], error: null };
+  return await supabase
+    .from('service_media')
+    .select('id, service_id, storage_path, kind, sort_order, created_at')
+    .eq('service_id', serviceId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+}
+
 export async function getServiceOfferings(serviceId) {
   if (!supabaseReady || !serviceId) return { data: [], error: null };
   return await supabase

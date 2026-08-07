@@ -7,7 +7,7 @@
 // NO fake IG media — the photo strip is gated on real data.igMedia.
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
-import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime, listMyServices } from '../lib/api';
+import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime, listMyServices, listRequestAttachments } from '../lib/api';
 import { IgPostTile } from '../components/ui/IgPostTile';
 import { TrustStream, ConnectorChip } from '../components/ui/reputation';
 
@@ -115,6 +115,16 @@ export function RequestFromConnectorScreen() {
   const [askDraft, setAskDraft] = useState('');
   const [myName, setMyName] = useState('');
   const [spotlights, setSpotlights] = useState([]);
+  // PR 5 (PATCHES §2): the requester's photos/video — signed urls, visible
+  // to responding providers per the request-media RLS join.
+  const [attachments, setAttachments] = useState([]);
+
+  useEffect(() => {
+    if (!reqId) return;
+    let cancelled = false;
+    listRequestAttachments(reqId).then(({ data }) => { if (!cancelled) setAttachments((data || []).filter(a => a.signed_url)); });
+    return () => { cancelled = true; };
+  }, [reqId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -398,6 +408,35 @@ export function RequestFromConnectorScreen() {
           )}
         </div>
       </div>
+
+      {/* PR 5 (PATCHES §2): the requester's photos/video. Real rows only —
+          nothing renders when they attached nothing. Signed urls (private
+          bucket); tap opens full-size in a new tab. */}
+      {attachments.length > 0 && (
+        <div className="px-5 pb-3">
+          <div className="flex gap-2 overflow-x-auto">
+            {attachments.map(a => a.kind === 'video' ? (
+              <video
+                key={a.id}
+                src={a.signed_url}
+                controls
+                playsInline
+                preload="metadata"
+                className="h-[92px] rounded-[12px] bg-bg5 flex-shrink-0"
+              />
+            ) : (
+              <a key={a.id} href={a.signed_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                <img
+                  src={a.signed_url}
+                  alt="Request attachment"
+                  loading="lazy"
+                  className="h-[92px] w-[92px] object-cover rounded-[12px] bg-bg5"
+                />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* requester block — identity (avatar · bio · services) ABOVE the IG box;
           mutual friends BELOW the IG box (Tarik 2026-06-14).

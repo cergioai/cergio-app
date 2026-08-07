@@ -1,11 +1,10 @@
 import { Link } from 'react-router-dom';
 
-// Photo background classes — CSS gradients, no external images
-const PHOTO_BG = {
-  'fv-jamie': 'bg-gradient-to-br from-[#e8dcc8] via-[#b89870] to-[#604030]',
-  'fv-john':  'bg-gradient-to-br from-[#dce8f0] via-[#88a8c4] to-[#2c5070]',
-  'fv-steve': 'bg-gradient-to-br from-[#ede4d4] via-[#b8a078] to-[#584028]',
-};
+// FW-20 (founder 2026-08-06): the fake-person gradient placeholders
+// (fv-jamie/john/steve) are purged from real screens. When a service has no
+// real cover the tile is an honest neutral mint surface with the brand leaf —
+// never an aesthetic that implies a photo we don't have.
+import { LeafLogo } from './LeafLogo';
 
 function SavingsLabel({ savings }) {
   if (!savings || savings === 0) return null;
@@ -132,19 +131,18 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
 
   return (
     <div className="mb-5">
-      {/* ── PHOTO ── CERGIO-GUARD: real cover_url wins over the legacy
-            CSS-gradient photoClass when set. Falls back to the gradient
-            when no real photo is available so existing seeded rows still
-            render. img tag uses object-cover + lazy loading. */}
+      {/* ── PHOTO ── CERGIO-GUARD: real cover_url wins. FW-20: no real
+            photo → honest neutral tile (bg-gl + leaf), never the legacy
+            fake-person gradients. img tag uses object-cover + lazy. */}
       <div
         role="button"
         tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpen(); } }}
         className={`relative mx-4 h-[210px] rounded-2xl overflow-hidden cursor-pointer cg-tap
-                    ${coverUrl ? 'bg-bg5' : (PHOTO_BG[photoClass] || PHOTO_BG['fv-jamie'])}`}
+                    ${coverUrl ? 'bg-bg5' : 'bg-gl'}`}
         onClick={handleOpen}
       >
-        {coverUrl && (
+        {coverUrl ? (
           <img
             src={coverUrl}
             alt=""
@@ -152,6 +150,10 @@ export function ProviderCard({ provider, onBook, onSave, onOpen }) {
             className="absolute inset-0 w-full h-full object-cover"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center opacity-60">
+            <LeafLogo size={44} />
+          </span>
         )}
         {/* light overlay for depth — adds readability for badges/buttons */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/20" />

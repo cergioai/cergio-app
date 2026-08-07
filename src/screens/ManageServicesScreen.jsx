@@ -5,7 +5,8 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { listMyServices } from '../lib/api';
 import { useProviderReady } from '../hooks/useProviderReady';
 
-const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
+// FW-20: fake-person placeholder classes purged — cards render the real
+// cover_url or an honest neutral mint tile.
 
 export function ManageServicesScreen() {
   const navigate = useNavigate();
@@ -133,13 +134,18 @@ export function ManageServicesScreen() {
         <>
           <p className="px-5 pt-2 pb-3 text-heading-1 font-extrabold text-black">Listed</p>
           <div className="px-5 flex flex-col gap-3 mb-5">
-            {listed.map((s, i) => (
+            {listed.map((s) => (
               <div key={s.id} className="bg-white border border-bdr rounded-[18px] overflow-hidden">
                 <button
                   onClick={() => navigate(`/services/${s.id}`)}
                   className="w-full p-3 text-left flex items-center gap-3"
                 >
-                  <div className={`w-16 h-16 rounded-[12px] flex-shrink-0 ${s.photo_class || s.photoClass || PHOTO_FALLBACKS[i % 3]}`} />
+                  <div className="w-16 h-16 rounded-[12px] flex-shrink-0 bg-gl overflow-hidden">
+                    {s.cover_url && (
+                      <img src={s.cover_url} alt="" loading="lazy" className="w-full h-full object-cover"
+                           onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    )}
+                  </div>
                   <div className="flex-1">
                     <p className="text-body-lg font-extrabold text-black leading-tight">{s.title}</p>
                     <p className="text-meta text-b3 mt-0.5">{s.sub || s.category || s.description}</p>

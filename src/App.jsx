@@ -208,7 +208,7 @@ function Layout() {
     category: '', location: '', description: '',
     pricingMode: null,            // 'hourly' | 'session'
     offerings: [],
-    photoClass: 'fv-jamie',
+    photoClass: null, // FW-20: no fake-person placeholder class on new listings
     // Taxonomy linkage populated by the list-service flow when the
     // provider's typed text resolved through chat-parse with confidence
     // ≥ 0.60. Null when they overrode or we couldn't match — we then
@@ -222,7 +222,7 @@ function Layout() {
   });
   const resetListingDraft = useCallback(() => setListingDraft({
     category: '', location: '', description: '',
-    pricingMode: null, offerings: [], photoClass: 'fv-jamie',
+    pricingMode: null, offerings: [], photoClass: null, // FW-20: no fake-person placeholder class on new listings
     taxonomy_category: null, taxonomy_provider_type: null, taxonomy_offering_id: null,
     serviceAreaGeoJson: null,
   }), []);

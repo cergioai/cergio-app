@@ -32,7 +32,8 @@ import { useNavigate, useParams, useLocation, useOutletContext, Link } from 'rea
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { supabase, supabaseReady } from '../lib/supabase';
 import { RequestQuoteSheet } from '../components/ui/RequestQuoteSheet';
-import { getInboxPartyCounts, getMyNetworkIds, getMutualConnections } from '../lib/api';
+import { getInboxPartyCounts, getMyNetworkIds, getMutualConnections, listServiceMedia } from '../lib/api';
+import { serviceMediaPublicUrl } from '../lib/storage';
 import { priceForViewer, money } from '../lib/servicePricing';
 import { Avatar } from '../components/ui/Avatar';
 import { FacetBadge } from '../components/ui/FacetBadge';
@@ -178,6 +179,10 @@ export function ServiceDetailScreen() {
   const [loading, setLoading] = useState(!seeded);
   // Reviews come from bookings → reviews join (rater_id = reviewer).
   const [reviews, setReviews] = useState([]);
+  // FW-18: real gallery rows (photos + videos) from service_media. Images
+  // join the hero's story pager; videos render in the media strip below.
+  const [galleryMedia, setGalleryMedia] = useState([]);
+  const [heroIdx, setHeroIdx] = useState(0);
   const [showAllReviews, setShowAllReviews] = useState(false);
   // Reputational streams (SPEC-49g).
   const [ownerCounts, setOwnerCounts] = useState(null);
@@ -239,6 +244,18 @@ export function ServiceDetailScreen() {
     location.state?.provider?.taxonomy_provider_type || location.state?.provider?.category || null
   );
 
+  // FW-18: fetch the ordered gallery. UUID-guarded so old mock ids never hit
+  // the uuid column. Public read — signed-out viewers see the gallery too.
+  useEffect(() => {
+    if (!serviceId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId)) {
+      setGalleryMedia([]);
+      return;
+    }
+    let cancelled = false;
+    listServiceMedia(serviceId).then(({ data }) => { if (!cancelled) setGalleryMedia(data || []); });
+    return () => { cancelled = true; };
+  }, [serviceId]);
+
   useEffect(() => {
     if (!supabaseReady || !serviceId) return;
     let cancelled = false;
@@ -277,7 +294,7 @@ export function ServiceDetailScreen() {
             bio:        svc.description || '',
             price:      Math.round((def?.price_cents ?? 0) / 100),
             coverUrl:   svc.cover_url || null,
-            photoClass: svc.photo_class || 'fv-jamie',
+            photoClass: null, // FW-20: the PDP renders real media or the neutral surface, never fv-*
             location_text: svc.location_text || null,
           });
         }
@@ -478,7 +495,15 @@ export function ServiceDetailScreen() {
 
   const firstName = (ownerProfile?.display_name || provider.name).split(' ')[0];
   // Real hero images only — drives the story ruler (no fake multi-page hint).
-  const heroImages = [provider.coverUrl].filter(Boolean);
+  // FW-18: gallery images join the cover in the pager; videos stay in the
+  // media strip below (a silent autoplaying hero video would lie about sound).
+  const galleryImageUrls = galleryMedia
+    .filter(m => m.kind === 'image')
+    .map(m => serviceMediaPublicUrl(m.storage_path))
+    .filter(Boolean);
+  const galleryVideos = galleryMedia.filter(m => m.kind === 'video');
+  const heroImages = [provider.coverUrl, ...galleryImageUrls].filter(Boolean);
+  const heroImage = heroImages[Math.min(heroIdx, Math.max(heroImages.length - 1, 0))] || null;
   // The provider type to show (e.g. "Hair Stylist"), never the vague category.
   const displayType = serviceType || provider.taxonomy_provider_type || provider.category;
   const selectedOffering = (offerings || []).find(o => o.id === selectedOfferingId) || offerings?.[0] || null;
@@ -496,12 +521,16 @@ export function ServiceDetailScreen() {
           heart / pin / share), mute bottom-left, story ruler only when there
           is actually more than one image (SPEC-12/49g — never a fake "more
           to scroll" hint). */}
-      <div className={`relative h-[395px] overflow-hidden ${provider.coverUrl ? 'bg-bg5' : 'bg-b2'}`}>
-        {provider.coverUrl && (
+      <div className={`relative h-[395px] overflow-hidden ${heroImage ? 'bg-bg5' : 'bg-b2'}`}>
+        {heroImage && (
           <img
-            src={provider.coverUrl}
+            src={heroImage}
             alt=""
             loading="lazy"
+            // FW-18: tapping the IMAGE (not the overlay buttons — they sit
+            // above it, so their clicks never reach here) advances the story
+            // pager when there is more than one real image (SPEC-12/49g).
+            onClick={() => { if (heroImages.length > 1) setHeroIdx(i => (i + 1) % heroImages.length); }}
             className="absolute inset-0 w-full h-full object-cover"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
@@ -566,12 +595,32 @@ export function ServiceDetailScreen() {
             {heroImages.map((_, i) => (
               <div
                 key={i}
-                className={`flex-1 h-[3px] rounded-full ${i === 0 ? 'bg-white' : 'bg-white/40'}`}
+                className={`flex-1 h-[3px] rounded-full ${i === heroIdx ? 'bg-white' : 'bg-white/40'}`}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* FW-18: videos from the provider's gallery. Real rows only — the
+          strip doesn't render at all when there are none. */}
+      {galleryVideos.length > 0 && (
+        <div className="px-5 pt-4">
+          <SectionTitle size="pdp">Video</SectionTitle>
+          <div className="flex gap-2 overflow-x-auto pt-2 pb-1">
+            {galleryVideos.map(v => (
+              <video
+                key={v.id}
+                src={serviceMediaPublicUrl(v.storage_path)}
+                controls
+                playsInline
+                preload="metadata"
+                className="h-[180px] rounded-[18px] bg-bg5 flex-shrink-0"
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Identity — name (Link to the owner's profile), full facet list,
           perk headline when the service is free for Local Creators. */}
