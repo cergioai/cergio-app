@@ -55,7 +55,7 @@ serve(async (req: Request) => {
     // line used to be createClient(url, svc) — the product client — so the dashboard
     // queried tables that hold almost nothing and rendered as "truncated". Auth stays
     // on product (above); leads now come from growth.
-    const db = growthDb();
+    const gdbAll = growthDb();
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
     // SPEC-210 — EVERY dataset is downloadable, not just the two lead tables. The
     // founder asked for "all available on dashboard to download live"; the crawl queue
@@ -69,6 +69,17 @@ serve(async (req: Request) => {
     };
     const audience = DATASETS[body.audience] ? body.audience : 'services';
     const DS = DATASETS[audience];
+    // SPEC-267 — THE AGENT-RUNS TAB READ A TABLE NOBODY WRITES. Every worker's
+    // logAgentRun() inserts into agent_runs on the PRODUCT project (the SPEC-132
+    // cutover deliberately kept agent_runs/qa_findings there so the watchdog and
+    // ops console kept working), while this dashboard read agent_runs on GROWTH —
+    // a table that has held [] since the cutover. The founder's "Agent runs" tab
+    // was therefore a PERMANENT CONFIDENT ZERO (the #249 class), and when
+    // creator-harvest wrote 0 rows for 6 straight ticks the one surface that
+    // could say WHY ({queried,found,inserted,skips} lives in meta) showed
+    // "AGENT RUNS 0". Leads stay on growth (SPEC-203 — that cutover is why the
+    // founder can sign in during a crawl); ONLY the runs audience reads product.
+    const db = audience === 'runs' ? createClient(url, svc) : gdbAll;
     const table = DS.table;
     const isLeadTable = audience === 'services' || audience === 'creators';
     // SPEC-224 — METRO and LOCALITY are different columns and must be different filters.
@@ -161,7 +172,10 @@ serve(async (req: Request) => {
 
     // growth: rows fetched in last 1/7/14 days
     const since = (d: number) => new Date(Date.now() - d * 864e5).toISOString();
-    const tsCol = isLeadTable ? 'fetched_at' : 'created_at';
+    // SPEC-267: agent_runs has NO created_at (backbone schema: started_at/finished_at)
+    // — ordering the runs audience by created_at was a 42703 on every load, invisible
+    // only because the growth copy this screen used to read is empty anyway.
+    const tsCol = isLeadTable ? 'fetched_at' : (audience === 'runs' ? 'started_at' : 'created_at');
     const growth = {
       last1d: await count((b) => b.gte(tsCol, since(1))),
       last7d: await count((b) => b.gte(tsCol, since(7))),
