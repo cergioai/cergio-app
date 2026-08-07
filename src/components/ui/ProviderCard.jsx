@@ -26,9 +26,10 @@ function SavingsLabel({ savings }) {
 // id+name) is provided, render each avatar as a Link to /u/{id}.
 // Falls back to friends[] (strings only) for legacy/mock paths.
 function FriendAvatars({ friends, recommenders }) {
+  // STYLE_MIGRATION (PR 6): token-only palette — no raw-hex gradients.
   const colors = [
-    'bg-gradient-to-br from-[#b06090] to-[#703050]',
-    'bg-gradient-to-br from-[#4478aa] to-[#2a5070]',
+    'bg-gd2',
+    'bg-b2',
     'bg-gradient-to-br from-g to-gd',
   ];
   const initialsOf = (s) => (s || '?').slice(0, 2).toUpperCase();

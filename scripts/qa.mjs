@@ -7911,6 +7911,30 @@ test('service-headline-leads-title-badges', 'FW-23 (founder 2026-08-07, verbatim
   assert(!(!/column: 'headline'/.test(prov)), 'the provider lost the inline Headline editor (FW-23)');
 });
 
+test('style-migration-long-tail-done', 'PR 6 (redesign handoff STYLE_MIGRATION.md, groups 4-6 — the LAST design module): booking/request screens, profile-adjacent screens, and the 13 ServiceList* screens are migrated to the UI kit. The enforceable done-check from the handoff: NO raw-hex Tailwind arbitrary classes (-[#...]) left in any migrated screen — a literal #4AA901 becomes text-g, a hand-built pink-gradient avatar becomes the kit Avatar (initials on mint). IA untouched: same sections, same headings, same navigation (markup-only rule). ProviderCard rides along because ResultsScreen renders through it.', '#277', () => {
+  const SCREENS = [
+    'src/screens/RequestFromConnectorScreen.jsx', 'src/screens/RequestDetailScreen.jsx',
+    'src/screens/BookingScreen.jsx', 'src/screens/ServiceCompleteScreen.jsx',
+    'src/screens/ConnectorRequestsScreen.jsx', 'src/screens/PublicProfileServicesScreen.jsx',
+    'src/screens/ProfileScreen.jsx', 'src/screens/ActivityScreen.jsx',
+    'src/screens/BrowseConnectorsScreen.jsx', 'src/screens/ResultsScreen.jsx',
+    'src/screens/ServiceListAboutScreen.jsx', 'src/screens/ServiceListAddNewOfferingScreen.jsx',
+    'src/screens/ServiceListAddOfferingScreen.jsx', 'src/screens/ServiceListAddSessionOfferingScreen.jsx',
+    'src/screens/ServiceListHourlyOrSessionScreen.jsx', 'src/screens/ServiceListMoreOfferingsScreen.jsx',
+    'src/screens/ServiceListPhotosArrangeScreen.jsx', 'src/screens/ServiceListPhotosIntroScreen.jsx',
+    'src/screens/ServiceListPhotosPickScreen.jsx', 'src/screens/ServiceListSetupScreen.jsx',
+    'src/screens/ServiceListVerifyScreen.jsx', 'src/screens/ServiceListWelcomeScreen.jsx',
+    'src/components/ui/ProviderCard.jsx',
+  ];
+  for (const f of SCREENS) {
+    assert(!/-\[#/.test(readFile(f)), `${f} carries a raw-hex Tailwind class again — STYLE_MIGRATION done-check (PR 6)`);
+  }
+  const rfc = readFile('src/screens/RequestFromConnectorScreen.jsx');
+  assert(!(!/from '\.\.\/components\/ui\/Avatar'/.test(rfc)), 'RequestFromConnectorScreen no longer uses the kit Avatar (PR 6)');
+  const rd = readFile('src/screens/RequestDetailScreen.jsx');
+  assert(!(!/from '\.\.\/components\/ui\/Avatar'/.test(rd)), 'RequestDetailScreen no longer uses the kit Avatar (PR 6)');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

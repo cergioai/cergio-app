@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import { getBooking, updateBookingStatus, notifyBookingAccepted, getMutualConnections, isConnectorProfile } from '../lib/api';
+import { Avatar } from '../components/ui/Avatar';
 import { usePartyCounts, formatKeyCounts } from '../hooks/usePartyCounts';
 import { useProviderReady } from '../hooks/useProviderReady';
 
@@ -26,16 +27,10 @@ function getInitials(name = '') {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();
 }
 
+// STYLE_MIGRATION (PR 6): hand-built pink-gradient avatar → kit Avatar
+// (initials on mint), size 44 to keep the 11-unit slot.
 function GradientAvatar({ name }) {
-  return (
-    <div
-      className="rounded-full bg-gradient-to-br from-[#b06090] to-[#703050]
-                 flex items-center justify-center text-white font-extrabold flex-shrink-0
-                 w-11 h-11 text-body"
-    >
-      {getInitials(name)}
-    </div>
-  );
+  return <Avatar name={name} size={44} />;
 }
 
 function formatAppointment(iso) {
@@ -409,7 +404,7 @@ export function RequestDetailScreen() {
                   key={m.id}
                   className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center
                               text-meta-sm font-extrabold text-white
-                              ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}
+                              ${m.is_connector ? 'bg-g text-white' : 'bg-gl text-gd'}`}
                   title={m.name}
                 >
                   {m.initial}
