@@ -37,6 +37,17 @@ import { leadsDashboard } from '../lib/api';
 // different origin columns (data_source vs discovered_via vs source), different fields.
 // SPEC-260: Services | Creators are the segmented primary pair; the crawl queue and
 // agent runs stay selectable (gate #210) as quiet secondary pills.
+// SPEC-271 — brief intuitive crawl names (founder, 2026-08-07). DISPLAY ONLY: the raw
+// data_source/discovered_via values keep flowing through every query and CSV. WELDED to
+// SOURCE_LABELS in _shared/opsPayload.ts by gate #271b (JSX cannot import a Deno module).
+const SOURCE_LABELS = {
+  osm: 'OpenStreetMap', craigslist: 'Craigslist', yellowpages_apify: 'YP',
+  yelp: 'Yelp', google_lsa: 'Google Sponsored', google_sponsored: 'Sponsored (legacy)',
+  gmaps_apify: 'Google Maps', ig_services: 'IG Services',
+  'ig-scraper-user-search': 'IG Creators', 'se:web-harvest': 'Web Creators',
+};
+const srcLabel = (id) => SOURCE_LABELS[id] || (String(id || '').startsWith('se:web-harvest') ? 'Web Creators' : id);
+
 const AUDIENCES = [
   { id: 'services', label: 'Services' },
   { id: 'creators', label: 'Creators' },
@@ -163,7 +174,7 @@ function LeadRow({ r, audience }) {
         {audience === 'runs' && r.rows_written != null && <span className="tabular-nums">{Number(r.rows_written).toLocaleString()} rows</span>}
         {status && <span className="font-bold">{status}</span>}
         {audience === 'runs' && r.last_error && <span className="text-red-600 truncate max-w-[18rem]">{String(r.last_error)}</span>}
-        {src && <span className="rounded-full bg-bg5 px-2 py-0.5 font-bold text-b2">{src}</span>}
+        {src && <span className="rounded-full bg-bg5 px-2 py-0.5 font-bold text-b2" title={src}>{srcLabel(src)}</span>}
         {when && <span>{when}</span>}
       </div>
     </>
@@ -188,7 +199,7 @@ function SourceRow({ b, onCsv }) {
   return (
     <div data-source-row className="px-3 py-2 odd:bg-white even:bg-bg4" title={b.state_detail}>
       <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
-        <span className="w-40 truncate text-[13px] font-extrabold text-black">{b.source}</span>
+        <span className="w-40 truncate text-[13px] font-extrabold text-black" title={b.source}>{srcLabel(b.source)}</span>
         <span className="text-[11px] text-b3 tabular-nums">fresh {b.fresh === null || b.fresh === undefined ? 'FAILED' : Math.min(b.fresh, b.fresh_target)}/{b.fresh_target}</span>
         <span className={`text-[11px] font-bold uppercase ${tone}`}>{b.state}</span>
         <div className="flex-1" />
