@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
 import { getInboundRequest, getMutualConnections, respondToRequest, getPublicProfileStats, isConnectorProfile, askRequestQuestion, listRequestQuestions, getMyDisplayName, getConnectorSpotlights, acceptRequestWithTime, listMyServices, listRequestAttachments } from '../lib/api';
 import { IgPostTile } from '../components/ui/IgPostTile';
+import { Avatar } from '../components/ui/Avatar';
 import { TrustStream, ConnectorChip } from '../components/ui/reputation';
 
 const QUICK_QS = [
@@ -38,18 +39,8 @@ function mutualSummaryText({ count, connectors }) {
   return `${parts.join(' and ')} in common`;
 }
 
-// Initials avatar. Default 36px (message rows); pass size for the lead identity
-// (48px per the Airbnb review/identity spec).
-function Avatar({ name, size = 36 }) {
-  return (
-    <div
-      className="rounded-full bg-gradient-to-br from-[#b06090] to-[#703050] flex items-center justify-center text-white font-extrabold shrink-0"
-      style={{ width: size, height: size, minWidth: size, fontSize: Math.max(11, Math.round(size * 0.3)) }}
-    >
-      {getInitials(name)}
-    </div>
-  );
-}
+// STYLE_MIGRATION (PR 6): the hand-built pink-gradient initials avatar is
+// replaced by the kit Avatar (initials on mint) — one avatar everywhere.
 
 // Compose a personalized note in the Connector's voice from the real request
 // fields (Tarik 2026-06-14). Derived from data we have — not fabricated.
@@ -524,7 +515,7 @@ export function RequestFromConnectorScreen() {
                   <div className="flex -space-x-2 shrink-0">
                     {mutuals.sample.map(m => (
                       <button key={m.id} onClick={() => navigate(`/u/${m.id}`)} title={m.name}
-                        className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[11px] font-extrabold text-white ${m.is_connector ? 'bg-g' : 'bg-gradient-to-br from-[#b06090] to-[#703050]'}`}>{m.initial}</button>
+                        className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[11px] font-extrabold ${m.is_connector ? 'bg-g text-white' : 'bg-gl text-gd'}`}>{m.initial}</button>
                     ))}
                   </div>
                   <p className="text-body-sm text-b2 leading-snug min-w-0">
@@ -649,7 +640,7 @@ export function RequestFromConnectorScreen() {
           precise pin; exact street address blocked until accepted + confirmed. */}
       <div className="px-5 pb-3">
         <button type="button" onClick={() => setMapOpen(true)}
-          className="relative block w-full text-left rounded-[18px] overflow-hidden h-[200px] bg-[#E8EEE6] border border-line">
+          className="relative block w-full text-left rounded-[18px] overflow-hidden h-[200px] bg-soft border border-line">
           {osmSrc ? (
             <iframe title="Approximate area" src={osmSrc} loading="lazy"
               className="absolute inset-0 w-full h-full pointer-events-none" style={{ border: 0, filter: 'saturate(0.92)' }} />

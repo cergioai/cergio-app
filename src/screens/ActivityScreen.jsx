@@ -244,9 +244,9 @@ function GoatShareCard({ row, onClick }) {
   // Both avatars (owner + recommender pill) are Links to public
   // profiles. The card itself is also clickable → service PDP, so the
   // avatar Links stopPropagation to avoid double-navigation.
-  const ownerAvatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+  const ownerAvatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-g to-gd
                           text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
-  const goatAvatarCls  = `w-5 h-5 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+  const goatAvatarCls  = `w-5 h-5 rounded-full bg-gradient-to-br from-g to-gd
                           text-white text-[9px] font-extrabold flex items-center justify-center`;
 
   const serviceTypeLabel = svc.taxonomy_provider_type || svc.category || 'Service';
@@ -341,7 +341,7 @@ function GoatShareCard({ row, onClick }) {
 // signups get the Connector chip; everyone else just the join verb.
 function JoinedCard({ ev }) {
   const p = ev.profile;
-  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-g to-gd
                      text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
   return (
     <div className="flex items-center gap-2.5">
@@ -380,7 +380,7 @@ function ListingCard({ ev, onClick }) {
   const ownerId   = owner?.id || null;
   const gradient  = NEUTRAL_GRADIENT; // FW-20
   const cover     = svc.cover_url;
-  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
+  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-g to-gd
                      text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
   // CERGIO-GUARD (2026-06-03): inline share for the listing announcement.
   const serviceTypeLabel = svc.taxonomy_provider_type || svc.category || 'Service';
@@ -450,7 +450,7 @@ function SpotlightCard({ ev }) {
   const connector = ev.connector;
   const requester = ev.requester;
   const platform  = ev.platform === 'tiktok' ? 'TikTok' : 'Instagram';
-  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#8A6FD6] to-[#4F3DB0]
+  const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-b2 to-black
                      text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;
   const cName = connector?.display_name || 'A Connector';
   const rName = requester?.display_name || 'a provider';
