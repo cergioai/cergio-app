@@ -6694,8 +6694,17 @@ test('every-services-source-stops-itself-at-the-audit-cap', 'SPEC-243 (founder, 
   const cfg = JSON.parse(readFile('growth-controls.json').replace(/^\s*\/\/.*$/gm, ''));
   assert(!(Number(cfg.SOURCE_AUDIT_CAP) !== 100), `SOURCE_AUDIT_CAP is ${cfg.SOURCE_AUDIT_CAP}, not the founder's 100 — "100 leads each max to review" is a founder number, and changing it is a founder decision (update this gate with the new verbatim order, never just edit the config)`);
   const only = String(cfg.CRAWLS_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
-  for (const s of ['osm', 'craigslist', 'yellowpages_apify', 'google_lsa', 'gmaps_apify', 'ig_services', 'se:web-harvest']) {
-    assert(!(!only.includes(s)), `${s} is missing from CRAWLS_ONLY — the founder ordered ALL sources (minus yelp) into the crawl, and a source outside the allowlist is silently not crawling`);
+  // AMENDED IN PLACE by SPEC-270 (founder, 2026-08-07, verbatim: "for creators and IG
+  // services only for now... keep the other cralwers parked"): the all-sources phase
+  // (SPEC-243, 2026-08-03) is superseded — the services sources are PARKED (kept in the
+  // rota, dashboards and code; OUT of the allowlist), and a parked source sneaking back
+  // into CRAWLS_ONLY is a founder decision taken by config drift (the #239 rule,
+  // generalised). The cap MECHANICS below stand untouched for the day they re-open.
+  for (const s of ['osm', 'craigslist', 'yellowpages_apify', 'yelp', 'google_lsa', 'google_sponsored', 'gmaps_apify']) {
+    assert(!(only.includes(s)), `${s} is in CRAWLS_ONLY while the SPEC-270 park order stands — re-opening a parked source is a founder decision, not config drift`);
+  }
+  for (const s of ['ig_services', 'se:web-harvest']) {
+    assert(!(!only.includes(s)), `${s} is missing from CRAWLS_ONLY — the founder ordered creators AND IG services scaled to 250 contactable, and a missing source silently closes half that order (SPEC-230 shape)`);
   }
   // 2) fulfill-crawl: the cap is computed before the claim, from the shared map, fail closed
   const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
@@ -7484,7 +7493,7 @@ test('site-enrich-free-website-contact-harvest', 'SPEC-263 (founder, 2026-08-06,
     'candidate picking no longer stops when the budget is spent — the budget constant exists but nothing enforces it, which is a gate that appears to exist and does not (the falsest kind of green)');
   // 6) the ATTEMPT is stamped no matter the outcome — an unstamped failed site is
   //    picked again every run, and 12 dead linktrees would permanently occupy the batch
-  assert(!(!fn.includes('const patch: Record<string, string> = { site_enriched_at: stamp }')),
+  assert(!(!fn.includes('const patch: Record<string, string | number> = { site_enriched_at: stamp }')),
     'the write patch no longer carries site_enriched_at unconditionally — only successful finds get stamped, every no-contact site is retried each run, and the batch fills with known-dead pages while un-attempted rows starve');
   assert(!((fn.match(/\.update\(\{ site_enriched_at: stamp \}\)/g) || []).length < 2),
     'the failure-path stamp (fill-only guard matched 0 rows / write error) is gone from one of the two tables — those rows re-enter the candidate pool forever and the free lane silently stops draining forward');
@@ -7843,6 +7852,30 @@ test('booking-freeform-box-and-attachments', 'PR 5 (redesign handoff, Booking Fl
   const inbound = readFile('src/screens/RequestFromConnectorScreen.jsx');
   assert(!(!/listRequestAttachments/.test(inbound)), 'the provider inbound screen no longer loads request attachments (PR 5)');
   assert(!(!/attachments\.length > 0 &&/.test(inbound)), 'the attachments strip lost its real-rows-only guard (PR 5/SPEC-12)');
+});
+
+test('creators-and-ig-only-250-contactable-rotated-categories-followers', 'SPEC-270 (founder, 2026-08-07, verbatim: "use the same strategy used for IG services to scale contactable %% for creators but add other categories to get to 100 contactable leads accross all categories (we only see pets and nyc)... also add #of followers like for IG services crawl... scale creators and IG services to 250 contactable (whatever the # total nubmer is..) .. for creators and IG services only for now... keep the other cralwers parked... conserve tokens ... but deliver gradually to download..."). Four welded parts. (1) PARK: CRAWLS_ONLY narrows to exactly the two creator sources — the services sources are parked, not deleted (the #239 shape; the amended #243 pins both directions). (2) 250 CONTACTABLE, NOT 250 ROWS: both self-stops chain or(email.not.is.null,phone.not.is.null) after their pinned population filters, so uncontactable rows are kept but never satisfy the stop and the total row count floats — the founder\'s parenthetical, verbatim. (3) ROTATION: MEASURED on relay run #1 — a fresh runner IP is served only the FIRST ~2 queries before DDG walls it, and the slice always led with the same head, so every tick harvested pets×NYC ("we only see pets and nyc"). The built slice now rotates IN PLACE by spin, so the served window walks the whole category×metro space across ticks. (4) FOLLOWERS: site-enrich parses a follower count off the creator\'s own pages ("123K followers" → integer, no match → null, never fabricated — SPEC-86) and fills it on the same fill-only write. Money: ig_services stays under every #253-#256 control; se:web-harvest and site-enrich stay $0.', '#270b', () => {
+  const cfg = JSON.parse(readFile('growth-controls.json').replace(/^\s*\/\/.*$/gm, ''));
+  const only = String(cfg.CRAWLS_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean).sort();
+  assert(!(only.join(',') !== 'ig_services,se:web-harvest'),
+    `CRAWLS_ONLY is [${only.join(',')}] not exactly the two creator sources — either a parked crawler is back (config drift spending attention the founder parked) or half the 250-contactable order is closed`);
+  assert(!(Number(cfg.CREATOR_TARGET) !== 250),
+    `CREATOR_TARGET is ${cfg.CREATOR_TARGET}, not the founder\'s 250 — "scale creators and IG services to 250 contactable" is a founder number; changing it is a founder decision (update this gate with the new verbatim order)`);
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  const igCnt = fc.slice(fc.indexOf('const CREATOR_TARGET'), fc.indexOf('SPEC-243', fc.indexOf('const CREATOR_TARGET')));
+  assert(!(!igCnt.includes(".or('email.not.is.null,phone.not.is.null')")),
+    'the ig_services self-stop no longer counts CONTACTABLE rows — 250 uncontactable rows would satisfy a stop the founder defined in contacts, and the paid crawl stops before delivering what was actually ordered');
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+  const chCnt = ch.slice(ch.indexOf('const { count: harvested'), ch.indexOf('const { count: harvested') + 600);
+  assert(!(!chCnt.includes(".or('email.not.is.null,phone.not.is.null')")),
+    'the se:web-harvest self-stop no longer counts CONTACTABLE rows — contactless rows (the majority at harvest time, before site-enrich finishes them) would satisfy the 250 and the free lane parks itself with the order unfilled');
+  assert(!(!/const qrot = rotate\(queries, \(spin \* 5\) % Math\.max\(queries\.length, 1\)\);\s*\n\s*queries\.length = 0;\s*\n\s*queries\.push\(\.\.\.qrot\);/.test(ch)),
+    'the spin rotation of the built query slice is gone — the ~2 queries a rate-limited runner IP gets served are the SAME head every tick, and the founder is back to "we only see pets and nyc"');
+  const se = readFile('supabase/functions/site-enrich/index.ts');
+  assert(!(!se.includes('function parseFollowersHtml')),
+    'site-enrich lost its follower parser — "also add #of followers like for IG services crawl" is unserved on the free lane and the ranking column stays null for every free-harvested creator');
+  assert(!(!se.includes('if (found.followers) patch.followers = found.followers;')),
+    'a parsed follower count is never written — the parser exists but the fill is gone, which is a feature that appears to exist and does not (the falsest kind of green)');
 });
 
 main().catch(e => {
