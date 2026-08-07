@@ -8,11 +8,36 @@
 // creators become 'queued' (sendable). Runs on pg_cron via cergio_call_edge —
 // no Mac, no key. Reversible: everything tagged discovered_via='se:web-harvest'.
 //
+// SPEC-264 — v2 (FOUNDER, 2026-08-06, verbatim, both orders): "I'm showing 0
+// progress on creators.. . use same solution for IG services for IG creators (by
+// running seaches direct based on spec (top 25 micro and mid parenting, pets, etc
+// influncers in nyc miami etc..)... augment the IG services solution with more
+// emails and phones by carawling their websites (email is easily visible there in
+// most).. also crawl the # of followers so we rank..... use same stategy for
+// creators... run creators now .. it's a free staregy.. need to see initial 100 to
+// tweak..." and, overriding any paid path: "NO... for creators we're doing the
+// same IG FREE web crawling staretgy we're using for IG services... (it's
+// working!)....correct and upgrade with above and ship get 100 from each — not
+// paid! IG .."
+//
+// MEASURED defect that zeroed v1: the CREATOR_TARGET self-stop counted the
+// like('se:web-harvest%') prefix over ALL TIME. The table holds ~4,211 rows under
+// the June/July daily tags (in-tree: opsPayload "CREATORS TOTAL was 4,211"; gate
+// #220's "0 rows beside a real total of 4,211") — 4,211 >= 100, so EVERY
+// invocation returned { paused: true } at the top of the handler, before any
+// search, while the board's FRESH count (AUDIT_FRESH_SINCE) read 0/100: the
+// founder's "0 progress on creators", verbatim. v2 windows the self-stop and the
+// per-(category × metro) caps by the SAME committed freshness instant the audit
+// cap uses (SPEC-246 — "100 FRESH peices of DATA"), keeps the prefix like(), and
+// re-asserts the */15 cron in its migration (belt and braces — board snapshots
+// showed agent_runs: [] beside a correct-looking final schedule).
+//
 // AUTH: service-role bearer only (cron).
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?target=deno&deno-std=0.224.0';
 import { growthDb, growthEnvPresent } from '../_shared/growthDb.ts';
+import { CREATOR_CATEGORIES, CREATOR_CAT_CAP, auditFreshSince } from '../_shared/opsPayload.ts';
 
 // On-values creator niches (category is chosen to pass cergio_grade_creators).
 // BLOCKED (never harvested — MEMORY: mobile_first_positioning + no-values guard):
@@ -165,7 +190,14 @@ const MODIFIERS = [
 
 const MAX_QUERIES   = 48;   // high-volume discovery — target 1000+ new/day across continuous runs
 const MAX_SITEFETCH = 60;   // bounded external fetches for email mining
-const DEADLINE_MS   = 125000;
+// SPEC-264: ~50s run budget — the */15 cron must never stack invocations, and an
+// unfinished slice simply continues next tick (the query rotation advances anyway).
+const DEADLINE_MS   = 50000;
+// SPEC-264 — the founder's "nyc miami" is METRO-level. Spelled 'New York'/'Miami'
+// (never 'NYC') because CITY_STATE, CITY_ALIASES and the .eq('city') cap counts
+// all key on these spellings — a 'NYC' literal would write state=null rows and
+// geo-verify against nothing.
+const HARVEST_METROS = ['New York', 'Miami'];
 
 // ── QUALITY GATE HELPERS (SPEC-86, 2026-07-18) — enforce the frozen creator bar:
 //    verified geo only, individual (not business), NO fabricated fields. ──
@@ -291,10 +323,21 @@ const gdb = growthDb();
       return json({ ok: true, suspended: true, reason });
     }
     const CREATOR_TARGET = Number(Deno.env.get('CREATOR_TARGET') || 100);
+    // SPEC-264 — THE MEASURED DEFECT LIVED ON THE NEXT QUERY. Unwindowed, this
+    // prefix count reads the ~4,211 June/July rows, decides 4,211 >= 100, and the
+    // worker pauses itself on every tick — "0 progress on creators" beside a
+    // target it believes it met weeks ago. The window is the SAME committed
+    // freshness instant the audit cap and the board already use (SPEC-246,
+    // AUDIT_FRESH_SINCE): the founder is owed 100 FRESH rows, so the stop counts
+    // fresh rows. The like() prefix stays EXACTLY (SPEC-237: per-run-day tags;
+    // an eq() reads 0 beside real rows). Unparseable instant → epoch → counts
+    // everything → stops sooner: fail-closed, refusing costs nothing.
+    const HARVEST_FRESH = auditFreshSince(Deno.env.get('AUDIT_FRESH_SINCE')) ?? '1970-01-01T00:00:00Z';
     if (CREATOR_TARGET > 0) {
       const { count: harvested, error: cntErr } = await gdb.from('leads_influencers')
         .select('id', { count: 'exact', head: true })
-        .like('discovered_via', 'se:web-harvest%');
+        .like('discovered_via', 'se:web-harvest%')
+        .gte('fetched_at', HARVEST_FRESH);
       // If the target cannot be READ, refuse to crawl — refusing costs nothing.
       if (cntErr) {
         await logAgentRun(db, 'creator-harvest', {
@@ -304,7 +347,7 @@ const gdb = growthDb();
         return json({ error: `target unreadable — refusing to crawl: ${serr(cntErr)}` }, 500);
       }
       if ((harvested ?? 0) >= CREATOR_TARGET) {
-        const reason = `creator target met — ${harvested} of ${CREATOR_TARGET} from se:web-harvest (prefix). Paused for audit alongside the rest (founder, 2026-08-02).`;
+        const reason = `creator target met — ${harvested} of ${CREATOR_TARGET} FRESH (since ${HARVEST_FRESH}) from se:web-harvest (prefix). Paused for audit alongside the rest (founder, 2026-08-02; freshness window SPEC-264).`;
         await logAgentRun(db, 'creator-harvest', {
           started, raw_found: 0, rows_written: 0, status: 'ok',
           meta: { target_met: true, harvested, target: CREATOR_TARGET, reason },
@@ -450,13 +493,53 @@ const gdb = growthDb();
     const cities = rotate(CITIES,    (spin * 3)  % CITIES.length);
     const mods   = rotate(MODIFIERS, (spin * 2)  % MODIFIERS.length);
 
-    // SPEC-245 — build the query list TIER BY TIER, each tier rotated within itself and
-    // holding its own share of the run (TIER_BUDGET). Tier order is the founder's crawl
-    // order; rotation within a tier keeps successive runs exploring different slices
-    // instead of re-finding the same handles. The walk is still diagonal across
-    // city × modifier so one run mixes several niches and shapes.
+    // ── SPEC-264 — SPEC-SHAPED QUERIES FIRST (founder: "running seaches direct
+    // based on spec (top 25 micro and mid parenting, pets, etc influncers in nyc
+    // miami etc..)"). For each committed CREATOR_CATEGORIES slug (tier order —
+    // the SAME table SPEC-257 welded) × metro, TWO variants encode "top 25 micro
+    // and mid". A (category × metro) pair that already holds CREATOR_CAT_CAP (25)
+    // FRESH kept rows is SKIPPED — the founder asked for the top 25 per category
+    // per city, not an unbounded pile in one bucket. Counts are fresh-windowed
+    // for the same reason the self-stop is: legacy rows already saturate several
+    // pairs, and an unwindowed cap re-zeroes the source on day one. A pair whose
+    // count ERRORS is treated as 0 and crawled anyway — this path spends no
+    // money, and the handle-dedupe + upsert make over-crawling a no-op.
+    const catCityHave: Record<string, number> = {};
+    stage = 'cap-count';
+    await Promise.all(CREATOR_CATEGORIES.flatMap((cat) => HARVEST_METROS.map(async (metro) => {
+      const { count } = await gdb.from('leads_influencers')
+        .select('id', { count: 'exact', head: true })
+        .like('discovered_via', 'se:web-harvest%')
+        .eq('category', cat.slug)
+        .eq('city', metro)
+        .gte('fetched_at', HARVEST_FRESH);
+      catCityHave[`${cat.slug}|${metro}`] = count ?? 0;
+    })));
+
     const queries: Array<{ query: string; niche: { q: string; category: string }; city: string }> = [];
     const qseen = new Set<string>();
+    for (const cat of CREATOR_CATEGORIES) {
+      for (const metro of HARVEST_METROS) {
+        if ((catCityHave[`${cat.slug}|${metro}`] ?? 0) >= CREATOR_CAT_CAP) continue;   // top-25 cap met — next pair
+        for (const query of [
+          `top ${cat.igQuery}s in ${metro} instagram`,     // "top 25 ... influncers in nyc miami"
+          `micro ${cat.igQuery} ${metro} instagram`,       // "micro and mid"
+        ]) {
+          const k = query.toLowerCase();
+          if (qseen.has(k) || queries.length >= MAX_QUERIES) continue;
+          qseen.add(k);
+          queries.push({ query, niche: { q: cat.igQuery, category: cat.slug }, city: metro });
+        }
+      }
+    }
+
+    // SPEC-245 — the tier walk now FILLS whatever budget the spec-shaped queries
+    // left (all of it once every pair caps out): each tier rotated within itself
+    // and holding its own share of the remainder (TIER_BUDGET). Tier order is the
+    // founder's crawl order; rotation within a tier keeps successive runs
+    // exploring different slices instead of re-finding the same handles. The walk
+    // is still diagonal across city × modifier so one run mixes several niches
+    // and shapes.
     NICHE_TIERS.forEach((tier, t) => {
       const tn = rotate(tier, (spin * 7) % Math.max(tier.length, 1));
       let added = 0;
@@ -495,36 +578,49 @@ const gdb = growthDb();
 
       for (const r of results) {
         if (Date.now() - started > DEADLINE_MS) break;
-        // Handle can come from the result URL, the DDG snippet/title, or (below)
-        // the fetched page. Discovery queries deliberately target linktr.ee/contact
-        // pages, whose RESULT URL is not instagram.com — so igHandle(r.url) was null
-        // for ~all of them and the handle-guard zeroed candidates (100 raw -> 0).
-        // These pages almost always LINK to the creator's instagram.com/<handle>;
-        // mining that restores real-handle discovery WITHOUT weakening the guard.
-        // (Forensic Auditor 2026-07-08 — creators frozen at 26 sendable.)
-        let handle = igHandle(r.url) || igHandle(r.snippet + ' ' + r.title);
+        // SPEC-264 EXTRACT — a "top 25 ..." result block names SEVERAL creators:
+        // instagram.com/<handle> links AND bare @handles in the title/snippet.
+        // v1 took exactly one handle per block, so a listicle of 25 yielded 1.
+        // The PRIMARY handle (result URL first, then first in text) keeps the
+        // block's snippet email; the extra handles become contactless rows with
+        // the block's non-IG URL as external_url, which the */15 site-enrich cron
+        // then finishes — attributing one block's email to every handle in it
+        // would be fabrication (SPEC-86: never fabricate).
+        const blockText = r.snippet + ' ' + r.title;
         const isIG = /instagram\.com/i.test(r.url);
-        const key = (handle || r.url).toLowerCase();
-        if (seen.has(key)) { skips.known_handle++; continue; }
+        let primary = igHandle(r.url) || igHandle(blockText) || atHandle(blockText);
+        const blockHandles: string[] = [];
+        for (const h of [primary, ...allIgHandles(blockText), ...allAtHandles(blockText)]) {
+          if (h && !blockHandles.includes(h)) blockHandles.push(h);
+        }
 
         // Contact from the snippet/title first (free, no fetch).
-        let email = firstEmail(r.snippet + ' ' + r.title);
-        let phone = firstPhone(r.snippet + ' ' + r.title);
+        let email = firstEmail(blockText);
+        let phone = firstPhone(blockText);
+        // FOLLOWERS (founder: "also crawl the # of followers so we rank") — a
+        // snippet's "123K followers" parsed K/M → integer, or null. Never faked.
+        const blockFollowers = parseFollowers(blockText);
 
-        // Mine the NON-Meta page when we still need a contact OR a real IG handle.
+        // ONE inline site fetch of the block's non-IG page when a contact or a
+        // handle is still missing — the site-enrich shape: 5s timeout, junk
+        // filter (firstEmail carries it — welded to site-enrich's list by gate
+        // #264b), one hop. Rows the budget skips keep external_url set and
+        // site_enriched_at NULL, so the */15 site-enrich cron finishes the job.
         let pageText = '';
-        if ((!handle || (!email && !phone)) && !isIG && siteFetches < MAX_SITEFETCH) {
+        if ((!primary || (!email && !phone)) && !isIG && siteFetches < MAX_SITEFETCH) {
           siteFetches++;
-          pageText = (await fetchText(r.url)) || '';
+          pageText = (await fetchText(r.url, 5000)) || '';
           if (pageText) {
             if (!email) email = firstEmail(pageText);
             if (!phone) phone = firstPhone(pageText);
-            if (!handle) handle = igHandle(pageText);   // creator's IG link on their linktree/site
+            const mined = igHandle(pageText);          // creator's IG link on their linktree/site
+            if (mined && !blockHandles.includes(mined)) { blockHandles.unshift(mined); if (!primary) primary = mined; }
           }
         }
-        // VOLUME MODE: keep the creator if we have a contact OR a mineable link
+        if (!blockHandles.length) { skips.no_handle++; continue; }
+        // VOLUME MODE: keep a creator if we have a contact OR a mineable link
         // (their non-IG site / linktree). Contactless-with-link rows get their
-        // contacts filled by enrich-influencers (runs every 30 min) → then gated.
+        // contacts filled by site-enrich (*/15) / enrich-influencers → then gated.
         const ext = isIG ? null : r.url;   // their own site/linktree = enrich can mine it
         if (!email && !phone && !ext) { skips.no_contact_no_link++; continue; }
 
@@ -536,39 +632,46 @@ const gdb = growthDb();
           if (!sErr && s) { email = null; skips.suppressed++; }   // ignore suppression-table errors, don't abort the run
         }
 
-        seen.add(key);
-        // QUALITY GATE (Forensic Auditor 2026-07-08): a creator row MUST have a
-        // real IG handle. leads_influencers.ig_handle is NOT NULL, so handle-less
-        // rows were (a) throwing a not-null violation that failed the WHOLE upsert
-        // chunk (upserted:0 despite 68 candidates, creators frozen 55h) and (b)
-        // letting non-creator emails in (e.g. billing@wordfence.com, business
-        // front desks). enrich-influencers cannot add a handle, so skip these.
-        if (!handle) { skips.no_handle++; continue; }
-        // NON-CREATOR GUARD (Forensic Auditor 2026-07-08): listicles & news
-        // pages link to media-outlet / wiki / aggregator IG handles
-        // (foxbusiness, eatermiami, tampabaytimes, thefashionspot, wikipedia…).
-        // Those are NOT individual creators and were polluting the sendable
-        // pool ~20-25%. enrich/gate can't fix identity, so drop at the source.
-        if (isBadHandle(handle)) { skips.non_creator++; continue; }
-        // ── QUALITY GATE at the SOURCE (SPEC-86): no fabrication, verified geo,
-        //    individual-only, and NEVER sendable until vetted/promoted. ──
-        const geoText = `${r.snippet} ${r.title} ${pageText}`;
-        if (!cityVerified(city, geoText)) { skips.geo_unverified++; continue; }   // kills wrong-geo (Utah-for-Miami)
-        if (isBusinessLike(handle, r.title)) { skips.business++; continue; }        // kills business-as-creator
-        if (isBlockedContent(handle, r.title, ext, r.snippet)) { skips.blocked++; continue; } // kills med-spa/aesthetic/SHAFT leak at source
-        const id = `harv:${handle.replace(/[^a-z0-9]+/gi, '').slice(0, 60).toLowerCase()}`;
-        rows.push({
-          id, ig_handle: handle, display_name: cleanTitle(r.title),
-          category: niche.category,
-          email,                                   // only a real, un-suppressed email or null
-          phone: null,                             // creators are reached by IG/email — NEVER a scraped phone (no fabrication)
-          external_url: ext,
-          city, state: CITY_STATE[city] ?? null,   // mapped, NEVER hardcoded 'FL'
-          is_business: false,
-          discovered_via: tag,
-          outreach_status: 'pending_review',       // NON-sendable until it passes the gate + (initial batches) human vet
-          created_at: new Date().toISOString(),
-        });
+        for (const handle of blockHandles.slice(0, 5)) {   // bounded per block
+          const key = handle.toLowerCase();
+          const first = handle === primary;
+          if (seen.has(key)) { skips.known_handle++; continue; }
+          seen.add(key);
+          // QUALITY GATE (Forensic Auditor 2026-07-08): a creator row MUST have a
+          // real IG handle. leads_influencers.ig_handle is NOT NULL, so handle-less
+          // rows were (a) throwing a not-null violation that failed the WHOLE upsert
+          // chunk (upserted:0 despite 68 candidates, creators frozen 55h) and (b)
+          // letting non-creator emails in (e.g. billing@wordfence.com, business
+          // front desks). The 2..30 length guard — IG's own bounds — lives inside
+          // igHandle/atHandle (SPEC-264), so an off-bounds "handle" never gets here.
+          // NON-CREATOR GUARD (Forensic Auditor 2026-07-08): listicles & news
+          // pages link to media-outlet / wiki / aggregator IG handles
+          // (foxbusiness, eatermiami, tampabaytimes, thefashionspot, wikipedia…).
+          // Those are NOT individual creators and were polluting the sendable
+          // pool ~20-25%. enrich/gate can't fix identity, so drop at the source.
+          if (isBadHandle(handle)) { skips.non_creator++; continue; }
+          // ── QUALITY GATE at the SOURCE (SPEC-86): no fabrication, verified geo,
+          //    individual-only, and NEVER sendable until vetted/promoted. ──
+          const geoText = `${r.snippet} ${r.title} ${pageText}`;
+          if (!cityVerified(city, geoText)) { skips.geo_unverified++; continue; }   // kills wrong-geo (Utah-for-Miami)
+          if (isBusinessLike(handle, r.title)) { skips.business++; continue; }        // kills business-as-creator
+          if (isBlockedContent(handle, r.title, ext, r.snippet)) { skips.blocked++; continue; } // kills med-spa/aesthetic/SHAFT leak at source
+          const id = `harv:${handle.replace(/[^a-z0-9]+/gi, '').slice(0, 60).toLowerCase()}`;
+          rows.push({
+            id, ig_handle: handle, display_name: cleanTitle(r.title),
+            category: niche.category,
+            email: first ? email : null,             // only a real, un-suppressed email, on the PRIMARY handle only (never fanned out)
+            phone: null,                             // creators are reached by IG/email — NEVER a scraped phone (no fabrication; site-enrich's fill-only tel: path is the phone lane)
+            followers: first ? blockFollowers : null, // parsed "123K followers" belongs to the block's primary creator
+            external_url: ext,
+            city, state: CITY_STATE[city] ?? null,   // mapped, NEVER hardcoded 'FL'
+            is_business: false,
+            discovered_via: tag,
+            outreach_status: 'pending_review',       // NON-sendable until it passes the gate + (initial batches) human vet
+            created_at: new Date().toISOString(),
+            fetched_at: new Date().toISOString(),    // the column every FRESH count reads (SPEC-264)
+          });
+        }
       }
     }
 
@@ -579,7 +682,29 @@ const gdb = growthDb();
     // (Forensic Auditor 2026-07-08 — creator_harvest_last_error). Keep first.
     const byId = new Map<string, Record<string, unknown>>();
     for (const r of rows) { const k = r.id as string; if (!byId.has(k)) byId.set(k, r); }
-    const uniqueRows = [...byId.values()];
+    let uniqueRows = [...byId.values()];
+
+    // SPEC-264 — DEDUPE AGAINST EXISTING ROWS BY ig_handle, CASE-INSENSITIVE,
+    // before insert. The id upsert only collides with rows THIS harvester minted
+    // (harv:<handle>); the same creator discovered by ig-scraper-user-search or
+    // the modash seeds carries a DIFFERENT id, so without this check one creator
+    // becomes two rows and the founder's 100 double-counts. ilike with no
+    // wildcard is case-insensitive equality; handles are sanitized to [a-z0-9._]
+    // upstream so the or() expression cannot be injected through.
+    if (uniqueRows.length) {
+      stage = 'handle-dedupe';
+      const existing = new Set<string>();
+      const hs = uniqueRows.map((r) => String(r.ig_handle));
+      for (let i = 0; i < hs.length; i += 40) {
+        const orExpr2 = hs.slice(i, i + 40).map((h) => `ig_handle.ilike.${h.replace(/[^A-Za-z0-9._]/g, '')}`).join(',');
+        const { data: ex, error: exErr } = await gdb.from('leads_influencers').select('ig_handle').or(orExpr2).limit(200);
+        if (exErr) continue;   // dedupe read failed → keep the rows; the id upsert still prevents self-duplicates
+        for (const e of ex || []) existing.add(String((e as { ig_handle?: string }).ig_handle || '').toLowerCase());
+      }
+      const before = uniqueRows.length;
+      uniqueRows = uniqueRows.filter((r) => !existing.has(String(r.ig_handle).toLowerCase()));
+      skips.known_handle += before - uniqueRows.length;
+    }
 
     let inserted = 0; let upsertError: string | null = null;
     if (uniqueRows.length) {
@@ -632,11 +757,19 @@ const gdb = growthDb();
     });
 
     return json({
-      ok: true, tag, queries: queries.length, site_fetches: siteFetches,
+      ok: true, tag,
+      // SPEC-264 diagnosable shape: what was asked, what was found, what landed,
+      // how reachable it is, and whether site-enrich has follow-up work.
+      queried: queries.length, found: rows.length, inserted,
+      with_contact: uniqueRows.filter((r) => r.email || r.phone).length,
+      with_site: uniqueRows.filter((r) => r.external_url).length,
+      elapsed_ms: Date.now() - started,
+      // legacy keys the earlier dashboards/scripts read — kept, same meanings.
+      queries: queries.length, site_fetches: siteFetches,
       candidates_with_contact: rows.length, upserted: inserted, upsert_error: upsertError,
       creators_sendable_total: sendable ?? null, skips, dbg,
       ms: Date.now() - started,
-      sample: rows.slice(0, 8).map(r => ({ h: r.ig_handle, c: r.email || r.phone })),
+      sample: uniqueRows.slice(0, 8).map(r => ({ h: r.ig_handle, c: r.email || r.phone, f: r.followers })),
     });
   } catch (e) {
     // BACKBONE: log the crash so the watchdog sees status='error', not a stall.
@@ -755,7 +888,43 @@ function igHandle(url: string): string | null {
   if (!m) return null;
   const h = m[1].toLowerCase();
   if (['p', 'reel', 'reels', 'explore', 'stories', 'tv', 'accounts'].includes(h)) return null;
+  if (h.length < 2 || h.length > 30) return null;   // SPEC-264: IG's own handle bounds — anything outside is parse noise, not an account
   return h;
+}
+// SPEC-264 — EVERY instagram.com/<handle> link in a result block, not just the
+// first: a "top 25" listicle block links several accounts, and v1's single-handle
+// take made 25 named creators yield one row.
+function allIgHandles(s: string): string[] {
+  const out: string[] = [];
+  for (const m of s.matchAll(/instagram\.com\/([A-Za-z0-9._]+)/gi)) {
+    const h = igHandle(`instagram.com/${m[1]}`);
+    if (h && !out.includes(h)) out.push(h);
+  }
+  return out;
+}
+// SPEC-264 — bare @handles in titles/snippets ("... follow @petsofmiami for ...").
+// Same 2..30 bounds; a trailing dot is sentence punctuation, not the handle.
+function atHandle(s: string): string | null { return allAtHandles(s)[0] ?? null; }
+function allAtHandles(s: string): string[] {
+  const out: string[] = [];
+  for (const m of s.matchAll(/(?:^|[^A-Za-z0-9._])@([A-Za-z0-9._]{2,30})\b/g)) {
+    const h = m[1].toLowerCase().replace(/\.+$/, '');
+    if (h.length < 2 || h.length > 30) continue;
+    if (h.includes('.') && /\.(com|net|org|io|co|ai)$/.test(h)) continue;   // that's an email domain fragment, not a handle
+    if (!out.includes(h)) out.push(h);
+  }
+  return out;
+}
+// SPEC-264 — FOLLOWERS from result text ("also crawl the # of followers so we
+// rank"): "12,400 followers" / "123K followers" / "1.2M followers" → integer.
+// No match → null, NEVER a guess (SPEC-86: no fabrication).
+function parseFollowers(s: string): number | null {
+  const m = s.match(/([\d][\d.,]*)\s*([KkMm])?\s*followers/);
+  if (!m) return null;
+  const base = Number(m[1].replace(/,/g, ''));
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const mult = /[Kk]/.test(m[2] || '') ? 1_000 : /[Mm]/.test(m[2] || '') ? 1_000_000 : 1;
+  return Math.round(base * mult);
 }
 
 // Media outlets / publications / wikis / directories whose IG handle shows up on
