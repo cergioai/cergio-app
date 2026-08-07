@@ -7665,6 +7665,29 @@ test('spec265-free-parallel-multiplier', 'SPEC-265 (founder order, 2026-08-07: 1
     `a free-lane run budget (site-enrich ${seBudget}ms / harvest ${chBudget}ms) reached the 7-minute lane stagger — two lanes can now be LIVE AT ONCE, the select-then-stamp claim window becomes a real race, and the no-new-claim-columns design premise of SPEC-265 is void: shrink the budget or build real claims`);
 });
 
+test('craigslist-budget-floor-defers-instead-of-burning-jobs', 'SPEC-266 (handoff task, 2026-08-07: "craigslist to 100 — timeout bump"; measured shape: craigslist 20/100 fresh with run notes showing actorTimeoutSecs collapsed to ~43s). The solidcode actor opens every post\'s detail page (includeDetails — the ONLY place phoneNumbers[]/emails[] come from), so a job claimed near the end of the tick\'s budget gets msLeft\'s scraps, Apify kills the run mid-crawl, and the job is stamped delivered-0 and CONSUMED — the source starves one job at a time while looking merely unlucky. A literal timeout bump is impossible (the edge wall is ~150s; apifyRun already caps at msLeft(140000)), so the fix is a FLOOR: under CL_MIN_BUDGET_MS the fulfiller returns defer=true WITHOUT any vendor call — zero spend, the money meters never move — and the caller hands the job back (status new, the orphan-reclaim shape) so it retries a tick where an earlier claim slot gives it a real window. The floor check must sit BEFORE the vendor call (a guard after the call is a report, not a control — SPEC-185\'s rule applied to wall-clock), and the defer path must never write cost_usd or delivered status.', '#266', () => {
+  const fc = readFile('supabase/functions/fulfill-crawl/index.ts');
+  assert(!(!fc.includes('const CL_MIN_BUDGET_MS = 75000;')),
+    'the craigslist budget floor is gone or moved off 75s — shrunk toward 43s the killed-mid-crawl runs come back, grown toward the 140s cap craigslist can never run at all: both starve the founder\'s 100');
+  const fnAt = fc.indexOf('async function fulfillCraigslist');
+  assert(!(fnAt < 0), 'fulfillCraigslist is gone or renamed — this gate can no longer see the craigslist path; fix the gate before shipping');
+  const floorAt = fc.indexOf('if (msLeft(140000) < CL_MIN_BUDGET_MS)', fnAt);
+  const vendorAt = fc.indexOf("await apifyRun('solidcode~craigslist-scraper'", fnAt);
+  assert(!(floorAt < 0), 'the floor check is gone from fulfillCraigslist — doomed 43s runs are back: killed mid-crawl, stamped delivered-0, job consumed');
+  assert(!(vendorAt < 0), 'the solidcode vendor call is gone or renamed in fulfillCraigslist — fix the gate reference before shipping');
+  assert(!(floorAt > vendorAt),
+    'the budget-floor check sits AFTER the vendor call — a guard after the point of no return is a report, not a control (SPEC-185\'s shape): the actor already ran, already billed its partial results, and the job is already burned');
+  assert(!(!/return \{ saved: 0, found: 0, query, defer: true,/.test(fc)),
+    'the defer flag is gone from the floor return — the caller cannot tell a deferred job from a delivered-empty one, so it stamps delivered-0 and consumes the job anyway: the exact starvation this spec removes');
+  const deferBranch = fc.match(/await gdb\.from\('crawl_requests'\)\.update\(r\.defer\s*\n?\s*\? \{ ([^}]*)\}/);
+  assert(!(!deferBranch),
+    'the craigslist caller no longer branches on r.defer when writing the job back — every defer is recorded as delivered and the hand-back never happens');
+  assert(!(!/status: 'new', notes: r\.note/.test(deferBranch[1])),
+    'the defer branch does not hand the job back as status new — a deferred job that keeps any other status never re-enters the claim query and the source loses the job exactly as before');
+  assert(!(/cost_usd|delivered/.test(deferBranch[1])),
+    'the defer branch writes cost_usd or a delivered status — nothing was spent and nothing was delivered on a defer; recording either corrupts the spend ledger the #253-#256 money gates read');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
