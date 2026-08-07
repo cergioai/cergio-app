@@ -180,7 +180,11 @@ const gdb = growthDb();
         .from('leads_influencers')
         .select('id', { count: 'exact', head: true })
         .eq('discovered_via', 'ig-scraper-user-search')
-        .in('category', CREATOR_CATEGORIES.map((c) => c.slug));
+        .in('category', CREATOR_CATEGORIES.map((c) => c.slug))
+        // SPEC-270 (founder, 2026-08-07): the target counts CONTACTABLE rows only —
+        // "250 contactable (whatever the # total nubmer is..)". Uncontactable rows
+        // are kept (data is data) but do not satisfy the stop.
+        .or('email.not.is.null,phone.not.is.null');
       creatorTargetMet = (count ?? 0) >= CREATOR_TARGET;
       // SPEC-256: snapshot for need-bounded buys — ig_services sizes its paid search
       // to the creators still OWED, not the blind IG_MAX cap.
@@ -189,7 +193,7 @@ const gdb = growthDb();
       if (creatorTargetMet && ONLY.length === 1 && ONLY[0] === 'ig_services') {
         return json({
           suspended: true, processed: 0,
-          reason: `creator target met — ${count} of ${CREATOR_TARGET} from ig-scraper-user-search (new-spec category rows only, SPEC-259). Paused for audit (SPEC-205). ig_services is the only creator source (SPEC-221).`,
+          reason: `creator target met — ${count} of ${CREATOR_TARGET} CONTACTABLE from ig-scraper-user-search (new-spec category rows, SPEC-259; contactable-only count, SPEC-270). Paused for audit (SPEC-205). ig_services is the only creator source (SPEC-221).`,
         });
       }
     } catch (e) {
