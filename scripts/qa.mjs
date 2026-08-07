@@ -7878,6 +7878,39 @@ test('creators-and-ig-only-250-contactable-rotated-categories-followers', 'SPEC-
     'a parsed follower count is never written — the parser exists but the fill is gone, which is a feature that appears to exist and does not (the falsest kind of green)');
 });
 
+test('manage-offerings-shows-and-edits', 'FW-22 (founder 2026-08-07): "Edit Offerings doesn\'t let you edit.. and doesn\'t show you existing offerings". Root cause of the blank list: getServiceOfferings selected a `price` column the offerings table has NEVER had (it is price_cents) — the 42703 was swallowed and every real service read "No offerings yet". And the manage path was read-only: "+ Add another" routed into the DRAFT flow (writes that never touch the real service) and the footer pushed on into the new-listing photos step. Manage mode must: select price_cents (never `price`), treat an EMPTY array as an honest empty state (no draft fallback for a real service), edit rows IN PLACE via updateOffering (inline Save/Cancel — the founder\'s no-browser-popup rule), remove with an inline armed confirm via deleteOffering, add via addOffering straight onto the service, and finish with Done back to the provider screen.', '#275', () => {
+  const api = readFile('src/lib/api.js');
+  const gso = api.slice(api.indexOf('export async function getServiceOfferings'), api.indexOf('export async function getServiceOfferings') + 900);
+  assert(!(!/price_cents/.test(gso)), 'getServiceOfferings no longer selects price_cents (FW-22)');
+  assert(!/select\('[^']*[^_]price[,)]/.test(gso), 'getServiceOfferings selects the nonexistent `price` column again — every call 42703s and the list goes blank (FW-22)');
+  for (const fn of ['updateOffering', 'addOffering', 'deleteOffering']) {
+    assert(!(!new RegExp(`export async function ${fn}`).test(api)), `${fn} is gone from api.js (FW-22)`);
+  }
+  const scr = readFile('src/screens/ServiceListMoreOfferingsScreen.jsx');
+  assert(!(!/setLiveOfferings\(data \|\| \[\]\)/.test(scr)), 'an empty offerings answer no longer renders honestly — the draft fallback would lie for a real service (FW-22)');
+  assert(!(!/updateOffering\(editingId, patch\)/.test(scr)), 'manage mode lost in-place editing (FW-22)');
+  assert(!(!/addOffering\(serviceId, \{/.test(scr)), 'manage mode "+ Add another" no longer writes to the REAL service (FW-22)');
+  assert(!(!/removeArmedId/.test(scr)), 'the inline armed remove confirm is gone (FW-22 — no browser popups)');
+  assert(!(!/nextLabel="Done"/.test(scr)), 'manage mode footer no longer finishes with Done — it would push into the new-listing photos flow (FW-22)');
+});
+
+test('service-headline-leads-title-badges', 'FW-23 (founder 2026-08-07, verbatim): "Need to Add a Service Headline (like airbnb).. one line that is displayed instead of the default \'babysitter in new york etc\'... and keep babysitter in nyc (service in location) as a formatted service badge.. add by [name of provider]". Migration 20260807130000 adds nullable services.headline; the provider edits it INLINE on their service screen; listServices + the PDP cold path select it; when set, ProviderCard and the PDP LEAD with the headline, render the auto service-in-location title as a formatted badge, and credit the human with a "by {name}" line (owner display names hydrated once per result set). Services WITHOUT a headline render exactly as before.', '#276', () => {
+  const mig = readFile('supabase/migrations/20260807130000_service_headline.sql');
+  assert(!(!/add column if not exists headline text/.test(mig)), 'the services.headline migration is gone (FW-23)');
+  const api = readFile('src/lib/api.js');
+  assert(!(!/id, title, headline, category/.test(api)), 'listServices no longer selects headline (FW-23)');
+  assert(!(!/fetchOwnerDisplayNames/.test(api)), 'owner display names are no longer hydrated — no "by {name}" possible (FW-23)');
+  const card = readFile('src/components/ui/ProviderCard.jsx');
+  assert(!(!/\{headline \|\| name\}/.test(card)), 'ProviderCard no longer leads with the headline (FW-23)');
+  assert(!(!/headline && serviceTitle && \(/.test(card)), 'the service-in-location badge is gone from ProviderCard (FW-23)');
+  assert(!(!/by \{ownerName\}/.test(card)), 'the "by {name}" credit is gone from ProviderCard (FW-23)');
+  const pdp = readFile('src/screens/ServiceDetailScreen.jsx');
+  assert(!(!/provider\.headline \? \(/.test(pdp)), 'the PDP no longer leads with the headline when set (FW-23)');
+  assert(!(!/provider\.headline && \(provider\.serviceTitle \|\| provider\.name\) && \(/.test(pdp)), 'the PDP service-in-location badge is gone (FW-23)');
+  const prov = readFile('src/screens/ServiceDetailProviderScreen.jsx');
+  assert(!(!/column: 'headline'/.test(prov)), 'the provider lost the inline Headline editor (FW-23)');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
