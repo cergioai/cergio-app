@@ -77,6 +77,19 @@ alter table public.leads_influencers add column if not exists enrich_attempted_a
 -- fails only in production.
 alter table public.leads_influencers add column if not exists is_business boolean;
 alter table public.leads_influencers add column if not exists created_at timestamptz default now();
+-- SPEC-263: site-enrich stamps site_enriched_at on BOTH lead tables on every crawl
+-- attempt. This file is the ONE schema applied to the live growth project
+-- (apply-growth-schema.mjs), so the guard must live here or the writer fails only
+-- in production — the exact 42703-swallowed shape SPEC-202/237 already paid for.
+alter table public.leads_influencers add column if not exists site_enriched_at timestamptz;
+alter table public.leads_services    add column if not exists site_enriched_at timestamptz;
+-- SPEC-264: creator-harvest v2 writes followers (parsed "123K followers" → int)
+-- and fetched_at (the column every FRESH count reads) on every harvested row.
+-- Both are in the CREATE TABLE above, but the live growth table predates it — a
+-- column a writer writes MUST have a heal guard here or the writer 42703s only
+-- in production (the SPEC-202/237 lesson, again).
+alter table public.leads_influencers add column if not exists followers int;
+alter table public.leads_influencers add column if not exists fetched_at timestamptz default now();
 create index if not exists leads_influencers_via_idx  on public.leads_influencers (discovered_via);
 create index if not exists leads_influencers_city_idx on public.leads_influencers (city, state);
 
