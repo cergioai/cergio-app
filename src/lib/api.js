@@ -2573,16 +2573,20 @@ export async function listInboundRequests({ limit = 20 } = {}) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (myTypes.length > 0 && myCategories.length > 0) {
-    // Match on either taxonomy type OR category.
+  // FW-16 (founder live repro 2026-08-05): the fan-out notified the driver
+  // (in-app row written) but this filter hid the request — it compared
+  // request.service_type only vs myTypes and request.category only vs
+  // myCategories. This request had category NULL and service_type 'Driver',
+  // and the listing's match lived in its CATEGORY ('Driver'; its taxonomy
+  // 'Moving Truck Driver' is deliberately outside the people-Driver family).
+  // SPEC-127's rule one level up: BOTH request columns match the UNION of
+  // both bridge-expanded sets, so fan-out and inbox can never disagree.
+  const myMatchSet = [...new Set([...myTypes, ...myCategories])];
+  if (myMatchSet.length > 0) {
     query = query.or(
-      `service_type.in.(${myTypes.map(t => `"${t}"`).join(',')}),` +
-      `category.in.(${myCategories.map(c => `"${c}"`).join(',')})`,
+      `service_type.in.(${myMatchSet.map(t => `"${t}"`).join(',')}),` +
+      `category.in.(${myMatchSet.map(c => `"${c}"`).join(',')})`,
     );
-  } else if (myTypes.length > 0) {
-    query = query.in('service_type', myTypes);
-  } else if (myCategories.length > 0) {
-    query = query.in('category', myCategories);
   }
   // If neither is set just fetch recent pending requests — better than
   // showing nothing to a provider who skipped taxonomy resolution.
