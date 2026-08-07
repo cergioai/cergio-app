@@ -1,0 +1,37 @@
+# SPEC-268 follow-up probe — MEASURE, never guess (CLAUDE.md rule 1).
+#
+# MEASURED 2026-08-07 (agent_runs.meta.engines, live): from the SUPABASE edge egress
+# every keyless engine is IP-walled — ddg-html/ddg-lite fetch partially + parse 0,
+# bing answers 200 on all 52 queries with ZERO b_algo blocks (a challenge shell;
+# the founder's browser gets 6 organic results for the same query), mojeek won't
+# even fetch. The ONLY remaining free-transport hypothesis is that a GitHub runner
+# IP gets served where Supabase's does not. This workflow measures exactly that in
+# one manual run: same query shape, same UA the harvester sends, marker counts per
+# engine printed to the log. If any engine serves a runner, the fix is a CI search
+# lane feeding the edge; if none do, keyless datacenter search is dead and the
+# founder decides between a keyed-free API (his click) or another discovery model.
+name: search-probe
+permissions: {}
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe keyless search engines from a runner IP
+        run: |
+          set -uo pipefail
+          Q="top%20pet%20influencers%20in%20Miami%20instagram"
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+          probe () {
+            CODE=$(curl -s -o /tmp/p.html -w '%{http_code}' -A "$UA" -H "Accept: text/html,application/xhtml+xml" --max-time 15 "$1" || echo 000)
+            N=$(grep -c "$2" /tmp/p.html 2>/dev/null || true)
+            echo "$3 -> HTTP $CODE · marker '$2' x${N} · $(wc -c < /tmp/p.html 2>/dev/null || echo 0) bytes"
+          }
+          probe "https://html.duckduckgo.com/html/?q=$Q" "result__a"        "ddg-html"
+          probe "https://lite.duckduckgo.com/lite/?q=$Q"  "result-link"      "ddg-lite"
+          probe "https://www.bing.com/search?q=$Q"        "b_algo"           "bing    "
+          probe "https://www.mojeek.com/search?q=$Q"      "results-standard" "mojeek  "
+          echo "runner egress IP: $(curl -s --max-time 10 https://api.ipify.org || echo unknown)"
