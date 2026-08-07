@@ -7411,6 +7411,17 @@ test('pdp-v2-viewer-priced', 'SPEC-49i / S-263 (founder redesign handoff 2026-08
   }
 });
 
+test('inbox-match-uses-the-fanout-bridge-union', 'FW-16 (founder live repro 2026-08-05): a Driver request notified the provider (in-app row written) but never appeared in his inbox — listInboundRequests matched request.service_type only against the taxonomy set and request.category only against the category set; a NULL-category request could never match via the provider category leg. The filter must compare BOTH request columns against the bridge-expanded UNION of both sets (SPEC-127: the inbox must use the SAME bridge as the fan-out).', '#264', () => {
+  const api = readFile('src/lib/api.js');
+  const i = api.indexOf('export async function listInboundRequests');
+  assert(!(i < 0), 'listInboundRequests is gone — the provider inbox has no request feed');
+  const src = api.slice(i, i + 4200);
+  assert(!(!/const myMatchSet = \[\.\.\.new Set\(\[\.\.\.myTypes, \.\.\.myCategories\]\)\]/.test(src)), 'the inbox no longer unions taxonomy+category allow-sets (FW-16)');
+  assert(!(!/service_type\.in\.\(\$\{myMatchSet/.test(src)), 'request.service_type is not checked against the UNION set (FW-16/SPEC-127)');
+  assert(!(!/category\.in\.\(\$\{myMatchSet/.test(src)), 'request.category is not checked against the UNION set (FW-16)');
+});
+
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
