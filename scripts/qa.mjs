@@ -7421,6 +7421,14 @@ test('inbox-match-uses-the-fanout-bridge-union', 'FW-16 (founder live repro 2026
   assert(!(!/category\.in\.\(\$\{myMatchSet/.test(src)), 'request.category is not checked against the UNION set (FW-16)');
 });
 
+test('provider-detail-owner-guard', 'FW-17 (founder live repro 2026-08-06): /services/:id is the provider EDIT surface but rendered ANY service uuid — signed in as t@cergio it showed ANOTHER account\'s cleaner service in full edit chrome (RLS no-ops the writes, so edits silently save nothing). The screen must resolve the LIVE session (supabase.auth.getUser, immune to outlet-auth hydration races) and replace-redirect non-owners and signed-out viewers to the public /service/:id view whenever the row records an owner_id.', '#265', () => {
+  const src = readFile('src/screens/ServiceDetailProviderScreen.jsx');
+  assert(!(!/supabase\.auth\.getUser\(\)/.test(src)), 'provider detail no longer resolves the live session before rendering edit chrome (FW-17)');
+  assert(!(!/userRes\.user\.id !== data\.owner_id/.test(src)), 'provider detail no longer compares the viewer to services.owner_id (FW-17)');
+  assert(!(!/navigate\(`\/service\/\$\{id\}`, \{ replace: true \}\)/.test(src)), 'a non-owner is no longer redirected to the public /service/:id view (FW-17)');
+  assert(!(!/data\?\.owner_id/.test(src)), 'the NULL-owner_id legacy carve-out is gone — guard must only fire when ownership is recorded (FW-17)');
+});
+
 
 main().catch(e => {
   console.error(e);
