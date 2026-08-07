@@ -115,7 +115,8 @@ function buildStatusSteps(providerType /* , opts = {} */) {
   return { scripted, persistent };
 }
 
-const PHOTO_FALLBACKS = ['fv-jamie', 'fv-john', 'fv-steve'];
+// FW-20: fake-person placeholder classes purged — ProviderCard renders the
+// real cover_url or its honest neutral tile.
 
 // CERGIO-GUARD (2026-07-14, launch-02 — SPEC-78): THE canonical post-request
 // waiting copy, dictated verbatim by Tarik. It is the ONE sentence a requester
@@ -420,7 +421,7 @@ function serviceToProvider(svc, idx, budgetCents, friendDisplayName = null, frie
     recommendersRaw: Array.isArray(svc.recommenders) ? svc.recommenders : [],
     savings:     counterCents != null ? counterSavings : savings,
     pick:        idx === 0,        // first real listing gets the Cergio Pick badge
-    photoClass:  svc.photo_class || PHOTO_FALLBACKS[idx % 3],
+    photoClass:  null, // FW-20
     coverUrl:    svc.cover_url || null,
   };
 }

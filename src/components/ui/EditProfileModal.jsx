@@ -15,8 +15,10 @@
 // defensive: if the headline column doesn't exist yet, the UPDATE
 // errors gracefully and we surface the message so Tarik can run the
 // migration without losing the typed copy.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { uploadAndPersistAvatar } from '../../lib/storage';
+import { Avatar } from './Avatar';
 
 const HEADLINE_MAX = 120;
 const BIO_MAX = 500;
@@ -35,6 +37,24 @@ export function EditProfileModal({ user, onClose, onSaved }) {
   const [err,      setErr]      = useState('');
   // Track the loaded profile state so dirty-check is honest.
   const [loaded,   setLoaded]   = useState({ headline: '', bio: '' });
+  // FW-19: profile photo. Uploads persist immediately (like service covers) —
+  // pick a file → uploadAndPersistAvatar writes storage + profiles.avatar_url,
+  // no Save required. The Avatar primitive shows initials until one exists.
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const avatarInputRef = useRef(null);
+
+  const handleAvatarPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || avatarBusy) return;
+    setAvatarBusy(true); setErr('');
+    const { url, error } = await uploadAndPersistAvatar(file);
+    setAvatarBusy(false);
+    if (error) { setErr(error.message || 'Photo upload failed — try again.'); return; }
+    setAvatarUrl(url);
+    onSaved?.({ avatarUrl: url });
+  };
 
   // Pull existing headline + bio when the modal mounts so the user
   // sees their saved copy, not a blank slate. Errors are swallowed —
@@ -45,7 +65,7 @@ export function EditProfileModal({ user, onClose, onSaved }) {
     (async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('headline, bio')
+        .select('headline, bio, avatar_url')
         .eq('id', user.id)
         .maybeSingle();
       if (cancelled) return;
@@ -66,6 +86,7 @@ export function EditProfileModal({ user, onClose, onSaved }) {
       const b = data?.bio      || '';
       setHeadline(h);
       setBio(b);
+      if (data?.avatar_url) setAvatarUrl(data.avatar_url); // FW-19
       setLoaded({ headline: h, bio: b });
     })();
     return () => { cancelled = true; };
@@ -155,6 +176,32 @@ export function EditProfileModal({ user, onClose, onSaved }) {
             <p className="text-meta text-b3 mt-0.5">Your public-facing details on Cergio.</p>
           </div>
           <button onClick={onClose} className="text-[20px] text-b3 font-extrabold px-2 -mt-1" aria-label="Close">×</button>
+        </div>
+
+        {/* FW-19: profile photo — the avatars bucket + profiles.avatar_url
+            shipped in 20260805120000; this is the upload control PATCHES §1
+            says belongs here. */}
+        <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">
+          Profile photo
+        </label>
+        <div className="flex items-center gap-4">
+          <Avatar url={avatarUrl} name={name || initial.email} size={56} />
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={avatarBusy}
+            className="bg-bg5 text-black rounded-[14px] px-4 py-2.5 text-body font-extrabold
+                       hover:bg-bg5/70 active:scale-[.97] transition-all disabled:opacity-60"
+          >
+            {avatarBusy ? 'Uploading…' : (avatarUrl ? 'Change photo' : 'Add photo')}
+          </button>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarPick}
+          />
         </div>
 
         <label className="block text-meta-sm font-extrabold uppercase tracking-wide text-b2 mb-1.5 mt-4">

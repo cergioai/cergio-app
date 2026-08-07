@@ -3,8 +3,8 @@
 // render the not-found state — CERGIO-GUARD: no fake data.
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
-import { getService, unlistService, relistService, deleteService, updateService } from '../lib/api';
-import { uploadAndPersistServiceCover } from '../lib/storage';
+import { getService, unlistService, relistService, deleteService, updateService, listServiceMedia } from '../lib/api';
+import { uploadAndPersistServiceCover, uploadServiceMedia, serviceMediaPublicUrl, deleteServiceMedia } from '../lib/storage';
 import { supabase } from '../lib/supabase';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,6 +35,40 @@ export function ServiceDetailProviderScreen() {
     const t = setTimeout(() => setDeleteArmed(false), 5000);
     return () => clearTimeout(t);
   }, [deleteArmed]);
+
+  // FW-18 (founder 2026-08-06): add/update photos AND videos on a listed
+  // service — before this, the single cover swap was the only media control.
+  // Gallery rows live in service_media (20260807040000); files in the public
+  // service-media bucket via the ONE upload helper in lib/storage.js.
+  const [media, setMedia] = useState([]);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const mediaInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!svc?.real) { setMedia([]); return; }
+    let cancelled = false;
+    listServiceMedia(svc.id).then(({ data }) => { if (!cancelled) setMedia(data || []); });
+    return () => { cancelled = true; };
+  }, [svc?.real, svc?.id]);
+
+  const handleMediaPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !svc?.real || mediaBusy) return;
+    setMediaBusy(true);
+    const { row, error } = await uploadServiceMedia(file, svc.id, media.length);
+    setMediaBusy(false);
+    if (error) { showToast(`Couldn't upload: ${error.message}`); return; }
+    setMedia(m => [...m, row]);
+    showToast(row.kind === 'video' ? 'Video added ✓' : 'Photo added ✓');
+  };
+
+  const handleMediaRemove = async (row) => {
+    const { error } = await deleteServiceMedia(row);
+    if (error) { showToast(`Couldn't remove: ${error.message}`); return; }
+    setMedia(m => m.filter(x => x.id !== row.id));
+    showToast('Removed ✓');
+  };
 
   const handleCoverPick = async (e) => {
     const file = e.target.files?.[0];
@@ -183,7 +217,7 @@ export function ServiceDetailProviderScreen() {
   return (
     <div className="flex-1 flex flex-col bg-cr pb-24 overflow-y-auto">
       {/* photo hero */}
-      <div className={`relative h-[220px] overflow-hidden ${svc.coverUrl ? 'bg-bg5' : (svc.photoClass || 'fv-jamie')}`}>
+      <div className={`relative h-[220px] overflow-hidden ${svc.coverUrl ? 'bg-bg5' : 'bg-gl'}`}>
         {/* Real cover photo when uploaded; else the gradient palette. */}
         {svc.coverUrl && (
           <img
@@ -258,6 +292,71 @@ export function ServiceDetailProviderScreen() {
         ))}
       </div>
 
+      {/* FW-18: gallery — photos + videos beyond the single cover. */}
+      <p className="px-5 text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-3">
+        Photos &amp; videos
+      </p>
+      <div className="mx-5 mb-5">
+        <input
+          ref={mediaInputRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={handleMediaPick}
+        />
+        <div className="grid grid-cols-3 gap-2">
+          {media.map(row => (
+            <div key={row.id} className="relative rounded-[12px] overflow-hidden bg-bg5 aspect-square">
+              {row.kind === 'video' ? (
+                <video
+                  src={serviceMediaPublicUrl(row.storage_path)}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <img
+                  src={serviceMediaPublicUrl(row.storage_path)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              )}
+              {row.kind === 'video' && (
+                <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white rounded-pill px-2 py-0.5 text-meta-sm font-extrabold">
+                  ▶ video
+                </span>
+              )}
+              <button
+                onClick={() => handleMediaRemove(row)}
+                aria-label="Remove"
+                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white text-[13px]
+                           flex items-center justify-center font-extrabold"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              if (!svc.real) { showToast('Demo service — sign up to upload your own media.'); return; }
+              if (mediaBusy) return;
+              mediaInputRef.current?.click();
+            }}
+            disabled={mediaBusy}
+            className="aspect-square rounded-[12px] border-2 border-dashed border-g bg-gl/40
+                       flex flex-col items-center justify-center gap-1 text-g disabled:opacity-60"
+          >
+            <span className="text-2xl leading-none font-extrabold">+</span>
+            <span className="text-meta-sm font-extrabold">{mediaBusy ? 'Uploading…' : 'Add'}</span>
+          </button>
+        </div>
+        <p className="text-meta-sm text-b3 mt-2 leading-snug">
+          Photos and videos show on your public service page in this order.
+        </p>
+      </div>
+
       <p className="px-5 text-meta-sm font-extrabold uppercase tracking-widest text-b3 mb-3">
         Service details
       </p>
@@ -277,8 +376,10 @@ export function ServiceDetailProviderScreen() {
             edit: { column: 'description', current: svc.description,
                     placeholder: 'How would you describe this service?', multiline: true } },
           { label: 'Photos & videos',
-            sub: svc.coverUrl ? 'Cover uploaded · tap to change' : 'Add a cover photo',
-            run: () => { if (!svc.real) { showToast('Demo service — sign up to upload your own photo.'); return; } fileInputRef.current?.click(); } },
+            // FW-18: the row reports the real gallery, and tapping it adds
+            // to the gallery (the cover keeps its own hero button).
+            sub: media.length > 0 ? `${media.length} in gallery · tap to add more` : 'Add photos or a video',
+            run: () => { if (!svc.real) { showToast('Demo service — sign up to upload your own media.'); return; } mediaInputRef.current?.click(); } },
           { label: 'Availability defaults',to: '/calendar/availability',
             sub: 'Auto-accept bookings on weekdays' },
         ].map((row, i, arr) => {

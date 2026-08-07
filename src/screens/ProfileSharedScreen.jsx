@@ -59,7 +59,7 @@ export function ProfileSharedScreen() {
         </div>
 
         {/* "image" placeholder using gradient */}
-        <div className="fv-jamie h-[260px] relative">
+        <div className="bg-gl h-[260px] relative"> {/* FW-20: neutral surface, no fake-photo gradient */}
           <button
             onClick={() => showToast('Open Instagram — coming later')}
             className="absolute bottom-3 right-3 bg-black text-white text-meta

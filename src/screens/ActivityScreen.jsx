@@ -161,13 +161,9 @@ function SpotlightRow({ req, onClick }) {
   );
 }
 
-// CERGIO-GUARD (2026-05-30): photo_class → cover-image gradient fallback.
-// Same pool ResultsScreen uses so the look is consistent across screens.
-const PHOTO_GRADIENTS = {
-  'fv-jamie':  'from-[#e8dcc8] via-[#b89870] to-[#604030]',
-  'fv-john':   'from-[#cad8e8] via-[#7088b0] to-[#2e4060]',
-  'fv-steve':  'from-[#d8e8ca] via-[#88b070] to-[#406030]',
-};
+// FW-20 (founder 2026-08-06): the fake-person cover gradients are purged.
+// No real cover → an honest neutral mint surface, consistent everywhere.
+const NEUTRAL_GRADIENT = 'from-gl via-gl to-white';
 
 function initials(name) {
   if (!name) return '?';
@@ -231,7 +227,7 @@ function GoatShareCard({ row, onClick }) {
   const ownerName    = svc.owner_display_name || svc.title;
   const ownerId      = svc.owner_id || null;
   const cover        = svc.cover_url;
-  const gradient     = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+  const gradient     = NEUTRAL_GRADIENT; // FW-20
 
   // CERGIO-GUARD (2026-06-03 v2): priority flipped to Connector >
   // Friend per Tarik — "your Connector Connie Connect spotlighted
@@ -382,7 +378,7 @@ function ListingCard({ ev, onClick }) {
   const owner = ev.owner;
   const ownerName = owner?.display_name || 'A provider';
   const ownerId   = owner?.id || null;
-  const gradient  = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+  const gradient  = NEUTRAL_GRADIENT; // FW-20
   const cover     = svc.cover_url;
   const avatarCls = `w-10 h-10 rounded-full bg-gradient-to-br from-[#5BC404] to-[#2F6E00]
                      text-white text-meta font-extrabold flex items-center justify-center flex-shrink-0`;

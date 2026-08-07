@@ -5120,9 +5120,12 @@ test('listing-uploads-its-cover-photo', 'SPEC-133 (founder 2026-07-31): every li
   // the capture side must keep putting files on the draft
   const arrange = readFile('src/screens/ServiceListPhotosArrangeScreen.jsx');
   assert(/updateListingDraft\(\{ photos \}\)/.test(arrange), 'photos must still be persisted to the draft');
-  // and the render side must prefer the real photo
+  // and the render side must prefer the real photo. SHARED-CHANGE-APPROVED
+  // (FW-18): the hero became a story pager — cover_url is still rendered
+  // when present, as heroImages[0]; the assert follows the derivation.
   const detail = readFile('src/screens/ServiceDetailScreen.jsx');
-  assert(/provider\.coverUrl &&/.test(detail), 'the detail screen must render cover_url when present');
+  assert(/\[provider\.coverUrl, \.\.\.galleryImageUrls\]\.filter\(Boolean\)/.test(detail) && /heroImage &&/.test(detail),
+    'the detail screen must render cover_url when present (it is heroImages[0] of the FW-18 story pager)');
 });
 
 test('offer-aware-cta-and-persistent-sent', 'SPEC-134/135 (founder 2026-07-31): (a) a provider LOST every sent offer from their Sent tab the moment the consumer accepted or declined, because the query filtered to offered/countered only — they had no record of what they had quoted; (b) the service page always said "Request X ($Y)" even when that provider had already sent the viewer a live counter-offer, which is the wrong action and reads as if nothing happened', '#134', async () => {
@@ -7760,6 +7763,86 @@ test('ci-search-relay-transport-only-single-truth-pipeline', 'SPEC-269 (the meas
     'the relay workflow lost its 15-minute schedule — the lane only runs when someone clicks, which is the exact watching-a-dashboard dependency the SPEC-237 self-stop was built to remove');
   assert(!(!wf.includes('run: node scripts/creator-harvest-relay.mjs') || !wf.includes('SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}')),
     'the relay workflow no longer runs the relay script with the service bearer — the schedule fires a runner that does nothing, and silence reads as success (the SPEC-214 rule, inverted)');
+});
+
+test('avatar-upload-ui-wired', 'FW-19 (founder 2026-08-06): the avatars infra shipped in 20260805120000 (profiles.avatar_url + public avatars bucket) but NO screen ever offered an upload — every profile rendered initials forever. PATCHES §1 names the control\'s home: EditProfileModal, path <uid>/avatar.jpg (the RLS policy requires the first folder segment to be the uploader\'s UUID). The upload must go through ONE helper (uploadAndPersistAvatar in lib/storage.js — same rule as service covers: no hand-rolled bucket calls in screens) which writes the public URL back to profiles.avatar_url, and the ProfileScreen hero must select avatar_url and render the shared Avatar primitive so the photo actually shows up.', '#270', () => {
+  const st = readFile('src/lib/storage.js');
+  assert(!(!/export async function uploadAndPersistAvatar/.test(st)), 'uploadAndPersistAvatar is gone from lib/storage.js — screens would hand-roll bucket calls (FW-19)');
+  assert(!(!/\$\{uid\}\/avatar\.jpg/.test(st)), 'avatar upload path is no longer <uid>/avatar.jpg — the avatars RLS policy requires the uid folder prefix (FW-19)');
+  assert(!(!/from\('avatars'\)/.test(st)), 'avatar upload no longer targets the avatars bucket (FW-19)');
+  assert(!(!/update\(\{ avatar_url: url \}\)/.test(st)), 'the uploaded avatar URL is never written to profiles.avatar_url — the photo would upload and vanish (FW-19)');
+  const modal = readFile('src/components/ui/EditProfileModal.jsx');
+  assert(!(!/uploadAndPersistAvatar/.test(modal)), 'EditProfileModal lost the avatar upload control PATCHES §1 places there (FW-19)');
+  assert(!(!/from '\.\/Avatar'/.test(modal)), 'EditProfileModal no longer previews via the shared Avatar primitive (FW-19)');
+  const prof = readFile('src/screens/ProfileScreen.jsx');
+  assert(!(!/follower_count, avatar_url/.test(prof)), 'ProfileScreen no longer selects avatar_url — the hero can never show the uploaded photo (FW-19)');
+  assert(!(!/<Avatar url=\{avatarUrl\}/.test(prof)), 'ProfileScreen hero no longer renders the Avatar primitive with the real photo (FW-19)');
+});
+
+test('service-gallery-media-wired', 'FW-18 (founder 2026-08-06): "add/update photos AND videos on a listed service" — before this the single cover swap was the only media control. The migration (20260807040000) must keep the ordered service_media table + public service-media bucket with uid-prefixed writes; lib/storage.js must own the ONE upload path (uploadServiceMedia — no hand-rolled bucket calls in screens) accepting image AND video; the provider screen must render the gallery with add + remove; and the PDP must fetch the gallery, feed real images into the hero story pager (ruler segments = ACTUAL images, SPEC-12/49g) and render videos only when they exist.', '#271', () => {
+  const mig = readFile('supabase/migrations/20260807040000_service_media.sql');
+  assert(!(!/create table if not exists public\.service_media/.test(mig)), 'the service_media table migration is gone (FW-18)');
+  assert(!(!/kind\s+text not null check \(kind in \('image', 'video'\)\)/.test(mig)), 'service_media no longer constrains kind to image|video (FW-18)');
+  assert(!(!/\(storage\.foldername\(name\)\)\[1\] = auth\.uid\(\)::text/.test(mig)), 'the service-media bucket lost its uid-prefix write policy (FW-18)');
+  const st = readFile('src/lib/storage.js');
+  assert(!(!/export async function uploadServiceMedia/.test(st)), 'uploadServiceMedia is gone from lib/storage.js (FW-18)');
+  assert(!(!/isVideo \? 'video' : 'image'/.test(st)), 'uploadServiceMedia no longer records the video|image kind (FW-18)');
+  const prov = readFile('src/screens/ServiceDetailProviderScreen.jsx');
+  assert(!(!/listServiceMedia/.test(prov)), 'the provider screen no longer loads the gallery (FW-18)');
+  assert(!(!/handleMediaRemove/.test(prov)), 'the provider screen lost gallery remove (FW-18)');
+  assert(!(!/accept="image\/\*,video\/\*"/.test(prov)), 'the provider gallery picker no longer accepts videos (FW-18)');
+  const pdp = readFile('src/screens/ServiceDetailScreen.jsx');
+  assert(!(!/listServiceMedia/.test(pdp)), 'the PDP no longer fetches the gallery (FW-18)');
+  assert(!(!/\[provider\.coverUrl, \.\.\.galleryImageUrls\]\.filter\(Boolean\)/.test(pdp)), 'gallery images no longer feed the hero story pager (FW-18)');
+  assert(!(!/galleryVideos\.length > 0 &&/.test(pdp)), 'the PDP video strip lost its real-rows-only guard — an empty section would fake content (FW-18/SPEC-12)');
+});
+
+test('no-fake-person-placeholders-on-real-screens', 'FW-20 (founder 2026-08-06): "replace ALL placeholder pics with real pics". The fake-person gradient placeholders (fv-jamie/fv-john/fv-steve, gradients NAMED after invented people) are purged from every real-data surface: no real screen or shared component may apply an fv-* class or keep a PHOTO_FALLBACKS/PHOTO_GRADIENTS fake pool; new listings must not record a fake photo_class into the DB (api.js default is null); real covers (cover_url) win everywhere, and the no-photo state is the honest neutral mint surface. src/data/mock.js and the css class DEFINITIONS in index.css are exempt (demo screens + legacy DB rows), the ban is on real screens APPLYING them.', '#272', () => {
+  const SCREENS = [
+    'src/components/ui/ProviderCard.jsx', 'src/screens/ManageServicesScreen.jsx',
+    'src/screens/ResultsScreen.jsx', 'src/screens/ActivityScreen.jsx',
+    'src/screens/PublicProfileServicesScreen.jsx', 'src/screens/ProfileSharedScreen.jsx',
+    'src/screens/ServiceDetailScreen.jsx', 'src/screens/ServiceDetailProviderScreen.jsx',
+    'src/screens/SocialPostsScreen.jsx', 'src/App.jsx',
+  ];
+  for (const f of SCREENS) {
+    const code = stripCommentsAndStrings ? stripCommentsAndStrings(readFile(f)) : readFile(f).replace(/\/\/[^\n]*/g, '');
+    assert(!/fv-(jamie|john|steve)/.test(code), `${f} still applies a fake-person placeholder class (FW-20)`);
+    assert(!/PHOTO_FALLBACKS|PHOTO_GRADIENTS\s*\[/.test(code), `${f} still carries a fake placeholder pool (FW-20)`);
+  }
+  const api = readFile('src/lib/api.js');
+  assert(!(!/photo_class:  draft\.photoClass \|\| null/.test(api)), 'new listings record a fake photo_class again — the DB default must be null (FW-20)');
+  const card = readFile('src/components/ui/ProviderCard.jsx');
+  assert(!(!/coverUrl \? 'bg-bg5' : 'bg-gl'/.test(card)), 'ProviderCard lost its honest neutral no-photo surface (FW-20)');
+});
+
+test('spotlight-real-ig-image-token-gated', 'FW-21 (founder 2026-08-06): "spotlights show REAL IG post image, not the IG logo tile". The ONLY legal path to the real image is Meta\'s official instagram_oembed endpoint, so the ig-oembed edge function proxies it TOKEN-GATED server-side (IG_OEMBED_TOKEN never reaches the browser; unset token → 200 {thumbnail_url:null}, a NORMAL state while Meta review is pending). IgPostTile renders the real <img> only when a thumbnail actually came back and keeps the SPEC-12 honest branded tile on every other path (no token, API miss, img onError) — never a fabricated thumbnail, and never scraping IG.', '#273', () => {
+  const fn = readFile('supabase/functions/ig-oembed/index.ts');
+  assert(!(!/instagram_oembed/.test(fn)), 'ig-oembed no longer calls the official oEmbed endpoint (FW-21)');
+  assert(!(!/Deno\.env\.get\('IG_OEMBED_TOKEN'\)/.test(fn)), 'the oEmbed token is no longer read server-side — either it leaked client-side or the gate is gone (FW-21)');
+  assert(!(!/token-unset/.test(fn)), 'the unset-token path no longer returns the normal null state (FW-21)');
+  assert(!(!/IG_URL_RE\.test\(url\)/.test(fn)), 'the URL allowlist is gone — the proxy became an open fetcher (FW-21)');
+  const tile = readFile('src/components/ui/IgPostTile.jsx');
+  assert(!(!/functions\.invoke\('ig-oembed'/.test(tile)), 'IgPostTile no longer asks ig-oembed for the real thumbnail (FW-21)');
+  assert(!(!/thumb \?/.test(tile)) && !(!/from-\[#f9ce34\]/.test(tile)), 'IgPostTile lost the honest branded-tile fallback — a null thumbnail must render the SPEC-12 tile, never a fabricated image (FW-21/SPEC-12)');
+  assert(!(!/onError=\{\(\) => \{ thumbCache\.set\(url, null\); setThumb\(null\); \}\}/.test(tile)), 'a broken real image no longer falls back to the branded tile (FW-21)');
+});
+
+test('booking-freeform-box-and-attachments', 'PR 5 (redesign handoff, Booking Flow.dc.html + PATCHES §2/§5): the PDP request composer replaces the configure-with-fields step with the ONE free-form kit RequestBox wired to the REAL chat-parse edge function via the chatParse client — the prototype\'s bedroom/deep-clean regex is demo scaffolding and must never ship. The green "Read as: …" echo stays (the user\'s chance to catch a bad parse). "Add photos or video" stages files locally and uploads them AFTER the request row exists (path uid/requestId/… in the PRIVATE request-media bucket + request_attachments rows, via the ONE helper uploadRequestAttachments) — best-effort, a failed upload never kills a sent request. The provider\'s inbound request screen renders the attachments from SIGNED urls (createSignedUrls — the bucket is private) and only when rows actually exist.', '#274', () => {
+  const sheet = readFile('src/components/ui/RequestQuoteSheet.jsx');
+  assert(!(!/from '\.\/RequestBox'/.test(sheet)), 'the composer no longer uses the kit RequestBox (PR 5)');
+  assert(!(!/chatParse\(\{/.test(sheet)), 'the composer no longer parses via the real chat-parse client (PR 5)');
+  assert(!/bedroom|deep.clean.*laundry.*supplies/i.test(stripCommentsAndStrings(sheet)), 'the prototype demo regex leaked into the shipped composer (PR 5 — PATCHES §5 forbids it)');
+  assert(!(!/uploadRequestAttachments\(files, request\.id\)/.test(sheet)), 'attachments are no longer uploaded after the request row exists (PR 5)');
+  assert(!(!/the request still went out/.test(sheet)), 'a failed attachment upload no longer degrades gracefully — it must never kill a sent request (PR 5)');
+  const st = readFile('src/lib/storage.js');
+  assert(!(!/export async function uploadRequestAttachments/.test(st)), 'uploadRequestAttachments is gone from lib/storage.js (PR 5)');
+  assert(!(!/\$\{uid\}\/\$\{requestId\}\//.test(st)), 'the request-media path no longer starts uid/requestId — the RLS prefix rule breaks (PR 5)');
+  const api = readFile('src/lib/api.js');
+  assert(!(!/createSignedUrls\(rows\.map\(r => r\.storage_path\), 60 \* 60\)/.test(api)), 'request attachments are no longer read via signed urls — the bucket is PRIVATE (PR 5)');
+  const inbound = readFile('src/screens/RequestFromConnectorScreen.jsx');
+  assert(!(!/listRequestAttachments/.test(inbound)), 'the provider inbound screen no longer loads request attachments (PR 5)');
+  assert(!(!/attachments\.length > 0 &&/.test(inbound)), 'the attachments strip lost its real-rows-only guard (PR 5/SPEC-12)');
 });
 
 main().catch(e => {

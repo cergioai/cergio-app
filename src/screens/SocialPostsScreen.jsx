@@ -7,7 +7,7 @@ const POSTS = [
   { id: '3', providerName: 'Johnathan', followerCount: 45414,  category: 'Personal Driver', location: 'New York, NY',    sharedBy: 'Jennifer Driver', count: 3 },
 ];
 
-const PHOTO_BG = ['fv-jamie', 'fv-john', 'fv-steve'];
+const PHOTO_BG = ['bg-gl', 'bg-gl/70', 'bg-gl']; // FW-20: neutral surfaces, no fake-person tiles
 
 function getInitials(name) {
   return name.split(' ').map(s => s[0] || '').join('').slice(0, 2).toUpperCase();

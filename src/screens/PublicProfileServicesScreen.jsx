@@ -13,15 +13,13 @@ import { recoByline } from '../components/ui/reputation';
 // the profile now renders the v2 service cards; this page was ServiceTile's
 // only other consumer, so the tile + its gradient fallbacks live here until
 // this screen's own kit migration (STYLE_MIGRATION group 5).
-const PHOTO_GRADIENTS = {
-  'fv-jamie': 'from-[#e8dcc8] via-[#b89870] to-[#604030]',
-  'fv-john':  'from-[#cad8e8] via-[#7088b0] to-[#2e4060]',
-  'fv-steve': 'from-[#d8e8ca] via-[#88b070] to-[#406030]',
-};
+// FW-20: fake-person gradient placeholders purged — no real cover means
+// an honest neutral mint surface, never an aesthetic implying a photo.
+const NEUTRAL_GRADIENT = 'from-gl via-gl to-white';
 
 // One service-card row. Cover image or photo-class gradient fallback. Tap → PDP.
 function ServiceTile({ svc, recoSummary, onOpen }) {
-  const grad = PHOTO_GRADIENTS[svc.photo_class] || PHOTO_GRADIENTS['fv-jamie'];
+  const grad = NEUTRAL_GRADIENT; // FW-20
   const price = svc.price_cents != null ? Math.round(svc.price_cents / 100) : null;
   return (
     <button
