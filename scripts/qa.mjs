@@ -7430,7 +7430,7 @@ test('provider-detail-owner-guard', 'FW-17 (founder live repro 2026-08-06): /ser
 });
 
 
-test('site-enrich-free-website-contact-harvest', 'SPEC-263 (founder, 2026-08-06, verbatim: "figure out a solution to capture more contact details for IG... my search showed some had websites with emails and or phones.. it may need a 3 step crawl or alternative straetgy.. worst case we scale the numbers to 5000 to get 500 contactable ... per city .. but creators always ahve an email somewhere as they want to attract partners and advertising..."). MEASURED (audit 2026-08-06T04:28Z): ig_services 276 rows, 218 with external_url (websites/linktrees), only 29 emails, 0 phones — 10.5% contactable. The contacts exist ONE FREE HOP away on pages whose addresses we already bought; before anyone scales a paid buy to 5,000 rows to net 500 contactables, this worker walks the hop for $0: 3-step crawl (landing page → linktree fan-out to up to 3 real sites → up to 2 contact-shaped same-origin pages), plain fetch only, 5s per request, ~45s per run. FILL-ONLY write-back (a contact another path found is never overwritten), MANDATORY junk filter (a wixpress/noreply address written to a lead row poisons outreach worse than an empty one), and site_enriched_at stamped on EVERY attempt so no dead site is ever crawled in a loop. Asserts scan RAW text — URLs, hosts and messages live in template literals and strings, which stripComments() blanks.', '#263b', () => {
+test('site-enrich-free-website-contact-harvest', 'SPEC-263 (founder, 2026-08-06, verbatim: "figure out a solution to capture more contact details for IG... my search showed some had websites with emails and or phones.. it may need a 3 step crawl or alternative straetgy.. worst case we scale the numbers to 5000 to get 500 contactable ... per city .. but creators always ahve an email somewhere as they want to attract partners and advertising..."). MEASURED (audit 2026-08-06T04:28Z): ig_services 276 rows, 218 with external_url (websites/linktrees), only 29 emails, 0 phones — 10.5% contactable. The contacts exist ONE FREE HOP away on pages whose addresses we already bought; before anyone scales a paid buy to 5,000 rows to net 500 contactables, this worker walks the hop for $0: 3-step crawl (landing page → linktree fan-out to up to 3 real sites → up to 2 contact-shaped same-origin pages), plain fetch only, 5s per request, ~120s per run across a POOL_SIZE worker pool (amended in place by SPEC-265 — the founder\'s parallel-crawler order grew the budget and batch; every bound below stays enforced). FILL-ONLY write-back (a contact another path found is never overwritten), MANDATORY junk filter (a wixpress/noreply address written to a lead row poisons outreach worse than an empty one), and site_enriched_at stamped on EVERY attempt so no dead site is ever crawled in a loop. Asserts scan RAW text — URLs, hosts and messages live in template literals and strings, which stripComments() blanks.', '#263b', () => {
   // 1) the worker exists and takes the cron/service-role bearer only — an open
   //    endpoint lets anyone burn the run budget and write to the founder's lead rows
   const fn = readFile('supabase/functions/site-enrich/index.ts');
@@ -7469,14 +7469,14 @@ test('site-enrich-free-website-contact-harvest', 'SPEC-263 (founder, 2026-08-06,
     'the isJunkEmail filter is gone entirely — every asset filename and platform address a page embeds gets written to lead rows, and a poisoned outreach list costs more to clean than the harvest saved');
   assert(!(!/if \(isJunkEmail\(cand\)\) \{ junk\+\+; continue; \}/.test(fn)),
     'scanHtml no longer rejects junk emails before accepting one — the filter exists but nothing calls it on the accept path, so the first icon@2x.png "email" on a page wins and is mailed');
-  // 5) the free crawl is BOUNDED: 5s per request, ~45s per run — an unbounded fetch
+  // 5) the free crawl is BOUNDED: 5s per request, ~120s per run (SPEC-265) — an unbounded fetch
   //    against a dead site wedges the */15 cron and the whole enrichment lane stalls
   assert(!(!fn.includes('FETCH_TIMEOUT_MS = 5000;')),
     'the per-request timeout is no longer 5s — one unresponsive site holds a socket for the platform default, the run budget drains on a single candidate, and 12 candidates/run collapses to 1');
   assert(!(!fn.includes('AbortSignal.timeout(FETCH_TIMEOUT_MS)')),
     'fetchPage no longer aborts via AbortSignal.timeout — the 5s constant is decoration, a hung site wedges the run, and the cron delivers 0 scanned rows forever while looking scheduled');
-  assert(!(!fn.includes('RUN_BUDGET_MS = 45000;')),
-    'the ~45s total run budget is gone — a batch of slow sites runs the edge function into its wall-clock kill, the stamp never lands, and the same slow sites are picked again every 15 minutes: an infinite loop that enriches nothing');
+  assert(!(!fn.includes('RUN_BUDGET_MS = 120000;')),
+    'the ~120s total run budget (SPEC-265) is gone — either it grew past the ~150s edge wall (the function is killed mid-batch, stamps never land, the same slow sites are re-picked forever) or it shrank back to the sequential-era value and the parallel batch cannot finish: both zero the free lane');
   assert(!(!/if \(Date\.now\(\) - started > RUN_BUDGET_MS\) break;/.test(fn)),
     'candidate picking no longer stops when the budget is spent — the budget constant exists but nothing enforces it, which is a gate that appears to exist and does not (the falsest kind of green)');
   // 6) the ATTEMPT is stamped no matter the outcome — an unstamped failed site is
@@ -7602,6 +7602,67 @@ test('creator-harvest-v2-free-spec-shaped-crawl', 'SPEC-264 (founder, 2026-08-06
     'the unschedule-first exists-guard is gone from the SPEC-264 migration — re-applying double-schedules the job and two concurrent runs race the same queries and dedupe window');
   assert(!(!/select cron\.schedule\('cergio_creator_harvest', '\*\/15 \* \* \* \*',\s*\n\s*\$\$ select public\.cergio_call_edge\('creator-harvest'\); \$\$\)/.test(mig)),
     'the SPEC-264 migration no longer re-asserts the */15 schedule through cergio_call_edge — if the live schedule is the dead one, nothing revives it and "run creators now" stays a request');
+});
+
+test('spec265-free-parallel-multiplier', 'SPEC-265 (founder order, 2026-08-07: 100X SPEED via parallel crawlers — FREE only). MEASURED baseline: site-enrich walked 12 sites per 15-min tick strictly sequentially inside a 45s budget, and creator-harvest completed only ~6-10 of the 48 queries it built before its 50s deadline — the free machine idled in single digits while the edge wall clock allows ~150s. The multiplier is three welded parts, all $0: (1) IN-RUN FAN-OUT — site-enrich drains BATCH=60 through a POOL_SIZE=6 worker pool inside a 120s budget; creator-harvest processes its whole query slice through HARVEST_POOL=4 inside a 120s deadline with MAX_SITEFETCH=120; every pick advances a cursor in a SYNCHRONOUS statement, so no candidate or query can be double-claimed under the single-threaded event loop. (2) THE PER-REQUEST CAPS DO NOT MOVE — 5s per site fetch, 8s per DDG search: parallelism bought by letting sockets hang longer is throughput theater, and DDG bot-walls are the measured risk that keeps the harvest pool at 4, not 16. (3) A SECOND CRON LANE per free worker at minutes 7,22,37,52 through cergio_call_edge — staggered 7-8 min against a ≤120s run, lanes can never be live at once, so the existing stamp/dedupe/fill-only semantics stay sufficient WITHOUT new claim columns; the harvest spin bucket shrinks to 7 min so consecutive ticks explore DIFFERENT query slices instead of burning the new budget on known_handle skips. MONEY GATES UNTOUCHED: no paid source gains a lane, and neither free worker gains a paid vendor call — the caps stay count-based and re-read every run, so parallelism cannot overspend a cap that spends nothing. Asserts scan RAW text (constants and cron bodies sit beside template literals, which stripComments() blanks).', '#265b', () => {
+  const se = readFile('supabase/functions/site-enrich/index.ts');
+  const ch = readFile('supabase/functions/creator-harvest/index.ts');
+
+  // 1) site-enrich fan-out: batch, pool, budget, and the single-claim cursor.
+  assert(!(!se.includes('const BATCH = 60;')),
+    'site-enrich BATCH is no longer 60 — either it fell back to the sequential-era 12 (the pool starves and the multiplier is a comment) or it grew past what a 120s budget can actually drain (the tail of every batch is picked and never crawled, stamped never, retried forever)');
+  assert(!(!se.includes('const POOL_SIZE = 6;')),
+    'site-enrich POOL_SIZE=6 is gone — sequential again means 12-ish sites per tick and the free contact lane crawls at 1/10th the shipped speed while the founder scales spend to compensate: the exact inversion SPEC-263 exists to prevent');
+  assert(!(!/await Promise\.all\(Array\.from\(\{ length: POOL_SIZE \}/.test(se)),
+    'the site-enrich worker pool is gone — POOL_SIZE exists but nothing fans out, which is a multiplier that appears to exist and does not (the falsest kind of green)');
+  assert(!(!se.includes('const c = cands[cursor++];')),
+    'the site-enrich pool no longer claims candidates via a synchronous cursor increment — an await between check and claim lets two workers crawl the SAME site, and the run wastes its budget double-fetching instead of draining the queue');
+  // 2) the per-request caps did NOT move (the #263b pins hold the 5s + 120000 values;
+  //    re-pinned here so a future "make it faster" edit that relaxes a socket cap
+  //    fails THIS gate with the SPEC-265 rationale in the message).
+  assert(!(!se.includes('FETCH_TIMEOUT_MS = 5000;')),
+    'site-enrich per-request timeout moved off 5s — parallelism was bought by letting sockets hang longer, so one dead host now costs a worker slot for the platform default and the pool quietly degrades to sequential');
+
+  // 3) creator-harvest fan-out: pool, deadline, fetch cap, cursor, spin bucket.
+  assert(!(!ch.includes('const HARVEST_POOL  = 4;')),
+    'HARVEST_POOL=4 is gone from creator-harvest — either sequential again (~8 of 48 queries per run, the founder\'s "0 progress" cadence) or cranked high enough to earn the DDG bot-wall that zeroes BOTH endpoints at once');
+  assert(!(!ch.includes('const DEADLINE_MS   = 120000;')),
+    'creator-harvest DEADLINE_MS is no longer 120000 — shrunk, the 48-query slice cannot finish and the spec-shaped queries starve; grown past the ~150s edge wall, the function is killed mid-run and agent_runs shows errors where rows should be');
+  assert(!(!ch.includes('const MAX_SITEFETCH = 120;')),
+    'MAX_SITEFETCH is no longer 120 — the bigger budget with the old 60-fetch cap leaves workers idle after the cap trips, and contactless rows that needed one 5s fetch ship to site-enrich\'s backlog instead');
+  assert(!(!/await Promise\.all\(Array\.from\(\{ length: HARVEST_POOL \}/.test(ch)),
+    'the creator-harvest query pool is gone — HARVEST_POOL exists but the driver is sequential, so the 120s deadline buys ~15 queries instead of 48 and the multiplier quietly halves twice');
+  assert(!(!ch.includes('const item = queries[qCursor++];')),
+    'the creator-harvest pool no longer claims queries via a synchronous cursor increment — two workers can run the SAME query, every handle it finds dedupes against itself, and the run reports known_handle skips instead of new creators');
+  assert(!(!ch.includes('fetchText(ep, 8000)')),
+    'the DDG search fetch lost its 8s cap — one bot-walled endpoint holds a pool slot for the platform default and the parallel harvest degrades to slower-than-sequential');
+  assert(!(!ch.includes('Math.floor(Date.now() / 420000)')),
+    'the spin bucket is no longer 7 minutes — with two lanes ticking ~every 7.5 min, a 20-min bucket hands consecutive runs the SAME rotation slice, and the second run\'s whole budget is spent re-finding handles the first just wrote (known_handle skips, not creators)');
+
+  // 4) FREE stays free: neither worker gained a paid vendor call. (Comment mentions
+  //    of the word are fine — a CALL needs the API host or a token env.)
+  assert(!(se.includes('api.apify.com') || ch.includes('api.apify.com') || se.includes('APIFY_TOKEN') || ch.includes('APIFY_TOKEN')),
+    'a paid Apify call appeared inside a FREE lane — the founder\'s order is verbatim "not paid! IG", and the parallel multiplier must multiply $0, not a meter (SPEC-262b was built on this exact confusion and fully reverted)');
+
+  // 5) the second lanes exist, fire through the ONLY transport that resolves, and
+  //    can never double-schedule on re-apply.
+  const mig = readFile('supabase/migrations/20260807090000_spec265_free_parallel_lanes.sql');
+  assert(!(!mig.includes("select cron.unschedule('cergio_creator_harvest_b')\nwhere exists (select 1 from cron.job where jobname = 'cergio_creator_harvest_b')")),
+    'the harvest lane-b unschedule-first exists-guard is gone — re-applying the migration double-schedules the lane, two invocations tick the same minute, and the same-bucket runs waste each other\'s budget on known_handle skips');
+  assert(!(!/select cron\.schedule\('cergio_creator_harvest_b', '7-59\/15 \* \* \* \*',\s*\n\s*\$\$ select public\.cergio_call_edge\('creator-harvest'\); \$\$\)/.test(mig)),
+    'the creator-harvest second lane is not scheduled at minutes 7,22,37,52 through cergio_call_edge — either the lane never fires (half the promised cadence, silently) or it fires through a GUC-built URL that can never resolve (gate #242\'s schedule-that-parses-and-never-runs)');
+  assert(!(!mig.includes("select cron.unschedule('cergio_site_enrich_b')\nwhere exists (select 1 from cron.job where jobname = 'cergio_site_enrich_b')")),
+    'the site-enrich lane-b unschedule-first exists-guard is gone — a re-apply double-schedules it and concurrent same-minute runs re-crawl the same candidate batch (harmless to data via fill-only, but the whole tick\'s budget enriches nothing new)');
+  assert(!(!/select cron\.schedule\('cergio_site_enrich_b', '7-59\/15 \* \* \* \*',\s*\n\s*\$\$ select public\.cergio_call_edge\('site-enrich'\); \$\$\)/.test(mig)),
+    'the site-enrich second lane is not scheduled at minutes 7,22,37,52 through cergio_call_edge — the contact-fill cadence silently halves and the reachable %% the founder is watching climbs at half the speed the ship report promised');
+  // 6) the stagger arithmetic that makes lane overlap impossible: both run budgets
+  //    must stay strictly under the 7-minute lane gap. Parse the shipped constants —
+  //    if either grows past 420000ms, two lanes CAN be live at once and the
+  //    stamp/dedupe claim semantics this design relies on stop being sufficient.
+  const seBudget = Number((se.match(/RUN_BUDGET_MS = (\d+);/) || [])[1]);
+  const chBudget = Number((ch.match(/DEADLINE_MS   = (\d+);/) || [])[1]);
+  assert(!(!Number.isFinite(seBudget) || !Number.isFinite(chBudget) || seBudget >= 420000 || chBudget >= 420000),
+    `a free-lane run budget (site-enrich ${seBudget}ms / harvest ${chBudget}ms) reached the 7-minute lane stagger — two lanes can now be LIVE AT ONCE, the select-then-stamp claim window becomes a real race, and the no-new-claim-columns design premise of SPEC-265 is void: shrink the budget or build real claims`);
 });
 
 main().catch(e => {
