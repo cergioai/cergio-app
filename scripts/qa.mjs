@@ -7688,6 +7688,18 @@ test('craigslist-budget-floor-defers-instead-of-burning-jobs', 'SPEC-266 (handof
     'the defer branch writes cost_usd or a delivered status — nothing was spent and nothing was delivered on a defer; recording either corrupts the spend ledger the #253-#256 money gates read');
 });
 
+test('agent-runs-tab-reads-the-database-agents-log-to', 'SPEC-267 (measured 2026-08-07): creator-harvest ran 6+ ticks after SPEC-264/265 and wrote 0 rows, and the ONE surface that could say WHY — the /ops/data "Agent runs" tab, whose meta column carries {queried,found,inserted,skips,dbg} — reads agent_runs on the GROWTH project, a table NO worker writes: every logAgentRun() inserts into agent_runs on PRODUCT (the SPEC-132 cutover deliberately kept agent_runs/qa_findings there so the watchdog and ops console kept working). The tab has therefore shown "AGENT RUNS 0" since the cutover — a permanent confident zero (the #249 class), and it turned a diagnosable discovery miss into a mystery at the exact moment the founder\'s creator hundred depended on the answer. Second latent defect: the runs audience ordered rows by created_at, a column agent_runs does not have (backbone schema: started_at/finished_at) — a 42703 on every load, invisible only because the empty growth copy never returned rows to order. ONLY the runs audience moves to product; the lead audiences stay on growth — SPEC-203 stands (that cutover is why the founder can sign in during a crawl) and gate #203\'s forbidden product-client literal must stay absent.', '#267', () => {
+  const f = readFile('supabase/functions/leads-dashboard/index.ts');
+  assert(!(!f.includes("const db = audience === 'runs' ? createClient(url, svc) : gdbAll;")),
+    'the runs audience no longer branches to the PRODUCT client — the Agent-runs tab is back to reading the growth table nobody writes, a tab that can only ever say 0, and the next zero-rows mystery has no surface to answer it');
+  assert(!(!f.includes('const gdbAll = growthDb()')),
+    'the growth client is gone from leads-dashboard — every lead audience would read the near-empty product tables: the exact "dashboard looks truncated" outage SPEC-203 fixed');
+  assert(!(!/audience === 'runs' \? 'started_at' : 'created_at'/.test(f)),
+    'the runs audience no longer orders by started_at — agent_runs has no created_at column, so every rows load 42703s and the tab renders an error (or worse, a silent empty) beside 98 real runs a day');
+  assert(!(!/runs:\s+\{ table: 'agent_runs',\s+srcCol: 'agent'/.test(f)),
+    'the runs dataset no longer maps agent_runs by agent — the per-agent filter dies and the founder cannot isolate creator-harvest\'s runs from the 110 fulfill-crawl rows a day around them');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
