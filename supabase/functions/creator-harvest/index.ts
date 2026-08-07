@@ -359,7 +359,10 @@ const gdb = growthDb();
       const { count: harvested, error: cntErr } = await gdb.from('leads_influencers')
         .select('id', { count: 'exact', head: true })
         .like('discovered_via', 'se:web-harvest%')
-        .gte('fetched_at', HARVEST_FRESH);
+        .gte('fetched_at', HARVEST_FRESH)
+        // SPEC-270: the stop counts CONTACTABLE rows only (founder: "250 contactable
+        // (whatever the # total nubmer is..)") — total rows float, contacts decide.
+        .or('email.not.is.null,phone.not.is.null');
       // If the target cannot be READ, refuse to crawl — refusing costs nothing.
       if (cntErr) {
         await logAgentRun(db, 'creator-harvest', {
@@ -369,7 +372,7 @@ const gdb = growthDb();
         return json({ error: `target unreadable — refusing to crawl: ${serr(cntErr)}` }, 500);
       }
       if ((harvested ?? 0) >= CREATOR_TARGET) {
-        const reason = `creator target met — ${harvested} of ${CREATOR_TARGET} FRESH (since ${HARVEST_FRESH}) from se:web-harvest (prefix). Paused for audit alongside the rest (founder, 2026-08-02; freshness window SPEC-264).`;
+        const reason = `creator target met — ${harvested} of ${CREATOR_TARGET} FRESH CONTACTABLE (since ${HARVEST_FRESH}) from se:web-harvest (prefix; contactable-only count, SPEC-270). Paused for audit alongside the rest (founder, 2026-08-02; freshness window SPEC-264).`;
         await logAgentRun(db, 'creator-harvest', {
           started, raw_found: 0, rows_written: 0, status: 'ok',
           meta: { target_met: true, harvested, target: CREATOR_TARGET, reason },
@@ -586,6 +589,19 @@ const gdb = growthDb();
         }
       }
     });
+
+    // ── SPEC-270 — ROTATE THE BUILT SLICE BY SPIN, IN PLACE. MEASURED (relay run
+    // #1): a fresh runner IP gets served only the FIRST ~2 queries before DDG
+    // walls it, and the list always led with the same head — so every tick
+    // harvested pets×NYC and the founder saw "only pets and nyc". Rotating by
+    // spin makes the served window WALK the whole category×metro space across
+    // ticks. In place, so every later reference (queries mode, crawl fallback)
+    // sees the rotated order.
+    {
+      const qrot = rotate(queries, (spin * 5) % Math.max(queries.length, 1));
+      queries.length = 0;
+      queries.push(...qrot);
+    }
 
     // ── SPEC-269: 'queries' mode returns the built slice and stops — no search,
     // no lead writes. Everything ABOVE (committed kill-switch, fresh self-stop,

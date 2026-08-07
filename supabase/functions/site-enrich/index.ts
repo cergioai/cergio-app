@@ -125,10 +125,22 @@ async function fetchPage(url: string): Promise<string | null> {
   }
 }
 
-type Found = { email: string | null; phone: string | null; junk: number };
+type Found = { email: string | null; phone: string | null; junk: number; followers: number | null };
+// SPEC-270 (founder, 2026-08-07: "also add #of followers like for IG services crawl"):
+// a follower count printed on the creator's own site/linktree ("12,400 followers",
+// "123K followers") is parsed to an integer. No match → null, NEVER a guess (SPEC-86).
+function parseFollowersHtml(s: string): number | null {
+  const m = s.match(/([\d][\d.,]*)\s*([KkMm])?\s*followers/);
+  if (!m) return null;
+  const base = Number(m[1].replace(/,/g, ''));
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const mult = /[Kk]/.test(m[2] || '') ? 1_000 : /[Mm]/.test(m[2] || '') ? 1_000_000 : 1;
+  return Math.round(base * mult);
+}
 
 function scanHtml(html: string): Found {
   let email: string | null = null, phone: string | null = null, junk = 0;
+  const followers = parseFollowersHtml(html.replace(/<[^>]+>/g, ' '));
   // mailto: first — an explicit contact affordance beats a regex hit in a blob
   const mailtos = [...html.matchAll(/mailto:([^"'?\s<>&]+)/gi)].map((m) => decodeURIComponent(m[1]).toLowerCase());
   const regexEmails = (html.match(EMAIL_RE) || []).map((e) => e.toLowerCase());
@@ -144,7 +156,7 @@ function scanHtml(html: string): Found {
     const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ');
     for (const m of text.match(PHONE_RE) || []) { const p = normalizePhone(m); if (p) { phone = p; break; } }
   }
-  return { email, phone, junk };
+  return { email, phone, junk, followers };
 }
 
 function extractLinks(html: string, baseUrl: string): { href: string; text: string }[] {
@@ -162,7 +174,7 @@ function extractLinks(html: string, baseUrl: string): { href: string; text: stri
 // The full 3-step crawl for one candidate URL. Pure function of its inputs —
 // module-level, so it can never close over a handler-scoped client (SPEC-166 class).
 async function crawlSite(startUrl: string): Promise<Found> {
-  const found: Found = { email: null, phone: null, junk: 0 };
+  const found: Found = { email: null, phone: null, junk: 0, followers: null };
   const url = /^https?:\/\//i.test(startUrl) ? startUrl : `https://${startUrl}`;
 
   // step 1 — landing page (a link-in-bio landing fans out to real sites)
@@ -181,6 +193,7 @@ async function crawlSite(startUrl: string): Promise<Found> {
     found.junk += s.junk;
     found.email = found.email ?? s.email;
     found.phone = found.phone ?? s.phone;
+    found.followers = found.followers ?? s.followers;
   }
 
   // step 2 — scan the fanned-out real sites (linktree outbounds)
@@ -192,6 +205,7 @@ async function crawlSite(startUrl: string): Promise<Found> {
     found.junk += s.junk;
     found.email = found.email ?? s.email;
     found.phone = found.phone ?? s.phone;
+    found.followers = found.followers ?? s.followers;
     if (!found.email && !found.phone) {
       // remember this page's own contact links for step 3
       landingLinks.push(...extractLinks(html, p));
@@ -214,6 +228,7 @@ async function crawlSite(startUrl: string): Promise<Found> {
       found.junk += s.junk;
       found.email = found.email ?? s.email;
       found.phone = found.phone ?? s.phone;
+      found.followers = found.followers ?? s.followers;
       if (found.email || found.phone) break;
     }
   }
@@ -280,10 +295,14 @@ serve(async (req: Request) => {
 
     // FILL-ONLY write-back: only currently-null contact columns are set, and
     // site_enriched_at is stamped on EVERY attempt so no site is retried forever.
-    const patch: Record<string, string> = { site_enriched_at: stamp };
+    const patch: Record<string, string | number> = { site_enriched_at: stamp };
     if (c.table === 'leads_influencers') {
       if (found.email) patch.email = found.email;
       if (found.phone) patch.phone = found.phone;
+      // SPEC-270: followers ride the same fill-only write ("also add #of followers") —
+      // only when the crawl actually read a count; never fabricated, never overwritten
+      // to a DIFFERENT row shape (the update's null re-check still guards contacts).
+      if (found.followers) patch.followers = found.followers;
       const { data: w, error } = await gdb.from('leads_influencers').update(patch).eq('id', c.id)
         .is('email', null).is('phone', null) // never overwrite a contact another path found
         .select('id');
