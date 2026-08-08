@@ -1,15 +1,14 @@
 # SCOPE
 
-PR 6 (redesign handoff STYLE_MIGRATION.md, groups 4-6 — the LAST design module):
-booking/request, profile-adjacent, and the 13 ServiceList* screens are locked as
-kit-migrated. Real conversions: hand-built pink-gradient avatars → kit Avatar;
-avatar/mutual-circle/map-tile hexes → tokens. Markup-only, IA untouched.
-Gate #277.
+FW-24 (founder live repro 2026-08-08): a confirmed booking time must READ as
+confirmed. The requester's inbox never joined bookings, so a booked job still
+offered "book a time" (a second tap minted a DUPLICATE booking), the only
+viewable surface was the service profile, and the free-barter gate demanded an
+IG post for a job that had not happened. Gate #278.
 
-- `src/screens/RequestFromConnectorScreen.jsx`
-- `src/screens/RequestDetailScreen.jsx`
-- `src/screens/ActivityScreen.jsx`
-- `src/components/ui/ProviderCard.jsx`
+- `src/App.jsx`
+- `src/screens/JobsInboxScreen.jsx`
+- `src/screens/JobDetailsScreen.jsx`
 - `scripts/qa.mjs`
 - `SCOPE.md`
 
@@ -21,4 +20,13 @@ May only GROW. To modify an existing line add `SHARED-CHANGE-APPROVED`.
 - `supabase/functions/fulfill-crawl/index.ts`
 - `scripts/qa.mjs`
 
-qa.mjs change is purely additive (gate #277 appended before main()).
+SHARED-CHANGE-APPROVED — `src/lib/api.js`: listMyRequestsWithResponses must
+attach each response's live booking, which means its single `return` statement
+becomes a shaped local plus a bookings read before returning. There is no
+additive form of "the existing reader now returns the missing field" — a new
+parallel export would leave the OLD path (the one every inbox already calls)
+still blind, which is the defect. The only other change is the NEW export
+findActiveBookingFor. No existing caller's contract changes: responses gain a
+`booking` key and lose nothing.
+
+qa.mjs change is purely additive (gate #278 appended before main()).
