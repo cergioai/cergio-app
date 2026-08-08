@@ -7959,6 +7959,45 @@ test('lsa-active-2000-cap-matrix-lanes-and-brief-source-labels', 'SPEC-271 (foun
     'the screen no longer renders through srcLabel — the map exists but raw ids still show, a rename that appears to exist and does not');
 });
 
+// ─── INVARIANT: FW-24 — a confirmed time must READ as confirmed ─────────
+test('booked-offer-not-bookable', 'FW-24 (founder live repro 2026-08-08, verbatim: "tarik.sansal2@ Confirmed a booking time... but requester t@cergio is still seeing (book a time)... when clicking to BOOK, he should see the booked time and summary of the job (location time, request) not the profile of the service... with ability to reschedule... need to simplify the back and forth... but t@cergio is getting a message Finish your last barter first... but there are no other jobs open"). FOUR welded defects, one state gap. accept_request_with_time mints a CONFIRMED booking and writes a request_responses row with status=offered; the requester\'s inbox read ONLY that response row and never joined bookings, so (a) an already-booked job still rendered as an open offer with a live Book CTA, (b) tapping it minted a SECOND booking (createBooking has no dedupe of its own), (c) the only "view" was the SERVICE PROFILE — the requester had nowhere to see their own time/place/request or change it, and (d) the free-barter gate fired on ANY free booking lacking post_confirmed_at, so the instant a provider confirmed a time the requester was ordered to "finish your last barter" for a job that HAD NOT HAPPENED YET, with nothing to post and no other open job. The fix: responses carry their live booking, a booked response renders the agreed time + a View-booking CTA into the ROLE-AWARE job screen (both sides see the other party, either side reschedules), the preConfirmed path re-checks for a live booking before it can mint a duplicate, and the gate blocks only on a barter that is actually OWED — the same serviceHappened test BarterPostGate blocks on.', '#278', () => {
+  const api = stripComments(readFile('src/lib/api.js'));
+  assert(/resp\.booking\s*=\s*byPair\.get/.test(api),
+    'listMyRequestsWithResponses no longer attaches the live booking to each response — the requester\'s inbox is blind to a confirmed time again, which is the whole FW-24 defect');
+  assert(/\.from\('bookings'\)[\s\S]{0,400}?\.eq\('consumer_id',\s*uid\)/.test(api),
+    'the response→booking join must read bookings as the CONSUMER (bookings carries no request_id column — SPEC-247 — so the link is consumer+provider+service)');
+  assert(/export async function findActiveBookingFor/.test(api),
+    'findActiveBookingFor is gone — nothing stops a second tap on an already-confirmed offer from minting a duplicate job');
+  assert(/not\('status',\s*'in',\s*'\("cancelled","declined","expired"/.test(api),
+    'the booking lookups must exclude cancelled/declined/expired rows, or a dead booking hides a live offer');
+
+  const app = stripComments(readFile('src/App.jsx'));
+  assert(!/const \{ outstanding \} = await getOutstandingFreeBarter\(\);\s*if \(outstanding\)/.test(app),
+    'THE REGRESSION: handleBook blocks on the bare EXISTENCE of an outstanding free booking again — that locks the user out of the free marketplace the moment a provider confirms a time, for a barter that is not yet owed');
+  assert(/outstanding\.serviceHappened && !outstanding\.reviewed/.test(app),
+    'the free-barter book gate must test serviceHappened (provider marked complete OR the time passed) — the same test BarterPostGate blocks on, so the two surfaces can never disagree about whether a post is owed');
+  assert(/findActiveBookingFor\(\{/.test(app) && /bookingId: existing\.id/.test(app),
+    'the preConfirmed path no longer re-checks for a live booking before creating one — booking off an already-accepted offer mints a duplicate job (createBooking has no dedupe)');
+
+  const inbox = stripComments(readFile('src/screens/JobsInboxScreen.jsx'));
+  assert(/const canBook = !bk &&/.test(inbox),
+    'the "Book a time" CTA is offered again on a response whose booking already exists — the exact double-booking trap the founder hit');
+  assert((inbox.match(/\.filter\(resp => !resp\.booking\)/g) || []).length >= 2,
+    'booked responses must be excluded from BOTH the action feed and the inbox badge — a confirmed job is not a pending action');
+  assert(/navigate\('\/job',\s*\{ state: \{[\s\S]{0,200}?bookingId:\s*bk\.id/.test(inbox),
+    'the booked response must open the JOB (time, place, request, reschedule), not the service profile — "not the profile of the service (shown currently)"');
+  assert(/function whenLabel\(/.test(inbox) && /bkWhen/.test(inbox),
+    'the agreed time is no longer rendered on the booked response row — the requester still cannot see WHAT was booked without leaving the screen');
+
+  const job = stripComments(readFile('src/screens/JobDetailsScreen.jsx'));
+  assert(/import \{[^}]*\brescheduleBooking\b[^}]*\} from '\.\.\/lib\/api'/.test(job) && /await rescheduleBooking\(job\.id,/.test(job),
+    '/job can no longer reschedule — "with ability to reschedule" was the founder\'s explicit ask, and without it the requester is back to re-booking (which mints duplicates)');
+  assert(/isConsumer/.test(job) && /b\.consumer\?\.id === me/.test(job),
+    'the job screen is provider-only again — the requester lands on "Your earnings" and their OWN name as the client, which is why they had nowhere to see their booking');
+  assert(/!job\.isConsumer && \(/.test(job) || /job\.isConsumer \?/.test(job),
+    '"Mark service complete" must stay provider-only — the consumer must never be able to close out the provider\'s job from this screen');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);

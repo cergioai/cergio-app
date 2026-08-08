@@ -2661,15 +2661,79 @@ export async function listMyRequestsWithResponses({ limit = 20 } = {}) {
 
   // Only surface meaningful responses; keep declined/withdrawn out of
   // the requester's face. Sort responses newest-first.
-  return {
-    data: (data || []).map(r => ({
-      ...r,
-      responses: (r.responses || [])
-        .filter(resp => ['offered', 'countered', 'accepted'].includes(resp.status))
-        .sort((a, b) => new Date(b.responded_at || 0) - new Date(a.responded_at || 0)),
-    })),
-    error: null,
-  };
+  const shaped = (data || []).map(r => ({
+    ...r,
+    responses: (r.responses || [])
+      .filter(resp => ['offered', 'countered', 'accepted'].includes(resp.status))
+      .sort((a, b) => new Date(b.responded_at || 0) - new Date(a.responded_at || 0)),
+  }));
+
+  // CERGIO-GUARD (2026-08-08, Tarik — FW-24): "tarik.sansal2 confirmed a
+  // booking time but the requester is still seeing (book a time)".
+  // accept_request_with_time creates a CONFIRMED booking AND writes a
+  // request_responses row with status='offered'. The requester's Inbox read
+  // only ever saw that response row, so a job that was already booked still
+  // rendered as an open offer with a live "Book a free time →" CTA —
+  // and tapping it minted a SECOND booking (createBooking has no dedupe).
+  // Attach the live booking to each response so the UI can render the
+  // booked state instead of the offer state. bookings carries no
+  // request_id column in any committed migration (see SPEC-247), so the
+  // link is (consumer=me, provider=responder, service=service).
+  const pairs = new Set();
+  for (const r of shaped) {
+    for (const resp of r.responses) {
+      if (resp.responder?.id && resp.service?.id) pairs.add(`${resp.responder.id}|${resp.service.id}`);
+    }
+  }
+  if (pairs.size) {
+    const providerIds = Array.from(new Set(Array.from(pairs).map(k => k.split('|')[0])));
+    const serviceIds  = Array.from(new Set(Array.from(pairs).map(k => k.split('|')[1])));
+    const { data: bks } = await supabase
+      .from('bookings')
+      .select('id, status, scheduled_at, schedule_confirmed_at, provider_id, service_id, total_cents, is_free_for_rainmaker, paid_at, completed_at')
+      .eq('consumer_id', uid)
+      .in('provider_id', providerIds)
+      .in('service_id', serviceIds)
+      .not('status', 'in', '("cancelled","declined","expired")')
+      .order('created_at', { ascending: false });
+    const byPair = new Map();
+    for (const b of bks || []) {
+      const k = `${b.provider_id}|${b.service_id}`;
+      if (!byPair.has(k)) byPair.set(k, b); // newest wins
+    }
+    for (const r of shaped) {
+      for (const resp of r.responses) {
+        if (!resp.responder?.id || !resp.service?.id) continue;
+        resp.booking = byPair.get(`${resp.responder.id}|${resp.service.id}`) || null;
+      }
+    }
+  }
+
+  return { data: shaped, error: null };
+}
+
+/**
+ * CERGIO-GUARD (2026-08-08, FW-24): is there already a live booking between
+ * me (consumer) and this provider+service? Used as the last wall before
+ * booking off an offer the provider already confirmed — createBooking has no
+ * dedupe of its own, so without this a second tap mints a duplicate job.
+ */
+export async function findActiveBookingFor({ providerId, serviceId } = {}) {
+  if (!supabaseReady) return { data: null, error: null };
+  if (!providerId || !serviceId) return { data: null, error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, status, scheduled_at, schedule_confirmed_at')
+    .eq('consumer_id', userRes.user.id)
+    .eq('provider_id', providerId)
+    .eq('service_id', serviceId)
+    .not('status', 'in', '("cancelled","declined","expired","completed")')
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) return { data: null, error };
+  return { data: (data || [])[0] || null, error: null };
 }
 
 // ─── Spotlight requests (v10) ───────────────────────────────────────────────
