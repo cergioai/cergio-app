@@ -293,7 +293,21 @@ function Layout() {
     if (provider.isFree) {
       const { getOutstandingFreeBarter } = await import('./lib/api');
       const { outstanding } = await getOutstandingFreeBarter();
-      if (outstanding) {
+      // CERGIO-GUARD (2026-08-08, Tarik — FW-24): the gate must only fire on a
+      // barter that is actually OWED. It used to fire on ANY free booking in
+      // confirmed/in_progress/completed with no post_confirmed_at — so the
+      // instant a provider confirmed a time, the requester was told to "finish
+      // your last barter first" for a job that HASN'T HAPPENED YET, with no
+      // way to comply and no other open job. Owed means: the service happened
+      // (provider marked complete OR the time passed) and they haven't taken
+      // their turn (rated/posted) — the same test BarterPostGate blocks on —
+      // or they've posted and the provider hasn't accepted it yet.
+      const owed = !!outstanding && (
+        outstanding.posted_at
+          ? !outstanding.post_confirmed_at
+          : (outstanding.serviceHappened && !outstanding.reviewed)
+      );
+      if (owed) {
         const svcTitle = outstanding.service?.title || 'your last free service';
         showToast(
           outstanding.posted_at
@@ -301,6 +315,23 @@ function Layout() {
             : `Finish your last barter first: post your IG spotlight for ${svcTitle} (Inbox → Upcoming), then book more free services.`,
           { sticky: true },
         );
+        return;
+      }
+    }
+
+    // CERGIO-GUARD (2026-08-08, Tarik — FW-24): booking off an offer the
+    // provider already accepted-with-time must NEVER mint a second job.
+    // createBooking has no dedupe; the offer CTA stayed live because the
+    // Inbox never joined bookings. Send them to the job they already have.
+    if (provider.preConfirmed && provider.id && provider.ownerId) {
+      const { findActiveBookingFor } = await import('./lib/api');
+      const { data: existing } = await findActiveBookingFor({
+        providerId: provider.ownerId,
+        serviceId:  provider.id,
+      });
+      if (existing?.id) {
+        showToast('This job is already booked — here are the details.');
+        navigate('/job', { state: { bookingId: existing.id } });
         return;
       }
     }

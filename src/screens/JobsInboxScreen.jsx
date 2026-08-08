@@ -165,6 +165,16 @@ function timeAgo(iso) {
   try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return ''; }
 }
 
+// FW-24 (Tarik 2026-08-08): absolute "when" for a CONFIRMED booking —
+// "Tue, Aug 12 — 2:00 PM". A booked job shows the time it will happen, never
+// a relative "3h ago" (that's the offer's age, not the appointment).
+function whenLabel(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+}
+
 // CERGIO-GUARD (2026-06-18, Tarik): every action row must ALSO be viewable —
 // "given a button to accept but no way to view!! this has regressed". The body
 // (headline + sub) is now a tappable button that opens the item's detail
@@ -404,7 +414,8 @@ export function JobsInboxScreen() {
     (inbound || []).length +
     openQuestions.length +
     disputes.length +
-    myAnswered.reduce((n, r) => n + (r.responses || []).length, 0);
+    // FW-24: booked offers aren't pending actions — don't badge them.
+    myAnswered.reduce((n, r) => n + (r.responses || []).filter(resp => !resp.booking).length, 0);
 
   async function handleInboundResponse(req, status) {
     if (!req.my_service_id) {
@@ -733,7 +744,11 @@ export function JobsInboxScreen() {
           });
 
           // 6. Consumer: a provider accepted your request — book a time (lead $ when offered).
-          myAnswered.forEach(r => (r.responses || []).forEach(resp => items.push({
+          // FW-24 (Tarik 2026-08-08): a response whose booking already exists is
+          // NOT an open offer — "book a time" on an already-confirmed job is the
+          // exact double-booking trap. Those surface via #7 (recently confirmed)
+          // and Upcoming instead.
+          myAnswered.forEach(r => (r.responses || []).filter(resp => !resp.booking).forEach(resp => items.push({
             key: 'offer-' + resp.id, tone: 'plain', money: !!resp.offered_price_cents,
             headline: resp.offered_price_cents
               ? `${usd(resp.offered_price_cents)} · ${resp.service?.title || r.service_type || 'service'}`
@@ -936,12 +951,17 @@ export function JobsInboxScreen() {
                     const name  = resp.responder?.display_name || 'A provider';
                     const price = resp.offered_price_cents;
                     const priceLabel = price != null ? ` — $${(price / 100).toFixed(0)}` : '';
+                    // FW-24 (Tarik 2026-08-08): the provider already confirmed a
+                    // time — this row is a BOOKED JOB, not an open offer.
+                    const bk = resp.booking || null;
+                    const bkWhen = bk?.scheduled_at ? whenLabel(bk.scheduled_at) : '';
                     const line =
+                      bk                          ? `${name} confirmed your time ✓` :
                       resp.status === 'accepted'  ? `${name} is confirmed ✓` :
                       resp.status === 'countered' ? `${name} countered${priceLabel}` :
                       `${name} accepted your request${priceLabel}`;
                     const target = resp.responder?.id || null;
-                    const canBook = !!(resp.service?.id && resp.responder?.id) && handleBook;
+                    const canBook = !bk && !!(resp.service?.id && resp.responder?.id) && handleBook;
                     return (
                       <div key={resp.id} className="bg-gl rounded-[14px] px-3 py-2.5">
                         <button
@@ -967,6 +987,13 @@ export function JobsInboxScreen() {
                                 {resp.service.title}
                               </p>
                             )}
+                            {/* FW-24: the agreed time, on the card, so the
+                                requester never has to hunt for what was booked. */}
+                            {bkWhen && (
+                              <p className="text-meta-sm text-black font-extrabold leading-snug mt-0.5">
+                                {bkWhen}
+                              </p>
+                            )}
                             {target && (
                               <p className="text-meta-sm text-g font-extrabold mt-0.5">
                                 View profile →
@@ -975,6 +1002,23 @@ export function JobsInboxScreen() {
                           </div>
                           <span className="text-b3 text-base flex-shrink-0">›</span>
                         </button>
+                        {/* FW-24 (Tarik 2026-08-08): once the provider has
+                            confirmed a time there is nothing left to book —
+                            the CTA opens the JOB (time, place, request,
+                            reschedule), not the service profile. */}
+                        {bk && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/job', { state: {
+                              bookingId:       bk.id,
+                              requestText:     myReq.description || '',
+                              requestLocation: myReq.location_text || '',
+                            } })}
+                            className="w-full mt-2 bg-g text-white rounded-[12px] py-2 text-meta font-extrabold cg-cta active:scale-[.98] transition-all"
+                          >
+                            View booking →
+                          </button>
+                        )}
                         {/* Book a time — turns the offer into a scheduled booking,
                             which kicks off the barter (service → IG post → confirm).
                             Tarik 2026-06-15: closes the end-to-end loop. */}
