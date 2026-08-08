@@ -1496,6 +1496,27 @@ export function HomeScreen() {
             <p className="text-meta-sm text-b3 text-center mt-1 leading-snug">
               Free services for creators · Free IG spotlights for providers
             </p>
+            {/* SPEC-279 (founder 2026-08-08): the OPEN BOARD — every open
+                request plus everyone who opted in as flexible, in one feed.
+                It sits under /free because the two are the same offer seen
+                from opposite ends: /free is who is available, the board is
+                what is being asked for. */}
+            <button
+              type="button"
+              onClick={() => navigate('/board')}
+              className="w-full flex items-center justify-center gap-2 border-t border-line pt-3 mt-3 group"
+            >
+              <span className="bg-gl text-gd text-meta-sm font-extrabold px-2 py-0.5 rounded-pill leading-none">OPEN</span>
+              <span className="text-body-sm font-extrabold text-black group-hover:text-gd transition-colors">
+                Browse the open board near you
+              </span>
+              <svg width="7" height="12" viewBox="0 0 11 18" fill="none" className="flex-shrink-0 text-black/40">
+                <path d="M1.5 1.5L9 9l-7.5 7.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <p className="text-meta-sm text-b3 text-center mt-1 leading-snug">
+              Open jobs · people up for a barter · post your own
+            </p>
           </div>
         </>
       )}

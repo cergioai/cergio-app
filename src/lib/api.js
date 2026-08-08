@@ -2736,6 +2736,263 @@ export async function findActiveBookingFor({ providerId, serviceId } = {}) {
   return { data: (data || [])[0] || null, error: null };
 }
 
+// ─── SPEC-279 — THE OPEN BOARD ──────────────────────────────────────────────
+// Founder, 2026-08-08: publish OPEN requests from users AND creators for
+// everyone to browse, combined with the "I'm open to barter" opt-ins, filterable
+// by type and scoped to what's around you. A provider ACCEPTS a specific job
+// with one tap — and that acceptance is an OFFER, never a booking: "the booking
+// isn't confirmed until the user actually books".
+
+/** Great-circle miles between two coords. Null when either side has none —
+ *  a post with no coordinates is "anywhere", never silently "0 miles away". */
+export function milesBetween(aLat, aLng, bLat, bLng) {
+  if ([aLat, aLng, bLat, bLng].some(v => v === null || v === undefined || Number.isNaN(+v))) return null;
+  const R = 3958.7613;
+  const toRad = d => (+d) * Math.PI / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+/**
+ * The board feed: every OPEN post anyone can act on.
+ *
+ * `.is('target_provider_id', null)` is the privacy line. RLS already lets any
+ * signed-in user read every pending request (policy "providers read open",
+ * 20260613000000), so a targeted quote — "I want a price from THIS provider" —
+ * would otherwise be browsable by the whole market the moment we shipped a
+ * browse screen. The board publishes posts that were MEANT to be public.
+ *
+ * Distance is computed here, not in SQL: requests carry lat/lng but there is no
+ * requests_near RPC, and a client-side haversine over a bounded page is exact
+ * and needs no migration. Posts with no coordinates are kept and marked
+ * distance:null ("anywhere") — dropping them would silently hide every post
+ * whose address never geocoded (the SPEC-133 class).
+ */
+export async function listOpenBoard({
+  kind = 'all',            // 'all' | 'job' | 'optin'
+  type = null,             // service_type / category filter (case-insensitive)
+  q = null,                // free-text search
+  near = null,             // { lat, lng } — the viewer's location
+  radiusMiles = null,      // null = anywhere
+  windowDays = 30,
+  limit = 200,
+} = {}) {
+  if (!supabaseReady) return { data: [], error: null };
+  const { data: userRes } = await supabase.auth.getUser();
+  const me = userRes?.user?.id || null;
+
+  let sel = supabase
+    .from('requests')
+    .select(`
+      id, kind, poster_role, service_type, category, description, what, when_text,
+      location_text, lat, lng, budget_cents, is_free_for_rainmaker, status, created_at,
+      requester:profiles ( id, display_name, avatar_url, cc_verified_at )
+    `)
+    .eq('status', 'pending')
+    .is('target_provider_id', null)
+    .gte('created_at', new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (kind === 'job' || kind === 'optin') sel = sel.eq('kind', kind);
+
+  const { data, error } = await sel;
+  if (error) return { data: [], error };
+
+  const needle = (q || '').trim().toLowerCase();
+  const wanted = (type || '').trim().toLowerCase();
+
+  const rows = (data || [])
+    // Your own post is not an opportunity — it's already in your inbox.
+    .filter(r => !me || r.requester?.id !== me)
+    .filter(r => {
+      if (!wanted) return true;
+      return [r.service_type, r.category, r.what].some(v => (v || '').toLowerCase() === wanted);
+    })
+    .filter(r => {
+      if (!needle) return true;
+      return [r.what, r.service_type, r.category, r.description, r.location_text, r.requester?.display_name]
+        .some(v => (v || '').toLowerCase().includes(needle));
+    })
+    .map(r => ({
+      ...r,
+      distanceMiles: milesBetween(near?.lat, near?.lng, r.lat, r.lng),
+    }))
+    .filter(r => {
+      if (!radiusMiles) return true;
+      if (r.distanceMiles === null) return true; // "anywhere" posts always ride along
+      return r.distanceMiles <= radiusMiles;
+    });
+
+  // Nearest first when we know where the viewer is; unknown-distance posts sink
+  // below the located ones but keep their recency order among themselves.
+  rows.sort((a, b) => {
+    const ad = a.distanceMiles, bd = b.distanceMiles;
+    if (ad !== null && bd !== null && ad !== bd) return ad - bd;
+    if (ad !== null && bd === null) return -1;
+    if (ad === null && bd !== null) return 1;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+
+  // The type chips are built from what the board ACTUALLY holds, so a filter can
+  // never offer a type that returns nothing.
+  const types = Array.from(new Set(
+    (data || []).filter(r => r.kind !== 'optin')
+      .map(r => (r.what || r.service_type || r.category || '').trim())
+      .filter(Boolean),
+  )).sort((a, b) => a.localeCompare(b));
+
+  return { data: rows, types, error: null };
+}
+
+/** Post "I'm open to barter" — the FLEXIBLE card on the board. */
+export async function postFlexibleOptIn({
+  role = null,             // 'service' | 'creator'
+  note = '',
+  whereText = '',
+  lat = null, lng = null,
+} = {}) {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes?.user?.id) return { data: null, error: { message: 'Sign in to join the barter.' } };
+  const uid = userRes.user.id;
+
+  // One live opt-in per person. Re-opting-in REFRESHES the existing card
+  // instead of stacking duplicates down the board.
+  const { data: existing } = await supabase
+    .from('requests')
+    .select('id')
+    .eq('requester_id', uid)
+    .eq('kind', 'optin')
+    .eq('status', 'pending')
+    .limit(1);
+
+  const payload = {
+    // service_type is NOT NULL in the base schema; 'flexible' is also what keeps
+    // an opt-in OUT of every provider's taxonomy-matched inbox (listInboundRequests
+    // matches on service_type/category) — a "I'm open" card must be browsed, not
+    // pushed at every provider in the category.
+    service_type:  'flexible',
+    description:   (note || '').slice(0, 500),
+    query:         (note || '').slice(0, 500),
+    location_text: whereText || null,
+    lat: lat ?? null,
+    lng: lng ?? null,
+    status:        'pending',
+    kind:          'optin',
+    poster_role:   (role === 'service' || role === 'creator') ? role : null,
+  };
+
+  if (existing && existing.length) {
+    return await supabase
+      .from('requests')
+      .update(payload)
+      .eq('id', existing[0].id)
+      .select()
+      .maybeSingle();
+  }
+  return await supabase
+    .from('requests')
+    .insert({ requester_id: uid, ...payload })
+    .select()
+    .maybeSingle();
+}
+
+/** A person's LISTED services — used by the suggest sheet, which must be able to
+ *  show the OTHER party's services (a creator suggesting what they'd like), not
+ *  only your own (a provider offering what they'd give). */
+export async function listOwnerServices(ownerId) {
+  if (!supabaseReady) return { data: [], error: null };
+  if (!ownerId) return { data: [], error: null };
+  return await supabase
+    .from('services')
+    .select('id, title, headline, category, taxonomy_provider_type, location_text, owner_id')
+    .eq('owner_id', ownerId)
+    .eq('status', 'listed')
+    .order('created_at', { ascending: false })
+    .limit(25);
+}
+
+/**
+ * Provider taps ACCEPT on a specific open job.
+ *
+ * THIS WRITES AN OFFER, NOT A BOOKING — founder, verbatim: "services can accept
+ * specific jobs .. by clicking accept.. (but the booking isn't confirmed until
+ * the user actually books". The other accept path, accept_request_with_time,
+ * mints a CONFIRMED booking; using it here would confirm a job the requester
+ * never agreed to and would re-create the FW-24 defect from the other end.
+ */
+export async function acceptOpenJob({ requestId, serviceId, message = null, offeredPriceCents = null } = {}) {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+  if (!requestId)  return { data: null, error: { message: 'requestId required' } };
+  if (!serviceId)  return { data: null, error: { message: 'Pick which of your services you are accepting with.' } };
+  return await respondToRequest(requestId, {
+    status: 'offered',
+    serviceId,
+    message,
+    offeredPriceCents,
+  });
+}
+
+/**
+ * Suggest a service against a FLEXIBLE opt-in. Two directions, one entry point,
+ * chosen by WHO OWNS the suggested service — the founder named both:
+ * "so a creator can suggest a service to a service provider and a service
+ *  provider can suggest a service to a creator for the barter".
+ *
+ *  - the service belongs to the POSTER  → I am ASKING them for it. That is a
+ *    request aimed at them, so it lands in their inbound queue like any other
+ *    request and they accept it there.
+ *  - the service belongs to ME          → I am OFFERING it. That is an offer on
+ *    their opt-in, so it lands under their own post in Inbox → Requests.
+ *
+ * Both directions end the same way: the OTHER party books. Nothing here
+ * confirms anything.
+ */
+export async function suggestServiceOnOptIn({
+  optInId,
+  posterId,
+  service,                 // { id, owner_id, title, category, taxonomy_provider_type }
+  message = '',
+  whereText = '',
+  lat = null, lng = null,
+} = {}) {
+  if (!supabaseReady) return { data: null, error: NOT_WIRED.error };
+  if (!optInId || !posterId || !service?.id) {
+    return { data: null, error: { message: 'Pick a service to suggest.' } };
+  }
+  const { data: userRes } = await supabase.auth.getUser();
+  const me = userRes?.user?.id;
+  if (!me) return { data: null, error: { message: 'Sign in to suggest a service.' } };
+  if (posterId === me) return { data: null, error: { message: 'That is your own post.' } };
+
+  if (service.owner_id === posterId) {
+    // ASKING them for their service → a targeted request.
+    const { request, error } = await createRequestAndFanOut({
+      query:         (message || `Interested in ${service.title || 'this service'} for the barter.`).slice(0, 500),
+      provider_type: service.taxonomy_provider_type || null,
+      category:      service.category || null,
+      what:          service.title || null,
+      where_text:    whereText || null,
+      lat, lng,
+      targetProviderId: posterId,
+    });
+    if (error) return { data: null, error };
+    return { data: request, direction: 'asked', error: null };
+  }
+
+  // OFFERING my service → an offer on their opt-in.
+  const res = await respondToRequest(optInId, {
+    status:  'offered',
+    serviceId: service.id,
+    message: (message || `I can do ${service.title || 'this'} for the barter.`).slice(0, 1000),
+  });
+  if (res.error) return { data: null, error: res.error };
+  return { data: res.data, direction: 'offered', error: null };
+}
+
 // ─── Spotlight requests (v10) ───────────────────────────────────────────────
 // Provider asks Connector for an IG/TT spotlight. Connector can counter at
 // a lower price. RLS scopes reads to the two parties on the row.
@@ -3581,6 +3838,12 @@ export async function createRequestAndFanOut({
   // provider. When set, the request is written with target_provider_id and the
   // fan-out goes to that one provider only.
   targetProviderId = null,
+  // SPEC-279 (founder 2026-08-08): the OPEN BOARD. 'job' is a specific request
+  // ("need a driver Tuesday"); 'optin' is "I'm open to barter" with nothing
+  // specific yet, rendered FLEXIBLE on the board. Defaults keep every existing
+  // caller writing exactly the row it wrote before.
+  kind = 'job',
+  posterRole = null,
 } = {}) {
   if (!supabaseReady) return { request: null, notified: 0, error: NOT_WIRED.error };
   const { data: userRes } = await supabase.auth.getUser();
@@ -3686,6 +3949,9 @@ export async function createRequestAndFanOut({
       budget_cents:  (typeof budget_cents === 'number') ? budget_cents : null,
       // SPEC-136: a custom quote aimed at ONE provider (from that provider's page)
       target_provider_id: targetProviderId || null,
+      // SPEC-279 open board (20260808160000)
+      kind:        kind === 'optin' ? 'optin' : 'job',
+      poster_role: (posterRole === 'service' || posterRole === 'creator') ? posterRole : null,
     })
     .select()
     .single();

@@ -62,7 +62,19 @@ export function AuthScreen() {
   // right back to finish booking after sign-in (never a dead-end). Defaults
   // to /home. Only same-origin internal paths are honored.
   const returnToRaw = new URLSearchParams(location.search).get('returnTo') || '';
-  const returnTo = /^\/[a-zA-Z0-9/_-]+$/.test(returnToRaw) ? returnToRaw : '/home';
+  // SPEC-279 (founder 2026-08-08): the barter OPT-IN link. outreach-optin
+  // redirects here as /auth?src=soft_launch&role=<connector|service>&optin=1
+  // after flipping the lead to opted_in — and /auth read NONE of those params,
+  // so every recipient who said yes landed on /home with no next step and no
+  // trace of which side of the barter they were. The role now rides through to
+  // /join, which is the "Optin and Post a request" screen the founder asked for.
+  const optInParam = new URLSearchParams(location.search).get('optin') === '1';
+  const roleParam  = new URLSearchParams(location.search).get('role') || '';
+  const roleSafe   = /^[a-z]+$/.test(roleParam) ? roleParam : '';
+  const optInDest  = `/join${roleSafe ? `?role=${roleSafe}` : ''}`;
+  const returnTo = /^\/[a-zA-Z0-9/_-]+$/.test(returnToRaw)
+    ? returnToRaw
+    : (optInParam ? optInDest : '/home');
 
   // CERGIO-GUARD (2026-08-01, SPEC-152, Tarik live): "I clicked on claim founding
   // spot… kept on being asked to relogin". /auth honoured ?returnTo= but had NO
