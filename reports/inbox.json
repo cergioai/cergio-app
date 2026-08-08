@@ -1,0 +1,26 @@
+{
+ "id": "inbox",
+ "title": "Jobs inbox — one truthful card per event",
+ "priority": 3,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-08T18:24:36.766Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 511 of 520 repo files",
+ "gates": [
+  {
+   "id": "#154",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 268,
+  "fail": 0
+ },
+ "defects": [
+  "FW-1 FIXED IN CODE 2026-08-04: Home now has a persistent 'Your requests & replies' entry (signed-in) straight to /inbox?tab=Requests, and the inbox honors the tab deep-link. Verify live, then close.",
+  "FW-1 FIXED IN CODE 2026-08-04: Home now has a persistent 'Your requests & replies' entry (signed-in) straight to /inbox?tab=Requests, and the inbox honors the tab deep-link. Verify live, then close.",
+  "FW-1 FIXED IN CODE 2026-08-04: Home now has a persistent 'Your requests & replies' entry (signed-in) straight to /inbox?tab=Requests, and the inbox honors the tab deep-link. Verify live, then close.",
+  "FW-16 FIXED IN CODE 2026-08-05: inbox request-match now uses the fan-out's bridge UNION (both request columns vs taxonomy∪category expanded sets) — a notified provider can never have the request hidden from his inbox again. Verify live: pending Driver request must appear for the driver account."
+ ],
+ "green_when": "every inbox row maps 1:1 to a distinct live DB row, every row carries a timestamp, and the founder can find any request + its replies in one place"
+}

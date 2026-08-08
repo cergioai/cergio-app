@@ -1,0 +1,24 @@
+{
+ "id": "profile-ux",
+ "title": "Profiles + service pages say WHO they are",
+ "priority": 3,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-08T18:24:36.271Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 510 of 520 repo files",
+ "gates": [
+  {
+   "id": "#211",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 268,
+  "fail": 0
+ },
+ "defects": [
+  "FW-4 FIXED IN CODE 2026-08-04: own-profile name now sources profiles.display_name first (auth metadata / email local-part as fallbacks) — the screen read only auth user_metadata, which is unset for accounts whose name lives in the profiles row. The 'provider profile shows requester name' half was already proven DATA-CONSISTENT. Verify live, then close.",
+  "FW-7 FIXED IN CODE 2026-08-04: reply/counter context now travels to the service page — CTA reads 'Book · $X' at the reply's exact price (SPEC-211 seen==charged) wired to the same preConfirmed booking action as the reply card; direct visits unchanged. Verify live, then close."
+ ],
+ "green_when": "every profile surface names its owner correctly and a countered price follows the user onto the service page"
+}

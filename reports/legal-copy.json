@@ -1,0 +1,23 @@
+{
+ "id": "legal-copy",
+ "title": "Securities language",
+ "priority": 9,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-08T18:24:36.378Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 425 of 520 repo files",
+ "gates": [
+  {
+   "id": "#170",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 268,
+  "fail": 0
+ },
+ "defects": [
+  "/rainmaker/apply carries securities-PARAPHRASE copy that gate #170 is blind to — it bans 5 exact phrasings, not the risk"
+ ],
+ "green_when": "legal review clears the copy, or it is de-securitised and the paraphrases are added to the gate"
+}

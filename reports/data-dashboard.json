@@ -1,0 +1,27 @@
+{
+ "id": "data-dashboard",
+ "title": "/ops/data — every dataset live + downloadable",
+ "priority": 6,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-08T18:24:37.145Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 510 of 520 repo files",
+ "gates": [
+  {
+   "id": "#203",
+   "state": "PASS"
+  },
+  {
+   "id": "#210",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 268,
+  "fail": 0
+ },
+ "defects": [
+  "screen counts have never been reconciled against a direct REST count"
+ ],
+ "green_when": "the screen total equals a direct count for the same filter"
+}
