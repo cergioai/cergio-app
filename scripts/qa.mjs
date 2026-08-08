@@ -7998,6 +7998,77 @@ test('booked-offer-not-bookable', 'FW-24 (founder live repro 2026-08-08, verbati
     '"Mark service complete" must stay provider-only — the consumer must never be able to close out the provider\'s job from this screen');
 });
 
+// ─── INVARIANT: SPEC-279 — the open board is public, filtered, and books nothing ─
+test('open-board-published', 'SPEC-279 / FW-25 (founder 2026-08-08, verbatim: "add option for creator and service who receive a msg to join the barter to Optin and Post a request (eg: need a driver tuesday .. ) ... Publish OPEN requests (both from users and from creators on the site.. for everyone to browse)... add ability to filter by type data ... uses will see posts that are around their location ..combine both feeds (optins from services and creators .. and specific jobs open requests...services can accept specific jobs .. by clicking accept.. (but the booking isn\'t confirmed until the user actually books ...for optin acceptance requests without a specific request posted, show \'flexible\' click to suggest a service (so a creator can suggest a service to a service provider and a service provider can suggst a service to a creator for the bartner..)"). "Combine both feeds" is taken literally: an opt-in and an open job are two KINDS of the same requests row (kind job|optin), so there is ONE query, ONE RLS surface and ONE response inbox — two tables would have needed a merge step that drifts. THREE things this gate refuses to let regress. (1) ACCEPT IS AN OFFER, NEVER A BOOKING — the founder said the booking is not confirmed until the user actually books, and the OTHER accept path (accept_request_with_time) mints a CONFIRMED booking; wiring the board to it would confirm a job the requester never agreed to, which is FW-24 (#278) from the opposite end. (2) THE BOARD EXCLUDES TARGETED REQUESTS — RLS policy "providers read open" (20260613000000) already lets ANY signed-in user read EVERY pending request, so the instant a browse screen existed, a quote aimed at ONE provider became browsable by the whole market. Publishing is a QUERY decision, not a permission change, and `.is(target_provider_id, null)` IS that decision. (3) THE OPT-IN LINK MUST LAND SOMEWHERE — outreach-optin redirects to /auth?src=&role=&optin=1 after flipping the lead to opted_in, and /auth read none of those params, so every recipient who said yes was dropped on /home with no next step and no trace of which side of the barter they were.', '#279', () => {
+  const mig = readFile('supabase/migrations/20260808160000_open_board.sql');
+  assert(/add column if not exists kind\s+text not null default 'job'/.test(mig),
+    'the kind column is gone from the open-board migration — without it an opt-in and a job cannot share one feed');
+  assert(/check \(kind in \('job', 'optin'\)\)/.test(mig),
+    'the kind CHECK is gone — a third undefined kind would render as neither card and act as neither');
+  assert(/poster_role/.test(mig) && /'service', 'creator'/.test(mig),
+    'poster_role is gone — the board cannot say WHICH side of the barter posted, and the badge must mean what it meant at post time');
+  assert(/where status = 'pending' and target_provider_id is null/.test(mig),
+    'the board index no longer matches the board query (pending + untargeted) — the feed table-scans requests as it grows');
+
+  const api = stripComments(readFile('src/lib/api.js'));
+  assert(/export async function listOpenBoard/.test(api),
+    'listOpenBoard is gone — there is no board feed');
+  assert(/\.is\('target_provider_id', null\)/.test(api),
+    'THE PRIVACY LINE IS GONE: the board no longer excludes targeted requests. RLS lets any signed-in user read every pending request, so a quote aimed at ONE provider is now browsable by the whole market');
+  assert(/export async function acceptOpenJob/.test(api),
+    'acceptOpenJob is gone — the board has no accept path');
+  const acceptBody = api.slice(api.indexOf('export async function acceptOpenJob'));
+  const acceptOnly = acceptBody.slice(0, acceptBody.indexOf('export ', 10));
+  assert(/respondToRequest\(requestId, \{\s*status: 'offered'/.test(acceptOnly),
+    'acceptOpenJob no longer writes an OFFER — the founder was explicit that accepting does not confirm anything');
+  assert(!/createBooking|acceptRequestWithTime|accept_request_with_time/.test(acceptOnly),
+    'ACCEPT NOW BOOKS: acceptOpenJob reaches a booking-creating path. "the booking isn\'t confirmed until the user actually books" — a provider tap must never mint the consumer\'s booking');
+  assert(/export async function suggestServiceOnOptIn/.test(api),
+    'suggestServiceOnOptIn is gone — a FLEXIBLE opt-in has no action, which is the one thing the founder specified for it');
+  assert(/service\.owner_id === posterId/.test(api),
+    'the suggest direction is no longer chosen by who OWNS the service — the founder named BOTH directions (creator→provider and provider→creator) and they produce different rows');
+  assert(/export async function postFlexibleOptIn/.test(api),
+    'postFlexibleOptIn is gone — nobody can join the board as flexible');
+  assert(/\.eq\('kind', 'optin'\)[\s\S]{0,200}?\.eq\('status', 'pending'\)/.test(api),
+    'postFlexibleOptIn no longer looks for the existing live opt-in — re-opting in stacks duplicate cards down the board');
+  assert(/export function milesBetween/.test(api),
+    'the distance helper is gone — "uses will see posts that are around their location" has nothing to sort by');
+
+  const board = readFile('src/screens/OpenBoardScreen.jsx');
+  const boardCode = stripComments(board);
+  assert(/FLEXIBLE/.test(board) && /Suggest a service/.test(board),
+    'the FLEXIBLE badge or its "Suggest a service" action is gone from the board — that pair IS the opt-in card the founder specified');
+  assert(/isOpt \?/.test(boardCode) && /setSuggestFor\(row\)/.test(boardCode) && /function SuggestSheet\(\{/.test(boardCode),
+    'the FLEXIBLE card no longer opens the suggest sheet — an opt-in with no way to propose anything is a dead card, and proposing IS the only action it has');
+  assert(/Accepting sends them your offer/.test(board) && /they confirm by booking/.test(board),
+    'the ACCEPT card no longer TELLS the provider that accepting is not a booking — the guarantee has to be visible where the tap happens, not only in the code');
+  assert(/book to confirm the time/.test(board),
+    'the post-accept confirmation no longer says the requester still has to book — a bare "Accepted" reads as "it is booked"');
+  assert(/const KINDS = \[/.test(boardCode) && /const RADII = \[/.test(boardCode),
+    'the kind or radius filters are gone — "filter by type data" and "around their location" were both explicit');
+  assert(/setType\(/.test(boardCode) && /types\.map/.test(boardCode),
+    'the type chips no longer render from the feed\'s own types — a filter list that is not derived from the rows can offer a type that returns nothing');
+
+  const join = stripComments(readFile('src/screens/BarterJoinScreen.jsx'));
+  assert(/chatParse\(/.test(join),
+    'the join screen no longer parses through the REAL chat-parse fn — a local regex is demo scaffolding and must never ship (PR 5 rule)');
+  assert(/kind:\s*'job'/.test(join) && /postFlexibleOptIn\(/.test(join),
+    'the join screen lost one of its two paths — the founder asked for BOTH "Optin" AND "Post a request"');
+
+  // RAW text here on purpose: the destination lives inside a template literal,
+  // which stripComments() blanks (the Part-6 trap).
+  const authRaw = readFile('src/screens/AuthScreen.jsx');
+  const auth = stripComments(authRaw);
+  assert(/get\('optin'\) === '1'/.test(auth) && /optInParam \? optInDest/.test(auth),
+    'THE OPT-IN LINK DEAD-ENDS AGAIN: /auth ignores ?optin=1, so an outreach recipient who says yes lands on /home with no next step');
+  assert(/const optInDest\s*=\s*`\/join/.test(authRaw),
+    'the opt-in destination is no longer /join — the "Optin and Post a request" screen is unreachable from the outreach link');
+
+  const app = stripComments(readFile('src/App.jsx'));
+  assert(/path="\/board"/.test(app) && /path="\/join"/.test(app),
+    'the /board or /join route is gone — the screens exist but nothing can reach them');
+});
+
 main().catch(e => {
   console.error(e);
   process.exit(2);
