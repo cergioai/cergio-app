@@ -50,6 +50,8 @@ import { RequestDetailScreen }    from './screens/RequestDetailScreen';
 import { RequestFromConnectorScreen } from './screens/RequestFromConnectorScreen';
 import { SpotlightRequestScreen } from './screens/SpotlightRequestScreen';
 import { JobDetailsScreen }       from './screens/JobDetailsScreen';
+import { OpenBoardScreen }       from './screens/OpenBoardScreen';
+import { BarterJoinScreen }      from './screens/BarterJoinScreen';
 import { RateConfirmScreen }      from './screens/RateConfirmScreen';
 import { SocialPostsScreen }      from './screens/SocialPostsScreen';
 import { ProfileSharedScreen }    from './screens/ProfileSharedScreen';
@@ -556,6 +558,10 @@ export default function App() {
               rate card. Phase 2 will add request + counter-offer flow. */}
           <Route path="/connectors/browse" element={<BrowseConnectorsScreen />} />
           <Route path="/free" element={<FreeBarterLandingScreen />} />
+          {/* SPEC-279 — the open board + the opt-in landing an outreach
+              recipient reaches after saying yes. */}
+          <Route path="/board" element={<OpenBoardScreen />} />
+          <Route path="/join"  element={<BarterJoinScreen />} />
           <Route path="/early" element={<EarlyOffersScreen />} />
           {/* Two-tab inbox for spotlight requests — inbound for Connectors,
               outbound for providers. Counter-offer modal lives inside. */}
