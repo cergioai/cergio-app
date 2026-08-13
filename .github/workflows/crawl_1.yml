@@ -6,6 +6,9 @@ on:
       cities:
         description: "NYC, MIA, or NYC,MIA"
         default: "NYC,MIA"
+      sources:
+        description: "ig, realestate, localbiz (comma separated)"
+        default: "ig,realestate,localbiz"
       target:
         description: "leads to aim for"
         default: "15000"
@@ -47,6 +50,7 @@ jobs:
           cd tools/crawl
           python3 overnight.py \
             --cities "${{ inputs.cities || 'NYC,MIA' }}" \
+            --sources "${{ inputs.sources || 'ig,realestate,localbiz' }}" \
             --target "${{ inputs.target || '15000' }}" \
             --hours "${{ inputs.hours || '0.8' }}" \
             --workers 8
@@ -63,11 +67,35 @@ jobs:
           python3 cergio_pipeline.py followers
           python3 extract.py
 
+      # THE GATE. Never add continue-on-error here.
       - name: Quality gate
         run: cd tools/crawl && python3 qa.py
 
-      - name: Spreadsheet
-        run: cd tools/crawl && python3 build_xlsx.py
+      - name: Build spreadsheet and dashboard
+        run: |
+          cd tools/crawl
+          python3 build_xlsx.py
+          python3 build_dashboard.py
+
+      # Puts the dashboard, the CSV and a small status file into public/,
+      # which Vercel serves. This is what makes the run visible without
+      # opening the Actions tab.
+      - name: Publish to the site
+        run: cd tools/crawl && python3 publish.py
+
+      - name: Commit the published files
+        run: |
+          git config user.name  "cergio-crawler"
+          git config user.email "crawler@cergio.ai"
+          git add public/leads.html public/leads.csv public/crawl-status.json
+          git diff --staged --quiet && echo "no change" && exit 0
+          # [skip ci] matters: without it every hourly publish retriggers your
+          # full CI — build-and-qa, e2e, autonomous-build — 24 times a day for a
+          # commit that only touches three static files. Vercel still deploys,
+          # because Vercel has its own trigger and does not honour skip-ci.
+          git commit -m "crawl: run ${{ github.run_number }} — published leads [skip ci]"
+          git pull --rebase --autostash origin main || true
+          git push || echo "push blocked — artifact still available below"
 
       - uses: actions/cache/save@v4
         if: always()
@@ -81,3 +109,21 @@ jobs:
         if: always()
         with:
           name: leads-${{ github.run_number }}
+          path: |
+            tools/crawl/out/*.xlsx
+            tools/crawl/out/cergio-dashboard.html
+
+      - name: Summary
+        if: always()
+        run: |
+          cd tools/crawl
+          python3 -c "
+import json,os
+p='../../public/crawl-status.json'
+if os.path.exists(p):
+    s=json.load(open(p)); t=s['totals']
+    print(f\"## {t['crawled']} crawled · {t['contactable']} contactable\")
+    print(f\"- {t['with_email']} email · {t['with_phone']} phone · {t['with_instagram']} on Instagram\")
+    for k,v in s['by_source'].items():
+        print(f\"- **{k}**: {v['total']} ({v['contactable']} contactable)\")
+" >> $GITHUB_STEP_SUMMARY
