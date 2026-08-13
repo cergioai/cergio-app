@@ -1,0 +1,146 @@
+# CERGIO — unattended crawl on GitHub's servers. No laptop required.
+#
+# INSTALL (10 minutes, once):
+#   1. Copy this file to  .github/workflows/crawl.yml  in cergioai/cergio-app
+#   2. Repo -> Settings -> Secrets and variables -> Actions -> New secret:
+#        SERPAPI_KEY         (your SerpApi key)
+#        BRIGHTDATA_API_KEY  (your Bright Data token)
+#   3. Copy tools/crawl/*.py from the Mac bundle into the repo at tools/crawl/
+#   4. Actions tab -> "Cergio crawl" -> Run workflow
+#
+# It then runs itself every 6 hours, resuming where it left off. Each run
+# commits the leads it found, so progress is visible in the repo and nothing
+# is lost between runs.
+
+name: Cergio crawl
+
+on:
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "NYC, MIA, or NYC,MIA"
+        default: "NYC,MIA"
+      target:
+        description: "usable leads to aim for"
+        default: "15000"
+      max_searches:
+        description: "hard cap on paid SerpApi calls per run — protects the bill"
+        default: "600"
+  schedule:
+    - cron: "0 */6 * * *"
+
+# Never let two runs fight over the same data branch.
+concurrency:
+  group: cergio-crawl
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340        # GitHub hard-stops at 360; stop before that
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the one dependency
+        run: pip install --quiet openpyxl
+
+      # Previously crawled pages live in a cache, not in git — 100k pages would
+      # bloat the repo. The cache is what makes each run resume instead of
+      # starting over.
+      - name: Restore crawled pages
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            tools/crawl/raw
+            tools/crawl/candidates
+          key: cergio-crawl-${{ github.run_id }}
+          restore-keys: cergio-crawl-
+
+      - name: Find businesses and read their websites
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: |
+          cd tools/crawl
+          python3 overnight.py \
+            --city "${{ github.event.inputs.city || 'NYC,MIA' }}" \
+            --target "${{ github.event.inputs.target || '15000' }}" \
+            --max-searches "${{ github.event.inputs.max_searches || '600' }}" \
+            --hours 5.2 \
+            --workers 8
+
+      - name: Fill in Instagram follower counts
+        env:
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+        continue-on-error: true      # counts stay blank rather than guessed
+        run: |
+          cd tools/crawl
+          python3 extract.py || true
+          python3 cergio_pipeline.py followers || true
+
+      - name: Turn stored pages into leads
+        run: cd tools/crawl && python3 extract.py
+
+      # THE GATE. If a value was produced that no page contained, this fails
+      # and nothing gets committed. Do not add continue-on-error here.
+      - name: Quality gate
+        run: cd tools/crawl && python3 qa.py
+
+      - name: Build the spreadsheet
+        run: cd tools/crawl && python3 build_xlsx.py
+
+      - name: Save crawled pages for the next run
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            tools/crawl/raw
+            tools/crawl/candidates
+          key: cergio-crawl-${{ github.run_id }}
+
+      - name: Publish the results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cergio-leads-${{ github.run_number }}
+          path: |
+            tools/crawl/out/*.xlsx
+            tools/crawl/out/*.csv
+          retention-days: 90
+
+      - name: Commit the leads so they are visible in the repo
+        run: |
+          cd tools/crawl
+          git config user.name  "cergio-crawler"
+          git config user.email "crawler@cergio.ai"
+          mkdir -p ../../crawl-results
+          cp out/*.xlsx ../../crawl-results/ 2>/dev/null || true
+          cp out/*.csv  ../../crawl-results/ 2>/dev/null || true
+          cd ../..
+          git add crawl-results || true
+          git commit -m "crawl: results from run ${{ github.run_number }}" || echo "nothing new"
+          git push || echo "push skipped"
+
+      - name: Summary
+        if: always()
+        run: |
+          cd tools/crawl
+          python3 - <<'PY'
+          import json, os
+          p = "out/records.json"
+          if os.path.exists(p):
+              r = json.load(open(p))
+              c = [x for x in r if x["audience"] == "creator"]
+              big = [x for x in c if (x.get("followers") or 0) >= 2500]
+              print(f"### {len(r)} usable leads")
+              print(f"- {len(c)} creators, {len(big)} above 2,500 followers")
+              print(f"- {len(r)-len(c)} service providers")
+              print(f"- {sum(1 for x in r if x['email'])} with email, "
+                    f"{sum(1 for x in r if x['phone'])} with phone")
+          PY
