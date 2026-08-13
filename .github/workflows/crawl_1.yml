@@ -11,7 +11,9 @@ on:
         default: "15000"
       hours:
         description: "how long to run"
-        default: "5.2"
+        default: "0.8"
+  schedule:
+    - cron: "0 * * * *"
 
 concurrency:
   group: cergio-crawl
@@ -22,7 +24,7 @@ permissions:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 340
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,14 +46,15 @@ jobs:
         run: |
           cd tools/crawl
           python3 overnight.py \
-            --cities "${{ inputs.cities }}" \
-            --target "${{ inputs.target }}" \
-            --hours "${{ inputs.hours }}" \
+            --cities "${{ inputs.cities || 'NYC,MIA' }}" \
+            --target "${{ inputs.target || '15000' }}" \
+            --hours "${{ inputs.hours || '0.8' }}" \
             --workers 8
 
       - name: Extract
         run: cd tools/crawl && python3 extract.py
-        - name: Follower counts
+
+      - name: Follower counts
         env:
           BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
         continue-on-error: true
@@ -78,4 +81,3 @@ jobs:
         if: always()
         with:
           name: leads-${{ github.run_number }}
-          path: tools/crawl/out/*.xlsx
