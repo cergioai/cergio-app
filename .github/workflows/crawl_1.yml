@@ -3,57 +3,92 @@ name: Cergio crawl
 on:
   workflow_dispatch:
     inputs:
-      cities:
-        description: "NYC, MIA, or NYC,MIA"
-        default: "NYC,MIA"
       sources:
-        description: "ig, realestate, localbiz (comma separated)"
+        description: "ig, realestate, localbiz"
         default: "ig,realestate,localbiz"
-      target:
-        description: "leads to aim for"
-        default: "15000"
-      hours:
-        description: "how long to run"
-        default: "0.8"
+      shards:
+        description: "parallel jobs (max 20)"
+        default: "14"
   schedule:
     - cron: "0 * * * *"
-
-concurrency:
-  group: cergio-crawl
 
 permissions:
   contents: write
 
 jobs:
+  # ---------------------------------------------------------------- CRAWL --
+  # 14 jobs in parallel, each taking every 14th neighbourhood. Same grid,
+  # a fourteenth of the wall clock, and no two shards touch the same business.
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install --quiet openpyxl
+        with: { python-version: "3.12" }
 
       - uses: actions/cache/restore@v4
         with:
           path: |
             tools/crawl/raw
             tools/crawl/candidates
-          key: cergio-${{ github.run_id }}
-          restore-keys: cergio-
+          key: shard-${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: shard-${{ matrix.shard }}-
 
-      - name: Crawl
+      - name: Crawl shard ${{ matrix.shard }}
         env:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
         run: |
           cd tools/crawl
           python3 overnight.py \
-            --cities "${{ inputs.cities || 'NYC,MIA' }}" \
+            --cities NYC,MIA \
             --sources "${{ inputs.sources || 'ig,realestate,localbiz' }}" \
-            --target "${{ inputs.target || '15000' }}" \
-            --hours "${{ inputs.hours || '0.8' }}" \
-            --workers 8
+            --shard ${{ matrix.shard }} --of 14 \
+            --target 15000 --hours 0.7 --workers 24
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            tools/crawl/raw
+            tools/crawl/candidates
+          key: shard-${{ matrix.shard }}-${{ github.run_id }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shard-${{ matrix.shard }}
+          path: |
+            tools/crawl/raw
+            tools/crawl/candidates
+          retention-days: 3
+
+  # --------------------------------------------------------------- MERGE --
+  # Pulls every shard together, extracts once, gates once, publishes once.
+  merge:
+    needs: crawl
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install --quiet openpyxl
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/shards
+
+      - name: Combine every shard
+        run: |
+          cd tools/crawl && mkdir -p raw candidates
+          cp -rn /tmp/shards/*/raw/*        raw/        2>/dev/null || true
+          cp -rn /tmp/shards/*/candidates/* candidates/ 2>/dev/null || true
+          echo "raw=$(ls raw | wc -l)  candidates=$(ls candidates | wc -l)"
 
       - name: Extract
         run: cd tools/crawl && python3 extract.py
@@ -62,48 +97,28 @@ jobs:
         env:
           BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
         continue-on-error: true
-        run: |
-          cd tools/crawl
-          python3 cergio_pipeline.py followers
-          python3 extract.py
+        run: cd tools/crawl && python3 cergio_pipeline.py followers && python3 extract.py
 
       # THE GATE. Never add continue-on-error here.
       - name: Quality gate
         run: cd tools/crawl && python3 qa.py
 
-      - name: Build spreadsheet and dashboard
+      - name: Build and publish
         run: |
           cd tools/crawl
           python3 build_xlsx.py
           python3 build_dashboard.py
+          python3 publish.py
 
-      # Puts the dashboard, the CSV and a small status file into public/,
-      # which Vercel serves. This is what makes the run visible without
-      # opening the Actions tab.
-      - name: Publish to the site
-        run: cd tools/crawl && python3 publish.py
-
-      - name: Commit the published files
+      - name: Commit
         run: |
           git config user.name  "cergio-crawler"
           git config user.email "crawler@cergio.ai"
           git add public/leads.html public/leads.csv public/crawl-status.json
           git diff --staged --quiet && echo "no change" && exit 0
-          # [skip ci] matters: without it every hourly publish retriggers your
-          # full CI — build-and-qa, e2e, autonomous-build — 24 times a day for a
-          # commit that only touches three static files. Vercel still deploys,
-          # because Vercel has its own trigger and does not honour skip-ci.
-          git commit -m "crawl: run ${{ github.run_number }} — published leads [skip ci]"
+          git commit -m "crawl: run ${{ github.run_number }} [skip ci]"
           git pull --rebase --autostash origin main || true
-          git push || echo "push blocked — artifact still available below"
-
-      - uses: actions/cache/save@v4
-        if: always()
-        with:
-          path: |
-            tools/crawl/raw
-            tools/crawl/candidates
-          key: cergio-${{ github.run_id }}
+          git push || echo "push blocked"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -123,7 +138,7 @@ p='../../public/crawl-status.json'
 if os.path.exists(p):
     s=json.load(open(p)); t=s['totals']
     print(f\"## {t['crawled']} crawled · {t['contactable']} contactable\")
-    print(f\"- {t['with_email']} email · {t['with_phone']} phone · {t['with_instagram']} on Instagram\")
+    print(f\"- {t['with_email']} email · {t['with_phone']} phone · {t['with_instagram']} Instagram\")
     for k,v in s['by_source'].items():
         print(f\"- **{k}**: {v['total']} ({v['contactable']} contactable)\")
 " >> $GITHUB_STEP_SUMMARY
