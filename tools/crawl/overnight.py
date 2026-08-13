@@ -38,6 +38,11 @@ RAW, CAND, OUT = (os.path.join(ROOT, d) for d in ("raw", "candidates", "out"))
 for d in (RAW, CAND, OUT):
     os.makedirs(d, exist_ok=True)
 LOG = os.path.join(OUT, "overnight.log")
+# Which (area, type) searches have already been run, EVER. Without this the
+# discovery loop restarts from the top every run: hourly would fire ~1,484
+# paid searches an hour, nearly all returning businesses already on disk.
+# That is a quota fire with no data to show for it.
+DONE_Q = os.path.join(CAND, "_searched.json")
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
@@ -47,7 +52,7 @@ CONTACT_PATHS = ["", "/contact", "/contact-us", "/about", "/about-us", "/service
 _stop = threading.Event()
 _lock = threading.Lock()
 _robots = {}
-_counts = {"fetched": 0, "skipped": 0, "blocked": 0, "discovered": 0}
+_counts = {"fetched": 0, "skipped": 0, "blocked": 0, "discovered": 0, "searches": 0}
 
 
 def log(msg):
@@ -182,6 +187,44 @@ SERVICE_TYPES = [
     "physical therapy", "chiropractor", "nutritionist", "babysitter agency",
     "nanny agency", "senior care", "home health aide", "dog trainer",
 ]
+# ---- SOURCE 9: REAL ESTATE AGENTS ---------------------------------------
+# Individual agents and small brokerages. Instagram is OPTIONAL here and is
+# recorded either way — founder, 2026-08-13: "mark which have an IG account".
+REALESTATE_TYPES = [
+    "real estate agent", "realtor", "real estate broker", "buyers agent",
+    "listing agent", "luxury real estate agent", "condo specialist realtor",
+    "rental agent", "property manager", "real estate brokerage",
+]
+
+# ---- SOURCE 10: LOCAL BUSINESSES ----------------------------------------
+# Physical, bricks-and-mortar businesses. Food and drink are excluded on
+# purpose: restaurants, bars and cafes are a different buyer with different
+# economics, and they would swamp every other category by sheer count.
+LOCALBIZ_TYPES = [
+    "dry cleaner", "laundromat", "tailor", "shoe repair", "florist",
+    "hardware store", "locksmith shop", "print shop", "framing shop",
+    "bike shop", "phone repair shop", "computer repair shop", "furniture store",
+    "pet store", "veterinary clinic", "pharmacy", "optician", "dentist",
+    "chiropractor clinic", "physical therapy clinic", "dance studio",
+    "music school", "art studio", "photography studio", "bookstore",
+    "toy store", "gift shop", "jewelry store", "watch repair", "auto repair shop",
+    "tire shop", "car wash", "driving school", "daycare center", "preschool",
+    "tutoring center", "gym", "boxing gym", "climbing gym", "salon suite",
+    "barbershop", "spa", "medical spa", "urgent care clinic", "eye clinic",
+    "hearing center", "appliance store", "flooring store", "paint store",
+    "garden center", "nursery plants", "sewing shop", "party supply store",
+    "costume shop", "storage facility", "moving company office", "tax office",
+    "insurance agency", "travel agency", "notary office", "shipping store",
+]
+FOOD_WORDS = ("restaurant", "bar ", " bar", "cafe", "coffee", "pizzeria",
+              "bakery", "brewery", "deli", "diner", "bistro", "pub", "tavern",
+              "grill", "eatery", "sushi", "taqueria", "juice", "smoothie",
+              "ice cream", "food", "kitchen", "wine", "liquor", "cocktail")
+
+# Founder, 2026-08-13: "miami targets are always 20% of nyc".
+CITY_TARGETS = {"realestate": {"NYC": 2000, "MIA": 400},
+                "localbiz":   {"NYC": 2000, "MIA": 400}}
+
 AREAS = {
     "NYC": ["Manhattan NY", "Brooklyn NY", "Queens NY", "Bronx NY",
             "Staten Island NY", "Jersey City NJ", "Hoboken NJ", "Astoria NY",
@@ -192,6 +235,114 @@ AREAS = {
             "Hialeah FL", "Kendall FL", "Fort Lauderdale FL", "Hollywood FL"],
 }
 MARKET = {"NYC": ("New York", "NY"), "MIA": ("Miami-Ft. Lauderdale", "FL")}
+
+
+def load_done():
+    try:
+        return set(json.load(open(DONE_Q, encoding="utf-8")))
+    except Exception:
+        return set()
+
+
+def save_done(done):
+    json.dump(sorted(done), open(DONE_Q, "w", encoding="utf-8"))
+
+
+IG_SKIP = {"p", "reel", "reels", "explore", "tv", "stories", "accounts",
+           "directory", "about", "developer", "legal", "privacy", "terms",
+           "instagram", "help", "web", "challenge", "s", "graphql"}
+IG_RE_URL = re.compile(r"instagram\.com/([A-Za-z0-9_.]{2,30})", re.I)
+
+
+def seen_handles_on_disk():
+    s = set()
+    for fn in os.listdir(CAND):
+        if fn.startswith("_"):
+            continue
+        try:
+            h = (json.load(open(os.path.join(CAND, fn), encoding="utf-8"))
+                 .get("ig_handle") or "").lower()
+            if h:
+                s.add(h)
+        except Exception:
+            pass
+    return s
+
+
+def discover_ig(city, api_key, handles, counter, budget):
+    """
+    IG-FIRST discovery. This is the one that matters.
+
+    Finding businesses on Google and then hoping they link Instagram only
+    surfaces the ~35% who bother to. Searching Instagram directly for the same
+    service types returns accounts that have Instagram BY CONSTRUCTION — which
+    is the whole point, because an IG-having service provider is exactly what
+    becomes a creator.
+
+    Still fetch-only. Handles come from real instagram.com URLs in the search
+    output; every contact detail is proven later, offline, by extract.py.
+    """
+    new = []
+    market, state = MARKET[city]
+    done = load_done()
+    fresh = 0
+    for area in AREAS[city]:
+        for t in SERVICE_TYPES:
+            if _stop.is_set() or len(new) >= budget:
+                save_done(done)
+                return new
+            qkey = f"IG|{city}|{area}|{t}"
+            if qkey in done:
+                continue
+            place = area.replace(" NY", "").replace(" NJ", "").replace(" FL", "")
+            q = {"engine": "google", "num": 20, "api_key": api_key,
+                 "q": 'site:instagram.com "' + t + '" ' + place}
+            try:
+                data = json.loads(fetch(SERP + "?" + urllib.parse.urlencode(q), timeout=60))
+            except Exception as e:
+                log("  ig search failed '" + t + " " + place + "': " + str(e)[:70])
+                time.sleep(2)
+                continue
+            _counts["searches"] += 1
+            done.add(qkey)
+            fresh += 1
+            if fresh % 25 == 0:
+                save_done(done)
+            slug = re.sub(r"[^a-z]", "", t)[:12]
+            aid = "igdisc-" + city + "-" + slug + "-" + re.sub(r"[^a-z]", "", area.lower())[:10]
+            json.dump({"artifact_id": aid,
+                       "url": "serpapi:google:site:instagram.com " + t + " " + place,
+                       "kind": "discovery",
+                       "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                       "content": json.dumps(data, ensure_ascii=False)[:300_000]},
+                      open(os.path.join(RAW, aid + ".json"), "w", encoding="utf-8"))
+            for r in (data.get("organic_results") or []):
+                m = IG_RE_URL.search(r.get("link") or "")
+                if not m:
+                    continue
+                h = m.group(1).lower().strip(".")
+                if h in IG_SKIP or h in handles or len(h) < 3:
+                    continue
+                handles.add(h)
+                rid = "ig-" + city + "-" + slug + "-" + str(counter[0]).zfill(5)
+                counter[0] += 1
+                json.dump({
+                    "record_id": rid, "audience": "service", "city": city,
+                    "market": market, "state": state, "category": None,
+                    "service_type": t.title(),
+                    "display_name": (r.get("title") or "").split("(")[0].strip()[:120],
+                    "ig_handle": h, "website_url": None, "area": area,
+                    "source": "serpapi:google:site-instagram",
+                    "discovery_artifacts": [aid], "site_artifacts": [],
+                }, open(os.path.join(CAND, rid + ".json"), "w", encoding="utf-8"), indent=2)
+                new.append(rid)
+                with _lock:
+                    _counts["discovered"] += 1
+            time.sleep(0.3)
+    save_done(done)
+    if fresh == 0:
+        log("  [" + city + "] IG grid fully searched — widen SERVICE_TYPES or AREAS")
+    return new
 
 
 def known_domains():
@@ -207,13 +358,97 @@ def known_domains():
     return d
 
 
-def discover_round(city, k, seen, made_prefix, budget):
+def discover_places(city, api_key, seen, counter, audience, types, target,
+                    label_prefix, exclude_food=False):
+    """
+    Google Local discovery for an arbitrary audience. Shared by real estate
+    (source 9) and local businesses (source 10).
+
+    Instagram is NOT required for these two. Their websites are fetched the same
+    way, extract.py records whether a handle was found, and the dashboard shows
+    the split. A physical business without Instagram is still a lead; it just is
+    not a creator-conversion candidate.
+    """
+    new = []
+    market, state = MARKET[city]
+    done = load_done()
+    fresh = 0
+    have = sum(1 for fn in os.listdir(CAND)
+               if fn.startswith(label_prefix + "-" + city + "-"))
+    if have >= target:
+        log(f"  [{city}] {audience}: target {target} already met ({have} on disk)")
+        return new
+    for area in AREAS[city]:
+        for t in types:
+            if _stop.is_set() or have + len(new) >= target:
+                save_done(done)
+                return new
+            qkey = f"{audience}|{city}|{area}|{t}"
+            if qkey in done:
+                continue
+            q = {"engine": "google_local", "q": f"{t} {area}",
+                 "location": area, "api_key": api_key, "num": 20}
+            try:
+                data = json.loads(fetch(SERP + "?" + urllib.parse.urlencode(q), timeout=60))
+            except Exception as e:
+                log(f"  {audience} search failed '{t} {area}': {str(e)[:70]}")
+                time.sleep(2)
+                continue
+            _counts["searches"] += 1
+            done.add(qkey)
+            fresh += 1
+            if fresh % 25 == 0:
+                save_done(done)
+            slug = re.sub(r"[^a-z]", "", t)[:12]
+            aid = (label_prefix + "disc-" + city + "-" + slug + "-"
+                   + re.sub(r"[^a-z]", "", area.lower())[:10])
+            json.dump({"artifact_id": aid, "url": f"serpapi:google_local:{t} {area}",
+                       "kind": "discovery",
+                       "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                       "content": json.dumps(data, ensure_ascii=False)[:300_000]},
+                      open(os.path.join(RAW, aid + ".json"), "w", encoding="utf-8"))
+            for r in (data.get("local_results") or []):
+                title = (r.get("title") or "")
+                blob = (title + " " + str(r.get("type") or "")).lower()
+                if exclude_food and any(w in blob for w in FOOD_WORDS):
+                    continue                      # food and drink are out of scope
+                site = (r.get("website") or "").split("?")[0]
+                h = urllib.parse.urlparse(site).netloc.lower().replace("www.", "")
+                if not h or h in seen:
+                    continue
+                seen.add(h)
+                rid = f"{label_prefix}-{city}-{slug}-{counter[0]:05d}"
+                counter[0] += 1
+                json.dump({
+                    "record_id": rid, "audience": audience, "city": city,
+                    "market": market, "state": state, "category": None,
+                    "service_type": t.title(), "display_name": title,
+                    "ig_handle": None, "website_url": site, "area": area,
+                    "source": f"serpapi:google_local:{audience}",
+                    "discovery_artifacts": [aid], "site_artifacts": [],
+                }, open(os.path.join(CAND, rid + ".json"), "w", encoding="utf-8"), indent=2)
+                new.append(rid)
+            time.sleep(0.3)
+    save_done(done)
+    return new
+
+
+def discover_round(city, k, seen, made_prefix, budget, max_searches=900):
     """One pass over areas x types. Returns new candidate ids."""
     new = []
     market, state = MARKET[city]
+    done = load_done()
+    fresh = 0
     for area in AREAS[city]:
         for t in SERVICE_TYPES:
+            qkey = f"{city}|{area}|{t}"
+            if qkey in done:
+                continue                 # already searched in an earlier run
             if _stop.is_set() or len(new) >= budget:
+                return new
+            if _counts["searches"] >= max_searches:
+                log(f"  search cap reached ({max_searches}) — stopping discovery, "
+                    f"no further paid calls")
                 return new
             q = {"engine": "google_local", "q": f"{t} {area}",
                  "location": area, "api_key": k, "num": 20}
@@ -223,6 +458,11 @@ def discover_round(city, k, seen, made_prefix, budget):
                 log(f"  serpapi problem on '{t} {area}': {str(e)[:80]}")
                 time.sleep(2)
                 continue
+            _counts["searches"] += 1
+            done.add(qkey)
+            fresh += 1
+            if fresh % 25 == 0:
+                save_done(done)          # checkpoint, so a kill never re-buys
             results = data.get("local_results") or []
             slug = re.sub(r"[^a-z]", "", t)[:12]
             aid = f"disc-{city}-{slug}-{re.sub(r'[^a-z]', '', area.lower())[:10]}"
@@ -251,6 +491,10 @@ def discover_round(city, k, seen, made_prefix, budget):
             with _lock:
                 _counts["discovered"] += len(results)
             time.sleep(0.3)
+    save_done(done)
+    if fresh == 0:
+        log(f"  [{city}] every query in the grid has been searched already — "
+            f"no paid calls made. Widen SERVICE_TYPES or AREAS to find more.")
     return new
 
 
@@ -277,7 +521,15 @@ def main():
     ap.add_argument("--target", type=int, default=15000, help="usable leads to aim for")
     ap.add_argument("--hours", type=float, default=10.0, help="stop after this long")
     ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--cities", default="NYC,MIA")
+    ap.add_argument("--sources", default="ig,realestate,localbiz",
+                    help="comma list: ig, realestate, localbiz")
+    ap.add_argument("--also-web", action="store_true",
+                    help="additionally sweep Google Local for businesses that may "
+                         "not surface on Instagram (lower IG yield, more contacts)")
+    ap.add_argument("--city", "--cities", dest="cities", default="NYC,MIA")
+    ap.add_argument("--max-searches", dest="max_searches", type=int, default=900,
+                    help="HARD CAP on paid SerpApi calls. This is the spend gate — "
+                         "an uncapped crawl is the Apify failure mode with a new logo.")
     args = ap.parse_args()
 
     signal.signal(signal.SIGINT, lambda *_: (_stop.set(), log("\nstopping cleanly...")))
@@ -287,7 +539,8 @@ def main():
     counter = [len(seen) + 1]
 
     log("=" * 62)
-    log(f"OVERNIGHT RUN — target {args.target}, stopping after {args.hours}h")
+    log(f"OVERNIGHT RUN — target {args.target}, stopping after {args.hours}h, "
+        f"paid-search cap {args.max_searches}")
     log(f"starting from {len(seen)} businesses already on disk")
     log("Ctrl-C is safe at any point; progress is never lost")
     log("=" * 62)
@@ -300,9 +553,34 @@ def main():
             if _stop.is_set() or time.time() > deadline:
                 break
 
-            log(f"\n[round {rounds}] {city} — finding businesses")
-            new = discover_round(city, k, seen, counter, budget=1200)
-            log(f"[round {rounds}] {city} — {len(new)} new businesses found")
+            new = []
+            if "ig" in args.sources:
+                log(f"\n[round {rounds}] {city} — finding Instagram service accounts")
+                handles = seen_handles_on_disk()
+                new = discover_ig(city, k, handles, counter, budget=1500)
+                log(f"[round {rounds}] {city} — {len(new)} new IG accounts "
+                    f"(every one has Instagram by construction)")
+
+            if "realestate" in args.sources:
+                tgt = CITY_TARGETS["realestate"][city]
+                got = discover_places(city, k, seen, counter, "realestate",
+                                      REALESTATE_TYPES, tgt, "re")
+                log(f"[round {rounds}] {city} — {len(got)} real estate agents "
+                    f"(target {tgt})")
+                new += got
+
+            if "localbiz" in args.sources:
+                tgt = CITY_TARGETS["localbiz"][city]
+                got = discover_places(city, k, seen, counter, "localbiz",
+                                      LOCALBIZ_TYPES, tgt, "lb", exclude_food=True)
+                log(f"[round {rounds}] {city} — {len(got)} local businesses "
+                    f"(target {tgt}, food and drink excluded)")
+                new += got
+
+            if args.also_web:
+                log(f"[round {rounds}] {city} — also sweeping Google Local")
+                new += discover_round(city, k, seen, counter, budget=800,
+                                      max_searches=args.max_searches)
 
             todo = [f[:-5] for f in os.listdir(CAND) if f.endswith(".json")]
             todo = [r for r in todo if not json.load(

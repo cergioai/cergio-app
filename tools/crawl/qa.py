@@ -92,9 +92,10 @@ def t1():
         [art("x-01__1", SITE, "Test Co. Dog walking in Brooklyn, New York. Book online. "
                               "Instagram: https://instagram.com/testco NO_CONTACT_INFO_PRESENT")],
         [cand()])
-    assert_(len(recs) == 0, "a contactless page produced a PASSING record")
-    assert_(quar[0]["email"] is None, f"email was invented: {quar[0]['email']}")
-    assert_(quar[0]["phone"] is None, f"phone was invented: {quar[0]['phone']}")
+    r = recs[0]
+    assert_(r["email"] is None, f"email was invented: {r['email']}")
+    assert_(r["phone"] is None, f"phone was invented: {r['phone']}")
+    assert_(r["contactable"] is False, "a contactless row was marked contactable")
 test("a page with no contact info yields no contact", "#280.1",
      "This is the whole bug. If it ever goes red, values are being produced that no page "
      "contained — stop the pipeline.", t1)
@@ -161,8 +162,8 @@ def t6():
         [art("x-01__1", SITE, "THE MANCHESTER DOG WALKER. Serving Manchester city centre, "
                               "United Kingdom. Email: hi@testco.com https://instagram.com/testco")],
         [cand()])
-    assert_(len(recs) == 0, "a Manchester business passed as NYC")
-    assert_("geo_unverified" in quar[0]["gate_failures"], "geo gate did not fire")
+    assert_("geo_unverified" in recs[0]["gate_failures"], "geo gate did not fire")
+    assert_(recs[0]["status"] == "incomplete", "unverified geo not labelled")
 test("geo is proven from the page, never inherited from the search", "#280.6",
      "A live search for a Manhattan dog walker returned a MANCHESTER, UK one.", t6)
 
@@ -185,8 +186,8 @@ def t8():
     recs, quar = run_extractor(
         [art("x-01__1", SITE, "Test Co, Brooklyn, New York. Email: hi@testco.com. "
                               "Follow us on social media!")], [cand()])
-    assert_(len(recs) == 0, "a service with no provable handle passed")
-    assert_("service_without_ig" in quar[0]["gate_failures"], "the IG gate did not fire")
+    assert_("service_without_ig" in recs[0]["gate_failures"], "the IG gate did not fire")
+    assert_(recs[0]["ig_handle"] is None, "an unprovable handle was written anyway")
 test("a service without a proven Instagram cannot pass", "#280.8",
      "Founder rule 2026-08-12: services only count with a real Instagram account.", t8)
 
@@ -219,12 +220,13 @@ def t11():
         [art("x-01__1", SITE, "Test Spa, Brooklyn, New York. Massage and facials. "
                               "hi@testco.com https://instagram.com/testco")],
         [cand(service_type="Esthetician")])
-    assert_(len(blocked) == 0, "a massage provider passed the blocked-vertical gate")
+    assert_(blocked[0]["blocked_term"], "a massage provider was not flagged")
+    assert_(blocked[0]["status"] == "incomplete", "blocked vertical not labelled")
     ok, _ = run_extractor(
         [art("x-01__1", SITE, "Test Dojo, Brooklyn, New York. Adult classes and kids classes. "
                               "hi@testco.com https://instagram.com/testco")],
         [cand(service_type="Martial Arts Instructor")])
-    assert_(len(ok) == 1, "'adult classes' was wrongly treated as adult content")
+    assert_(not ok[0]["blocked_term"], "'adult classes' was wrongly treated as adult content")
 test("blocked verticals match whole words, not substrings", "#280.11",
      "A substring blocklist quarantined martial-arts gyms for offering 'adult classes'.", t11)
 
@@ -242,7 +244,8 @@ test("website boilerplate never becomes a lead", "#280.12",
 def t13():
     recs, _ = run_extractor(
         [{"artifact_id": "x-01__1", "url": SITE, "fetched_at": "x", "kind": "site"}], [cand()])
-    assert_(len(recs) == 0, "a record was built on a page with no content")
+    assert_(recs[0]["email"] is None and recs[0]["phone"] is None,
+            "fields were produced from an artifact with no content")
 test("a corrupt page is refused, not half-read", "#280.13",
      "Failing closed costs nothing; a half-parsed page becomes confident bad data.", t13)
 
@@ -331,7 +334,7 @@ def t20():
          art("x-01__ig1", "https://www.instagram.com/testco/",
              '{"account":"testco","followers_count":412}', "ig_profile")],
         [cand(audience="creator", ig_artifacts=["x-01__ig1"])])[0]
-    assert_(len(small) == 1, "a creator under 2,500 was dropped — the floor became a gate")
+    assert_(len(small) == 1, "a creator under 2,500 vanished from the output")
     assert_(small[0]["followers"] == 412, "the small follower count was not kept")
     assert_(small[0]["follower_tier"] == "under_2500_keep", f"wrong tier: {small[0]['follower_tier']}")
     assert_(not any("follow" in f for f in small[0]["gate_failures"]),
@@ -346,6 +349,63 @@ def t20():
 test("the 2,500 floor sorts creators and deletes nobody", "#280.20",
      "Founder decision 2026-08-12: keep all profiles, target the smaller ones later. "
      "A floor built as a gate destroys reachable audience and cannot be undone.", t20)
+
+
+def t21():
+    # IG-FIRST: no website at all. The contact lives in the Instagram bio.
+    bio = ('{"account":"brooklynpaws","full_name":"Brooklyn Paws Dog Walking",'
+           '"biography":"Dog walking in Brooklyn, New York. Book: hello@brooklynpaws.com '
+           'or call (718) 555-0142","followers_count":8400}')
+    recs, _ = run_extractor(
+        [art("x-01__ig1", "https://www.instagram.com/brooklynpaws/", bio, "ig_profile")],
+        [cand(ig_handle="brooklynpaws", website_url=None,
+              site_artifacts=[], ig_artifacts=["x-01__ig1"])])
+    assert_(recs[0]["contactable"], "an IG-first service got no contact from its bio")
+    assert_(recs[0]["email"] == "hello@brooklynpaws.com", f"bio email missed: {recs[0]['email']}")
+    assert_(recs[0]["phone"] == "(718) 555-0142", f"bio phone missed: {recs[0]['phone']}")
+    assert_(recs[0]["followers"] == 8400, "followers missed on the IG-first path")
+    assert_(recs[0]["geo_verified"], "geo not proven from the bio")
+
+    # someone else's profile must never donate a contact
+    other = ('{"account":"someoneelse","biography":"Miami. mail@other.com '
+             '(305) 555-0199","followers_count":50}')
+    recs2, quar2 = run_extractor(
+        [art("x-01__ig1", "https://www.instagram.com/someoneelse/", other, "ig_profile")],
+        [cand(ig_handle="brooklynpaws", website_url=None,
+              site_artifacts=[], ig_artifacts=["x-01__ig1"])])
+    got = (recs2 + quar2)[0]
+    assert_(got["email"] is None, f"another account's email was adopted: {got['email']}")
+    assert_(got["phone"] is None, f"another account's phone was adopted: {got['phone']}")
+test("an IG-first service carries contact from its own bio, and only its own", "#280.21",
+     "This is the services-become-creators path: accounts found ON Instagram have no website, "
+     "so the bio is the only contact there is. If this breaks, that whole route silently "
+     "yields zero — and the failure looks like 'no contacts found', not like a bug.", t21)
+
+
+def t22():
+    # Sources 9 and 10 are wanted WITH AND WITHOUT Instagram. If the services
+    # rule leaks onto them, every no-IG physical business is silently deleted
+    # and the source looks like it simply found nothing.
+    page = ("Kramer Realty, Brooklyn, New York. Call (718) 555-0142. "
+            "Email hello@kramerrealty.com")
+    for aud in ("realestate", "localbiz"):
+        recs, quar = run_extractor(
+            [art("x-01__1", SITE, page)],
+            [cand(audience=aud, ig_handle=None, service_type="Real Estate Agent")])
+        assert_(recs[0]["contactable"],
+                f"a {aud} lead with a contact but no Instagram lost it")
+        assert_(recs[0]["has_instagram"] is False, "has_instagram should be False, not missing")
+        assert_(not any("ig" in f for f in recs[0]["gate_failures"]),
+                "the services-need-Instagram rule leaked onto " + aud)
+    # and when they DO have one, it is recorded
+    withig = run_extractor(
+        [art("x-01__1", SITE, page + " https://instagram.com/kramerrealty")],
+        [cand(audience="realestate", ig_handle="kramerrealty")])[0][0]
+    assert_(withig["has_instagram"] is True, "an Instagram handle was not recorded")
+test("real estate and local businesses count with or without Instagram", "#280.22",
+     "Founder 2026-08-13: these two sources are wanted both ways, and the IG flag is the "
+     "mark of a conversion candidate. A gate leaking here deletes real leads and looks "
+     "like an empty source rather than a bug.", t22)
 
 
 print(f"\n{_pass} passed, {_fail} failed\n")
