@@ -430,8 +430,16 @@ def main():
     records, rejects = [], []
 
     for p in sorted(glob.glob(os.path.join(CAND, "*.json"))):
+        # Files starting with "_" are bookkeeping, not leads. _searched.json is
+        # a LIST of completed queries; parsing it as a candidate crashed the whole
+        # extract step, which would have failed every run once dedupe was on.
+        if os.path.basename(p).startswith("_"):
+            continue
         try:
             c = json.load(open(p, encoding="utf-8"))
+            if not isinstance(c, dict):
+                rejects.append({"file": os.path.basename(p), "reason": "not a candidate object"})
+                continue
         except Exception as e:
             rejects.append({"file": os.path.basename(p), "reason": f"unparseable candidate: {e}"})
             continue
