@@ -51,6 +51,14 @@ jobs:
 
       - name: Extract
         run: cd tools/crawl && python3 extract.py
+        - name: Follower counts
+        env:
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+        continue-on-error: true
+        run: |
+          cd tools/crawl
+          python3 cergio_pipeline.py followers
+          python3 extract.py
 
       - name: Quality gate
         run: cd tools/crawl && python3 qa.py
