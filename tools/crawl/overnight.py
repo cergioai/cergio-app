@@ -521,6 +521,10 @@ def main():
     ap.add_argument("--target", type=int, default=15000, help="usable leads to aim for")
     ap.add_argument("--hours", type=float, default=10.0, help="stop after this long")
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--shard", type=int, default=0,
+                    help="this shard's index (0-based). Shards split the AREA list "
+                         "so N jobs crawl N disjoint slices with zero overlap.")
+    ap.add_argument("--of", type=int, default=1, help="total number of shards")
     ap.add_argument("--sources", default="ig,realestate,localbiz",
                     help="comma list: ig, realestate, localbiz")
     ap.add_argument("--also-web", action="store_true",
@@ -544,6 +548,19 @@ def main():
     log(f"starting from {len(seen)} businesses already on disk")
     log("Ctrl-C is safe at any point; progress is never lost")
     log("=" * 62)
+
+    # SHARDING. Each shard takes every Nth neighbourhood, so twenty parallel
+    # jobs cover the same grid in a twentieth of the time and never fetch the
+    # same business twice. Splitting by AREA (not by type) keeps each shard's
+    # dedupe set meaningful — businesses cluster by neighbourhood, not by trade.
+    if args.of > 1:
+        for city in AREAS:
+            AREAS[city] = AREAS[city][args.shard::args.of]
+        log(f"shard {args.shard + 1} of {args.of}: "
+            + ", ".join(f"{c}={len(v)} areas" for c, v in AREAS.items()))
+        if not any(AREAS.values()):
+            log("no areas in this shard — nothing to do")
+            return
 
     cities = [c.strip() for c in args.cities.split(",")]
     rounds = 0
