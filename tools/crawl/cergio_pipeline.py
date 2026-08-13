@@ -79,12 +79,20 @@ def save_candidate(c):
 # ---------------------------------------------------------------- FOLLOWERS --
 def cmd_followers(a):
     """Bright Data -> raw IG profile artifacts. Writes no field values."""
-    recs_path = os.path.join(OUT, "records.json")
-    if not os.path.exists(recs_path):
-        sys.exit("run `build` first so there are records to enrich")
-    recs = json.load(open(recs_path, encoding="utf-8"))
-    todo = [(r["record_id"], r["ig_handle"]) for r in recs
-            if r.get("ig_handle") and r.get("followers") is None]
+    # Enrich CANDIDATES, not finished records. An IG-first candidate has no
+    # website, so its only possible contact is the Instagram bio — it can never
+    # pass the gates until after this runs. Reading records.json here was a
+    # chicken-and-egg that would have returned "nothing to enrich" forever.
+    todo = []
+    for fn in sorted(os.listdir(CAND)):
+        if not fn.endswith(".json") or fn.startswith("_"):
+            continue
+        try:
+            c = json.load(open(os.path.join(CAND, fn), encoding="utf-8"))
+        except Exception:
+            continue
+        if c.get("ig_handle") and not c.get("ig_artifacts"):
+            todo.append((c["record_id"], c["ig_handle"]))
     if a.limit:
         todo = todo[:a.limit]
     if not todo:

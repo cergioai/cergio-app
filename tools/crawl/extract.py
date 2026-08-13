@@ -370,12 +370,59 @@ def verify_city(city, artifacts, extra_text=""):
     return None
 
 
+# Human-readable source names. The old dashboard showed raw keys like
+# "se:web-harvest" and "ig-scraper-user-search", which nobody can read at a
+# glance and which hid that two different things were both called "IG".
+SOURCE_LABELS = [
+    ("google_local:realestate",       "Real Estate Agents"),
+    ("google_local:localbiz",         "Local Businesses"),
+    ("serpapi:google:site-instagram", "IG Service Creators"),
+    ("serpapi:google_local",          "Google Local"),
+    ("ig-scraper-user-search",        "IG Creators"),
+    ("se:web-harvest",                "Web Creators"),
+    ("google_lsa",                    "Google Ads (Sponsored)"),
+    ("gmaps_apify",                   "Google Maps"),
+    ("yellowpages",                   "Yellow Pages"),
+    ("craigslist",                    "Craigslist"),
+    ("yelp",                          "Yelp"),
+    ("osm",                           "OpenStreetMap"),
+]
+
+
+def source_label(c):
+    raw = (c.get("source") or "").lower()
+    for key, label in SOURCE_LABELS:
+        if key in raw:
+            return label
+    rid = c.get("record_id") or ""
+    if rid.startswith("re-"):
+        return "Real Estate Agents"
+    if rid.startswith("lb-"):
+        return "Local Businesses"
+    if rid.startswith("ig-"):
+        return "IG Service Creators"
+    if rid.startswith("c-"):
+        return "Web Creators"
+    if rid.startswith("s-"):
+        return "Web IG Service Creators"
+    return "Unlabelled"
+
+
 def blocked(text: str):
     for label, rx in BLOCKED_RE:
         m = rx.search(text or "")
         if m:
             return m.group(0).lower()
     return None
+
+
+REASON_TEXT = {
+    "no_contact": "No email or phone printed on their own pages",
+    "geo_unverified": "City not provable from their own text",
+    "geo_unverified,no_contact": "No contact, and city not provable",
+    "service_without_ig": "No Instagram handle found",
+    "no_contact,service_without_ig": "No contact and no Instagram found",
+}
 
 
 def main():
@@ -401,11 +448,20 @@ def main():
             ah = registrable(host_of(a["url"]))
             (owned if (site_host and ah == site_host) else foreign).append(a)
 
-        email = extract_email(owned)
-        phone = extract_phone(owned)
+        email = None
+        phone = None
 
         # ---- IG HANDLE: proven from the instagram.com URL itself ------------
         handle = (c.get("ig_handle") or "").lstrip("@").lower()
+
+        ig_arts = [artifacts[a] for a in c.get("ig_artifacts", []) if a in artifacts]
+        # An IG-first record has no website at all — its contact lives in the
+        # Instagram bio. Treat that profile as belonging to this entity ONLY if
+        # the response actually names this handle: the same contamination guard
+        # used for followers. Without this, IG-first records could never carry a
+        # contact, and the whole services-become-creators path yields nothing.
+        ig_owned = [a for a in ig_arts if handle and handle in a["content"].lower()]
+        contact_src = owned + ig_owned
 
         def prove_ig(arts, mode):
             """Prove the handle appears verbatim. Two accepted printed forms."""
@@ -421,6 +477,17 @@ def main():
                                 pr["value"] = handle
                                 pr["method"] = "url/instagram-path"
                                 return pr
+                elif mode == "bare":
+                    # The artifact IS this account's own profile response: its
+                    # URL is instagram.com/<handle> and its body names the
+                    # handle. Proving the bare handle here is sound because
+                    # ig_owned already required both. This is the strongest
+                    # tier — it is the account speaking for itself.
+                    pr = prove(a, handle)
+                    if pr:
+                        pr["as_printed"] = handle
+                        pr["method"] = "ig-profile/self"
+                        return pr
                 else:  # literal @handle printed on the page
                     for m in re.finditer(r"@([A-Za-z0-9_.]{1,30})", a["content"]):
                         if m.group(1).lower() == handle:
@@ -436,6 +503,7 @@ def main():
         # Every tier is still a byte-level substring proof — none of them infers.
         ig, strength = None, None
         for arts, mode, label in (
+            (ig_owned, "bare", "A_ig_profile_itself"),
             (owned, "url", "A_own_site_url"),
             (owned, "at", "B_own_site_at_handle"),
             (disc_arts, "url", "C_search_result_url"),
@@ -446,11 +514,16 @@ def main():
                 strength = label
                 break
 
-        first_name = extract_first_name(owned, c.get("display_name"))
-        ig_arts = [artifacts[a] for a in c.get("ig_artifacts", []) if a in artifacts]
+        email = extract_email(contact_src)
+        phone = extract_phone(contact_src)
+        first_name = extract_first_name(contact_src, c.get("display_name"))
         followers = extract_followers(ig_arts, ig["value"] if ig else handle)
 
-        geo = verify_city(c.get("city", ""), owned + disc_arts,
+        # Geo is proven from THIS entity's own pages or its own IG profile.
+        # A shared search-results blob holds twenty other businesses, so a city
+        # token in it proves nothing about this row — that is how a whole city
+        # column silently goes wrong.
+        geo = verify_city(c.get("city", ""), contact_src,
                           f"{handle} {c.get('display_name','')}")
 
         blk = blocked(f"{c.get('display_name','')} {c.get('category','')} "
@@ -459,6 +532,8 @@ def main():
         rec = {
             "record_id": rid,
             "audience": c.get("audience"),
+            "source": source_label(c),
+            "source_raw": c.get("source"),
             "city": c.get("city"),
             "market": c.get("market"),
             "state": c.get("state"),
@@ -470,6 +545,12 @@ def main():
             "ig_handle": ig["value"] if ig else None,
             "ig_profile_url": f"https://www.instagram.com/{ig['value']}/" if ig else None,
             "ig_proof_strength": strength,
+            # Founder, 2026-08-13: real estate and local businesses are wanted
+            # "with and without IG account", so the handle is RECORDED for every
+            # audience and REQUIRED only for services. A physical business with
+            # no Instagram is still a lead — it just is not a conversion
+            # candidate, and the dashboard splits on exactly this field.
+            "has_instagram": bool(ig),
             "website_url": c.get("website_url") or None,
             # followers is NULL until an L3 vendor response proves it. Never estimated.
             "followers": followers["value"] if followers else None,
@@ -517,11 +598,18 @@ def main():
             fails.append("no_contact")           # R4: without it the lead is useless
         if rec["audience"] == "service" and not ig:
             fails.append("service_without_ig")   # founder rule, 2026-08-12
+        # NOTHING IS DROPPED. Founder, 2026-08-13: "don't drop shit without my
+        # consent". Every crawled entity is delivered in ONE list with plain
+        # labels, and the filtering decision belongs to the founder, not to this
+        # file. A gate that deletes rows makes the pipeline look like it found
+        # less than it did, and the deletion is invisible in the output.
         rec["gate_failures"] = fails
-        rec["status"] = "PASS" if not fails else "QUARANTINE"
         rec["contactable"] = bool(email or phone)
-        (records if not fails else rejects).append(rec if not fails else
-                                                   {**rec, "reason": ",".join(fails)})
+        rec["hold_reason"] = REASON_TEXT.get(",".join(fails), ", ".join(fails)) if fails else ""
+        rec["status"] = "ready" if not fails else "incomplete"
+        records.append(rec)
+        if fails:
+            rejects.append({**rec, "reason": ",".join(fails)})
 
     os.makedirs(OUT, exist_ok=True)
     json.dump(records, open(os.path.join(OUT, "records.json"), "w"), indent=2)
@@ -530,8 +618,10 @@ def main():
               open(os.path.join(OUT, "artifact_report.json"), "w"), indent=2)
 
     print(f"artifacts loaded : {len(artifacts)}  (bad: {len(bad_artifacts)})")
-    print(f"records PASS     : {len(records)}")
-    print(f"records QUARANTINE: {len(rejects)}")
+    ready = [r for r in records if r["contactable"]]
+    print(f"records TOTAL    : {len(records)}  (nothing dropped)")
+    print(f"  contactable    : {len(ready)}   <- email and/or phone")
+    print(f"  incomplete     : {len(records) - len(ready)}  (kept, labelled)")
     if rejects:
         from collections import Counter
         cnt = Counter(r.get("reason", "?") for r in rejects)

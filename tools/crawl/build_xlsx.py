@@ -44,15 +44,15 @@ rows = [
     ("", None),
     ("WHAT THIS DROP DELIBERATELY DOES NOT CLAIM", None),
     ("", None),
-    ("followers is NULL on every row.", "instagram.com is robots-disallowed to this crawler and no browser session was available. The old pipeline would have written a number here. This one writes NULL and names the vendor call that fills it — see the strategy doc, L3."),
-    ("Quarantine is published, not hidden.", "28 records failed a gate and are on the Quarantine tab with the exact reason. A pipeline that only shows you its passes is not auditable."),
+    ("followers is NULL until a vendor proves it.", "The old pipeline wrote numbers it could not see. This one leaves the cell blank and names the call that fills it."),
+    ("NOTHING IS DROPPED.", "Every entity crawled is on the Records tab. Rows without an email or a phone are marked contactable=no with the reason in incomplete_because — they are not filed away on another tab and not deleted. Filter the contactable column to work the usable set; the rest stay visible so nobody has to wonder what was lost."),
     ("", None),
     ("HOW TO AUDIT THIS FILE IN 5 MINUTES", None),
     ("", None),
     ("1. Pick any row on the Records tab.", "Take its email_source_url. Open it. Search the page for the email_verbatim_snippet text."),
     ("2. The snippet is the surrounding characters as fetched.", "If the value is not on that page in that context, the pipeline is broken and the QA canary suite should have caught it. Tell us and it becomes a regression test."),
     ("3. Check ig_proof_strength.", "A = the handle appeared as a full instagram.com/<handle> URL on the business's OWN site. D = weakest, an @mention in a search result. Sort by it."),
-    ("4. Check the Quarantine tab.", "Confirm you agree with each rejection. Anything you think should have passed is a spec bug, not a data bug."),
+    ("4. Filter contactable = no.", "Those are the incomplete rows and why. Anything you think should have been contactable is a spec bug, not a data bug."),
 ]
 r = 1
 for a, b in rows:
@@ -83,7 +83,8 @@ COLS = [
     ("email", 32), ("email_source_url", 46), ("email_verbatim_snippet", 62),
     ("phone", 16), ("phone_source_url", 46), ("phone_verbatim_snippet", 62),
     ("website_url", 40), ("geo_token", 16), ("geo_source_url", 44),
-    ("contactable", 12), ("check_this", 46), ("artifacts", 10), ("extracted_at", 22),
+    ("contactable", 12), ("incomplete_because", 40), ("check_this", 46),
+    ("artifacts", 10), ("extracted_at", 22),
 ]
 
 
@@ -119,7 +120,8 @@ def write_records(sheet, data):
             rec.get("email"), prov(rec, "email", "source_url"), prov(rec, "email", "verbatim_snippet"),
             rec.get("phone"), prov(rec, "phone", "source_url"), prov(rec, "phone", "verbatim_snippet"),
             rec.get("website_url"), prov(rec, "geo", "token"), prov(rec, "geo", "source_url"),
-            "YES" if rec.get("contactable") else "no", review_note(rec),
+            "YES" if rec.get("contactable") else "no", rec.get("hold_reason") or "",
+            review_note(rec),
             rec.get("artifact_count"),
             (rec.get("extracted_at") or "")[:19],
         ]
@@ -128,7 +130,7 @@ def write_records(sheet, data):
             c.border = BORDER
             if v is None:
                 c.font = NULLF
-            elif ci == 25 and v != "looks clean":
+            elif ci == 26 and v != "looks clean":
                 c.font = Font(name=FONT, size=10, bold=True, color="B06000")
             elif ci in (17, 20, 11, 16, 19, 23):
                 c.font = MONO
@@ -136,36 +138,9 @@ def write_records(sheet, data):
             else:
                 c.font = BODY
 
-creators = sorted([x for x in recs if x["audience"] == "creator"], key=lambda x: x["record_id"])
-services = sorted([x for x in recs if x["audience"] == "service"], key=lambda x: x["record_id"])
-write_records(wb.create_sheet("Records"), creators + services)
-
-# ------------------------------------------------------------ QUARANTINE ----
-qs = wb.create_sheet("Held back")
-qs.sheet_view.showGridLines = False
-qcols = [("record_id", 24), ("audience", 10), ("city", 7), ("category", 18),
-         ("service_type", 22), ("display_name", 34), ("first_name", 14), ("website_url", 42),
-         ("ig_handle", 22), ("gate_failed", 30), ("what_it_means", 74)]
-MEAN = {
-    "no_contact": "No email and no phone was present in any page fetched from this entity's own domain. Build spec R4: without a contact the lead is useless. NOT deleted — re-fetchable later.",
-    "geo_unverified,no_contact": "No contact, and no city token could be proven from the entity's own text.",
-    "blocked_category:massage": "Blocked vertical per build spec R8. Held out of the deliverable rather than silently dropped.",
-}
-for i, (h, w) in enumerate(qcols, 1):
-    c = qs.cell(1, i, h); c.font, c.fill = H_FONT, H_FILL
-    qs.column_dimensions[get_column_letter(i)].width = w
-qs.freeze_panes = "A2"
-for ri, rec in enumerate(sorted(quar, key=lambda x: x["record_id"]), 2):
-    reason = rec.get("reason", "")
-    vals = [rec["record_id"], rec["audience"], rec["city"], rec.get("category"),
-            rec.get("service_type"), rec.get("display_name"), rec.get("website_url"),
-            rec.get("ig_handle"), reason, MEAN.get(reason, "See gate definition in extract.py")]
-    for ci, v in enumerate(vals, 1):
-        c = qs.cell(ri, ci, v if v is not None else "NULL")
-        c.font = NULLF if v is None else BODY
-        c.border = BORDER
-        if ci == 10:
-            c.alignment = Alignment(wrap_text=True, vertical="top")
+# One tab, contactable first. Nothing is filed away out of sight.
+allrecs = sorted(recs, key=lambda r: (not r.get("contactable"), r["audience"], r["record_id"]))
+write_records(wb.create_sheet("Records"), allrecs)
 
 # --------------------------------------------------------------- SUMMARY ----
 s = wb.create_sheet("Audit Summary")
@@ -180,7 +155,8 @@ R = "'Records'"
 N = len(recs) + 1
 blocks = [
     ("VOLUME", None, None),
-    ("Records passing all gates", f"=COUNTA({R}!A2:A{N})", None),
+    ("Rows crawled (nothing dropped)", f"=COUNTA({R}!A2:A{N})", None),
+    ("  contactable", f'=COUNTIF({R}!X2:X{N},"YES")', "email and/or phone"),
     ("  creators", f'=COUNTIF({R}!B2:B{N},"creator")', "target 100"),
     ("  service providers", f'=COUNTIF({R}!B2:B{N},"service")', "target 100"),
     ("  NYC", f'=COUNTIF({R}!C2:C{N},"NYC")', None),
