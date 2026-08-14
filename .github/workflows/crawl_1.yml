@@ -7,25 +7,48 @@ on:
         description: "ig, realestate, localbiz"
         default: "ig,realestate,localbiz"
       shards:
-        description: "parallel jobs (max 20)"
+        description: "parallel jobs (1-20). Drop to 4 if SerpApi quota is tight."
         default: "14"
   schedule:
     - cron: "0 * * * *"
 
+# pull-requests: write is required for the publish fallback below.
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
+  # ---------------------------------------------------------------- SETUP --
+  # The `shards` input used to be decorative: the matrix was hardcoded [0..13]
+  # and the script got a literal `--of 14`, so a dispatch could only ever run
+  # all 14. Now the input actually builds the matrix, which makes a small
+  # smoke-test run possible.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      count: ${{ steps.m.outputs.count }}
+    steps:
+      - id: m
+        run: |
+          N="${{ inputs.shards || '14' }}"
+          case "$N" in ''|*[!0-9]*) N=14 ;; esac
+          if [ "$N" -lt 1 ] || [ "$N" -gt 20 ]; then N=14; fi
+          echo "matrix=$(python3 -c "import json;print(json.dumps(list(range($N))))")" >> $GITHUB_OUTPUT
+          echo "count=$N" >> $GITHUB_OUTPUT
+          echo "running $N shards"
+
   # ---------------------------------------------------------------- CRAWL --
-  # 14 jobs in parallel, each taking every 14th neighbourhood. Same grid,
-  # a fourteenth of the wall clock, and no two shards touch the same business.
+  # N jobs in parallel, each taking every Nth neighbourhood. Same grid,
+  # an Nth of the wall clock, and no two shards touch the same business.
   crawl:
+    needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
-        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13]
+        shard: ${{ fromJSON(needs.setup.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,8 +70,16 @@ jobs:
           python3 overnight.py \
             --cities NYC,MIA \
             --sources "${{ inputs.sources || 'ig,realestate,localbiz' }}" \
-            --shard ${{ matrix.shard }} --of 14 \
+            --shard ${{ matrix.shard }} --of ${{ needs.setup.outputs.count }} \
             --target 15000 --hours 0.7 --workers 24
+
+      # Proof the shard actually produced something, in the job log where it
+      # can be seen without unzipping an artifact.
+      - name: Shard ${{ matrix.shard }} yield
+        if: always()
+        run: |
+          cd tools/crawl
+          echo "shard ${{ matrix.shard }}: raw=$(ls raw 2>/dev/null | wc -l) candidates=$(ls candidates 2>/dev/null | wc -l)"
 
       - uses: actions/cache/save@v4
         if: always()
@@ -70,7 +101,7 @@ jobs:
   # --------------------------------------------------------------- MERGE --
   # Pulls every shard together, extracts once, gates once, publishes once.
   merge:
-    needs: crawl
+    needs: [setup, crawl]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -83,15 +114,37 @@ jobs:
         with:
           path: /tmp/shards
 
+      # THE COMBINE USED TO FAIL SILENTLY. `cp -rn ... 2>/dev/null || true`
+      # swallowed everything, so a bad glob produced an empty directory, the
+      # extractor ran on nothing, and the run went green with zero rows.
+      # Now it counts what landed and stops the job if nothing did.
       - name: Combine every shard
         run: |
           cd tools/crawl && mkdir -p raw candidates
           cp -rn /tmp/shards/*/raw/*        raw/        2>/dev/null || true
           cp -rn /tmp/shards/*/candidates/* candidates/ 2>/dev/null || true
-          echo "raw=$(ls raw | wc -l)  candidates=$(ls candidates | wc -l)"
+          RAW=$(ls raw | wc -l); CAND=$(ls candidates | wc -l)
+          echo "raw=$RAW  candidates=$CAND"
+          echo "combined: $RAW raw artifacts, $CAND candidates" >> $GITHUB_STEP_SUMMARY
+          if [ "$CAND" -lt 1 ]; then
+            echo "::error::No candidates from any shard. Every shard failed, or the artifact paths moved."
+            exit 1
+          fi
 
       - name: Extract
         run: cd tools/crawl && python3 extract.py
+
+      # A zero-row extract must never reach publish. Publishing crawled:0 over
+      # a good previous run is worse than not publishing at all.
+      - name: Guard against an empty extract
+        run: |
+          cd tools/crawl
+          N=$(python3 -c "import json;print(len(json.load(open('out/records.json'))))")
+          echo "extracted $N records"
+          if [ "$N" -lt 1 ]; then
+            echo "::error::extract.py produced 0 records — refusing to publish."
+            exit 1
+          fi
 
       - name: Follower counts
         env:
@@ -103,6 +156,16 @@ jobs:
       - name: Quality gate
         run: cd tools/crawl && python3 qa.py
 
+      # The independent re-derivation. It is what actually caught the fake area
+      # codes and the mailto leak, and it was never wired into CI. Reporting
+      # only for now so it cannot block a drop; read it in the summary.
+      - name: Independent audit (report only)
+        continue-on-error: true
+        run: |
+          cd tools/crawl
+          echo '### Independent audit' >> $GITHUB_STEP_SUMMARY
+          python3 audit.py | tee -a $GITHUB_STEP_SUMMARY
+
       - name: Build and publish
         run: |
           cd tools/crawl
@@ -110,15 +173,38 @@ jobs:
           python3 build_dashboard.py
           python3 publish.py
 
-      - name: Commit
+      # PUBLISHING NO LONGER DEPENDS ON PUSHING TO main.
+      # The old step ended in `git push || echo "push blocked"`, which turned a
+      # rejected push into a green tick and an unchanged site. If the direct
+      # push is refused for any reason, this opens a pull request instead, so
+      # the result is always visible somewhere.
+      - name: Publish results
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name  "cergio-crawler"
           git config user.email "crawler@cergio.ai"
-          git add public/leads.html public/leads.csv public/crawl-status.json
-          git diff --staged --quiet && echo "no change" && exit 0
+          git add -f public/leads.html public/leads.csv public/crawl-status.json
+          if git diff --staged --quiet; then
+            echo "no change to publish" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
           git commit -m "crawl: run ${{ github.run_number }} [skip ci]"
           git pull --rebase --autostash origin main || true
-          git push || echo "push blocked"
+          if git push origin HEAD:main 2>push.log; then
+            echo "published straight to main" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "direct push refused — opening a pull request instead"
+            cat push.log || true
+            BR="crawl-results-${{ github.run_number }}"
+            git push -f origin HEAD:refs/heads/$BR
+            gh pr create --base main --head "$BR" \
+              --title "crawl: run ${{ github.run_number }} results" \
+              --body "Automated crawl output. Merge to publish to the site." \
+              >> $GITHUB_STEP_SUMMARY 2>&1 \
+              || echo "PR already open for $BR" >> $GITHUB_STEP_SUMMARY
+            echo "::warning::Could not push to main. Results are on branch $BR and a PR is open."
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -127,6 +213,7 @@ jobs:
           path: |
             tools/crawl/out/*.xlsx
             tools/crawl/out/cergio-dashboard.html
+            tools/crawl/out/records.json
 
       - name: Summary
         if: always()
@@ -141,4 +228,6 @@ if os.path.exists(p):
     print(f\"- {t['with_email']} email · {t['with_phone']} phone · {t['with_instagram']} Instagram\")
     for k,v in s['by_source'].items():
         print(f\"- **{k}**: {v['total']} ({v['contactable']} contactable)\")
+else:
+    print('## No crawl-status.json was produced — the run did not reach publish.')
 " >> $GITHUB_STEP_SUMMARY
