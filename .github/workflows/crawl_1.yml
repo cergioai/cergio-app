@@ -215,19 +215,21 @@ jobs:
             tools/crawl/out/cergio-dashboard.html
             tools/crawl/out/records.json
 
+      # NOTE: this step used to embed multi-line Python starting at column 0
+      # inside a `run: |` block. That ends the YAML block scalar early and makes
+      # the WHOLE FILE unparseable — which is why this workflow never appeared
+      # in the Actions tab and never ran. Shell and jq only from here.
       - name: Summary
         if: always()
         run: |
-          cd tools/crawl
-          python3 -c "
-import json,os
-p='../../public/crawl-status.json'
-if os.path.exists(p):
-    s=json.load(open(p)); t=s['totals']
-    print(f\"## {t['crawled']} crawled · {t['contactable']} contactable\")
-    print(f\"- {t['with_email']} email · {t['with_phone']} phone · {t['with_instagram']} Instagram\")
-    for k,v in s['by_source'].items():
-        print(f\"- **{k}**: {v['total']} ({v['contactable']} contactable)\")
-else:
-    print('## No crawl-status.json was produced — the run did not reach publish.')
-" >> $GITHUB_STEP_SUMMARY
+          P=public/crawl-status.json
+          if [ -f "$P" ]; then
+            {
+              echo "## $(jq -r '.totals.crawled' "$P") crawled · $(jq -r '.totals.contactable' "$P") contactable"
+              echo "- $(jq -r '.totals.with_email' "$P") email · $(jq -r '.totals.with_phone' "$P") phone · $(jq -r '.totals.with_instagram' "$P") Instagram"
+              echo "- NYC $(jq -r '.by_city.NYC' "$P") · Miami $(jq -r '.by_city.MIA' "$P")"
+              jq -r '.by_source | to_entries[] | "- **\(.key)**: \(.value.total) (\(.value.contactable) contactable)"' "$P"
+            } >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## No crawl-status.json was produced — the run did not reach publish." >> $GITHUB_STEP_SUMMARY
+          fi
