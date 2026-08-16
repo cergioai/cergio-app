@@ -7,8 +7,8 @@ on:
         description: "ig, realestate, localbiz"
         default: "ig,realestate,localbiz"
       shards:
-        description: "parallel jobs (1-20). Drop to 4 if SerpApi quota is tight."
-        default: "14"
+        description: "parallel jobs (1-20). 4 is the safe default — 14 triggers SerpApi 429s."
+        default: "4"
   schedule:
     - cron: "0 * * * *"
 
@@ -31,9 +31,12 @@ jobs:
     steps:
       - id: m
         run: |
-          N="${{ inputs.shards || '14' }}"
-          case "$N" in ''|*[!0-9]*) N=14 ;; esac
-          if [ "$N" -lt 1 ] || [ "$N" -gt 20 ]; then N=14; fi
+          # 14 shards x 24 workers = ~336 concurrent SerpApi callers, which the
+          # API answered with 5,045 consecutive HTTP 429s and zero results.
+          # Discovery is rate-limited; only FETCHING parallelises for free.
+          N="${{ inputs.shards || '4' }}"
+          case "$N" in ''|*[!0-9]*) N=4 ;; esac
+          if [ "$N" -lt 1 ] || [ "$N" -gt 20 ]; then N=4; fi
           echo "matrix=$(python3 -c "import json;print(json.dumps(list(range($N))))")" >> $GITHUB_OUTPUT
           echo "count=$N" >> $GITHUB_OUTPUT
           echo "running $N shards"
@@ -71,7 +74,7 @@ jobs:
             --cities NYC,MIA \
             --sources "${{ inputs.sources || 'ig,realestate,localbiz' }}" \
             --shard ${{ matrix.shard }} --of ${{ needs.setup.outputs.count }} \
-            --target 15000 --hours 0.7 --workers 24
+            --target 15000 --hours 0.9 --workers 24
 
       # Proof the shard actually produced something, in the job log where it
       # can be seen without unzipping an artifact.
