@@ -52,7 +52,7 @@ CONTACT_PATHS = ["", "/contact", "/contact-us", "/about", "/about-us", "/service
 _stop = threading.Event()
 _lock = threading.Lock()
 _robots = {}
-_counts = {"fetched": 0, "skipped": 0, "blocked": 0, "discovered": 0, "searches": 0}
+_counts = {"fetched": 0, "skipped": 0, "blocked": 0, "discovered": 0, "searches": 0, "search_errors": 0}
 
 
 def log(msg):
@@ -99,6 +99,45 @@ def fetch(url, timeout=20):
         raw = r.read(3_000_000)
         enc = r.headers.get_content_charset() or "utf-8"
         return raw.decode(enc, errors="replace")
+
+
+# ---------------------------------------------------------- SERPAPI GATE ---
+# THE SCALE BUG. Fourteen shards x 24 workers meant ~336 concurrent callers
+# hammering SerpApi, and it answered every single one with HTTP 429. The old
+# code caught the error, slept 2s and moved to the next query -- so a run
+# burned the entire grid collecting nothing. 5,045 consecutive 429s in the
+# last local log, zero successful searches, zero candidates, empty publish.
+#
+# Two changes: retry the SAME query with exponential backoff instead of
+# abandoning it, and serialise paid calls behind one process-wide lock with a
+# minimum gap, so shards cannot stampede. Throughput now comes from parallel
+# FETCHING (which is free and unmetered), not parallel SEARCHING.
+_serp_lock = threading.Lock()
+_serp_last = [0.0]
+SERP_MIN_GAP = float(os.environ.get("SERP_MIN_GAP", "1.2"))   # seconds between paid calls
+
+
+def serp_fetch(url, tries=5):
+    """One paid SerpApi call, rate-limited and retried on 429."""
+    delay = 4.0
+    for attempt in range(tries):
+        with _serp_lock:
+            gap = SERP_MIN_GAP - (time.time() - _serp_last[0])
+            if gap > 0:
+                time.sleep(gap)
+            _serp_last[0] = time.time()
+        try:
+            return fetch(url, timeout=60)
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                raise
+            if attempt == tries - 1:
+                raise
+            log(f"  serpapi 429 - backing off {delay:.0f}s "
+                f"(attempt {attempt + 1}/{tries})")
+            time.sleep(delay)
+            delay *= 2
+    raise RuntimeError("unreachable")
 
 
 TAG_RE = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.S | re.I)
@@ -298,9 +337,16 @@ def discover_ig(city, api_key, handles, counter, budget):
             q = {"engine": "google", "num": 20, "api_key": api_key,
                  "q": 'site:instagram.com "' + t + '" ' + place}
             try:
-                data = json.loads(fetch(SERP + "?" + urllib.parse.urlencode(q), timeout=60))
+                data = json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
             except Exception as e:
                 log("  ig search failed '" + t + " " + place + "': " + str(e)[:70])
+                _counts["search_errors"] += 1
+                if _counts["search_errors"] >= 25 and _counts["searches"] == 0:
+                    log("  25 search errors and not one success - SerpApi is "
+                        "refusing this key. Stopping instead of burning the grid.")
+                    _stop.set()
+                    save_done(done)
+                    return new
                 time.sleep(2)
                 continue
             _counts["searches"] += 1
@@ -389,9 +435,16 @@ def discover_places(city, api_key, seen, counter, audience, types, target,
             q = {"engine": "google_local", "q": f"{t} {area}",
                  "location": area, "api_key": api_key, "num": 20}
             try:
-                data = json.loads(fetch(SERP + "?" + urllib.parse.urlencode(q), timeout=60))
+                data = json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
             except Exception as e:
                 log(f"  {audience} search failed '{t} {area}': {str(e)[:70]}")
+                _counts["search_errors"] += 1
+                if _counts["search_errors"] >= 25 and _counts["searches"] == 0:
+                    log("  25 search errors and not one success - SerpApi is "
+                        "refusing this key. Stopping instead of burning the grid.")
+                    _stop.set()
+                    save_done(done)
+                    return new
                 time.sleep(2)
                 continue
             _counts["searches"] += 1
@@ -453,7 +506,7 @@ def discover_round(city, k, seen, made_prefix, budget, max_searches=900):
             q = {"engine": "google_local", "q": f"{t} {area}",
                  "location": area, "api_key": k, "num": 20}
             try:
-                data = json.loads(fetch(f"{SERP}?{urllib.parse.urlencode(q)}", timeout=60))
+                data = json.loads(serp_fetch(f"{SERP}?{urllib.parse.urlencode(q)}"))
             except Exception as e:
                 log(f"  serpapi problem on '{t} {area}': {str(e)[:80]}")
                 time.sleep(2)
@@ -637,6 +690,7 @@ def main():
 
     rebuild()
     log("\n" + "=" * 62)
+    log(f"searches: {_counts['searches']} ok, {_counts['search_errors']} failed")
     log(f"FINISHED — {_counts['fetched']} sites read, "
         f"{_counts['blocked']} skipped for robots.txt")
     log(f"spreadsheet: out/CERGIO_crawl_v2_audit_200.xlsx")
