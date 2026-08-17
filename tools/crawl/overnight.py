@@ -44,6 +44,25 @@ LOG = os.path.join(OUT, "overnight.log")
 # That is a quota fire with no data to show for it.
 DONE_Q = os.path.join(CAND, "_searched.json")
 
+# THE SPEND GATE. --max-searches was documented as the cap but was only ever
+# checked inside discover_round(), which runs solely under --also-web. The three
+# sources that actually run -- ig, realestate, localbiz -- had NO cap at all.
+# An uncapped paid loop is the Apify failure mode with a different logo.
+# MAX_SEARCHES[0] == 0 means "make no paid calls whatsoever".
+MAX_SEARCHES = [900]
+
+
+def paid_budget_left():
+    return MAX_SEARCHES[0] - _counts["searches"]
+
+
+def paid_exhausted(where):
+    if paid_budget_left() > 0:
+        return False
+    log(f"  [{where}] paid-search cap {MAX_SEARCHES[0]} reached — "
+        f"no further paid calls this run")
+    return True
+
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 SERP = "https://serpapi.com/search.json"
@@ -333,6 +352,9 @@ def discover_ig(city, api_key, handles, counter, budget):
             qkey = f"IG|{city}|{area}|{t}"
             if qkey in done:
                 continue
+            if paid_exhausted("ig"):
+                save_done(done)
+                return new
             place = area.replace(" NY", "").replace(" NJ", "").replace(" FL", "")
             q = {"engine": "google", "num": 20, "api_key": api_key,
                  "q": 'site:instagram.com "' + t + '" ' + place}
@@ -432,6 +454,9 @@ def discover_places(city, api_key, seen, counter, audience, types, target,
             qkey = f"{audience}|{city}|{area}|{t}"
             if qkey in done:
                 continue
+            if paid_exhausted(audience):
+                save_done(done)
+                return new
             q = {"engine": "google_local", "q": f"{t} {area}",
                  "location": area, "api_key": api_key, "num": 20}
             try:
@@ -585,9 +610,16 @@ def main():
                          "not surface on Instagram (lower IG yield, more contacts)")
     ap.add_argument("--city", "--cities", dest="cities", default="NYC,MIA")
     ap.add_argument("--max-searches", dest="max_searches", type=int, default=900,
-                    help="HARD CAP on paid SerpApi calls. This is the spend gate — "
+                    help="HARD CAP on paid SerpApi calls, enforced at every call site. "
+                         "0 disables all metered discovery. This is the spend gate — "
                          "an uncapped crawl is the Apify failure mode with a new logo.")
     args = ap.parse_args()
+
+    MAX_SEARCHES[0] = args.max_searches
+    if args.max_searches <= 0:
+        args.sources = ",".join(x for x in args.sources.split(",")
+                                if x.strip() not in ("ig", "realestate", "localbiz"))
+        log("paid-search budget is 0 — every metered source disabled for this run")
 
     signal.signal(signal.SIGINT, lambda *_: (_stop.set(), log("\nstopping cleanly...")))
     deadline = time.time() + args.hours * 3600
@@ -690,7 +722,8 @@ def main():
 
     rebuild()
     log("\n" + "=" * 62)
-    log(f"searches: {_counts['searches']} ok, {_counts['search_errors']} failed")
+    log(f"PAID SEARCHES USED THIS RUN: {_counts['searches']} of {MAX_SEARCHES[0]} allowed "
+        f"({_counts['search_errors']} failed)")
     log(f"FINISHED — {_counts['fetched']} sites read, "
         f"{_counts['blocked']} skipped for robots.txt")
     log(f"spreadsheet: out/CERGIO_crawl_v2_audit_200.xlsx")
