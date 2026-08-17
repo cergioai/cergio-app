@@ -1,0 +1,30 @@
+name: Source bake-off
+
+# Run this by hand from the Actions tab. It spends at most 5 API calls per
+# provider — pennies, and nothing at all for OpenStreetMap. It writes no
+# candidates and touches no crawl data; it only measures and reports.
+on:
+  workflow_dispatch:
+
+jobs:
+  bakeoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Compare discovery providers
+        env:
+          # Providers with no key set are skipped automatically, so this
+          # works with one key or all four.
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          DATAFORSEO_CREDENTIALS: ${{ secrets.DATAFORSEO_CREDENTIALS }}
+        run: cd tools/crawl && python3 source_bakeoff.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bakeoff
+          path: tools/crawl/bakeoff.json
