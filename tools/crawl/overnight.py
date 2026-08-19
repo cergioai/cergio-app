@@ -66,6 +66,58 @@ def paid_exhausted(where):
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 SERP = "https://serpapi.com/search.json"
+
+# ---------------------------------------------------------------- PROVIDER --
+# Discovery used to be hard-wired to SerpApi. That single dependency took the
+# whole crawler down when its 250-search free allowance ran out: 5,045 failed
+# calls, zero records, a week lost. Provider is now chosen at runtime by which
+# key is present, and every provider is normalised to SerpApi's response shape
+# so nothing downstream changes.
+#
+#   SERPER_API_KEY  -> serper.dev   ~$0.30/1k, 2,500 free on signup
+#   SERPAPI_KEY     -> serpapi.com  ~$25/1k
+#
+# Serper is preferred when both exist: same results, roughly 80x cheaper.
+SERPER_PLACES = "https://google.serper.dev/places"
+SERPER_SEARCH = "https://google.serper.dev/search"
+
+
+def provider():
+    if os.environ.get("SERPER_API_KEY"):
+        return "serper"
+    if os.environ.get("SERPAPI_KEY"):
+        return "serpapi"
+    return None
+
+
+def _serper(url, payload):
+    return serp_fetch(url, post=json.dumps(payload).encode(), headers={
+        "X-API-KEY": os.environ["SERPER_API_KEY"],
+        "Content-Type": "application/json"})
+
+
+def search_local(term, area, key):
+    """Local-business search. Returns SerpApi's {"local_results": [...]} shape."""
+    if provider() == "serper":
+        d = json.loads(_serper(SERPER_PLACES, {"q": f"{term} {area}", "num": 20}))
+        return {"local_results": [
+            {"title": r.get("title"), "website": r.get("website"),
+             "phone": r.get("phoneNumber"), "address": r.get("address")}
+            for r in (d.get("places") or [])]}
+    q = {"engine": "google_local", "q": f"{term} {area}", "location": area,
+         "api_key": key, "num": 20}
+    return json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
+
+
+def search_web(query, key):
+    """Plain web search. Returns SerpApi's {"organic_results": [...]} shape."""
+    if provider() == "serper":
+        d = json.loads(_serper(SERPER_SEARCH, {"q": query, "num": 20}))
+        return {"organic_results": [
+            {"title": r.get("title"), "link": r.get("link")}
+            for r in (d.get("organic") or [])]}
+    q = {"engine": "google", "num": 20, "api_key": key, "q": query}
+    return json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
 CONTACT_PATHS = ["", "/contact", "/contact-us", "/about", "/about-us", "/services"]
 
 _stop = threading.Event()
@@ -136,8 +188,8 @@ _serp_last = [0.0]
 SERP_MIN_GAP = float(os.environ.get("SERP_MIN_GAP", "1.2"))   # seconds between paid calls
 
 
-def serp_fetch(url, tries=5):
-    """One paid SerpApi call, rate-limited and retried on 429."""
+def serp_fetch(url, tries=5, post=None, headers=None):
+    """One paid discovery call, rate-limited and retried on 429."""
     delay = 4.0
     for attempt in range(tries):
         with _serp_lock:
@@ -146,6 +198,11 @@ def serp_fetch(url, tries=5):
                 time.sleep(gap)
             _serp_last[0] = time.time()
         try:
+            if post is not None:
+                req = urllib.request.Request(url, data=post, headers={
+                    "User-Agent": UA, **(headers or {})})
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    return r.read().decode("utf-8", errors="replace")
             return fetch(url, timeout=60)
         except urllib.error.HTTPError as e:
             if e.code != 429:
@@ -356,10 +413,8 @@ def discover_ig(city, api_key, handles, counter, budget):
                 save_done(done)
                 return new
             place = area.replace(" NY", "").replace(" NJ", "").replace(" FL", "")
-            q = {"engine": "google", "num": 20, "api_key": api_key,
-                 "q": 'site:instagram.com "' + t + '" ' + place}
             try:
-                data = json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
+                data = search_web('site:instagram.com "' + t + '" ' + place, api_key)
             except Exception as e:
                 log("  ig search failed '" + t + " " + place + "': " + str(e)[:70])
                 _counts["search_errors"] += 1
@@ -457,10 +512,8 @@ def discover_places(city, api_key, seen, counter, audience, types, target,
             if paid_exhausted(audience):
                 save_done(done)
                 return new
-            q = {"engine": "google_local", "q": f"{t} {area}",
-                 "location": area, "api_key": api_key, "num": 20}
             try:
-                data = json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
+                data = search_local(t, area, api_key)
             except Exception as e:
                 log(f"  {audience} search failed '{t} {area}': {str(e)[:70]}")
                 _counts["search_errors"] += 1
@@ -528,10 +581,8 @@ def discover_round(city, k, seen, made_prefix, budget, max_searches=900):
                 log(f"  search cap reached ({max_searches}) — stopping discovery, "
                     f"no further paid calls")
                 return new
-            q = {"engine": "google_local", "q": f"{t} {area}",
-                 "location": area, "api_key": k, "num": 20}
             try:
-                data = json.loads(serp_fetch(f"{SERP}?{urllib.parse.urlencode(q)}"))
+                data = search_local(t, area, k)
             except Exception as e:
                 log(f"  serpapi problem on '{t} {area}': {str(e)[:80]}")
                 time.sleep(2)
@@ -623,7 +674,12 @@ def main():
 
     signal.signal(signal.SIGINT, lambda *_: (_stop.set(), log("\nstopping cleanly...")))
     deadline = time.time() + args.hours * 3600
-    k = key("SERPAPI_KEY")
+    prov = provider()
+    if prov is None and args.max_searches > 0:
+        sys.exit("Neither SERPER_API_KEY nor SERPAPI_KEY is set — "
+                 "no discovery provider available.")
+    k = os.environ.get("SERPAPI_KEY", "")
+    log(f"discovery provider: {prov or 'none (free sources only)'}")
     seen = known_domains()
     counter = [len(seen) + 1]
 
