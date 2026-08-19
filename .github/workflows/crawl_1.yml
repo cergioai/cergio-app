@@ -10,8 +10,11 @@ on:
         description: "parallel jobs (1-20). 4 is the safe default — 14 triggers SerpApi 429s."
         default: "4"
       paid_searches:
-        description: "HARD CAP on paid SerpApi calls per shard. 0 = free sources only."
+        description: "HARD CAP on paid searches per shard. 0 = free sources only."
         default: "0"
+      audit_approved:
+        description: "Set to yes ONLY after auditing the first 2,000 records. Releases the gate."
+        default: "no"
   schedule:
     # Hourly: FREE OpenStreetMap discovery only. Zero paid calls, ever.
     - cron: "0 * * * *"
@@ -38,6 +41,7 @@ jobs:
       count: ${{ steps.m.outputs.count }}
       cap: ${{ steps.m.outputs.cap }}
     steps:
+      - uses: actions/checkout@v4
       - id: m
         run: |
           # 14 shards x 24 workers = ~336 concurrent SerpApi callers, which the
@@ -53,7 +57,29 @@ jobs:
           CAP="${{ inputs.paid_searches || '0' }}"
           case "$CAP" in ''|*[!0-9]*) CAP=0 ;; esac
           if [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then CAP=7; fi
-          if [ "$CAP" -gt 50 ]; then CAP=50; fi
+          if [ "$CAP" -gt 400 ]; then CAP=400; fi
+
+          # ---------------------------------------------------- AUDIT GATE --
+          # Founder decision, 2026-08-19: stop and audit at 2,000 records before
+          # spending anything on the run to 15,000. Until audit_approved=yes,
+          # a published count at or above 2,000 forces every paid budget to 0.
+          # Free OpenStreetMap discovery is unaffected and keeps running.
+          HAVE=0
+          if [ -f public/crawl-status.json ]; then
+            HAVE=$(jq -r '.totals.crawled // 0' public/crawl-status.json)
+          fi
+          echo "published records so far: $HAVE"
+          if [ "$HAVE" -ge 2000 ] && [ "${{ inputs.audit_approved || 'no' }}" != "yes" ]; then
+            CAP=0
+            echo "::warning::AUDIT GATE: $HAVE records published (>= 2000). Paid \
+          discovery is frozen until the data is audited. Re-run with \
+          audit_approved=yes to release it."
+            echo "### AUDIT GATE ACTIVE" >> $GITHUB_STEP_SUMMARY
+            echo "$HAVE records published. Paid discovery frozen at 0 pending your audit." \
+              >> $GITHUB_STEP_SUMMARY
+            echo "Free OpenStreetMap discovery continues. Re-run with audit_approved=yes to resume." \
+              >> $GITHUB_STEP_SUMMARY
+          fi
 
           echo "matrix=$(python3 -c "import json;print(json.dumps(list(range($N))))")" >> $GITHUB_OUTPUT
           echo "count=$N" >> $GITHUB_OUTPUT
@@ -185,11 +211,32 @@ jobs:
             exit 1
           fi
 
-      - name: Follower counts
+      # Never blocks a drop, but never silent either. Counts non-null follower
+      # values before and after, and says plainly if the pass filled nothing.
+      - name: Follower counts (Bright Data)
         env:
           BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
         continue-on-error: true
-        run: cd tools/crawl && python3 cergio_pipeline.py followers && python3 extract.py
+        run: |
+          cd tools/crawl
+          BEFORE=$(jq '[.[] | select(.followers != null)] | length' out/records.json)
+          CREATORS=$(jq '[.[] | select(.audience == "creator")] | length' out/records.json)
+          if [ -z "${BRIGHTDATA_API_KEY}" ]; then
+            echo "::warning::BRIGHTDATA_API_KEY is not set — follower counts will stay NULL."
+            echo "- followers: SKIPPED, no BRIGHTDATA_API_KEY" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          python3 cergio_pipeline.py followers || echo "::warning::follower pass exited non-zero"
+          python3 extract.py
+          AFTER=$(jq '[.[] | select(.followers != null)] | length' out/records.json)
+          echo "followers: $BEFORE -> $AFTER of $CREATORS creators"
+          echo "- followers filled: **$AFTER / $CREATORS creators** (was $BEFORE)" >> $GITHUB_STEP_SUMMARY
+          if [ "$AFTER" -le "$BEFORE" ]; then
+            echo "::warning::Follower pass filled ZERO new counts. Creator quality \
+          gating cannot work until this is fixed — check the Bright Data key and quota."
+            echo "- :warning: follower pass filled nothing — creator filtering is blind" \
+              >> $GITHUB_STEP_SUMMARY
+          fi
 
       # THE GATE. Never add continue-on-error here.
       - name: Quality gate
