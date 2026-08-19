@@ -99,11 +99,13 @@ def _serper(url, payload):
 def search_local(term, area, key):
     """Local-business search. Returns SerpApi's {"local_results": [...]} shape."""
     if provider() == "serper":
-        d = json.loads(_serper(SERPER_PLACES, {"q": f"{term} {area}", "num": 20}))
+        body = _serper(SERPER_PLACES, {"q": f"{term} {area}", "num": 20})
+        d = json.loads(body)
         return {"local_results": [
             {"title": r.get("title"), "website": r.get("website"),
              "phone": r.get("phoneNumber"), "address": r.get("address")}
-            for r in (d.get("places") or [])]}
+            for r in (d.get("places") or [])],
+            "_raw": body}          # verbatim provider bytes — this is the evidence
     q = {"engine": "google_local", "q": f"{term} {area}", "location": area,
          "api_key": key, "num": 20}
     return json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
@@ -112,10 +114,12 @@ def search_local(term, area, key):
 def search_web(query, key):
     """Plain web search. Returns SerpApi's {"organic_results": [...]} shape."""
     if provider() == "serper":
-        d = json.loads(_serper(SERPER_SEARCH, {"q": query, "num": 20}))
+        body = _serper(SERPER_SEARCH, {"q": query, "num": 20})
+        d = json.loads(body)
         return {"organic_results": [
             {"title": r.get("title"), "link": r.get("link")}
-            for r in (d.get("organic") or [])]}
+            for r in (d.get("organic") or [])],
+            "_raw": body}          # verbatim provider bytes — this is the evidence
     q = {"engine": "google", "num": 20, "api_key": key, "q": query}
     return json.loads(serp_fetch(SERP + "?" + urllib.parse.urlencode(q)))
 CONTACT_PATHS = ["", "/contact", "/contact-us", "/about", "/about-us", "/services"]
@@ -131,13 +135,6 @@ def log(msg):
     print(line, flush=True)
     with open(LOG, "a", encoding="utf-8") as f:
         f.write(line + "\n")
-
-
-def key(name):
-    v = os.environ.get(name)
-    if not v:
-        sys.exit(f"{name} is not set — run START HERE.command first, it saves your keys.")
-    return v
 
 
 # ------------------------------------------------------------------ FETCH ---
@@ -363,28 +360,18 @@ def save_done(done):
     json.dump(sorted(done), open(DONE_Q, "w", encoding="utf-8"))
 
 
-IG_SKIP = {"p", "reel", "reels", "explore", "tv", "stories", "accounts",
-           "directory", "about", "developer", "legal", "privacy", "terms",
-           "instagram", "help", "web", "challenge", "s", "graphql"}
-IG_RE_URL = re.compile(r"instagram\.com/([A-Za-z0-9_.]{2,30})", re.I)
+# Aggregators, socials and booking platforms. A link to one of these is not the
+# business's own domain, so the own-domain rule in extract.py would reject any
+# contact found there anyway (SPEC-280 test #280.5).
+NOT_OWN_SITE = (
+    "instagram.", "facebook.", "twitter.", "x.com", "tiktok.", "linkedin.",
+    "youtube.", "pinterest.", "yelp.", "google.", "goo.gl", "maps.app",
+    "tripadvisor.", "booksy.", "vagaro.", "styleseat.", "square.site",
+    "linktr.ee", "beacons.ai", "thumbtack.", "angi.", "homeadvisor.",
+    "nextdoor.", "groupon.", "eventbrite.", "wa.me", "bit.ly",
+)
 
-
-def seen_handles_on_disk():
-    s = set()
-    for fn in os.listdir(CAND):
-        if fn.startswith("_"):
-            continue
-        try:
-            h = (json.load(open(os.path.join(CAND, fn), encoding="utf-8"))
-                 .get("ig_handle") or "").lower()
-            if h:
-                s.add(h)
-        except Exception:
-            pass
-    return s
-
-
-def discover_ig(city, api_key, handles, counter, budget):
+def discover_ig(city, api_key, seen_hosts, counter, budget):
     """
     IG-FIRST discovery. This is the one that matters.
 
@@ -414,7 +401,9 @@ def discover_ig(city, api_key, handles, counter, budget):
                 return new
             place = area.replace(" NY", "").replace(" NJ", "").replace(" FL", "")
             try:
-                data = search_web('site:instagram.com "' + t + '" ' + place, api_key)
+                # NOT site:instagram.com — that returns instagram URLs with no
+                # website, which produced rows that could never be contacted.
+                data = search_web('"' + t + '" ' + place + ' instagram', api_key)
             except Exception as e:
                 log("  ig search failed '" + t + " " + place + "': " + str(e)[:70])
                 _counts["search_errors"] += 1
@@ -437,16 +426,21 @@ def discover_ig(city, api_key, handles, counter, budget):
                        "url": "serpapi:google:site:instagram.com " + t + " " + place,
                        "kind": "discovery",
                        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                       "content": json.dumps(data, ensure_ascii=False)[:300_000]},
+                       "content": (data.get("_raw")
+                                   or json.dumps(data, ensure_ascii=False))[:300_000]},
                       open(os.path.join(RAW, aid + ".json"), "w", encoding="utf-8"))
             for r in (data.get("organic_results") or []):
-                m = IG_RE_URL.search(r.get("link") or "")
-                if not m:
+                link = (r.get("link") or "").split("?")[0]
+                if not link.startswith("http"):
                     continue
-                h = m.group(1).lower().strip(".")
-                if h in IG_SKIP or h in handles or len(h) < 3:
+                host = urllib.parse.urlparse(link).netloc.lower().replace("www.", "")
+                # A social or directory page is not the business's own site, and
+                # it is not something the fetch layer can prove contacts from.
+                if not host or any(b in host for b in NOT_OWN_SITE):
                     continue
-                handles.add(h)
+                if host in seen_hosts:
+                    continue
+                seen_hosts.add(host)
                 rid = "ig-" + city + "-" + slug + "-" + str(counter[0]).zfill(5)
                 counter[0] += 1
                 json.dump({
@@ -454,8 +448,11 @@ def discover_ig(city, api_key, handles, counter, budget):
                     "market": market, "state": state, "category": None,
                     "service_type": t.title(),
                     "display_name": (r.get("title") or "").split("(")[0].strip()[:120],
-                    "ig_handle": h, "website_url": None, "area": area,
-                    "source": "serpapi:google:site-instagram",
+                    # ig_handle stays NULL here on purpose. extract.py proves it
+                    # from the business's own fetched page — A_own_site_url, the
+                    # strongest evidence grade. Never guessed at discovery time.
+                    "ig_handle": None, "website_url": link, "area": area,
+                    "source": "search:web:instagram-biased",
                     "discovery_artifacts": [aid], "site_artifacts": [],
                 }, open(os.path.join(CAND, rid + ".json"), "w", encoding="utf-8"), indent=2)
                 new.append(rid)
@@ -536,7 +533,8 @@ def discover_places(city, api_key, seen, counter, audience, types, target,
             json.dump({"artifact_id": aid, "url": f"serpapi:google_local:{t} {area}",
                        "kind": "discovery",
                        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                       "content": json.dumps(data, ensure_ascii=False)[:300_000]},
+                       "content": (data.get("_raw")
+                                   or json.dumps(data, ensure_ascii=False))[:300_000]},
                       open(os.path.join(RAW, aid + ".json"), "w", encoding="utf-8"))
             for r in (data.get("local_results") or []):
                 title = (r.get("title") or "")
@@ -577,8 +575,8 @@ def discover_round(city, k, seen, made_prefix, budget, max_searches=900):
                 continue                 # already searched in an earlier run
             if _stop.is_set() or len(new) >= budget:
                 return new
-            if _counts["searches"] >= max_searches:
-                log(f"  search cap reached ({max_searches}) — stopping discovery, "
+            if _counts["searches"] >= max_searches or paid_exhausted("also-web"):
+                log(f"  search cap reached — stopping discovery, "
                     f"no further paid calls")
                 return new
             try:
@@ -599,7 +597,8 @@ def discover_round(city, k, seen, made_prefix, budget, max_searches=900):
                 json.dump({"artifact_id": aid, "url": f"serpapi:{t} {area}",
                            "kind": "discovery",
                            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                           "content": json.dumps(data, ensure_ascii=False)[:300_000]}, f)
+                           "content": (data.get("_raw")
+                                       or json.dumps(data, ensure_ascii=False))[:300_000]}, f)
             for r in results:
                 site = (r.get("website") or "").split("?")[0]
                 host = urllib.parse.urlparse(site).netloc.lower().replace("www.", "")
@@ -714,10 +713,9 @@ def main():
             new = []
             if "ig" in args.sources:
                 log(f"\n[round {rounds}] {city} — finding Instagram service accounts")
-                handles = seen_handles_on_disk()
-                new = discover_ig(city, k, handles, counter, budget=1500)
-                log(f"[round {rounds}] {city} — {len(new)} new IG accounts "
-                    f"(every one has Instagram by construction)")
+                new = discover_ig(city, k, seen, counter, budget=1500)
+                log(f"[round {rounds}] {city} — {len(new)} new businesses from "
+                    f"Instagram-biased web search (own domains, fetchable)")
 
             if "realestate" in args.sources:
                 tgt = CITY_TARGETS["realestate"][city]
