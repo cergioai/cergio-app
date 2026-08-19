@@ -9,8 +9,16 @@ on:
       shards:
         description: "parallel jobs (1-20). 4 is the safe default — 14 triggers SerpApi 429s."
         default: "4"
+      paid_searches:
+        description: "HARD CAP on paid SerpApi calls per shard. 0 = free sources only."
+        default: "0"
   schedule:
+    # Hourly: FREE OpenStreetMap discovery only. Zero paid calls, ever.
     - cron: "0 * * * *"
+    # Once a day at 06:00 UTC: one small, hard-capped paid pass for the
+    # Instagram/creator half that OSM cannot reach. 4 shards x 7 searches
+    # = 28/day = ~840/month, inside the $25 Starter plan's 1,000.
+    - cron: "0 6 * * *"
 
 # pull-requests: write is required for the publish fallback below.
 permissions:
@@ -28,6 +36,7 @@ jobs:
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
       count: ${{ steps.m.outputs.count }}
+      cap: ${{ steps.m.outputs.cap }}
     steps:
       - id: m
         run: |
@@ -37,9 +46,20 @@ jobs:
           N="${{ inputs.shards || '4' }}"
           case "$N" in ''|*[!0-9]*) N=4 ;; esac
           if [ "$N" -lt 1 ] || [ "$N" -gt 20 ]; then N=4; fi
+
+          # THE BUDGET DECISION, made in one place.
+          # Hourly cron and manual runs: 0 paid searches unless asked for.
+          # The 06:00 cron: 7 per shard. Nothing else can spend.
+          CAP="${{ inputs.paid_searches || '0' }}"
+          case "$CAP" in ''|*[!0-9]*) CAP=0 ;; esac
+          if [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then CAP=7; fi
+          if [ "$CAP" -gt 50 ]; then CAP=50; fi
+
           echo "matrix=$(python3 -c "import json;print(json.dumps(list(range($N))))")" >> $GITHUB_OUTPUT
           echo "count=$N" >> $GITHUB_OUTPUT
-          echo "running $N shards"
+          echo "cap=$CAP" >> $GITHUB_OUTPUT
+          echo "running $N shards | paid-search cap per shard: $CAP"
+          echo "$N shards · paid cap $CAP/shard (max $((N * CAP)) searches this run)" >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------- CRAWL --
   # N jobs in parallel, each taking every Nth neighbourhood. Same grid,
@@ -65,8 +85,22 @@ jobs:
           key: shard-${{ matrix.shard }}-${{ github.run_id }}
           restore-keys: shard-${{ matrix.shard }}-
 
+      # FREE DISCOVERY FIRST. OpenStreetMap: no key, no quota, no bill.
+      # This is what keeps the crawler alive when the paid budget is 0.
+      - name: Free discovery (OpenStreetMap)
+        continue-on-error: true
+        run: |
+          cd tools/crawl
+          python3 osm_discover.py \
+            --cities NYC,MIA \
+            --shard ${{ matrix.shard }} --of ${{ needs.setup.outputs.count }} \
+            --max-queries 60
+
       - name: Crawl shard ${{ matrix.shard }}
         env:
+          # Whichever key exists wins; overnight.py prefers Serper because it is
+          # ~80x cheaper per search than SerpApi for identical results.
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
         run: |
           cd tools/crawl
@@ -74,6 +108,7 @@ jobs:
             --cities NYC,MIA \
             --sources "${{ inputs.sources || 'ig,realestate,localbiz' }}" \
             --shard ${{ matrix.shard }} --of ${{ needs.setup.outputs.count }} \
+            --max-searches ${{ needs.setup.outputs.cap }} \
             --target 15000 --hours 0.9 --workers 24
 
       # Proof the shard actually produced something, in the job log where it
@@ -126,7 +161,8 @@ jobs:
           cd tools/crawl && mkdir -p raw candidates
           cp -rn /tmp/shards/*/raw/*        raw/        2>/dev/null || true
           cp -rn /tmp/shards/*/candidates/* candidates/ 2>/dev/null || true
-          RAW=$(ls raw | wc -l); CAND=$(ls candidates | wc -l)
+          RAW=$(ls raw | wc -l)
+          CAND=$(ls candidates | grep -cv '^_' || true)   # exclude _searched.json
           echo "raw=$RAW  candidates=$CAND"
           echo "combined: $RAW raw artifacts, $CAND candidates" >> $GITHUB_STEP_SUMMARY
           if [ "$CAND" -lt 1 ]; then
