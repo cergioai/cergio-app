@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-08-20T00:25:15+00:00",
+  "generated_human": "20 Aug 2026 00:25 UTC",
+  "totals": {
+    "crawled": 404,
+    "contactable": 0,
+    "with_email": 0,
+    "with_phone": 0,
+    "with_both": 0,
+    "with_instagram": 0,
+    "incomplete": 404
+  },
+  "by_city": {
+    "NYC": 400,
+    "MIA": 4
+  },
+  "by_audience": {
+    "localbiz": 404
+  },
+  "creators": {
+    "total": 0,
+    "with_follower_count": 0,
+    "over_2500": 0
+  },
+  "by_source": {
+    "Unlabelled": {
+      "total": 404,
+      "contactable": 0,
+      "email": 0,
+      "phone": 0,
+      "instagram": 0,
+      "nyc": 400,
+      "mia": 4
+    }
+  },
+  "targets": {
+    "realestate": {
+      "NYC": 2000,
+      "MIA": 400
+    },
+    "localbiz": {
+      "NYC": 2000,
+      "MIA": 400
+    }
+  },
+  "run": {
+    "number": "143",
+    "id": "32313466202",
+    "sha": "6b1988ad"
+  }
+}
