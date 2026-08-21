@@ -1,0 +1,12 @@
+{
+ "state": "ATTEMPTED",
+ "acted": false,
+ "file": "src/screens/DataExportScreen.jsx",
+ "attempt": 1,
+ "why_not": "qa gates failed",
+ "finding": "The screen's 'Download view' button downloads `rows` (the client-side filtered set after legacy exclusion), but the count it displays comes from `data.filteredTotal` (the server count), which includes legacy rows when `showLegacy` is false — the populations diverge and the CSV will contradict the number.",
+ "evidence": "Line 252 in DataExportScreen.jsx: `const rows = excludeLegacy ? allRows.filter(isNewSpecCreator) : allRows;` filters client-side. Line 326 in the download function: `saveCsv(toCsv(rows), ...)` exports `rows.length`. But the button label on line 540 shows `n(data.filteredTotal)`, which comes from the server count that (despite `categoriesIn` being sent) includes legacy rows because the server's count query does NOT receive the `excludeLegacy` condition — it only receives `categoriesIn` when it is an array, and `excludeLegacy` is a boolean that is never passed to the server.",
+ "fix": "The server must receive the same `excludeLegacy` signal it receives `categoriesIn` for: add `excludeLegacy: audience === 'creators' && !showLegacy && !category` to the body sent to `leadsDashboard()`, and the server must use it to apply the legacy exclusion to the count query (line 306 in index.ts) the same way it applies `categoriesIn`. Alternatively, always send `categoriesIn: audience === 'creators' && !showLegacy && !category ? CREATOR_SLUGS : null` so the server's count and rows queries are identical and no client-side filter is needed.",
+ "confidence": "high",
+ "needs_founder": false
+}

@@ -1,0 +1,11 @@
+{
+ "state": "FINDING",
+ "model": "claude-haiku-4-5-20251001",
+ "acted": false,
+ "why_not": "needs a founder decision — I will not invent the answer",
+ "finding": "The timeAgo() function produces an empty string when given an invalid or missing ISO timestamp, but no error is logged or thrown, making silent failures invisible per house rule 'never swallow an error'.",
+ "evidence": "Lines 206–215: `if (!iso) return '';` and `if (Number.isNaN(ms)) return '';` and `try { return new Date(iso).toLocaleDateString(...); } catch { return ''; }` — all swallow errors and return silent empty strings.",
+ "fix": "Either guard all callers to never pass invalid timestamps (fail-fast before render), or log the invalid input so data defects surface: `console.warn('timeAgo: invalid iso', iso);` before returning empty string.",
+ "confidence": "high",
+ "needs_founder": true
+}

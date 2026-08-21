@@ -1,0 +1,43 @@
+{
+ "id": "ops-dashboard",
+ "title": "/ops/status — the founder's console",
+ "priority": 6,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-21T13:38:35.618Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 532 of 542 repo files",
+ "gates": [
+  {
+   "id": "#227",
+   "state": "PASS"
+  },
+  {
+   "id": "#229",
+   "state": "PASS"
+  },
+  {
+   "id": "#231",
+   "state": "PASS"
+  },
+  {
+   "id": "#232",
+   "state": "PASS"
+  },
+  {
+   "id": "#233",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 268,
+  "fail": 0
+ },
+ "defects": [
+  "every count and CSV must obey City (DMA), Location, Category, Time and Rows — the LIVE counts bypassed all of them and made working filters look broken",
+  "DMAs and every facet must come FROM THE DATA, never a hardcoded list",
+  "deleting an export from opsPayload crashed the whole console with 'SOURCES is not defined' — no count, no filter, no DMA",
+  "exactly TWO creator sources; a list of six put four permanent zeros beside the real ones",
+  "google_sponsored is folded into google_lsa, never shown as its own row"
+ ],
+ "green_when": "changing any filter changes the counts, and every facet list is derived from live rows"
+}

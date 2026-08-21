@@ -1,0 +1,11 @@
+{
+ "state": "FINDING",
+ "model": "claude-haiku-4-5-20251001",
+ "acted": false,
+ "why_not": "needs a founder decision — I will not invent the answer",
+ "finding": "e2e Playwright test is advisory (never blocks merge) despite being required by spec — the defect is baselined but never resolved, creating a permanently red advisory check which is worse than no check per house rules.",
+ "evidence": "ci.yml line 82-95: e2e job runs but has no `required: true` enforcement; spec says 'e2e is green and required, or deleted with the reason recorded' — the current state is neither (not required AND not deleted with reason).",
+ "fix": "Either make e2e a hard requirement in ci.yml branch protection (move it from advisory to blocking), or delete the e2e job entirely and document the reason in a committed comment explaining why it was removed, so the defect is resolved not baselined.",
+ "confidence": "high",
+ "needs_founder": true
+}

@@ -1,0 +1,30 @@
+{
+ "id": "payments",
+ "title": "Payment on accept — THE LAUNCH BLOCKER",
+ "priority": 1,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-21T13:38:36.919Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 532 of 542 repo files",
+ "gates": [
+  {
+   "id": "#47g",
+   "state": "PASS"
+  },
+  {
+   "id": "#155b",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 268,
+  "fail": 0
+ },
+ "defects": [
+  "bookings_paid has been 0 for the life of the project — no card has ever been charged end to end",
+  "counter-offer price shown vs charged (SPEC-211/212 shipped; needs live proof)",
+  "FW-8 (founder walk 2026-08-02): enable Stripe TEST mode / dummy-card path so the booking E2E can be walked without real money ('enable card payments to pay with stripe ... or enable testing with dummy card')",
+  "FW-9 (founder verbatim 2026-08-02, sharpens defect #1): 'user needs to pay when accepting a counter offer ... so their card is charged automatically... to eliminate the additional pay step... (funds kept until job done.. per spec release)'"
+ ],
+ "green_when": "one real booking reaches paid_at with a Stripe charge id"
+}

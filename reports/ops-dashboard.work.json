@@ -1,0 +1,12 @@
+{
+ "state": "ATTEMPTED",
+ "acted": false,
+ "file": "supabase/functions/_shared/opsPayload.ts",
+ "attempt": 1,
+ "why_not": "qa gates failed",
+ "finding": "The download filter does not apply city/location/category/time scoping, violating the spec contract that ALL counts and EVERY CSV obey the same five filters.",
+ "evidence": "In opsPayload.ts lines 285-305, the download block accepts `kind` and `key` but builds queries with only `city` applied: `if (city) q = q.eq('city', city);` — location, category, sinceHours, and limit are all absent. The spec (line 16 of the spec: 'The filter contract — ALL of it applies to EVERY count and EVERY CSV') and the UI comment (OpsStatusScreen.jsx line 113: 'every count + CSV below is scoped to this city and location') both declare that downloads must match the visible filtered counts.",
+ "fix": "Apply the same scope helper used for counts: add location, category, and time filters to both the services and creators download queries, and respect the rowLimit (currently hardcoded to 5000). The scope() helper pattern (lines 210–221 of opsPayload.ts) must be reused or its logic duplicated into the download block so all five filters (city, location, category, sinceHours, limit) are honored.",
+ "confidence": "high",
+ "needs_founder": false
+}

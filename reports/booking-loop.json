@@ -1,0 +1,35 @@
+{
+ "id": "booking-loop",
+ "title": "Request -> accept -> schedule -> complete",
+ "priority": 2,
+ "verdict": "NEEDS WORK",
+ "at": "2026-08-21T13:38:35.011Z",
+ "build": "clean",
+ "wall": "HIDDEN FROM THIS AGENT: 533 of 542 repo files",
+ "gates": [
+  {
+   "id": "#154",
+   "state": "PASS"
+  },
+  {
+   "id": "#48",
+   "state": "PASS"
+  },
+  {
+   "id": "#47i",
+   "state": "PASS"
+  }
+ ],
+ "suite": {
+  "pass": 268,
+  "fail": 0
+ },
+ "defects": [
+  "FW-3 RESOLVED-AS-DATA (2026-08-03, live DB probe): request_responses.responder_id + services.owner_id are CONSISTENT — the 'Babysitter' listing is OWNED by the founder's own 'Tarik Sansal' account, so 'Tarik accepted' was factually correct. Residual UX hardening: the accept line should carry the SERVICE title next to the name so a self-test like this reads clearly. Do NOT change responder writes.",
+  "core loop is auth-gated so it has only ever been verified in code, never walked live",
+  "FW-2 FIXED IN CODE 2026-08-05: the intake time-question is now ENFORCED — a request cannot reach submission until the 'when' carries a real time signal (dates/days/windows, asap/now/tonight, or the flexible family); signal-less replies re-ask with the SAME existing copy. Typo-nudge deliberately out of scope. Verify live, then close.",
+  "FW-5 FIXED IN CODE 2026-08-05: server-side send-once ledger (request_notify_ledger, migration 20260805100000, atomic ON CONFLICT DO NOTHING, backfilled from existing notifications) — a provider can never be re-announced the same request; fail-open only on ledger outage with loud logs. Verify live, then close.",
+  "FW-6 RESOLVED-AS-DESIGN (2026-08-04, code-trace evidence): default IS Paid (App.jsx useState(false)); the founder's account flipped to free because SPEC-131 auto-classifies Connectors and FROZEN SPEC-71#3 sets CONNECTOR_MIN_FOLLOWERS=300 for testing — his profile satisfies it (cc_verified_at or ig_followers>=300). Remedy is data/config (clear the flag on the test account, or the frozen plan's 5000 threshold at soft launch), NOT app code. Founder may unfreeze SPEC-131/71 with one sentence if he wants different behavior."
+ ],
+ "green_when": "a live walk completes the loop with two real accounts"
+}

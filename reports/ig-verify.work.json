@@ -1,0 +1,12 @@
+{
+ "state": "ATTEMPTED",
+ "acted": false,
+ "file": "src/screens/ServiceListVerifyScreen.jsx",
+ "attempt": 1,
+ "why_not": "build failed",
+ "finding": "ServiceListVerifyScreen.jsx does not enforce the story-highlight confirmation as a mandatory guard before submission, violating FW-10 fixed 2026-08-04.",
+ "evidence": "ServiceListVerifyScreen.jsx renders two informational cards ('Invite friends & clients' and 'Offer a free service to a Connector') with Learn more buttons that navigate away, but contains no submission form, no highlight confirmation checkbox, no armed-submit pattern, and no guard blocking submission until highlight is confirmed. The entire screen is informational only with no actual service-listing submission path.",
+ "fix": "Add a submission form to ServiceListVerifyScreen that includes a mandatory checkbox ('I've added this service to my Story Highlight') that must be checked before the Submit button enables, matching the FW-10 spec that 'submit stays disabled until confirmed.' This screen should be the actual point where the user confirms highlight before their service listing publishes.",
+ "confidence": "high",
+ "needs_founder": false
+}

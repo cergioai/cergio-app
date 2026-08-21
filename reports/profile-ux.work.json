@@ -1,0 +1,12 @@
+{
+ "state": "ATTEMPTED",
+ "acted": false,
+ "file": "src/screens/ProfileScreen.jsx",
+ "attempt": 1,
+ "why_not": "qa gates failed",
+ "finding": "FW-7 reply-offer context is not carried through location.state navigation to ServiceDetailScreen when a reply card navigates, so the preConfirmed booking CTA cannot wire to the offer details.",
+ "evidence": "ServiceDetailScreen.jsx line 46–57 reads replyOffer from location.state?.responseId, but ProfileScreen.jsx has no code that sets location.state when navigating from a reply card to /service/:serviceId — the reply context is never passed forward.",
+ "fix": "ProfileScreen (or the reply card component that calls navigate) must pass {responseId, requestId, offerCents} in the location.state second argument to navigate() when the user taps a reply card's service link, so ServiceDetailScreen receives replyOffer populated and renders 'Book · $X' wired to that offer.",
+ "confidence": "high",
+ "needs_founder": false
+}

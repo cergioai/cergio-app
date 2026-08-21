@@ -1,0 +1,11 @@
+{
+ "state": "FINDING",
+ "model": "claude-haiku-4-5-20251001",
+ "acted": false,
+ "why_not": "needs a founder decision — I will not invent the answer",
+ "finding": "AboutScreen carries de-securitised APGI copy ('discretionary loyalty-style bonus, not a security') but gate #170 is not documented as having been updated to catch the paraphrased risk language, leaving the known defect from the spec unresolved.",
+ "evidence": "src/screens/AboutScreen.jsx line ~135: 'Every dollar earned can also add Asset Participation Growth Income (APGI) — a discretionary loyalty-style bonus, not a security and with no fixed dollar value.' The comment cites 'Terms §7 + gate #170' but the spec (under 'Open defects') explicitly flags that gate #170 'bans 5 exact phrasings, not the risk' — meaning paraphrased versions like 'discretionary loyalty-style bonus' may evade the guard.",
+ "fix": "Either (1) confirm gate #170 has been updated to catch this specific paraphrase and document that in the spec's Founder decisions section, or (2) file a gate update task to add the paraphrase to #170's banned patterns before this copy ships to production.",
+ "confidence": "high",
+ "needs_founder": true
+}
