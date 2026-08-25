@@ -51,12 +51,18 @@ DONE_Q = os.path.join(CAND, "_searched.json")
 # MAX_SEARCHES[0] == 0 means "make no paid calls whatsoever".
 MAX_SEARCHES = [900]
 
+# Set when a paid provider proves unusable. Disables further PAID discovery
+# without touching _stop, so free sources and the fetch chain carry on.
+PAID_DEAD = [False]
+
 
 def paid_budget_left():
     return MAX_SEARCHES[0] - _counts["searches"]
 
 
 def paid_exhausted(where):
+    if PAID_DEAD[0]:
+        return True
     if paid_budget_left() > 0:
         return False
     log(f"  [{where}] paid-search cap {MAX_SEARCHES[0]} reached — "
@@ -408,9 +414,10 @@ def discover_ig(city, api_key, seen_hosts, counter, budget):
                 log("  ig search failed '" + t + " " + place + "': " + str(e)[:70])
                 _counts["search_errors"] += 1
                 if _counts["search_errors"] >= 25 and _counts["searches"] == 0:
-                    log("  25 search errors and not one success - SerpApi is "
-                        "refusing this key. Stopping instead of burning the grid.")
-                    _stop.set()
+                    log("  25 search errors, zero successes — the paid provider is "
+                        "refusing this key. Disabling PAID discovery only; free "
+                        "sources and website fetching continue.")
+                    PAID_DEAD[0] = True
                     save_done(done)
                     return new
                 time.sleep(2)
@@ -515,9 +522,10 @@ def discover_places(city, api_key, seen, counter, audience, types, target,
                 log(f"  {audience} search failed '{t} {area}': {str(e)[:70]}")
                 _counts["search_errors"] += 1
                 if _counts["search_errors"] >= 25 and _counts["searches"] == 0:
-                    log("  25 search errors and not one success - SerpApi is "
-                        "refusing this key. Stopping instead of burning the grid.")
-                    _stop.set()
+                    log("  25 search errors, zero successes — the paid provider is "
+                        "refusing this key. Disabling PAID discovery only; free "
+                        "sources and website fetching continue.")
+                    PAID_DEAD[0] = True
                     save_done(done)
                     return new
                 time.sleep(2)
@@ -778,6 +786,9 @@ def main():
     log("\n" + "=" * 62)
     log(f"PAID SEARCHES USED THIS RUN: {_counts['searches']} of {MAX_SEARCHES[0]} allowed "
         f"({_counts['search_errors']} failed)")
+    if PAID_DEAD[0]:
+        log("PAID DISCOVERY WAS DISABLED MID-RUN — the key was refused. "
+            "Free sources still ran and every candidate on disk was still fetched.")
     log(f"FINISHED — {_counts['fetched']} sites read, "
         f"{_counts['blocked']} skipped for robots.txt")
     log(f"spreadsheet: out/CERGIO_crawl_v2_audit_200.xlsx")
