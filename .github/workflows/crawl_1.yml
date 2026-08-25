@@ -43,6 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: m
+        env:
+          SERPER_KEY_PRESENT: ${{ secrets.SERPER_API_KEY }}
         run: |
           # 14 shards x 24 workers = ~336 concurrent SerpApi callers, which the
           # API answered with 5,045 consecutive HTTP 429s and zero results.
@@ -57,6 +59,19 @@ jobs:
           CAP="${{ inputs.paid_searches || '0' }}"
           case "$CAP" in ''|*[!0-9]*) CAP=0 ;; esac
           if [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then CAP=7; fi
+
+          # The hourly cron may spend a LITTLE, but only through Serper, and
+          # only if a Serper key actually exists. SerpApi is $25 per 1,000
+          # searches and its allowance is already spent; Serper is $0.30 per
+          # 1,000 with 2,500 free on signup. overnight.py picks the provider by
+          # which key is present, so without this guard raising the hourly cap
+          # would quietly spend on the expensive one. 3 per shard x 4 shards x
+          # 24 h = 288 searches a day: free for the first eight days, about
+          # nine cents a day after that.
+          if [ "${{ github.event.schedule }}" = "0 * * * *" ]; then
+            if [ -n "$SERPER_KEY_PRESENT" ]; then CAP=3; else CAP=0; fi
+          fi
+
           if [ "$CAP" -gt 400 ]; then CAP=400; fi
 
           # ---------------------------------------------------- AUDIT GATE --
@@ -120,7 +135,7 @@ jobs:
           python3 osm_discover.py \
             --cities NYC,MIA \
             --shard ${{ matrix.shard }} --of ${{ needs.setup.outputs.count }} \
-            --max-queries 60
+            --max-queries 100
 
       - name: Crawl shard ${{ matrix.shard }}
         env:
