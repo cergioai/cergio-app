@@ -29,7 +29,7 @@ THE SEPARATION STILL HOLDS
   value in this file, the fabrication bug is back.
 """
 
-import json, os, re, sys, time, threading, argparse, subprocess, signal
+import json, os, re, sys, time, threading, argparse, subprocess, signal, socket
 import urllib.request, urllib.error, urllib.parse, urllib.robotparser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -72,6 +72,13 @@ def paid_exhausted(where):
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 SERP = "https://serpapi.com/search.json"
+
+# No socket in this process may block forever. urllib.robotparser.read()
+# takes no timeout argument at all, so a single hung robots.txt used to
+# park a worker thread permanently -- and ThreadPoolExecutor's shutdown
+# waits for every worker, so one dead host could stall a whole shard past
+# its deadline and leave the rest of the businesses unfetched.
+socket.setdefaulttimeout(25)
 
 # ---------------------------------------------------------------- PROVIDER --
 # Discovery used to be hard-wired to SerpApi. That single dependency took the
@@ -133,7 +140,9 @@ CONTACT_PATHS = ["", "/contact", "/contact-us", "/about", "/about-us", "/service
 _stop = threading.Event()
 _lock = threading.Lock()
 _robots = {}
-_counts = {"fetched": 0, "skipped": 0, "blocked": 0, "discovered": 0, "searches": 0, "search_errors": 0}
+_counts = {"fetched": 0, "skipped": 0, "blocked": 0, "unfetched": 0,
+           "discovered": 0, "searches": 0, "search_errors": 0}
+_fetch_fail = {}          # why -> count, printed at the end of the run
 
 
 def log(msg):
@@ -144,6 +153,48 @@ def log(msg):
 
 
 # ------------------------------------------------------------------ FETCH ---
+ROBOTS_TIMEOUT = 8
+
+
+def _read_robots(base):
+    """
+    Fetch and parse one robots.txt. Returns a parser, "open" or "closed".
+
+    THE SILENT BLOCKER. This used to be urllib.robotparser's own .read(), and
+    that method has two defects that together stopped most of the crawl:
+
+      1. It requests robots.txt with Python's DEFAULT User-Agent
+         ("Python-urllib/3.x"). Cloudflare and most WAFs answer that with 403.
+      2. On a 403 the stdlib parser sets disallow_all = True -- so every page
+         on the host is then treated as forbidden.
+
+    So a host that is perfectly happy to be read, but sits behind a bot shield,
+    was recorded as robots-blocked and never fetched. Run 177: 405 businesses
+    discovered, 39 fetched. Nothing in the log said why.
+
+    RFC 9309 s2.3.1.3 is explicit: for ANY 4xx the crawler "MAY access any
+    resources" -- 403 on robots.txt is a challenge page, not a directive.
+    5xx still means back off, and that is honoured below.
+    """
+    try:
+        req = urllib.request.Request(base + "/robots.txt",
+                                     headers={"User-Agent": UA, "Accept": "text/plain,*/*"})
+        with urllib.request.urlopen(req, timeout=ROBOTS_TIMEOUT) as r:
+            body = r.read(500_000).decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        if 400 <= e.code < 500:
+            return "open"        # RFC 9309: 4xx = no restrictions
+        return "closed"          # RFC 9309: 5xx = assume complete disallow
+    except Exception:
+        # Unreachable robots.txt on an unreachable host. The page fetch that
+        # follows will fail on its own merits and be counted as an error; it
+        # must not be mislabelled as a robots block.
+        return "open"
+    rp = urllib.robotparser.RobotFileParser()
+    rp.parse(body.splitlines())
+    return rp
+
+
 def allowed(url):
     """Respect robots.txt. A blocked page is skipped, never routed around."""
     try:
@@ -152,15 +203,14 @@ def allowed(url):
         with _lock:
             rp = _robots.get(base)
         if rp is None:
-            rp = urllib.robotparser.RobotFileParser()
-            rp.set_url(base + "/robots.txt")
-            try:
-                rp.read()
-            except Exception:
-                rp = "open"          # no robots file = nothing disallowed
+            rp = _read_robots(base)
             with _lock:
                 _robots[base] = rp
-        return True if rp == "open" else rp.can_fetch(UA, url)
+        if rp == "open":
+            return True
+        if rp == "closed":
+            return False
+        return rp.can_fetch(UA, url)
     except Exception:
         return False
 
@@ -221,6 +271,71 @@ def serp_fetch(url, tries=5, post=None, headers=None):
 
 TAG_RE = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.S | re.I)
 
+# JSON-LD is where Squarespace, Wix, Webflow, Shopify and every WordPress SEO
+# plugin put the phone, the email and the postal address. It lives inside
+# <script type="application/ld+json">, so TAG_RE above deleted all of it before
+# extract.py ever saw the page. On a template site the contact block is often
+# rendered client-side and JSON-LD is the ONLY place the number appears in the
+# bytes we store. Proven in the harness: a Squarespace-shaped page whose phone,
+# email and city existed only in JSON-LD came out of to_text() with all three
+# gone, and the record was published as "no contact".
+LD_RE = re.compile(
+    r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.S | re.I)
+
+# Open Graph / business meta tags carry the same values on many themes.
+META_RE = re.compile(
+    r'<meta[^>]+(?:property|name)=["\']([^"\']*(?:phone|email|contact|street|locality|region|postal)[^"\']*)["\'][^>]*content=["\']([^"\']+)["\']',
+    re.I)
+
+# Keys worth surfacing verbatim. Everything else in the graph is noise.
+LD_KEYS = ("telephone", "phone", "email", "streetaddress", "addresslocality",
+           "addressregion", "postalcode", "addresscountry", "name", "url",
+           "sameas", "legalname", "contacttype", "faxnumber")
+
+
+def _ld_flatten(node, out, depth=0):
+    """Walk a decoded JSON-LD graph and emit 'key: value' for contact fields.
+
+    This is a faithful decode of bytes we fetched, in the same spirit as the
+    HTML-entity decoding below it -- no value is invented, reformatted or
+    inferred, so SPEC-280 R-B still holds: every published field remains a
+    byte-level substring of the artifact this function produces.
+    """
+    if depth > 8 or len(out) > 400:
+        return
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if isinstance(v, (dict, list)):
+                _ld_flatten(v, out, depth + 1)
+            elif v is not None and not isinstance(v, bool):
+                s = str(v).strip()
+                if s and str(k).lower() in LD_KEYS:
+                    out.append(f"{k}: {s}")
+    elif isinstance(node, list):
+        for v in node:
+            _ld_flatten(v, out, depth + 1)
+
+
+def structured(html):
+    """Contact-bearing structured data, as text, before any tag stripping."""
+    out = []
+    for raw in LD_RE.findall(html)[:12]:
+        block = raw.strip()
+        if not block:
+            continue
+        try:
+            _ld_flatten(json.loads(block), out)
+        except Exception:
+            # Unparseable (template placeholders, trailing commas). Keep the
+            # raw bytes anyway -- a regex in extract.py can still prove a phone
+            # or an email out of them, and they are verbatim page content.
+            out.append(block[:4000])
+    for name, content in META_RE.findall(html)[:40]:
+        c = content.strip()
+        if c:
+            out.append(f"{name}: {c}")
+    return "\n".join(out)[:40_000]
+
 
 def to_text(html):
     """
@@ -229,6 +344,7 @@ def to_text(html):
     """
     hrefs = re.findall(r'href=["\'](mailto:[^"\']+|tel:[^"\']+|[^"\']*instagram\.com/[^"\']*)["\']',
                        html, re.I)
+    struct = structured(html)                      # BEFORE TAG_RE deletes it
     body = TAG_RE.sub(" ", html)
     body = re.sub(r"<[^>]+>", " ", body)
     body = (body.replace("&amp;", "&").replace("&nbsp;", " ").replace("&#64;", "@")
@@ -237,7 +353,28 @@ def to_text(html):
     body = re.sub(r"[ \t\r\f\v]+", " ", body)
     body = re.sub(r"\n\s*\n+", "\n", body)
     links = "\n".join(urllib.parse.unquote(h) for h in hrefs)
-    return (body.strip()[:200_000] + "\n\n--- LINKS ---\n" + links[:20_000])
+    return (body.strip()[:200_000]
+            + "\n\n--- LINKS ---\n" + links[:20_000]
+            + "\n\n--- STRUCTURED ---\n" + struct)
+
+
+def host_variants(site):
+    """The same site with and without www, https first.
+
+    Small-business hosting is inconsistent: half these domains serve only on
+    www, half only on the apex, and a plain redirect is not guaranteed. Trying
+    the other spelling costs one request and recovers businesses that would
+    otherwise be recorded as unreachable.
+    """
+    out = [site]
+    p = urllib.parse.urlparse(site)
+    if p.netloc.startswith("www."):
+        out.append(urllib.parse.urlunparse(p._replace(netloc=p.netloc[4:])))
+    else:
+        out.append(urllib.parse.urlunparse(p._replace(netloc="www." + p.netloc)))
+    if p.scheme == "http":
+        out.insert(1, urllib.parse.urlunparse(p._replace(scheme="https")))
+    return out
 
 
 def fetch_candidate(rid):
@@ -255,23 +392,52 @@ def fetch_candidate(rid):
         return 0                                   # already done, resume-safe
     site = (c.get("website_url") or "").rstrip("/")
     if not site.startswith("http"):
+        _note(rid, c, cp, "no_website")
+        return 0
+
+    # Settle on a base that actually answers before spending five more requests
+    # on paths under a hostname that does not resolve or does not serve.
+    base, why = None, "unreachable"
+    for cand in host_variants(site):
+        if not allowed(cand + "/"):
+            why = "robots_blocked"
+            continue
+        try:
+            root = fetch(cand)
+        except urllib.error.HTTPError as e:
+            why = f"http_{e.code}"
+            continue
+        except Exception as e:
+            why = type(e).__name__.lower()
+            continue
+        if len(root) < 200:
+            why = "page_too_short"
+            continue
+        base, first_html = cand, root
+        break
+
+    if base is None:
+        _note(rid, c, cp, why)
         return 0
 
     written = []
     for i, path in enumerate(CONTACT_PATHS, 1):
         if _stop.is_set() or len(written) >= 3:
             break
-        url = site + path
-        if not allowed(url):
-            with _lock:
-                _counts["blocked"] += 1
-            continue
-        try:
-            html = fetch(url)
-        except Exception:
-            continue
-        if len(html) < 200:
-            continue
+        url = base + path
+        if path == "":
+            html = first_html                      # already fetched above
+        else:
+            if not allowed(url):
+                with _lock:
+                    _counts["blocked"] += 1
+                continue
+            try:
+                html = fetch(url)
+            except Exception:
+                continue
+            if len(html) < 200:
+                continue
         aid = f"{rid}__s{i}"
         with open(os.path.join(RAW, f"{aid}.json"), "w", encoding="utf-8") as f:
             json.dump({"artifact_id": aid, "url": url, "kind": "site",
@@ -282,12 +448,33 @@ def fetch_candidate(rid):
 
     if written:
         c["site_artifacts"] = written
+        c.pop("fetch_failed", None)
         # the IG handle comes out of the business's own page in extract.py —
         # strongest possible proof, and nothing is guessed here
         json.dump(c, open(cp, "w", encoding="utf-8"), indent=2)
         with _lock:
             _counts["fetched"] += 1
     return len(written)
+
+
+def _note(rid, c, cp, why):
+    """Record WHY a business was never read, on the business itself.
+
+    Run 177 published 405 businesses and 0 contacts, and the only thing the
+    logs could say was "no contact". Whether those sites were robots-blocked,
+    dead, or simply had no phone on the page was unknowable without re-running
+    the whole crawl. Now every failure names itself, survives into the merge
+    artifact, and is counted in the end-of-run summary.
+    """
+    with _lock:
+        _counts["blocked" if why == "robots_blocked" else "unfetched"] += 1
+        _fetch_fail[why] = _fetch_fail.get(why, 0) + 1
+    try:
+        c["fetch_failed"] = {"why": why,
+                             "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        json.dump(c, open(cp, "w", encoding="utf-8"), indent=2)
+    except Exception:
+        pass
 
 
 # -------------------------------------------------------------- DISCOVERY ---
@@ -790,7 +977,12 @@ def main():
         log("PAID DISCOVERY WAS DISABLED MID-RUN — the key was refused. "
             "Free sources still ran and every candidate on disk was still fetched.")
     log(f"FINISHED — {_counts['fetched']} sites read, "
-        f"{_counts['blocked']} skipped for robots.txt")
+        f"{_counts['blocked']} skipped for robots.txt, "
+        f"{_counts['unfetched']} could not be read at all")
+    if _fetch_fail:
+        log("WHY BUSINESSES WERE NEVER READ (this is the yield ceiling):")
+        for why, n in sorted(_fetch_fail.items(), key=lambda kv: -kv[1]):
+            log(f"    {n:>6}  {why}")
     log(f"spreadsheet: out/CERGIO_crawl_v2_audit_200.xlsx")
     log("=" * 62)
 

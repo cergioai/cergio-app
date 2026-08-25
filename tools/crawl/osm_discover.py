@@ -52,10 +52,50 @@ UA = "cergio-crawl/1.0 (+https://cergio.ai; contact t@cergio.ai)"
 
 # OSM areas. Names must match an administrative boundary or place in OSM.
 AREAS = {
-    "NYC": ["Manhattan", "Brooklyn", "Queens", "The Bronx", "Staten Island",
-            "Jersey City", "Hoboken"],
-    "MIA": ["Miami", "Miami Beach", "Coral Gables", "Hialeah",
-            "Fort Lauderdale", "Hollywood"],
+    # WHY THESE. Every name here must resolve to an OSM administrative
+    # boundary, and every business found inside it must be able to PROVE its
+    # city from its own page -- extract.py accepts ", NY" and ", FL" as proof,
+    # so staying inside those two states keeps the geo gate satisfiable. New
+    # Jersey is deliberately limited to the three towns extract.py already
+    # names; adding Bayonne or Weehawken would discover businesses that could
+    # never pass the geo gate, which reads as "no contact" and wastes fetches.
+    #
+    # The old grid was 13 areas x 56 types = 728 possible queries, and it ran
+    # dry at 405 businesses. This grid is roughly eight times larger.
+    "NYC": [
+        # five boroughs
+        "Manhattan", "Brooklyn", "Queens", "The Bronx", "Staten Island",
+        # northern New Jersey, only where extract.py can prove the city
+        "Jersey City", "Hoboken", "Newark",
+        # Westchester
+        "Yonkers", "New Rochelle", "Mount Vernon", "White Plains", "Scarsdale",
+        "Rye", "Port Chester", "Mamaroneck", "Harrison", "Tarrytown",
+        "Ossining", "Peekskill", "Eastchester", "Greenburgh",
+        # Nassau
+        "Hempstead", "Long Beach", "Freeport", "Valley Stream", "Garden City",
+        "Mineola", "Great Neck", "Glen Cove", "Rockville Centre", "Oceanside",
+        "Levittown", "Baldwin", "Massapequa", "Westbury", "Lynbrook",
+        # Suffolk
+        "Huntington", "Babylon", "Islip", "Smithtown", "Riverhead",
+        "Patchogue", "Bay Shore",
+        # Rockland
+        "New City", "Nyack", "Spring Valley", "Suffern",
+    ],
+    "MIA": [
+        # Miami-Dade
+        "Miami", "Miami Beach", "Coral Gables", "Hialeah", "Doral",
+        "Aventura", "North Miami", "North Miami Beach", "Homestead",
+        "Pinecrest", "Key Biscayne", "Sunny Isles Beach", "Miami Gardens",
+        "Cutler Bay", "Palmetto Bay", "South Miami", "Sweetwater",
+        "Miami Lakes", "Hialeah Gardens", "Miami Springs", "Opa-locka",
+        "Coral Terrace", "Kendall", "Westchester", "Richmond West",
+        # Broward
+        "Fort Lauderdale", "Hollywood", "Pembroke Pines", "Miramar",
+        "Coral Springs", "Pompano Beach", "Plantation", "Sunrise", "Davie",
+        "Weston", "Deerfield Beach", "Tamarac", "Lauderhill", "Margate",
+        "Coconut Creek", "Oakland Park", "Wilton Manors", "Dania Beach",
+        "Hallandale Beach", "Cooper City",
+    ],
 }
 MARKET = {"NYC": ("New York", "NY"), "MIA": ("Miami-Ft. Lauderdale", "FL")}
 
@@ -121,13 +161,111 @@ TYPES = [
     ("Handyman",              '["craft"="handyman"]'),
     ("Painter",               '["craft"="painter"]'),
     ("Carpenter",             '["craft"="carpenter"]'),
+
+    # ---- added 2026-08-25: the original 56 selectors ran the grid dry at
+    # 405 businesses. These are all bricks-and-mortar or small-practice
+    # categories. Blocked verticals stay absent by construction: no massage,
+    # tattoo, makeup, cannabis, vape, gambling, firearms, adult or nightlife
+    # selector appears here, and shop=beauty explicitly excludes massage and
+    # tattoo rather than relying on a downstream text filter.
+    ("Beauty Salon",          '["shop"="beauty"]["beauty"!="massage"]["beauty"!="tattoo"]'),
+    ("Cosmetics Store",       '["shop"="cosmetics"]'),
+    ("Perfumery",             '["shop"="perfumery"]'),
+    ("Clothing Store",        '["shop"="clothes"]'),
+    ("Shoe Store",            '["shop"="shoes"]'),
+    ("Bag Store",             '["shop"="bag"]'),
+    ("Bridal Shop",           '["shop"="bridal"]'),
+    ("Baby Goods",            '["shop"="baby_goods"]'),
+    ("Second Hand Store",     '["shop"="second_hand"]'),
+    ("Antiques Dealer",       '["shop"="antiques"]'),
+    ("Interior Decoration",   '["shop"="interior_decoration"]'),
+    ("Bed Store",             '["shop"="bed"]'),
+    ("Lighting Store",        '["shop"="lighting"]'),
+    ("Electronics Store",     '["shop"="electronics"]'),
+    ("Hifi Store",            '["shop"="hifi"]'),
+    ("Video Game Store",      '["shop"="video_games"]'),
+    ("Hobby Game Store",      '["shop"="games"]'),
+    ("Model Shop",            '["shop"="model"]'),
+    ("Party Supplies",        '["shop"="party"]'),
+    ("Craft Store",           '["shop"="craft"]'),
+    ("Fabric Store",          '["shop"="fabric"]'),
+    ("Stationery Store",      '["shop"="stationery"]'),
+    ("Art Shop",              '["shop"="art"]'),
+    ("Musical Instruments",   '["shop"="musical_instrument"]'),
+    ("Sports Store",          '["shop"="sports"]'),
+    ("Outdoor Store",         '["shop"="outdoor"]'),
+    ("Photo Shop",            '["shop"="photo"]'),
+    ("Car Dealer",            '["shop"="car"]'),
+    ("Car Parts Store",       '["shop"="car_parts"]'),
+    ("Motorcycle Shop",       '["shop"="motorcycle"]'),
+    ("Boat Dealer",           '["shop"="boat"]'),
+    ("Equipment Rental",      '["shop"="rental"]'),
+    ("Funeral Director",      '["shop"="funeral_directors"]'),
+    ("Car Rental",            '["amenity"="car_rental"]'),
+    ("Coworking Space",       '["amenity"="coworking_space"]'),
+    ("Events Venue",          '["amenity"="events_venue"]'),
+    ("Animal Boarding",       '["amenity"="animal_boarding"]'),
+    ("Dog Training",          '["amenity"="animal_training"]'),
+    ("Doctors Office",        '["amenity"="doctors"]'),
+    ("Medical Clinic",        '["amenity"="clinic"]'),
+    ("Optometrist",           '["healthcare"="optometrist"]'),
+    ("Podiatrist",            '["healthcare"="podiatrist"]'),
+    ("Psychotherapist",       '["healthcare"="psychotherapist"]'),
+    ("Speech Therapist",      '["healthcare"="speech_therapist"]'),
+    ("Occupational Therapy",  '["healthcare"="occupational_therapist"]'),
+    ("Nutrition Counselling", '["healthcare"="nutrition_counselling"]'),
+    ("Midwife",               '["healthcare"="midwife"]'),
+    ("Accountant",            '["office"="accountant"]'),
+    ("Lawyer",                '["office"="lawyer"]'),
+    ("Architect",             '["office"="architect"]'),
+    ("Advertising Agency",    '["office"="advertising_agency"]'),
+    ("Financial Advisor",     '["office"="financial_advisor"]'),
+    ("Employment Agency",     '["office"="employment_agency"]'),
+    ("Property Management",   '["office"="property_management"]'),
+    ("Moving Company",        '["office"="moving_company"]'),
+    ("IT Services",           '["office"="it"]'),
+    ("Yoga Studio",           '["sport"="yoga"]["website"]'),
+    ("Martial Arts School",   '["sport"="martial_arts"]'),
+    ("Boxing Gym",            '["sport"="boxing"]'),
+    ("Climbing Gym",          '["leisure"="sports_centre"]["sport"="climbing"]'),
+    ("Sports Centre",         '["leisure"="sports_centre"]'),
+    ("Roofer",                '["craft"="roofer"]'),
+    ("HVAC Contractor",       '["craft"="hvac"]'),
+    ("Gardener",              '["craft"="gardener"]'),
+    ("Cleaning Service",      '["craft"="cleaning"]'),
+    ("Window Fitter",         '["craft"="window_construction"]'),
+    ("Metal Fabricator",      '["craft"="metal_construction"]'),
+    ("Upholsterer",           '["craft"="upholsterer"]'),
+    ("Jeweller",              '["craft"="jeweller"]'),
+    ("Sign Maker",            '["craft"="signmaker"]'),
+    ("Dressmaker",            '["craft"="dressmaker"]'),
+    ("Blacksmith",            '["craft"="blacksmith"]'),
+    ("Glazier",               '["craft"="glaziery"]'),
+    ("Stonemason",            '["craft"="stonemason"]'),
+    ("Pest Control",          '["craft"="pest_control"]'),
+    ("Piano Tuner",           '["craft"="piano_tuner"]'),
+    ("Insulation Contractor", '["craft"="insulation"]'),
+    ("Floorer",               '["craft"="floorer"]'),
+    ("Plasterer",             '["craft"="plasterer"]'),
+    ("Tiler",                 '["craft"="tiler"]'),
+    ("Scaffolder",            '["craft"="scaffolder"]'),
 ]
 
 # Food and drink are out of scope — a different buyer, different economics,
 # and they would swamp every other category by sheer count.
-FOOD = ("restaurant", "bar", "cafe", "coffee", "pizzeria", "bakery", "brewery",
-        "deli", "diner", "bistro", "pub", "tavern", "grill", "sushi", "juice",
-        "ice cream", "kitchen", "wine", "liquor", "cocktail")
+#
+# THIS USED TO BE A SUBSTRING TEST, and it quietly deleted good businesses:
+# "bar" matched every Barber, Barbara and Barclay; "pub" matched Public and
+# Republic; "deli" matched Delia. Whole words only, exactly the lesson already
+# learned in extract.py when "adult" quarantined martial-arts gyms for
+# offering adult classes. "kitchen" and "grill" are gone entirely — a kitchen
+# showroom and a grill-repair shop are both real targets.
+FOOD_WORDS = ("restaurant", "restaurants", "bar", "bars", "cafe", "cafes",
+              "coffee", "pizzeria", "pizza", "bakery", "brewery", "deli",
+              "diner", "bistro", "pub", "tavern", "sushi", "juice",
+              "wine", "winery", "liquor", "cocktail", "cocktails", "taqueria",
+              "eatery", "catering", "caterer")
+FOOD_RE = re.compile(r"\b(?:" + "|".join(FOOD_WORDS) + r")\b", re.I)
 
 
 def log(m):
@@ -160,6 +298,25 @@ def overpass(query, tries=None):
             log(f"  {urllib.parse.urlparse(url).netloc} unavailable: {str(e)[:60]}")
             time.sleep(3)
     raise RuntimeError(f"every Overpass endpoint failed: {last}")
+
+
+_AREA_OK = {}
+
+
+def area_exists(area):
+    """True if this name resolves to an OSM administrative boundary."""
+    if area in _AREA_OK:
+        return _AREA_OK[area]
+    q = (f'[out:json][timeout:25];'
+         f'rel["name"="{area}"]["boundary"="administrative"];out ids 1;')
+    try:
+        ok = bool(json.loads(overpass(q)).get("elements"))
+    except Exception as e:
+        log(f"  area probe for '{area}' failed ({str(e)[:50]}) — assuming it exists")
+        ok = True                     # never let a flaky probe delete the grid
+    _AREA_OK[area] = ok
+    time.sleep(1.0)
+    return ok
 
 
 def known_domains():
@@ -200,9 +357,21 @@ def main():
     made = queries = 0
     log(f"starting from {len(seen)} known domains — cost of this run: $0.00")
 
+    per_area = {}
+    dead_areas = []
+
     for city in [c.strip() for c in args.cities.split(",")]:
         market, state = MARKET[city]
         for area in areas.get(city, []):
+            # ONE cheap probe before spending a hundred queries on this area.
+            # An area name that does not resolve to an OSM boundary returns an
+            # empty element list for EVERY type -- no error, no warning, and
+            # each of those empty queries gets marked done forever. That is how
+            # a typo silently eats an eighth of the grid. Now it says so.
+            if not area_exists(area):
+                log(f"  !! area '{area}' does not resolve to an OSM boundary — skipped")
+                dead_areas.append(area)
+                continue
             for label, sel in TYPES:
                 if queries >= args.max_queries:
                     log(f"query cap {args.max_queries} reached — stopping")
@@ -245,7 +414,7 @@ def main():
                     site = (tags.get("website") or tags.get("contact:website") or "").split("?")[0]
                     if not name or not site.startswith("http"):
                         continue
-                    if any(w in (name + " " + str(tags.get("cuisine", ""))).lower() for w in FOOD):
+                    if FOOD_RE.search(name + " " + str(tags.get("cuisine", ""))):
                         continue
                     host = urllib.parse.urlparse(site).netloc.lower().replace("www.", "")
                     if not host or host in seen:
@@ -266,10 +435,17 @@ def main():
                     }, open(os.path.join(CAND, rid + ".json"), "w", encoding="utf-8"), indent=2)
                     n += 1
                     made += 1
+                per_area[area] = per_area.get(area, 0) + n
                 log(f"  {label:22} @ {area:16} {n:4} new  (total {made})")
                 time.sleep(1.5)          # courteous to a free, donated service
 
     save_done(done)
+    if dead_areas:
+        log(f"AREAS THAT DO NOT EXIST IN OSM ({len(dead_areas)}): "
+            + ", ".join(dead_areas))
+    empty = [a for a, n in per_area.items() if n == 0]
+    if empty:
+        log(f"areas that resolved but yielded nothing this run: {', '.join(empty)}")
     log(f"DONE — {made} candidates written from {queries} free queries. Cost: $0.00")
 
 
